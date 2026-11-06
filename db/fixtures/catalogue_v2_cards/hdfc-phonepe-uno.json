@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "0a3a7af1ba043e95d953f16558c23e774f9e4a448de7a1aad99086d9c9e4be20",
-    "override_sha256": "2c5f9e4b74409572ef8bb823c83ac07a29bf2d7ffe7fea77f621c6b7770289c3",
-    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
+    "override_sha256": "11422dcfba7eb05b0be8c5d7cbbe14b784231d6be0a5e05a5401c23b3f3c5489",
+    "directory_sha256": "15c375346504fca57465605d625ef45ca6cec4f5866ba3f4f16a1f5cbe0b8a90",
     "verified": true
   },
   "blocking_flags": [],
@@ -25,8 +25,8 @@
     "points_expiry_months": 24,
     "model_status": "verified",
     "model_coverage": {
-      "rules_total": 18,
-      "rules_modelled": 15,
+      "rules_total": 19,
+      "rules_modelled": 16,
       "rules_info": 3,
       "caps_total": 4,
       "caps_enforced": 3,
@@ -119,6 +119,11 @@
         {
           "code": "exclusion_scope_broadened",
           "source_local_id": "excluded_education",
+          "detail": null
+        },
+        {
+          "code": "broad_exclusion_v1_only",
+          "source_local_id": "cd_gaming_exclusion",
           "detail": null
         },
         {
@@ -333,6 +338,15 @@
           "reason": "WP7: T&C Note 1: no reward points on \"... gift cards, cash advances, credit card bill payments, charges, ... investments ...\". Fees and charges are not purchases. Not expressible by MCC or category, so it stays info (D25d), flagged depends_on_txn_attribute (D14b).",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
           "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "86a8d96d60d7e56e",
+          "reason": "Card data review: D24d. MITC v4.18 (Oct 2026) I(g): \"With effect from 1st July 2025, Online Skill-Based gaming transactions will not earn Reward Points/CashPoints on all the cards.\" The record had no gaming row, so a spend at MCC 5816 earned. Same token as the Diners Black Metal record: v1-only entertainment row (D18b, accepted under-statement for installed apps) plus a v2 MCC 5816 row.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+          "checked_on": "2026-11-06",
           "citation": null
         }
       ]
@@ -1053,6 +1067,81 @@
         "max_engine_version": null,
         "source_local_id": "wp7_emi_rail_exclusion",
         "display_note": "EMI transactions earn no rewards."
+      },
+      {
+        "id": "hdfc-phonepe-uno:rule:cd_gaming_exclusion#1",
+        "category_id": "cat-entertainment",
+        "category_slug": "entertainment",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "cd_gaming_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only",
+            "broad_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "cd_gaming_exclusion",
+        "display_note": "Online skill-based gaming transactions do not earn Reward Points from 1 July 2025."
+      },
+      {
+        "id": "hdfc-phonepe-uno:rule:cd_gaming_exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "cd_gaming_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5816"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cd_gaming_exclusion",
+        "display_note": "Online skill-based gaming transactions do not earn Reward Points from 1 July 2025."
       }
     ],
     "cap_rules": [

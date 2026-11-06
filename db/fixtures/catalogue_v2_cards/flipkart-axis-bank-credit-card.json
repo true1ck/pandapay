@@ -4,13 +4,11 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "564570fd404b4889badf1b8fba4492626a835a456feff11ee352bde310923908",
-    "override_sha256": "4103537139f1cf2af27e85b02c5f08cd4192a1f8befced90354bd9e4634f5fb0",
-    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
-    "verified": false
+    "override_sha256": "814e0dbe20976057f42376b57ff1786a05f1b7416260b151eafa92b417a1abc6",
+    "directory_sha256": "15c375346504fca57465605d625ef45ca6cec4f5866ba3f4f16a1f5cbe0b8a90",
+    "verified": true
   },
-  "blocking_flags": [
-    "info_rule"
-  ],
+  "blocking_flags": [],
   "card": {
     "id": "flipkart-axis-bank-credit-card:card",
     "slug": "flipkart-axis-bank-credit-card",
@@ -34,19 +32,14 @@
     "accrual_rounding": "floor",
     "cashback_rounding": "rupee_floor",
     "points_expiry_months": null,
-    "model_status": "partial",
+    "model_status": "verified",
     "model_coverage": {
       "rules_total": 20,
-      "rules_modelled": 17,
-      "rules_info": 3,
+      "rules_modelled": 18,
+      "rules_info": 2,
       "caps_total": 3,
       "caps_enforced": 3,
       "flags": [
-        {
-          "code": "info_rule",
-          "source_local_id": "preferred_merchants_cashback_4",
-          "detail": "unmapped_category_token"
-        },
         {
           "code": "unmapped_excluded_category",
           "source_local_id": "other_eligible_cashback_1",
@@ -215,6 +208,24 @@
           "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
           "checked_on": "2026-11-05",
           "citation": null
+        },
+        {
+          "path": "reward_rules[id=preferred_merchants_cashback_4].category_id",
+          "op": "set",
+          "value_sha256": "6e3191ec1b0332a4",
+          "reason": "The only preferred merchant the cashback T&C name is Swiggy, and only its food delivery: the rule is restated as a Swiggy dining rule (the unmapped 'preferred_merchants' token goes). The dining scope keeps a generic \"Swiggy\" grocery spend (likely Instamart, not eligible) at 1% (H2).",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=preferred_merchants_cashback_4].conditions",
+          "op": "set",
+          "value_sha256": "b5ff9c4f5628a37f",
+          "reason": "Cashback T&C (Jun 2026): Preferred Merchants earn 4% (\"Unlimited\"), and \"only transactions made towards Food Delivery on Swiggy App shall be eligible for accelerated cashback. Transactions made on 'Instamart', 'genie' etc. shall not be eligible\". Swiggy is not Flipkart, Myntra or Cleartrip, so its accelerated rate is the 4% preferred rate. Modelled for Swiggy only, except Instamart and Dineout (not food delivery); the rest of the unpublished list earns 1% (H2). Residual: Genie has no directory entry.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+          "checked_on": "2026-11-06",
+          "citation": null
         }
       ]
     },
@@ -331,9 +342,9 @@
       },
       {
         "id": "flipkart-axis-bank-credit-card:rule:preferred_merchants_cashback_4",
-        "category_id": null,
-        "category_slug": null,
-        "merchant_pattern": null,
+        "category_id": "cat-dining",
+        "category_slug": "dining",
+        "merchant_pattern": "swiggy",
         "rail": null,
         "unit": "cashback_percent",
         "rate": 4,
@@ -343,21 +354,24 @@
         "conditions": {
           "source_local_id": "preferred_merchants_cashback_4",
           "part": null,
-          "info_reasons": [
-            "unmapped_category_token"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2025-06-20",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
-        "merchant_slugs": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "swiggy"
+        ],
         "platform_slugs": [],
         "mcc_include": [],
         "mcc_exclude": [],
-        "except_merchant_slugs": [],
+        "except_merchant_slugs": [
+          "instamart",
+          "swiggy_dineout"
+        ],
         "except_platform_slugs": [],
         "block_inr": null,
         "min_engine_version": 2,

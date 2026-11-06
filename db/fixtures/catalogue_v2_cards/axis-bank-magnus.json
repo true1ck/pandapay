@@ -4,14 +4,11 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "47d373ddfe49e0b50e401f8c819727021c7cd7093d6ee7298a84a1033df38867",
-    "override_sha256": "2b98f65cee3aca6ac93fdfa851d38d573c9452ef42dd293a41e0548ccfb1f457",
-    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
-    "verified": false
+    "override_sha256": "9d2a84ca4b60481ae3ba587b89a77d4e291a6e8251fa69aafec7c8f09415f497",
+    "directory_sha256": "15c375346504fca57465605d625ef45ca6cec4f5866ba3f4f16a1f5cbe0b8a90",
+    "verified": true
   },
-  "blocking_flags": [
-    "info_rule",
-    "missing_cap_value"
-  ],
+  "blocking_flags": [],
   "card": {
     "id": "axis-bank-magnus:card",
     "slug": "axis-bank-magnus",
@@ -26,11 +23,11 @@
     "accrual_rounding": "floor",
     "cashback_rounding": null,
     "points_expiry_months": 36,
-    "model_status": "partial",
+    "model_status": "verified",
     "model_coverage": {
       "rules_total": 17,
-      "rules_modelled": 10,
-      "rules_info": 7,
+      "rules_modelled": 12,
+      "rules_info": 5,
       "caps_total": 7,
       "caps_enforced": 3,
       "flags": [
@@ -42,22 +39,17 @@
         {
           "code": "info_rule",
           "source_local_id": "accelerated_35_above_150k",
+          "detail": "depends_on_user_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "accelerated_35_above_150k",
           "detail": "condition:calendar_month_spend"
         },
         {
-          "code": "info_rule",
-          "source_local_id": "travel_edge_above_200k",
-          "detail": "condition:monthly_travel_edge_spend"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "education_direct_vs_aggregator",
-          "detail": "condition:direct_payment"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "education_direct_vs_aggregator",
-          "detail": "condition:third_party_app"
+          "code": "depends_on_user_attribute",
+          "source_local_id": "accelerated_35_above_150k",
+          "detail": null
         },
         {
           "code": "exclusion_scope_broadened",
@@ -110,7 +102,17 @@
           "detail": null
         },
         {
-          "code": "missing_cap_value",
+          "code": "cap_depends_on_user",
+          "source_local_id": "accelerated_spend_cap",
+          "detail": null
+        },
+        {
+          "code": "post_limit_rate_not_compared",
+          "source_local_id": "accelerated_spend_cap",
+          "detail": null
+        },
+        {
+          "code": "cap_targets_info_only",
           "source_local_id": "accelerated_spend_cap",
           "detail": null
         },
@@ -157,6 +159,60 @@
           "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card-tnc/terms-and-conditions-for-magnus-credit-card.pdf?sfvrsn=1d8117ef_1",
           "checked_on": "2026-11-05",
           "citation": "You will earn 35 EDGE REWARD Points per INR 200 on spends^ above INR 1.5 lakhs"
+        },
+        {
+          "path": "reward_rules[id=accelerated_35_above_150k].depends_on_user_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Revision eff. 20 Jun 2025: 35 per INR 200 above INR 1.5 lakh \"up to spends equivalent to your credit limit + additional INR 1.5 Lakhs per calendar month. Thereafter, you will earn 12\". The 35 band itself is carried by base_150k_spend (custom post-limit 35, D26a); its upper bound depends on the cardholder's credit limit (D13).",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card-tnc/terms-and-conditions-for-magnus-credit-card.pdf?sfvrsn=1d8117ef_1",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=accelerated_spend_cap].depends_on_user",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Ceiling = assigned credit limit + INR 1.5 lakh per calendar month (revision eff. 20 Jun 2025): user-dependent cap (D13a), amount null.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card-tnc/terms-and-conditions-for-magnus-credit-card.pdf?sfvrsn=1d8117ef_1",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=travel_edge_200k_spend].post_limit_behavior.points_per_block",
+          "op": "set",
+          "value_sha256": "6b51d431df5d7f14",
+          "reason": "Accelerated 35 T&C example row 4: Travel EDGE Rs 2,10,000 earns 12 EP/Rs.200 base, and only the spend above Rs 2 lakh is \"Considered in eligible spends\" for the 23-point accelerated top-up, which needs monthly eligible spend above Rs 1.5 lakh. Paying 35 above Rs 2 lakh unconditionally over-states; 12 (base) is paid and the conditional top-up is not modelled (H2).",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-accelerated-35-edge-reward-points.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=travel_edge_above_200k]",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "Same T&C: Travel EDGE spend above Rs 2 lakh is ordinary eligible spend (12 base, plus 23 only through the monthly accelerated calculation), not a flat 35. The travel_edge_200k_spend post-limit (12) carries it; this info row stated 35 unconditionally.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-accelerated-35-edge-reward-points.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=education_direct_vs_aggregator].conditions",
+          "op": "set",
+          "value_sha256": "44136fa355b3678a",
+          "reason": "Education is not in the Magnus exclusion list (revision eff. 20 Jun 2025: Utility & Telecom, Rent, Wallet, Government, Insurance, Gold & Jewellery, Fuel, Cash advances, Repayments; 35 T&C point 3). The conditions were commentary (direct vs third-party fee) that made the rule info; it earns the base 12 per Rs 200 under base_150k_spend, like any eligible spend.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card-tnc/terms-and-conditions-for-magnus-credit-card.pdf?sfvrsn=1d8117ef_1",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "0ae3b6895d153048",
+          "reason": "Accelerated 35 T&C example row 6 and note 2: Grab Deals/GYFTR earn \"12 EP/Rs.200\" with \"no AEP\", and \"spends on Grab Deals, GYFTR will not be calculated for Total Eligible Spends\". Without this row a Grab Deals spend counted toward base_150k_spend and could unlock 35 per Rs 200 early (over-statement). The 'up to 5X' Grab Deals bonus is not modelled (H2).",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-accelerated-35-edge-reward-points.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
         }
       ]
     },
@@ -211,9 +267,12 @@
           "part": null,
           "info_reasons": [
             "unsupported_trigger",
+            "depends_on_user_attribute",
             "condition:calendar_month_spend"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_user_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2025-06-20",
@@ -269,44 +328,6 @@
         "display_note": "60 EDGE Reward Points per ₹200 on Travel EDGE"
       },
       {
-        "id": "axis-bank-magnus:rule:travel_edge_above_200k",
-        "category_id": "cat-travel",
-        "category_slug": "travel",
-        "merchant_pattern": null,
-        "rail": null,
-        "unit": "points_per_200",
-        "rate": 35,
-        "min_txn_inr": null,
-        "max_txn_inr": null,
-        "priority": 60,
-        "conditions": {
-          "source_local_id": "travel_edge_above_200k",
-          "part": null,
-          "info_reasons": [
-            "condition:monthly_travel_edge_spend"
-          ],
-          "flags": []
-        },
-        "notes": null,
-        "effective_from": "2025-06-20",
-        "effective_to": null,
-        "excluded_categories": [],
-        "rule_role": "info",
-        "merchant_slugs": [],
-        "platform_slugs": [
-          "axis_travel_edge"
-        ],
-        "mcc_include": [],
-        "mcc_exclude": [],
-        "except_merchant_slugs": [],
-        "except_platform_slugs": [],
-        "block_inr": null,
-        "min_engine_version": 2,
-        "max_engine_version": null,
-        "source_local_id": "travel_edge_above_200k",
-        "display_note": "35 EDGE Reward Points per ₹200 above ₹2 lakh cumulative Travel EDGE transactions per calendar month"
-      },
-      {
         "id": "axis-bank-magnus:rule:exclude_wallet",
         "category_id": "cat-wallet",
         "category_slug": "wallet",
@@ -354,17 +375,14 @@
         "conditions": {
           "source_local_id": "education_direct_vs_aggregator",
           "part": null,
-          "info_reasons": [
-            "condition:direct_payment",
-            "condition:third_party_app"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2024-12-20",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
@@ -372,7 +390,7 @@
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "max_engine_version": null,
         "source_local_id": "education_direct_vs_aggregator",
         "display_note": "Base earning applies where the education transaction is otherwise eligible"
@@ -937,6 +955,42 @@
         "max_engine_version": null,
         "source_local_id": "exclude_repayments",
         "display_note": "Repayments excluded from rewards"
+      },
+      {
+        "id": "axis-bank-magnus:rule:grab_deals_base_not_counted",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 12,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 40,
+        "conditions": {
+          "source_local_id": "grab_deals_base_not_counted",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "axis_grab_deals"
+        ],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "grab_deals_base_not_counted",
+        "display_note": "Grab Deals spends earn the base 12 EDGE Reward Points per Rs 200 and do not count toward the Rs 1.5 lakh accelerated threshold."
       }
     ],
     "cap_rules": [
@@ -967,6 +1021,31 @@
         "source_local_id": "base_150k_spend"
       },
       {
+        "id": "axis-bank-magnus:cap:accelerated_spend_cap",
+        "reward_rule_id": "axis-bank-magnus:rule:accelerated_35_above_150k",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Accelerated spend cap",
+        "measure": "spend_amount",
+        "period": "calendar_month",
+        "cap_value": 0,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": null,
+        "scope": "targets",
+        "targets": [
+          "axis-bank-magnus:rule:accelerated_35_above_150k"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "base_rate",
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "accelerated_spend_cap"
+      },
+      {
         "id": "axis-bank-magnus:cap:travel_edge_200k_spend",
         "reward_rule_id": "axis-bank-magnus:rule:travel_edge_60",
         "category_id": null,
@@ -977,7 +1056,7 @@
         "period": "calendar_month",
         "cap_value": 200000,
         "post_cap_unit": "points_per_200",
-        "post_cap_rate": 35,
+        "post_cap_rate": 12,
         "resets_on_day": null,
         "cap_kind": "eligible_spend",
         "cap_amount": 200000,

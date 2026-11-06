@@ -2344,6 +2344,59 @@
       "vpa_prefixes": [],
       "mcc": [],
       "notes": "Cloud billing; not the Amazon shopping brand."
+    },
+    {
+      "slug": "swiggy_liquor",
+      "name": "Swiggy Liquor",
+      "parent_slug": null,
+      "category_slug": "shopping",
+      "aliases": [
+        "swiggy liquor"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": "Separate brand from Swiggy for card terms (Swiggy HDFC 10% excludes Swiggy Liquor); no parent_slug per D6.",
+      "group": "swiggy"
+    },
+    {
+      "slug": "swiggy_minis",
+      "name": "Swiggy Minis",
+      "parent_slug": null,
+      "category_slug": "shopping",
+      "aliases": [
+        "swiggy minis"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": "Separate brand from Swiggy for card terms (Swiggy HDFC 10% excludes Swiggy Minis); no parent_slug per D6.",
+      "group": "swiggy"
+    },
+    {
+      "slug": "swiggy_genie",
+      "name": "Swiggy Genie",
+      "parent_slug": null,
+      "category_slug": "other",
+      "aliases": [
+        "swiggy genie"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": "Separate brand from Swiggy for card terms (Swiggy HDFC 10% covers only Food, Instamart, Dineout); no parent_slug per D6.",
+      "group": "swiggy"
+    },
+    {
+      "slug": "swiggy_money",
+      "name": "Swiggy Money",
+      "parent_slug": null,
+      "category_slug": "wallet",
+      "aliases": [
+        "swiggy money",
+        "swiggy money wallet"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": "Swiggy's wallet; loads are wallet loads (Swiggy HDFC excludes Swiggy Money Wallet); no parent_slug per D6.",
+      "group": "swiggy"
     }
   ],
   "platforms": [

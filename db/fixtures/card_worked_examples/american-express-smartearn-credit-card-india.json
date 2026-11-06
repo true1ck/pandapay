@@ -18,6 +18,11 @@
       "url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
       "doc": "Membership Rewards terms",
       "quote": "you earn 1 Membership Rewards Point for every Rs. 50 spent on all purchases, except Fuel*, Insurance and Other Utility Services"
+    },
+    {
+      "url": "https://www.americanexpress.com/in/credit-cards/smart-earn-credit-card/",
+      "doc": "SmartEarn product page",
+      "quote": "On Spending INR 2500 in a month on our 10X Partner (Zomato), you will earn 500"
     }
   ],
   "examples": [
@@ -75,7 +80,7 @@
           "cap-10x-zomato-easemytrip": 180
         }
       },
-      "why": "10X = 10 points per Rs 50 in total (1 base + 9 bonus): 20 x 10 = 200. The 180 bonus points count to the 500 per month cap shared by Zomato and EaseMyTrip."
+      "why": "10X = 10 points per Rs 50 in total (1 regular + 9 additional): 20 x 10 = 200. The 180 additional points count to the Zomato/EaseMyTrip monthly limit (450 additional points, read conservatively from \"capped at 500 points\")."
     },
     {
       "id": "003",
@@ -104,7 +109,7 @@
           "cap-10x-shopping-lifestyle": 180
         }
       },
-      "why": "10X at Flipkart, Uber, BookMyShow and others: 20 x 10 = 200; 180 bonus points count to the shared 500 per month cap."
+      "why": "10X at Flipkart, Uber, BookMyShow and others: 20 x 10 = 200; 180 additional points count to the shared monthly limit (450 additional points)."
     },
     {
       "id": "004",
@@ -133,11 +138,11 @@
           "cap-5x-amazon": 80
         }
       },
-      "why": "5X = 5 points per Rs 50 in total (1 base + 4 bonus): 20 x 5 = 100; 80 bonus points count to the 250 per month Amazon cap."
+      "why": "5X = 5 points per Rs 50 in total (1 regular + 4 additional): 20 x 5 = 100; 80 additional points count to the Amazon monthly limit (200 additional points, read conservatively from \"capped at 250 points\")."
     },
     {
       "id": "005",
-      "title": "Rs 2,000 on Flipkart with 400 of the 500 bonus points already earned",
+      "title": "Rs 2,000 on Flipkart with 400 additional points already earned this month",
       "ctx": {
         "amount": 2000,
         "occurred": "2026-11-10T10:00:00+05:30",
@@ -157,18 +162,18 @@
       },
       "expect": {
         "currency": "points",
-        "amount": 140,
+        "amount": 90,
         "value_inr": null,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "cap-10x-shopping-lifestyle": 100
+          "cap-10x-shopping-lifestyle": 50
         }
       },
-      "why": "10X would give 400 points (360 bonus) but only 100 bonus points remain: 40 base + 100 bonus = 140."
+      "why": "The 10X limit is 500 points per month in all, i.e. 450 additional points at Rs 2,500 (card page: Rs 2,500 at a 10X partner earns 500). 400 used, so 50 additional remain: 40 regular + 50 additional = 90. (A 500-additional reading would pay 140; the lower reading is used, H2.)"
     },
     {
       "id": "006",
-      "title": "Rs 1,000 on Zomato after the 500 bonus points are used",
+      "title": "Rs 1,000 on Zomato after the monthly 10X limit is used",
       "ctx": {
         "amount": 1000,
         "occurred": "2026-11-10T10:00:00+05:30",
@@ -183,7 +188,7 @@
       },
       "state_before": {
         "caps_by_source_id": {
-          "cap-10x-zomato-easemytrip": 500
+          "cap-10x-zomato-easemytrip": 450
         }
       },
       "expect": {
@@ -193,7 +198,7 @@
         "excluded": false,
         "cap_deltas_by_source_id": {}
       },
-      "why": "Bonus is exhausted; the spend still earns the standard 1 point per Rs 50: 20 x 1 = 20."
+      "why": "The 10X limit is used; the spend still earns the regular 1 point per Rs 50: 20 x 1 = 20."
     },
     {
       "id": "007",
@@ -302,21 +307,79 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "No points on EMI options selected on a merchant website or at a merchant terminal."
+    },
+    {
+      "id": "011",
+      "title": "Rs 2,500 on Zomato in a month (issuer illustration)",
+      "ctx": {
+        "amount": 2500,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "dining",
+        "mcc": null,
+        "merchant_name": "Zomato",
+        "merchant_vpa": null,
+        "merchant_slug": "zomato",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 500,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "cap-10x-zomato-easemytrip": 450
+        }
+      },
+      "why": "Card page: \"On Spending INR 2500 in a month on our 10X Partner (Zomato), you will earn 500 Membership Rewards points\": 50 regular + 450 additional; the monthly 10X limit is now fully used."
+    },
+    {
+      "id": "012",
+      "title": "Rs 2,500 on Amazon in a month (issuer illustration)",
+      "ctx": {
+        "amount": 2500,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "online",
+        "mcc": null,
+        "merchant_name": "Amazon",
+        "merchant_vpa": null,
+        "merchant_slug": "amazon",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 250,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "cap-5x-amazon": 200
+        }
+      },
+      "why": "Card page: \"On Spending INR 2500 in a month on our 5X Partner (Amazon), you will earn 250\": 50 regular + 200 additional; the monthly 5X limit is now fully used."
     }
   ],
   "research_notes": [
     {
       "item": "bonus caps",
       "cardpipeline_says": "bonus_reward_points 500 / 500 / 250 per calendar month, then base",
-      "issuer_says": "Matches the SmartEarn page: 500 shared by Flipkart, Uber, BookMyShow and others; 500 shared by EaseMyTrip and Zomato; 250 for Amazon (bonus points only).",
-      "proposed_fix": "none",
-      "override_file": null
+      "issuer_says": "Partner list: \"10X Membership Rewards points will be capped at 500 points per month\" (Flipkart, Uber, BookMyShow, Ajio, Nykaa, PVR, BlinkIt, Myntra jointly; Zomato and EaseMyTrip jointly) and 250 for Amazon (5X). Card page: Rs 2,500 at a 10X partner earns 500 and at Amazon 250, which reads as 500/250 points in all (450/200 additional). A bonus-only reading (500/250 additional) would pay up to 50 more.",
+      "proposed_fix": "override (2026-11-06): additional-point limits 450 / 450 / 200 (H2: the lower of the two readings); examples 005, 006, 011-013",
+      "override_file": "api/scripts/catalogue_overrides/american-express-smartearn-credit-card-india.json"
     },
     {
       "item": "partner lists",
       "cardpipeline_says": "two accelerators with merchant_pattern lists",
-      "issuer_says": "The page lists Zomato, Ajio, Nykaa, BookMyShow, Uber as 10X and says the list may change; merchants such as Blinkit, PVR, Myntra in CardPipeline are not on the fetched page excerpt.",
-      "proposed_fix": "importer: re-check the partner list at amex.co/seccrewards",
+      "issuer_says": "Partner list PDF (amex.co/seccrewards, as of 28 Aug 2024) names 10X: Zomato, EaseMyTrip, Flipkart, Uber, BookMyShow, Ajio, Nykaa, PVR, BlinkIt, Myntra; 5X: Amazon. Matches CardPipeline (Blinkit, PVR, Myntra confirmed).",
+      "proposed_fix": "none",
       "override_file": null
     },
     {
@@ -325,6 +388,13 @@
       "issuer_says": "Amex Membership Rewards terms do not state rounding of Rs 50 blocks; no rounding example.",
       "proposed_fix": "none",
       "override_file": null
+    },
+    {
+      "item": "EMI and Reward Multiplier (2026-11-06)",
+      "cardpipeline_says": "SafeKey / post-purchase EMI earn rules; Reward Multiplier up to 5X info",
+      "issuer_says": "SafeKey and post-purchase EMI earn, merchant EMI does not; the context cannot tell them apart (D14b, depends_on_txn_attribute). Reward Multiplier discontinued 30 Sep 2026 (Amex notice quoted by Business Today).",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/american-express-smartearn-credit-card-india.json"
     }
   ]
 }

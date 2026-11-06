@@ -4,14 +4,12 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "96a4e4c1334ff67d447b3b105bcea3eabc1ea715625a5bbc8342ccee04ffff43",
-    "override_sha256": "c977b160d6889eba6b45347d0df1ba470b9897421ae553b5e9577e42169bad35",
-    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
+    "override_sha256": "15648eaf4ed8036c6ff3097b62cb33f17e51cd4b7d6798c4277f8189bdd0e242",
+    "directory_sha256": "15c375346504fca57465605d625ef45ca6cec4f5866ba3f4f16a1f5cbe0b8a90",
     "verified": false
   },
   "blocking_flags": [
-    "info_rule",
-    "post_limit_conflict",
-    "orphan_cap"
+    "info_rule"
   ],
   "card": {
     "id": "idfc-first-select:card",
@@ -141,11 +139,6 @@
           "detail": null
         },
         {
-          "code": "post_limit_conflict",
-          "source_local_id": "tripstacc_monthly_bonus_cap",
-          "detail": null
-        },
-        {
           "code": "cap_targets_info_only",
           "source_local_id": "tripstacc_monthly_bonus_cap",
           "detail": null
@@ -166,9 +159,9 @@
           "detail": null
         },
         {
-          "code": "orphan_cap",
-          "source_local_id": "select_credit_limit_cycle",
-          "detail": null
+          "code": "hidden_from_v1_uncapped",
+          "source_local_id": null,
+          "detail": "10x_dining, 10x_travel"
         }
       ],
       "overrides_applied": [
@@ -283,10 +276,163 @@
         {
           "path": "cap_rules",
           "op": "set",
-          "value_sha256": "52de7c8df66a4a5c",
-          "reason": "Restates the three source caps and adds the issuer rule that reward points are earned only on spends up to the credit limit per billing cycle (same wording as Wealth and Millennia). Amount depends on the user: null with depends_on_user (D13a).",
+          "value_sha256": "b3138360fac2299e",
+          "reason": "Restates the three source caps and adds the issuer rule that reward points are earned only on spends up to the credit limit per billing cycle (same wording as Wealth and Millennia). Amount depends on the user: null with depends_on_user (D13a). card-data group4 (2026-11-06): the Tripstacc cap limits only the bonus, so after it the usual card points continue (issuer page: \"Earn 20% Bonus Reward Points on hotel bookings, over and above your usual Credit Card Reward Points\"); post-limit action base_accrual_only instead of zero_accrual (cleared post_limit_conflict).",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
-          "checked_on": "2026-11-05",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=base_3x_eligible].action.cap_reference",
+          "op": "set",
+          "value_sha256": "8dc77e871f6ec4f6",
+          "reason": "card-data group4: issuer page: \"Reward Points are earned only on spends up to your credit limit per billing cycle. Additional spends beyond this will not be eligible for Reward Points.\" The earning rule targets the credit-limit cap (amount null, D13a; as Millennia/Wealth), which was an orphan cap.",
+          "source_url": "https://www.idfcfirst.bank.in/credit-card/select",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=10x_dining].action.cap_reference",
+          "op": "set",
+          "value_sha256": "8dc77e871f6ec4f6",
+          "reason": "card-data group4: issuer page: \"Reward Points are earned only on spends up to your credit limit per billing cycle. Additional spends beyond this will not be eligible for Reward Points.\" The earning rule targets the credit-limit cap (amount null, D13a; as Millennia/Wealth), which was an orphan cap.",
+          "source_url": "https://www.idfcfirst.bank.in/credit-card/select",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=10x_travel].action.cap_reference",
+          "op": "set",
+          "value_sha256": "8dc77e871f6ec4f6",
+          "reason": "card-data group4: issuer page: \"Reward Points are earned only on spends up to your credit limit per billing cycle. Additional spends beyond this will not be eligible for Reward Points.\" The earning rule targets the credit-limit cap (amount null, D13a; as Millennia/Wealth), which was an orphan cap.",
+          "source_url": "https://www.idfcfirst.bank.in/credit-card/select",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=10x_international].action.cap_reference",
+          "op": "set",
+          "value_sha256": "8dc77e871f6ec4f6",
+          "reason": "card-data group4: issuer page: \"Reward Points are earned only on spends up to your credit limit per billing cycle. Additional spends beyond this will not be eligible for Reward Points.\" The earning rule targets the credit-limit cap (amount null, D13a; as Millennia/Wealth), which was an orphan cap.",
+          "source_url": "https://www.idfcfirst.bank.in/credit-card/select",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=10x_birthday].action.cap_reference",
+          "op": "set",
+          "value_sha256": "8dc77e871f6ec4f6",
+          "reason": "card-data group4: issuer page: \"Reward Points are earned only on spends up to your credit limit per billing cycle. Additional spends beyond this will not be eligible for Reward Points.\" The earning rule targets the credit-limit cap (amount null, D13a; as Millennia/Wealth), which was an orphan cap.",
+          "source_url": "https://www.idfcfirst.bank.in/credit-card/select",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=1x_utility].action.cap_reference",
+          "op": "set",
+          "value_sha256": "8dc77e871f6ec4f6",
+          "reason": "card-data group4: issuer page: \"Reward Points are earned only on spends up to your credit limit per billing cycle. Additional spends beyond this will not be eligible for Reward Points.\" The earning rule targets the credit-limit cap (amount null, D13a; as Millennia/Wealth), which was an orphan cap.",
+          "source_url": "https://www.idfcfirst.bank.in/credit-card/select",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=1x_insurance].action.cap_reference",
+          "op": "set",
+          "value_sha256": "8dc77e871f6ec4f6",
+          "reason": "card-data group4: issuer page: \"Reward Points are earned only on spends up to your credit limit per billing cycle. Additional spends beyond this will not be eligible for Reward Points.\" The earning rule targets the credit-limit cap (amount null, D13a; as Millennia/Wealth), which was an orphan cap.",
+          "source_url": "https://www.idfcfirst.bank.in/credit-card/select",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=1x_railway].action.cap_reference",
+          "op": "set",
+          "value_sha256": "8dc77e871f6ec4f6",
+          "reason": "card-data group4: issuer page: \"Reward Points are earned only on spends up to your credit limit per billing cycle. Additional spends beyond this will not be eligible for Reward Points.\" The earning rule targets the credit-limit cap (amount null, D13a; as Millennia/Wealth), which was an orphan cap.",
+          "source_url": "https://www.idfcfirst.bank.in/credit-card/select",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=1x_fastag].action.cap_reference",
+          "op": "set",
+          "value_sha256": "8dc77e871f6ec4f6",
+          "reason": "card-data group4: issuer page: \"Reward Points are earned only on spends up to your credit limit per billing cycle. Additional spends beyond this will not be eligible for Reward Points.\" The earning rule targets the credit-limit cap (amount null, D13a; as Millennia/Wealth), which was an orphan cap.",
+          "source_url": "https://www.idfcfirst.bank.in/credit-card/select",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=3x_education].action.cap_reference",
+          "op": "set",
+          "value_sha256": "8dc77e871f6ec4f6",
+          "reason": "card-data group4: issuer page: \"Reward Points are earned only on spends up to your credit limit per billing cycle. Additional spends beyond this will not be eligible for Reward Points.\" The earning rule targets the credit-limit cap (amount null, D13a; as Millennia/Wealth), which was an orphan cap.",
+          "source_url": "https://www.idfcfirst.bank.in/credit-card/select",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=3x_wallet_load].action.cap_reference",
+          "op": "set",
+          "value_sha256": "8dc77e871f6ec4f6",
+          "reason": "card-data group4: issuer page: \"Reward Points are earned only on spends up to your credit limit per billing cycle. Additional spends beyond this will not be eligible for Reward Points.\" The earning rule targets the credit-limit cap (amount null, D13a; as Millennia/Wealth), which was an orphan cap.",
+          "source_url": "https://www.idfcfirst.bank.in/credit-card/select",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=3x_government].action.cap_reference",
+          "op": "set",
+          "value_sha256": "8dc77e871f6ec4f6",
+          "reason": "card-data group4: issuer page: \"Reward Points are earned only on spends up to your credit limit per billing cycle. Additional spends beyond this will not be eligible for Reward Points.\" The earning rule targets the credit-limit cap (amount null, D13a; as Millennia/Wealth), which was an orphan cap.",
+          "source_url": "https://www.idfcfirst.bank.in/credit-card/select",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=3x_rent].action.cap_reference",
+          "op": "set",
+          "value_sha256": "8dc77e871f6ec4f6",
+          "reason": "card-data group4: issuer page: \"Reward Points are earned only on spends up to your credit limit per billing cycle. Additional spends beyond this will not be eligible for Reward Points.\" The earning rule targets the credit-limit cap (amount null, D13a; as Millennia/Wealth), which was an orphan cap.",
+          "source_url": "https://www.idfcfirst.bank.in/credit-card/select",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=3x_education].priority",
+          "op": "set",
+          "value_sha256": "19581e27de7ced00",
+          "reason": "card-data group4: issuer FAQ: 10X Reward Points on Dining, Travel and International purchases; \"However, the following transactions are excluded ... Rental & Property Management, Government Services, Education, Wallet Load transactions\". The 3X MCC rule must win over 10X dining (10) and travel (11) when the MCC is known.",
+          "source_url": "https://www.idfcfirst.bank.in/credit-card/select",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=3x_wallet_load].priority",
+          "op": "set",
+          "value_sha256": "19581e27de7ced00",
+          "reason": "card-data group4: issuer FAQ: 10X Reward Points on Dining, Travel and International purchases; \"However, the following transactions are excluded ... Rental & Property Management, Government Services, Education, Wallet Load transactions\". The 3X MCC rule must win over 10X dining (10) and travel (11) when the MCC is known.",
+          "source_url": "https://www.idfcfirst.bank.in/credit-card/select",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=3x_government].priority",
+          "op": "set",
+          "value_sha256": "19581e27de7ced00",
+          "reason": "card-data group4: issuer FAQ: 10X Reward Points on Dining, Travel and International purchases; \"However, the following transactions are excluded ... Rental & Property Management, Government Services, Education, Wallet Load transactions\". The 3X MCC rule must win over 10X dining (10) and travel (11) when the MCC is known.",
+          "source_url": "https://www.idfcfirst.bank.in/credit-card/select",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=3x_rent].priority",
+          "op": "set",
+          "value_sha256": "19581e27de7ced00",
+          "reason": "card-data group4: issuer FAQ: 10X Reward Points on Dining, Travel and International purchases; \"However, the following transactions are excluded ... Rental & Property Management, Government Services, Education, Wallet Load transactions\". The 3X MCC rule must win over 10X dining (10) and travel (11) when the MCC is known.",
+          "source_url": "https://www.idfcfirst.bank.in/credit-card/select",
+          "checked_on": "2026-11-06",
           "citation": null
         }
       ]
@@ -341,7 +487,9 @@
           "source_local_id": "10x_dining",
           "part": null,
           "info_reasons": [],
-          "flags": []
+          "flags": [
+            "hidden_from_v1_uncapped"
+          ]
         },
         "notes": null,
         "effective_from": "2026-06-19",
@@ -355,7 +503,7 @@
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 1,
+        "min_engine_version": 2,
         "max_engine_version": null,
         "source_local_id": "10x_dining",
         "display_note": "10X Reward Points on Dining purchases."
@@ -375,7 +523,9 @@
           "source_local_id": "10x_travel",
           "part": null,
           "info_reasons": [],
-          "flags": []
+          "flags": [
+            "hidden_from_v1_uncapped"
+          ]
         },
         "notes": null,
         "effective_from": "2026-06-19",
@@ -389,7 +539,7 @@
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 1,
+        "min_engine_version": 2,
         "max_engine_version": null,
         "source_local_id": "10x_travel",
         "display_note": "10X Reward Points on Travel purchases."
@@ -755,7 +905,7 @@
         "rate": 3,
         "min_txn_inr": null,
         "max_txn_inr": null,
-        "priority": 24,
+        "priority": 9,
         "conditions": {
           "source_local_id": "3x_education",
           "part": null,
@@ -796,7 +946,7 @@
         "rate": 3,
         "min_txn_inr": null,
         "max_txn_inr": null,
-        "priority": 25,
+        "priority": 9,
         "conditions": {
           "source_local_id": "3x_wallet_load",
           "part": null,
@@ -832,7 +982,7 @@
         "rate": 3,
         "min_txn_inr": null,
         "max_txn_inr": null,
-        "priority": 26,
+        "priority": 9,
         "conditions": {
           "source_local_id": "3x_government",
           "part": null,
@@ -875,7 +1025,7 @@
         "rate": 3,
         "min_txn_inr": null,
         "max_txn_inr": null,
-        "priority": 27,
+        "priority": 9,
         "conditions": {
           "source_local_id": "3x_rent",
           "part": null,
@@ -2054,7 +2204,24 @@
         "cap_kind": "eligible_spend",
         "cap_amount": null,
         "scope": "targets",
-        "targets": [],
+        "targets": [
+          "idfc-first-select:rule:base_3x_eligible",
+          "idfc-first-select:rule:10x_dining",
+          "idfc-first-select:rule:10x_travel",
+          "idfc-first-select:rule:10x_international",
+          "idfc-first-select:rule:10x_birthday",
+          "idfc-first-select:rule:1x_utility#1",
+          "idfc-first-select:rule:1x_utility#2",
+          "idfc-first-select:rule:1x_utility#v1",
+          "idfc-first-select:rule:1x_insurance",
+          "idfc-first-select:rule:1x_railway#1",
+          "idfc-first-select:rule:1x_railway#2",
+          "idfc-first-select:rule:1x_fastag",
+          "idfc-first-select:rule:3x_education",
+          "idfc-first-select:rule:3x_wallet_load",
+          "idfc-first-select:rule:3x_government",
+          "idfc-first-select:rule:3x_rent"
+        ],
         "parent_cap_id": null,
         "post_cap_behavior": "zero",
         "anchor": null,

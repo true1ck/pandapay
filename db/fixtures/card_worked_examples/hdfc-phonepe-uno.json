@@ -23,6 +23,11 @@
       "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
       "doc": "PhonePe HDFC Bank UNO Reward Points T&C, Note 1",
       "quote": "No reward points will be given for ... rental transactions, education fees, insurance, investments, jewelry purchases"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "doc": "HDFC Bank credit card MITC v4.18, Oct 2026",
+      "quote": "Online Skill-Based gaming transactions will not earn Reward Points/CashPoints on all the cards."
     }
   ],
   "examples": [
@@ -407,6 +412,32 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "T&C Note 1: investments earn no points (MCC 6211, securities brokers/dealers)."
+    },
+    {
+      "id": "015",
+      "title": "Rs 3,000 online skill-based gaming (MCC 5816) by UPI QR",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "other",
+        "mcc": 5816,
+        "merchant_name": "Online gaming platform",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "upi_qr"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "MITC v4.18 I(g): from 1 July 2025 online skill-based gaming earns no Reward Points/CashPoints on all HDFC cards."
     }
   ],
   "research_notes": [
@@ -442,6 +473,13 @@
       "cardpipeline_says": "Example 009 combined category rent and MCC 6513; jewellery was tested on swipe only.",
       "issuer_says": "Note 1 excludes rental transactions, jewelry purchases and investments. Each exclusion row is now proven on its own on the UPI rail (category-only rent, MCC-only rent, jewellery, investments).",
       "proposed_fix": "none"
+    },
+    {
+      "item": "Card data review (2026-11-06): online gaming exclusion",
+      "cardpipeline_says": "No gaming exclusion.",
+      "issuer_says": "MITC v4.18 I(g): no Reward Points/CashPoints on online skill-based gaming from 1 July 2025, all cards.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/hdfc-phonepe-uno.json"
     }
   ]
 }

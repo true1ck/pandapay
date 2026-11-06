@@ -89,7 +89,7 @@ const termsOfServiceSections = <LegalSection>[
   LegalSection(
     '11. Governing law',
     [
-      LegalBlock.paragraph('These terms are governed by [OWNER TO FILL: governing law and courts, for example the laws of India and the courts of a named city].'),
+      LegalBlock.paragraph('These terms are governed by the laws of India.'),
     ],
   ),
   LegalSection(
@@ -105,7 +105,7 @@ const privacyPolicySections = <LegalSection>[
     '1. Who we are',
     [
       LegalBlock.paragraph('PandaPay helps you track spending and choose the right card. This policy explains what we collect, why, and the choices you have. It is written to be read, not skimmed past.'),
-      LegalBlock.paragraph('PandaPay is run by [OWNER TO FILL: legal entity name and registered address]. Our grievance officer under the Digital Personal Data Protection Act, 2023 is [OWNER TO FILL: grievance officer name], at [OWNER TO FILL: grievance officer email]. We reply to every request and complaint within 30 days. For general questions you can also write to panda.paths123@gmail.com.'),
+      LegalBlock.paragraph('PandaPay is run by Chandresh Kerkar, an individual in Goa, India. Our grievance officer under the Digital Personal Data Protection Act, 2023 is Chandresh Kerkar, at panda.paths123@gmail.com. We reply to every request and complaint within 30 days. You can write to the same address with general questions.'),
     ],
   ),
   LegalSection(
@@ -181,9 +181,9 @@ const privacyPolicySections = <LegalSection>[
     [
       LegalBlock.paragraph('We use a few providers to run PandaPay. Each gets only what it needs for its job.'),
       LegalBlock.bullets([
-        'Hosting and storage of your account data: [OWNER TO FILL: hosting provider and region].',
+        'Hosting and storage of your account data: Oracle Cloud for our servers (Hyderabad, India) and Supabase on Amazon Web Services for our database (Mumbai, India).',
         'Push notifications: Novu and Google Firebase Cloud Messaging.',
-        'Error reports: GlitchTip ([OWNER TO FILL: where error reports are hosted]).',
+        'Error reports: none are collected today. If we turn them on, they will go to GlitchTip and say only what broke and where in our code, never message text, amounts or IDs.',
         'Google Gemini: only if you turn on sharing message layouts and shop names (section 5).',
         'Google Places or OpenStreetMap-based providers: for nearby merchant searches (section 4).',
         'Google: only if you use Google sign-in.',

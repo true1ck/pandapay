@@ -1,8 +1,8 @@
 {
   "source_slug": "icici-emeralde-credit-card",
-  "cardpipeline_id": "icici-bank-sapphiro-credit-card",
+  "cardpipeline_id": "icici-bank-emeralde-credit-card",
   "card_name": "ICICI Bank Emeralde Credit Card",
-  "verified_on": "2026-11-05",
+  "verified_on": "2026-11-06",
   "sources": [
     {
       "url": "https://www.icicibank.com/managed-assets/docs/personal/cards/mitc_cc.pdf",
@@ -17,7 +17,7 @@
     {
       "url": "https://www.icici.bank.in/personal-banking/cards/credit-card/emeralde-credit-card",
       "doc": "Emeralde product page",
-      "quote": "Earn Points on every Rs 100 spend: 4 international, 2 domestic, 1 utility and insurance"
+      "quote": "Earn Points on every Rs 100 spend: 4 On Domestic Spend, 4 On International Spend, 1 On Utility and Insurance Spend"
     }
   ],
   "examples": [
@@ -275,6 +275,60 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "MITC: no reward points for Cash and Rent categories."
+    },
+    {
+      "id": "010",
+      "title": "Rs 5,000 quasi-cash MCC 6051",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "6051",
+        "merchant_name": "Quasi-cash merchant",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {},
+        "amount": 0
+      },
+      "why": "MITC: no reward points for the Cash category; the MITC MCC table lists Cash as 6011, 6050, 6051, 6529, 6530, 6538, 6666, 7777, 9999, 6010, 3882, 6541, 6542."
+    },
+    {
+      "id": "011",
+      "title": "Rs 20,000 rent at MCC 7014 not labelled rent",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "7014",
+        "merchant_name": "Rental agency",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {},
+        "amount": 0
+      },
+      "why": "MITC: no reward points for the Rent category; the MITC MCC table lists Rent as 7014, 7407, 5271, 6513."
     }
   ],
   "research_notes": [
@@ -311,6 +365,20 @@
       "cardpipeline_says": "excluded: third-party wallet, cash advance",
       "issuer_says": "MITC also lists skill-based gaming and education MCCs in the capped/restricted table; education MCC 8211.. listed. Direct education payment treatment not verified.",
       "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "example file metadata",
+      "cardpipeline_says": "cardpipeline_id pointed at icici-bank-sapphiro-credit-card; product-page quote copied from Sapphiro (2 domestic)",
+      "issuer_says": "Emeralde product page (fetched 2026-11-06): 4 On Domestic Spend, 4 On International Spend, 1 On Utility and Insurance Spend. Record is results/20260829-213551-fact-check/items/icici-bank-emeralde-credit-card.json.",
+      "proposed_fix": "metadata corrected; no expected value changed",
+      "override_file": null
+    },
+    {
+      "item": "government payments",
+      "cardpipeline_says": "government_zero_reward: government payments excluded",
+      "issuer_says": "MITC: 'Starting Feb 05, 2024, government transactions will be included under utility payment transactions' (all cards except Amazon Pay); only the Emeralde Private Metal section excludes Government Payment & Services. Plain Emeralde government likely earns the utility 1 per Rs 100.",
+      "proposed_fix": "none now (exclusion under-states); lead decision",
       "override_file": null
     }
   ]

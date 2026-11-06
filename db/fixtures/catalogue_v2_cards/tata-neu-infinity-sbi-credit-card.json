@@ -4,13 +4,11 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "e1ccabed32d2880c7a27f212d996fe69937c54e943112a7e999c45625212103d",
-    "override_sha256": "5036e849a3174871db49fa29dc786abc3c1ae3a764caa2dde1df84af4f41fbf6",
-    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
-    "verified": false
+    "override_sha256": "313f9622c32ac9da7ab1d2c30b89f4c4fa57fc48545d63e7ac8202b92bda3a93",
+    "directory_sha256": "15c375346504fca57465605d625ef45ca6cec4f5866ba3f4f16a1f5cbe0b8a90",
+    "verified": true
   },
-  "blocking_flags": [
-    "info_rule"
-  ],
+  "blocking_flags": [],
   "card": {
     "id": "tata-neu-infinity-sbi-credit-card:card",
     "slug": "tata-neu-infinity-sbi-credit-card",
@@ -25,13 +23,13 @@
     "accrual_rounding": "points_floor",
     "cashback_rounding": null,
     "points_expiry_months": 24,
-    "model_status": "partial",
+    "model_status": "verified",
     "model_coverage": {
-      "rules_total": 25,
-      "rules_modelled": 16,
-      "rules_info": 9,
+      "rules_total": 26,
+      "rules_modelled": 18,
+      "rules_info": 8,
       "caps_total": 5,
-      "caps_enforced": 4,
+      "caps_enforced": 5,
       "flags": [
         {
           "code": "group_replaced_by_condition_list",
@@ -45,18 +43,23 @@
         },
         {
           "code": "info_rule",
-          "source_local_id": "upi-rupay",
-          "detail": "condition:channel_type"
-        },
-        {
-          "code": "info_rule",
           "source_local_id": "select-grocery-extra-5pct",
           "detail": "up_to_rate"
         },
         {
           "code": "info_rule",
           "source_local_id": "select-grocery-extra-5pct",
+          "detail": "depends_on_user_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "select-grocery-extra-5pct",
           "detail": "condition:additional_reward"
+        },
+        {
+          "code": "depends_on_user_attribute",
+          "source_local_id": "select-grocery-extra-5pct",
+          "detail": null
         },
         {
           "code": "merchant_prose_restates",
@@ -71,7 +74,17 @@
         {
           "code": "info_rule",
           "source_local_id": "select-insurance-extra-5pct",
+          "detail": "depends_on_user_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "select-insurance-extra-5pct",
           "detail": "condition:additional_reward"
+        },
+        {
+          "code": "depends_on_user_attribute",
+          "source_local_id": "select-insurance-extra-5pct",
+          "detail": null
         },
         {
           "code": "merchant_prose_restates",
@@ -86,7 +99,17 @@
         {
           "code": "info_rule",
           "source_local_id": "select-utility-extra-5pct",
+          "detail": "depends_on_user_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "select-utility-extra-5pct",
           "detail": "condition:additional_reward"
+        },
+        {
+          "code": "depends_on_user_attribute",
+          "source_local_id": "select-utility-extra-5pct",
+          "detail": null
         },
         {
           "code": "merchant_prose_restates",
@@ -101,7 +124,17 @@
         {
           "code": "info_rule",
           "source_local_id": "select-telecom-cable-extra-5pct",
+          "detail": "depends_on_user_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "select-telecom-cable-extra-5pct",
           "detail": "condition:additional_reward"
+        },
+        {
+          "code": "depends_on_user_attribute",
+          "source_local_id": "select-telecom-cable-extra-5pct",
+          "detail": null
         },
         {
           "code": "merchant_prose_restates",
@@ -206,11 +239,6 @@
         {
           "code": "depends_on_txn_attribute",
           "source_local_id": "wp7_disputed_info",
-          "detail": null
-        },
-        {
-          "code": "cap_targets_info_only",
-          "source_local_id": "cap-telecom-cable-monthly-2000",
           "detail": null
         },
         {
@@ -408,6 +436,78 @@
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
           "checked_on": "2026-11-05",
           "citation": null
+        },
+        {
+          "path": "reward_rules[id=upi-rupay].conditions",
+          "op": "set",
+          "value_sha256": "8aa93f2e26dd1b1a",
+          "reason": "Card-data: T&C 11.3(e): \"1.5% Value back as NeuCoins on other spends, including UPI transactions (applicable on spends on RuPay Variant) - The total NeuCoins earned on eligible UPI transactions are capped to 500 NeuCoins per month\" (also 11.4(i) \"UPI Spends - 500\"). A credit-card spend on the UPI rail can only come from the RuPay variant, so the rail carries the variant; the \"network RuPay\" condition made the rule info, and non-partner UPI spends then earned the uncapped base 1.5% (over the 500 NeuCoin cap). mcc_exclude restates the rent/government MCC exclusion (11.4(g)) and keeps this UPI-rail rule v2-only (D24b, as D29d on the HDFC Tata Neu cards).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=upi-rupay].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "Card-data: the UPI rail carries it (see conditions).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=upi-rupay].priority",
+          "op": "set",
+          "value_sha256": "4ec9599fc203d176",
+          "reason": "Card-data: after the capped grocery/insurance/utility/telecom rules (15-16) and before the 5% partner rule (20; partner UPI spends take the carve-out at 8, same rate and cap). A UPI spend in a capped category keeps counting toward that category cap as before (a UPI rule ahead of them would free the category cap for card spends in a mixed month and pay more than before); other UPI spends now count toward the 500 NeuCoin UPI cap. Residual: a month of UPI spends in one capped category stays under the 2,000 category cap, not the 500 UPI cap (unchanged from before; reported).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=select-grocery-extra-5pct].depends_on_user_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Card-data: D13b. T&C 11.3(c): \"Extra Value Back as NeuCoins - Upto 5% on select category spends on Tata Neu App/Website. For more details please visit www.tataneu.com/about-neupass.\" The extra depends on the NeuPass programme (membership/tier) and is an \"up to\" rate with no entry-tier rate stated: stays info with depends_on_user_attribute (as on Plus SBI tata-neu-select-categories-additional-5pct).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=select-insurance-extra-5pct].depends_on_user_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Card-data: D13b. T&C 11.3(c): \"Extra Value Back as NeuCoins - Upto 5% on select category spends on Tata Neu App/Website. For more details please visit www.tataneu.com/about-neupass.\" The extra depends on the NeuPass programme (membership/tier) and is an \"up to\" rate with no entry-tier rate stated: stays info with depends_on_user_attribute (as on Plus SBI tata-neu-select-categories-additional-5pct).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=select-utility-extra-5pct].depends_on_user_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Card-data: D13b. T&C 11.3(c): \"Extra Value Back as NeuCoins - Upto 5% on select category spends on Tata Neu App/Website. For more details please visit www.tataneu.com/about-neupass.\" The extra depends on the NeuPass programme (membership/tier) and is an \"up to\" rate with no entry-tier rate stated: stays info with depends_on_user_attribute (as on Plus SBI tata-neu-select-categories-additional-5pct).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=select-telecom-cable-extra-5pct].depends_on_user_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Card-data: D13b. T&C 11.3(c): \"Extra Value Back as NeuCoins - Upto 5% on select category spends on Tata Neu App/Website. For more details please visit www.tataneu.com/about-neupass.\" The extra depends on the NeuPass programme (membership/tier) and is an \"up to\" rate with no entry-tier rate stated: stays info with depends_on_user_attribute (as on Plus SBI tata-neu-select-categories-additional-5pct).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "8b0439165f1e9d3b",
+          "reason": "Card-data: T&C 11.4(i): \"Maximum Capping per month on NeuCoins on the below categories ... Telecom and cable - 2000\". WP7 restated the grocery, insurance and utility caps on base-rate rules (read as covering all NeuCoins in the category) but not telecom, whose only target was the info extra-5% rule, so telecom spends earned an uncapped 1.5%. Same pattern, by the telecom/cable MCCs 4812, 4814, 4899 (as telecom_cable_standard_capped on Infinity HDFC); priority 16, after the utility rule (15) so a bills-category telecom spend keeps counting to the utility cap as before. Only lowers earnings (after 2,000 NeuCoins a month).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
         }
       ]
     },
@@ -505,24 +605,26 @@
         "rate": 1.5,
         "min_txn_inr": null,
         "max_txn_inr": null,
-        "priority": 30,
+        "priority": 18,
         "conditions": {
           "source_local_id": "upi-rupay",
           "part": null,
-          "info_reasons": [
-            "condition:channel_type"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2025-04-16",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
-        "mcc_exclude": [],
+        "mcc_exclude": [
+          "6513",
+          "9311",
+          "9399"
+        ],
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
@@ -547,9 +649,11 @@
           "part": null,
           "info_reasons": [
             "up_to_rate",
+            "depends_on_user_attribute",
             "condition:additional_reward"
           ],
           "flags": [
+            "depends_on_user_attribute",
             "merchant_prose_restates"
           ]
         },
@@ -590,9 +694,11 @@
           "part": null,
           "info_reasons": [
             "up_to_rate",
+            "depends_on_user_attribute",
             "condition:additional_reward"
           ],
           "flags": [
+            "depends_on_user_attribute",
             "merchant_prose_restates"
           ]
         },
@@ -633,9 +739,11 @@
           "part": null,
           "info_reasons": [
             "up_to_rate",
+            "depends_on_user_attribute",
             "condition:additional_reward"
           ],
           "flags": [
+            "depends_on_user_attribute",
             "merchant_prose_restates"
           ]
         },
@@ -676,9 +784,11 @@
           "part": null,
           "info_reasons": [
             "up_to_rate",
+            "depends_on_user_attribute",
             "condition:additional_reward"
           ],
           "flags": [
+            "depends_on_user_attribute",
             "merchant_prose_restates",
             "narrow_token_on_merchant"
           ]
@@ -1807,6 +1917,44 @@
         "max_engine_version": null,
         "source_local_id": "wp7_disputed_info",
         "display_note": "Disputed transactions earn no NeuCoins."
+      },
+      {
+        "id": "tata-neu-infinity-sbi-credit-card:rule:telecom-standard-capped",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1.5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 16,
+        "conditions": {
+          "source_local_id": "telecom-standard-capped",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-04-16",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4812",
+          "4814",
+          "4899"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "telecom-standard-capped",
+        "display_note": "Telecom and cable earn the base 1.5% as NeuCoins, capped at 2,000 NeuCoins per month."
       }
     ],
     "cap_rules": [
@@ -1916,7 +2064,7 @@
       },
       {
         "id": "tata-neu-infinity-sbi-credit-card:cap:cap-telecom-cable-monthly-2000",
-        "reward_rule_id": "tata-neu-infinity-sbi-credit-card:rule:select-telecom-cable-extra-5pct",
+        "reward_rule_id": null,
         "category_id": null,
         "category_slug": null,
         "benefit_kind": null,
@@ -1931,7 +2079,8 @@
         "cap_amount": 2000,
         "scope": "targets",
         "targets": [
-          "tata-neu-infinity-sbi-credit-card:rule:select-telecom-cable-extra-5pct"
+          "tata-neu-infinity-sbi-credit-card:rule:select-telecom-cable-extra-5pct",
+          "tata-neu-infinity-sbi-credit-card:rule:telecom-standard-capped"
         ],
         "parent_cap_id": null,
         "post_cap_behavior": null,

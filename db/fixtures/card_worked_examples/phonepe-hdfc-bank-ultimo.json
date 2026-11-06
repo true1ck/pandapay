@@ -23,6 +23,11 @@
       "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
       "doc": "PhonePe HDFC Bank Ultimo Reward Points T&C, Note 1",
       "quote": "No reward points will be given for ... rental transactions, education fees, insurance, investments, jewelry purchases"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "doc": "HDFC Bank credit card MITC v4.18, Oct 2026",
+      "quote": "Online Skill-Based gaming transactions will not earn Reward Points/CashPoints on all the cards."
     }
   ],
   "examples": [
@@ -49,7 +54,8 @@
         "value_inr": null,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "phonepe_categories_monthly_cap": 300
+          "phonepe_categories_monthly_cap": 300,
+          "overall_monthly_reward_cap": 300
         }
       },
       "why": "10% on PhonePe recharges and bills = 300 RP. Cap 1000 RP per month."
@@ -77,7 +83,8 @@
         "value_inr": null,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "online_brands_monthly_cap": 40
+          "online_brands_monthly_cap": 40,
+          "overall_monthly_reward_cap": 40
         }
       },
       "why": "5% on listed online brands (needs listed MCC): 40 RP. Cap 500 per month."
@@ -105,7 +112,8 @@
         "value_inr": null,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "upi_scan_pay_monthly_cap": 5
+          "upi_scan_pay_monthly_cap": 5,
+          "overall_monthly_reward_cap": 5
         }
       },
       "why": "1% on Scan & Pay (UPI, QR): 5 RP. Cap 500 per month."
@@ -135,7 +143,8 @@
         "value_inr": null,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "phonepe_categories_monthly_cap": 100
+          "phonepe_categories_monthly_cap": 100,
+          "overall_monthly_reward_cap": 100
         }
       },
       "why": "Would be 800 RP; only 100 remain in the monthly cap."
@@ -352,6 +361,32 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "T&C Note 1: investments earn no points."
+    },
+    {
+      "id": "013",
+      "title": "Rs 2,000 online gaming paid by UPI QR (MCC 5816)",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "entertainment",
+        "mcc": 5816,
+        "merchant_name": "Gaming platform",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "upi_qr"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "MITC v4.18 I(g): from 1 July 2025 online skill-based gaming earns no Reward Points on all cards, so Scan & Pay 1% does not apply."
     }
   ],
   "research_notes": [
@@ -380,6 +415,20 @@
       "cardpipeline_says": "Jewellery was tested on swipe only.",
       "issuer_says": "Note 1 excludes jewelry purchases and investments; both are now proven on the UPI rail.",
       "proposed_fix": "none"
+    },
+    {
+      "item": "Card data review (2026-11-06): card-wide cap overall_monthly_reward_cap in examples 001, 002, 003, 004",
+      "cardpipeline_says": "total_reward_points 2,000 per calendar month (category all_rewards, which did not load: orphan_cap).",
+      "issuer_says": "Reward T&C (29 Jul 2026) state only the category caps 1,000 + 500 + 500 = 2,000 per calendar month, so a card-wide 2,000 cap never binds first. Loaded card-wide; every earning spend counts toward it, so each earning example lists its delta (= the points earned). Amounts unchanged.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/phonepe-hdfc-bank-ultimo.json"
+    },
+    {
+      "item": "Card data review (2026-11-06): category caps and gaming",
+      "cardpipeline_says": "Category caps as bonus_reward_points with zero after the limit (post_limit_conflict); no gaming exclusion.",
+      "issuer_says": "T&C: 'Capping of 1000/500/500 reward points per calendar month'; the card has no base rate, so they are total caps. MITC I(g) gaming exclusion applies to all cards.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/phonepe-hdfc-bank-ultimo.json"
     }
   ]
 }

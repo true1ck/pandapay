@@ -156,6 +156,59 @@
       "reason": "WP7: T&C Note 1: no reward points on \"... gift cards, cash advances, credit card bill payments, charges, ... investments ...\". Fees and charges are not purchases. Not expressible by MCC or category, so it stays info (D25d), flagged depends_on_txn_attribute (D14b).",
       "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=phonepe_categories_monthly_cap].metric",
+      "value": "total_reward_points",
+      "reason": "Card data review: T&C: 10% on PhonePe categories with \"Capping of 1000 reward points per calendar month\". The card has no base rate (only the three categories earn), so the category's points are its total; a bonus cap with zero after the limit was flagged post_limit_conflict. Same limit, same result.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "cap_rules[id=online_brands_monthly_cap].metric",
+      "value": "total_reward_points",
+      "reason": "Card data review: T&C: 5% on select online brands with \"Capping of 500 reward points per calendar month\"; no base rate, so a total cap (clears post_limit_conflict). Same limit, same result.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "cap_rules[id=upi_scan_pay_monthly_cap].metric",
+      "value": "total_reward_points",
+      "reason": "Card data review: T&C: 1% on Scan & Pay with \"Capping of 500 reward points per calendar month\"; no base rate, so a total cap (clears post_limit_conflict). Same limit, same result.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "cap_rules[id=overall_monthly_reward_cap].category_id",
+      "value": "all_retail",
+      "reason": "Card data review: the record's 2,000 RP/month overall cap named an unmapped category (all_rewards), so it had no target (orphan_cap). The reward T&C (29 Jul 2026) state only the three category caps, 1,000 + 500 + 500 = 2,000, so a card-wide 2,000 total cap can never bind before them; kept card-wide (can only under-state).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "cd_gaming_exclusion",
+        "category_id": "online_skill_based_gaming",
+        "priority": 1,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Online skill-based gaming transactions do not earn Reward Points from 1 July 2025."
+        },
+        "effective_from": "2025-07-01",
+        "effective_to": null
+      },
+      "reason": "Card data review: D24d. MITC v4.18 (Oct 2026) I(g): \"With effect from 1st July 2025, Online Skill-Based gaming transactions will not earn Reward Points/CashPoints on all the cards.\" Without it a Scan & Pay at a gaming merchant (MCC 5816) earned 1%. Reward T&C Note 1 also excludes \"any other categories excluded as per the Bank's internal policies\".",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "checked_on": "2026-11-06"
     }
   ]
 }

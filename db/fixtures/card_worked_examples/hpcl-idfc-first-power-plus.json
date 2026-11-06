@@ -2,7 +2,7 @@
   "source_slug": "hpcl-idfc-first-power-plus",
   "cardpipeline_id": "idfc-first-bank-hpcl-idfc-first-power-2",
   "card_name": "HPCL IDFC FIRST Power+ Credit Card",
-  "verified_on": "2026-11-05",
+  "verified_on": "2026-11-06",
   "sources": [
     {
       "url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
@@ -18,6 +18,11 @@
       "url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
       "doc": "FIRST Power+ Savings Maximiser",
       "quote": "30 Reward points per Rs 150 recharge on IDFC FIRST FASTag (1 Reward point = Rs 0.25)"
+    },
+    {
+      "url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
+      "doc": "FIRST Power+ Savings Maximiser",
+      "quote": "Applicable conditions (HPCL fuel 30X): Not Applicable on UPI transactions"
     }
   ],
   "examples": [
@@ -304,6 +309,60 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "EMI transactions are excluded."
+    },
+    {
+      "id": "011",
+      "title": "Rs 3,000 HPCL fuel paid by UPI QR",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "HPCL pump",
+        "merchant_vpa": null,
+        "merchant_slug": "hpcl",
+        "platform": null,
+        "rail": "upi_qr"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {},
+        "amount": 0
+      },
+      "why": "Savings Maximiser: the HPCL fuel 30X is 'Not Applicable on UPI transactions', and UPI Rewards exclude 'fuel spends': nothing is earned."
+    },
+    {
+      "id": "012",
+      "title": "Rs 3,000 HPCL fuel by UPI QR, no MCC on the SMS",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": null,
+        "merchant_name": "HPCL pump",
+        "merchant_vpa": null,
+        "merchant_slug": "hpcl",
+        "platform": null,
+        "rail": "upi_qr"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {},
+        "amount": 0
+      },
+      "why": "Savings Maximiser: the HPCL fuel 30X is 'Not Applicable on UPI transactions', and UPI Rewards exclude 'fuel spends'. The fuel category decides when the SMS carries no MCC: nothing is earned."
     }
   ],
   "research_notes": [

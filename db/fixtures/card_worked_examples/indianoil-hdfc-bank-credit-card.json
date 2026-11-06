@@ -23,6 +23,11 @@
       "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
       "doc": "HDFC Bank credit card MITC v4.18, Oct 2026 (Fair Usage Policy)",
       "quote": "The maximum reward points that can be earned in a statement cycle for ... IOCL, IRCTC* ... is 25,000."
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "doc": "HDFC Bank credit card MITC v4.18, Oct 2026",
+      "quote": "Online Skill-Based gaming transactions will not earn Reward Points/CashPoints on all the cards."
     }
   ],
   "examples": [
@@ -249,6 +254,32 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "Insurance is on the issuer exclusion list."
+    },
+    {
+      "id": "009",
+      "title": "Rs 3,000 online skill-based gaming (MCC 5816)",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "entertainment",
+        "mcc": 5816,
+        "merchant_name": "Online gaming platform",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "MITC v4.18 I(g): from 1 July 2025 online skill-based gaming earns no Reward Points/CashPoints on all HDFC cards."
     }
   ],
   "research_notes": [
@@ -280,6 +311,13 @@
       "item": "WP7 r1: card-wide 25,000 RP cap in examples 001, 002, 003, 004, 005",
       "cardpipeline_says": "No statement-cycle ceiling.",
       "issuer_says": "MITC fair usage policy caps reward points per statement cycle at 25,000 for IOCL and IRCTC cards. Added by override (wp7_fair_usage_statement_cycle); every earning spend counts toward it. Amounts unchanged.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/indianoil-hdfc-bank-credit-card.json"
+    },
+    {
+      "item": "Card data review (2026-11-06): online gaming exclusion",
+      "cardpipeline_says": "No gaming exclusion.",
+      "issuer_says": "MITC v4.18 I(g): no Reward Points/CashPoints on online skill-based gaming from 1 July 2025, all cards.",
       "proposed_fix": "override",
       "override_file": "api/scripts/catalogue_overrides/indianoil-hdfc-bank-credit-card.json"
     }

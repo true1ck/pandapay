@@ -23,6 +23,11 @@
       "url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card-tnc/terms-and-conditions-for-magnus-credit-card.pdf?sfvrsn=1d8117ef_1",
       "doc": "Magnus T&C revision eff. 20 Jun 2025",
       "quote": "Rent (capped at INR 50,000 per month)"
+    },
+    {
+      "url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-accelerated-35-edge-reward-points.pdf",
+      "doc": "Magnus accelerated reward points T&C (example table)",
+      "quote": "Spends upto Rs. 2 Lakhs on Travel EDGE and spends on Grab Deals, GYFTR will not be calculated"
     }
   ],
   "examples": [
@@ -253,6 +258,64 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "EMI transactions are excluded from rewards."
+    },
+    {
+      "id": "009",
+      "title": "Rs 10,000 on Travel EDGE after Rs 2 lakh of Travel EDGE this month",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "travel",
+        "mcc": null,
+        "merchant_name": "Axis Travel EDGE",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "axis_travel_edge",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "travel_edge_200k_spend": 200000
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 600,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Accelerated 35 T&C example row 4 (Travel EDGE Rs 2,10,000): every rupee earns the 12 EP/Rs 200 base; the 5X applies only up to Rs 2 lakh, and the spend above it joins the monthly eligible spend for the 23-point top-up, which needs eligible spend above Rs 1.5 lakh (none here). 50 blocks x 12 = 600."
+    },
+    {
+      "id": "010",
+      "title": "Rs 80,000 on Grab Deals with Rs 1,45,000 eligible spend already this month",
+      "ctx": {
+        "amount": 80000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "shopping",
+        "mcc": null,
+        "merchant_name": "Axis Grab Deals",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "axis_grab_deals",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "base_150k_spend": 145000
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 4800,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Accelerated 35 T&C example row 6 (Grab Deals Rs 80,000): base earn 4,800 (12 EP/Rs 200), accelerated 0 EP/Rs 200, \"Considered in eligible spends: No\", so it does not cross the Rs 1.5 lakh line. The separate 'up to 5X' Grab Deals bonus (up to 19,200 in the table) is not modelled (H2)."
     }
   ],
   "research_notes": [
@@ -274,8 +337,8 @@
       "item": "Travel EDGE above Rs 2 lakh",
       "cardpipeline_says": "rule travel_edge_above_200k: 35 per Rs 200 unconditionally",
       "issuer_says": "Bank table treats Travel EDGE beyond Rs 2 lakh as normal eligible spend (12 base, plus 23 extra only once monthly eligible spend passes Rs 1.5 lakh). Not exemplified.",
-      "proposed_fix": "importer: review",
-      "override_file": null
+      "proposed_fix": "override (2026-11-06): travel_edge_200k_spend post-limit 12 per Rs 200; travel_edge_above_200k (flat 35) removed; example 009",
+      "override_file": "api/scripts/catalogue_overrides/axis-bank-magnus.json"
     },
     {
       "item": "rounding",
@@ -303,6 +366,13 @@
       "cardpipeline_says": "Example had excluded: true.",
       "issuer_says": "T&C: \"Rent (capped at INR 50,000 per month)\" - a monthly eligible-spend cap with nothing above it (rental_50k_spend, post-cap zero), not an exclusion rule. Points stay 0; excluded is false under C3.4.",
       "proposed_fix": "none"
+    },
+    {
+      "item": "Grab Deals / GYFTR and the Rs 1.5 lakh threshold (2026-11-06)",
+      "cardpipeline_says": "no Grab Deals rule; such spends counted toward base_150k_spend",
+      "issuer_says": "35 T&C note 2: Grab Deals/GYFTR spends are not counted in Total Eligible Spends; base 12 EP/Rs 200; up to 5X separately.",
+      "proposed_fix": "override: grab_deals_base_not_counted (platform axis_grab_deals, 12 per Rs 200, uncapped); example 010. GYFTR has no directory platform yet (residual: a GYFTR spend still counts toward the threshold).",
+      "override_file": "api/scripts/catalogue_overrides/axis-bank-magnus.json"
     }
   ]
 }

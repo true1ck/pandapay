@@ -33,6 +33,16 @@
       "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
       "doc": "HDFC Bank credit card MITC v4.18, Oct 2026 (Fair Usage Policy)",
       "quote": "The maximum reward points that can be earned in a statement cycle for Diners Black Metal Edition, Diners Black Card is 75,000."
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "doc": "HDFC Bank credit card MITC v4.18, Oct 2026",
+      "quote": "Online Skill-Based gaming transactions will not earn Reward Points/CashPoints on all the cards."
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "doc": "HDFC Bank credit card MITC v4.18, Oct 2026",
+      "quote": "Education payments made through third-party apps like (but not limited to) CRED, Cheq, MobiKwik, etc will not earn Reward Points."
     }
   ],
   "examples": [
@@ -320,6 +330,58 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "Rent never earns."
+    },
+    {
+      "id": "011",
+      "title": "Rs 3,000 online skill-based gaming (MCC 5816)",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "entertainment",
+        "mcc": 5816,
+        "merchant_name": "Online gaming platform",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "MITC v4.18 I(g): from 1 July 2025 online skill-based gaming earns no Reward Points on all cards."
+    },
+    {
+      "id": "012",
+      "title": "Rs 45,000 college fee paid through CRED",
+      "ctx": {
+        "amount": 45000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "education",
+        "mcc": 8220,
+        "merchant_name": "CRED college fee payment",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "MITC v4.18 I: education payments through third-party apps like CRED earn no Reward Points (from 1 Sep 2024)."
     }
   ],
   "research_notes": [
@@ -352,6 +414,27 @@
       "cardpipeline_says": "total_reward_points 75,000 per statement cycle, card-wide.",
       "issuer_says": "Confirmed (HDFC Bank credit card MITC v4.18, Oct 2026 (Fair Usage Policy)). Every earning spend counts toward it, so each earning example now lists this cap's delta (= the points earned). Amounts unchanged.",
       "proposed_fix": "none"
+    },
+    {
+      "item": "Card data review (2026-11-06): third-party education",
+      "cardpipeline_says": "Exclusion for CRED/Cheq/MobiKwik/other apps on the online rail.",
+      "issuer_says": "MITC: apps 'like (but not limited to)' those earn nothing; direct payments earn. The context cannot tell them apart (SMS spends carry no platform), so education is excluded by category and MCC; direct payments are under-stated.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/hdfc-diners-club-black-metal.json"
+    },
+    {
+      "item": "Card data review (2026-11-06): weekend dining 2X",
+      "cardpipeline_says": "2X at dining MCCs on Saturday/Sunday at standalone restaurants.",
+      "issuer_says": "Product page: '2X Rewards on Weekend Dining'. Day of week is a D14b attribute and the participating list is unpublished: info with depends_on_txn_attribute.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/hdfc-diners-club-black-metal.json"
+    },
+    {
+      "item": "Card data review (2026-11-06): SmartBuy voucher sub-cap",
+      "cardpipeline_says": "3,000 RP/month voucher sub-cap under the SmartBuy cap.",
+      "issuer_says": "No voucher accelerator loads, so the sub-cap is an orphan; removed until one does.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/hdfc-diners-club-black-metal.json"
     }
   ]
 }

@@ -12,6 +12,15 @@ to resume.
 [agent plan](card-rewards-phase1-agent-plan.md) ·
 [later phases](card-rewards-later-phases.md)
 
+## Card data verification pass (6 Nov 2026, branch `card-rewards/release` @ 689c130)
+
+- Four agents re-checked the 24 hand-checked cards that were not Verified, against the research records and the issuers' own terms. 19 cards were added to the Verified list (now **39 Verified**, 324 Partial, 13 Basic). Five of the 44 hand-checked cards stay unverified: Amex Gold and Amex Platinum Charge (bonuses the schema cannot express), IRCTC HDFC (SmartBuy cashback stacks on points), Swiggy HDFC (the bank rounds exact halves down; no engine mode does), IDFC FIRST Select (Rewards Gallery bonus; the platform is in the directory so it cannot be deferred).
+- Over-statements found and fixed while checking: ICICI Sapphiro government spends; Magnus Travel EDGE above ₹2 lakh and Grab Deals; Amex SmartEarn partner bonus limits; Airtel Axis (Airtel Thanks, Zomato/Blinkit/District); HPCL Power+ UPI at fuel; Tata Neu Infinity SBI and Plus SBI (UPI and telecom caps); Infinia, Diners Black and Millennia education; the HDFC online-gaming exclusion on IndianOil HDFC and PhonePe UNO; Platinum Charge "up to" values; Platinum Travel's closed Reward Multiplier.
+- Shared files changed by the lead: `verified_cards.json`, `_known_failures.json` (now empty), `merchant_directory.json` (four Swiggy sub-brands); all snapshots regenerated.
+- Checks: api 2,248 tests, 0 fail (32 skipped, DB-backed); domain 2,094 pass; app 2,940 pass; snapshots current.
+- Open: 21 other HDFC cards have no online-gaming exclusion (check each card's own terms first); the ₹50-block rounding in `reward_math_v2.js` under-states in both engines; Swiggy exact-half rounding; Amex Gold/Platinum Charge/IRCTC HDFC/IDFC Select need a transaction-count trigger, multi-currency rewards or a percentage-of-points bonus (Phase 2).
+- Not merged into `sms-v2/integration` yet; the rig `/tmp/pandapay-sms-rig.Q555hU` already serves this data.
+
 ## iPhone test build with card rewards (6 Nov 2026)
 
 - Branch `card-rewards/release` (worktree `../pandapay-card-release`) = `sms-v2/integration` @ 93e99bb + `card-rewards/phase1`, merge commit e60599d. Nothing pushed. 9 conflicts resolved (api/package.json check list, CI workflow steps, app test config, 5 console files and one console doc taken from integration).

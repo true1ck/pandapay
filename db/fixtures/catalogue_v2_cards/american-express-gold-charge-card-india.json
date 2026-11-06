@@ -4,13 +4,12 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "7257b808c842f4e5735f518bbc51cdaceb28a432838c5ab42ea3b572b99d24d5",
-    "override_sha256": "2121341d72f9b1820432ee5e9154677e51455c1df88d89339f5be49d6672387c",
-    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
+    "override_sha256": "fdd27140c0b4dd2f4e35b781454e80068a93f8a73180cab0b433fd1c981d3edb",
+    "directory_sha256": "15c375346504fca57465605d625ef45ca6cec4f5866ba3f4f16a1f5cbe0b8a90",
     "verified": false
   },
   "blocking_flags": [
-    "info_rule",
-    "post_limit_conflict"
+    "info_rule"
   ],
   "card": {
     "id": "american-express-gold-charge-card-india:card",
@@ -28,10 +27,10 @@
     "points_expiry_months": 0,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 10,
+      "rules_total": 9,
       "rules_modelled": 7,
-      "rules_info": 3,
-      "caps_total": 2,
+      "rules_info": 2,
+      "caps_total": 1,
       "caps_enforced": 1,
       "flags": [
         {
@@ -56,16 +55,6 @@
         },
         {
           "code": "info_rule",
-          "source_local_id": "rewards_multiplier_5x",
-          "detail": "up_to_rate"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "rewards_multiplier_5x",
-          "detail": "condition:valid_transaction_required"
-        },
-        {
-          "code": "info_rule",
           "source_local_id": "cash_advance_and_fee_exclusion",
           "detail": "condition:excluded_items"
         },
@@ -77,16 +66,6 @@
         {
           "code": "exclusion_scope_broadened",
           "source_local_id": "exclude_merchant_emi",
-          "detail": null
-        },
-        {
-          "code": "post_limit_conflict",
-          "source_local_id": "reward_multiplier_monthly_cap",
-          "detail": null
-        },
-        {
-          "code": "cap_targets_info_only",
-          "source_local_id": "reward_multiplier_monthly_cap",
           "detail": null
         }
       ],
@@ -116,6 +95,33 @@
           "reason": "WP7: D28c: MR terms: no points \"on any EMI option selected from a merchant's website\" or terminal (SafeKey/post-purchase EMI, which earn, cannot be told apart on the EMI rail, so this may under-state them). The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
           "source_url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
           "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=rewards_multiplier_5x]",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "Amex India's notice (quoted by Business Today, 1 Sep 2026): \"Effective 30 September 2026, the Reward Multiplier program will be discontinued.\" The \"up to 5X\" row (info) described a closed programme.",
+          "source_url": "https://www.businesstoday.in/personal-finance/story/american-express-reward-multiplier-ends-this-month-what-cardholders-should-know-552371-2026-09-01",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=reward_multiplier_monthly_cap]",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "The 25,000-point Reward Multiplier cap only limited rewards_multiplier_5x, removed with the programme (closed 30 Sep 2026). It was also flagged post_limit_conflict (total cap, then base).",
+          "source_url": "https://www.businesstoday.in/personal-finance/story/american-express-reward-multiplier-ends-this-month-what-cardholders-should-know-552371-2026-09-01",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "fee_waiver_and_milestones.spend_milestones[id=monthly_milestone_6x1000]",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "Gold card page: 1,000 bonus points for six transactions of Rs 1,000 or more in a calendar month. A Rs 6,000 monthly spend milestone pays it on one Rs 6,000 spend (or 3 x Rs 2,000), which the issuer does not: over-states. The milestone schema has no transaction count, so it is removed; the bonus stays documented as the info rule monthly_six_transaction_bonus.",
+          "source_url": "https://www.americanexpress.com/in/charge-cards/gold-card/",
+          "checked_on": "2026-11-06",
           "citation": null
         }
       ]
@@ -333,45 +339,6 @@
         "display_note": "Earn 1,000 bonus Membership Rewards points after six transactions of ₹1,000 or more in a calendar month."
       },
       {
-        "id": "american-express-gold-charge-card-india:rule:rewards_multiplier_5x",
-        "category_id": null,
-        "category_slug": null,
-        "merchant_pattern": null,
-        "rail": null,
-        "unit": "points_per_100",
-        "rate": 5,
-        "min_txn_inr": null,
-        "max_txn_inr": null,
-        "priority": 30,
-        "conditions": {
-          "source_local_id": "rewards_multiplier_5x",
-          "part": null,
-          "info_reasons": [
-            "up_to_rate",
-            "condition:valid_transaction_required"
-          ],
-          "flags": []
-        },
-        "notes": null,
-        "effective_from": "2026-03-31",
-        "effective_to": null,
-        "excluded_categories": [],
-        "rule_role": "info",
-        "merchant_slugs": [],
-        "platform_slugs": [
-          "amex_reward_multiplier"
-        ],
-        "mcc_include": [],
-        "mcc_exclude": [],
-        "except_merchant_slugs": [],
-        "except_platform_slugs": [],
-        "block_inr": 50,
-        "min_engine_version": 2,
-        "max_engine_version": null,
-        "source_local_id": "rewards_multiplier_5x",
-        "display_note": "Earn up to 5X Membership Rewards points on eligible Reward Multiplier transactions."
-      },
-      {
         "id": "american-express-gold-charge-card-india:rule:cash_advance_and_fee_exclusion",
         "category_id": null,
         "category_slug": null,
@@ -541,51 +508,9 @@
         "anchor": null,
         "min_engine_version": 2,
         "source_local_id": "utility_monthly_points_cap"
-      },
-      {
-        "id": "american-express-gold-charge-card-india:cap:reward_multiplier_monthly_cap",
-        "reward_rule_id": "american-express-gold-charge-card-india:rule:rewards_multiplier_5x",
-        "category_id": null,
-        "category_slug": null,
-        "benefit_kind": null,
-        "label": "Reward multiplier monthly cap",
-        "measure": "reward_value",
-        "period": "calendar_month",
-        "cap_value": 6250,
-        "post_cap_unit": null,
-        "post_cap_rate": 0,
-        "resets_on_day": 1,
-        "cap_kind": "total_points",
-        "cap_amount": 25000,
-        "scope": "targets",
-        "targets": [
-          "american-express-gold-charge-card-india:rule:rewards_multiplier_5x"
-        ],
-        "parent_cap_id": null,
-        "post_cap_behavior": null,
-        "anchor": null,
-        "min_engine_version": 2,
-        "source_local_id": "reward_multiplier_monthly_cap"
       }
     ],
-    "milestone_rules": [
-      {
-        "id": "american-express-gold-charge-card-india:milestone:monthly_milestone_6x1000",
-        "label": "1,000 bonus Membership Rewards points on six ₹1,000+ transactions",
-        "period": "calendar_month",
-        "threshold_spend_inr": 6000,
-        "reward_description": "1,000 bonus Membership Rewards points on six ₹1,000+ transactions",
-        "reward_value_inr": 250,
-        "is_repeatable": true,
-        "max_repeats": null,
-        "anchor": "calendar_year",
-        "reward_points": 1000,
-        "reward_kind": "points",
-        "excluded_category_ids": [],
-        "window_days": null,
-        "source_local_id": "monthly_milestone_6x1000"
-      }
-    ],
+    "milestone_rules": [],
     "fee_waiver_rules": [],
     "benefits": [
       {

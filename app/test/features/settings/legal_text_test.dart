@@ -159,19 +159,19 @@ void main() {
     expect(all, isNot(contains('guest mode')));
   });
 
-  test('owner placeholders are present and unmistakable', () {
+  test('owner details are filled in, with no placeholder left', () {
     final all = [
       ..._expectedParts(privacyPolicySections),
       ..._expectedParts(termsOfServiceSections),
     ].join('\n');
-    for (final needed in [
-      '[OWNER TO FILL: legal entity name and registered address]',
-      '[OWNER TO FILL: grievance officer name]',
-      '[OWNER TO FILL: grievance officer email]',
-    ]) {
-      expect(all, contains(needed));
-    }
     expect(legalOwnerPlaceholder, '[OWNER TO FILL');
+    expect(all, isNot(contains(legalOwnerPlaceholder)));
+    expect(
+      all,
+      contains('grievance officer under the Digital Personal Data Protection '
+          'Act, 2023 is Chandresh Kerkar, at panda.paths123@gmail.com'),
+    );
+    expect(all, contains('governed by the laws of India'));
   });
 
   testWidgets('the Legal screen shows the policy sections and the 18+ line', (
