@@ -35,6 +35,7 @@
 
 const rewardV2 = require('./reward_math_v2');
 const { loadDirectory } = require('./merchant_directory');
+const { safeErrorCode } = require('./safeErrorCode');
 const {
   periodBounds, cardAnchorDate, cardIssueAnchorDate, windowBoundsV2, calendarDay, istDay, addDays,
 } = require('./cycles');
@@ -664,20 +665,64 @@ async function reverseTransactionV2(client, userId, v2, args) {
   return { ...reversed, pointsLedgerEntry: null };
 }
 
+const HOOK_SAVEPOINT = 'card_state_v2';
+const DEFERRED_STATE = Object.freeze({ capStates: [], milestoneStates: [], pointsLedgerEntry: null, feeWaiverStates: [] });
+
 /**
  * index.js's applyTransactionState hook. Returns the state updates for a
  * v2-shaped card (sign +1 records, sign −1 reverses), or null so the v1
  * path runs unchanged. Callers that change an existing transaction hold the
  * user's `transaction-ingest:<user>` advisory lock first (C8 D23d), so a
  * rebuild never interleaves; this hook takes no lock of its own.
+ *
+ * C8 D33c: card-state recording never fails ingest. Everything runs inside
+ * SAVEPOINT card_state_v2 — every caller (insert, edit, ignore/restore,
+ * duplicate resolution, bulk apply, sync apply, repair) goes through here.
+ * On any error the work is rolled back to the savepoint (so nothing is ever
+ * half-applied or half-reversed), only safeErrorCode is logged, the
+ * transaction keeps card_state_v2 = NULL (a later reversal then subtracts
+ * nothing), and the next reconcile or recompute rebuilds the state. A failed
+ * reversal still does what v1's reversal does to the transaction itself:
+ * expected values to 0 and its ledger rows removed, so an ignored spend
+ * never keeps counting. A v1-shaped card leaves the savepoint before the v1
+ * path runs, which is unchanged.
  */
 async function applyIfV2(client, userId, userCard, args) {
   const userCardId = (args && args.userCardId) || (userCard && userCard.id);
-  const v2 = await loadV2Card(client, userCardId, { profileId: userId });
-  if (!v2) return null;
-  return args.sign < 0
-    ? reverseTransactionV2(client, userId, v2, args)
-    : applyTransactionV2(client, userId, v2, args);
+  await client.query(`SAVEPOINT ${HOOK_SAVEPOINT}`);
+  try {
+    const v2 = await loadV2Card(client, userCardId, { profileId: userId });
+    const result = !v2
+      ? null
+      : args.sign < 0
+        ? await reverseTransactionV2(client, userId, v2, args)
+        : await applyTransactionV2(client, userId, v2, args);
+    await client.query(`RELEASE SAVEPOINT ${HOOK_SAVEPOINT}`);
+    return result;
+  } catch (err) {
+    await client.query(`ROLLBACK TO SAVEPOINT ${HOOK_SAVEPOINT}`);
+    await client.query(`RELEASE SAVEPOINT ${HOOK_SAVEPOINT}`);
+    console.warn('card_state_v2 deferred to the next rebuild', safeErrorCode(err));
+    if (args && args.txnId) {
+      if (args.sign < 0) {
+        await client.query(
+          `UPDATE transactions
+              SET expected_value_inr = 0, expected_points = 0,
+                  expected_cashback_inr = CASE WHEN expected_cashback_inr IS NULL THEN NULL ELSE 0 END,
+                  card_state_v2 = NULL, updated_at = now()
+            WHERE id = $1 AND profile_id = $2`,
+          [args.txnId, userId],
+        );
+        await client.query(`DELETE FROM points_ledger WHERE transaction_id = $1 AND profile_id = $2`, [args.txnId, userId]);
+      } else {
+        await client.query(
+          `UPDATE transactions SET card_state_v2 = NULL, updated_at = now() WHERE id = $1 AND profile_id = $2`,
+          [args.txnId, userId],
+        );
+      }
+    }
+    return { ...DEFERRED_STATE };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -722,7 +767,10 @@ function rebuildRange(v2, {
     for (const cap of v2.caps) {
       const w = capWindow(v2, cap, day);
       start = minDay(start, w.start);
-      end = maxDay(end, w.end);
+      // C8 D33f: a lifetime window ends 9999-12-31; it must not stretch the
+      // replay for the card's other caps. Later spends still count toward the
+      // lifetime row as seeds, through their records.
+      if (cap.period !== 'lifetime') end = maxDay(end, w.end);
     }
     if (expected) start = minDay(start, monthStart(day));
     if (since) start = minDay(start, calendarDay(since));
@@ -749,6 +797,21 @@ function rebuildRange(v2, {
     loadTo = loadTo == null ? w.end : maxDay(loadTo, w.end);
   }
   return { asOf: day, caps: capRange, milestones: milestoneWindows, loadFrom, loadTo };
+}
+
+/**
+ * The periods a rebuild enumerates, per cap: those intersecting the replay
+ * window, but never past the cap's own period containing `asOf` (C8 D33f).
+ * A later spend in the window still gets its row (planReplay adds it).
+ */
+function rebuildPeriods(v2, range) {
+  const out = new Map();
+  if (!range.caps) return out;
+  for (const cap of v2.caps) {
+    const own = capWindow(v2, cap, range.asOf).end;
+    out.set(cap.id, capPeriodsBetween(v2, cap, range.caps.start, minDay(range.caps.end, own)));
+  }
+  return out;
 }
 
 /** Every period of `cap` that intersects [start, end]. */
@@ -797,8 +860,9 @@ function planReplay({
   const caps = range.caps;
   const capRows = new Map(); // key -> row being rebuilt
   if (caps) {
+    const periods = rebuildPeriods(v2, range);
     for (const cap of v2.caps) {
-      for (const w of capPeriodsBetween(v2, cap, caps.start, caps.end)) {
+      for (const w of periods.get(cap.id)) {
         capRows.set(key(cap.id, w.start), {
           cap_rule_id: cap.id, period_start: w.start, period_end: w.end, consumed: 0,
           cap_kind: null, cap_amount: null, approximate_window: w.approximate,
@@ -1153,6 +1217,164 @@ async function rebuildCardState(client, userId, v2, opts = {}) {
   return { plan, written };
 }
 
+// ---------------------------------------------------------------------------
+// Fee waivers (C8 D33b): rebuilt by recompute_card_state.js
+//
+// A forced catalogue re-import deletes and re-creates fee_waiver_rules, and
+// fee_waiver_states cascades away with them. The recompute replays each
+// rule's CURRENT period over the card's spends with exactly the maths the
+// live path uses (v1's periodBounds keyed by the spend's own period, the
+// rule's excluded categories, the raw amount; on a v2 card also the D22a
+// exclusion), then settles waived_at. Earlier periods are history and are
+// not rebuilt. Statement-cycle rules get the same approximation the live
+// path uses (v1's statement-cycle bounds), never a wider window.
+// ---------------------------------------------------------------------------
+
+const FEE_WINDOW_MARGIN_DAYS = 5; // v1's statement-cycle bounds can end up to 3 days before a spend in them
+
+/** Each rule's current window as the live path keys it: v1's periodBounds on the UTC day of `asOf`. */
+function feeWaiverWindows(rules, asOf, statementDay) {
+  const ref = asOf instanceof Date ? asOf : new Date(asOf);
+  return arr(rules).map((rule) => ({ rule, ...periodBounds(rule.period, ref, { statementDay }) }));
+}
+
+function isEligibleSpend(t) {
+  return t.status === 'active' && t.instrument === 'credit_card' && t.entry_kind === 'spend' && t.is_backfill !== true;
+}
+
+/**
+ * Pure. `windows` from feeWaiverWindows; `transactions` the card's rows
+ * around them; `excludedOf(t)` the engine's exclusion on a v2 card (null on
+ * v1). Returns the rebuilt rows, the rows to write (changed amount or
+ * waiver), and — when `userCardId` is given (v2) — record updates for the
+ * fee_waivers section.
+ */
+function planFeeWaivers({
+  windows, transactions, statementDay = null, excludedOf = null, existingRows = [], userCardId = null,
+}) {
+  const totals = new Map(windows.map((w) => [key(w.rule.id, w.start), 0]));
+  const recordUpdates = [];
+  const ordered = [...arr(transactions)].sort((a, b) => new Date(a.occurred_at) - new Date(b.occurred_at)
+    || (String(a.id) < String(b.id) ? -1 : 1));
+  for (const t of ordered) {
+    const entries = [];
+    if (isEligibleSpend(t) && !(excludedOf && excludedOf(t))) {
+      for (const w of windows) {
+        const own = periodBounds(w.rule.period, new Date(t.occurred_at), { statementDay });
+        if (own.start !== w.start) continue;
+        if (t.category_id && arr(w.rule.excluded_categories).includes(t.category_id)) continue;
+        const delta = round2(Number(t.amount_inr));
+        totals.set(key(w.rule.id, w.start), totals.get(key(w.rule.id, w.start)) + delta);
+        entries.push({ id: w.rule.id, start: w.start, end: w.end, delta });
+      }
+    }
+    if (userCardId) {
+      const old = t.card_state_v2 && typeof t.card_state_v2 === 'object' ? t.card_state_v2 : null;
+      const sections = {};
+      for (const name of RECORD_SECTIONS) sections[name] = arr(old && old[name]);
+      sections.fee_waivers = sections.fee_waivers.filter((e) => !totals.has(key(e.id, e.start))).concat(entries);
+      const next = toRecord(userCardId, sections);
+      if (canonical(next) !== canonical(old)) recordUpdates.push({ id: t.id, record: next });
+    }
+  }
+
+  const existing = new Map(arr(existingRows).map((r) => [key(r.fee_waiver_rule_id, calendarDay(r.period_start)), r]));
+  const rows = [];
+  const toWrite = [];
+  const diff = [];
+  for (const w of windows) {
+    const k = key(w.rule.id, w.start);
+    const qualified = round2(totals.get(k));
+    const threshold = num(w.rule.threshold_spend_inr) ?? 0;
+    const row = {
+      fee_waiver_rule_id: w.rule.id, period_start: w.start, period_end: w.end,
+      qualified_spend: qualified, threshold, waived: qualified >= threshold,
+    };
+    rows.push(row);
+    const before = existing.get(k) || null;
+    if (!before && qualified === 0) continue;
+    const same = before && sameNumber(before.qualified_spend, qualified)
+      && Boolean(before.waived_at) === row.waived && calendarDay(before.period_end) === w.end;
+    if (same) continue;
+    toWrite.push(row);
+    diff.push({
+      fee_waiver_rule_id: w.rule.id, period_start: w.start,
+      before: before ? { qualified_spend: num(before.qualified_spend), waived: Boolean(before.waived_at) } : null,
+      after: { qualified_spend: qualified, waived: row.waived },
+    });
+  }
+  return { rows, toWrite, diff, recordUpdates };
+}
+
+/**
+ * Reads and plans the fee-waiver rebuild for one user card (v1 or v2), or
+ * null when its product has no fee-waiver rules. `card` is
+ * `{ userCardId, profileId, cardProductId, statementDay }`; pass the loaded
+ * v2 card for a v2-shaped one (adds the D22a exclusion and record updates).
+ */
+async function planFeeWaiverRebuild(client, card, { asOf = new Date(), v2 = null } = {}) {
+  const rules = await client.query(
+    `SELECT id, threshold_spend_inr, period, excluded_categories FROM fee_waiver_rules
+      WHERE card_product_id = $1 ORDER BY id`,
+    [card.cardProductId],
+  );
+  if (rules.rows.length === 0) return null;
+  const windows = feeWaiverWindows(rules.rows, asOf, card.statementDay);
+  const from = windows.reduce((d, w) => minDay(d, w.start), windows[0].start);
+  const to = windows.reduce((d, w) => maxDay(d, w.end), windows[0].end);
+  const transactions = await client.query(
+    `SELECT id, amount_inr, occurred_at, category_id, merchant_name, merchant_vpa, mcc, rail,
+            status, instrument, entry_kind, is_backfill, card_state_v2
+       FROM transactions
+      WHERE user_card_id = $1 AND profile_id = $2
+        AND occurred_at >= (($3::date - $5::int)::timestamp AT TIME ZONE 'UTC')
+        AND occurred_at < (($4::date + $5::int + 1)::timestamp AT TIME ZONE 'UTC')
+        AND (card_state_v2 IS NOT NULL
+             OR (status = 'active' AND instrument = 'credit_card' AND entry_kind = 'spend'
+                 AND COALESCE(is_backfill, false) = false))
+      ORDER BY occurred_at ASC, id ASC`,
+    [card.userCardId, card.profileId, from, to, FEE_WINDOW_MARGIN_DAYS],
+  );
+  const existing = await client.query(
+    `SELECT fee_waiver_rule_id, to_char(period_start, 'YYYY-MM-DD') AS period_start,
+            to_char(period_end, 'YYYY-MM-DD') AS period_end, qualified_spend, waived_at
+       FROM fee_waiver_states
+      WHERE user_card_id = $1 AND profile_id = $2 AND fee_waiver_rule_id = ANY($3::uuid[])`,
+    [card.userCardId, card.profileId, rules.rows.map((r) => r.id)],
+  );
+  let excludedOf = null;
+  if (v2) {
+    const directory = await loadDirectoryCached(client);
+    excludedOf = (t) => capPlan(v2, directory, transactionContext(t)).excluded;
+  }
+  return planFeeWaivers({
+    windows, transactions: transactions.rows, statementDay: card.statementDay, excludedOf,
+    existingRows: existing.rows, userCardId: v2 ? v2.userCardId : null,
+  });
+}
+
+/** Writes a fee-waiver plan: absolute qualified spend, then waived_at settled as the live path does. */
+async function applyFeeWaiverRebuild(client, userId, card, plan) {
+  for (const r of plan.toWrite) {
+    const upserted = await client.query(
+      `INSERT INTO fee_waiver_states (profile_id, user_card_id, fee_waiver_rule_id, period_start, period_end, qualified_spend)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (user_card_id, fee_waiver_rule_id, period_start)
+       DO UPDATE SET qualified_spend = EXCLUDED.qualified_spend, period_end = EXCLUDED.period_end, updated_at = now()
+       RETURNING ${FEE_WAIVER_STATE_RETURNING}`,
+      [userId, card.userCardId, r.fee_waiver_rule_id, r.period_start, r.period_end, r.qualified_spend],
+    );
+    await settleFeeWaiver(client, upserted.rows[0], r.threshold);
+  }
+  for (const u of plan.recordUpdates) {
+    await client.query(
+      `UPDATE transactions SET card_state_v2 = $3::jsonb, updated_at = now() WHERE id = $1 AND profile_id = $2`,
+      [u.id, userId, u.record ? JSON.stringify(u.record) : null],
+    );
+  }
+  return { rows: plan.toWrite.length, records: plan.recordUpdates.length };
+}
+
 /**
  * index.js's reconcileCurrentCapStates hook: for a v2-shaped card, rebuild
  * the current cap periods in native units (and the records that back them);
@@ -1249,7 +1471,12 @@ module.exports = {
   computeTransactionV2,
   milestoneEntries,
   rebuildRange,
+  rebuildPeriods,
   planReplay,
+  feeWaiverWindows,
+  planFeeWaivers,
+  planFeeWaiverRebuild,
+  applyFeeWaiverRebuild,
   toRecord,
   nativeAmount,
   ledgerRows,

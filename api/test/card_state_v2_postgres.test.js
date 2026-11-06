@@ -471,6 +471,102 @@ test('v2 card: a cap row written in v1 units is rebuilt in native units before p
   });
 });
 
+/** index.js's real insertTransactionAndUpdateState, with only its observation/duplicate/tag helpers stubbed. */
+function insertFunction(fns) {
+  const source = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
+  const start = source.indexOf('async function insertTransactionAndUpdateState(client');
+  const end = source.indexOf('async function importParsedMessage(client', start);
+  assert.ok(start >= 0 && end > start);
+  return new Function(
+    'recordTransactionObservation', 'detectDuplicates', 'loadUserCardForState', 'applyTransactionState',
+    'reverseTransactionState', 'transactionTags',
+    `${source.slice(start, end)} return insertTransactionAndUpdateState;`,
+  )(
+    async () => {}, async () => ({ candidateId: null }), fns.loadUserCardForState, fns.applyTransactionState,
+    fns.reverseTransactionState, { mergeTransactionTags: async () => {} },
+  );
+}
+
+/** index.js's real POST /transactions/:id/ignore handler, on `client`. */
+function ignoreRoute(client, fns) {
+  const source = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
+  const start = source.indexOf("app.post('/transactions/:id/ignore'");
+  const end = source.indexOf('/**\n * POST /transactions/:id/restore', start);
+  assert.ok(start >= 0 && end > start);
+  let handler;
+  new Function('app', 'requireAuth', 'withUserClient', 'IGNORE_REASONS', 'loadUserCardForState',
+    'reverseTransactionState', 'safeErrorCode', source.slice(start, end))(
+    { post: (_route, ...handlers) => { handler = handlers.at(-1); } }, null, (_userId, fn) => fn(client),
+    ['refund', 'reversal', 'transfer', 'wrong_transaction'], fns.loadUserCardForState, fns.reverseTransactionState,
+    (e) => String(e && e.code),
+  );
+  return async (userId, txnId) => {
+    const res = { code: 200, body: null, status(c) { this.code = c; return this; }, json(b) { this.body = b; return this; } };
+    await handler({ userId, params: { id: txnId }, body: { reason: 'refund' } }, res);
+    return res;
+  };
+}
+
+test('C8 D33c: a card-state failure never fails ingest or ignore; nothing half-applied, rebuilt later', { skip }, async () => {
+  cardStateV2.clearDirectoryCache();
+  await withRollback(async (client) => {
+    const fns = extractIndexFunctions();
+    const { monthStart, prevMonthStart } = await dates(client);
+    const ids = await seedSyntheticCard(client, { openedOn: prevMonthStart });
+    await asUser(client, ids.profileId);
+    const { txnId: first } = await recordSpend(client, fns, ids, { amount: 2000, day: monthStart, category: 'dining' });
+    const rowsBefore = await capRows(client, ids.userCardId);
+    const milestonesBefore = await milestoneRows(client, ids.userCardId);
+
+    // Inject a SQL failure into every cap_states write (rolled back with the test).
+    await asOwner(client);
+    await client.query(`CREATE FUNCTION public.wp8_injected_failure() RETURNS trigger LANGUAGE plpgsql AS
+      $$ BEGIN RAISE EXCEPTION 'wp8 injected failure' USING ERRCODE = 'P0001'; END $$`);
+    await client.query(`CREATE TRIGGER wp8_injected_failure BEFORE INSERT OR UPDATE ON cap_states
+      FOR EACH ROW EXECUTE FUNCTION public.wp8_injected_failure()`);
+    await asUser(client, ids.profileId);
+    const warnings = [];
+    const warn = console.warn;
+    console.warn = (...args) => warnings.push(args.join(' '));
+    try {
+      // Ingest (the POST /transactions and /sms path): stored, 201, no card state, no partial writes.
+      const insert = insertFunction(fns);
+      const stored = await insert(client, ids.profileId, {
+        userCardId: ids.userCardId, amount: 1000, occurred: new Date(`${addDays(monthStart, 1)}T06:30:00Z`),
+        categoryId: ids.cats.dining, rail: 'unknown', merchantName: null, source: 'manual',
+      });
+      assert.equal(stored.status, 201);
+      const second = stored.transaction.id;
+      const [row] = (await client.query(`SELECT status, state_applied, card_state_v2 FROM transactions WHERE id = $1`, [second])).rows;
+      assert.deepEqual([row.status, row.card_state_v2], ['active', null]);
+      assert.deepEqual(await capRows(client, ids.userCardId), rowsBefore, 'no partial cap writes');
+      assert.deepEqual(await milestoneRows(client, ids.userCardId), milestonesBefore, 'no partial milestone writes');
+
+      // Ignore (a reversal): 200, never half-reversed; the record is cleared, expected values zeroed.
+      const res = await ignoreRoute(client, fns)(ids.profileId, first);
+      assert.equal(res.code, 200);
+      assert.equal(res.body.transaction.status, 'ignored');
+      assert.deepEqual(await capRows(client, ids.userCardId), rowsBefore, 'not half-reversed');
+      const [ignored] = await expectedOf(client, [first]);
+      assert.deepEqual([ignored.points, ignored.card_state_v2], [0, null]);
+      assert.equal((await client.query(`SELECT count(*)::int AS n FROM points_ledger WHERE transaction_id = $1`, [first])).rows[0].n, 0);
+      // Only a safe error code is logged, never row data.
+      assert.ok(warnings.length >= 2 && warnings.every((w) => w.includes('P0001') && !w.includes('2000')), warnings.join('\n'));
+    } finally {
+      console.warn = warn;
+    }
+
+    // Once writes work again, the wallet's reconcile rebuilds the caps from the ledger.
+    await asOwner(client);
+    await client.query(`DROP TRIGGER wp8_injected_failure ON cap_states`);
+    await asUser(client, ids.profileId);
+    await fns.reconcileCurrentCapStates(client, ids.profileId);
+    assert.deepEqual(consumedById(await capRows(client, ids.userCardId)), {
+      [F.CAP.parent]: 50, [F.CAP.bonus]: 40, [F.CAP.cardYear]: 50,
+    });
+  });
+});
+
 test('C8 D23c: the wallet\'s "current" v2 cap and milestone rows follow the India day across 18:30 UTC', { skip }, async () => {
   cardStateV2.clearDirectoryCache();
   await withRollback(async (client) => {
@@ -732,6 +828,107 @@ test('C8 D23d: an edit holding the ingest lock and a concurrent reconcile lose n
     }
     await Promise.all([owner.end(), editor.end(), rebuilder.end()]);
   }
+});
+
+// ---------------------------------------------------------------------------
+// C8 D33b: a forced re-import cascades fee_waiver_states away; the recompute
+// replays each rule's current period with the live path's (v1) maths.
+
+async function feeWaiverRows(client, userCardId) {
+  const r = await client.query(
+    `SELECT fee_waiver_rule_id, to_char(period_start, 'YYYY-MM-DD') AS period_start,
+            to_char(period_end, 'YYYY-MM-DD') AS period_end, qualified_spend::float8 AS qualified,
+            waived_at IS NOT NULL AS waived
+       FROM fee_waiver_states WHERE user_card_id = $1 ORDER BY fee_waiver_rule_id, period_start`,
+    [userCardId],
+  );
+  return r.rows;
+}
+
+test('C8 D33b: recompute rebuilds a v1 card\'s current fee-waiver progress exactly as the live path left it', { skip }, async () => {
+  cardStateV2.clearDirectoryCache();
+  await withRollback(async (client) => {
+    const fns = extractIndexFunctions();
+    const { today, monthStart } = await v1Dates(client);
+    const cats = await categoryIds(client);
+    const issuer = (await client.query(`INSERT INTO issuers (slug, name) VALUES ('wp8-fw-bank', 'WP8 FW Bank') RETURNING id`)).rows[0].id;
+    const product = (await client.query(
+      `INSERT INTO card_products (issuer_id, slug, name, network, status, verified_at, base_reward_unit, base_reward_rate, point_value_inr)
+       VALUES ($1, 'wp8-fw-card', 'WP8 FW Card', 'visa', 'published', now(), 'cashback_percent', 1, 1) RETURNING id`,
+      [issuer],
+    )).rows[0].id;
+    await client.query(
+      `INSERT INTO fee_waiver_rules (card_product_id, threshold_spend_inr, period, waives_fee_inr, excluded_categories)
+       VALUES ($1, 3000, 'annual', 500, '{}'), ($1, 50000, 'quarter', 999, ARRAY[$2]::uuid[])`,
+      [product, cats.rent],
+    );
+    const profileId = (await client.query(`INSERT INTO profiles (id) VALUES (gen_random_uuid()) RETURNING id`)).rows[0].id;
+    const userCardId = (await client.query(
+      `INSERT INTO user_cards (profile_id, card_product_id) VALUES ($1, $2) RETURNING id`, [profileId, product])).rows[0].id;
+    const ids = { cats, product, profileId, userCardId };
+    await asUser(client, profileId);
+    assert.equal(await cardStateV2.loadV2Card(client, userCardId), null, 'v1-shaped');
+    for (const s of [
+      { amount: 2000, day: monthStart, category: 'dining' },
+      { amount: 2000, day: monthStart, category: 'dining' },
+      { amount: 1000, day: monthStart, category: 'rent' },
+    ]) await recordSpend(client, fns, ids, s);
+
+    const live = await feeWaiverRows(client, userCardId);
+    assert.deepEqual(live.map((r) => [r.qualified, r.waived]).sort(), [[4000, false], [5000, true]]);
+
+    // A forced import cascades the rows away.
+    await client.query(`DELETE FROM fee_waiver_states WHERE user_card_id = $1`, [userCardId]);
+    const dry = await recompute(client, { nested: true, asOf: today, userCardId, log: quietLog });
+    assert.deepEqual([dry.changedCards, dry.feeWaiverRows], [1, 2]);
+    assert.deepEqual(await feeWaiverRows(client, userCardId), [], 'dry run writes nothing');
+    await recompute(client, { nested: true, apply: true, asOf: today, userCardId, log: quietLog });
+    assert.deepEqual(await feeWaiverRows(client, userCardId), live, 'identical to the live v1 path');
+    const again = await recompute(client, { nested: true, apply: true, asOf: today, userCardId, log: quietLog });
+    assert.deepEqual([again.changedCards, again.feeWaiverRows], [0, 0]);
+  });
+});
+
+test('C8 D33b: after a forced re-import of a v2 card\'s fee-waiver rules, recompute restores progress and the waiver', { skip }, async () => {
+  cardStateV2.clearDirectoryCache();
+  await withRollback(async (client) => {
+    const fns = extractIndexFunctions();
+    const { today, monthStart, prevMonthStart } = await dates(client);
+    const ids = await seedSyntheticCard(client, { openedOn: prevMonthStart });
+    await asUser(client, ids.profileId);
+    const spends = [
+      { amount: 2000, day: monthStart, category: 'dining' },
+      { amount: 30000, day: addDays(monthStart, 1), merchant: 'BUNDL TECHNOLOGIES BLR' },
+      { amount: 30000, day: addDays(monthStart, 2), category: 'dining' },
+      { amount: 500, day: addDays(monthStart, 2), category: 'wallet' }, // excluded: no progress (D22a)
+    ];
+    const txnIds = [];
+    for (const s of spends) txnIds.push((await recordSpend(client, fns, ids, s)).txnId);
+    const live = await feeWaiverRows(client, ids.userCardId);
+    assert.deepEqual(live.map((r) => [r.qualified, r.waived]), [[62000, true]]);
+
+    // Forced re-import: the rule is deleted and re-created (new id); its state cascades away.
+    await asOwner(client);
+    await client.query(`DELETE FROM fee_waiver_rules WHERE card_product_id = $1`, [ids.product]);
+    const newRule = (await client.query(
+      `INSERT INTO fee_waiver_rules (card_product_id, threshold_spend_inr, period, waives_fee_inr)
+       VALUES ($1, 50000, 'annual', 500) RETURNING id`, [ids.product])).rows[0].id;
+    await asUser(client, ids.profileId);
+    assert.deepEqual(await feeWaiverRows(client, ids.userCardId), []);
+
+    await recompute(client, { nested: true, apply: true, asOf: today, userCardId: ids.userCardId, log: quietLog });
+    const rebuilt = await feeWaiverRows(client, ids.userCardId);
+    assert.deepEqual(rebuilt.map((r) => [r.fee_waiver_rule_id, r.period_start, r.period_end, r.qualified, r.waived]),
+      [[newRule, live[0].period_start, live[0].period_end, 62000, true]]);
+    const [record] = await expectedOf(client, [txnIds[1]]);
+    assert.ok(record.card_state_v2.fee_waivers.some((e) => e.id === newRule && e.delta === 30000), 'records carry the new rule');
+
+    // A reversal now subtracts exactly from the rebuilt row, and un-waives below the threshold.
+    await ignoreSpend(client, fns, ids, txnIds[1]);
+    assert.deepEqual((await feeWaiverRows(client, ids.userCardId)).map((r) => [r.qualified, r.waived]), [[32000, false]]);
+    const again = await recompute(client, { nested: true, apply: true, asOf: today, userCardId: ids.userCardId, log: quietLog });
+    assert.equal(again.feeWaiverRows, 0);
+  });
 });
 
 // ---------------------------------------------------------------------------

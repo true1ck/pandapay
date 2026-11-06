@@ -4481,6 +4481,8 @@ async function applyTransactionState(client, userId, userCard, {
   // card-rewards v2 (WP8, plan C3 / C8 D10): a v2-shaped card records through
   // reward_math_v2 in native units, every applicable cap in its own period,
   // and reverses from its per-transaction record (src/card_state_v2.js).
+  // The hook runs inside SAVEPOINT card_state_v2 (C8 D33c): a failure there
+  // is rolled back and deferred to the next rebuild, never failing ingest.
   // A v1-shaped card gets null back and runs the unchanged v1 path below.
   const v2State = await cardStateV2.applyIfV2(client, userId, userCard, {
     txnId, userCardId, amount, occurred, categoryId, sign, merchantName, rail,

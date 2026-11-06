@@ -225,6 +225,36 @@ test('C8 D23f: lifetime caps rebuild from the card floor, not 1970', () => {
   assert.deepEqual([lifetime.period_start, lifetime.consumed], ['1970-01-01', 200]);
 });
 
+test('C8 D33f (M1): a lifetime cap does not stretch the rebuild to 9999 for the card\'s other caps', () => {
+  const lifetimeId = '00000000-0000-4000-8000-0000000000c9';
+  const caps = [...F.CAPS, {
+    id: lifetimeId, reward_rule_id: null, category_id: null, label: 'lifetime',
+    measure: 'reward_value', period: 'lifetime', cap_value: '1000', cap_kind: 'total_points', cap_amount: '4000',
+    scope: 'card', parent_cap_id: null, post_cap_behavior: null, post_cap_rate: '0', anchor: null, targets: [],
+  }];
+  const v2 = cardStateV2.buildV2Card({ userCard: F.userCardRow(), rules: F.RULES, caps, milestones: F.MILESTONES });
+  const range = cardStateV2.rebuildRange(v2, { asOf: new Date('2026-11-20T12:00:00Z'), caps: true, floor: '2026-08-01' });
+  // The replay window ends with the longest non-lifetime period (the card year), not 9999-12-31.
+  assert.equal(range.caps.end, '2027-09-30');
+  const periods = cardStateV2.rebuildPeriods(v2, range);
+  // Each cap enumerates only up to its own current period: the monthly parent
+  // from the floor to November (4 periods), the card year twice, the lifetime cap once.
+  assert.deepEqual(periods.get(F.CAP.parent).map((w) => w.start), ['2026-08-01', '2026-09-01', '2026-10-01', '2026-11-01']);
+  assert.deepEqual(periods.get(F.CAP.cardYear).map((w) => w.start), ['2025-10-01', '2026-10-01']);
+  assert.deepEqual(periods.get(lifetimeId).map((w) => [w.start, w.end]), [['1970-01-01', '9999-12-31']]);
+  // The lifetime cap still counts from the card's start; a future-dated spend
+  // in a later month still gets its own monthly row.
+  const plan = cardStateV2.planReplay({
+    v2, directory, range,
+    transactions: [dining('2026-08-05', 2000), dining('2026-11-03', 2000), dining('2026-12-02', 2000)],
+  });
+  assert.equal(plan.capRows.find((r) => r.cap_rule_id === lifetimeId).consumed, 300);
+  assert.deepEqual(
+    plan.capRows.filter((r) => r.cap_rule_id === F.CAP.parent).map((r) => [r.period_start, r.consumed]),
+    [['2026-08-01', 100], ['2026-11-01', 100], ['2026-12-01', 100]],
+  );
+});
+
 test('a points+cashback card: cashback goes to expected_cashback_inr only, never the points ledger', () => {
   const rules = [...F.RULES, {
     ...F.RULES[0], id: '00000000-0000-4000-8000-0000000000a9', category_id: F.CATEGORY.other,
@@ -378,6 +408,43 @@ test('C8 D23d: every route that changes a transaction takes the ingest lock befo
       assert.ok(lock < at, `${site}: ingest lock before ${marker}`);
     }
   }
+});
+
+test('C8 D33b: fee-waiver replay keys each spend by its own v1 period, as live — statement cycles included, never wider', () => {
+  const { periodBounds } = require('../src/cycles');
+  const rule = { id: '00000000-0000-4000-8000-0000000000f9', period: 'statement_cycle', threshold_spend_inr: '5000', excluded_categories: [F.CATEGORY.rent] };
+  const asOf = new Date('2026-02-15T12:00:00Z');
+  const windows = cardStateV2.feeWaiverWindows([rule], asOf, 31);
+  // The window is exactly v1's (statement day 31 in February: Jan 31 – Feb 27, v1's approximation).
+  assert.deepEqual([windows[0].start, windows[0].end], [periodBounds('statement_cycle', asOf, { statementDay: 31 }).start, '2026-02-27']);
+  const spends = [
+    txn('2026-01-30', 1000), // previous cycle
+    txn('2026-02-10', 2000),
+    txn('2026-02-28', 3000), // outside v1's end, but v1 keys it to this cycle: counted, as live
+    txn('2026-03-01', 4000), // next cycle
+    txn('2026-02-11', 9000, { category_id: F.CATEGORY.rent }), // the rule's excluded category
+    txn('2026-02-12', 9000, { status: 'ignored' }),
+  ];
+  const plan = cardStateV2.planFeeWaivers({ windows, transactions: spends, statementDay: 31 });
+  assert.deepEqual(plan.rows.map((r) => [r.period_start, r.qualified_spend, r.waived]), [['2026-01-31', 5000, true]]);
+  // Each counted spend is one the live path adds to this same row.
+  for (const t of spends.slice(0, 4)) {
+    const own = periodBounds('statement_cycle', t.occurred_at, { statementDay: 31 });
+    assert.equal(own.start === '2026-01-31', ['2026-02-10', '2026-02-28'].includes(t.occurred_at.toISOString().slice(0, 10)));
+  }
+  // Nothing written when nothing qualifies and no row exists.
+  assert.deepEqual(cardStateV2.planFeeWaivers({ windows, transactions: [], statementDay: 31 }).toWrite, []);
+});
+
+test('C8 D33f (M2): the cap_states kind check is added NOT VALID, then validated in its own statement', () => {
+  const sql = require('node:fs').readFileSync(require('node:path').join(
+    __dirname, '../../db/supabase/migrations/20261106120000_card_state_v2.sql'), 'utf8')
+    .replace(/--[^\n]*/g, '').replace(/\s+/g, ' ').toLowerCase();
+  const statements = sql.split(';').map((s) => s.trim()).filter(Boolean);
+  const add = statements.findIndex((s) => s.includes('add constraint cap_states_cap_kind_known'));
+  const validate = statements.findIndex((s) => s === 'alter table cap_states validate constraint cap_states_cap_kind_known');
+  assert.ok(add >= 0 && / not valid$/.test(statements[add]), 'added NOT VALID');
+  assert.ok(validate > add, 'validated afterwards, in a separate statement');
 });
 
 test('recompute_card_state: dry run by default; options are validated', () => {

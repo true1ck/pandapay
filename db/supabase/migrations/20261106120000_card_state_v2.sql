@@ -31,11 +31,16 @@ alter table cap_states
   add column if not exists cap_amount         numeric(14,2),
   add column if not exists approximate_window boolean not null default false;
 
+-- Added NOT VALID (no scan under the ACCESS EXCLUSIVE lock), then validated
+-- in its own statement, which takes only a SHARE UPDATE EXCLUSIVE lock
+-- (C8 D33f). Every existing row has cap_kind NULL, so validation passes.
 alter table cap_states drop constraint if exists cap_states_cap_kind_known;
 alter table cap_states
   add constraint cap_states_cap_kind_known
     check (cap_kind is null or cap_kind in
-      ('bonus_points','total_points','bonus_cashback','total_cashback','eligible_spend','txn_count'));
+      ('bonus_points','total_points','bonus_cashback','total_cashback','eligible_spend','txn_count'))
+    not valid;
+alter table cap_states validate constraint cap_states_cap_kind_known;
 
 alter table milestone_states
   add column if not exists approximate_window boolean not null default false;
