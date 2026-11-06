@@ -19,9 +19,12 @@ app.get('/admin/me', requireAuth, async (req, res) => {
 
 app.get('/admin/cards', requireAdmin, async (req, res) => {
   try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query('SELECT * FROM v_admin_card_catalogue_export ORDER BY name')
-    );
+    const result = await withUserClient(req.userId, async (client) => {
+      // The whole catalogue is large (about 14 MB, 376 cards) and takes several seconds to read, more than the 5 s
+      // every other admin read gets. Give this one read more time on the database side and on the client side.
+      await client.query("SET LOCAL statement_timeout = '30s'");
+      return client.query({ text: 'SELECT * FROM v_admin_card_catalogue_export ORDER BY name', query_timeout: 30_000 });
+    });
     res.json({ cards: result.rows });
   } catch (err) {
     console.error('GET /admin/cards error', safeErrorCode(err));

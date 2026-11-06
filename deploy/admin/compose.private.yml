@@ -12,7 +12,8 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     pids_limit: 128
-    mem_limit: 256m
+    # 384m: a 14 MB card-catalogue reply peaks near 190 MB while the gateway reads and re-serialises it.
+    mem_limit: 384m
     cpus: 0.5
     ports: ['127.0.0.1:4321:4321']
     networks: [admin_private]
