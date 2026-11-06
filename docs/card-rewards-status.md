@@ -12,6 +12,14 @@ to resume.
 [agent plan](card-rewards-phase1-agent-plan.md) ·
 [later phases](card-rewards-later-phases.md)
 
+## iPhone test build with card rewards (6 Nov 2026)
+
+- Branch `card-rewards/release` (worktree `../pandapay-card-release`) = `sms-v2/integration` @ 93e99bb + `card-rewards/phase1`, merge commit e60599d. Nothing pushed. 9 conflicts resolved (api/package.json check list, CI workflow steps, app test config, 5 console files and one console doc taken from integration).
+- Checks on the merged tree: api 2,164 pass, 31 skipped (DB-backed), and the 2 tests that need DATABASE_URL / JWT_ACCESS_SECRET pass with placeholders; domain 2,050 pass; app 2,940 pass, 10 skipped, 0 fail; analyze 110 issues, 0 errors or warnings.
+- Rig: new scratch rig `/tmp/pandapay-sms-rig.Q555hU` on 192.168.160.140 (API :62279, auth :62278), started with `node scripts/sms_v2_local_rig.js --lan-ip 192.168.160.140` from the release worktree; all migrations applied, merchant directory seeded (165/61), 376 cards imported and published through the real scripts, `/catalogue?schema=2` answers gzip with an ETag and 304. Older rigs were left running.
+- Build: `PandaPay SMS v2 Test` 1.0.16 (127) installed on the iPhone (profile build, same app identity as 126). The launch step failed only because the phone was locked.
+- Not checked on a device yet: every card-rewards screen.
+
 ## ▶ Resumed (2026-11-06, at the owner's request)
 
 All nine work packages are merged into `card-rewards/phase1` (head 75efce3). Two whole-branch reviews (server and app) found three Critical over-statements and four Important rollout problems; all were fixed and re-reviewed (rulings D32–D35). Checkpoint B was re-run on the final branch and passed. What is left: the owner-run rollout (plan §9) and an emulator pass on a signed-in device, which has not been done.
