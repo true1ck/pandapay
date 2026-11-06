@@ -4,13 +4,11 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "43666c620871e3bde0c0bcd3e6ae8d46ac8b81bce1c94543f621143f35fb842e",
-    "override_sha256": "bcc3c60452adc8b340624b4c1dd5992cb75e7a90e898ed37ebfe8ec0dbc99e33",
+    "override_sha256": "6141b3a8e7b2b0649e52e0694f04cca918bdb7d8fc63303d696ae7616f0944ed",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
-  "blocking_flags": [
-    "info_rule"
-  ],
+  "blocking_flags": [],
   "card": {
     "id": "hdfc-regalia-gold:card",
     "slug": "hdfc-regalia-gold",
@@ -27,8 +25,8 @@
     "points_expiry_months": 24,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 10,
-      "rules_modelled": 9,
+      "rules_total": 11,
+      "rules_modelled": 10,
       "rules_info": 1,
       "caps_total": 6,
       "caps_enforced": 6,
@@ -51,7 +49,22 @@
         {
           "code": "info_rule",
           "source_local_id": "education_direct_standard",
+          "detail": "depends_on_txn_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "education_direct_standard",
           "detail": "condition:channel_type"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "education_direct_standard",
+          "detail": null
+        },
+        {
+          "code": "broad_exclusion_v1_only",
+          "source_local_id": "cd_gaming_exclusion",
+          "detail": null
         },
         {
           "code": "broad_category",
@@ -94,6 +107,24 @@
           "reason": "WP7: D28c: Reward Points T&C item 4: \"EasyEMI and e-wallet loading transactions will not accrue Reward points\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
           "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=education_direct_standard].depends_on_txn_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Card data review: MITC v4.18 (Oct 2026) I: \"Education payments made through third-party apps like (but not limited to) CRED, Cheq, MobiKwik, etc will not earn Reward Points\"; charges t: education \"done directly through ... their POS machines\" is not charged. Whether a payment went direct or through an app is not in the transaction context (the platform is never known for SMS spends, and an unknown platform cannot prove 'direct'), so this base-rate rule stays info with the D14b deferral flag. The education exclusion (category education, all channels) governs: direct education payments are under-stated, never over-stated.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "86a8d96d60d7e56e",
+          "reason": "Card data review: D24d. MITC v4.18 (Oct 2026) I(g): \"With effect from 1st July 2025, Online Skill-Based gaming transactions will not earn Reward Points/CashPoints on all the cards.\" The record had no gaming row. Same token as the Diners Black Metal record: v1-only entertainment row (D18b) plus a v2 MCC 5816 row.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+          "checked_on": "2026-11-06",
           "citation": null
         }
       ]
@@ -432,9 +463,12 @@
           "source_local_id": "education_direct_standard",
           "part": null,
           "info_reasons": [
+            "depends_on_txn_attribute",
             "condition:channel_type"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2026-08-05",
@@ -486,6 +520,81 @@
         "max_engine_version": null,
         "source_local_id": "wp7_emi_rail_exclusion",
         "display_note": "EMI transactions earn no rewards."
+      },
+      {
+        "id": "hdfc-regalia-gold:rule:cd_gaming_exclusion#1",
+        "category_id": "cat-entertainment",
+        "category_slug": "entertainment",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "cd_gaming_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only",
+            "broad_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "cd_gaming_exclusion",
+        "display_note": "Online skill-based gaming transactions do not earn Reward Points from 1 July 2025."
+      },
+      {
+        "id": "hdfc-regalia-gold:rule:cd_gaming_exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "cd_gaming_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5816"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cd_gaming_exclusion",
+        "display_note": "Online skill-based gaming transactions do not earn Reward Points from 1 July 2025."
       }
     ],
     "cap_rules": [
