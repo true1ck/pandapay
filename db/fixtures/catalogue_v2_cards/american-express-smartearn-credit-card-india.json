@@ -4,13 +4,11 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "2b59c5235adb8aea359210c7cbb0ab2331f2c8797d71ed8540ba2691a328d2f5",
-    "override_sha256": null,
+    "override_sha256": "ca7b520b9b2bd4134566f8999f761d8b532d574db79d1de45d5ff72afab3c3f7",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
-  "blocking_flags": [
-    "info_rule"
-  ],
+  "blocking_flags": [],
   "card": {
     "id": "american-express-smartearn-credit-card-india:card",
     "slug": "american-express-smartearn-credit-card-india",
@@ -27,9 +25,9 @@
     "points_expiry_months": 0,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 12,
+      "rules_total": 11,
       "rules_modelled": 9,
-      "rules_info": 3,
+      "rules_info": 2,
       "caps_total": 3,
       "caps_enforced": 3,
       "flags": [
@@ -46,21 +44,6 @@
         {
           "code": "token_replaced_by_conditions",
           "source_local_id": "accelerator-5x-amazon",
-          "detail": null
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "reward-multiplier-up-to-5x",
-          "detail": "up_to_rate"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "reward-multiplier-up-to-5x",
-          "detail": "condition:merchant_selection_required"
-        },
-        {
-          "code": "depends_on_user_attribute",
-          "source_local_id": "reward-multiplier-up-to-5x",
           "detail": null
         },
         {
@@ -86,6 +69,11 @@
         {
           "code": "info_rule",
           "source_local_id": "standard-safekey-emi",
+          "detail": "depends_on_txn_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "standard-safekey-emi",
           "detail": "condition:emi_origin"
         },
         {
@@ -94,6 +82,16 @@
           "detail": "condition:channel_type"
         },
         {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "standard-safekey-emi",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "standard-post-purchase-emi",
+          "detail": "depends_on_txn_attribute"
+        },
+        {
           "code": "info_rule",
           "source_local_id": "standard-post-purchase-emi",
           "detail": "condition:emi_origin"
@@ -102,9 +100,69 @@
           "code": "info_rule",
           "source_local_id": "standard-post-purchase-emi",
           "detail": "condition:channel_type"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "standard-post-purchase-emi",
+          "detail": null
         }
       ],
-      "overrides_applied": []
+      "overrides_applied": [
+        {
+          "path": "reward_rules[id=standard-safekey-emi].depends_on_txn_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Partner list note: points continue \"on all EMI transactions through American Express SafeKey\" but not on \"any EMI option selected from a merchant's website\". The C3.1 context cannot tell SafeKey EMI from merchant EMI (D14b); info, the rail-EMI exclusion applies (may under-state, H2).",
+          "source_url": "https://www.americanexpress.com/content/dam/amex/in/legal/cmu/merchantlist.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=standard-post-purchase-emi].depends_on_txn_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Partner list note: points continue \"on all EMI conversions done post purchase\". Post-purchase conversion is not in the C3.1 context (D14b); info, the rail-EMI exclusion applies (may under-state, H2).",
+          "source_url": "https://www.americanexpress.com/content/dam/amex/in/legal/cmu/merchantlist.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=reward-multiplier-up-to-5x]",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "Amex India's notice (quoted by Business Today, 1 Sep 2026): \"Effective 30 September 2026, the Reward Multiplier program will be discontinued.\" The info row described a closed programme.",
+          "source_url": "https://www.businesstoday.in/personal-finance/story/american-express-reward-multiplier-ends-this-month-what-cardholders-should-know-552371-2026-09-01",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=cap-10x-zomato-easemytrip].limit_value",
+          "op": "set",
+          "value_sha256": "83151157c10d85af",
+          "reason": "Partner list: \"10X Membership Rewards points will be capped at 500 points per month\" for Zomato and EaseMyTrip; card page: \"On Spending INR 2500 in a month on our 10X Partner (Zomato), you will earn 500\". Read as 500 10X points in all (50 regular + 450 additional at Rs 2,500); a 500-bonus reading would pay 50 more. Ambiguous, so the lower bonus limit (H2): 450 additional points, then the regular rate.",
+          "source_url": "https://www.americanexpress.com/content/dam/amex/in/legal/cmu/merchantlist.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=cap-10x-shopping-lifestyle].limit_value",
+          "op": "set",
+          "value_sha256": "83151157c10d85af",
+          "reason": "Partner list: 10X points \"capped at 500 points per month per Card Account jointly for Flipkart, Uber, BookMyShow, Ajio, Nykaa, PVR, BlinkIt and Myntra\"; card page: Rs 2,500 on these partners earns 500. Same H2 reading as the Zomato/EaseMyTrip cap: 450 additional points.",
+          "source_url": "https://www.americanexpress.com/content/dam/amex/in/legal/cmu/merchantlist.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=cap-5x-amazon].limit_value",
+          "op": "set",
+          "value_sha256": "27badc983df1780b",
+          "reason": "Partner list: \"5X Membership Rewards points will be capped at 250 points per month per Card Account Amazon\"; card page: \"On Spending INR 2500 in a month on our 5X Partner (Amazon), you will earn 250\" (50 regular + 200 additional). H2 reading: 200 additional points, then the regular rate.",
+          "source_url": "https://www.americanexpress.com/content/dam/amex/in/legal/cmu/merchantlist.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        }
+      ]
     },
     "reward_rules": [
       {
@@ -262,47 +320,6 @@
         "max_engine_version": null,
         "source_local_id": "accelerator-5x-amazon",
         "display_note": "Earn 5X Membership Rewards points per ₹50 at Amazon, comprising 1 regular point plus 4 additional points."
-      },
-      {
-        "id": "american-express-smartearn-credit-card-india:rule:reward-multiplier-up-to-5x",
-        "category_id": null,
-        "category_slug": null,
-        "merchant_pattern": null,
-        "rail": null,
-        "unit": "points_per_100",
-        "rate": 5,
-        "min_txn_inr": null,
-        "max_txn_inr": null,
-        "priority": 20,
-        "conditions": {
-          "source_local_id": "reward-multiplier-up-to-5x",
-          "part": null,
-          "info_reasons": [
-            "up_to_rate",
-            "condition:merchant_selection_required"
-          ],
-          "flags": [
-            "depends_on_user_attribute"
-          ]
-        },
-        "notes": null,
-        "effective_from": "2026-08-28",
-        "effective_to": null,
-        "excluded_categories": [],
-        "rule_role": "info",
-        "merchant_slugs": [],
-        "platform_slugs": [
-          "amex_reward_multiplier"
-        ],
-        "mcc_include": [],
-        "mcc_exclude": [],
-        "except_merchant_slugs": [],
-        "except_platform_slugs": [],
-        "block_inr": 50,
-        "min_engine_version": 2,
-        "max_engine_version": null,
-        "source_local_id": "reward-multiplier-up-to-5x",
-        "display_note": "American Express Reward Multiplier currently advertises up to 5X bonus points at participating merchants; merchant-specific terms apply."
       },
       {
         "id": "american-express-smartearn-credit-card-india:rule:exclusion-fuel",
@@ -533,10 +550,13 @@
           "source_local_id": "standard-safekey-emi",
           "part": null,
           "info_reasons": [
+            "depends_on_txn_attribute",
             "condition:emi_origin",
             "condition:channel_type"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2020-02-01",
@@ -570,10 +590,13 @@
           "source_local_id": "standard-post-purchase-emi",
           "part": null,
           "info_reasons": [
+            "depends_on_txn_attribute",
             "condition:emi_origin",
             "condition:channel_type"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2020-02-01",
@@ -603,12 +626,12 @@
         "label": "Cap 10x zomato easemytrip",
         "measure": "reward_value",
         "period": "calendar_month",
-        "cap_value": 125,
+        "cap_value": 112.5,
         "post_cap_unit": null,
         "post_cap_rate": null,
         "resets_on_day": 1,
         "cap_kind": "bonus_points",
-        "cap_amount": 500,
+        "cap_amount": 450,
         "scope": "targets",
         "targets": [
           "american-express-smartearn-credit-card-india:rule:accelerator-10x-zomato-easemytrip"
@@ -628,12 +651,12 @@
         "label": "Cap 10x shopping lifestyle",
         "measure": "reward_value",
         "period": "calendar_month",
-        "cap_value": 125,
+        "cap_value": 112.5,
         "post_cap_unit": null,
         "post_cap_rate": null,
         "resets_on_day": 1,
         "cap_kind": "bonus_points",
-        "cap_amount": 500,
+        "cap_amount": 450,
         "scope": "targets",
         "targets": [
           "american-express-smartearn-credit-card-india:rule:accelerator-10x-shopping-lifestyle"
@@ -653,12 +676,12 @@
         "label": "Cap 5x amazon",
         "measure": "reward_value",
         "period": "calendar_month",
-        "cap_value": 62.5,
+        "cap_value": 50,
         "post_cap_unit": null,
         "post_cap_rate": null,
         "resets_on_day": 1,
         "cap_kind": "bonus_points",
-        "cap_amount": 250,
+        "cap_amount": 200,
         "scope": "targets",
         "targets": [
           "american-express-smartearn-credit-card-india:rule:accelerator-5x-amazon"
