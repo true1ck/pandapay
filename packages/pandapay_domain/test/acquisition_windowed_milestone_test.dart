@@ -41,14 +41,17 @@ CardProduct _cashback({List<MilestoneRule> milestones = const []}) =>
     );
 
 void main() {
-  group('Amex Platinum Charge (fixture)', () {
-    final amex = _fixture('american-express-platinum-charge-card-india');
+  group('Amex Platinum Travel (fixture)', () {
+    // Platinum Charge's welcome/renewal values were nulled ("up to" figures,
+    // D13), so it no longer loads a windowed milestone; Platinum Travel keeps
+    // its 90-day welcome milestone.
+    final amex = _fixture('american-express-platinum-travel-credit-card-india');
 
     test('the fixture carries a windowed welcome milestone', () {
       expect(amex.milestoneRules.any((m) => m.windowDays != null), isTrue);
     });
 
-    test('₹60,000 a year projects its true ₹375, not ₹60,375', () {
+    test('a windowed welcome milestone adds nothing to a ₹60,000-a-year projection', () {
       final withMilestones = _projected(amex, 60000);
       // The same card with its milestones removed is the reference.
       final without = _projected(
@@ -70,7 +73,6 @@ void main() {
         60000,
       );
       expect(withMilestones, without);
-      expect(withMilestones, Money.fromRupees(375));
     });
   });
 

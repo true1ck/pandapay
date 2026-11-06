@@ -5,7 +5,7 @@
     "transform_version": "7",
     "source_record_sha256": "0f0ab8fafeeb5e5343353df94f7376dd03be6af9a34bc87e34bc01d886cf69fb",
     "override_sha256": "fdfca2c3e7670d789200b786807caf861d8b26e2a2aa303a25cf9a3ae8bfa4da",
-    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
+    "directory_sha256": "15c375346504fca57465605d625ef45ca6cec4f5866ba3f4f16a1f5cbe0b8a90",
     "verified": false
   },
   "blocking_flags": [],
@@ -35,8 +35,8 @@
     "model_status": "partial",
     "model_coverage": {
       "rules_total": 20,
-      "rules_modelled": 16,
-      "rules_info": 4,
+      "rules_modelled": 20,
+      "rules_info": 0,
       "caps_total": 3,
       "caps_enforced": 3,
       "flags": [
@@ -44,11 +44,6 @@
           "code": "unmapped_excluded_category",
           "source_local_id": "other_1pct",
           "detail": null
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "swiggy_wallet_exclusion",
-          "detail": "unresolved_merchant:merchant_pattern"
         },
         {
           "code": "mcc_scoped_exclusion",
@@ -96,24 +91,9 @@
           "detail": null
         },
         {
-          "code": "info_rule",
-          "source_local_id": "swiggy_liquor_exclusion",
-          "detail": "unresolved_merchant:merchant_pattern"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "swiggy_minis_exclusion",
-          "detail": "unresolved_merchant:merchant_pattern"
-        },
-        {
           "code": "min_amount_exclusion",
           "source_local_id": "swiggy_below_minimum_exclusion",
           "detail": null
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "cd_swiggy_genie_exclusion",
-          "detail": "unresolved_merchant:merchant_pattern"
         }
       ],
       "overrides_applied": [
@@ -549,7 +529,7 @@
         "id": "swiggy-hdfc-bank-credit-card:rule:swiggy_wallet_exclusion",
         "category_id": null,
         "category_slug": null,
-        "merchant_pattern": null,
+        "merchant_pattern": "swiggy money",
         "rail": null,
         "unit": "cashback_percent",
         "rate": 0,
@@ -559,24 +539,24 @@
         "conditions": {
           "source_local_id": "swiggy_wallet_exclusion",
           "part": null,
-          "info_reasons": [
-            "unresolved_merchant:merchant_pattern"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2026-05-22",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
-        "merchant_slugs": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [
+          "swiggy_money"
+        ],
         "platform_slugs": [],
         "mcc_include": [],
         "mcc_exclude": [],
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "max_engine_version": null,
         "source_local_id": "swiggy_wallet_exclusion",
         "display_note": "Swiggy Money Wallet loads do not earn cashback."
@@ -1438,7 +1418,7 @@
         "id": "swiggy-hdfc-bank-credit-card:rule:swiggy_liquor_exclusion",
         "category_id": null,
         "category_slug": null,
-        "merchant_pattern": null,
+        "merchant_pattern": "swiggy liquor",
         "rail": null,
         "unit": "cashback_percent",
         "rate": 0,
@@ -1448,24 +1428,24 @@
         "conditions": {
           "source_local_id": "swiggy_liquor_exclusion",
           "part": null,
-          "info_reasons": [
-            "unresolved_merchant:merchant_pattern"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2026-05-22",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
-        "merchant_slugs": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [
+          "swiggy_liquor"
+        ],
         "platform_slugs": [],
         "mcc_include": [],
         "mcc_exclude": [],
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "max_engine_version": null,
         "source_local_id": "swiggy_liquor_exclusion",
         "display_note": "Swiggy Liquor transactions do not qualify for 10% cashback."
@@ -1474,7 +1454,7 @@
         "id": "swiggy-hdfc-bank-credit-card:rule:swiggy_minis_exclusion",
         "category_id": null,
         "category_slug": null,
-        "merchant_pattern": null,
+        "merchant_pattern": "swiggy minis",
         "rail": null,
         "unit": "cashback_percent",
         "rate": 0,
@@ -1484,24 +1464,24 @@
         "conditions": {
           "source_local_id": "swiggy_minis_exclusion",
           "part": null,
-          "info_reasons": [
-            "unresolved_merchant:merchant_pattern"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2026-05-22",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
-        "merchant_slugs": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [
+          "swiggy_minis"
+        ],
         "platform_slugs": [],
         "mcc_include": [],
         "mcc_exclude": [],
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "max_engine_version": null,
         "source_local_id": "swiggy_minis_exclusion",
         "display_note": "Swiggy Minis transactions do not qualify for 10% cashback."
@@ -1654,7 +1634,7 @@
         "id": "swiggy-hdfc-bank-credit-card:rule:cd_swiggy_genie_exclusion",
         "category_id": null,
         "category_slug": null,
-        "merchant_pattern": null,
+        "merchant_pattern": "swiggy genie",
         "rail": null,
         "unit": "cashback_percent",
         "rate": 0,
@@ -1664,24 +1644,24 @@
         "conditions": {
           "source_local_id": "cd_swiggy_genie_exclusion",
           "part": null,
-          "info_reasons": [
-            "unresolved_merchant:merchant_pattern"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2026-04-21",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
-        "merchant_slugs": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [
+          "swiggy_genie"
+        ],
         "platform_slugs": [],
         "mcc_include": [],
         "mcc_exclude": [],
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "max_engine_version": null,
         "source_local_id": "cd_swiggy_genie_exclusion",
         "display_note": "Swiggy Genie transactions do not qualify for 10% cashback."

@@ -5,8 +5,8 @@
     "transform_version": "7",
     "source_record_sha256": "61935416c29b40b70a4cfd88628795f2ed0a4795ec48bb5ba448b2c89cde1cf6",
     "override_sha256": "5fb59027e5263277fe80453cd7fe8bc9125dea403c4ed5ebdbf060a28847400b",
-    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
-    "verified": false
+    "directory_sha256": "15c375346504fca57465605d625ef45ca6cec4f5866ba3f4f16a1f5cbe0b8a90",
+    "verified": true
   },
   "blocking_flags": [],
   "card": {
@@ -23,7 +23,7 @@
     "accrual_rounding": "floor",
     "cashback_rounding": null,
     "points_expiry_months": 0,
-    "model_status": "partial",
+    "model_status": "verified",
     "model_coverage": {
       "rules_total": 15,
       "rules_modelled": 14,

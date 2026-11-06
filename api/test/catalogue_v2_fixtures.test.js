@@ -50,9 +50,15 @@ test('co-brand card (Swiggy HDFC): the swiggy_app token becomes a Swiggy merchan
   assert.equal(swiggy.min_engine_version, 1);
   // The 5% online rule is narrowed by a merchant/MCC list we can't express: info, not widened.
   assert.equal(rows(t, 'online_5pct')[0].rule_role, 'info');
-  // "Swiggy Liquor" / "Swiggy Minis" exclusions must not exclude all of Swiggy.
+  // "Swiggy Liquor" / "Swiggy Minis" are their own directory brands now, so on
+  // the RAW record (no override) their exclusions load as real exclusions. The
+  // raw swiggy_app channel still expands to the whole Swiggy group, which is
+  // broader than the issuer's text (it can only under-state); the committed
+  // override narrows it with channel_type "all" (see the snapshot examples).
   for (const id of ['swiggy_liquor_exclusion', 'swiggy_minis_exclusion']) {
-    assert.equal(rows(t, id)[0].rule_role, 'info', id);
+    const [row] = rows(t, id);
+    assert.equal(row.rule_role, 'exclusion', id);
+    assert.ok(row.merchant_slugs.includes(id.replace('_exclusion', '')), id);
   }
   // The spend-vs-cashback mix-up (R5) is flagged, not silently fixed.
   assert.ok(cap(t, 'swiggy_cashback_cap').flags.includes('suspect_cap_unit'));
