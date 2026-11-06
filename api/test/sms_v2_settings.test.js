@@ -14,7 +14,8 @@ const { evaluateAutoPause } = require('../src/sms_v2/rule_stats');
 const throwsInvalid = (fn) => assert.throws(fn, (error) => error.status === 422 && error.code === 'setting_invalid');
 
 test('validateSetting enforces ranges, types and ceilings', () => {
-  throwsInvalid(() => validateSetting('signals_min_distinct_users', 1));
+  throwsInvalid(() => validateSetting('signals_min_distinct_users', 0));
+  assert.equal(validateSetting('signals_min_distinct_users', 1), 1, 'one person is allowed during the friends run');
   assert.equal(validateSetting('signals_min_distinct_users', 3), 3);
   assert.equal(validateSetting('signals_min_distinct_users', 20), 20);
   throwsInvalid(() => validateSetting('signals_min_distinct_users', 21));
@@ -55,8 +56,8 @@ test('listSettings has a row for every setting, stored or not', () => {
   assert.deepEqual(rows.map((row) => row.key).sort(), Object.keys(SETTINGS).sort());
   const k = rows.find((row) => row.key === 'signals_min_distinct_users');
   assert.equal(k.value, 5);
-  assert.equal(k.default, 3);
-  assert.equal(k.min, 2);
+  assert.equal(k.default, 1);
+  assert.equal(k.min, 1);
   assert.equal(k.max, 20);
   assert.equal(k.updatedAt, '2026-11-06T00:00:00.000000Z');
   const untouched = rows.find((row) => row.key === 'ai_enabled');
@@ -92,7 +93,7 @@ test('readSettings merges defaults, drops values that no longer validate and cac
 
 test('mergeSettings keeps defaults for an empty table', () => {
   assert.equal(mergeSettings([]).intake_enabled, true);
-  assert.equal(mergeSettings([]).signals_min_distinct_users, 3);
+  assert.equal(mergeSettings([]).signals_min_distinct_users, 1);
 });
 
 test('the public settings reader returns only the public keys that are stored', async () => {

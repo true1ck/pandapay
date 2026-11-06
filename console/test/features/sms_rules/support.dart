@@ -136,7 +136,7 @@ List<Map<String, dynamic>> fixtureSettings({Map<String, Object?> values = const 
     row('templates_per_user_per_day', 'int', 50, min: 1, max: 500),
     row('corrections_per_user_per_day', 'int', 200, min: 1, max: 2000),
     row('signals_per_user_per_day', 'int', 500, min: 1, max: 5000),
-    row('signals_min_distinct_users', 'int', 3, min: 2, max: 20),
+    row('signals_min_distinct_users', 'int', 1, min: 1, max: 20),
     row('signals_retention_days', 'int', 180, min: 30, max: 730),
     row('intake_enabled', 'bool', true),
     row('ai_enabled', 'bool', true),

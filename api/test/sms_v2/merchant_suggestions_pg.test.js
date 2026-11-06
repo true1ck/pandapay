@@ -8,6 +8,7 @@ const { config } = require('./fixtures/template_draft');
 
 test('shop suggestions: who is picked, once per shop, one shared budget, and shown on the Learning page', { skip }, async (t) => {
   const rig = await startLoopHarness({ profileCount: 4, registerAdmin: registerAllLoopAdminRoutes });
+  await rig.requirePeople(3);
   t.after(() => rig.close());
   const { pool, profiles } = rig;
   const admin = rig.asAdmin();

@@ -3,8 +3,8 @@
 // The Learning page of the console (learning-loop A7): counted, k-anonymous
 // candidates from opted-in phones. A shop key or name appears only when at
 // least K different attested people reported it (setting
-// signals_min_distinct_users, never below 2). Smaller groups appear only as
-// totals. Nothing here publishes anything: "Create rule" opens the existing
+// signals_min_distinct_users, from 1 to 20; 1 during the friends run). Smaller
+// groups appear only as totals. Nothing here publishes anything: "Create rule" opens the existing
 // category draft flow, and the admin publishes through the golden check.
 const { HttpError } = require('./rules_admin_route');
 const { readSettings, SETTINGS, USER_LIMIT_KEYS } = require('./settings');
@@ -145,7 +145,7 @@ async function uncategorisedCandidates(client, { k, days, parts }) {
 async function candidateContext(client, req) {
   const settings = await readSettings(client);
   return {
-    k: Math.max(2, settings.signals_min_distinct_users),
+    k: Math.max(1, settings.signals_min_distinct_users),
     days: parseDays(req.query.days, DAY_OPTIONS.candidates),
     parts: await readParts(client),
   };
@@ -330,7 +330,7 @@ function registerPrivateLearningRoutes(api) {
     const settings = await readSettings(client);
     return buildSummary(client, {
       days: parseDays(req.query.days, DAY_OPTIONS.summary),
-      k: Math.max(2, settings.signals_min_distinct_users),
+      k: Math.max(1, settings.signals_min_distinct_users),
       parts: await readParts(client),
     });
   }));

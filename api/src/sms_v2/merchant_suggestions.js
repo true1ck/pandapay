@@ -149,7 +149,7 @@ function createPgSuggestionStore({ withAdminClient, adminId }) {
                                  AND a.started_at > clock_timestamp() - interval '24 hours')
             GROUP BY s.merchant_key HAVING count(DISTINCT s.profile_id) >= $2
             ORDER BY count(DISTINCT s.profile_id) DESC, max(s.last_at) DESC, s.merchant_key LIMIT 50`,
-          [taxonomy, Math.max(2, settings.signals_min_distinct_users)])).rows;
+          [taxonomy, Math.max(1, settings.signals_min_distinct_users)])).rows;
         const row = candidates.find((candidate) => !ruled.has(candidate.merchant_key));
         if (!row) return null;
         await client.query(

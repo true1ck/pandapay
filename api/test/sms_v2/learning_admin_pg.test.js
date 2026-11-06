@@ -37,6 +37,9 @@ test('Learning page: counted, k-anonymous candidates on Postgres', { skip: !url 
   clearSettingsCache();
   for (const id of people) await pool.query('INSERT INTO profiles(id) VALUES($1)', [id]);
   await pool.query("INSERT INTO admin_users(id,email,role) VALUES($1,$2,'owner')", [admin, `${admin}@example.invalid`]);
+  // The default is one person (friends run); this scenario is written for three.
+  await pool.query("INSERT INTO sms_v2_settings(key,value,updated_by,reason) VALUES('signals_min_distinct_users','3'::jsonb,$1,'test: three people')", [admin]);
+  clearSettingsCache();
   await pool.query("DELETE FROM sms_v2_bundle_parts WHERE part IN ('taxonomyVersion','categoryRules','merchantAliases')");
   await pool.query("INSERT INTO sms_v2_bundle_parts(part, body) VALUES('taxonomyVersion','1'::jsonb),('categoryRules','[]'::jsonb),('merchantAliases','[]'::jsonb)");
 
@@ -170,7 +173,7 @@ test('Learning page: counted, k-anonymous candidates on Postgres', { skip: !url 
   assert.deepEqual(audited.map((row) => row.reason), ['Opened the category draft', 'Too few people for now']);
 
   // ---- a higher K from the settings hides the shop
-  await pool.query("INSERT INTO sms_v2_settings(key,value,updated_by,reason) VALUES('signals_min_distinct_users','8'::jsonb,$1,'stricter')", [admin]);
+  await pool.query("UPDATE sms_v2_settings SET value='8'::jsonb, reason='stricter', updated_at=clock_timestamp() WHERE key='signals_min_distinct_users'");
   clearSettingsCache();
   assert.equal((await rows('categories')).length, 0);
   assert.equal((await call('GET', '/admin/sms/v2/learning/categories')).body.minUsers, 8);
