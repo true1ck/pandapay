@@ -88,6 +88,10 @@ async function createAdminGatewayRuntime({ env = process.env, routeManifest, lis
   const connection = readRequired(env, 'ADMIN_AUTH_DATABASE_URL');
   const resolved = resolveDatabaseTls(connection);
   const pool = new Pool({ connectionString: resolved.connectionString, ssl: resolved.ssl, options: '-c role=pandapay_admin_gateway', max: 3, connectionTimeoutMillis: 5000, idleTimeoutMillis: 10000, statement_timeout: 5000, query_timeout: 7000 });
+  // Connection poolers (Supabase's included) ignore the startup `options` above, which leaves the connection as
+  // the bare login with no access to admin_private. Assume the capability role explicitly on every new connection
+  // too; this is a no-op where the option was honoured. If it fails, queries fail closed with permission errors.
+  pool.on('connect', client => { client.query('SET ROLE pandapay_admin_gateway').catch(() => {}); });
   try {
     const identity = (await pool.query("SELECT session_user AS name, r.rolsuper OR r.rolbypassrls OR r.rolcreaterole OR r.rolcreatedb OR r.rolinherit AS unsafe FROM pg_roles r WHERE r.rolname=session_user")).rows[0];
     if(identity?.name !== 'admin_gateway_runtime' || identity.unsafe !== false) throw new Error('Unsafe private gateway database identity');
