@@ -4,14 +4,11 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "97c23f78c6b9fa2384f24ccfcafaf50229fd53df7a571ab7304d4bcf0de898e2",
-    "override_sha256": "f3b0f2e44cba83858b130edbdc5583a9a295602dfb0b93354359e37f4fab97b4",
+    "override_sha256": "fce7595e7fd34d4ae47265b5cb3425e04e4429eb2421e077edd842842d02871d",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
-  "blocking_flags": [
-    "info_rule",
-    "orphan_cap"
-  ],
+  "blocking_flags": [],
   "card": {
     "id": "hdfc-infinia-metal:card",
     "slug": "hdfc-infinia-metal",
@@ -28,10 +25,10 @@
     "points_expiry_months": 36,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 12,
-      "rules_modelled": 10,
-      "rules_info": 2,
-      "caps_total": 11,
+      "rules_total": 13,
+      "rules_modelled": 12,
+      "rules_info": 1,
+      "caps_total": 10,
       "caps_enforced": 6,
       "flags": [
         {
@@ -50,24 +47,24 @@
           "detail": null
         },
         {
-          "code": "info_rule",
-          "source_local_id": "education-aggregator-exclusion",
-          "detail": "condition:aggregators"
-        },
-        {
-          "code": "exclusion_rail_dropped",
-          "source_local_id": "education-aggregator-exclusion",
-          "detail": null
-        },
-        {
-          "code": "exclusion_scope_broadened",
+          "code": "mcc_scoped_exclusion",
           "source_local_id": "education-aggregator-exclusion",
           "detail": null
         },
         {
           "code": "info_rule",
           "source_local_id": "education-direct-standard",
+          "detail": "depends_on_txn_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "education-direct-standard",
           "detail": "condition:channel_type"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "education-direct-standard",
+          "detail": null
         },
         {
           "code": "token_replaced_by_conditions",
@@ -90,13 +87,13 @@
           "detail": null
         },
         {
-          "code": "broad_category",
-          "source_local_id": "telecom-rp-monthly-cap",
+          "code": "broad_exclusion_v1_only",
+          "source_local_id": "cd_gaming_exclusion",
           "detail": null
         },
         {
-          "code": "orphan_cap",
-          "source_local_id": "smartbuy-brand-voucher-rp-subcap",
+          "code": "broad_category",
+          "source_local_id": "telecom-rp-monthly-cap",
           "detail": null
         },
         {
@@ -254,6 +251,60 @@
           "reason": "WP7: D28c: Rewards Points Program T&C item 3: \"EasyEMI and e-wallet loading transactions will not accrue reward points\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/infinia-credit-card/rewards-points-program-terms-and-conditions.pdf",
           "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=education-aggregator-exclusion].conditions",
+          "op": "set",
+          "value_sha256": "c7e0bfaa920cc7c0",
+          "reason": "Card data review: Rewards Points Program T&C item 15(c): \"Education payments made through third-party apps like (but not limited to) CRED, Cheq, MobiKwik, and others will NOT earn Reward Points.\" The app list is open-ended and SMS spends never carry the platform, so the aggregator condition made the row info and every education spend earned 5 RP/Rs150 (over-statement). Restated as an exclusion on the education category and the education MCCs the record gives (D20a rows). Direct school/college payments, which the issuer says do earn, are now under-stated (H2).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/infinia-credit-card/rewards-points-program-terms-and-conditions.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=education-aggregator-exclusion].rail",
+          "op": "set",
+          "value_sha256": "251ecb599a3f3a2f",
+          "reason": "Card data review: an app payment may reach the card on any rail; the exclusion is not limited to online.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/infinia-credit-card/rewards-points-program-terms-and-conditions.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=education-aggregator-exclusion].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "Card data review: the third-party-app channel cannot be told from the context (see the conditions change).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/infinia-credit-card/rewards-points-program-terms-and-conditions.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=education-direct-standard].depends_on_txn_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Card data review: T&C item 15(c): \"education payments made directly through college/school websites or their POS machines will earn Reward Points.\" Direct vs third-party app is not in the transaction context, so this base-rate rule stays info with the D14b deferral flag; the education exclusion governs (under-states direct payments).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/infinia-credit-card/rewards-points-program-terms-and-conditions.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=smartbuy-brand-voucher-rp-subcap]",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "Card data review: T&C item 18: SmartBuy brand vouchers (GyFTR/Woohoo via SmartBuy) are capped at 3,000 accelerated RP a month inside the 15,000 SmartBuy cap. No loaded rule pays an accelerated rate on vouchers (only SmartBuy hotels 10X, flights 5X, trains 3X load), so the sub-cap had no target (orphan_cap) and limited nothing in either engine. Restore it when a voucher accelerator is modelled.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/infinia-credit-card/rewards-points-program-terms-and-conditions.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "86a8d96d60d7e56e",
+          "reason": "Card data review: D24d. MITC v4.18 (Oct 2026) I(g): \"With effect from 1st July 2025, Online Skill-Based gaming transactions will not earn Reward Points/CashPoints on all the cards.\" The record had no gaming row. Same token as the Diners Black Metal record (v1-only entertainment row, v2 MCC 5816).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+          "checked_on": "2026-11-06",
           "citation": null
         }
       ]
@@ -1042,7 +1093,7 @@
         "display_note": "EasyEMI and retail transactions converted to SmartEMI do not retain Reward Points; accrued points are reversed."
       },
       {
-        "id": "hdfc-infinia-metal:rule:education-aggregator-exclusion",
+        "id": "hdfc-infinia-metal:rule:education-aggregator-exclusion#1",
         "category_id": "cat-education",
         "category_slug": "education",
         "merchant_pattern": null,
@@ -1054,23 +1105,106 @@
         "priority": 2,
         "conditions": {
           "source_local_id": "education-aggregator-exclusion",
-          "part": null,
-          "info_reasons": [
-            "condition:aggregators"
-          ],
+          "part": 1,
+          "info_reasons": [],
           "flags": [
-            "exclusion_rail_dropped",
-            "exclusion_scope_broadened"
+            "mcc_scoped_exclusion"
           ]
         },
         "notes": null,
         "effective_from": "2024-09-01",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "exclusion",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "education-aggregator-exclusion",
+        "display_note": "Education payments via third-party apps do not earn Reward Points; accrued points are reversed."
+      },
+      {
+        "id": "hdfc-infinia-metal:rule:education-aggregator-exclusion#2",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "education-aggregator-exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education-aggregator-exclusion",
+        "display_note": "Education payments via third-party apps do not earn Reward Points; accrued points are reversed."
+      },
+      {
+        "id": "hdfc-infinia-metal:rule:education-aggregator-exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "education-aggregator-exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
         "mcc_exclude": [],
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
@@ -1095,9 +1229,12 @@
           "source_local_id": "education-direct-standard",
           "part": null,
           "info_reasons": [
+            "depends_on_txn_attribute",
             "condition:channel_type"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2024-09-01",
@@ -1538,6 +1675,81 @@
         "max_engine_version": null,
         "source_local_id": "wp7_emi_rail_exclusion",
         "display_note": "EMI transactions earn no rewards."
+      },
+      {
+        "id": "hdfc-infinia-metal:rule:cd_gaming_exclusion#1",
+        "category_id": "cat-entertainment",
+        "category_slug": "entertainment",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "cd_gaming_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only",
+            "broad_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "cd_gaming_exclusion",
+        "display_note": "Online skill-based gaming transactions do not earn Reward Points from 1 July 2025."
+      },
+      {
+        "id": "hdfc-infinia-metal:rule:cd_gaming_exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "cd_gaming_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5816"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cd_gaming_exclusion",
+        "display_note": "Online skill-based gaming transactions do not earn Reward Points from 1 July 2025."
       }
     ],
     "cap_rules": [
@@ -1682,29 +1894,6 @@
         "anchor": null,
         "min_engine_version": 2,
         "source_local_id": "smartbuy-accelerated-rp"
-      },
-      {
-        "id": "hdfc-infinia-metal:cap:smartbuy-brand-voucher-rp-subcap",
-        "reward_rule_id": null,
-        "category_id": null,
-        "category_slug": null,
-        "benefit_kind": null,
-        "label": "Smartbuy brand voucher rp subcap",
-        "measure": "reward_value",
-        "period": "calendar_month",
-        "cap_value": 3000,
-        "post_cap_unit": null,
-        "post_cap_rate": null,
-        "resets_on_day": 1,
-        "cap_kind": "bonus_points",
-        "cap_amount": 3000,
-        "scope": "targets",
-        "targets": [],
-        "parent_cap_id": "hdfc-infinia-metal:cap:smartbuy-accelerated-rp",
-        "post_cap_behavior": null,
-        "anchor": null,
-        "min_engine_version": 1,
-        "source_local_id": "smartbuy-brand-voucher-rp-subcap"
       }
     ],
     "milestone_rules": [],
