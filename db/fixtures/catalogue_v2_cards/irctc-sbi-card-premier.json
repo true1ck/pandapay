@@ -4,13 +4,11 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "7b371da3daece551ec05d29a274542a09a514c7c1213adfdfc6e08914d0ebedd",
-    "override_sha256": "d92b3b087d5ad8cbcbb36c437c1ea1f039bb0f287f7267b7b503bc5308cbc5a5",
+    "override_sha256": "5f924dfe96c556dbd90ffdf4edee2ed8aba819a8ff6482cd5a20af6cad2d899c",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
-  "blocking_flags": [
-    "info_rule"
-  ],
+  "blocking_flags": [],
   "card": {
     "id": "irctc-sbi-card-premier:card",
     "slug": "irctc-sbi-card-premier",
@@ -28,15 +26,15 @@
     "model_status": "partial",
     "model_coverage": {
       "rules_total": 15,
-      "rules_modelled": 8,
-      "rules_info": 7,
+      "rules_modelled": 9,
+      "rules_info": 6,
       "caps_total": 1,
       "caps_enforced": 1,
       "flags": [
         {
           "code": "info_rule",
-          "source_local_id": "base_non_fuel_retail",
-          "detail": "condition:clause:transaction_category"
+          "source_local_id": "utility_standing_instruction_accelerator",
+          "detail": "depends_on_txn_attribute"
         },
         {
           "code": "info_rule",
@@ -44,9 +42,19 @@
           "detail": "condition:channel_type"
         },
         {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "utility_standing_instruction_accelerator",
+          "detail": null
+        },
+        {
           "code": "info_rule",
           "source_local_id": "irctc_railway_value_back",
           "detail": "up_to_rate"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "irctc_railway_value_back",
+          "detail": "depends_on_txn_attribute"
         },
         {
           "code": "info_rule",
@@ -57,6 +65,11 @@
           "code": "info_rule",
           "source_local_id": "irctc_railway_value_back",
           "detail": "condition:clause:cardholder_is_passenger"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "irctc_railway_value_back",
+          "detail": null
         },
         {
           "code": "partial_merchant_list",
@@ -96,6 +109,11 @@
         {
           "code": "info_rule",
           "source_local_id": "balance_transfer_exclusion",
+          "detail": "depends_on_txn_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "balance_transfer_exclusion",
           "detail": "transaction_type"
         },
         {
@@ -104,6 +122,16 @@
           "detail": "non_purchase_channel"
         },
         {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "balance_transfer_exclusion",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "encash_exclusion",
+          "detail": "depends_on_txn_attribute"
+        },
+        {
           "code": "info_rule",
           "source_local_id": "encash_exclusion",
           "detail": "transaction_type"
@@ -112,6 +140,11 @@
           "code": "info_rule",
           "source_local_id": "encash_exclusion",
           "detail": "non_purchase_channel"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "encash_exclusion",
+          "detail": null
         },
         {
           "code": "exclusion_scope_broadened",
@@ -121,12 +154,27 @@
         {
           "code": "info_rule",
           "source_local_id": "financial_charge_exclusion",
+          "detail": "depends_on_txn_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "financial_charge_exclusion",
           "detail": "transaction_type"
         },
         {
           "code": "info_rule",
           "source_local_id": "financial_charge_exclusion",
           "detail": "non_purchase_channel"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "financial_charge_exclusion",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "disputed_transaction_exclusion",
+          "detail": "depends_on_txn_attribute"
         },
         {
           "code": "info_rule",
@@ -139,9 +187,9 @@
           "detail": "condition:channel_type"
         },
         {
-          "code": "synthesized_base_rule",
-          "source_local_id": null,
-          "detail": "block ₹125"
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "disputed_transaction_exclusion",
+          "detail": null
         }
       ],
       "overrides_applied": [
@@ -189,6 +237,69 @@
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/IRCTCPremiertnc.pdf",
           "checked_on": "2026-11-05",
           "citation": null
+        },
+        {
+          "path": "reward_rules[id=base_non_fuel_retail].conditions",
+          "op": "set",
+          "value_sha256": "44136fa355b3678a",
+          "reason": "Card-data: T&C 11.3(c)(iii): \"Cardholder shall earn 1 Point for every eligible `125 charged ... All spending ... will be eligible to earn Points except the following\" - the \"eligible non-fuel retail\" condition restates the card's exclusion rows (fuel MCCs 5172/5541/5542/5983, wallet, rent, government, EMI, cash advance), which all exist. It was an info earning rule; the base it states is the same 1 per Rs125 the loader synthesised.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/IRCTCPremiertnc.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=utility_standing_instruction_accelerator].depends_on_txn_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Card-data: D14b. T&C 11.3(c)(ii): \"3 reward Point for `125 spent on Dining and Standing Instruction on Utility Spends\" - only a utility payment set up as a standing instruction earns 3; whether a utility spend is a standing instruction is not in the transaction context. Stays info; utility spends earn the 1 per Rs125 base (under-states).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/IRCTCPremiertnc.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=irctc_railway_value_back].depends_on_txn_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Card-data: D14b. T&C \"Value Back on Railway Ticket booking\" (a) \"upto 10% value back on 1st Class AC, 2nd Class AC, 3rd Class AC, Executive Chair Car and Chair Car\" and (c) \"You must be one of the passengers on the ticket\" - travel class and passenger are not in the context, and the rate is \"up to\". Stays info; IRCTC rail tickets earn the base (under-states).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/IRCTCPremiertnc.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=balance_transfer_exclusion].depends_on_txn_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Card-data: D25d. T&C 11.3(c)(iii) excludes \"Balance transfers\"; not a purchase the context can tell apart: info with depends_on_txn_attribute (D14b).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/IRCTCPremiertnc.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=encash_exclusion].depends_on_txn_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Card-data: D25d. T&C 11.3(c)(iii) excludes \"Encash\"; not a purchase the context can tell apart: info with depends_on_txn_attribute (D14b).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/IRCTCPremiertnc.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=financial_charge_exclusion].depends_on_txn_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Card-data: D25d. T&C 11.3(c)(iii) excludes \"Financial charges (e.g. late payment fee, dishonored cheque charges, service fee, transaction charges)\"; not purchases the context can tell apart: info with depends_on_txn_attribute (D14b).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/IRCTCPremiertnc.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=disputed_transaction_exclusion].depends_on_txn_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Card-data: D25d. T&C 11.3(c)(iii) excludes \"Disputed transactions\"; dispute status is not in the context: info with depends_on_txn_attribute (D14b).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/IRCTCPremiertnc.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
         }
       ]
     },
@@ -207,16 +318,14 @@
         "conditions": {
           "source_local_id": "base_non_fuel_retail",
           "part": null,
-          "info_reasons": [
-            "condition:clause:transaction_category"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2025-07-26",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "base",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
@@ -282,9 +391,12 @@
           "source_local_id": "utility_standing_instruction_accelerator",
           "part": null,
           "info_reasons": [
+            "depends_on_txn_attribute",
             "condition:channel_type"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2025-07-26",
@@ -321,10 +433,12 @@
           "part": null,
           "info_reasons": [
             "up_to_rate",
+            "depends_on_txn_attribute",
             "condition:clause:travel_class",
             "condition:clause:cardholder_is_passenger"
           ],
           "flags": [
+            "depends_on_txn_attribute",
             "partial_merchant_list",
             "narrow_token_on_merchant"
           ]
@@ -1163,10 +1277,13 @@
           "source_local_id": "balance_transfer_exclusion",
           "part": null,
           "info_reasons": [
+            "depends_on_txn_attribute",
             "transaction_type",
             "non_purchase_channel"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2025-07-26",
@@ -1200,10 +1317,13 @@
           "source_local_id": "encash_exclusion",
           "part": null,
           "info_reasons": [
+            "depends_on_txn_attribute",
             "transaction_type",
             "non_purchase_channel"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2025-07-26",
@@ -1273,10 +1393,13 @@
           "source_local_id": "financial_charge_exclusion",
           "part": null,
           "info_reasons": [
+            "depends_on_txn_attribute",
             "transaction_type",
             "non_purchase_channel"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2025-07-26",
@@ -1310,10 +1433,13 @@
           "source_local_id": "disputed_transaction_exclusion",
           "part": null,
           "info_reasons": [
+            "depends_on_txn_attribute",
             "condition:transaction_status",
             "condition:channel_type"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2025-07-26",
@@ -1365,42 +1491,6 @@
         "max_engine_version": null,
         "source_local_id": "wp7_emi_rail_exclusion",
         "display_note": "EMI transactions earn no rewards."
-      },
-      {
-        "id": "irctc-sbi-card-premier:rule:base-block",
-        "category_id": null,
-        "category_slug": null,
-        "merchant_pattern": null,
-        "rail": null,
-        "unit": "points_per_100",
-        "rate": 1,
-        "min_txn_inr": null,
-        "max_txn_inr": null,
-        "priority": 1000,
-        "conditions": {
-          "source_local_id": null,
-          "part": null,
-          "info_reasons": [],
-          "flags": [
-            "synthesized_base_rule"
-          ]
-        },
-        "notes": null,
-        "effective_from": null,
-        "effective_to": null,
-        "excluded_categories": [],
-        "rule_role": "base",
-        "merchant_slugs": [],
-        "platform_slugs": [],
-        "mcc_include": [],
-        "mcc_exclude": [],
-        "except_merchant_slugs": [],
-        "except_platform_slugs": [],
-        "block_inr": 125,
-        "min_engine_version": 2,
-        "max_engine_version": null,
-        "source_local_id": null,
-        "display_note": "1 pts per ₹125"
       }
     ],
     "cap_rules": [
