@@ -580,6 +580,56 @@ test('C8 D34c: a failure before the card is known to be v2 falls back to the v1 
   });
 });
 
+test('the cap rebuild after an archived-card remap is behind a savepoint: a failure there never fails the repair', { skip }, async () => {
+  cardStateV2.clearDirectoryCache();
+  await withRollback(async (client) => {
+    const fns = extractIndexFunctions();
+    const source = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
+    const start = source.indexOf('async function reconcileArchivedCardReferences(client, userId)');
+    const end = source.indexOf("// The parser uses the owner's profile name", start);
+    assert.ok(start >= 0 && end > start);
+    const context = { reconcileCurrentCapStates: fns.reconcileCurrentCapStates, safeErrorCode: (e) => String(e && e.code), console };
+    vm.runInNewContext(source.slice(start, end), context, { filename: 'api/src/index.js' });
+
+    const { monthStart, prevMonthStart } = await dates(client);
+    const ids = await seedSyntheticCard(client, { openedOn: prevMonthStart });
+    await client.query(`UPDATE user_cards SET last4 = '4242' WHERE id = $1`, [ids.userCardId]);
+    const archived = (await client.query(
+      `INSERT INTO user_cards (profile_id, card_product_id, last4, is_archived, archived_at)
+       VALUES ($1, $2, '4242', true, now()) RETURNING id`, [ids.profileId, ids.product])).rows[0].id;
+    const txnId = (await client.query(
+      `INSERT INTO transactions (profile_id, user_card_id, amount_inr, occurred_at, category_id, source, instrument, entry_kind)
+       VALUES ($1, $2, 2000, $3, $4, 'manual', 'credit_card', 'spend') RETURNING id`,
+      [ids.profileId, archived, new Date(`${monthStart}T06:30:00Z`), ids.cats.dining])).rows[0].id;
+    await client.query(`CREATE FUNCTION public.wp8_injected_failure() RETURNS trigger LANGUAGE plpgsql AS
+      $$ BEGIN RAISE EXCEPTION 'wp8 injected failure' USING ERRCODE = 'P0001'; END $$`);
+    await client.query(`CREATE TRIGGER wp8_injected_failure BEFORE INSERT OR UPDATE ON cap_states
+      FOR EACH ROW EXECUTE FUNCTION public.wp8_injected_failure()`);
+    await asUser(client, ids.profileId);
+
+    const warn = console.warn;
+    const warnings = [];
+    console.warn = (...args) => warnings.push(args.join(' '));
+    let result;
+    try {
+      result = await context.reconcileArchivedCardReferences(client, ids.profileId);
+    } finally {
+      console.warn = warn;
+    }
+    assert.deepEqual([result.replacementCards, result.remappedTransactions], [1, 1]);
+    assert.equal((await client.query(`SELECT user_card_id FROM transactions WHERE id = $1`, [txnId])).rows[0].user_card_id, ids.userCardId);
+    assert.ok(warnings.some((w) => w.includes('P0001')), warnings.join('\n'));
+    assert.deepEqual(await capRows(client, ids.userCardId), [], 'rebuild rolled back, nothing half-written');
+
+    // Once writes work, the next reconcile rebuilds the moved spend's caps.
+    await asOwner(client);
+    await client.query(`DROP TRIGGER wp8_injected_failure ON cap_states`);
+    await asUser(client, ids.profileId);
+    await fns.reconcileCurrentCapStates(client, ids.profileId);
+    assert.equal(consumedById(await capRows(client, ids.userCardId))[F.CAP.parent], 100);
+  });
+});
+
 test('C8 D33c: a card-state failure never fails ingest or ignore; nothing half-applied, rebuilt later', { skip }, async () => {
   cardStateV2.clearDirectoryCache();
   await withRollback(async (client) => {
