@@ -229,12 +229,12 @@ jobs:
   # VM) still holds: no two test files ever share a VM, only different shards
   # run at the same time, on different machines.
   app-test:
-    name: App tests (shard ${{ matrix.shard }}/4)
+    name: App tests (shard ${{ matrix.shard }}/8)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -248,7 +248,7 @@ jobs:
 
       - name: App test
         working-directory: app
-        run: flutter test --no-pub --concurrency=1 --total-shards=4 --shard-index=$(( ${{ matrix.shard }} - 1 ))
+        run: flutter test --no-pub --concurrency=1 --total-shards=8 --shard-index=$(( ${{ matrix.shard }} - 1 ))
 
   # The release bundle build is ~9 minutes and does not depend on the tests,
   # so it runs alongside them instead of after them.
@@ -329,6 +329,12 @@ jobs:
     # the push gate needs every validation, including the integration smoke
     # test and anonymization audit, before publishing a deployable image.
     needs: [api, flutter, app-test, app-bundle, smoke, anonymization-audit, security-recovery]
+    # A latest-dev push is a production deploy, and the production host builds
+    # its own images from source (deploy/deploy.sh), never pulling these. Skip
+    # this job there so the deploy does not wait an extra minute on an image
+    # nothing uses. master pushes and pull requests still build (and on master
+    # push) these images exactly as before.
+    if: github.ref != 'refs/heads/latest-dev'
     # Needed to push to GHCR under GITHUB_TOKEN — this repo's default token
     # permissions may be read-only, so this is explicit rather than assumed.
     permissions:
