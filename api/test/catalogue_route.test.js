@@ -6,7 +6,7 @@ const http = require('node:http');
 const zlib = require('node:zlib');
 const express = require('express');
 const {
-  createCatalogueHandler, V1_SQL, V2_CARDS_SQL, V2_MERCHANTS_SQL, V2_PLATFORMS_SQL, FINGERPRINT_SQL,
+  createCatalogueHandler, rateLimitIdentity, V1_SQL, V2_CARDS_SQL, V2_MERCHANTS_SQL, V2_PLATFORMS_SQL, FINGERPRINT_SQL,
 } = require('../src/catalogue_route');
 const { createFeedbackRateLimiter } = require('../src/feedback_rate_limit');
 
@@ -252,4 +252,42 @@ test('v1 body bytes equal the previous handler output; gzip decodes to the ident
     legacyServer.close();
     currentServer.close();
   }
+});
+
+test('IPv6 addresses in the same /64 share a rate-limit bucket; other prefixes and IPv4 do not', async () => {
+  assert.equal(rateLimitIdentity('2001:db8:1:2:aaaa:bbbb:cccc:dddd'), rateLimitIdentity('2001:0db8:0001:0002::1'));
+  assert.notEqual(rateLimitIdentity('2001:db8:1:2::1'), rateLimitIdentity('2001:db8:1:3::1'));
+  assert.equal(rateLimitIdentity('::ffff:10.1.2.3'), '10.1.2.3');
+  assert.equal(rateLimitIdentity('10.1.2.3'), '10.1.2.3');
+  assert.equal(rateLimitIdentity('fe80::1%eth0'), rateLimitIdentity('fe80::2'));
+  const limiter = createFeedbackRateLimiter({ windowMs: 60_000, authenticatedLimit: 2, anonymousLimit: 2 });
+  const { handler } = harness({}, { limiter });
+  for (const ip of ['2001:db8:1:2::1', '2001:db8:1:2:ffff::9']) {
+    const res = responseDouble();
+    await handler({ query: {}, ip }, res);
+    assert.equal(res.statusCode, 200);
+  }
+  const blocked = responseDouble();
+  await handler({ query: {}, ip: '2001:db8:1:2:1:2:3:4' }, blocked);
+  assert.equal(blocked.statusCode, 429);
+  const elsewhere = responseDouble();
+  await handler({ query: {}, ip: '2001:db8:1:9::1' }, elsewhere);
+  assert.equal(elsewhere.statusCode, 200);
+});
+
+test('default limiter fails OPEN for a new identity when its table is full; the feedback default stays closed', async () => {
+  const open = createFeedbackRateLimiter({ windowMs: 60_000, authenticatedLimit: 1, anonymousLimit: 1, maxEntries: 1, failOpenWhenFull: true });
+  const { handler } = harness({}, { limiter: open });
+  const first = responseDouble();
+  await handler({ query: {}, ip: '1.1.1.1' }, first);
+  assert.equal(first.statusCode, 200);
+  const overflow = responseDouble();
+  await handler({ query: {}, ip: '2.2.2.2' }, overflow);
+  assert.equal(overflow.statusCode, 200, 'table full must allow, not 429');
+  const tracked = responseDouble();
+  await handler({ query: {}, ip: '1.1.1.1' }, tracked);
+  assert.equal(tracked.statusCode, 429, 'tracked identities are still limited');
+  const closed = createFeedbackRateLimiter({ windowMs: 60_000, authenticatedLimit: 1, anonymousLimit: 1, maxEntries: 1 });
+  closed.consume('a', false);
+  assert.equal(closed.consume('b', false).allowed, false, 'default behaviour for existing users is unchanged');
 });

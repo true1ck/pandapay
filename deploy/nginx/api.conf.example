@@ -10,8 +10,13 @@
 
 # Per-IP budget for the public catalogue feed (v1 ~1 MB, v2 several MB). This
 # file is included in the http context via sites-enabled, so the zone may be
-# declared here. The API also enforces its own per-IP limit (api/src/catalogue_route.js).
-limit_req_zone $binary_remote_addr zone=catalogue:10m rate=30r/m;
+# declared here. The API enforces its own per-IP limit of 60 requests a minute
+# (api/src/catalogue_route.js; IPv6 keyed on the /64). nginx must be LOOSER than
+# that: carrier-grade NAT puts many real users behind one address, an app launch
+# can fetch the feed plus conditional revalidations, and a 304 still counts. So
+# nginx is only a coarse flood guard at twice the API rate with a burst that
+# covers a launch, never the tighter limit.
+limit_req_zone $binary_remote_addr zone=catalogue:10m rate=120r/m;
 
 server {
     listen 80;
@@ -91,7 +96,7 @@ server {
     # Public catalogue feed: compress the large JSON, rate-limit per IP, and
     # let the API's ETag / Cache-Control through unchanged.
     location = /catalogue {
-        limit_req zone=catalogue burst=10 nodelay;
+        limit_req zone=catalogue burst=40 nodelay;
         limit_req_status 429;
         gzip on;
         gzip_types application/json;

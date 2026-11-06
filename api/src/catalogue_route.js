@@ -1,12 +1,36 @@
 'use strict';
 
 const { createHash } = require('node:crypto');
+const net = require('node:net');
 const zlib = require('node:zlib');
 const { promisify } = require('node:util');
 const { safeErrorCode } = require('./safeErrorCode');
 const { createFeedbackRateLimiter } = require('./feedback_rate_limit');
 
 const gzip = promisify(zlib.gzip);
+
+/**
+ * Rate-limit identity: IPv4 as-is; IPv6 collapsed to its /64 so a client that
+ * rotates addresses inside its own prefix shares one bucket. IPv4-mapped IPv6
+ * is treated as the IPv4 address.
+ */
+function rateLimitIdentity(ip) {
+  if (typeof ip !== 'string' || !ip) return 'unknown';
+  const value = ip.split('%')[0].toLowerCase();
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(value);
+  if (mapped) return mapped[1];
+  if (!net.isIPv6(value)) return value;
+  let head = value;
+  let tail = '';
+  if (value.includes('::')) [head, tail] = value.split('::');
+  const toGroups = (part) => (part ? part.split(':') : []);
+  const groups = toGroups(head);
+  const rest = toGroups(tail);
+  // An embedded dotted IPv4 tail never falls inside the first four groups.
+  const missing = 8 - groups.length - rest.length;
+  const all = value.includes('::') ? [...groups, ...Array(Math.max(missing, 0)).fill('0'), ...rest] : groups;
+  return `v6/64:${all.slice(0, 4).map((g) => g.replace(/^0+(?=.)/, '')).join(':')}`;
+}
 
 // GET /catalogue serves the v1 feed by default (exact shape installed apps
 // parse; plan H1) and the v2 feed when ?schema=2 (plan C2).
@@ -92,11 +116,14 @@ function createCatalogueHandler({ withUserClient, logger = console, limiter } = 
     windowMs: RATE_WINDOW_MS,
     authenticatedLimit: RATE_LIMIT_PER_WINDOW,
     anonymousLimit: RATE_LIMIT_PER_WINDOW,
+    // Public read: a flood of new identities must not deny the feed to
+    // everyone else for the rest of the window (D34b).
+    failOpenWhenFull: true,
   });
 
   return async function catalogueHandler(req, res) {
     try {
-      const identity = req.ip || (req.socket && req.socket.remoteAddress) || 'unknown';
+      const identity = rateLimitIdentity(req.ip || (req.socket && req.socket.remoteAddress));
       const admission = rateLimiter.consume(identity, false);
       if (!admission.allowed) {
         res.set('Retry-After', String(admission.retryAfterSeconds));
@@ -149,5 +176,5 @@ function createCatalogueHandler({ withUserClient, logger = console, limiter } = 
 }
 
 module.exports = {
-  createCatalogueHandler, V1_SQL, V2_CARDS_SQL, V2_MERCHANTS_SQL, V2_PLATFORMS_SQL, FINGERPRINT_SQL,
+  createCatalogueHandler, rateLimitIdentity, V1_SQL, V2_CARDS_SQL, V2_MERCHANTS_SQL, V2_PLATFORMS_SQL, FINGERPRINT_SQL,
 };

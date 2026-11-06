@@ -14,6 +14,9 @@ function createFeedbackRateLimiter({
   authenticatedLimit = FEEDBACK_PROFILE_LIMIT,
   anonymousLimit = FEEDBACK_ANONYMOUS_LIMIT,
   maxEntries = FEEDBACK_MAX_IDENTITIES,
+  // Opt-in for public READ routes: when the identity table is full, let a NEW
+  // identity through (untracked) instead of refusing it. Default stays closed.
+  failOpenWhenFull = false,
 } = {}) {
   for (const value of [windowMs, authenticatedLimit, anonymousLimit, maxEntries]) {
     if (!Number.isSafeInteger(value) || value < 1) throw new TypeError('feedback limiter configuration is invalid');
@@ -47,6 +50,7 @@ function createFeedbackRateLimiter({
         return { allowed: true, retryAfterSeconds: 0 };
       }
       if (!existing && attempts.size >= maxEntries) {
+        if (failOpenWhenFull) return { allowed: true, retryAfterSeconds: 0, untracked: true };
         return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((nextPruneAt - current) / 1000)) };
       }
       attempts.set(key, { count: 1, resetAt: current + windowMs });
