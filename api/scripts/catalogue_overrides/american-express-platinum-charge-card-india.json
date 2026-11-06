@@ -61,6 +61,20 @@
       "reason": "MR terms: \"5 Membership Rewards Points for every Rs. 100 spent on Fuel* (capped at a maximum of 5000 Points every calendar month)\". What fuel earns after the 5,000 points is not stated; the total cap is kept with nothing after it (the engines already applied this stricter reading, flagged post_limit_conflict). H2: may under-state.",
       "source_url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
       "checked_on": "2026-11-06"
+    },
+    {
+      "path": "fee_waiver_and_milestones.spend_milestones[id=renewal_benefit_20_lakh].reward_value_inr",
+      "value": null,
+      "reason": "Card page: renewal vouchers \"upto INR 35,000*\" \"On spends on INR 20 Lakhs in membership year and payment of renewal fee\". Only a maximum is stated, so a stored value of 35,000 over-states; no firm figure exists (D13), so the value is null and the milestone is not loaded (flag milestone_missing_values).",
+      "source_url": "https://www.americanexpress.com/in/charge-cards/platinum-card/",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "fee_waiver_and_milestones.spend_milestones[id=welcome_gift_50000_first_two_months].reward_value_inr",
+      "value": null,
+      "reason": "Card page: welcome gift \"worth up to INR 60,000*\" on INR 50,000 net spend in the first 2 months. Same 'up to' problem as the renewal benefit: no firm figure, value null, milestone not loaded.",
+      "source_url": "https://www.americanexpress.com/in/charge-cards/platinum-card/",
+      "checked_on": "2026-11-06"
     }
   ]
 }
