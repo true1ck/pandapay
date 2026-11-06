@@ -76,7 +76,11 @@ class _ProductActivationScreenState
         _productTermsAccepted = signupChoices?.acceptProductTerms ?? false;
         _pendingCode = pendingCode;
         _codeController.text = pendingCode ?? '';
-        _loading = false;
+        // An already-active account has nothing to choose here: the code below
+        // records any saved consents and moves straight on. Keep the spinner up
+        // until then, otherwise the terms checkbox is drawn for the second or
+        // two those network calls take and vanishes before it can be tapped.
+        _loading = access.isActive;
         _error = null;
       });
 

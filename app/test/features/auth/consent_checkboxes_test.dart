@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -315,6 +316,81 @@ void main() {
       await tester.tap(submit);
       await tester.pumpAndSettle();
       expect(otpRequested, isTrue);
+    },
+  );
+
+  testWidgets(
+    'an already-active account never sees the activation form flash by',
+    (tester) async {
+      // Logging back in: the account is active and no sign-up choices are saved,
+      // so the screen only checks the terms consent in the background. While
+      // that call is in flight the terms checkbox must not be drawn.
+      final consentsGate = Completer<http.Response>();
+      final consentsClient = MockClient((req) async {
+        if (req.method == 'GET' && req.url.path == '/consents') {
+          return consentsGate.future;
+        }
+        return http.Response('{"consent":{}}', 201);
+      });
+      final router = GoRouter(
+        initialLocation: AppRoute.productActivation,
+        routes: [
+          GoRoute(
+            path: AppRoute.productActivation,
+            builder: (_, _) => const ProductActivationScreen(),
+          ),
+          GoRoute(
+            path: AppRoute.permissions,
+            builder: (_, _) => const Scaffold(body: Text('Permissions')),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            accessTokenProvider.overrideWith((ref) => 'tok-abc'),
+            productAccessApiProvider.overrideWithValue(
+              _AlreadyActiveProductAccess(),
+            ),
+            consentsApiProvider.overrideWithValue(
+              ConsentsApi(
+                apiBaseUrl: 'http://api.test',
+                accessToken: 'tok-abc',
+                client: consentsClient,
+              ),
+            ),
+          ],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      // Let the policy and access calls finish; the consents call is held open.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.byKey(const Key('activation_product_terms')), findsNothing);
+      expect(find.byType(CheckboxListTile), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      consentsGate.complete(
+        http.Response(
+          jsonEncode({
+            'consents': [
+              {
+                'purpose': 'terms',
+                'granted': true,
+                'granted_at': '2026-11-06T00:00:00Z',
+                'revoked_at': null,
+                'policy_version': 'v1',
+                'source_screen': 'A4',
+              },
+            ],
+          }),
+          200,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Permissions'), findsOneWidget);
     },
   );
 
