@@ -3753,7 +3753,18 @@ async function reconcileArchivedCardReferences(client, userId) {
   }
 
   if (remappedTransactions > 0) {
-    await reconcileCurrentCapStates(client, userId);
+    // card-rewards (WP8, C8 D33c): cap state is derived. A failed rebuild here
+    // (e.g. the v2 rebuild of the replacement card) is rolled back and left
+    // to the next reconcile instead of failing the repair that called it.
+    await client.query('SAVEPOINT reconcile_archived_cap_states');
+    try {
+      await reconcileCurrentCapStates(client, userId);
+      await client.query('RELEASE SAVEPOINT reconcile_archived_cap_states');
+    } catch (capError) {
+      await client.query('ROLLBACK TO SAVEPOINT reconcile_archived_cap_states');
+      await client.query('RELEASE SAVEPOINT reconcile_archived_cap_states');
+      console.warn('reconcileArchivedCardReferences cap rebuild deferred', safeErrorCode(capError));
+    }
   }
 
   return {

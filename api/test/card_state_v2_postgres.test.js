@@ -507,6 +507,129 @@ function ignoreRoute(client, fns) {
   };
 }
 
+test('C8 D34c: a failure before the card is known to be v2 falls back to the v1 path (apply and reverse)', { skip }, async () => {
+  cardStateV2.clearDirectoryCache();
+  await withRollback(async (client) => {
+    const fns = extractIndexFunctions();
+    const { monthStart } = await v1Dates(client);
+    const cats = await categoryIds(client);
+    // A v1-shaped card with a cap, a milestone and a fee waiver, so reversal touches every bucket.
+    const issuer = (await client.query(`INSERT INTO issuers (slug, name) VALUES ('wp8-d34-bank', 'WP8 D34 Bank') RETURNING id`)).rows[0].id;
+    const product = (await client.query(
+      `INSERT INTO card_products (issuer_id, slug, name, network, status, verified_at, base_reward_unit, base_reward_rate, point_value_inr)
+       VALUES ($1, 'wp8-d34-card', 'WP8 D34 Card', 'visa', 'published', now(), 'cashback_percent', 1, 1) RETURNING id`,
+      [issuer],
+    )).rows[0].id;
+    const rule = (await client.query(
+      `INSERT INTO reward_rules (card_product_id, category_id, unit, rate) VALUES ($1, $2, 'cashback_percent', 5) RETURNING id`,
+      [product, cats.dining],
+    )).rows[0].id;
+    await client.query(
+      `INSERT INTO cap_rules (card_product_id, reward_rule_id, label, measure, period, cap_value)
+       VALUES ($1, $2, 'v1 dining cap', 'reward_value', 'calendar_month', 150)`, [product, rule]);
+    await client.query(
+      `INSERT INTO milestone_rules (card_product_id, label, period, threshold_spend_inr, reward_description, reward_value_inr, anchor)
+       VALUES ($1, 'v1 annual', 'annual', 100000, 'v1 annual', 500, 'calendar_year')`, [product]);
+    await client.query(
+      `INSERT INTO fee_waiver_rules (card_product_id, threshold_spend_inr, period, waives_fee_inr) VALUES ($1, 3000, 'annual', 500)`,
+      [product]);
+    const profileId = (await client.query(`INSERT INTO profiles (id) VALUES (gen_random_uuid()) RETURNING id`)).rows[0].id;
+    const userCardId = (await client.query(
+      `INSERT INTO user_cards (profile_id, card_product_id) VALUES ($1, $2) RETURNING id`, [profileId, product])).rows[0].id;
+    const ids = { cats, product, profileId, userCardId };
+
+    const state = async (txnIds) => ({
+      caps: (await capRows(client, userCardId)).map((r) => [r.cap_rule_id, r.period_start, r.consumed, r.cap_kind]),
+      milestones: (await milestoneRows(client, userCardId)).map((r) => [r.milestone_rule_id, r.period_start, r.qualified]),
+      feeWaivers: (await feeWaiverRows(client, userCardId)).map((r) => [r.fee_waiver_rule_id, r.period_start, r.qualified, r.waived]),
+      expected: (await expectedOf(client, txnIds)).map((t) => [t.value, t.card_state_v2]),
+      ledger: (await client.query(`SELECT count(*)::int AS n FROM points_ledger WHERE user_card_id = $1`, [userCardId])).rows[0].n,
+    });
+    // Two dining spends, then the first is ignored (a v1 reversal).
+    const run = async () => {
+      const txnIds = [];
+      for (let i = 0; i < 2; i += 1) {
+        txnIds.push((await recordSpend(client, fns, ids, { amount: 2000, day: monthStart, category: 'dining' })).txnId);
+      }
+      await ignoreSpend(client, fns, ids, txnIds[0]);
+      return state(txnIds);
+    };
+
+    await asUser(client, profileId);
+    await client.query('SAVEPOINT normal_run');
+    const normal = await run();
+    assert.ok(normal.caps.length === 1 && normal.milestones.length === 1 && normal.feeWaivers.length === 1, 'every bucket moved');
+    await client.query('ROLLBACK TO SAVEPOINT normal_run');
+
+    // Inject: loadV2Card can't read cap_rule_targets (only it reads that table).
+    await asOwner(client);
+    await client.query('REVOKE SELECT ON cap_rule_targets FROM app_user');
+    await asUser(client, profileId);
+    cardStateV2.clearDirectoryCache(); // no cached "v1-shaped" answer to skip the failing read
+    const warnings = [];
+    const warn = console.warn;
+    console.warn = (...args) => warnings.push(args.join(' '));
+    let injected;
+    try {
+      injected = await run();
+    } finally {
+      console.warn = warn;
+    }
+    assert.ok(warnings.some((w) => w.includes('42501')), 'the failure is logged by code');
+    assert.deepEqual(injected, normal, 'the v1 path ran: same rows as a normal run');
+  });
+});
+
+test('the cap rebuild after an archived-card remap is behind a savepoint: a failure there never fails the repair', { skip }, async () => {
+  cardStateV2.clearDirectoryCache();
+  await withRollback(async (client) => {
+    const fns = extractIndexFunctions();
+    const source = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
+    const start = source.indexOf('async function reconcileArchivedCardReferences(client, userId)');
+    const end = source.indexOf("// The parser uses the owner's profile name", start);
+    assert.ok(start >= 0 && end > start);
+    const context = { reconcileCurrentCapStates: fns.reconcileCurrentCapStates, safeErrorCode: (e) => String(e && e.code), console };
+    vm.runInNewContext(source.slice(start, end), context, { filename: 'api/src/index.js' });
+
+    const { monthStart, prevMonthStart } = await dates(client);
+    const ids = await seedSyntheticCard(client, { openedOn: prevMonthStart });
+    await client.query(`UPDATE user_cards SET last4 = '4242' WHERE id = $1`, [ids.userCardId]);
+    const archived = (await client.query(
+      `INSERT INTO user_cards (profile_id, card_product_id, last4, is_archived, archived_at)
+       VALUES ($1, $2, '4242', true, now()) RETURNING id`, [ids.profileId, ids.product])).rows[0].id;
+    const txnId = (await client.query(
+      `INSERT INTO transactions (profile_id, user_card_id, amount_inr, occurred_at, category_id, source, instrument, entry_kind)
+       VALUES ($1, $2, 2000, $3, $4, 'manual', 'credit_card', 'spend') RETURNING id`,
+      [ids.profileId, archived, new Date(`${monthStart}T06:30:00Z`), ids.cats.dining])).rows[0].id;
+    await client.query(`CREATE FUNCTION public.wp8_injected_failure() RETURNS trigger LANGUAGE plpgsql AS
+      $$ BEGIN RAISE EXCEPTION 'wp8 injected failure' USING ERRCODE = 'P0001'; END $$`);
+    await client.query(`CREATE TRIGGER wp8_injected_failure BEFORE INSERT OR UPDATE ON cap_states
+      FOR EACH ROW EXECUTE FUNCTION public.wp8_injected_failure()`);
+    await asUser(client, ids.profileId);
+
+    const warn = console.warn;
+    const warnings = [];
+    console.warn = (...args) => warnings.push(args.join(' '));
+    let result;
+    try {
+      result = await context.reconcileArchivedCardReferences(client, ids.profileId);
+    } finally {
+      console.warn = warn;
+    }
+    assert.deepEqual([result.replacementCards, result.remappedTransactions], [1, 1]);
+    assert.equal((await client.query(`SELECT user_card_id FROM transactions WHERE id = $1`, [txnId])).rows[0].user_card_id, ids.userCardId);
+    assert.ok(warnings.some((w) => w.includes('P0001')), warnings.join('\n'));
+    assert.deepEqual(await capRows(client, ids.userCardId), [], 'rebuild rolled back, nothing half-written');
+
+    // Once writes work, the next reconcile rebuilds the moved spend's caps.
+    await asOwner(client);
+    await client.query(`DROP TRIGGER wp8_injected_failure ON cap_states`);
+    await asUser(client, ids.profileId);
+    await fns.reconcileCurrentCapStates(client, ids.profileId);
+    assert.equal(consumedById(await capRows(client, ids.userCardId))[F.CAP.parent], 100);
+  });
+});
+
 test('C8 D33c: a card-state failure never fails ingest or ignore; nothing half-applied, rebuilt later', { skip }, async () => {
   cardStateV2.clearDirectoryCache();
   await withRollback(async (client) => {
@@ -928,6 +1051,36 @@ test('C8 D33b: after a forced re-import of a v2 card\'s fee-waiver rules, recomp
     assert.deepEqual((await feeWaiverRows(client, ids.userCardId)).map((r) => [r.qualified, r.waived]), [[32000, false]]);
     const again = await recompute(client, { nested: true, apply: true, asOf: today, userCardId: ids.userCardId, log: quietLog });
     assert.equal(again.feeWaiverRows, 0);
+  });
+});
+
+test('C8 D34e: a fee-waiver change that touches only records is counted and logged by the dry run', { skip }, async () => {
+  cardStateV2.clearDirectoryCache();
+  await withRollback(async (client) => {
+    const fns = extractIndexFunctions();
+    const { today, monthStart, prevMonthStart } = await dates(client);
+    const ids = await seedSyntheticCard(client, { openedOn: prevMonthStart });
+    await asUser(client, ids.profileId);
+    await recordSpend(client, fns, ids, { amount: 2000, day: monthStart, category: 'dining' });
+    await recordSpend(client, fns, ids, { amount: 3000, day: addDays(monthStart, 1), category: 'dining' });
+    const rows = await feeWaiverRows(client, ids.userCardId);
+    // The rows are right; only the records lost their fee-waiver entries.
+    await client.query(`UPDATE transactions SET card_state_v2 = card_state_v2 - 'fee_waivers' WHERE user_card_id = $1`, [ids.userCardId]);
+
+    const lines = [];
+    const dry = await recompute(client, { nested: true, asOf: today, userCardId: ids.userCardId, log: (l) => lines.push(l) });
+    assert.deepEqual([dry.changedCards, dry.feeWaiverRows, dry.feeWaiverRecords], [1, 0, 2]);
+    assert.ok(lines.some((l) => l.includes(`user_card ${ids.userCardId}`) && l.includes('fee-waiver records 2')), lines.join('\n'));
+    assert.ok(lines.some((l) => l.includes('fee-waiver records 2,') || l.endsWith('fee-waiver records 2')), lines.join('\n'));
+    const [txn] = (await client.query(
+      `SELECT card_state_v2 FROM transactions WHERE user_card_id = $1 ORDER BY occurred_at LIMIT 1`, [ids.userCardId])).rows;
+    assert.equal(txn.card_state_v2.fee_waivers, undefined, 'dry run writes nothing');
+
+    const applied = await recompute(client, { nested: true, apply: true, asOf: today, userCardId: ids.userCardId, log: quietLog });
+    assert.deepEqual([applied.changedCards, applied.feeWaiverRecords], [1, 2]);
+    assert.deepEqual(await feeWaiverRows(client, ids.userCardId), rows);
+    const again = await recompute(client, { nested: true, asOf: today, userCardId: ids.userCardId, log: quietLog });
+    assert.deepEqual([again.changedCards, again.feeWaiverRecords], [0, 0]);
   });
 });
 
