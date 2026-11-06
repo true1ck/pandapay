@@ -4,13 +4,11 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "61935416c29b40b70a4cfd88628795f2ed0a4795ec48bb5ba448b2c89cde1cf6",
-    "override_sha256": "b0642ca0baf8963d2614f7c2668f113b91c1089ec1cfa89c97039df28560f812",
+    "override_sha256": "e30ea0a0ba0057688bd1df195e3a4a466d3672afa84c647a049da49bfa6e397e",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
-  "blocking_flags": [
-    "info_rule"
-  ],
+  "blocking_flags": [],
   "card": {
     "id": "hpcl-idfc-first-power-plus:card",
     "slug": "hpcl-idfc-first-power-plus",
@@ -27,8 +25,8 @@
     "points_expiry_months": 0,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 11,
-      "rules_modelled": 10,
+      "rules_total": 15,
+      "rules_modelled": 14,
       "rules_info": 1,
       "caps_total": 3,
       "caps_enforced": 3,
@@ -61,7 +59,17 @@
         {
           "code": "info_rule",
           "source_local_id": "education_direct_base",
+          "detail": "depends_on_txn_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "education_direct_base",
           "detail": "condition:channel_type"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "education_direct_base",
+          "detail": null
         },
         {
           "code": "mcc_scoped_exclusion",
@@ -110,6 +118,51 @@
           "reason": "WP7: D28c: Savings Maximiser: 3X \"Applicable on: All other retail spends excluding Insurance premium payments, non-HPCL fuel spends, EMI transactions, ATM cash withdrawals\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
           "source_url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
           "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=education_direct_base].depends_on_txn_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "card-data group4: D14b. The rule is restricted to direct (non-aggregator) education payments; that channel is not in the C3.1 context. Its rate (3 per Rs150) equals the other-retail base, which governs; the Savings Maximiser gives 3X on \"All other retail spends\" and names no education exclusion.",
+          "source_url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "d26f2b0925022ed0",
+          "reason": "card-data group4: HPCL fuel 30X: \"Not Applicable on UPI transactions\"; Savings Maximiser, UPI Rewards: \"Exclusions: Insurance premium payments, fuel spends, EMI transactions, ATM cash withdrawals, utility spends, grocery spends and IDFC FIRST FASTag recharges.\" The 30X HPCL rule had no rail, so HPCL fuel by UPI QR earned 30X (over-statement). Rail-scoped (D25b). MCC-only (category all_retail) so every row is v2-only: v1 has no rail and would match an unknown rail (D28d). A UPI spend with no MCC in these categories is not caught (residual).",
+          "source_url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "f04e35a26a2a0c35",
+          "reason": "card-data group4: Savings Maximiser, UPI Rewards: \"Exclusions: Insurance premium payments, fuel spends, EMI transactions, ATM cash withdrawals, utility spends, grocery spends and IDFC FIRST FASTag recharges.\" The grocery section does not say the 30X applies on UPI; H2 takes the lower reading (0 on the UPI rail; under-states if the 30X applies). Rail-scoped (D25b). MCC-only (category all_retail) so every row is v2-only: v1 has no rail and would match an unknown rail (D28d). A UPI spend with no MCC in these categories is not caught (residual).",
+          "source_url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "82b8b8225cf6a34d",
+          "reason": "card-data group4: Savings Maximiser, UPI Rewards: \"Exclusions: Insurance premium payments, fuel spends, EMI transactions, ATM cash withdrawals, utility spends, grocery spends and IDFC FIRST FASTag recharges.\" The utility section does not say the 30X applies on UPI; H2 takes the lower reading. Rail-scoped (D25b). MCC-only (category all_retail) so every row is v2-only: v1 has no rail and would match an unknown rail (D28d). A UPI spend with no MCC in these categories is not caught (residual).",
+          "source_url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "869a0e1dafa38a97",
+          "reason": "card-data group4: Savings Maximiser, UPI Rewards: \"Exclusions: Insurance premium payments, fuel spends, EMI transactions, ATM cash withdrawals, utility spends, grocery spends and IDFC FIRST FASTag recharges.\" Rail-scoped (D25b). MCC-only (category all_retail) so every row is v2-only: v1 has no rail and would match an unknown rail (D28d). A UPI spend with no MCC in these categories is not caught (residual).",
+          "source_url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
+          "checked_on": "2026-11-06",
           "citation": null
         }
       ]
@@ -384,9 +437,12 @@
           "source_local_id": "education_direct_base",
           "part": null,
           "info_reasons": [
+            "depends_on_txn_attribute",
             "condition:channel_type"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2024-05-01",
@@ -711,6 +767,161 @@
         "max_engine_version": null,
         "source_local_id": "wp7_emi_rail_exclusion",
         "display_note": "EMI transactions earn no rewards."
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:rule:cd4_upi_fuel_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "upi_qr",
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "cd4_upi_fuel_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-05-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cd4_upi_fuel_exclusion",
+        "display_note": "Fuel paid by UPI earns no reward points."
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:rule:cd4_upi_grocery_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "upi_qr",
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "cd4_upi_grocery_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-05-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5411",
+          "5422",
+          "5441",
+          "5451",
+          "5462",
+          "5499"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cd4_upi_grocery_exclusion",
+        "display_note": "Grocery paid by UPI earns no reward points."
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:rule:cd4_upi_utility_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "upi_qr",
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "cd4_upi_utility_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-05-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4814",
+          "4816",
+          "4899",
+          "4900"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cd4_upi_utility_exclusion",
+        "display_note": "Utility bills paid by UPI earn no reward points."
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:rule:cd4_upi_fastag_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "upi_qr",
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "cd4_upi_fastag_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-05-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4784"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cd4_upi_fastag_exclusion",
+        "display_note": "FASTag recharge paid by UPI earns no reward points."
       },
       {
         "id": "hpcl-idfc-first-power-plus:rule:other_retail_3x#min-amount",
