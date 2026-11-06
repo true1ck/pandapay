@@ -241,6 +241,93 @@
       "reason": "Card data review: the channel restated the MCC list; the online requirement stays on the rail (T&C 2.3: \"5% Cashback will only be accrued on online transactions\").",
       "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
       "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "cd_swiggy_genie_exclusion",
+        "category_id": "excluded_spend",
+        "priority": 0,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "merchant_pattern": "Swiggy Genie"
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Swiggy Genie transactions do not qualify for 10% cashback."
+        },
+        "effective_from": "2026-04-21",
+        "effective_to": null
+      },
+      "reason": "Card data review: T&C 2.2: the 10% category \"is applicable only on transaction done on Swiggy Food ordering, Instamart and Dineout\" and \"Transactions made on any other Swiggy platform except the above stated platforms won't qualify for the 10% Cashback category\"; the record still listed Genie as eligible. Modelled like the record's Liquor and Minis rows (exclusion, under-states any 1% the issuer may pay). Info until the directory has a swiggy_genie merchant.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=swiggy_10pct].conditions.eligible_services",
+      "value": [
+        "food_ordering",
+        "instamart",
+        "dineout"
+      ],
+      "reason": "Card data review: T&C 2.2 names only Food ordering, Instamart and Dineout; Genie removed.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=swiggy_liquor_exclusion].channel_type",
+      "value": "all",
+      "reason": "Card data review: the channel 'swiggy_app' resolves to the Swiggy merchant, and an exclusion's merchant list is a set of alternatives (D21a), so with Swiggy Liquor in the directory the row would exclude every Swiggy order. The merchant pattern alone scopes it (T&C Table 1.1: 10% exclusions 'Swiggy Money Wallet, Swiggy Liquor, Swiggy Minis').",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=swiggy_minis_exclusion].channel_type",
+      "value": "all",
+      "reason": "Card data review: the channel 'swiggy_app' resolves to the Swiggy merchant, and an exclusion's merchant list is a set of alternatives (D21a), so with Swiggy Minis in the directory the row would exclude every Swiggy order. The merchant pattern alone scopes it (T&C Table 1.1: 10% exclusions 'Swiggy Money Wallet, Swiggy Liquor, Swiggy Minis').",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=swiggy_liquor_exclusion].priority",
+      "value": 0,
+      "reason": "Card data review: v1 matches the 10% rule by the substring 'swiggy' (priority 1), so this exclusion must sort ahead of it for installed apps to stop paying 10% here (D14d: narrower rule first).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=swiggy_minis_exclusion].priority",
+      "value": 0,
+      "reason": "Card data review: v1 matches the 10% rule by the substring 'swiggy' (priority 1), so this exclusion must sort ahead of it for installed apps to stop paying 10% here (D14d: narrower rule first).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=swiggy_wallet_exclusion].priority",
+      "value": 0,
+      "reason": "Card data review: v1 matches the 10% rule by the substring 'swiggy' (priority 1), so this exclusion must sort ahead of it for installed apps to stop paying 10% here (D14d: narrower rule first).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=swiggy_wallet_exclusion].category_id",
+      "value": "all_retail",
+      "reason": "Card data review: T&C Table 1.1 excludes 'Transactions made using Swiggy Money Wallet' and 2.1 excludes 'Prepaid Card/Gift Card/Wallet' whatever the category; with category wallet AND the merchant, a Swiggy Money load the app categorised otherwise earned 1%. The merchant alone scopes it.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=swiggy_wallet_exclusion].channel_type",
+      "value": "all",
+      "reason": "Card data review: the channel 'swiggy_wallet' restates the merchant (Swiggy Money); left in, it made the row info.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "checked_on": "2026-11-06"
     }
   ]
 }

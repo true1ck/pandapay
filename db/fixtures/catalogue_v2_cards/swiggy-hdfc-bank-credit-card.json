@@ -4,7 +4,7 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "0f0ab8fafeeb5e5343353df94f7376dd03be6af9a34bc87e34bc01d886cf69fb",
-    "override_sha256": "dc0dc377c03d690440b49234fbf33d7c0148322e63d8e74cf042c42c606497c2",
+    "override_sha256": "fdfca2c3e7670d789200b786807caf861d8b26e2a2aa303a25cf9a3ae8bfa4da",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
@@ -34,9 +34,9 @@
     "points_expiry_months": null,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 19,
+      "rules_total": 20,
       "rules_modelled": 16,
-      "rules_info": 3,
+      "rules_info": 4,
       "caps_total": 3,
       "caps_enforced": 3,
       "flags": [
@@ -109,6 +109,11 @@
           "code": "min_amount_exclusion",
           "source_local_id": "swiggy_below_minimum_exclusion",
           "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "cd_swiggy_genie_exclusion",
+          "detail": "unresolved_merchant:merchant_pattern"
         }
       ],
       "overrides_applied": [
@@ -243,6 +248,87 @@
           "op": "set",
           "value_sha256": "5cf7504d9781301d",
           "reason": "Card data review: the channel restated the MCC list; the online requirement stays on the rail (T&C 2.3: \"5% Cashback will only be accrued on online transactions\").",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "42feace3cbf6eb18",
+          "reason": "Card data review: T&C 2.2: the 10% category \"is applicable only on transaction done on Swiggy Food ordering, Instamart and Dineout\" and \"Transactions made on any other Swiggy platform except the above stated platforms won't qualify for the 10% Cashback category\"; the record still listed Genie as eligible. Modelled like the record's Liquor and Minis rows (exclusion, under-states any 1% the issuer may pay). Info until the directory has a swiggy_genie merchant.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=swiggy_10pct].conditions.eligible_services",
+          "op": "set",
+          "value_sha256": "58b27111e90817d3",
+          "reason": "Card data review: T&C 2.2 names only Food ordering, Instamart and Dineout; Genie removed.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=swiggy_liquor_exclusion].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "Card data review: the channel 'swiggy_app' resolves to the Swiggy merchant, and an exclusion's merchant list is a set of alternatives (D21a), so with Swiggy Liquor in the directory the row would exclude every Swiggy order. The merchant pattern alone scopes it (T&C Table 1.1: 10% exclusions 'Swiggy Money Wallet, Swiggy Liquor, Swiggy Minis').",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=swiggy_minis_exclusion].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "Card data review: the channel 'swiggy_app' resolves to the Swiggy merchant, and an exclusion's merchant list is a set of alternatives (D21a), so with Swiggy Minis in the directory the row would exclude every Swiggy order. The merchant pattern alone scopes it (T&C Table 1.1: 10% exclusions 'Swiggy Money Wallet, Swiggy Liquor, Swiggy Minis').",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=swiggy_liquor_exclusion].priority",
+          "op": "set",
+          "value_sha256": "5feceb66ffc86f38",
+          "reason": "Card data review: v1 matches the 10% rule by the substring 'swiggy' (priority 1), so this exclusion must sort ahead of it for installed apps to stop paying 10% here (D14d: narrower rule first).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=swiggy_minis_exclusion].priority",
+          "op": "set",
+          "value_sha256": "5feceb66ffc86f38",
+          "reason": "Card data review: v1 matches the 10% rule by the substring 'swiggy' (priority 1), so this exclusion must sort ahead of it for installed apps to stop paying 10% here (D14d: narrower rule first).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=swiggy_wallet_exclusion].priority",
+          "op": "set",
+          "value_sha256": "5feceb66ffc86f38",
+          "reason": "Card data review: v1 matches the 10% rule by the substring 'swiggy' (priority 1), so this exclusion must sort ahead of it for installed apps to stop paying 10% here (D14d: narrower rule first).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=swiggy_wallet_exclusion].category_id",
+          "op": "set",
+          "value_sha256": "1e08efd699e66ddd",
+          "reason": "Card data review: T&C Table 1.1 excludes 'Transactions made using Swiggy Money Wallet' and 2.1 excludes 'Prepaid Card/Gift Card/Wallet' whatever the category; with category wallet AND the merchant, a Swiggy Money load the app categorised otherwise earned 1%. The merchant alone scopes it.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=swiggy_wallet_exclusion].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "Card data review: the channel 'swiggy_wallet' restates the merchant (Swiggy Money); left in, it made the row info.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
           "checked_on": "2026-11-06",
           "citation": null
@@ -461,15 +547,15 @@
       },
       {
         "id": "swiggy-hdfc-bank-credit-card:rule:swiggy_wallet_exclusion",
-        "category_id": "cat-wallet",
-        "category_slug": "wallet",
+        "category_id": null,
+        "category_slug": null,
         "merchant_pattern": null,
         "rail": null,
         "unit": "cashback_percent",
         "rate": 0,
         "min_txn_inr": null,
         "max_txn_inr": null,
-        "priority": 10,
+        "priority": 0,
         "conditions": {
           "source_local_id": "swiggy_wallet_exclusion",
           "part": null,
@@ -1352,13 +1438,13 @@
         "id": "swiggy-hdfc-bank-credit-card:rule:swiggy_liquor_exclusion",
         "category_id": null,
         "category_slug": null,
-        "merchant_pattern": "swiggy",
+        "merchant_pattern": null,
         "rail": null,
         "unit": "cashback_percent",
         "rate": 0,
         "min_txn_inr": null,
         "max_txn_inr": null,
-        "priority": 20,
+        "priority": 0,
         "conditions": {
           "source_local_id": "swiggy_liquor_exclusion",
           "part": null,
@@ -1372,9 +1458,7 @@
         "effective_to": null,
         "excluded_categories": [],
         "rule_role": "info",
-        "merchant_slugs": [
-          "swiggy"
-        ],
+        "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
         "mcc_exclude": [],
@@ -1390,13 +1474,13 @@
         "id": "swiggy-hdfc-bank-credit-card:rule:swiggy_minis_exclusion",
         "category_id": null,
         "category_slug": null,
-        "merchant_pattern": "swiggy",
+        "merchant_pattern": null,
         "rail": null,
         "unit": "cashback_percent",
         "rate": 0,
         "min_txn_inr": null,
         "max_txn_inr": null,
-        "priority": 21,
+        "priority": 0,
         "conditions": {
           "source_local_id": "swiggy_minis_exclusion",
           "part": null,
@@ -1410,9 +1494,7 @@
         "effective_to": null,
         "excluded_categories": [],
         "rule_role": "info",
-        "merchant_slugs": [
-          "swiggy"
-        ],
+        "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
         "mcc_exclude": [],
@@ -1567,6 +1649,42 @@
         "max_engine_version": null,
         "source_local_id": "wp7_emi_rail_exclusion",
         "display_note": "EMI transactions earn no rewards."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:cd_swiggy_genie_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "cd_swiggy_genie_exclusion",
+          "part": null,
+          "info_reasons": [
+            "unresolved_merchant:merchant_pattern"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-04-21",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cd_swiggy_genie_exclusion",
+        "display_note": "Swiggy Genie transactions do not qualify for 10% cashback."
       },
       {
         "id": "swiggy-hdfc-bank-credit-card:rule:other_1pct#min-amount",
