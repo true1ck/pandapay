@@ -49,6 +49,23 @@ class SmsLearningFeedback {
     );
   }
 
+  /// Takes back [recordFalseTransactionRule]: later messages in this format
+  /// are read again. The rule is per message format (amounts and digits are
+  /// masked), so this frees every message that shares it.
+  void removeFalseTransactionRule({
+    required String sender,
+    required String body,
+  }) {
+    final exists = database.db.select(
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='user_sms_ignore_rules' LIMIT 1",
+    );
+    if (exists.isEmpty) return;
+    database.db.execute(
+      'DELETE FROM user_sms_ignore_rules WHERE namespace=? AND context_pattern=?',
+      [namespace, contextPattern('IGNORE', sender, body)],
+    );
+  }
+
   bool matchesFalseTransactionRuleSync({
     required String sender,
     required String body,

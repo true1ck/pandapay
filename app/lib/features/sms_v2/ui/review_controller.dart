@@ -8,6 +8,7 @@ import 'package:pandapay_domain/sms_v2_category.dart';
 import 'package:pandapay_domain/sms_v2_ledger.dart';
 import '../../../app/providers.dart' as app;
 import '../../../data/local/financial_store.dart';
+import '../../../data/local/sms_learning_feedback.dart';
 import '../../../data/local/sms_intake_repository.dart';
 import '../corrections/corrections_service.dart';
 import '../pipeline/receipt_review.dart';
@@ -225,6 +226,100 @@ class ReviewController {
         rethrow;
       }
     });
+  }
+}
+
+extension ReviewRestore on ReviewController {
+  /// Takes back "Not financial" for unknown-format messages: removes the
+  /// ignore rule for each format and reopens the review items.
+  ///
+  /// Only `template` items with no facts qualify. They have no event, so
+  /// nothing else was changed when they were dismissed. Dismissals of items
+  /// that did change an event are not reversed here. Returns how many items were reopened.
+  int restoreDismissed(Iterable<LocalReviewItem> items) {
+    final db = financial.database.db;
+    final feedback = SmsLearningFeedback(
+      financial.database,
+      namespace: namespace,
+    );
+    var reopened = 0;
+    final freed = <String>{};
+    financial.batch(() {
+      db.execute('SAVEPOINT sms_review_restore');
+      try {
+        for (final item in items) {
+          final message = item.message?.message;
+          if (item.kind != 'template' || message == null) continue;
+          // A message that was read into facts had an event changed when it
+          // was dismissed; that is not undone here.
+          final source = item.payload['sourceKey'] as String? ?? item.id;
+          if (FactStore(
+            db,
+            namespace: namespace,
+          ).forSource(source).isNotEmpty) {
+            continue;
+          }
+          feedback.removeFalseTransactionRule(
+            sender: message.sender,
+            body: message.body,
+          );
+          freed.add(
+            SmsLearningFeedback.contextPattern(
+              'IGNORE',
+              message.sender,
+              message.body,
+            ),
+          );
+          db.execute(
+            "UPDATE v2_review_items SET status='open' WHERE namespace=? AND review_id=? AND kind='template' AND status='resolved'",
+            [namespace, item.id],
+          );
+          reopened += db.updatedRows;
+        }
+        // The rule is per message format, which is wider than the bundle the
+        // user acted on: other dismissed messages sharing it would otherwise
+        // be left resolved with no rule, listed nowhere and never reopened.
+        if (freed.isNotEmpty) {
+          final intake = SmsIntakeRepository(financial.database);
+          for (final row in db.select(
+            "SELECT review_id,payload FROM v2_review_items WHERE namespace=? AND kind='template' AND status='resolved'",
+            [namespace],
+          )) {
+            final payload = jsonDecode(row['payload'] as String) as Map;
+            final source = payload['sourceKey'];
+            if (source is! String) continue;
+            final m = intake.capturedById(namespace, source)?.message;
+            if (m == null) continue;
+            if (!freed.contains(
+              SmsLearningFeedback.contextPattern('IGNORE', m.sender, m.body),
+            )) {
+              continue;
+            }
+            if (FactStore(
+              db,
+              namespace: namespace,
+            ).forSource(source).isNotEmpty) {
+              continue;
+            }
+            db.execute(
+              "UPDATE v2_review_items SET status='open' WHERE namespace=? AND review_id=?",
+              [namespace, row['review_id']],
+            );
+            reopened += db.updatedRows;
+          }
+        }
+        db.execute('RELEASE sms_review_restore');
+      } catch (_) {
+        db.execute('ROLLBACK TO sms_review_restore');
+        db.execute('RELEASE sms_review_restore');
+        rethrow;
+      }
+      financial.notifyExternalChanges(namespace, const [
+        'needs_review',
+        'observations',
+      ]);
+    });
+    return reopened;
   }
 }
 

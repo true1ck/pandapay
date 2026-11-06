@@ -3,6 +3,7 @@ import '../personal/personal_format_service.dart';
 import '../corrections/corrections_service.dart';
 import 'personal_format_form.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/design/app_theme.dart';
 import '../../../app/design/bamboo_components.dart';
@@ -11,6 +12,8 @@ import '../../../app/providers.dart' as app;
 import '../pipeline/trace.dart';
 import '../providers/data_providers.dart';
 import 'correction_form.dart';
+import 'dismissed_reviews_view.dart';
+import 'review_clustering.dart';
 import 'review_controller.dart';
 import 'screen_parts.dart';
 import 'sharing_offer_card.dart';
@@ -47,6 +50,23 @@ class ReviewInboxScreen extends ConsumerStatefulWidget {
 
 class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
   bool _saving = false;
+  int _tab = 0;
+  ScaffoldMessengerState? _messenger;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _messenger = ScaffoldMessenger.maybeOf(context);
+  }
+
+  @override
+  void dispose() {
+    // The messenger outlives this screen. An "Undo" left on it would call back
+    // into a disposed State, so it goes with the screen.
+    _messenger?.hideCurrentSnackBar();
+    super.dispose();
+  }
+
   Future<void> _act(List<LocalReviewItem> group, String action) async {
     if (_saving) return;
     final namespace = ref.read(app.cacheNamespaceProvider);
@@ -197,6 +217,60 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
         confirm: action == 'correct' || action == 'separate',
       );
       ref.invalidate(reviewItemsProvider);
+      ref.invalidate(dismissedReviewItemsProvider);
+      if (action == 'ignore' &&
+          group.every((i) => i.kind == 'template' && i.message != null) &&
+          mounted) {
+        final n = group.length;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                n == 1
+                    ? 'Marked as not financial.'
+                    : '$n messages marked as not financial.',
+              ),
+              duration: const Duration(seconds: 8),
+              action: SnackBarAction(
+                label: 'Undo',
+                onPressed: () => _restore(group),
+              ),
+            ),
+          );
+      }
+    } catch (error) {
+      if (mounted) smsShowError(context, error);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  /// Takes back "Not financial" for unknown formats: the ignore rule goes and
+  /// the messages return to Needs review.
+  Future<void> _restore(List<LocalReviewItem> group) async {
+    if (_saving || !mounted) return;
+    final namespace = ref.read(app.cacheNamespaceProvider);
+    setState(() => _saving = true);
+    try {
+      final controller = await smsReviewController(ref);
+      if (!mounted || namespace != ref.read(app.cacheNamespaceProvider)) return;
+      final n = controller.restoreDismissed(group);
+      ref.invalidate(reviewItemsProvider);
+      ref.invalidate(dismissedReviewItemsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                n == 1
+                    ? 'Moved back to review.'
+                    : '$n messages moved back to review.',
+              ),
+            ),
+          );
+      }
     } catch (error) {
       if (mounted) smsShowError(context, error);
     } finally {
@@ -285,29 +359,71 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Needs review')),
-    body: AppBackground(
-      child: ref
-          .watch(reviewItemsProvider)
-          .when(
-            skipLoadingOnReload: true,
-            skipLoadingOnRefresh: true,
-            loading: () => const SmsLoading(),
-            error: (_, _) =>
-                SmsError(onRetry: () => ref.invalidate(reviewItemsProvider)),
-            data: (items) => ReviewInboxList(
-              items: items,
-              busy: _saving,
-              onAction: _act,
-              header: SharingOfferCard(openItems: items.length),
+  Widget build(BuildContext context) {
+    final review = ref.watch(reviewItemsProvider);
+    final dismissed =
+        ref.watch(dismissedReviewItemsProvider).valueOrNull ?? const [];
+    return Scaffold(
+      appBar: AppBar(title: const Text('Needs review')),
+      body: AppBackground(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.lg,
+                AppSpace.sm,
+                AppSpace.lg,
+                AppSpace.xs,
+              ),
+              child: SegmentedButton<int>(
+                segments: [
+                  ButtonSegment(
+                    value: 0,
+                    label: Text(
+                      'Needs review${review.valueOrNull == null ? '' : ' (${review.valueOrNull!.length})'}',
+                    ),
+                  ),
+                  ButtonSegment(
+                    value: 1,
+                    label: Text('Dismissed (${dismissed.length})'),
+                  ),
+                ],
+                selected: {_tab},
+                showSelectedIcon: false,
+                expandedInsets: EdgeInsets.zero,
+                onSelectionChanged: (s) => setState(() => _tab = s.first),
+              ),
             ),
-          ),
-    ),
-  );
+            Expanded(
+              child: _tab == 1
+                  ? DismissedReviewList(
+                      items: dismissed,
+                      busy: _saving,
+                      onRestore: _restore,
+                    )
+                  : review.when(
+                      skipLoadingOnReload: true,
+                      skipLoadingOnRefresh: true,
+                      loading: () => const SmsLoading(),
+                      error: (_, _) => SmsError(
+                        onRetry: () => ref.invalidate(reviewItemsProvider),
+                      ),
+                      data: (items) => ReviewInboxList(
+                        items: items,
+                        busy: _saving,
+                        onAction: _act,
+                        header: SharingOfferCard(openItems: items.length),
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class ReviewInboxList extends StatelessWidget {
+class ReviewInboxList extends StatefulWidget {
   const ReviewInboxList({
     super.key,
     required this.items,
@@ -321,31 +437,123 @@ class ReviewInboxList extends StatelessWidget {
 
   /// Shown under the privacy note (the sharing offer).
   final Widget? header;
+
+  @override
+  State<ReviewInboxList> createState() => _ReviewInboxListState();
+}
+
+class _ReviewInboxListState extends State<ReviewInboxList> {
+  ReviewFilter _filter = ReviewFilter.all;
+  String? _month;
+
+  /// Only unknown formats can be set aside in bulk, and only under the
+  /// "Declined & alerts" chip: that is the one group that is not financial by
+  /// nature. Anything else could hold real spends, so it is decided card by
+  /// card. Unknown-format items are also the ones whose dismissal can be
+  /// undone (they have no event, so nothing else was changed).
+  static List<LocalReviewItem> _dismissable(List<ReviewBundle> bundles) => [
+    for (final b in bundles)
+      if (b.kind == 'template')
+        for (final i in b.items)
+          if (i.message != null) i,
+  ];
+
+  Future<void> _confirmBulkDismiss(
+    List<LocalReviewItem> targets,
+    String scope,
+  ) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Mark ${targets.length} messages as not financial?'),
+        content: Text(
+          'These are the ${targets.length} messages shown under $scope. '
+          'Future messages in the same formats will be ignored too. '
+          'You can undo this right after, or later from the Dismissed tab.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Mark all'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && mounted) widget.onAction(targets, 'ignore');
+  }
+
   @override
   Widget build(BuildContext context) {
+    final items = widget.items;
     if (items.isEmpty) {
       return const SmsEmpty(
         'You’re all caught up. New formats and payments that need your help will appear here.',
         icon: Icons.task_alt_rounded,
       );
     }
-    final groups = <String, List<LocalReviewItem>>{};
-    for (final item in items) {
-      groups
-          .putIfAbsent('${reviewKindOf(item)}:${item.groupKey}', () => [])
-          .add(item);
+    final typeOf = {
+      for (final item in items) item: reviewFilterOf(item, reviewKindOf),
+    };
+    final typeCounts = <ReviewFilter, int>{};
+    for (final f in typeOf.values) {
+      typeCounts[f] = (typeCounts[f] ?? 0) + 1;
     }
-    final sections = <String, List<List<LocalReviewItem>>>{};
-    for (final group in groups.values) {
-      final title = switch (reviewKindOf(group.first)) {
+    // A chip whose items were all dealt with falls back to All instead of
+    // leaving an empty screen.
+    final filter =
+        _filter != ReviewFilter.all && (typeCounts[_filter] ?? 0) == 0
+        ? ReviewFilter.all
+        : _filter;
+    final ofType = [
+      for (final item in items)
+        if (filter == ReviewFilter.all || typeOf[item] == filter) item,
+    ];
+    final monthCounts = <String, int>{};
+    for (final item in ofType) {
+      final key = reviewMonthKey(item);
+      if (key != null) monthCounts[key] = (monthCounts[key] ?? 0) + 1;
+    }
+    final months = monthCounts.keys.toList()..sort((a, b) => b.compareTo(a));
+    final month = _month != null && monthCounts.containsKey(_month)
+        ? _month
+        : null;
+    final visible = month == null
+        ? ofType
+        : [
+            for (final item in ofType)
+              if (reviewMonthKey(item) == month) item,
+          ];
+
+    final sections = <String, List<ReviewBundle>>{};
+    for (final bundle in bundleReviewItems(visible, reviewKindOf)) {
+      final title = switch (bundle.kind) {
         'receipt' => receiptReviewText().title,
         'template' => 'New message formats',
         'link' => 'Is this the same payment?',
         'category' => 'What is this merchant?',
         _ => 'Please confirm',
       };
-      sections.putIfAbsent(title, () => []).add(group);
+      sections.putIfAbsent(title, () => []).add(bundle);
     }
+    // Teaching a big format clears the most messages, so those come first.
+    sections['New message formats']?.sort((a, b) {
+      final bySize = b.items.length.compareTo(a.items.length);
+      if (bySize != 0) return bySize;
+      final byDate = (b.latest ?? DateTime(0)).compareTo(
+        a.latest ?? DateTime(0),
+      );
+      return byDate != 0 ? byDate : a.key.compareTo(b.key);
+    });
+
+    final scope = [
+      '“${filter.label}”',
+      if (month != null) reviewMonthLabel(month),
+    ].join(' in ');
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(
         AppSpace.lg,
@@ -357,8 +565,8 @@ class ReviewInboxList extends StatelessWidget {
         const BambooNote(
           'Your message text stays on this phone. A format choice applies to every message in that group.',
         ),
-        ?header,
-        if (busy)
+        ?widget.header,
+        if (widget.busy)
           const Padding(
             padding: EdgeInsets.only(top: AppSpace.md),
             child: ClipRRect(
@@ -366,15 +574,96 @@ class ReviewInboxList extends StatelessWidget {
               child: LinearProgressIndicator(minHeight: 3),
             ),
           ),
+        if (typeCounts.length > 1) ...[
+          const SizedBox(height: AppSpace.md),
+          _ChipRow(
+            children: [
+              _ReviewChip(
+                label: 'All (${items.length})',
+                selected: filter == ReviewFilter.all,
+                onTap: () => setState(() {
+                  _filter = ReviewFilter.all;
+                  _month = null;
+                }),
+              ),
+              for (final f in ReviewFilter.values)
+                if (f != ReviewFilter.all && (typeCounts[f] ?? 0) > 0)
+                  _ReviewChip(
+                    label: '${f.label} (${typeCounts[f]})',
+                    selected: filter == f,
+                    onTap: () => setState(() {
+                      _filter = f;
+                      _month = null;
+                    }),
+                  ),
+            ],
+          ),
+        ],
+        if (months.length > 1) ...[
+          const SizedBox(height: AppSpace.xs),
+          _ChipRow(
+            children: [
+              _ReviewChip(
+                label: 'All time',
+                selected: month == null,
+                onTap: () => setState(() => _month = null),
+              ),
+              for (final m in months)
+                _ReviewChip(
+                  label: '${reviewMonthLabel(m)} (${monthCounts[m]})',
+                  selected: month == m,
+                  onTap: () => setState(() => _month = m),
+                ),
+            ],
+          ),
+        ],
+        if (visible.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpace.xl),
+            child: Column(
+              children: [
+                Text(
+                  'Nothing matches these filters.',
+                  style: BambooFonts.ui(14.5, color: BambooInk.ink700),
+                ),
+                TextButton(
+                  onPressed: () => setState(() {
+                    _filter = ReviewFilter.all;
+                    _month = null;
+                  }),
+                  child: const Text('Show everything'),
+                ),
+              ],
+            ),
+          ),
         for (final section in sections.entries) ...[
           BambooSectionLabel(section.key, asTitle: true),
-          for (final group in section.value)
+          if (filter == ReviewFilter.alerts &&
+              section.key == 'New message formats' &&
+              _dismissable(section.value).length > 1)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                style: BambooButtons.quiet,
+                onPressed: widget.busy
+                    ? null
+                    : () => _confirmBulkDismiss(
+                        _dismissable(section.value),
+                        scope,
+                      ),
+                child: Text(
+                  'Not financial — all ${_dismissable(section.value).length} shown',
+                ),
+              ),
+            ),
+          for (final bundle in section.value)
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpace.md),
               child: _ReviewGroupPanel(
-                group: group,
-                busy: busy,
-                onAction: onAction,
+                key: ValueKey(bundle.key),
+                bundle: bundle,
+                busy: widget.busy,
+                onAction: widget.onAction,
               ),
             ),
         ],
@@ -383,30 +672,149 @@ class ReviewInboxList extends StatelessWidget {
   }
 }
 
-class _ReviewGroupPanel extends StatelessWidget {
+class _ChipRow extends StatelessWidget {
+  const _ChipRow({required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: Row(spacing: AppSpace.xs, children: children),
+  );
+}
+
+class _ReviewChip extends StatelessWidget {
+  const _ReviewChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => ChoiceChip(
+    selected: selected,
+    selectedColor: BambooInk.slate,
+    onSelected: (_) => onTap(),
+    label: Text(label),
+    showCheckmark: false,
+    labelStyle: BambooFonts.ui(
+      12.5,
+      weight: selected ? FontWeight.w600 : FontWeight.w500,
+      color: selected ? BambooInk.onSlate : BambooInk.ink700,
+    ),
+    backgroundColor: selected ? BambooInk.slate : BambooInk.paperMuted,
+    side: BorderSide(
+      color: selected ? BambooInk.slate : BambooInk.hairlineOnPaper,
+    ),
+    shape: const StadiumBorder(),
+    padding: const EdgeInsets.symmetric(horizontal: 4),
+    materialTapTargetSize: MaterialTapTargetSize.padded,
+  );
+}
+
+class _ReviewGroupPanel extends StatefulWidget {
   const _ReviewGroupPanel({
-    required this.group,
+    super.key,
+    required this.bundle,
     required this.busy,
     required this.onAction,
   });
-  final List<LocalReviewItem> group;
+  final ReviewBundle bundle;
   final bool busy;
   final void Function(List<LocalReviewItem>, String) onAction;
 
+  @override
+  State<_ReviewGroupPanel> createState() => _ReviewGroupPanelState();
+}
+
+class _ReviewGroupPanelState extends State<_ReviewGroupPanel> {
+  bool _expanded = false;
+
+  List<LocalReviewItem> get group => widget.bundle.items;
+
   VoidCallback? _on(String action) =>
-      busy ? null : () => onAction(group, action);
+      widget.busy ? null : () => widget.onAction(group, action);
+
+  String _summary(ReviewBundle b) {
+    final parts = <String>[
+      if (b.totalMinor != null) '${formatRupeesMinor(b.totalMinor!)} total',
+      if (b.earliest != null && b.latest != null)
+        formatBundleSpan(b.earliest!, b.latest!),
+    ];
+    return parts.join(' · ');
+  }
+
+  Widget _members() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      for (final item in group)
+        Padding(
+          padding: const EdgeInsets.only(top: AppSpace.sm),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      [
+                        if (reviewItemDate(item) case final d?)
+                          DateFormat('d MMM yyyy').format(d.toLocal()),
+                        if (reviewItemAmountMinor(item) case final a?)
+                          formatRupeesMinor(a),
+                      ].join(' · '),
+                      style: BambooFonts.ui(
+                        12,
+                        weight: FontWeight.w700,
+                        color: BambooInk.ink500,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      item.message?.message.body ??
+                          'The original message is no longer on this phone.',
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: BambooFonts.ui(
+                        13,
+                        color: BambooInk.ink900,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (item.message != null)
+                TextButton(
+                  style: BambooButtons.quiet,
+                  onPressed: widget.busy
+                      ? null
+                      : () => widget.onAction([item], 'ignore'),
+                  child: const Text('Not financial'),
+                ),
+            ],
+          ),
+        ),
+    ],
+  );
 
   @override
   Widget build(BuildContext context) {
+    final bundle = widget.bundle;
     final first = group.first;
     final kind = reviewKindOf(first);
     final isReceipt = kind == 'receipt';
     final hasReading = group.every((i) => i.payload['hasReading'] == true);
     final allMessages = group.every((i) => i.message != null);
+    final uniform = bundle.uniformFormat;
     final notFinancial = TextButton(
       style: BambooButtons.quiet,
       onPressed: _on('ignore'),
-      child: const Text('Not financial'),
+      child: Text(group.length > 1 ? 'Not financial (all)' : 'Not financial'),
     );
     Widget fix(bool primary) => primary
         ? FilledButton(
@@ -469,6 +877,34 @@ class _ReviewGroupPanel extends StatelessWidget {
         ],
         quiet: [if (allMessages) notFinancial],
       );
+    } else if (bundle.kind == 'template' &&
+        uniform &&
+        allMessages &&
+        const {
+          ReviewContent.security,
+          ReviewContent.promotion,
+          ReviewContent.declined,
+        }.contains(bundle.content)) {
+      // Nothing here moved money, so setting it aside is the likely answer.
+      // Fix stays available in case the wording was misread.
+      actions = BambooActionBar(
+        primary: FilledButton(
+          style: BambooButtons.primary,
+          onPressed: _on('ignore'),
+          child: Text(switch (bundle.content!) {
+            ReviewContent.security => 'Dismiss notice',
+            ReviewContent.promotion => 'Dismiss promotion',
+            _ => 'Not a spend',
+          }),
+        ),
+        secondary: [fix(false)],
+      );
+    } else if (!uniform) {
+      // A Pay Later bundle spans several message formats. Teaching or
+      // confirming one format for all of them would be wrong, so only the
+      // safe bundle-wide action is offered; each message can still be set
+      // aside on its own from the expanded list.
+      actions = BambooActionBar(quiet: [if (allMessages) notFinancial]);
     } else {
       actions = BambooActionBar(
         primary: hasReading
@@ -483,6 +919,9 @@ class _ReviewGroupPanel extends StatelessWidget {
       );
     }
 
+    final count =
+        '${group.length} ${group.length == 1 ? 'message' : 'messages'}';
+    final summary = _summary(bundle);
     return BambooPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -490,21 +929,58 @@ class _ReviewGroupPanel extends StatelessWidget {
           Row(
             children: [
               Icon(
-                isReceipt ? Icons.receipt_long_outlined : Icons.sms_outlined,
+                isReceipt
+                    ? Icons.receipt_long_outlined
+                    : bundle.isPayLater
+                    ? Icons.credit_score_outlined
+                    : Icons.sms_outlined,
                 size: 16,
                 color: BambooInk.ink500,
               ),
               const SizedBox(width: 6),
-              Text(
-                '${group.length} ${group.length == 1 ? 'message' : 'messages'}',
-                style: BambooFonts.ui(
-                  12.5,
-                  weight: FontWeight.w700,
-                  color: BambooInk.ink500,
+              Flexible(
+                child: Text(
+                  bundle.isPayLater
+                      ? '${bundle.payLaterProvider} · $count'
+                      : bundle.kind == 'template' &&
+                            bundle.content != null &&
+                            bundle.content != ReviewContent.other
+                      ? '$count · ${bundle.content!.label}'
+                      : count,
+                  style: BambooFonts.ui(
+                    12.5,
+                    weight: FontWeight.w700,
+                    color: BambooInk.ink500,
+                  ),
                 ),
               ),
             ],
           ),
+          if (group.length > 1 && summary.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              summary,
+              style: BambooFonts.ui(
+                14.5,
+                weight: FontWeight.w700,
+                color: BambooInk.ink900,
+              ),
+            ),
+          ],
+          if (bundle.kind == 'template' && !bundle.isPayLater) ...[
+            const SizedBox(height: 2),
+            Text(
+              'We can’t read this message format yet.',
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500, height: 1.4),
+            ),
+          ],
+          if (bundle.isPayLater && group.length > 1) ...[
+            const SizedBox(height: 2),
+            Text(
+              'Credit line drawdowns, usually billed together in a monthly AutoPay.',
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500, height: 1.4),
+            ),
+          ],
           const SizedBox(height: 10),
           if (isReceipt)
             Text(
@@ -522,6 +998,19 @@ class _ReviewGroupPanel extends StatelessWidget {
                   'The original message is no longer on this phone.',
               sender: first.message?.message.sender,
             ),
+          if (group.length > 1 && !isReceipt) ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                style: BambooButtons.quiet,
+                onPressed: () => setState(() => _expanded = !_expanded),
+                child: Text(
+                  _expanded ? 'Hide messages' : 'Show all ${group.length}',
+                ),
+              ),
+            ),
+            if (_expanded) _members(),
+          ],
           if (first.payload['reading'] case final String reading) ...[
             const SizedBox(height: AppSpace.md),
             Row(
