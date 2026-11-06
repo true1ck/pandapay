@@ -85,21 +85,36 @@ Data types (collected = leaves the phone):
 | Personal info | User IDs | Yes | No | No | App functionality, Account management | Account ID |
 | Financial info | Purchase history | Yes | No | No | App functionality | Transaction details read from SMS, entered by hand or imported |
 | Financial info | Other financial info | Yes | No | No | App functionality | Card names, card or account ending, bills, limits, balances. No full card number, PIN or CVV |
-| Messages | SMS or MMS | Yes | No | Yes | App functionality | Only redacted templates, only when "Help PandaPay get better for everyone" is on. The SMS text itself is never sent |
+| Messages | SMS or MMS (redacted layouts only) | Yes | No | Yes | App functionality | Only the layout of a message PandaPay could not read, with every amount, name, number and date removed, and only when "Help PandaPay get better for everyone" is on. The SMS text itself is never sent |
 | Messages | Emails | Yes | No | Yes | App functionality | Only when email import is connected; deleted once read, unread ones within 30 days |
 | Location | Approximate location | Yes | No | Yes | App functionality | Nearby merchants and alerts |
 | Location | Precise location | Yes | No | Yes | App functionality | Nearby merchants and alerts; coordinates pass to Google Places or OpenStreetMap-based providers acting for us |
 | Contacts | Contacts | Yes | No | Yes | App functionality | Only a person you pick for a shared expense: name and number |
 | App activity | App interactions | Yes | No | No | Analytics, App functionality | Fixed list of events, no free text |
+| App activity | Other user-generated content (shop categories and names you choose) | Yes | No | Yes | App functionality | The category and the display name a person picks for a shop, the shop name PandaPay could not categorise, and the sender (for example HDFCBK). Only when "Help PandaPay get better for everyone" is on; deleted when it is turned off or the account is deleted. No message text, amounts or the people a person pays. See `docs/release/learning-data-flows.md` |
 | App info and performance | Crash logs | Yes | No | No | App functionality | Error type, code location, app version, phone type; no message text, amounts or IDs |
 | Device or other IDs | Device or other IDs | Yes | No | No | App functionality | Push token and install ID |
 
 Notes for the form:
 
-- "Shared" is No throughout: Novu, Firebase Cloud Messaging, GlitchTip, hosting, Google Places/OpenStreetMap-based providers and Google Gemini act as service providers on our behalf. Google Gemini only sees redacted templates, and only with the opt-in. If the form's wording makes you answer Yes for a provider, answer it per type.
+- "Shared" is No throughout: Novu, Firebase Cloud Messaging, GlitchTip, hosting, Google Places/OpenStreetMap-based providers and Google Gemini act as service providers on our behalf. Google Gemini only sees redacted layouts and shop names, and only with the opt-in. If the form's wording makes you answer Yes for a provider, answer it per type.
 - Data not collected (stays on the phone): SMS text, receipts and attachments, messages waiting for review.
 - Camera, photos and microphone: used on the phone (QR and card scanning, receipt text recognition, voice input through the phone's own speech recognition). Confirm that no audio or image leaves the phone before answering "Not collected".
 - Optional data is marked optional because the person can use PandaPay without it.
+
+### 3.3 Shared learning declarations (added with the learning loop)
+
+The opt-in "Help PandaPay get better for everyone" now covers three things, and the declarations above must say so before the release that ships it:
+
+- **Messages: SMS (redacted layouts only), optional.** The layout of bank messages PandaPay can't read, with every amount, name, number and date removed. Already in the table above; the wording now says "layouts" everywhere.
+- **App activity: other user-generated content (shop categories and names you choose), optional.** New row in the table above. It covers the category and display name a person picks for a shop and the shops PandaPay could not categorise. Collected, not shared (Google Gemini is a service provider), optional, purpose App functionality, deleted when the person turns sharing off or deletes the account.
+- **Processing by Google Gemini.** Keep the "Shared: No, service provider" answer only after the paid-key terms are confirmed (open point 1 in `docs/release/learning-data-flows.md`).
+
+Checks before submitting:
+
+- [ ] The Play answers and the App Store labels (section 4.1) use the same wording as the in-app opt-in sheet and privacy policy section 5 ("Optional: sharing message layouts, shop categories and shop names").
+- [ ] The privacy policy version (`consentPolicyVersion`) and the opt-in policy version (`sms-shared-learning-v3`) were bumped together if any wording changed.
+- [ ] `docs/release/learning-data-flows.md` was read by the lawyer (section 1, "Before anything is published", last item) and its open points are answered.
 
 ## 4. Apple App Store
 
@@ -115,7 +130,8 @@ Data linked to the user:
 | Financial Info | Other Financial Info (transaction details, card or account ending, bills) | App Functionality |
 | Location | Precise Location (optional) | App Functionality |
 | Contacts | Contacts (optional: only a picked contact) | App Functionality |
-| User Content | Emails or Text Messages (optional: email import; redacted templates if sharing is on) | App Functionality |
+| User Content | Emails or Text Messages (optional: email import; redacted layouts if sharing is on) | App Functionality |
+| User Content | Other User Content (optional: the shop categories and shop names a person picks, and shop names left uncategorised, only if sharing is on) | App Functionality |
 | Identifiers | User ID, Device ID (push token and install ID) | App Functionality |
 | Usage Data | Product Interaction | Analytics, App Functionality |
 

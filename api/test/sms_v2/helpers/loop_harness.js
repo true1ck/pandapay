@@ -28,7 +28,9 @@ const LOOP_TABLES = [
   'sms_v2_testers', 'sms_v2_rule_stats_profile_daily', 'sms_v2_rule_stats_daily', 'sms_v2_rule_cohorts', 'sms_v2_bundles', 'sms_v2_bundle_parts', 'sms_v2_rules',
 ];
 
-async function startLoopHarness({ profileCount = 4, registerAdmin, adminPaths } = {}) {
+// `sessions(token, { admin, mfaFresh })` may stand in for the admin session
+// service: it returns the session a bearer token belongs to, or null.
+async function startLoopHarness({ profileCount = 4, registerAdmin, adminPaths, sessions } = {}) {
   if (skip) throw new Error('SMS_V2_TEST_DATABASE_URL and SMS_V2_TEST_ADMIN_DATABASE_URL are required');
   const pool = new Pool({ connectionString: url });
   const privatePool = new Pool({ connectionString: adminUrl });
@@ -93,7 +95,7 @@ async function startLoopHarness({ profileCount = 4, registerAdmin, adminPaths } 
   const wanted = adminPaths || ((path) => path.startsWith('/admin/sms/v2/'));
   const adminApp = createAdminApiApp({
     routeManifest: routeManifest.filter((row) => wanted(row.path)),
-    introspectAdminSession: async () => ({
+    introspectAdminSession: async (token) => (sessions ? sessions(token, { admin, mfaFresh }) : {
       active: true, userId: admin, sessionId: 'loop-harness', assurance: 'email+webauthn-uv',
       mfaVerifiedAt: new Date(Date.now() - (mfaFresh ? 0 : 3600000)), expiresAt: new Date(Date.now() + 60000),
     }),
@@ -114,8 +116,8 @@ async function startLoopHarness({ profileCount = 4, registerAdmin, adminPaths } 
       post: (path, body) => fetch(`${publicUrl}${path}`, { method: 'POST', headers, body: JSON.stringify(body) }).then(json),
     };
   };
-  const asAdmin = () => {
-    const headers = { authorization: `Bearer ${'x'.repeat(43)}`, 'content-type': 'application/json' };
+  const asAdmin = (token = 'x'.repeat(43)) => {
+    const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
     const call = (method) => (path, body) => fetch(`${adminUrlBase}${path}`, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }).then(json);
     return { get: call('GET'), post: call('POST'), put: call('PUT'), del: call('DELETE') };
   };

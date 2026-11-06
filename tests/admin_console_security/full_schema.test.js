@@ -58,10 +58,12 @@ test('private admin migrations coexist with the complete clean application schem
     execFileSync('psql', ['-h', socket, '-p', '55487', '-U', 'postgres', '-d', productName,
       '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', path.resolve(__dirname, '../../db/tests', name)], { stdio: 'pipe' });
   }
-  execFileSync(process.execPath, ['--test', '--test-concurrency=1', 'api/test/sms_v2/rules_pg.test.js', 'api/test/sms_v2/facts_pg.test.js', 'api/test/sms_v2/templates_pg.test.js', 'api/test/sms_v2/category_pg.test.js', 'api/test/sms_v2/corrections_pg.test.js', 'api/test/sms_v2/legacy_supersede_pg.test.js', 'api/test/sms_v2/consent_ordering_pg.test.js', 'api/test/sms_v2/metrics_pg.test.js', 'api/test/sms_v2/client_metrics_pg.test.js'], {
+  execFileSync(process.execPath, ['--test', '--test-concurrency=1', 'api/test/sms_v2/rules_pg.test.js', 'api/test/sms_v2/facts_pg.test.js', 'api/test/sms_v2/templates_pg.test.js', 'api/test/sms_v2/category_pg.test.js', 'api/test/sms_v2/corrections_pg.test.js', 'api/test/sms_v2/legacy_supersede_pg.test.js', 'api/test/sms_v2/consent_ordering_pg.test.js', 'api/test/sms_v2/metrics_pg.test.js', 'api/test/sms_v2/client_metrics_pg.test.js', 'api/test/sms_v2/learning_consent_pg.test.js', 'api/test/sms_v2/settings_pg.test.js', 'api/test/sms_v2/learning_signals_pg.test.js', 'api/test/sms_v2/learning_admin_pg.test.js', 'api/test/sms_v2/alias_admin_pg.test.js', 'api/test/sms_v2/ai_learning_pg.test.js', 'api/test/sms_v2/merchant_suggestions_pg.test.js', 'api/test/sms_v2/learning_loop_e2e_pg.test.js', 'api/test/sms_v2/learning_security_pg.test.js'], {
     cwd: path.resolve(__dirname, '../..'), stdio: 'pipe',
     env: {
       ...process.env,
+      // Under `node --test` this variable makes a nested run report nothing and run nothing.
+      NODE_TEST_CONTEXT: undefined,
       SMS_V2_TEST_DATABASE_URL: `postgresql://postgres@localhost/${productName}?host=${encodeURIComponent(socket)}&port=55487`,
       SMS_V2_TEST_ADMIN_DATABASE_URL: `postgresql://admin_api_runtime@localhost/${productName}?host=${encodeURIComponent(socket)}&port=55487`,
     },
