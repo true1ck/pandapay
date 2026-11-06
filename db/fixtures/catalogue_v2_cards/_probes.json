@@ -4,6 +4,71 @@
     "Probes are not issuer-verified worked examples: each cites the CardPipeline record text it checks. A probe card is never listed in verified_cards.json."
   ],
   "cards": {
+    "fabindia-sbi-card": {
+      "sources": [
+        {
+          "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/Fabindia-TnC.pdf",
+          "doc": "Fabindia SBI Card T&C, 11.4 Points (read 2026-11-06)",
+          "quote": "5 Reward Points per Rs100 spent at Fabindia."
+        }
+      ],
+      "examples": [
+        {
+          "id": "P01",
+          "title": "Rs 2,000 other retail spend",
+          "ctx": {
+            "amount": 2000,
+            "occurred": "2026-11-10T10:00:00+05:30",
+            "category_id": null,
+            "category_slug": "other",
+            "mcc": "5651",
+            "merchant_name": "Apparel store",
+            "merchant_vpa": null,
+            "merchant_slug": null,
+            "platform": null,
+            "rail": "swipe"
+          },
+          "state_before": {
+            "caps_by_source_id": {}
+          },
+          "expect": {
+            "currency": "points",
+            "amount": 10,
+            "value_inr": null,
+            "excluded": false,
+            "cap_deltas_by_source_id": {}
+          },
+          "why": "The T&C give no other-spends rate and the record contradicts itself (base 1 per Rs200, rule 1 per Rs100), so the rule is info and the card base governs: 10 blocks of Rs200 x 1 = 10 (C8 D33e, H2)."
+        },
+        {
+          "id": "P02",
+          "title": "Rs 1,000 at Fabindia",
+          "ctx": {
+            "amount": 1000,
+            "occurred": "2026-11-10T10:00:00+05:30",
+            "category_id": null,
+            "category_slug": "other",
+            "mcc": "5651",
+            "merchant_name": "Fabindia",
+            "merchant_vpa": null,
+            "merchant_slug": "fabindia",
+            "platform": null,
+            "rail": "swipe"
+          },
+          "state_before": {
+            "caps_by_source_id": {}
+          },
+          "expect": {
+            "currency": "points",
+            "amount": 50,
+            "value_inr": null,
+            "excluded": false,
+            "cap_deltas_by_source_id": {}
+          },
+          "why": "T&C 11.4: \"5 Reward Points per Rs100 spent at Fabindia\": 10 x 5 = 50 (unchanged by the D33e fix)."
+        }
+      ]
+    },
     "indigo-idfc-first-dual-card": {
       "sources": [
         {
