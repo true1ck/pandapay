@@ -65,3 +65,19 @@ Wave 3 closed facts on 39 unfinished cards (15 complete, 24 still blocked). Five
 Complete but not published because no issuer states a rupee value per point (9): AU Xcite Ultra, IndiGo Axis, IndiGo Axis Premium, Axis Kwik, RBL SaveMax, RBL iGlobe, RBL Movies & More, SBM OneCard Metal, YES POP-CLUB. In the app these would show zero reward value, so they wait for a decision.
 
 Complete but held for a conflicting document (1): CSB Jupiter Edge+ (Jupiter-hosted T&C of 15 Oct 2026 differs from CSB's PDF of 7 Sep 2026 on the travel cap and effective date).
+
+## Third publish (9 cards without a stated point value, owner decision)
+
+The owner chose to publish the nine cards whose other facts are complete but for which no issuer states a rupee value per point. In the app their points show with zero rupee value, so they rank last on reward value until a value is added. The app already handles a missing value (40 older cards have none). Dry run 9 would publish, then 9 published, 0 failed. Feed 410 to 419; 19 drafts remain hidden.
+
+| Card | Slug |
+|---|---|
+| AU Xcite Ultra Credit Card | `au-xcite-ultra` |
+| IndiGo Axis Bank Credit Card | `axis-bank-indigo` |
+| IndiGo Axis Bank Premium Credit Card | `axis-bank-indigo-premium` |
+| Kwik Axis Bank Credit Card | `axis-bank-kwik` |
+| RBL Bank BankBazaar SaveMax Credit Card | `rbl-bank-bankbazaar-savemax` |
+| RBL Bank iGlobe Credit Card | `rbl-bank-iglobe` |
+| RBL Bank Movies & More Credit Card | `rbl-bank-movies-and-more` |
+| OneCard Metal Credit Card (SBM Bank India variant) | `sbm-bank-india-onecard-metal` |
+| YES BANK POP-CLUB RuPay Credit Card | `yes-bank-pop-club-rupay` |
