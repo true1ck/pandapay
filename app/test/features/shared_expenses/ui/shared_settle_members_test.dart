@@ -403,6 +403,45 @@ void main() {
       expect(runtime.store.pendingCount, 1);
     },
   );
+
+  testWidgets(
+    'adding duplicate member or invalid name/phone is prevented with clear error',
+    (tester) async {
+      await show(
+        tester,
+        SharedMembersSheet(
+          runtime: runtime,
+          contextId: group,
+          groupName: 'Trip Group',
+        ),
+      );
+      await tap(tester, 'Add person');
+      // Case 1: Entering an existing member's name ('Friend User')
+      await tester.enterText(find.byType(TextField).first, '  friend user  ');
+      await tester.tap(find.widgetWithText(FilledButton, 'Add person'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Someone in this split already has that name. Add a surname or initial.'),
+        findsOneWidget,
+      );
+      expect(runtime.store.pendingCount, 0);
+
+      // Case 2: Name field limits input to 40 characters
+      final nameField = tester.widget<TextField>(find.byType(TextField).first);
+      expect(nameField.maxLength, 40);
+
+      // Case 3: Entering an invalid phone number
+      await tester.enterText(find.byType(TextField).first, 'Valid Person');
+      await tester.enterText(find.byType(TextField).at(1), '12345');
+      await tester.tap(find.widgetWithText(FilledButton, 'Add person'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Enter a valid mobile number, or leave it empty.'),
+        findsOneWidget,
+      );
+      expect(runtime.store.pendingCount, 0);
+    },
+  );
   for (final kind in ['members', 'history', 'settle']) {
     testWidgets(
       '$kind hides private data immediately when context is revoked',

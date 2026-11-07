@@ -544,6 +544,12 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
           setState(() => _formError = 'Enter the person\'s name.');
           return;
         }
+        if (text.length > 40) {
+          setState(
+            () => _formError = 'Name cannot be more than 40 characters.',
+          );
+          return;
+        }
         final cleaned = phone.isEmpty ? null : sharedCleanPhone(phone);
         if (phone.isNotEmpty && cleaned == null) {
           setState(
@@ -560,6 +566,25 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
         _pendingPhone = cleaned;
         final current = await widget.runtime.contextRoster(widget.contextId);
         if (!current.canInvite) throw const SharedRuntimeUnavailable();
+        final duplicateName = current.members.any(
+          (m) =>
+              m.state != 'left' &&
+              m.name.trim().toLowerCase() == name.toLowerCase(),
+        );
+        if (duplicateName) {
+          setState(
+            () => _formError =
+                'Someone in this split already has that name. Add a surname or initial.',
+          );
+          return;
+        }
+        if (cleaned != null && _phones.values.any((p) => p == cleaned)) {
+          setState(
+            () => _formError =
+                'Someone in this split is already invited with that number.',
+          );
+          return;
+        }
         _pendingMemberId = const Uuid().v4();
         _pending = SharedCommand(
           operationId: const Uuid().v4(),
@@ -655,8 +680,9 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
       final picked = await FlutterContacts.native.showPicker(
         properties: {ContactProperty.name, ContactProperty.phone},
       );
-      final name = picked?.displayName?.trim() ?? '';
-      if (picked == null || name.isEmpty) return null;
+      final rawName = picked?.displayName?.trim() ?? '';
+      if (picked == null || rawName.isEmpty) return null;
+      final name = rawName.length > 40 ? rawName.substring(0, 40).trim() : rawName;
       final number = picked.phones.isEmpty ? '' : picked.phones.first.number;
       final cleaned = number.replaceAll(RegExp(r'[^+0-9 ()-]'), '').trim();
       return (name, cleaned.length > 20 ? '' : cleaned);
@@ -720,7 +746,7 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
       TextField(
         controller: _nameField,
         autofocus: true,
-        maxLength: 120,
+        maxLength: 40,
         buildCounter:
             (_, {required currentLength, required isFocused, maxLength}) =>
                 null,
