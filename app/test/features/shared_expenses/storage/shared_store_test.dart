@@ -832,4 +832,78 @@ void main() {
       );
     },
   );
+
+  SharedProjection member(String id, {String name = 'A', int revision = 1}) =>
+      SharedProjection(
+        entity: 'members',
+        id: id,
+        contextId: contextId,
+        revision: revision,
+        payload: {'displayName': name},
+      );
+
+  test(
+    'repeats of one record in a page apply and advance the cursor',
+    () async {
+      await store.applyPage(
+        SharedChangePage(
+          records: [
+            projection(),
+            member('m1'),
+            projection(),
+            member('m1'),
+            member('m2'),
+            projection(),
+          ],
+          nextCursor: 'c1',
+        ),
+        expectedCursor: null,
+      );
+      expect(store.cursor, 'c1');
+      expect(
+        store.readPage(entity: 'members', contextId: contextId).items,
+        hasLength(2),
+      );
+      expect(
+        store.readPage(entity: 'contexts', contextId: contextId).items,
+        hasLength(1),
+      );
+    },
+  );
+
+  test('in a page the higher revision wins whatever the order', () async {
+    await store.applyPage(
+      SharedChangePage(
+        records: [
+          member('m1', name: 'New', revision: 3),
+          member('m1', name: 'Old', revision: 2),
+        ],
+        nextCursor: 'c1',
+      ),
+      expectedCursor: null,
+    );
+    final item = store
+        .readPage(entity: 'members', contextId: contextId)
+        .items
+        .single;
+    expect(item.revision, 3);
+    expect(item.payload['displayName'], 'New');
+  });
+
+  test('same revision with different content in a page still fails', () async {
+    await expectLater(
+      store.applyPage(
+        SharedChangePage(
+          records: [
+            member('m1', name: 'A'),
+            member('m1', name: 'B'),
+          ],
+          nextCursor: 'c1',
+        ),
+        expectedCursor: null,
+      ),
+      throwsA(isA<SharedLocalException>()),
+    );
+    expect(store.cursor, isNull);
+  });
 }

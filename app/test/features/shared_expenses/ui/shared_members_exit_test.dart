@@ -26,7 +26,6 @@ const account = '11111111-1111-4111-8111-111111111111',
     report = '55555555-5555-4555-8555-555555555555';
 final sessionNamespace = StateProvider<String>((ref) => 'user:$account');
 
-
 class Runtime extends SharedExpensesRuntime {
   Runtime({required super.store, required super.remote, required super.cache})
     : super(isCurrent: () => true);
@@ -126,7 +125,6 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-
   Future<void> openMembers(WidgetTester tester) => show(
     tester,
     SharedMembersSheet(
@@ -195,7 +193,9 @@ void main() {
     expect(find.textContaining('Take over as owner'), findsOneWidget);
   });
 
-  testWidgets('unjoined people are labelled in expense pickers', (tester) async {
+  testWidgets('unjoined people are labelled in expense pickers', (
+    tester,
+  ) async {
     expect(
       const SharedEditorMember(friend, 'Asha', state: 'invited').label,
       'Asha (not joined yet)',
@@ -229,7 +229,12 @@ void main() {
     runtime.owner = false;
     runtime.people = [
       const SharedEditorMember(me, 'You', profileId: account),
-      const SharedEditorMember(friend, 'Boss', profileId: friend, role: 'owner'),
+      const SharedEditorMember(
+        friend,
+        'Boss',
+        profileId: friend,
+        role: 'owner',
+      ),
     ];
     bool? result;
     await show(

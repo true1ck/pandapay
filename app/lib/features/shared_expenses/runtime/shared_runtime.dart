@@ -145,6 +145,13 @@ class SharedExpensesRuntime extends ChangeNotifier {
       });
     } catch (error) {
       lastError = error;
+      // Type and code only (never the message): a silent apply failure must
+      // not look like "still loading".
+      debugPrint(
+        'shared refresh failed: ${error.runtimeType}'
+        '${error is SharedTransportException ? ' ${error.code}' : ''}'
+        '${error is SharedLocalException ? ' ${error.code}' : ''}',
+      );
       offline =
           error is SharedTransportException &&
           error.code == 'network_unavailable';
