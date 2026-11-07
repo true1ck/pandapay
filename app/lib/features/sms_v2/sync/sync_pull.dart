@@ -463,9 +463,14 @@ class SyncPull {
       categoryIdBySlug: categoryIdBySlug,
     );
     // These are server projections, so writing the display does not queue a push.
+    // One ledger read for all events instead of one query per event.
+    final entriesByEvent = <String, List<LedgerEntry>>{};
+    for (final entry in _ledger.list()) {
+      (entriesByEvent[entry.eventId] ??= []).add(entry);
+    }
     for (final event in ready) {
       if (!_dirty('v2_events', 'event_id', event.eventId)) {
-        for (final entry in _ledger.forEvent(event.eventId)) {
+        for (final entry in entriesByEvent[event.eventId] ?? const []) {
           if (!dirtyBefore.contains(entry.entryId)) {
             _ledger.markClean([entry.entryId]);
           }
