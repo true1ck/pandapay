@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:pandapay_domain/sms_v2.dart';
 import 'package:pandapay_domain/sms_v2_ledger.dart';
@@ -115,11 +116,17 @@ class SyncPull {
       if (clock != null) _state.recordClock(kind, id, clock);
     }
 
+    // What this page can have changed. The projection is rebuilt for these
+    // events (and the events that share a fact with them) only; see
+    // _rebuildDisplay.
+    final touchedEvents = <String>{};
+    final touchedFacts = <String>{};
     financial.batch(() {
       _db.execute('SAVEPOINT sms_v2_pull');
       try {
         for (final json in body['facts'] as List? ?? []) {
           final fact = Fact.fromJson((json as Map).cast<String, Object?>());
+          touchedFacts.add(fact.factId);
           _facts.insert(fact);
           _facts.markUploaded(fact.factId, DateTime.now());
         }
@@ -158,6 +165,7 @@ class SyncPull {
           final incoming = Event.fromJson(
             (json as Map).cast<String, Object?>(),
           );
+          touchedEvents.add(incoming.eventId);
           if (incoming.status == EventStatus.userConfirmed &&
                   newer('events', incoming.eventId) ||
               !_dirty('v2_events', 'event_id', incoming.eventId) &&
@@ -192,6 +200,7 @@ class SyncPull {
           final incoming = LedgerEntry.fromJson(
             (json as Map).cast<String, Object?>(),
           );
+          touchedEvents.add(incoming.eventId);
           if (protectedEvents.contains(incoming.eventId) ||
               _dirty('v2_events', 'event_id', incoming.eventId) ||
               _dirty('v2_ledger', 'entry_id', incoming.entryId) ||
@@ -234,7 +243,7 @@ class SyncPull {
             (status as Map).cast<String, Object?>(),
         ]);
         _state.put('rules:latest', '${body['latestBundleVersion']}');
-        _rebuildDisplay();
+        _rebuildDisplay(touchedEvents, touchedFacts);
         _state.put('pull:cursor', body['cursor'] as String);
         _db.execute('RELEASE SAVEPOINT sms_v2_pull');
         financial.notifyExternalChanges(namespace, const [
@@ -306,9 +315,12 @@ class SyncPull {
       final json = (jsonDecode(row['payload'] as String) as Map)
           .cast<String, Object?>();
       rewrite(json);
+      final rewritten = jsonEncode(json);
+      // Most rows do not mention the adopted instrument; leave them alone.
+      if (rewritten == row['payload']) continue;
       _db.execute(
         'UPDATE v2_ledger SET payload=? WHERE namespace=? AND entry_id=?',
-        [jsonEncode(json), namespace, row['entry_id']],
+        [rewritten, namespace, row['entry_id']],
       );
     }
     final pending = _db.select(
@@ -343,28 +355,175 @@ class SyncPull {
     }
   }
 
-  void _rebuildDisplay() {
-    final events = _events.listSince(DateTime.utc(1900));
-    final facts = <String, Fact>{};
-    final ready = <Event>[];
-    for (final event in events) {
-      var complete = true;
-      for (final leg in event.legs) {
-        final fact = facts[leg.factId] ?? _facts.get(leg.factId);
-        if (fact == null) {
-          complete = false;
-        } else {
-          facts[leg.factId] = fact;
-        }
+
+  // ---------------------------------------------------------------------------
+  // Display projection after a pull
+  //
+  // The ledger and the display rows are a pure function of: an event, the facts
+  // of its legs, the instruments, the rule bundle, the category catalogue and
+  // the category decisions already stored. A pull used to rebuild and rewrite
+  // all of that for every event of the account, on the UI isolate, once per
+  // page. Now the cost follows what the page changed:
+  //
+  //  * `projection:context` (sync state) is a hash of everything that is NOT one
+  //    event's own records: the bundle, the catalogue and the shape of every
+  //    instrument (kind, mask, name, status, card link, aliases; not counters
+  //    that move on every message). When it differs from the last projection
+  //    the whole account is rebuilt once, exactly as before.
+  //  * Otherwise only the events this page named (event, ledger and fact
+  //    records), events with unsent local edits, and the events that share a
+  //    fact with them (a refund inherits its purchase's category) are rebuilt.
+  //  * Reads are batched per chunk of ids; nothing queries inside a per-event
+  //    loop, and ProjectionWriter skips rows that would not change.
+  // ---------------------------------------------------------------------------
+
+  static const _contextKey = 'projection:context';
+  static const _contextVersion = 'v1';
+  static final _bundleDigests = Expando<String>('SyncPull bundle digest');
+  static const _volatileInstrumentFields = {
+    'firstSeenAt',
+    'lastSeenAt',
+    'evidenceCount',
+    'creditLimitMinor',
+    'creditLimitSource',
+    'creditLimitAt',
+    'availableMinor',
+    'availableAt',
+    'pointsBalance',
+    'pointsAt',
+  };
+
+  String _projectionContext(Iterable<Instrument> instruments) {
+    final bundleDigest = _bundleDigests[bundle] ??= sha256
+        .convert(utf8.encode(jsonEncode(bundle.toJson())))
+        .toString();
+    final catalogue = [
+      for (final entry in categoryIdBySlug.entries)
+        '${entry.key}=${entry.value}',
+    ]..sort();
+    final shapes = [
+      for (final instrument in instruments)
+        jsonEncode({
+          for (final field in instrument.toJson().entries)
+            if (!_volatileInstrumentFields.contains(field.key))
+              field.key: field.value,
+        }),
+    ]..sort();
+    return sha256
+        .convert(
+          utf8.encode(
+            [_contextVersion, bundleDigest, ...catalogue, '|', ...shapes].join(
+              '\n',
+            ),
+          ),
+        )
+        .toString();
+  }
+
+  Set<String> _dirtyEventIds() => {
+    for (final row in _db.select(
+      'SELECT event_id FROM v2_events WHERE namespace=? AND dirty=1',
+      [namespace],
+    ))
+      row['event_id'] as String,
+  };
+
+  /// Instrument id of each of [factIds] that has one, one query per 400 ids.
+  Map<String, String> _instrumentIdsFor(Iterable<String> factIds) {
+    final ids = factIds.toList();
+    final out = <String, String>{};
+    for (var offset = 0; offset < ids.length; offset += 400) {
+      final chunk = ids.skip(offset).take(400).toList();
+      for (final row in _db.select(
+        'SELECT fact_id,instrument_id FROM v2_facts WHERE namespace=? AND instrument_id IS NOT NULL '
+        'AND fact_id IN (${List.filled(chunk.length, '?').join(',')})',
+        [namespace, ...chunk],
+      )) {
+        out[row['fact_id'] as String] = row['instrument_id'] as String;
       }
-      if (complete || transactionKindForEvent(event) == null) ready.add(event);
     }
-    final readyIds = ready.map((event) => event.eventId).toSet();
+    return out;
+  }
+
+  /// [seeds] plus every event that shares a fact with one of them or holds one
+  /// of [newFacts], oldest first (the order the full rebuild uses, which the
+  /// "last purchase owns a fact" rule of LedgerSnapshot depends on).
+  List<Event> _impactedEvents(Set<String> seeds, Set<String> newFacts) {
+    final byId = <String, Event>{};
+    for (final id in seeds) {
+      // Bounded by the seeds, which are this page's records.
+      final event = _events.get(id);
+      if (event != null) byId[id] = event;
+    }
+    final factIds = {
+      ...newFacts,
+      for (final event in byId.values) ...event.legs.map((leg) => leg.factId),
+    };
+    for (final event in _events.findByFactIds(factIds)) {
+      byId[event.eventId] = event;
+    }
+    return byId.values.toList()..sort((a, b) {
+      final byTime = a.occurredAt.compareTo(b.occurredAt);
+      return byTime != 0 ? byTime : a.eventId.compareTo(b.eventId);
+    });
+  }
+
+  void _rebuildDisplay(Set<String> touchedEvents, Set<String> touchedFacts) {
     final instruments = {
       for (final instrument in _instruments.list())
         instrument.instrumentId: instrument,
     };
-    final instrumentIds = _facts.instrumentIdsSince(DateTime.utc(1900));
+    final context = _projectionContext(instruments.values);
+    final full = _state.get(_contextKey) != context;
+    final dirtyEvents = _dirtyEventIds();
+    // null means the whole account.
+    final Set<String>? scope;
+    final List<Event> events;
+    if (full) {
+      scope = null;
+      events = _events.listSince(DateTime.utc(1900));
+    } else {
+      final seeds = {
+        ...touchedEvents,
+        ...dirtyEvents,
+        ..._ledger.dirtyEntries().values,
+      };
+      events = _impactedEvents(seeds, touchedFacts);
+      scope = {...seeds, for (final event in events) event.eventId};
+    }
+    final facts = <String, Fact>{};
+    if (full) {
+      for (final fact in _facts.all()) {
+        facts[fact.factId] = fact;
+      }
+    } else {
+      for (final event in events) {
+        for (final leg in event.legs) {
+          if (facts.containsKey(leg.factId)) continue;
+          // Bounded by the legs of the impacted events.
+          final fact = _facts.get(leg.factId);
+          if (fact != null) facts[leg.factId] = fact;
+        }
+      }
+    }
+    final ready = [
+      for (final event in events)
+        if (transactionKindForEvent(event) == null ||
+            event.legs.every((leg) => facts.containsKey(leg.factId)))
+          event,
+    ];
+    final readyIds = ready.map((event) => event.eventId).toSet();
+    final instrumentIds = full
+        ? _facts.instrumentIdsSince(DateTime.utc(1900))
+        : _instrumentIdsFor(facts.keys);
+    final ledgerByEvent = <String, List<LedgerEntry>>{};
+    if (full) {
+      for (final entry in _ledger.list()) {
+        (ledgerByEvent[entry.eventId] ??= []).add(entry);
+      }
+    } else {
+      ledgerByEvent.addAll(_ledger.forEvents(scope!));
+    }
     final invalidEvents = {
       for (final event in ready)
         if (event.type == EventType.unknown ||
@@ -379,7 +538,7 @@ class SyncPull {
                       InstrumentStatus.rejected;
             }))
           event.eventId,
-      for (final entry in _ledger.list())
+      for (final entry in ledgerByEvent.values.expand((rows) => rows))
         if ([entry.from, entry.to].whereType<InstrumentEndpoint>().any(
           (endpoint) =>
               instruments[endpoint.instrumentId]?.status ==
@@ -388,24 +547,21 @@ class SyncPull {
           entry.eventId,
     };
     for (final id in invalidEvents) {
-      for (final entry in _ledger.forEvent(id)) {
+      for (final entry in ledgerByEvent[id] ?? const <LedgerEntry>[]) {
         _db.execute('DELETE FROM v2_outbox WHERE namespace=? AND id=?', [
           namespace,
           'ledger:${entry.entryId}',
         ]);
       }
     }
-    final entries = _ledger
-        .list()
-        .where(
-          (entry) =>
-              readyIds.contains(entry.eventId) &&
-              !invalidEvents.contains(entry.eventId),
-        )
-        .toList();
-    final dirtyBefore = _ledger.dirty().map((entry) => entry.entryId).toSet();
+    final entries = [
+      for (final event in ready)
+        if (!invalidEvents.contains(event.eventId))
+          ...?ledgerByEvent[event.eventId],
+    ];
+    final dirtyBefore = _ledger.dirtyEntries(eventIds: scope).keys.toSet();
     final locked = Map<String, CategoryDecision>.of(
-      _ledger.categoryDecisions(), // perf-ok: once per pull, not per entry
+      _ledger.categoryDecisions(eventIds: scope),
     );
     final purchaseFacts = {
       for (final event in ready)
@@ -462,20 +618,16 @@ class SyncPull {
       instrumentIdByFactId: instrumentIds,
       categoryIdBySlug: categoryIdBySlug,
     );
-    // These are server projections, so writing the display does not queue a push.
-    // One ledger read for all events instead of one query per event.
-    final entriesByEvent = <String, List<LedgerEntry>>{};
-    for (final entry in _ledger.list()) {
-      (entriesByEvent[entry.eventId] ??= []).add(entry);
-    }
-    for (final event in ready) {
-      if (!_dirty('v2_events', 'event_id', event.eventId)) {
-        for (final entry in entriesByEvent[event.eventId] ?? const []) {
-          if (!dirtyBefore.contains(entry.entryId)) {
-            _ledger.markClean([entry.entryId]);
-          }
-        }
-      }
-    }
+    // These are server projections, so writing the display does not queue a push:
+    // rows the write just made dirty are marked clean again, except rows that
+    // were already waiting to be pushed and events with unsent edits.
+    _ledger.markClean([
+      for (final dirty in _ledger.dirtyEntries(eventIds: scope).entries)
+        if (readyIds.contains(dirty.value) &&
+            !dirtyEvents.contains(dirty.value) &&
+            !dirtyBefore.contains(dirty.key))
+          dirty.key,
+    ]);
+    _state.put(_contextKey, context);
   }
 }

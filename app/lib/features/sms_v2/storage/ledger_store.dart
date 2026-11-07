@@ -98,6 +98,44 @@ payload=excluded.payload,dirty=excluded.dirty WHERE v2_ledger.payload != exclude
             (to == null || e.occurredAt.isBefore(to)),
       )
       .toList();
+
+  /// Ledger rows of [eventIds], grouped by event, each group in the same
+  /// `(occurred_at, entry_id)` order as [list]. One indexed query per 400 ids,
+  /// so a caller needing several events pays for those events only.
+  Map<String, List<LedgerEntry>> forEvents(Iterable<String> eventIds) {
+    final out = <String, List<LedgerEntry>>{};
+    for (final r in _rows(eventIds: eventIds.toSet())) {
+      (out[r['event_id'] as String] ??= []).add(
+        _decode(r['payload'] as String),
+      );
+    }
+    return out;
+  }
+
+  /// Entry id -> event id of every dirty row, optionally for [eventIds] only.
+  /// Reads two small columns; nothing is JSON-decoded.
+  Map<String, String> dirtyEntries({Set<String>? eventIds}) {
+    final out = <String, String>{};
+    final groups = eventIds == null
+        ? [<String>[]]
+        : [
+            for (var start = 0; start < eventIds.length; start += 400)
+              eventIds.skip(start).take(400).toList(),
+          ];
+    for (final ids in groups) {
+      final filter = eventIds == null
+          ? ''
+          : ' AND event_id IN (${List.filled(ids.length, '?').join(',')})';
+      for (final r in db.select(
+        'SELECT entry_id,event_id FROM v2_ledger WHERE namespace=? AND dirty=1$filter',
+        [namespace, ...ids],
+      )) {
+        out[r['entry_id'] as String] = r['event_id'] as String;
+      }
+    }
+    return out;
+  }
+
   List<LedgerEntry> forEvent(String eventId) => [
     for (final row in db.select(
       // Pinned to the event index: with ORDER BY entry_id SQLite may walk the

@@ -99,11 +99,13 @@ class HistoryCategoryRecheck {
   // A changed bundle or newly imported event set creates a new explicit job.
   // Runtime downloads do not call this operation.
   Set<String> _pendingMoneyEvents() => {
+    // json_extract reads the id inside SQLite; decoding every pending payload
+    // in Dart for each chunk of 25 events was the larger share of this call.
     for (final row in db.select(
-      "SELECT payload FROM v2_outbox WHERE namespace=? AND kind='ledger' AND coalesce(json_extract(payload,'\$._categoryOnly'),0)!=1",
+      "SELECT json_extract(payload,'\$.eventId') AS event_id FROM v2_outbox WHERE namespace=? AND kind='ledger' AND coalesce(json_extract(payload,'\$._categoryOnly'),0)!=1",
       [namespace],
     ))
-      (jsonDecode(row['payload'] as String) as Map)['eventId'] as String,
+      row['event_id'] as String,
   };
   late final _periodEvents = _events
       .listSince(from)
@@ -286,13 +288,15 @@ class HistoryCategoryRecheck {
         instrument.instrumentId: instrument,
     };
     final instrumentIds = <String, String>{};
-    for (final id in facts.keys) {
-      final rows = db.select(
-        'SELECT instrument_id FROM v2_facts WHERE namespace=? AND fact_id=?',
-        [namespace, id],
-      );
-      if (rows.firstOrNull?['instrument_id'] case final String instrument) {
-        instrumentIds[id] = instrument;
+    final factKeys = facts.keys.toList();
+    for (var start = 0; start < factKeys.length; start += 400) {
+      final group = factKeys.skip(start).take(400).toList();
+      for (final row in db.select(
+        'SELECT fact_id,instrument_id FROM v2_facts WHERE namespace=? AND instrument_id IS NOT NULL '
+        'AND fact_id IN (${List.filled(group.length, '?').join(',')})',
+        [namespace, ...group],
+      )) {
+        instrumentIds[row['fact_id'] as String] = row['instrument_id'] as String;
       }
     }
     final before = _ledger.categoryDecisions(eventIds: affected.keys.toSet());
@@ -361,11 +365,17 @@ class HistoryCategoryRecheck {
         .map((entry) => entry.key)
         .toSet();
     // A category pass may never change money, counts, dates or instrument legs.
+    final storedRows = _ledger.forEvents(snapshot.events.map((e) => e.eventId));
+    final projectedRows = <String, List<LedgerEntry>>{};
+    for (final entry in snapshot.entries) {
+      (projectedRows[entry.eventId] ??= []).add(entry);
+    }
     for (final event in snapshot.events) {
-      final old = _ledger.forEvent(event.eventId);
-      final updated = snapshot.entries
-          .where((entry) => entry.eventId == event.eventId)
-          .toList();
+      // Same order as LedgerStore.forEvent (entry id), which the comparison
+      // below has always used.
+      final old = [...?storedRows[event.eventId]]
+        ..sort((a, b) => a.entryId.compareTo(b.entryId));
+      final updated = projectedRows[event.eventId] ?? const <LedgerEntry>[];
       Map<String, Object?> money(LedgerEntry row) => Map.of(row.toJson())
         ..remove('category')
         ..remove('categorySource');
