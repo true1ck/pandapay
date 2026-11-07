@@ -16,6 +16,7 @@ import '../ui/shared_members_sheet.dart';
 import '../ui/shared_name_sheet.dart';
 import '../ui/shared_add_friend_sheet.dart';
 import '../ui/shared_invite_inbox.dart';
+import '../ui/shared_join_requests_page.dart';
 import '../ui/shared_settlements_sheet.dart';
 
 /// Production-backed screen adapter. App router supplies destinations; this
@@ -23,10 +24,14 @@ import '../ui/shared_settlements_sheet.dart';
 class SharedExpensesRoute extends ConsumerStatefulWidget {
   final ValueChanged<String> onOpenContext;
   final VoidCallback onAddExpense;
+
+  /// Opens the join-requests page.
+  final Future<void> Function()? onOpenRequests;
   const SharedExpensesRoute({
     super.key,
     required this.onOpenContext,
     required this.onAddExpense,
+    this.onOpenRequests,
   });
   @override
   ConsumerState<SharedExpensesRoute> createState() =>
@@ -161,7 +166,11 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
             return SharedExpensesScreen(
               key: ValueKey(runtime.store.namespace),
               data: snapshot.data!,
-              header: SharedInviteInbox(runtime: runtime, onJoined: _reload),
+              header: SharedInviteInbox(
+                runtime: runtime,
+                onJoined: _reload,
+                onReviewRequests: widget.onOpenRequests,
+              ),
               onOpenFriend: widget.onOpenContext,
               onOpenGroup: widget.onOpenContext,
               onOpenActivity: widget.onOpenContext,
@@ -206,6 +215,30 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
           },
         );
       },
+    );
+  }
+}
+
+/// Page of everyone waiting to join, reached from the Splits summary row.
+class SharedJoinRequestsRoute extends ConsumerWidget {
+  final VoidCallback onShareGroupLink;
+  const SharedJoinRequestsRoute({super.key, required this.onShareGroupLink});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final runtime = ref.watch(sharedExpensesRuntimeProvider);
+    return runtime.when(
+      skipLoadingOnReload: true,
+      skipLoadingOnRefresh: true,
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (_, _) => Scaffold(
+        appBar: AppBar(title: const Text('Join requests')),
+        body: const Center(child: Text('Shared expenses are not ready yet.')),
+      ),
+      data: (value) => SharedJoinRequestsPage(
+        runtime: value,
+        onShareGroupLink: onShareGroupLink,
+      ),
     );
   }
 }
