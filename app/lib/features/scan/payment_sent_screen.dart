@@ -4,6 +4,8 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
+import '../quickadd/quick_add_screen.dart';
+import '../shared_expenses/runtime/shared_providers.dart';
 import '../../data/acceptance_reports_repository.dart';
 import '../../data/analytics.dart';
 import '../../data/api_exception.dart';
@@ -306,23 +308,72 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
                           : const Text("No SMS? Log this spend manually"),
                     ),
                   )
-                else
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: BambooInk.lime,
-                        foregroundColor: BambooInk.slate,
-                        minimumSize: const Size.fromHeight(52),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                else ...[
+                  if (ref.watch(sharedExpensesEnabledProvider)) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: BambooInk.lime,
+                          foregroundColor: BambooInk.slate,
+                          minimumSize: const Size.fromHeight(52),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
                         ),
+                        onPressed: () {
+                          Navigator.of(context).pushReplacement(
+                            MaterialPageRoute(
+                              builder: (_) => QuickAddScreen(
+                                sharedExpense: true,
+                                initialAmount: widget.amount,
+                                initialMerchant: widget.merchantName.isEmpty
+                                    ? null
+                                    : widget.merchantName,
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.group_outlined, size: 20),
+                        label: const Text('Split this bill with friends'),
                       ),
-                      onPressed: () =>
-                          Navigator.of(context).popUntil((r) => r.isFirst),
-                      child: const Text('Take me Home'),
                     ),
-                  ),
+                    const SizedBox(height: AppSpace.sm),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: BambooInk.onSlate,
+                          side: const BorderSide(color: BambooInk.slateHairline),
+                          minimumSize: const Size.fromHeight(48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        onPressed: () =>
+                            Navigator.of(context).popUntil((r) => r.isFirst),
+                        child: const Text('Take me Home'),
+                      ),
+                    ),
+                  ] else ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: BambooInk.lime,
+                          foregroundColor: BambooInk.slate,
+                          minimumSize: const Size.fromHeight(52),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        onPressed: () =>
+                            Navigator.of(context).popUntil((r) => r.isFirst),
+                        child: const Text('Take me Home'),
+                      ),
+                    ),
+                  ],
+                ],
                 const SizedBox(height: AppSpace.sm),
                 Center(
                   child: TextButton(
