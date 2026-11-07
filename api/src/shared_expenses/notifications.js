@@ -43,6 +43,8 @@ function plan({ kind, payload, actorMemberName, contextName, members, actorId })
   const cleanContext = cleanLabel(contextName);
   // "in PandaPay friend" reads wrongly, so the generic fallback is left out like a missing name.
   const where = cleanContext && cleanContext !== GENERIC_CONTEXT_LABEL ? ` in ${cleanContext}` : '';
+  // "asked to join Goa trip" reads better than "asked to join in Goa trip".
+  const joinWhat = cleanContext && cleanContext !== GENERIC_CONTEXT_LABEL ? ` "${cleanContext}"` : ' your split';
   const others = members.filter((m) => m.profileId && m.profileId !== actorId);
   switch (kind) {
     case 'expense.propose':
@@ -60,11 +62,11 @@ function plan({ kind, payload, actorMemberName, contextName, members, actorId })
     case 'invitation.requested':
       return others
         .filter((m) => m.role === 'owner')
-        .map((m) => ({ profileId: m.profileId, title: `${who} wants to join`, body: `${who} asked to join${where || ' your split'}. Approve or decline.` }));
+        .map((m) => ({ profileId: m.profileId, title: `${who} wants to join`, body: `${who} asked to join${joinWhat}. Approve or decline.` }));
     case 'invitation.joined':
       return others
         .filter((m) => m.role === 'owner')
-        .map((m) => ({ profileId: m.profileId, title: label ? `${label} joined` : 'Invite accepted', body: `${who} joined${where || ' your split'}.` }));
+        .map((m) => ({ profileId: m.profileId, title: label ? `${label} joined` : 'Invite accepted', body: `${who} joined${joinWhat}.` }));
     default:
       return [];
   }

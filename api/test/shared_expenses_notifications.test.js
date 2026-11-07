@@ -192,5 +192,5 @@ test('a direct split with only the generic fallback title omits "in <split>"', (
     assert.equal(joined.body, 'Asha joined your split.');
   }
   const [named] = plan({ ...base, kind: 'invitation.requested', payload: {}, contextName: 'Goa trip' });
-  assert.match(named.body, /^Asha asked to join in Goa trip\./);
+  assert.match(named.body, /^Asha asked to join "Goa trip"\./);
 });
