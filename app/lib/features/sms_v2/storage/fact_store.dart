@@ -41,7 +41,11 @@ ON CONFLICT(namespace, fact_id) DO NOTHING
   }
 
   List<Fact> forSource(String sourceKey) =>
-      _read('source_key = ?', [sourceKey]);
+      // Pinned to the source index: with ORDER BY observed_at, SQLite can pick
+      // the observed_at index instead and scan the account's whole fact
+      // history for every lookup (seen as ~100% UI-thread CPU on the review
+      // list).
+      _read('source_key = ?', [sourceKey], indexedBy: 'idx_v2_facts_source');
 
   List<Fact> since(DateTime from) =>
       _read('observed_at >= ?', [_timestamp(from)]);
@@ -75,9 +79,14 @@ WHERE namespace = ? AND fact_id = ? AND uploaded_at IS NULL
     );
   }
 
-  List<Fact> _read(String condition, List<Object?> args, {int? limit}) => [
+  List<Fact> _read(
+    String condition,
+    List<Object?> args, {
+    int? limit,
+    String? indexedBy,
+  }) => [
     for (final row in _db.select(
-      'SELECT fact_id,payload FROM v2_facts WHERE namespace = ? AND $condition '
+      'SELECT fact_id,payload FROM v2_facts${indexedBy == null ? '' : ' INDEXED BY $indexedBy'} WHERE namespace = ? AND $condition '
       'ORDER BY observed_at, fact_id${limit == null ? '' : ' LIMIT ?'}',
       [namespace, ...args, ?limit],
     ))

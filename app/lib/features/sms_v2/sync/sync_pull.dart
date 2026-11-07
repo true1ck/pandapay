@@ -209,7 +209,11 @@ class SyncPull {
             // a retained local decision must not overwrite it.
             category: incoming.isRefundShaped
                 ? null
-                : _ledger.categoryDecisions()[incoming.eventId],
+                // Only this event's rows: decoding the whole ledger for every
+                // incoming entry was quadratic on the UI thread.
+                : _ledger.categoryDecisions(eventIds: {
+                    incoming.eventId,
+                  })[incoming.eventId],
           );
           record('ledger', incoming.entryId);
         }
