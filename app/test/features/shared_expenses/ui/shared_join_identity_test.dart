@@ -44,15 +44,15 @@ Map<String, Object?> phoneJson({
   String consent = 'shared',
   bool available = true,
   bool lookalike = false,
-  String? full,
   String? status,
+  String? last4 = '4821',
   String mask = '+91 72••• ••4821',
 }) => {
   'v': 1,
   'source': consent == 'none' ? 'none' : 'verified',
   'consent': consent,
   'countryCode': '+91',
-  'last4': '4821',
+  'last4': last4,
   'mask': mask,
   'available': available,
   'unavailableReason': null,
@@ -60,13 +60,13 @@ Map<String, Object?> phoneJson({
   'duplicateOf': <String>[],
   'numberStatus': status ?? 'confirmed',
   'capturedAt': '2026-11-07T10:00:00Z',
-  'fullNumber': ?full,
 };
 
 SharedJoinRequest request(
   String id, {
   Map<String, Object?>? phone,
   String name = 'Rahul',
+  String? fullNumber,
   Map<String, Object?> extra = const {},
 }) => SharedJoinRequest.fromJson({
   'invitationId': id,
@@ -75,6 +75,7 @@ SharedJoinRequest request(
   'memberName': name,
   'claimantProfileName': 'Rahul Kumar',
   'claimantPhone': ?phone,
+  'fullNumber': ?fullNumber,
   ...extra,
 });
 
@@ -85,6 +86,8 @@ class Runtime extends SharedExpensesRuntime {
   int reveals = 0;
   SharedInvitePreview? preview;
   final claims = <bool?>[];
+  final claimOps = <String>[];
+  final claimFailures = <Object>[];
   Object? renameError;
   @override
   Future<SharedRevealedPhone> revealClaimantPhone(String invitationId) async {
@@ -102,6 +105,8 @@ class Runtime extends SharedExpensesRuntime {
     bool? sharePhone,
   }) async {
     claims.add(sharePhone);
+    claimOps.add(operationId);
+    if (claimFailures.isNotEmpty) throw claimFailures.removeAt(0);
     return 'awaiting_owner';
   }
 
@@ -123,6 +128,7 @@ void main() {
   late AuthenticatedHttpClient client;
   late List<MethodCall> clipboard;
   String? clipboardText;
+  late List<bool> secure;
 
   setUp(() {
     BambooFonts.useSystemFontsForTests = true;
@@ -145,6 +151,15 @@ void main() {
     )..capabilities = {'reads': true, 'proposals': true, 'settlements': true};
     clipboard = [];
     clipboardText = null;
+    secure = [];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('pandapay/secure_screen'),
+          (call) async {
+            secure.add((call.arguments as Map)['enable'] as bool);
+            return null;
+          },
+        );
     TestWidgetsFlutterBinding.ensureInitialized();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (call) async {
@@ -177,23 +192,33 @@ void main() {
     });
 
     test('full number is kept only for look-alike items', () {
-      final normal = SharedClaimantPhone.tryParse(phoneJson(full: full))!;
+      final normal = SharedClaimantPhone.tryParse(
+        phoneJson(),
+        fullNumber: full,
+      )!;
       expect(normal.fullNumber, isNull);
       final look = SharedClaimantPhone.tryParse(
-        phoneJson(lookalike: true, full: full),
+        phoneJson(lookalike: true),
+        fullNumber: full,
       )!;
       expect(look.fullNumber, full);
       final bad = SharedClaimantPhone.tryParse(
-        phoneJson(lookalike: true, full: '12; DROP'),
+        phoneJson(lookalike: true),
+        fullNumber: '12; DROP',
       )!;
       expect(bad.fullNumber, isNull);
     });
 
     test('toString never contains the number', () {
       final look = SharedClaimantPhone.tryParse(
-        phoneJson(lookalike: true, full: full),
+        phoneJson(lookalike: true),
+        fullNumber: full,
       )!;
-      final req = request(inv1, phone: phoneJson(lookalike: true, full: full));
+      final req = request(
+        inv1,
+        phone: phoneJson(lookalike: true),
+        fullNumber: full,
+      );
       for (final text in [
         look.toString(),
         const SharedRevealedPhone(full).toString(),
@@ -317,6 +342,80 @@ void main() {
         );
       }
     });
+
+    Map<String, Object?> item(
+      String id, {
+      bool lookalike = false,
+      String? full,
+    }) => {
+      'invitationId': id,
+      'contextId': ctxId,
+      'contextName': 'Goa',
+      'memberName': 'Rahul',
+      'claimantPhone': phoneJson(lookalike: lookalike),
+      'fullNumber': ?full,
+    };
+
+    test('plain list request first; full numbers only when flagged', () async {
+      final queries = <Map<String, String>>[];
+      final t = transport((r) async {
+        queries.add(r.url.queryParameters);
+        final withFull = r.url.queryParameters['withLookalikeFull'] == '1';
+        return json({
+          'items': [
+            item(inv1),
+            item(inv2, lookalike: true, full: withFull ? full : null),
+          ],
+        });
+      });
+      final list = await t.fetchJoinRequests();
+      expect(queries, [
+        <String, String>{},
+        {'withLookalikeFull': '1'},
+      ]);
+      expect(list.last.claimantPhone!.fullNumber, full);
+    });
+
+    test('no look-alikes means a single plain request', () async {
+      var calls = 0;
+      final t = transport((r) async {
+        calls++;
+        expect(r.url.queryParameters, isEmpty);
+        return json({
+          'items': [item(inv1)],
+        });
+      });
+      await t.fetchJoinRequests();
+      expect(calls, 1);
+    });
+
+    test('an API that rejects the parameter keeps the plain answer', () async {
+      final t = transport((r) async {
+        if (r.url.queryParameters.containsKey('withLookalikeFull')) {
+          return json({'error': 'invalid_input'}, 400);
+        }
+        return json({
+          'items': [item(inv2, lookalike: true)],
+        });
+      });
+      final list = await t.fetchJoinRequests();
+      expect(list, hasLength(1));
+      expect(list.single.claimantPhone!.fullNumber, isNull);
+    });
+
+    test(
+      'invitation id in the reveal reply is compared ignoring case',
+      () async {
+        final t = transport(
+          (r) async => json({'invitationId': inv1.toUpperCase(), 'e164': full}),
+        );
+        final ok = await t.revealClaimantPhone(
+          invitationId: inv1,
+          operationId: inv2,
+        );
+        expect(ok.e164, full);
+      },
+    );
 
     test('a friend_name_taken body carries the existing chat id', () async {
       final t = transport(
@@ -478,6 +577,70 @@ void main() {
       expect(runtime.claims, [true]);
     });
 
+    testWidgets('changing the answer after a failed claim uses a new id', (
+      tester,
+    ) async {
+      runtime.preview = preview(
+        mask: '+91 72\u2022\u2022\u2022 \u2022\u20224821',
+      );
+      runtime.claimFailures.add(
+        const SharedTransportException(code: 'network_unavailable'),
+      );
+      await openJoin(tester);
+      await tester.tap(find.byKey(const Key('consent-share')));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Join'));
+      await tester.pumpAndSettle();
+      // Same answer retried: same id (safe replay).
+      await tester.tap(find.widgetWithText(FilledButton, 'Join'));
+      await tester.pumpAndSettle();
+      expect(runtime.claimOps[1], runtime.claimOps[0]);
+    });
+
+    testWidgets('switching the answer after an attempt gets a fresh id', (
+      tester,
+    ) async {
+      runtime.preview = preview(
+        mask: '+91 72\u2022\u2022\u2022 \u2022\u20224821',
+      );
+      runtime.claimFailures.add(
+        const SharedTransportException(code: 'network_unavailable'),
+      );
+      await openJoin(tester);
+      await tester.tap(find.byKey(const Key('consent-share')));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Join'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('consent-decline')));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Join'));
+      await tester.pumpAndSettle();
+      expect(runtime.claims, [true, false]);
+      expect(runtime.claimOps[1], isNot(runtime.claimOps[0]));
+    });
+
+    testWidgets('operation_conflict retries once with a fresh id', (
+      tester,
+    ) async {
+      runtime.preview = preview(
+        mask: '+91 72\u2022\u2022\u2022 \u2022\u20224821',
+      );
+      runtime.claimFailures.add(
+        const SharedTransportException(
+          statusCode: 409,
+          code: 'operation_conflict',
+        ),
+      );
+      await openJoin(tester);
+      await tester.tap(find.byKey(const Key('consent-decline')));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Join'));
+      await tester.pumpAndSettle();
+      expect(runtime.claims, [false, false]);
+      expect(runtime.claimOps[1], isNot(runtime.claimOps[0]));
+      expect(find.textContaining('Request sent'), findsOneWidget);
+    });
+
     testWidgets('flag off: no consent screen and no sharePhone sent', (
       tester,
     ) async {
@@ -593,17 +756,80 @@ void main() {
       expect(clipboardText, '');
     });
 
-    testWidgets('clipboard that changed meanwhile is left alone', (
-      tester,
-    ) async {
+    testWidgets('clipboard is wiped blindly, also on Hide', (tester) async {
       await pumpApp(tester, card(request(inv1, phone: phoneJson())));
       await tester.tap(find.byKey(const Key('reveal-phone')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('copy-phone')));
       await tester.pump();
-      clipboardText = 'something else';
-      await tester.pump(const Duration(seconds: 61));
-      expect(clipboardText, 'something else');
+      expect(clipboardText, full);
+      await tester.tap(find.byKey(const Key('hide-phone')));
+      await tester.pump();
+      expect(clipboardText, '');
+      // Never reads the clipboard back.
+      expect(clipboard.where((c) => c.method == 'Clipboard.getData'), isEmpty);
+    });
+
+    testWidgets('revealed number holds the secure screen until hidden', (
+      tester,
+    ) async {
+      await pumpApp(tester, card(request(inv1, phone: phoneJson())));
+      await tester.tap(find.byKey(const Key('reveal-phone')));
+      await tester.pumpAndSettle();
+      expect(secure, [true]);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump();
+      expect(secure, [true, false]);
+      expect(find.byKey(const Key('reveal-phone')), findsOneWidget);
+    });
+
+    testWidgets('look-alike without a full number offers Tap to show', (
+      tester,
+    ) async {
+      await pumpApp(
+        tester,
+        card(request(inv1, phone: phoneJson(lookalike: true))),
+      );
+      expect(find.byKey(const Key('lookalike-tap-to-show')), findsOneWidget);
+      expect(find.byKey(const Key('reveal-phone')), findsOneWidget);
+    });
+
+    testWidgets('declined claimant with null last4 does not crash', (
+      tester,
+    ) async {
+      await pumpApp(
+        tester,
+        card(
+          request(
+            inv1,
+            phone: phoneJson(
+              consent: 'declined',
+              last4: null,
+              status: 'unknown',
+            ),
+          ),
+        ),
+      );
+      expect(find.text('Did not share a number'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      final shared = SharedClaimantPhone.tryParse(phoneJson(last4: null))!;
+      expect(shared.last4, isNull);
+    });
+
+    testWidgets('owner without a verified phone gets its own message', (
+      tester,
+    ) async {
+      runtime.revealError = const SharedTransportException(
+        statusCode: 409,
+        code: 'owner_phone_required',
+      );
+      await pumpApp(tester, card(request(inv1, phone: phoneJson())));
+      await tester.tap(find.byKey(const Key('reveal-phone')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Add and verify your own phone number to view numbers.'),
+        findsOneWidget,
+      );
     });
 
     for (final (error, text) in [
@@ -648,11 +874,13 @@ void main() {
     ) async {
       final a = request(
         inv1,
-        phone: phoneJson(lookalike: true, full: '+917234512345'),
+        phone: phoneJson(lookalike: true),
+        fullNumber: '+917234512345',
       );
       final b = request(
         inv2,
-        phone: phoneJson(lookalike: true, full: '+917234512346'),
+        phone: phoneJson(lookalike: true),
+        fullNumber: '+917234512346',
       );
       await pumpApp(tester, card(a, siblings: [a, b]));
       expect(

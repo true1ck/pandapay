@@ -592,23 +592,48 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
   }
 
   Future<List<SharedJoinRequest>> fetchJoinRequests() async {
-    final value = (await _request(
-      'GET',
-      '/shared-expenses/invitations/requests',
-      query: {'withLookalikeFull': '1'},
-    ))!;
-    final items = value['items'];
-    if (items is! List || items.length > 50) {
-      throw const SharedTransportException(code: 'invalid_response');
+    Future<List<SharedJoinRequest>> load({required bool withFull}) async {
+      final value = (await _request(
+        'GET',
+        '/shared-expenses/invitations/requests',
+        query: withFull ? {'withLookalikeFull': '1'} : null,
+      ))!;
+      final items = value['items'];
+      if (items is! List || items.length > 50) {
+        throw const SharedTransportException(code: 'invalid_response');
+      }
+      return [
+        for (final item in items)
+          SharedJoinRequest.fromJson(
+            item is Map
+                ? Map<String, Object?>.from(item)
+                : throw const SharedTransportException(
+                    code: 'invalid_response',
+                  ),
+          ),
+      ];
     }
-    return [
-      for (final item in items)
-        SharedJoinRequest.fromJson(
-          item is Map
-              ? Map<String, Object?>.from(item)
-              : throw const SharedTransportException(code: 'invalid_response'),
-        ),
-    ];
+
+    // Plain request first so an older or rolled-back API never sees a
+    // parameter it may reject. Only when the server itself flags look-alikes
+    // do we ask once more for their full numbers; any refusal keeps the
+    // first answer.
+    final plain = await load(withFull: false);
+    final needsFull = plain.any(
+      (r) =>
+          r.claimantPhone != null &&
+          r.claimantPhone!.lookalike &&
+          r.claimantPhone!.fullNumber == null,
+    );
+    if (!needsFull) return plain;
+    try {
+      return await load(withFull: true);
+    } on SharedTransportException catch (error) {
+      if (error.code == 'network_unavailable' || error.statusCode == 401) {
+        rethrow;
+      }
+      return plain;
+    }
   }
 
   /// Owner-only, audited and rate limited: the full number of one pending
@@ -629,7 +654,8 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
       }),
     ))!;
     final e164 = value['e164'];
-    if (value['invitationId'] != invitationId ||
+    if ((value['invitationId'] as String?)?.toLowerCase() !=
+            invitationId.toLowerCase() ||
         e164 is! String ||
         !RegExp(r'^\+[0-9]{7,15}$').hasMatch(e164)) {
       throw const SharedTransportException(code: 'invalid_response');

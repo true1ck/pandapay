@@ -30,14 +30,15 @@ final class SharedClaimantPhone {
     // ignore: prefer_initializing_formals
   }) : _fullNumber = fullNumber;
 
-  /// Only present for look-alike items the server chose to expand.
+  /// Only present for look-alike items the server expanded (it sits on the
+  /// list item, next to claimantPhone, not inside it).
   String? get fullNumber => _fullNumber;
 
   static const _consents = {'shared', 'declined', 'not_asked', 'none'};
 
   /// Returns null when the key is missing or malformed so the card falls back
   /// to the older suffix view instead of failing.
-  static SharedClaimantPhone? tryParse(Object? value) {
+  static SharedClaimantPhone? tryParse(Object? value, {Object? fullNumber}) {
     if (value is! Map) return null;
     try {
       final consent = value['consent'], source = value['source'];
@@ -54,7 +55,7 @@ final class SharedClaimantPhone {
 
       final last4 = text('last4', max: 4);
       final dup = value['duplicateOf'];
-      final full = value['fullNumber'];
+      final full = fullNumber;
       final typed = value['matchesTyped'];
       return SharedClaimantPhone._(
         source: source,
@@ -84,8 +85,9 @@ final class SharedClaimantPhone {
     }
   }
 
-  /// A reveal is only offered for a number the claimant agreed to share.
-  bool get canReveal => consent == 'shared' && available && !lookalike;
+  /// A reveal is offered for a number the claimant agreed to share, unless
+  /// the list already carried it (look-alikes).
+  bool get canReveal => consent == 'shared' && available && _fullNumber == null;
 
   @override
   String toString() => 'SharedClaimantPhone(redacted)';
@@ -149,24 +151,51 @@ Set<int> sharedDifferingDigits(String full, Iterable<String> others) {
   return out;
 }
 
-/// Copies a number and wipes the clipboard after [clearAfter] if it still holds
-/// that value. The timer outlives any widget so leaving the screen cannot
-/// leave the number on the clipboard.
+/// Copies a number and wipes the clipboard after [clearAfter] without reading
+/// it back (reading is unreliable and itself exposes the value). The timer
+/// outlives any widget; [clearNow] also wipes on hide, dispose and resume.
 class SharedClipboardGuard {
   static Timer? _timer;
+  static bool _armed = false;
   static Future<void> copyTemporarily(
     String value, {
     Duration clearAfter = const Duration(seconds: 60),
   }) async {
     await Clipboard.setData(ClipboardData(text: value));
+    _armed = true;
     _timer?.cancel();
-    _timer = Timer(clearAfter, () async {
-      try {
-        final now = await Clipboard.getData(Clipboard.kTextPlain);
-        if (now?.text == value) {
-          await Clipboard.setData(const ClipboardData(text: ''));
-        }
-      } catch (_) {}
-    });
+    _timer = Timer(clearAfter, clearNow);
+  }
+
+  /// Blindly empties the clipboard if we put a number there.
+  static Future<void> clearNow() async {
+    if (!_armed) return;
+    _armed = false;
+    _timer?.cancel();
+    try {
+      await Clipboard.setData(const ClipboardData(text: ''));
+    } catch (_) {}
+  }
+}
+
+/// Keeps screenshots and the recents thumbnail from capturing a revealed
+/// number (Android FLAG_SECURE via a small native channel). Fails safe when
+/// the channel is missing (tests, iOS).
+class SharedSecureScreen {
+  static const _channel = MethodChannel('pandapay/secure_screen');
+  static int _holders = 0;
+  static Future<void> acquire() async {
+    if (_holders++ == 0) await _set(true);
+  }
+
+  static Future<void> release() async {
+    if (_holders == 0) return;
+    if (--_holders == 0) await _set(false);
+  }
+
+  static Future<void> _set(bool enable) async {
+    try {
+      await _channel.invokeMethod<void>('setSecure', {'enable': enable});
+    } catch (_) {}
   }
 }

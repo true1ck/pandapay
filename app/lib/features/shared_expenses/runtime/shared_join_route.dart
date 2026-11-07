@@ -26,7 +26,8 @@ class SharedJoinRoute extends ConsumerStatefulWidget {
 class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
   // One operation ID per screen so a retry after a dropped response replays
   // the same claim instead of creating a second one.
-  final _operationId = const Uuid().v4();
+  String _operationId = const Uuid().v4();
+  bool _attempted = false;
   Future<SharedInvitePreview>? _preview;
   SharedExpensesRuntime? _runtime;
   String? _result, _error;
@@ -64,11 +65,25 @@ class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
       _error = null;
     });
     try {
-      final status = await runtime.claimInvite(
-        widget.token,
-        _operationId,
-        sharePhone: _wantsChoice ? _sharePhone : null,
-      );
+      _attempted = true;
+      String status;
+      try {
+        status = await runtime.claimInvite(
+          widget.token,
+          _operationId,
+          sharePhone: _wantsChoice ? _sharePhone : null,
+        );
+      } on SharedTransportException catch (error) {
+        // The same operation id was used with a different answer: start over
+        // with a fresh one rather than failing.
+        if (error.code != 'operation_conflict') rethrow;
+        _operationId = const Uuid().v4();
+        status = await runtime.claimInvite(
+          widget.token,
+          _operationId,
+          sharePhone: _wantsChoice ? _sharePhone : null,
+        );
+      }
       await PendingSplitInviteStore().clear();
       if (mounted) setState(() => _result = status);
     } catch (error) {
@@ -229,8 +244,14 @@ class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
                                   ownMask: preview.ownPhoneMask,
                                   value: _sharePhone,
                                   enabled: !_busy,
-                                  onChanged: (v) =>
-                                      setState(() => _sharePhone = v),
+                                  onChanged: (v) => setState(() {
+                                    // A changed answer must not replay the
+                                    // old claim.
+                                    if (_attempted && v != _sharePhone) {
+                                      _operationId = const Uuid().v4();
+                                    }
+                                    _sharePhone = v;
+                                  }),
                                 ),
                               if (_error != null) ...[
                                 const SizedBox(height: 12),

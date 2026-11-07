@@ -208,7 +208,10 @@ final class SharedJoinRequest {
       phoneSuffix: _suffix(value['verifiedPhoneSuffix']),
       claimantProfileName: _text(value['claimantProfileName']),
       claimantPhoneSuffix: _suffix(value['claimantPhoneSuffix']),
-      claimantPhone: SharedClaimantPhone.tryParse(value['claimantPhone']),
+      claimantPhone: SharedClaimantPhone.tryParse(
+        value['claimantPhone'],
+        fullNumber: value['fullNumber'],
+      ),
       contextKind: value['contextKind'] is String
           ? value['contextKind'] as String
           : null,
@@ -299,6 +302,8 @@ String sharedInviteIssueMessage(Object error) {
     'member_name_reserved' =>
       'That name cannot be used. Please choose a different one.',
     'phone_not_available' => 'This number is no longer available to view.',
+    'owner_phone_required' =>
+      'Add and verify your own phone number to view numbers.',
     'reveal_rate_limited' =>
       'You have viewed several numbers recently. Please try again later.',
     'context_not_authorized' => 'Only the owner of this split can do that.',
@@ -390,7 +395,10 @@ final class SharedOwnerInvitation {
       status: status,
       phoneBound: bound,
       claimantName: value['claimantName'] as String?,
-      claimantPhone: SharedClaimantPhone.tryParse(value['claimantPhone']),
+      claimantPhone: SharedClaimantPhone.tryParse(
+        value['claimantPhone'],
+        fullNumber: value['fullNumber'],
+      ),
       phoneSuffix:
           _suffix(value['claimantPhoneSuffix']) ??
           _suffix(value['verifiedPhoneSuffix']),

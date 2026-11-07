@@ -31,40 +31,59 @@ class _ViewState extends State<SharedClaimantPhoneView>
     with WidgetsBindingObserver {
   SharedRevealedPhone? _revealed;
   Timer? _timer;
-  bool _loading = false, _copied = false;
+  bool _loading = false, _copied = false, _lookalikeSecure = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (widget.request.claimantPhone?.fullNumber != null) {
+      _lookalikeSecure = true;
+      unawaited(SharedSecureScreen.acquire());
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
+    if (_revealed != null) unawaited(SharedSecureScreen.release());
+    if (_lookalikeSecure) unawaited(SharedSecureScreen.release());
     _revealed = null;
+    unawaited(SharedClipboardGuard.clearNow());
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) _hide();
+    // inactive covers the app switcher and permission/system overlays.
+    if (state != AppLifecycleState.resumed) {
+      _hide();
+    } else {
+      unawaited(SharedClipboardGuard.clearNow());
+    }
   }
 
   void _hide() {
     _timer?.cancel();
+    unawaited(SharedClipboardGuard.clearNow());
+    if (_revealed != null) unawaited(SharedSecureScreen.release());
     if (mounted && (_revealed != null || _copied)) {
       setState(() {
         _revealed = null;
         _copied = false;
       });
+    } else {
+      _revealed = null;
     }
   }
 
   static String _message(Object error) {
     if (error is SharedTransportException) {
+      if (error.code == 'owner_phone_required') {
+        return 'Add and verify your own phone number to view numbers.';
+      }
       if (error.statusCode == 429 || error.code == 'reveal_rate_limited') {
         return 'You have viewed several numbers recently. Please try again later.';
       }
@@ -92,6 +111,8 @@ class _ViewState extends State<SharedClaimantPhoneView>
       if (!mounted) return;
       _timer?.cancel();
       _timer = Timer(widget.autoHide, _hide);
+      // Not awaited: the number must never wait on the native call.
+      unawaited(SharedSecureScreen.acquire());
       setState(() {
         _revealed = result;
         _loading = false;
@@ -168,7 +189,8 @@ class _ViewState extends State<SharedClaimantPhoneView>
     final full = _revealed?.e164 ?? phone.fullNumber;
     final others = [
       for (final s in widget.siblings)
-        if (s.invitationId != widget.request.invitationId &&
+        if (s.invitationId.toLowerCase() !=
+                widget.request.invitationId.toLowerCase() &&
             s.claimantPhone?.mask == phone.mask &&
             s.claimantPhone?.fullNumber != null)
           s.claimantPhone!.fullNumber!,
@@ -193,9 +215,17 @@ class _ViewState extends State<SharedClaimantPhoneView>
             Semantics(
               label: full != null
                   ? 'Phone number ${sharedSpokenDigits(full)}'
-                  : 'Phone number ending ${(phone.last4 ?? '').split('').join(' ')}, partly hidden',
+                  : phone.last4 == null
+                  ? 'Phone number partly hidden'
+                  : 'Phone number ending ${phone.last4!.split('').join(' ')}, partly hidden',
               excludeSemantics: true,
               child: _digits(shown, differing, numberStyle),
+            ),
+          if (phone.lookalike && phone.fullNumber == null && _revealed == null)
+            Text(
+              'Full number not shown here. Tap to show.',
+              key: const Key('lookalike-tap-to-show'),
+              style: small,
             ),
           if (phone.lookalike)
             Padding(

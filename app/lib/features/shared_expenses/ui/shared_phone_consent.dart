@@ -53,8 +53,9 @@ class SharedPhoneConsent extends StatelessWidget {
                     child: Directionality(
                       textDirection: TextDirection.ltr,
                       child: Semantics(
-                        label:
-                            'ending ${ownMask!.substring(ownMask!.length - 4)}',
+                        label: ownMask!.length >= 4
+                            ? 'ending ${ownMask!.substring(ownMask!.length - 4)}'
+                            : 'partly hidden',
                         excludeSemantics: true,
                         child: Text(
                           ownMask!.replaceAll(' ', ' '),
