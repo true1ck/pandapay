@@ -10,6 +10,7 @@ import '../../../app/design/bamboo_components.dart';
 import '../../../app/design/widgets.dart';
 import '../../../app/providers.dart' as app;
 import '../pipeline/trace.dart';
+import '../providers/ai_status_provider.dart';
 import '../providers/data_providers.dart';
 import 'correction_form.dart';
 import 'dismissed_reviews_view.dart';
@@ -363,6 +364,12 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
     final review = ref.watch(reviewItemsProvider);
     final dismissed =
         ref.watch(dismissedReviewItemsProvider).valueOrNull ?? const [];
+    final ai = ref.watch(aiReviewStatusProvider).valueOrNull ??
+        const AiReviewStatus();
+    final aiItems = [
+      for (final item in review.valueOrNull ?? const <LocalReviewItem>[])
+        if (ai.resolutionOf(item) != null) item,
+    ];
     return Scaffold(
       appBar: AppBar(title: const Text('Needs review')),
       body: AppBackground(
@@ -380,9 +387,14 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
                   ButtonSegment(
                     value: 0,
                     label: Text(
-                      'Needs review${review.valueOrNull == null ? '' : ' (${review.valueOrNull!.length})'}',
+                      'Needs review${review.valueOrNull == null ? '' : ' (${review.valueOrNull!.length - aiItems.length})'}',
                     ),
                   ),
+                  if (aiItems.isNotEmpty)
+                    ButtonSegment(
+                      value: 2,
+                      label: Text('AI suggested (${aiItems.length})'),
+                    ),
                   ButtonSegment(
                     value: 1,
                     label: Text('Dismissed (${dismissed.length})'),
@@ -395,7 +407,15 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
               ),
             ),
             Expanded(
-              child: _tab == 1
+              child: _tab == 2 && aiItems.isNotEmpty
+                  ? ReviewInboxList(
+                      items: aiItems,
+                      busy: _saving,
+                      onAction: _act,
+                      aiStatus: ai,
+                      header: const _AiSuggestedNote(),
+                    )
+                  : _tab == 1
                   ? DismissedReviewList(
                       items: dismissed,
                       busy: _saving,
@@ -408,12 +428,19 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
                       error: (_, _) => SmsError(
                         onRetry: () => ref.invalidate(reviewItemsProvider),
                       ),
-                      data: (items) => ReviewInboxList(
-                        items: items,
-                        busy: _saving,
-                        onAction: _act,
-                        header: SharingOfferCard(openItems: items.length),
-                      ),
+                      data: (items) {
+                        final rest = [
+                          for (final item in items)
+                            if (ai.resolutionOf(item) == null) item,
+                        ];
+                        return ReviewInboxList(
+                          items: rest,
+                          busy: _saving,
+                          onAction: _act,
+                          aiStatus: ai,
+                          header: SharingOfferCard(openItems: rest.length),
+                        );
+                      },
                     ),
             ),
           ],
@@ -430,8 +457,12 @@ class ReviewInboxList extends StatefulWidget {
     required this.onAction,
     this.busy = false,
     this.header,
+    this.aiStatus = const AiReviewStatus(),
   });
   final List<LocalReviewItem> items;
+
+  /// What the AI check says about these items (labels only).
+  final AiReviewStatus aiStatus;
   final bool busy;
   final void Function(List<LocalReviewItem>, String) onAction;
 
@@ -664,6 +695,7 @@ class _ReviewInboxListState extends State<ReviewInboxList> {
                 bundle: bundle,
                 busy: widget.busy,
                 onAction: widget.onAction,
+                aiStatus: widget.aiStatus,
               ),
             ),
         ],
@@ -721,7 +753,9 @@ class _ReviewGroupPanel extends StatefulWidget {
     required this.bundle,
     required this.busy,
     required this.onAction,
+    this.aiStatus = const AiReviewStatus(),
   });
+  final AiReviewStatus aiStatus;
   final ReviewBundle bundle;
   final bool busy;
   final void Function(List<LocalReviewItem>, String) onAction;
@@ -811,6 +845,9 @@ class _ReviewGroupPanelState extends State<_ReviewGroupPanel> {
     final hasReading = group.every((i) => i.payload['hasReading'] == true);
     final allMessages = group.every((i) => i.message != null);
     final uniform = bundle.uniformFormat;
+    final aiResolution = widget.aiStatus.resolutionOf(first);
+    final aiChecking =
+        aiResolution == null && group.every(widget.aiStatus.isChecking);
     final notFinancial = TextButton(
       style: BambooButtons.quiet,
       onPressed: _on('ignore'),
@@ -967,7 +1004,23 @@ class _ReviewGroupPanelState extends State<_ReviewGroupPanel> {
               ),
             ),
           ],
-          if (bundle.kind == 'template' && !bundle.isPayLater) ...[
+          if (aiResolution != null) ...[
+            const SizedBox(height: 2),
+            AiStatusLine(
+              icon: aiResolution.verified
+                  ? Icons.verified_outlined
+                  : Icons.auto_awesome_outlined,
+              text: aiResolution.verified
+                  ? 'Verified by PandaPay'
+                  : 'AI suggested, not yet verified',
+            ),
+          ] else if (aiChecking) ...[
+            const SizedBox(height: 2),
+            const AiStatusLine(
+              icon: Icons.hourglass_top_rounded,
+              text: 'Checking with AI… we’ll read it for you when it’s ready.',
+            ),
+          ] else if (bundle.kind == 'template' && !bundle.isPayLater) ...[
             const SizedBox(height: 2),
             Text(
               'We can’t read this message format yet.',
@@ -1044,4 +1097,45 @@ class _ReviewGroupPanelState extends State<_ReviewGroupPanel> {
       ),
     );
   }
+}
+
+/// One line under a review card: the AI check is running, or the AI's reading
+/// is awaiting an admin's verification.
+class AiStatusLine extends StatelessWidget {
+  const AiStatusLine({super.key, required this.icon, required this.text});
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Padding(
+        padding: const EdgeInsets.only(top: 1),
+        child: Icon(icon, size: 15, color: BambooInk.ink700),
+      ),
+      const SizedBox(width: 6),
+      Expanded(
+        child: Text(
+          text,
+          style: BambooFonts.ui(12.5, color: BambooInk.ink700, height: 1.4),
+        ),
+      ),
+    ],
+  );
+}
+
+class _AiSuggestedNote extends StatelessWidget {
+  const _AiSuggestedNote();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: AppSpace.sm),
+    child: Text(
+      'These were read by an AI-written rule that no one at PandaPay has '
+      'checked yet. Use Fix if a reading is wrong; once it is verified the '
+      'label changes.',
+      style: BambooFonts.ui(12.5, color: BambooInk.ink500, height: 1.4),
+    ),
+  );
 }
