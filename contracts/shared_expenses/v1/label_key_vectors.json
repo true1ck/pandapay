@@ -1,0 +1,156 @@
+{
+  "contractVersion": "1.0.0",
+  "note": "labelKey and cleanLabel must give identical results in SQL (shared_expenses._label_key/_clean_label) and Node (api/src/shared_expenses/label.js).",
+  "labelKey": [
+    {
+      "input": "Rahul",
+      "key": "rahul"
+    },
+    {
+      "input": "rahul",
+      "key": "rahul"
+    },
+    {
+      "input": "RAHUL",
+      "key": "rahul"
+    },
+    {
+      "input": " Ra hul ",
+      "key": "rahul"
+    },
+    {
+      "input": "Rahul.",
+      "key": "rahul"
+    },
+    {
+      "input": "R-a_h(u)l",
+      "key": "rahul"
+    },
+    {
+      "input": "Rahul Sharma",
+      "key": "rahulsharma"
+    },
+    {
+      "input": "rahul   sharma",
+      "key": "rahulsharma"
+    },
+    {
+      "input": "José",
+      "key": "jose"
+    },
+    {
+      "input": "Jose",
+      "key": "jose"
+    },
+    {
+      "input": "Rahul​",
+      "key": "rahul"
+    },
+    {
+      "input": "Ra‮hul",
+      "key": "rahul"
+    },
+    {
+      "input": "Раhul",
+      "key": "pahul"
+    },
+    {
+      "input": "pаndapay",
+      "key": "pandapay"
+    },
+    {
+      "input": "Pandа Pay",
+      "key": "pandapay"
+    },
+    {
+      "input": "Αρο",
+      "key": "apo"
+    },
+    {
+      "input": "Apo",
+      "key": "apo"
+    },
+    {
+      "input": "Ｒahul",
+      "key": "rahul"
+    },
+    {
+      "input": "Former member",
+      "key": "formermember"
+    },
+    {
+      "input": "FORMER-MEMBER",
+      "key": "formermember"
+    },
+    {
+      "input": "...",
+      "key": ""
+    },
+    {
+      "input": "  ",
+      "key": ""
+    },
+    {
+      "input": "😀",
+      "key": "😀"
+    },
+    {
+      "input": "Amit 2",
+      "key": "amit2"
+    },
+    {
+      "input": "Amit2",
+      "key": "amit2"
+    },
+    {
+      "input": "नमस्ते",
+      "key": "नमस्ते"
+    },
+    {
+      "input": "Rénée",
+      "key": "renee"
+    },
+    {
+      "input": "Renee",
+      "key": "renee"
+    }
+  ],
+  "cleanLabel": [
+    {
+      "input": " Ra​hul‮\n K ",
+      "clean": "Rahul K"
+    },
+    {
+      "input": "A\tB",
+      "clean": "A B"
+    },
+    {
+      "input": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "clean": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "input": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+      "clean": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+    },
+    {
+      "input": "⁦abc⁩",
+      "clean": "abc"
+    },
+    {
+      "input": "﻿Hi",
+      "clean": "Hi"
+    },
+    {
+      "input": "a b",
+      "clean": "a b"
+    },
+    {
+      "input": "a　　b",
+      "clean": "a b"
+    },
+    {
+      "input": "",
+      "clean": ""
+    }
+  ]
+}

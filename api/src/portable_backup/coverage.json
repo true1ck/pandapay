@@ -825,6 +825,10 @@
       "disposition": "excluded_with_intent",
       "reason": "Shared-history portable scope gate: these multi-actor or private financial records require an authorized shared export/recovery contract; never insert a portable copy as new accepted money. Full PostgreSQL recovery preserves this isolated schema. P01/P05/P13 require explicit pending-command and account recovery proof before feature activation; classification is inventory, not complete portable coverage."
     },
+    "shared_expenses.phone_reveals": {
+      "disposition": "excluded_with_intent",
+      "reason": "Security audit log of owner reveals of a join-request phone number (who, which request, when; never a number). Not user data to restore: full PostgreSQL recovery preserves it, a portable copy would only invite replaying audit rows."
+    },
     "shared_expenses.settlement_reports": {
       "disposition": "excluded_with_intent",
       "reason": "Shared-history portable scope gate: these multi-actor or private financial records require an authorized shared export/recovery contract; never insert a portable copy as new accepted money. Full PostgreSQL recovery preserves this isolated schema. P01/P05/P13 require explicit pending-command and account recovery proof before feature activation; classification is inventory, not complete portable coverage."
