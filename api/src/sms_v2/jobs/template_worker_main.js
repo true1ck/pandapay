@@ -60,6 +60,7 @@ async function main() {
   const provider = createGeminiTemplateProvider();
   const { pool, store, suggestionStore } = await openStores();
   let stopped = false;
+  let lastCleanup = 0;
   const stop = () => {
     stopped = true;
   };
@@ -75,6 +76,15 @@ async function main() {
           status: result.status,
         }),
       );
+      // Housekeeping when nothing is waiting: at most hourly.
+      if (result.status === "idle" && Date.now() - lastCleanup > 3600000) {
+        lastCleanup = Date.now();
+        try {
+          console.log(JSON.stringify({ event: "sms_v2_ai_cleanup", cleared: await store.cleanupDecided() }));
+        } catch (error) {
+          console.error("SMS v2 AI cleanup failed", error.code || error.name);
+        }
+      }
       if (process.argv.includes("--once") || stopped) break;
       // disabled: an admin switched AI drafting off. budget: this month's cap is
       // spent. Layouts wait in the queue meanwhile.

@@ -287,6 +287,9 @@ begin
     grant execute on function pandapay.sms_v2_ai_consent_people(text) to sms_ai_worker;
     grant execute on function pandapay.sms_v2_ai_report_counts(text) to sms_ai_worker;
   end if;
+  if to_regprocedure('pandapay.sms_v2_ai_cleanup_decided()') is not null then
+    grant execute on function pandapay.sms_v2_ai_cleanup_decided() to sms_ai_worker;
+  end if;
 end $$;
 
 -- Production: use a real generated password via your secrets manager, never

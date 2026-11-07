@@ -502,6 +502,14 @@ function createPgWorkerStore({ withAdminClient, adminId, transaction }) {
     settings() {
       return tx((client) => readSettings(client, { force: true }));
     },
+    // Drops Gemini's raw draft once an admin decision is final (approved and
+    // published a week ago, or rejected), keeping the decision record. Returns
+    // how many drafts were cleared.
+    cleanupDecided() {
+      return tx(async (client) =>
+        Number((await client.query("SELECT pandapay.sms_v2_ai_cleanup_decided() AS n")).rows[0].n),
+      );
+    },
     // Month-to-date provider spend in USD (UTC month), layouts and shops together.
     monthSpend() {
       return tx((client) => monthSpendUsd(client));
