@@ -75,6 +75,9 @@ elif args[:1]==['stop']:
 elif args[:1]==['compose']:
     if 'ps' in args and '-q' in args:
         if os.environ.get('FAIL_INVENTORY')=='1': sys.exit(24)
+        if os.environ.get('UNKNOWN_WORKER_SERVICE')=='1' and 'sms-v2-template-worker' in args:
+            sys.stderr.write('no such service: sms-v2-template-worker\n')
+            sys.exit(1)
         pos=args.index('-q')+1
         for service in args[pos:]:
             if service in running: print(service+'-old-id')
@@ -228,6 +231,14 @@ class DeploySecurityOrderTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertFalse(any(c[0] == "docker" and "build" in c[1] and WORKER in c[1] for c in commands))
         self.assertTrue(any(c[0] == "docker" and "stop" in c[1] and WORKER in c[1] for c in commands))
+
+    def test_initial_rollout_without_worker_in_old_compose_omits_it_from_fence_list(self):
+        result, commands, _ = self.run_deploy(UNKNOWN_WORKER_SERVICE="1")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("omitting from fence list", result.stdout)
+        stops = [c[1] for c in commands if c[0] == "docker" and "stop" in c[1] and "compose" in c[1]]
+        self.assertTrue(stops)
+        self.assertFalse(any(WORKER in args for args in stops), stops)
 
     def test_ai_worker_build_failure_never_fails_the_release(self):
         result, commands, _ = self.run_deploy(EXTRA_ENV=AI_ENV, FAIL_WORKER_BUILD="1")

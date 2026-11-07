@@ -52,6 +52,7 @@ DEPLOY_TARGET_STAGE=''
 DB_CA_TEMP=''
 OLD_WRITER_CONTAINER_IDS=()
 BACKUP_COMPOSE_FILES=()
+FENCED_WRITE_SERVICES=()
 
 remaining_maintenance_seconds() {
   local remaining=$((MAINTENANCE_DEADLINE - SECONDS))
@@ -72,8 +73,9 @@ run_in_maintenance_window() {
 
 stop_writer_services_best_effort() {
   local compose_stop_failed=0 query_failed=0 container_id active_output
+  local -a stop_targets=("${FENCED_WRITE_SERVICES[@]:-${WRITE_SERVICES[@]}}")
   if ! timeout --kill-after=10s --foreground 60s docker compose --profile sms-ai --profile sms-learning \
-    -f docker-compose.prod.yml "${BACKUP_COMPOSE_FILES[@]}" --env-file .env stop --timeout 30 "${WRITE_SERVICES[@]}"; then
+    -f docker-compose.prod.yml "${BACKUP_COMPOSE_FILES[@]}" --env-file .env stop --timeout 30 "${stop_targets[@]}"; then
     compose_stop_failed=1
   fi
 
@@ -81,7 +83,7 @@ stop_writer_services_best_effort() {
   # any still-running target containers and stop them directly by ID.
   local -a active_ids=()
   if active_output="$(timeout --kill-after=10s --foreground 20s docker compose --profile sms-ai --profile sms-learning \
-    -f docker-compose.prod.yml "${BACKUP_COMPOSE_FILES[@]}" --env-file .env ps -q "${WRITE_SERVICES[@]}" 2>/dev/null)"; then
+    -f docker-compose.prod.yml "${BACKUP_COMPOSE_FILES[@]}" --env-file .env ps -q "${stop_targets[@]}" 2>/dev/null)"; then
     while IFS= read -r container_id; do
       [ -n "$container_id" ] && active_ids+=("$container_id")
     done <<< "$active_output"
@@ -486,20 +488,26 @@ while read -r container_id live_project live_service extra; do
 done <<< "$active_services"
 
 echo "==> Fencing API/auth and background writer services before the paired backup"
+FENCED_WRITE_SERVICES=()
 for service in "${WRITE_SERVICES[@]}"; do
-  container_ids="$(docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml "${BACKUP_COMPOSE_FILES[@]}" --env-file .env ps -q "$service")" || {
+  if container_output="$(docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml "${BACKUP_COMPOSE_FILES[@]}" --env-file .env ps -q "$service" 2>&1)"; then
+    FENCED_WRITE_SERVICES+=("$service")
+    while IFS= read -r container_id; do
+      [ -n "$container_id" ] && OLD_WRITER_CONTAINER_IDS+=("$container_id")
+    done <<< "$container_output"
+  elif [ "$service" = "$AI_WORKER" ] && grep -qi "no such service" <<< "$container_output"; then
+    echo "    $service is not defined in the current compose file; omitting from fence list"
+  else
+    echo "$container_output" >&2
     echo "FATAL: could not inventory the existing $service container; refusing to fence writers without a recovery list." >&2
     exit 1
-  }
-  while IFS= read -r container_id; do
-    [ -n "$container_id" ] && OLD_WRITER_CONTAINER_IDS+=("$container_id")
-  done <<< "$container_ids"
+  fi
 done
 MAINTENANCE_DEADLINE=$((SECONDS + MAINTENANCE_WINDOW_SECONDS))
 SERVICES_FENCED=1
 run_in_maintenance_window 'Stopping writer services with a 30-second graceful timeout' \
   docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml --env-file .env \
-    "${BACKUP_COMPOSE_FILES[@]}" stop --timeout 30 "${WRITE_SERVICES[@]}"
+    "${BACKUP_COMPOSE_FILES[@]}" stop --timeout 30 "${FENCED_WRITE_SERVICES[@]}"
 
 echo "==> Creating and verifying the paired encrypted product/auth backup"
 run_in_maintenance_window 'Paired backup' \
