@@ -44,20 +44,45 @@ void main() {
       AiStatusReader(state).templateState(local),
       AiTemplateState.checking,
     );
-    state.put('ai:$remote', jsonEncode({'templateHash': remote, 'status': 'pending'}));
+    state.put(
+      'ai:$remote',
+      jsonEncode({'templateHash': remote, 'status': 'pending'}),
+    );
     expect(
       AiStatusReader(state).templateState(local),
       AiTemplateState.checking,
     );
   });
 
+  test('an upload nobody answers stops saying checking after a day', () {
+    origin();
+    final sent = DateTime.utc(2026, 11, 20, 12);
+    state.put('template:sent:$remote', sent.toIso8601String());
+    AiTemplateState at(Duration later) =>
+        AiStatusReader(state, now: () => sent.add(later)).templateState(local);
+    expect(at(const Duration(hours: 23)), AiTemplateState.checking);
+    expect(at(const Duration(hours: 25)), AiTemplateState.none);
+    // A late answer still counts.
+    state.put(
+      'ai:$remote',
+      jsonEncode({'templateHash': remote, 'status': 'ready', 'rule': {}}),
+    );
+    expect(at(const Duration(days: 3)), AiTemplateState.ready);
+  });
+
   test('a ready answer, a rejection and a failure are told apart', () {
     origin();
     state.put('template:sent:$remote', '1');
-    state.put('ai:$remote', jsonEncode({'templateHash': remote, 'status': 'ready', 'rule': {}}));
+    state.put(
+      'ai:$remote',
+      jsonEncode({'templateHash': remote, 'status': 'ready', 'rule': {}}),
+    );
     expect(AiStatusReader(state).templateState(local), AiTemplateState.ready);
     for (final status in ['rejected', 'failed']) {
-      state.put('ai:$remote', jsonEncode({'templateHash': remote, 'status': status}));
+      state.put(
+        'ai:$remote',
+        jsonEncode({'templateHash': remote, 'status': status}),
+      );
       expect(
         AiStatusReader(state).templateState(local),
         AiTemplateState.unavailable,
@@ -74,8 +99,14 @@ void main() {
   });
 
   test('resolution comes from the saved decision trace', () {
-    state.put('trace:s1', jsonEncode({'ruleId': 'AI-$remote:local:$local', 'ruleVersion': 1}));
-    state.put('trace:s2', jsonEncode({'ruleId': 'BANK-DEBIT', 'ruleVersion': 3}));
+    state.put(
+      'trace:s1',
+      jsonEncode({'ruleId': 'AI-$remote:local:$local', 'ruleVersion': 1}),
+    );
+    state.put(
+      'trace:s2',
+      jsonEncode({'ruleId': 'BANK-DEBIT', 'ruleVersion': 3}),
+    );
     state.put('trace:s3', 'not json');
     final reader = AiStatusReader(state);
     final unverified = reader.resolution('s1', sharedRuleIds: {'BANK-DEBIT'});
@@ -87,11 +118,24 @@ void main() {
   });
 
   test('once the rule is published the same decision reads as verified', () {
-    state.put('trace:s1', jsonEncode({'ruleId': 'AI-$remote:local:$local', 'ruleVersion': 1}));
-    final verified = AiStatusReader(state).resolution('s1', sharedRuleIds: {'AI-$remote'});
+    state.put(
+      'trace:s1',
+      jsonEncode({'ruleId': 'AI-$remote:local:$local', 'ruleVersion': 1}),
+    );
+    final verified = AiStatusReader(
+      state,
+    ).resolution('s1', sharedRuleIds: {'AI-$remote'});
     expect(verified?.verified, isTrue);
     // A rule read straight from the published bundle has no local suffix.
-    state.put('trace:s4', jsonEncode({'ruleId': 'AI-$remote', 'ruleVersion': 2}));
-    expect(AiStatusReader(state).resolution('s4', sharedRuleIds: {'AI-$remote'})?.verified, isTrue);
+    state.put(
+      'trace:s4',
+      jsonEncode({'ruleId': 'AI-$remote', 'ruleVersion': 2}),
+    );
+    expect(
+      AiStatusReader(
+        state,
+      ).resolution('s4', sharedRuleIds: {'AI-$remote'})?.verified,
+      isTrue,
+    );
   });
 }

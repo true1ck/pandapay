@@ -31,8 +31,19 @@ class AiResolution {
 
 /// Reads the AI check state kept in the local sync state. Read-only.
 class AiStatusReader {
-  const AiStatusReader(this.state);
+  const AiStatusReader(
+    this.state, {
+    this.now,
+    this.checkingFor = const Duration(hours: 24),
+  });
   final SyncStateStore state;
+
+  /// The clock, for tests. Defaults to the device time.
+  final DateTime Function()? now;
+
+  /// How long an unanswered upload keeps saying "checking". A layout that is
+  /// held, blocked or never drafted would otherwise wait forever.
+  final Duration checkingFor;
 
   static final _localSuffix = RegExp(r':local:[a-f0-9]{64}$');
 
@@ -43,7 +54,9 @@ class AiStatusReader {
       "SELECT key,value FROM v2_sync_state WHERE namespace=? AND key LIKE 'template:origins:%'",
       [state.namespace],
     )) {
-      final remote = (row['key'] as String).substring('template:origins:'.length);
+      final remote = (row['key'] as String).substring(
+        'template:origins:'.length,
+      );
       try {
         final origin = jsonDecode(row['value'] as String) as Map;
         if (!(origin['localHashes'] as List).contains(localHash)) continue;
@@ -51,12 +64,17 @@ class AiStatusReader {
           return AiTemplateState.none;
         }
         final raw = state.get('ai:$remote');
-        if (raw == null) return AiTemplateState.checking;
-        return switch ((jsonDecode(raw) as Map)['status']) {
-          'ready' => AiTemplateState.ready,
-          'rejected' || 'failed' => AiTemplateState.unavailable,
-          _ => AiTemplateState.checking,
-        };
+        final status = raw == null ? null : (jsonDecode(raw) as Map)['status'];
+        if (status == 'ready') return AiTemplateState.ready;
+        if (status == 'rejected' || status == 'failed') {
+          return AiTemplateState.unavailable;
+        }
+        final sentAt = DateTime.tryParse(state.get('template:sent:$remote')!);
+        final current = (now ?? DateTime.now)();
+        if (sentAt != null && current.difference(sentAt) > checkingFor) {
+          return AiTemplateState.none;
+        }
+        return AiTemplateState.checking;
       } catch (_) {
         continue;
       }

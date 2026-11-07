@@ -211,6 +211,10 @@ test("rejecting a draft needs a reason, withdraws the private rule and teaches t
   assert.equal((await sync()).status, "ready");
 
   const path = `/admin/sms/v2/templates/${hash}/reject`;
+  // An approved layout is final here: it cannot be rejected afterwards.
+  await pool.query("UPDATE sms_v2_unknown_templates SET admin_decision='approved' WHERE template_hash=$1", [hash]);
+  assert.equal((await admin.post(path, { reason: "overmatches" })).status, 409);
+  await pool.query("UPDATE sms_v2_unknown_templates SET admin_decision=NULL WHERE template_hash=$1", [hash]);
   assert.equal((await admin.post(path, {})).body.error, "reject_reason_invalid");
   assert.equal((await admin.post(path, { reason: "because" })).body.error, "reject_reason_invalid");
   assert.equal((await admin.post(path, { reason: "other" })).body.error, "reject_note_required");

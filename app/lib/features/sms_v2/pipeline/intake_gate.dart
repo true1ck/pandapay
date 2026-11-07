@@ -15,7 +15,8 @@ SmsTriageResult classifySmsV2Intake(String sender, String body) {
       RegExp(r'-[Pp]$').hasMatch(bare.trim())) {
     return previous;
   }
-  if (!gate.passed && gate.dropReason != SmsGateDropReason.noFinancialKeywords) {
+  if (!gate.passed &&
+      gate.dropReason != SmsGateDropReason.noFinancialKeywords) {
     return previous;
   }
   final lifecycle = RegExp(

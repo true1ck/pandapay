@@ -256,11 +256,15 @@ function registerPrivateTemplateRoutes(api) {
         );
         const row = (
           await client.query(
-            "SELECT ai_status FROM sms_v2_unknown_templates WHERE template_hash=$1 FOR UPDATE",
+            "SELECT ai_status,admin_decision FROM sms_v2_unknown_templates WHERE template_hash=$1 FOR UPDATE",
             [req.params.hash],
           )
         ).rows[0];
         if (!row) throw new HttpError(404, "template_not_found");
+        // An approval already made a draft rule; reject that rule in the rules
+        // flow instead of reversing the decision here.
+        if (row.admin_decision === "approved")
+          throw new HttpError(409, "template_already_approved");
         // Only a finished draft can be rejected; a busy or untouched layout cannot.
         if (row.ai_status !== "ready")
           throw new HttpError(409, "template_not_rejectable");
