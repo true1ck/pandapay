@@ -37,17 +37,20 @@ class AppStatus {
   );
 }
 
-/// Compares two dot-separated version strings as integer components (e.g.
-/// "1.10.0" > "1.9.0"). NOT full semver (no pre-release/build-metadata
-/// handling) — deliberately simplified, same scope note as
-/// whats_new_screen.dart's own `_isNewerVersion`, which this mirrors
-/// exactly rather than importing across a features/ -> data/ boundary the
-/// rest of this codebase's layering avoids. Returns true if [current] is
-/// older than [minimum] — i.e. a forced upgrade is required.
+/// Compares numeric release components to decide whether an upgrade is required.
+/// Flavor suffixes (for example `-dev`) and build metadata are ignored so a
+/// Dev build of a supported release is not mistaken for patch version zero.
+/// This is a release support check, not full semver pre-release ordering.
 bool isVersionOlderThan(String current, String minimum) {
   if (current == minimum) return false;
-  final partsCurrent = current.split('.').map((p) => int.tryParse(p) ?? 0).toList();
-  final partsMinimum = minimum.split('.').map((p) => int.tryParse(p) ?? 0).toList();
+  List<int> releaseParts(String version) => version
+      .split(RegExp('[-+]'))
+      .first
+      .split('.')
+      .map((part) => int.tryParse(part) ?? 0)
+      .toList();
+  final partsCurrent = releaseParts(current);
+  final partsMinimum = releaseParts(minimum);
   final len = partsCurrent.length > partsMinimum.length ? partsCurrent.length : partsMinimum.length;
   for (var i = 0; i < len; i++) {
     final vc = i < partsCurrent.length ? partsCurrent[i] : 0;
