@@ -1143,7 +1143,9 @@ final foreignPaymentsSummaryProvider = Provider<ForeignPaymentsSummary>((ref) =>
 /// Insights Hub's tile both read this rather than the full list, so
 /// neither has to unwrap an AsyncValue just to show a number.
 final needsReviewCountProvider = FutureProvider<int>((ref) async {
-  return (await ref.watch(sms_v2_data.reviewItemsProvider.future)).length;
+  // The count has its own cheap path (rulebook R6): it does not build, nor
+  // resolve against SQLite, the whole review list.
+  return ref.watch(sms_v2_data.reviewItemCountProvider.future);
 });
 
 final commitmentsRepositoryProvider = Provider<CommitmentsRepository>((ref) {

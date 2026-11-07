@@ -30,7 +30,66 @@ class LedgerReadModel {
       if (row.eventId != null && row.status == 'active') row.eventId!: row.id,
   });
 
-  LedgerSnapshot snapshot({Iterable<TransactionEntry>? selected}) {
+  /// Facts by id / by source message, built once per model instead of once
+  /// per consumer rebuild (the review list used to rebuild both every time).
+  late final Map<String, v2.Fact> factsById = Map.unmodifiable({
+    for (final fact in facts) fact.factId: fact,
+  });
+  late final Map<String, List<v2.Fact>> factsBySource = () {
+    final out = <String, List<v2.Fact>>{};
+    for (final fact in facts) {
+      (out[fact.sourceKey] ??= <v2.Fact>[]).add(fact);
+    }
+    return Map<String, List<v2.Fact>>.unmodifiable(out);
+  }();
+
+  /// True when [other] holds exactly the same rows. Rows the loader reused
+  /// from its decode cache are the same instances, so an unchanged model
+  /// compares in one pointer check per row (the row types' `==` is a deep
+  /// JSON comparison and is deliberately not used). A false answer only
+  /// means "possibly different", never "equal".
+  bool sameContentAs(LedgerReadModel other) =>
+      identical(this, other) ||
+      (v2Ready == other.v2Ready &&
+          _sameInstances(ledger.entries, other.ledger.entries) &&
+          _sameInstances(ledger.events, other.ledger.events) &&
+          _sameInstances(facts, other.facts) &&
+          _sameInstances(instruments, other.instruments) &&
+          _sameInstances(transactions, other.transactions) &&
+          _sameDecisions(
+            ledger.categoryByEvent,
+            other.ledger.categoryByEvent,
+          ));
+
+  static bool _sameInstances(List<Object> a, List<Object> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (!identical(a[i], b[i])) return false;
+    }
+    return true;
+  }
+
+  static bool _sameDecisions(
+    Map<String, v2.CategoryDecision> a,
+    Map<String, v2.CategoryDecision> b,
+  ) {
+    if (a.length != b.length) return false;
+    for (final entry in a.entries) {
+      final other = b[entry.key];
+      if (other == null || !identical(other, entry.value)) return false;
+    }
+    return true;
+  }
+
+  // snapshot() with no selection is a pure function of this immutable model,
+  // and every report, total, home summary and review list asks for it.
+  late final LedgerSnapshot _fullSnapshot = _buildSnapshot(null);
+
+  LedgerSnapshot snapshot({Iterable<TransactionEntry>? selected}) =>
+      selected == null ? _fullSnapshot : _buildSnapshot(selected);
+
+  LedgerSnapshot _buildSnapshot(Iterable<TransactionEntry>? selected) {
     final rows = (selected ?? transactions)
         .where((r) => r.status == 'active')
         .toList();

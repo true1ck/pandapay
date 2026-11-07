@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:pandapay_domain/sms_v2.dart';
 import 'package:sqlite3/sqlite3.dart';
 
+import 'row_decode_cache.dart';
+
 /// Account-scoped ledger. Local category context is stripped from wire JSON,
 /// just as InstrumentStore strips local limit history.
 ///
@@ -187,6 +189,64 @@ payload=excluded.payload,dirty=excluded.dirty WHERE v2_ledger.payload != exclude
     return Map.unmodifiable(result);
   }
 
+  /// Every entry plus the per-event category decisions, i.e. exactly
+  /// `(list(), categoryDecisions())`, in one pass over the table.
+  ///
+  /// Entries are immutable, so a row whose payload text is unchanged since the
+  /// previous call reuses its already-decoded entry and decision (the very
+  /// same instances); only new or edited rows are parsed. The ledger read
+  /// model calls this on every revision bump.
+  (List<LedgerEntry>, Map<String, CategoryDecision>) readAllCached() {
+    final pass = RowDecodeCache.of<_DecodedRow>(
+      db,
+      'v2_ledger',
+    ).begin(namespace);
+    final entries = <LedgerEntry>[];
+    final decisions = <String, CategoryDecision>{};
+    for (final r in db.select(
+      'SELECT entry_id,event_id,payload FROM v2_ledger WHERE namespace=? ORDER BY occurred_at,entry_id',
+      [namespace],
+    )) {
+      final row = pass.resolve(
+        r['entry_id'] as String,
+        r['payload'] as String,
+        _decodeRow,
+      );
+      entries.add(row.entry);
+      final decision = row.decision;
+      if (decision != null) decisions[r['event_id'] as String] = decision;
+    }
+    pass.finish();
+    return (entries, Map.unmodifiable(decisions));
+  }
+
+  static _DecodedRow _decodeRow(String payload) {
+    final j = (jsonDecode(payload) as Map).cast<String, Object?>();
+    final c = j['_categoryDecision'] as Map?;
+    final entry = LedgerEntry.fromJson({...j}..remove('_categoryDecision'));
+    CategoryDecision? decision;
+    if (c == null && j['category'] != null) {
+      // CCR-003: a refund row's wire category is its decision. Spend rows
+      // keep using local metadata, which also holds the rule id.
+      if (entry.isRefundShaped && entry.categorySource != null) {
+        decision = CategoryDecision(
+          slug: entry.category!,
+          source: entry.categorySource!,
+          confidence: 1,
+        );
+      }
+    }
+    if (c != null) {
+      decision = CategoryDecision(
+        slug: c['slug'] as String,
+        source: CategorySource.fromWire(c['source'] as String),
+        ruleId: c['ruleId'] as String?,
+        confidence: (c['confidence'] as num).toDouble(),
+      );
+    }
+    return _DecodedRow(entry, decision);
+  }
+
   Iterable<Row> _rows({bool dirty = false, Set<String>? eventIds}) sync* {
     final groups = eventIds == null
         ? [<String>[]]
@@ -209,4 +269,10 @@ payload=excluded.payload,dirty=excluded.dirty WHERE v2_ledger.payload != exclude
     (jsonDecode(payload) as Map).cast<String, Object?>()
       ..remove('_categoryDecision'),
   );
+}
+
+class _DecodedRow {
+  const _DecodedRow(this.entry, this.decision);
+  final LedgerEntry entry;
+  final CategoryDecision? decision;
 }

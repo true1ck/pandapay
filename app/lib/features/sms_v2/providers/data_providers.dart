@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +10,7 @@ import '../../../app/providers.dart' as app;
 import '../../../data/local/sms_intake_repository.dart';
 import '../../../data/local/sms_learning_feedback.dart';
 import '../ledger/providers.dart';
+import '../ledger/reports.dart' show LedgerReadModel;
 import '../storage/schema.dart';
 import '../storage/fact_store.dart';
 import '../storage/event_store.dart';
@@ -47,6 +49,123 @@ class LocalReviewItem {
   String get groupKey => payload['templateHash'] as String? ?? id;
 }
 
+class BillTargetCandidate {
+  const BillTargetCandidate(this.eventId, this.sourceKey);
+  final String eventId;
+  final String sourceKey;
+}
+
+class CategoryPromptCandidate {
+  const CategoryPromptCandidate(this.eventId, this.sourceKey, this.merchantKey);
+  final String eventId;
+  final String sourceKey;
+  final String merchantKey;
+}
+
+/// The review entries that come from the ledger itself (as opposed to the
+/// `v2_review_items` table), in list order. One definition shared by the full
+/// review list and by the count, so the badge can never disagree with the
+/// list. Pure in-memory work on the read model: no SQLite, no JSON.
+class ReviewCandidates {
+  const ReviewCandidates(this.billTargets, this.categoryPrompts);
+  final List<BillTargetCandidate> billTargets;
+  final List<CategoryPromptCandidate> categoryPrompts;
+}
+
+ReviewCandidates reviewCandidates(
+  LedgerReadModel model, {
+  required int minimumOccurrences,
+  required int largeAmount,
+}) {
+  final factsById = model.factsById;
+  final merchantEvents = <String, List<Event>>{};
+  for (final event in model.snapshot().events) {
+    final decision = model.ledger.categoryByEvent[event.eventId];
+    if (event.type != EventType.purchase ||
+        decision?.source == CategorySource.user ||
+        decision?.slug != 'other') {
+      continue;
+    }
+    final money = event.legs
+        .map((l) => factsById[l.factId])
+        .whereType<MovementFact>()
+        .firstOrNull;
+    final merchant = money?.counterparty?.name;
+    if (merchant == null) continue;
+    merchantEvents
+        .putIfAbsent(normalizeMerchantText(merchant), () => [])
+        .add(event);
+  }
+  final cards = model.instruments
+      .where(
+        (i) =>
+            i.kind == InstrumentKind.creditCard &&
+            i.status == InstrumentStatus.confirmed,
+      )
+      .toList();
+  final unresolvedBillIds = {
+    for (final entry in model.ledger.entries)
+      if (entry.to is OwnUnresolvedEndpoint &&
+          (entry.to as OwnUnresolvedEndpoint).kind == InstrumentKind.creditCard)
+        entry.eventId,
+  };
+  return ReviewCandidates([
+    if (cards.length > 1)
+      for (final event in model.ledger.events.where(
+        (e) =>
+            e.type == EventType.cardBillPayment &&
+            unresolvedBillIds.contains(e.eventId),
+      ))
+        if (factsById[event.eventId]?.sourceKey case final source?)
+          BillTargetCandidate(event.eventId, source),
+  ], [
+    for (final merchant in merchantEvents.entries)
+      if (merchant.value.length >= minimumOccurrences ||
+          merchant.value.any((e) => e.amountMinor >= largeAmount))
+        for (final event in merchant.value)
+          for (final source in [factsById[event.eventId]?.sourceKey])
+            if (source != null)
+              CategoryPromptCandidate(event.eventId, source, merchant.key),
+  ]);
+}
+
+/// Bumped after every (re)build of [reviewItemsProvider]. Screens invalidate
+/// the list after resolving or dismissing an item (a `v2_review_items` update
+/// notifies no revision), and the badge used to follow because it was derived
+/// from the list; [reviewItemCountProvider] follows this instead, so it is
+/// still refreshed by those invalidations without building the list itself.
+final _reviewListBuildsProvider = StateProvider<int>((ref) => 0);
+
+/// How many items [reviewItemsProvider] lists, without building them.
+///
+/// The list resolves every item against SQLite (the event, the captured
+/// message, the facts of its source) just to be displayed; a badge only needs
+/// the number. Each open `v2_review_items` row is exactly one list item, and
+/// the ledger-derived items come from the same [reviewCandidates] the list
+/// uses, so the count equals `reviewItemsProvider`'s length.
+final reviewItemCountProvider = FutureProvider<int>((ref) async {
+  ref.watch(_reviewListBuildsProvider);
+  ref.watch(app.financialStoreRevisionProvider('needs_review'));
+  ref.watch(app.financialStoreRevisionProvider('observations'));
+  final namespace = ref.watch(app.cacheNamespaceProvider);
+  final cache = await ref.watch(app.responseCacheProvider.future);
+  final db = cache.financialStore.database.db;
+  SmsV2Schema.ensure(db);
+  final model = await ref.watch(smsV2LedgerReadModelProvider.future);
+  final candidates = reviewCandidates(
+    model,
+    minimumOccurrences: ref.watch(merchantPromptMinimumOccurrencesProvider),
+    largeAmount: ref.watch(merchantPromptLargeAmountProvider),
+  );
+  final open =
+      db.select(
+            "SELECT COUNT(*) AS n FROM v2_review_items WHERE namespace=? AND status='open'",
+            [namespace],
+          ).single['n']
+          as int;
+  return candidates.billTargets.length + open + candidates.categoryPrompts.length;
+});
+
 final reviewItemsProvider = FutureProvider<List<LocalReviewItem>>((ref) async {
   ref.watch(app.financialStoreRevisionProvider('needs_review'));
   ref.watch(app.financialStoreRevisionProvider('observations'));
@@ -60,11 +179,8 @@ final reviewItemsProvider = FutureProvider<List<LocalReviewItem>>((ref) async {
   // The read model already holds every fact; look them up in memory instead
   // of running SQLite queries per review item on the UI thread.
   final model = await ref.watch(smsV2LedgerReadModelProvider.future);
-  final factsById = {for (final fact in model.facts) fact.factId: fact};
-  final factsBySource = <String, List<Fact>>{};
-  for (final fact in model.facts) {
-    (factsBySource[fact.sourceKey] ??= <Fact>[]).add(fact);
-  }
+  final factsById = model.factsById;
+  final factsBySource = model.factsBySource;
   Fact? factFor(String id) => factsById[id] ?? factsStore.get(id);
   Map<String, Object?> enrich(Map<String, Object?> payload) {
     final fact = payload['factId'] is String
@@ -109,55 +225,28 @@ final reviewItemsProvider = FutureProvider<List<LocalReviewItem>>((ref) async {
     };
   }
 
-  final merchantEvents = <String, List<Event>>{};
-  for (final event in model.snapshot().events) {
-    final decision = model.ledger.categoryByEvent[event.eventId];
-    if (event.type != EventType.purchase ||
-        decision?.source == CategorySource.user ||
-        decision?.slug != 'other') {
-      continue;
-    }
-    final money = event.legs
-        .map((l) => factsById[l.factId])
-        .whereType<MovementFact>()
-        .firstOrNull;
-    final merchant = money?.counterparty?.name;
-    if (merchant == null) continue;
-    merchantEvents
-        .putIfAbsent(normalizeMerchantText(merchant), () => [])
-        .add(event);
-  }
-  final cards = model.instruments
-      .where(
-        (i) =>
-            i.kind == InstrumentKind.creditCard &&
-            i.status == InstrumentStatus.confirmed,
-      )
-      .toList();
-  final unresolvedBillIds = {
-    for (final entry in model.ledger.entries)
-      if (entry.to is OwnUnresolvedEndpoint &&
-          (entry.to as OwnUnresolvedEndpoint).kind == InstrumentKind.creditCard)
-        entry.eventId,
-  };
+  final candidates = reviewCandidates(
+    model,
+    minimumOccurrences: ref.watch(merchantPromptMinimumOccurrencesProvider),
+    largeAmount: ref.watch(merchantPromptLargeAmountProvider),
+  );
+  var disposed = false;
+  ref.onDispose(() => disposed = true);
+  scheduleMicrotask(() {
+    if (!disposed) ref.read(_reviewListBuildsProvider.notifier).state++;
+  });
   return [
-    if (cards.length > 1)
-      for (final event in model.ledger.events.where(
-        (e) =>
-            e.type == EventType.cardBillPayment &&
-            unresolvedBillIds.contains(e.eventId),
-      ))
-        if (factsById[event.eventId]?.sourceKey case final source?)
-          LocalReviewItem(
-            id: 'bill-target:${event.eventId}',
-            kind: 'bill_target',
-            payload: {
-              'sourceKey': source,
-              'eventId': event.eventId,
-              'hasReading': true,
-            },
-            message: intake.capturedById(namespace, source),
-          ),
+    for (final target in candidates.billTargets)
+      LocalReviewItem(
+        id: 'bill-target:${target.eventId}',
+        kind: 'bill_target',
+        payload: {
+          'sourceKey': target.sourceKey,
+          'eventId': target.eventId,
+          'hasReading': true,
+        },
+        message: intake.capturedById(namespace, target.sourceKey),
+      ),
     for (final row in db.select(
       "SELECT review_id,kind,payload FROM v2_review_items WHERE namespace=? AND status='open' ORDER BY review_id",
       [namespace],
@@ -177,27 +266,18 @@ final reviewItemsProvider = FutureProvider<List<LocalReviewItem>>((ref) async {
               ? intake.capturedById(namespace, json['sourceKey'] as String)
               : null,
         ),
-    for (final merchant in merchantEvents.entries)
-      if (merchant.value.length >=
-              ref.watch(merchantPromptMinimumOccurrencesProvider) ||
-          merchant.value.any(
-            (e) =>
-                e.amountMinor >= ref.watch(merchantPromptLargeAmountProvider),
-          ))
-        for (final event in merchant.value)
-          for (final source in [factsById[event.eventId]?.sourceKey])
-            if (source != null)
-              LocalReviewItem(
-                id: 'category:${event.eventId}',
-                kind: 'category',
-                payload: {
-                  'sourceKey': source,
-                  'eventId': event.eventId,
-                  'templateHash': merchant.key,
-                  'hasReading': true,
-                },
-                message: intake.capturedById(namespace, source),
-              ),
+    for (final prompt in candidates.categoryPrompts)
+      LocalReviewItem(
+        id: 'category:${prompt.eventId}',
+        kind: 'category',
+        payload: {
+          'sourceKey': prompt.sourceKey,
+          'eventId': prompt.eventId,
+          'templateHash': prompt.merchantKey,
+          'hasReading': true,
+        },
+        message: intake.capturedById(namespace, prompt.sourceKey),
+      ),
   ];
 });
 

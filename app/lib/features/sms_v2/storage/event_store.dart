@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:pandapay_domain/sms_v2.dart' show Event, EventLeg, EventStatus;
 import 'package:sqlite3/sqlite3.dart';
 
+import 'row_decode_cache.dart';
+
 /// Phone storage for linked events, on the WP-01 `v2_events` table.
 ///
 /// Every query is scoped to [namespace], the signed-in account. The row's
@@ -174,10 +176,23 @@ WHERE e.namespace = ? AND json_extract(j.value, '\$.factId') IN ($marks)
     DateTime? to,
   }) {
     final rows = _db.select(
-      'SELECT payload FROM v2_events WHERE namespace = ?${where == null ? '' : ' AND $where'}',
+      'SELECT event_id,payload FROM v2_events WHERE namespace = ?${where == null ? '' : ' AND $where'}',
       [namespace, ...args],
     );
-    final out = <Event>[for (final r in rows) _decode(r['payload'] as String)]
+    // Events are immutable values: a row whose payload text is unchanged
+    // since the last read reuses its decoded (and validated) Event. The ledger
+    // read model re-reads every event on each revision bump.
+    final pass = RowDecodeCache.of<Event>(_db, 'v2_events').begin(namespace);
+    final decoded = <Event>[
+      for (final r in rows)
+        pass.resolve(
+          r['event_id'] as String,
+          r['payload'] as String,
+          _decode,
+        ),
+    ];
+    pass.finish(complete: where == null);
+    final out = decoded
         .where((e) {
           if (from != null && e.occurredAt.isBefore(from)) return false;
           if (to != null && e.occurredAt.isAfter(to)) return false;
