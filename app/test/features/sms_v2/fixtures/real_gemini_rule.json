@@ -1,0 +1,93 @@
+{
+ "hash": "af463d8438cac89c529fd4f23dfc8a71864dfc96969aea87c94b6fbe5c3827f7",
+ "body": "Sent <AMT> from HDFC Bank A/c <MASK> to <PARTY> on <DATE>. Ref <REF>.",
+ "rule": {
+  "id": "AI-af463d8438cac89c529fd4f23dfc8a71864dfc96969aea87c94b6fbe5c3827f7",
+  "emit": [
+   {
+    "attrs": {
+     "rail": "unknown",
+     "purpose": "purchase",
+     "direction": "debit"
+    },
+    "amounts": [
+     {
+      "from": "amt",
+      "role": "posted",
+      "unit": "INR",
+      "transforms": [
+       "parseAmountIndian"
+      ]
+     }
+    ],
+    "factType": "movement",
+    "instrument": {
+     "kind": "bank_account",
+     "maskFrom": "mask_0"
+    },
+    "occurredAt": {
+     "from": "date",
+     "formats": [
+      "yyyy-MM-dd",
+      "dd-MM-yy",
+      "dd-MMM-yyyy",
+      "dd/MM/yyyy HH:mm",
+      "yyyy-MM-dd HH:mm:ss",
+      "ddMMMyy"
+     ]
+    },
+    "references": {
+     "txnId": "txnId"
+    },
+    "counterparty": {
+     "kind": "merchant",
+     "nameFrom": "party",
+     "transforms": [
+      "upperTrim"
+     ]
+    }
+   }
+  ],
+  "match": {
+   "flags": "i",
+   "pattern": "Sent\\s+(?<amt>[\\w\\s.,\\u20B9\u00e2\u201a\u00b9]+?)\\s+from\\s+HDFC\\s+Bank\\s+A\\/c\\s+(?<mask_0>[A-Za-z0-9*]+)\\s+to\\s+(?<party>[A-Z\\s]+?)\\s+on\\s+(?<date>[\\d\\w\\/\\-\\s\\:]+?)\\.\\s+Ref\\s+(?<txnId>\\d+)\\.",
+   "templateHash": "af463d8438cac89c529fd4f23dfc8a71864dfc96969aea87c94b6fbe5c3827f7"
+  },
+  "family": "hdfc_debit",
+  "status": "provisional",
+  "senders": [
+   "HDFCBK"
+  ],
+  "version": 1,
+  "examples": [
+   {
+    "body": "Sent Rs. 127.45 from HDFC Bank A/c x2468 to SYNTHETIC STORE on 2026-11-20. Ref 834217.",
+    "sender": "HDFCBK",
+    "expectFactTypes": [
+     "movement"
+    ]
+   },
+   {
+    "body": "Sent INR 1,23,456.78 from HDFC Bank A/c XX1234 to ACME CORP on 20-11-26. Ref 98765432.",
+    "sender": "HDFCBK",
+    "expectFactTypes": [
+     "movement"
+    ]
+   },
+   {
+    "body": "Your HDFC Bank A/c XX1234 has a balance of INR 5,000 on 2026-11-20.",
+    "sender": "HDFCBK",
+    "expectFactTypes": []
+   },
+   {
+    "body": "Failed to send Rs 500 from HDFC Bank A/c *1234 to MERCHANT on 20-Nov-2026. Ref 123456.",
+    "sender": "HDFCBK",
+    "expectFactTypes": []
+   }
+  ],
+  "priority": 100,
+  "createdBy": "ai:gemini-3.5-flash-lite",
+  "updatedAt": "2026-11-20T00:00:00Z",
+  "confidence": 0.95
+ }
+}

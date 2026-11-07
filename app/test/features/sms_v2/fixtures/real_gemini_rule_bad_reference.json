@@ -1,0 +1,94 @@
+{
+ "hash": "0d62c2badca05176b874c1d99a4adf4643a3d696d8062fe58c133b581a41d0e7",
+ "body": "Sent <AMT> from HDFC Bank A/c <MASK> to <PARTY> on <DATE>. Ref <REF>.",
+ "rule": {
+  "id": "AI-0d62c2badca05176b874c1d99a4adf4643a3d696d8062fe58c133b581a41d0e7",
+  "emit": [
+   {
+    "attrs": {
+     "rail": "unknown",
+     "purpose": "p2p",
+     "direction": "debit"
+    },
+    "amounts": [
+     {
+      "from": "amt",
+      "role": "posted",
+      "unit": "INR",
+      "transforms": [
+       "parseAmountIndian"
+      ]
+     }
+    ],
+    "factType": "movement",
+    "instrument": {
+     "kind": "bank_account",
+     "maskFrom": "maskno"
+    },
+    "occurredAt": {
+     "from": "dt",
+     "formats": [
+      "yyyy-MM-dd",
+      "dd-MM-yy",
+      "dd-MM-yyyy",
+      "dd/MM/yyyy",
+      "dd-MMM-yyyy",
+      "dd-MMM-yy",
+      "ddMMMyy"
+     ]
+    },
+    "references": {
+     "ref": "ref"
+    },
+    "counterparty": {
+     "kind": "person",
+     "nameFrom": "party",
+     "transforms": [
+      "upperTrim"
+     ]
+    }
+   }
+  ],
+  "match": {
+   "flags": "i",
+   "pattern": "^Sent\\s+(?<amt>[A-Za-z0-9.,\\s\u00e2\u201a\u00b9]+?)\\s+from\\s+HDFC\\s+Bank\\s+A\\/c\\s+(?<maskno>[A-Za-z0-9]+)\\s+to\\s+(?<party>[A-Za-z\\s]+?)\\s+on\\s+(?<dt>\\d{2}[-/]\\d{2}[-/]\\d{2,4}|\\d{4}-\\d{2}-\\d{2}|\\d{2}-[A-Za-z]{3}-\\d{2,4}|\\d{2}[A-Za-z]{3}\\d{2})\\.\\s+Ref\\s+(?<ref>\\d+)\\.$",
+   "templateHash": "0d62c2badca05176b874c1d99a4adf4643a3d696d8062fe58c133b581a41d0e7"
+  },
+  "family": "hdfcbk",
+  "status": "provisional",
+  "senders": [
+   "HDFCBK"
+  ],
+  "version": 1,
+  "examples": [
+   {
+    "body": "Sent Rs. 127.45 from HDFC Bank A/c x2468 to SYNTHETIC STORE on 2026-11-20. Ref 834217.",
+    "sender": "HDFCBK",
+    "expectFactTypes": [
+     "movement"
+    ]
+   },
+   {
+    "body": "Sent INR 1,23,456.78 from HDFC Bank A/c XX1234 to JOHN DOE on 20-Nov-2026. Ref 98765432.",
+    "sender": "HDFCBK",
+    "expectFactTypes": [
+     "movement"
+    ]
+   },
+   {
+    "body": "Your OTP is 123456 for HDFC Bank A/c x2468.",
+    "sender": "HDFCBK",
+    "expectFactTypes": []
+   },
+   {
+    "body": "Your HDFC Bank A/c x2468 statement for 2026-11-20 is due.",
+    "sender": "HDFCBK",
+    "expectFactTypes": []
+   }
+  ],
+  "priority": 100,
+  "createdBy": "ai:gemini-3.5-flash-lite",
+  "updatedAt": "2026-11-20T00:00:00Z",
+  "confidence": 1
+ }
+}
