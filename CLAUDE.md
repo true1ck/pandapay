@@ -60,6 +60,17 @@ Stack: Flutter app in `app/` on **Riverpod 2.6.1** (codegen) + **go_router 14.x*
 | `requesting-code-review` / `receiving-code-review` | Before merging, or when acting on review feedback. |
 | `verification-before-completion` | Before claiming anything is done, fixed, or passing. |
 
+## Performance rules (mandatory — read before touching SMS, sync, DB, providers, startup)
+
+The UI-thread lag has regressed twice after being fixed, because the fixes were only in
+prose. Read `docs/PERFORMANCE_RULEBOOK.md` first. In short: heavy or O(history) work never
+runs on the UI isolate (`async`/`Duration.zero` is not a thread); no whole-table read inside a
+loop; use `cachedRegExp` not `RegExp(` in per-message code; pin id lookups with `INDEXED BY`;
+cheap UI values must not build expensive lists; a rewrite must port the old subsystem's
+threading/budget guarantees. Before claiming a performance change works, run
+`flutter test test/performance_guards_test.dart` and `scripts/perf_smoke_android.sh` on a
+real phone with a profile build from `latest-dev`.
+
 ## Explicitly not for this project
 
 - `dagovalsusa-flutter-game` — no game features planned; ignore unless the user explicitly asks for one.

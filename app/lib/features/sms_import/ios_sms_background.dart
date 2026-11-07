@@ -98,7 +98,7 @@ class IosSmsBackgroundDrain {
           'outcomes': outcomes,
         });
         // Give expiration and account-change callbacks a turn between commits.
-        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero); // perf-ok: iOS background isolate, not the UI isolate
       }
       return {'success': false};
     } finally {

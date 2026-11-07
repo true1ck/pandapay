@@ -1,5 +1,6 @@
 import 'sms_capture_signals.dart';
 import 'sms_security_policy.dart';
+import 'cached_regexp.dart';
 
 enum SmsGateAction { pass, drop }
 
@@ -33,17 +34,17 @@ class SmsGateVerdict {
 class SmsGateFilter {
   // Regex for stripping TRAI DLT carrier prefixes (e.g. VK-, AD-, JD-, BZ-)
   // and route suffixes (e.g. -S, -P, -T, -G, -B).
-  static final _dltPrefixRe = RegExp(r'^[A-Za-z]{2}-');
-  static final _dltSuffixRe = RegExp(r'-[A-Za-z]$');
+  static final _dltPrefixRe = cachedRegExp(r'^[A-Za-z]{2}-');
+  static final _dltSuffixRe = cachedRegExp(r'-[A-Za-z]$');
 
   // TRAI telemarketing 140-series CLI, Indian 10-digit mobile phone numbers,
   // and 6-digit numeric promotional sender headers
-  static final _p2pOrTelemarketingRe = RegExp(
+  static final _p2pOrTelemarketingRe = cachedRegExp(
     r'^(?:\+?91[\-\s]?|0)?(?:140\d{7}|[6-9]\d{9})$|^(?:[A-Za-z]{2}-)?\d{6}(?:-[A-Za-z])?$',
   );
 
   // Gate 4: Demat, CDSL/NSDL depository share movements & broker noise
-  static final _dematDepositoryRe = RegExp(
+  static final _dematDepositoryRe = cachedRegExp(
     r'\b(?:cdsl|nsdl)\s*:\s*(?:debit|credit)\s+in\s+a/?c\b[\s\S]{0,40}\b(?:etf|bees|shares?|units?|mf)\b|'
     r'\b(?:cdsl|nsdl)\s*:\s*(?:unpledge|pledge)\b|'
     r'\b(?:updated\s+(?:your\s+)?address\s+(?:under|of)\s+folio|address\s+in\s+folio[^\w\n]*\w+\s+(?:is|has\s+been)\s+updated|based\s+on\s+(?:the\s+)?feed\s+received\s+from\s+kra)\b|'
@@ -52,7 +53,7 @@ class SmsGateFilter {
   );
 
   // Early operational/promotional noise patterns
-  static final _earlyNoiseRe = RegExp(
+  static final _earlyNoiseRe = cachedRegExp(
     r'\bdue\s+to\s+scheduled\s+maintenance\b[\s\S]{0,80}\b(?:paused|unavailable|interrupted)\b|'
     r'\bregistration\s+alert\s*:\s*device\s+name\b|'
     r'\bcoupons?\s+expire\b|'
@@ -65,17 +66,17 @@ class SmsGateFilter {
   );
 
   // Fast indicator tokens: at least one must exist for a financial message
-  static final _currencyOrAmountIndicatorRe = RegExp(
+  static final _currencyOrAmountIndicatorRe = cachedRegExp(
     r'(?:₹|rs\.?|inr|usd|eur|gbp|\$)\s*[:.]?\s*[\d,]+|\b(?:amount|amt|total|bal|balance|limit)\b',
     caseSensitive: false,
   );
 
-  static final _movementVerbIndicatorRe = RegExp(
+  static final _movementVerbIndicatorRe = cachedRegExp(
     r'\b(?:debited|credited|spent|paid|charged|transferred|withdrawn|withdrawal|received|deposited|refund|refunded|reversal|reversed|due|autopay|mandate|bill|statement|invoice)\b',
     caseSensitive: false,
   );
 
-  static final _balanceSnapshotRe = RegExp(
+  static final _balanceSnapshotRe = cachedRegExp(
     r'\b(?:available|current|closing|avl|avail)\s+(?:bal(?:ance)?|limit)\b[\s\S]{0,60}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?|\b(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?[\s\S]{0,40}\b(?:available|current|closing|avl|avail)\s+(?:bal(?:ance)?|limit)\b|\bcredit\s+limit\b[\s\S]{0,30}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?',
     caseSensitive: false,
   );
@@ -112,7 +113,7 @@ class SmsGateFilter {
     // Check promotional route suffix (-P)
     final actionableInsuranceRenewal =
         SmsCaptureSignals.isActionableInsuranceRenewal(body);
-    final isPromoRoute = RegExp(r'-[Pp]$').hasMatch(trimmedSender);
+    final isPromoRoute = cachedRegExp(r'-[Pp]$').hasMatch(trimmedSender);
     if (isPromoRoute &&
         !SmsCaptureSignals.isCompletedTransactionOrBill(body) &&
         !actionableInsuranceRenewal) {

@@ -47,6 +47,20 @@ ON CONFLICT(namespace, fact_id) DO NOTHING
       // list).
       _read('source_key = ?', [sourceKey], indexedBy: 'idx_v2_facts_source');
 
+  /// Every fact of the account, in no particular order. Facts are immutable,
+  /// so ones already decoded (and schema-validated) by an earlier read are
+  /// reused rather than parsed again; the ledger read model rebuilds on every
+  /// revision bump and used to re-decode and re-validate the whole history.
+  List<Fact> all() => [
+    for (final row in _db.select(
+      'SELECT fact_id,payload FROM v2_facts WHERE namespace = ?',
+      [namespace],
+    ))
+      _cache[_key(row['fact_id'] as String)] ??= Fact.fromJson(
+        (jsonDecode(row['payload'] as String) as Map).cast<String, Object?>(),
+      ),
+  ];
+
   List<Fact> since(DateTime from) =>
       _read('observed_at >= ?', [_timestamp(from)]);
 

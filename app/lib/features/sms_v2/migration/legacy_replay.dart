@@ -567,7 +567,7 @@ CREATE TABLE IF NOT EXISTS sms_v2_migration_sources(namespace TEXT NOT NULL,sour
         }
       });
       onChunk?.call(++chunks);
-      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero); // perf-ok: yield between bounded chunks; chunk cost is bounded by caller
     }
     _check();
     final complete = db.select(

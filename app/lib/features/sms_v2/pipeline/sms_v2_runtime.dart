@@ -210,7 +210,7 @@ class SmsV2Runtime {
           v2Backfill: history,
         ).captureBatch(namespace, selected);
       }
-      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero); // perf-ok: 200-message chunk, sync work; move to a worker isolate before raising chunk size
     }
   }
 

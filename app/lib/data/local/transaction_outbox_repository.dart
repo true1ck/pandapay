@@ -255,7 +255,7 @@ class TransactionOutboxRepository {
       }
       // Let Flutter service pending input and paint work between network/DB
       // items when this is called from a lifecycle or connectivity callback.
-      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero); // perf-ok: bounded 20-row outbox batch
     }
     return sent;
   }

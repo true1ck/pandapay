@@ -1,11 +1,10 @@
-import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:pandapay_domain/sms_v2.dart';
 import 'package:pandapay_domain/sms_v2_ledger.dart';
 import '../../../app/providers.dart' as app;
 import '../../../data/user_cards_repository.dart';
 import '../storage/schema.dart';
 import '../storage/event_store.dart';
+import '../storage/fact_store.dart';
 import '../storage/instrument_store.dart';
 import '../storage/ledger_store.dart';
 import 'reports.dart';
@@ -39,15 +38,7 @@ final smsV2LedgerReadModelProvider = FutureProvider<LedgerReadModel>((
       ).listSince(DateTime.utc(1900)),
       categoryByEvent: ledger.categoryDecisions(),
     ),
-    facts: [
-      for (final row in db.select(
-        'SELECT payload FROM v2_facts WHERE namespace=?',
-        [namespace],
-      ))
-        Fact.fromJson(
-          (jsonDecode(row['payload'] as String) as Map).cast<String, Object?>(),
-        ),
-    ],
+    facts: FactStore(db, namespace: namespace).all(),
     instruments: InstrumentStore(db, namespace: namespace).list(),
     transactions: cache.financialStore
         .entities(namespace, 'transactions')

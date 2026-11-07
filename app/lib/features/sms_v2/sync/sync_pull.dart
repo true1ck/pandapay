@@ -405,7 +405,7 @@ class SyncPull {
         .toList();
     final dirtyBefore = _ledger.dirty().map((entry) => entry.entryId).toSet();
     final locked = Map<String, CategoryDecision>.of(
-      _ledger.categoryDecisions(),
+      _ledger.categoryDecisions(), // perf-ok: once per pull, not per entry
     );
     final purchaseFacts = {
       for (final event in ready)

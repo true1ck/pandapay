@@ -126,7 +126,7 @@ class HistoryCategoryRecheck {
       'personalRules': personal.userRules.map((rule) => rule.toJson()).toList(),
       'confirmedHistory': personal.confirmedHistory,
       'userDecisions': {
-        for (final entry in _ledger.categoryDecisions().entries)
+        for (final entry in _ledger.categoryDecisions().entries) // perf-ok: once per run, not per chunk
           if (entry.value.source == CategorySource.user)
             entry.key: entry.value.slug,
       },
