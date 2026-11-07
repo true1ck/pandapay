@@ -226,3 +226,87 @@ All test data uses `SEC `-prefixed display names / account labels and lives in t
 drive this pass (throwaway, in the session scratchpad, not committed): `sec/users.cjs`,
 `sec/setup.cjs`, `sec/resources.cjs`, `sec/s01_authz_matrix.cjs`, `sec/s01_oracle2.cjs`,
 `sec/s02_input_attacks.cjs`, `sec/s03_flows.cjs`, `sec/s04_enum_privacy.cjs`, `sec/s05_lifecycle.cjs`.
+
+
+---
+
+# Follow-up: E7 erasure completeness and re-registration / number reuse (A13)
+
+Same stack, same rules, no product code changes. Throwaway accounts `EZ` (erase target, name
+"SEC Zed Erasable", +919500000030), `EV` (counterpart), `EP` (phone-bound invitee), `EQ`, `LA/LB/LO`.
+Method: build the account, snapshot, `POST /account/erase` (200 `{erased:true}`), then a server-side
+scan of every base table in every non-system schema (`row::text ILIKE`) for: the profile id, the name
+fragment "Zed", the phone digits, the bank-reference marker "SECBANK", the email, and the phone HMAC.
+Scripts (scratchpad, not committed): `sec/s05b_build.cjs`, `sec/scan.cjs`, `sec/s05c_rereg.cjs`.
+
+Data built for EZ: `private_cost_facts` (approved 3000 expense, share 1500), two
+`settlement_private_references` (one EZ-owned "HDFC-SECBANK-REF-9911", one EV-owned "UPI-SECBANK-REF-7788"),
+an unsettled pair balance (EV owes EZ 1500), a pending proposal authored by EZ, an open phone-bound
+invitation issued by EZ for EP's number, an active group link, a self-chosen member label ("Zed
+Erasable Person"), and one `source_resources` row whose `private_snapshot` carries a merchant name, a
+phone number and a bank marker. Note: `source_resources` was seeded by direct SQL because the API can
+only admit a v2 SMS event with full ledger fixtures (legacy sources are "explicit review required"),
+so this class is shown at table level, not via a real admission. No receipts/attachments tables
+exist in `shared_expenses` (31 tables, none for files), so that class does not apply.
+
+## E7 results: what survives `/account/erase`
+
+| ID | Data class | After erase | Contains PII? | Verdict | Sev |
+|---|---|---|---|---|---|
+| E7-01 | `profiles` row, `phone_directory` row, EZ's own `notifications` (2 rows), `members.profile_id` | removed / nulled | n/a | PASS | |
+| E7-02 | `settlement_private_references.reference` owned by EZ (bank/UPI reference) | row remains, `owner_profile_id` = dangling old id, reference text intact (`HDFC-SECBANK-REF-9911`) | YES: bank reference | FAIL | S2 |
+| E7-03 | `source_resources.private_snapshot` (merchant, note, phone digits, bank marker) | row remains in full, `owner_profile_id` dangling | YES: name, phone digits, bank text (real rows also hold transaction facts) | FAIL | S2 |
+| E7-04 | `private_cost_facts` (EZ personal cost: share, date, context, expense) | row remains (profile_id dangling) | personal spend facts linkable to the group | FAIL | S2 |
+| E7-05 | `members.display_name` self-chosen label "Zed Erasable Person" | retained; co-members see this label, not "Former member" (the fallback applies only when no label is stored) | YES: name as typed | BUG (contradicts the "Former member" intent) | S2 |
+| E7-06 | `expense_revisions.title` "Zed dinner at 9500000030" | retained (shared content) | name and phone digits typed into free text | Flag (by design for shared history; state it in the privacy notice) | S3 |
+| E7-07 | `operation_receipts`, `context_events`, `profile_events`, `profile_stream_heads`, `revision_approvals`, `revision_members`, `expenses.created_by`, `contexts.created_by`, `settlement_reports.reporter_profile_id`, `expense_revisions.author_profile_id`, `invitations.issuer_profile_id`, `group_links.created_by` | old profile id kept as an opaque uuid (about 45 rows) | id only; no name/phone/bank text for EZ | Flag (pseudonymous but a stable identifier of a deleted person; `profile_events` keeps the full per-person event stream, 10 rows) | S3 |
+| E7-08 | `public.notifications` addressed to OTHER users that name EZ (4 rows, e.g. "Zed Erasable Person says they paid you") | retained | YES: name, in others' inboxes | Flag (recipient's own history) | S3 |
+| E7-09 | Open phone-bound invitation issued by EZ | stays open and usable: EP claimed it after the erase and was auto-joined (`joined`, no owner approval) into a group whose owner no longer exists | n/a | FAIL | S2 |
+| E7-10 | Group link created by EZ | still active (30 day expiry), token still valid | n/a | BUG (issuer-less link) | S3 |
+| E7-11 | Unsettled pair balance and pending proposal authored by EZ | balance kept (correct for the counterparty); EV could still approve EZ's pending proposal after the erase (200) | n/a | PASS for the balance; flag the pending proposal | S3 |
+
+E7 answer: `/account/erase` returns 200 but leaves behind, keyed to a now-dangling account id, EZ's
+bank/UPI payment references, EZ's per-expense private cost facts, any admitted source snapshots
+(merchant, amount, instrument details), and the free-text member label. The erase function only nulls
+nullable FK columns that are not named `profile_id`; the `owner_profile_id` / `profile_id` columns of the
+three private tables and the actor columns are not touched, and the private tables have no deletion step.
+
+Fix suggestions: (1) add an explicit shared_expenses step to the erase path that deletes rows from
+`settlement_private_references`, `private_cost_facts` and `source_resources` (with its reservations and
+aliases) for the erased owner, and blanks `members.display_name` on the erased profile's rows so the
+"Former member" label applies; (2) revoke every open invitation and group link issued by the profile in
+the same transaction; (3) consider nulling or hashing `profile_events.profile_id` after the retention window.
+
+## Re-registration after erasure (same email and phone)
+
+The old auth identity was removed (simulating the lifecycle worker) and a new account was created with
+the same email and the same verified phone. The new profile id differs from the old one.
+
+| ID | Check (as the new account) | Result | Verdict | Sev |
+|---|---|---|---|---|
+| R-01 | Overview / contexts list | empty (`contextCount 0`) | PASS | |
+| R-02 | Read old context, members, balances, settlements | `404 context_not_found` | PASS | |
+| R-03 | Owner-only invitations list | `403` | PASS | |
+| R-04 | `take-over` old context, `leave`, rename the old owner member | `membership_not_authorized` / `context_not_authorized` | PASS | |
+| R-05 | Reveal phone on the old invitation | `403` | PASS | |
+| R-06 | Accept / claim the old phone-bound invitation issued by the erased account (bound to another number) | `invitation_unavailable` / `invitation_phone_mismatch` | PASS | |
+| R-07 | Re-bind old member rows to the new profile | not possible: rows have `profile_id` NULL and no code path matches by phone or email | PASS | |
+| R-08 | What remaining members see | the old owner row with its stored label, the counterpart balance of 2000 unchanged, and no new member; the new account appears nowhere | PASS for isolation (see E7-05 for the label) | |
+| R-09 (A13) | Open phone-bound invite created for that number by a third party | appears in the NEW holder's inbox; it does not auto-join (state stays `invited` until the holder acts), but the holder can accept it (`joined`) and takes the slot labelled "For old EZ number" with full history access to that group | BUG / risk: a recycled number inherits pending invites; only the 7 day expiry limits it | S2 |
+
+## Number moving between two LIVE accounts
+
+| ID | Check | Result | Verdict | Sev |
+|---|---|---|---|---|
+| N-01 | Can two live accounts hold the same verified phone in auth? | yes in the local auth DB (setting LB's phone to LA's succeeded) | Flag (local fixture; confirm production auth enforces uniqueness) | S3 |
+| N-02 | LA's number moves to LB and LB touches the directory | the directory row for the hash moves to LB and LA's row is deleted (`register_phone` takes the hash); LA re-registers under its new number | PASS (last verified holder wins) | |
+| N-03 | Pending invite bound to the number | disappears from LA's inbox (`items: []`), appears in LB's inbox; LA accepting by id gets `invitation_unavailable` | PASS for the old holder losing it; the new holder getting it is the same A13 exposure as R-09 | S2 |
+| N-04 | `discoverable` flag | LB's row is created fresh as discoverable; LA's preference does not carry over | PASS | |
+| N-05 | Lookup of the moved number by a stranger | resolves to LB's masked name, not LA | PASS | |
+
+Repro sketch (R-09 / N-03): user X invites number N from a group (member.invite, then
+`POST /shared-expenses/invitations` with `phoneNumber`); the account that held N is erased or changes
+number; whoever next verifies N calls `GET /shared-expenses/invitations/inbox`, sees the invite, then
+`POST /shared-expenses/invitations/accept`. Suggested fix: revoke open invitations bound to the old hash
+on erase and on number change, or require the inviter to confirm when the holder's directory registration
+is newer than the invite.
