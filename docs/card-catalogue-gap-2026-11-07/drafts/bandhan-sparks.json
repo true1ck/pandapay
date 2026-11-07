@@ -1,0 +1,423 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "bandhan-sparks",
+    "name": "Bandhan Bank Sparks Credit Card",
+    "issuer_slug": "bandhan-bank",
+    "network": null,
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 499,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": false,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 0.25,
+    "point_value_baseline_basis": "Bandhan Bank Delights FAQ, Accrual: 1 Delight Point = INR 0.25; the Bank may change the value from time to time. Card-page Value Charts use the same 0.25 (Sparks: 500 activation points = INR 125; Ignite: 1,000 points = INR 250). Minimum redemption 400 points; no convenience fee (FAQ). FAQ page is undated.",
+    "point_expiry_months": 0,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://creditcards.bandhan.bank.in/compare-card/",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": null,
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 200,
+    "rounding_mode": null,
+    "base_points_per_block": 2,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": 0.25,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "bandhan-sparks-excluded-mccs",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513,
+          5542,
+          5983,
+          5541,
+          7800,
+          7801,
+          7802,
+          9034,
+          9211,
+          9222,
+          9223,
+          9311,
+          9399,
+          9401,
+          9402,
+          9405,
+          9700,
+          9701,
+          9702,
+          9751,
+          9752,
+          9754,
+          9950
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Rent, fuel and government-sector MCCs earn no reward points (Excluded Merchant Category Codes list, 23 Jun 2026)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "bandhan-sparks-grocery-apparel-4",
+      "category_id": "groceries",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "categories": [
+          "grocery",
+          "apparel"
+        ]
+      },
+      "action": {
+        "multiplier": 2,
+        "points_per_block": 4,
+        "cashback_percent": "N/A",
+        "cap_reference": "bandhan-sparks-accel-monthly-cap",
+        "reason": "4 reward points per ₹200 on grocery and apparel (Compare page); accelerated points capped at 400 a month (Product Usage Guide)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "bandhan-sparks-base",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 200
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 2,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "2 reward points per ₹200 on all categories (Compare page; Product Usage Guide base rate)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "bandhan-sparks-accel-monthly-cap",
+      "category_id": "groceries",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "calendar_month",
+      "limit_value": 400,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "downgrade_to_base_rate",
+        "points_per_block": 2
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.5,
+      "annual_interest_rate_percent": 42
+    },
+    "forex_markup": {
+      "markup_percent": 3.5,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": "MITC: DCC mark-up applies to international ATM withdrawals"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 500,
+      "max_txn_inr": 2500,
+      "monthly_waiver_cap_inr": 150
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 3.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% + GST per rent transaction, no cap stated",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": 99,
+      "foreclosure_charge_percent": 3,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 500,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": 350,
+      "cheque_bounce_charge_inr": 350
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 0,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 99,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 100,
+        "max_balance_inr": 500,
+        "fee_inr": 100
+      },
+      {
+        "min_balance_inr": 501,
+        "max_balance_inr": 5000,
+        "fee_inr": 500
+      },
+      {
+        "min_balance_inr": 5001,
+        "max_balance_inr": 10000,
+        "fee_inr": 750
+      },
+      {
+        "min_balance_inr": 10001,
+        "max_balance_inr": null,
+        "fee_inr": 1100
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 50000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "Renewal fee waived on annual spend of ₹50,000; rent payments, wallet loads and their processing fees do not count (MITC).",
+      "excluded_category_ids": [
+        "rent",
+        "wallet"
+      ],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 499
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "spend_within_30_days_of_issue",
+      "benefit_points": 500,
+      "effective_value_inr": 125,
+      "condition": "500 reward points with ₹5,000 spent within 30 days of card issuance (Compare page); the Sparks Value Chart prices them at ₹125."
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "bandhan-sparks-lounge",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "Bandhan Bank",
+      "label": "Domestic airport lounge access",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 1,
+      "quota_period": "quarter",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 0,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [
+    {
+      "promo_id": "bandhan-sparks-bms",
+      "category_id": "movie",
+      "network_program": "N/A",
+      "sponsor": "BookMyShow",
+      "platform": "BookMyShow",
+      "offer_type": "instant_discount",
+      "discount_percent": 20,
+      "max_discount_inr": 100,
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": true,
+      "is_permanent_card_feature": true,
+      "valid_from": null,
+      "valid_to": null
+    }
+  ],
+  "additional_data": {
+    "_notes": "Source-supported data that cannot be represented faithfully by any existing universal schema field. Do not duplicate data already represented elsewhere. Do not use this section for unknown values, assumptions, or inferred data.",
+    "items": [
+      {
+        "key": "official_research",
+        "value": {
+          "checked_on": "2026-11-05",
+          "source_urls": [
+            "https://www.bandhan.bank.in/news",
+            "https://creditcards.bandhan.bank.in/"
+          ],
+          "facts": [
+            "Bank news index lists this member of its four-card launch."
+          ]
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://creditcards.bandhan.bank.in/landing/uploads/Credit_Card_MITC_English_19082026_2b514a85e4.pdf",
+              "kind": "MITC: fees, interest, forex, penalties, fuel waiver (file dated 19 Aug 2026)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://creditcards.bandhan.bank.in/compare-card/",
+              "kind": "Compare Credit Cards page: earn rates, activation offers, milestones, lounges, lifestyle offers",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://creditcards.bandhan.bank.in/landing/uploads/Credit_Card_Product_Usage_Guidelines_14082026_892e11470c.pdf",
+              "kind": "Credit Card Product Usage Guide with Terms & Conditions (file dated 14 Aug 2026): network wording for lounge, golf and concierge; accelerated-reward monthly caps; base rates",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://creditcards.bandhan.bank.in/landing/uploads/Credit_Card_KFS_30042026_d588f85ac2.pdf",
+              "kind": "Key Fact Statement CC/KFS/OA/080426/02/V-01 (file dated 30 Apr 2026): fees, interest, fuel waiver caps, forex; confirms Flash footnote",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://creditcards.bandhan.bank.in/landing/uploads/Excluded_Merchant_Category_Code_23062026_853953ff5a.pdf",
+              "kind": "Excluded Merchant Category Codes (file dated 23 Jun 2026)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://delights.bandhan.bank.in/content/faq",
+              "kind": "Bandhan Bank Delights FAQ, Accrual: value of 1 Delight Point (undated)",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://creditcards.bandhan.bank.in/card-details/Sparks/",
+              "kind": "Sparks card page, Compare page tile and card-art images reached through the site's own links (read 2026-11-07 for a network mark: none on any image; no network wording on any page)",
+              "read": "rendered page text, DOM and the images opened in a browser tab"
+            }
+          ],
+          "open_questions": [
+            "Delights earn rules and redemption catalogue sit behind the Delights login (\"About Delights\"); only the FAQ value (INR 0.25 per point, minimum 400 points to redeem) was readable without signing in. The FAQ is undated and says the Bank may change the value.",
+            "The card-page Value Charts do not reconcile with the stated base rates for the \"all other transactions\" line (for example Lumina shows INR 4,800 a year on INR 1,00,000 monthly spend, which is about 0.4%, against 16 points per INR 200 at INR 0.25 = 2%). The stated base rate is used and the charts are treated as illustrations.",
+            "Network (re-checked 2026-11-07, STILL UNRESOLVED): no Bandhan document or card art names the network for Sparks. Read: MITC (19 Aug 2026), KFS (30 Apr 2026), Cardholder's Agreement (30 Apr 2026; says only \"VISA / MasterCard or RuPay network\" generically), Product Usage Guide (14 Aug 2026; names a network only for Flare and Lumina in the golf and concierge sections, and links Visa, Mastercard and RuPay lounge lists generically for all four cards), EMI T&C, Credit Card Program Policy, Excluded MCC list, the Sparks card page, the Compare page, the home page and the contactless credit card FAQ on bandhan.bank.in. The Sparks card art (card-page hero, the Compare-page tile and the step-2 and step-4 phone mock-ups) shows only the card front with no network mark. The Visa domestic lounge list (visa.co.in) is by airport, not by card; the Mastercard lounge list link returned 403 and was not pursued. The MITC and KFS Flash footnote says the RuPay Flash card is issued only to existing physical Visa or Mastercard cardholders, which implies the physical cards are Visa or Mastercard but does not say which one Sparks ships on or whether the customer chooses. Press headlines listed on bandhan.bank.in/news (CNBC-TV18, Business Standard) say the four variants are \"on Mastercard\", but they are third-party and conflict with the Guide, which says Flare and Lumina ship on Visa or Mastercard, so they are not used. The application flow (applycc.bandhan.bank.in) asks for a mobile number first and was not opened. Action: ask Bandhan credit-card support in writing which network Sparks ships on (and whether the customer can choose), or read it off an issued card or welcome kit. card_product.network is null and no network candidates are recorded.",
+            "Accelerated-reward cap: the Product Usage Guide says \"per month\" without saying calendar month or statement cycle; calendar_month is assumed (milestones are stated per calendar month). The cap value matches the Value Chart arithmetic (cap points x 12 x INR 0.25), so it is read as total accelerated points, not bonus-only.",
+            "Interest on purchases is 3.5% a month for new-to-bank customers; existing-to-bank customers get 3.5% a month (42% a year) (MITC and KFS agree). The draft uses the new-to-bank rate.",
+            "MITC document reference CC/MITC/OA/090726/03/V-01; the file is dated 19 Aug 2026."
+          ],
+          "notes": [
+            "Rewards are \"Delight Points\" and never expire (home page: never-expiring rewards).",
+            "Rewards earn no points on the MCCs in the Excluded Merchant Category Codes list (rent, fuel, government sector); the same list also bars those MCCs from EMI conversion (Product Usage Guide).",
+            "Milestone and activation offers are event bonuses (spend within 30 days, or monthly spend), so they are not modelled as spend rates: Sparks has no monthly milestone.",
+            "MITC also lists a fifth variant, \"Flash\": a fully digital RuPay credit card issued only to existing physical Visa or Mastercard cardholders, sharing the physical card's credit limit on a separate card account, with no POS use. Joining and renewal fee nil; interest 3.5% a month (42% a year); forex 3.5%; fuel waiver 1% up to INR 150 a cycle on INR 500-2,500; no accelerated rewards, base 2 points per INR 200 (MITC, KFS, Product Usage Guide). It is not drafted here because it is not a standalone product."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

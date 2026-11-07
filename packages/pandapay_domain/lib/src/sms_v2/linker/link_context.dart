@@ -14,7 +14,13 @@ class RuleLinkContext extends LinkContext {
     required super.instrumentsById,
     this.instrumentIdByFactId = const {},
     this.knownEvents = const [],
+    this.ownerNames = const [],
   });
+
+  /// The account owner's own names (the profile name). A payment to or from a
+  /// person with one of these names is the owner moving their own money. A
+  /// one-word name is ignored, because a first name alone is not enough.
+  final List<String> ownerNames;
 
   /// The instrument each fact resolved to (WP-04's resolver). A fact missing
   /// here is matched by its mention against `instrumentsById`.

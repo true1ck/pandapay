@@ -1,0 +1,783 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "rbl-bank-iglobe",
+    "name": "RBL Bank iGlobe Credit Card",
+    "issuer_slug": "rbl",
+    "network": "mastercard",
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 3000,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": false,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": "No document read states what one iGlobe reward point is worth in rupees. The product page, the T&C and the Rewards Programme T&C give no per-point value; only the miles ratio (4 reward points = 1 partner mile) is published.",
+    "point_expiry_months": 24,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": "N/A",
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/iglobe-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "Page: \"exclusively designed for NRI customers\"; card bill payment is accepted only through a standing instruction (auto-debit) from an RBL Bank NRE savings account (page; T&C 3.8). The application route is a branch or Relationship Manager.",
+    "rules": [
+      {
+        "parameter": "customer_type",
+        "operator": "in",
+        "threshold_value": null,
+        "allowed_values": [
+          "nri"
+        ]
+      },
+      {
+        "parameter": "bill_payment_source",
+        "operator": "in",
+        "threshold_value": null,
+        "allowed_values": [
+          "rbl_nre_savings_account_standing_instruction"
+        ]
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": 5,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": "proportional_deduction",
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "rbl-iglobe-excl-emi",
+      "category_id": "emi",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "EMI transactions do not count for reward points (iGlobe T&C 3.3; MITC)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-iglobe-excl-cash",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Cash withdrawals do not count for reward points (iGlobe T&C 3.3)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-iglobe-excl-fees",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fees, charges and GST are not part of the qualifying purchase value (iGlobe T&C 3.3)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-iglobe-intl-10",
+      "category_id": "international_spend",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "transaction_type": "international",
+        "per_inr_block": 100,
+        "definition": "merchant located outside India or merchant bank outside India, excluding Nepal and Bhutan (T&C 2.12)"
+      },
+      "action": {
+        "multiplier": 2,
+        "points_per_block": 10,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "10 reward points per ₹100 on international purchases (iGlobe T&C 3.3; page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-iglobe-domestic-5",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "transaction_type": "domestic",
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 5,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "5 reward points per ₹100 on eligible domestic retail purchases (iGlobe T&C 3.3; page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.99,
+      "annual_interest_rate_percent": 47.88
+    },
+    "forex_markup": {
+      "markup_percent": 1.5,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 1.5,
+      "gst_applicable": true,
+      "trigger_condition": "SOC and MITC list one markup for \"Foreign Currency Transaction / Dynamic & Static Conversion Transactions\"; it also applies to INR transactions at an overseas location and at overseas-registered merchants located in India"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 500,
+      "max_txn_inr": 4000,
+      "monthly_waiver_cap_inr": 250
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on the transaction amount for all rental transactions (SOC; MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          32,
+          2541,
+          4001,
+          5542,
+          5541,
+          5172
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on each fuel and auto transaction above ₹10,000, at most ₹3,000 per transaction; the amount includes surcharge and purchase (SOC; MITC)",
+        "threshold_spend_inr": 10000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "utility",
+        "mcc_list": [
+          4900
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee when utility spends on the card exceed ₹50,000 in a month (SOC: \"per month per card\"; MITC: \"aggregate utility spends\")",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education",
+        "mcc_list": [
+          8220,
+          8244,
+          8249,
+          8211,
+          8241,
+          8299
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on education payments made through third-party apps (Cred, PhonePe, Cheqedu, Paytm, Mobikwik, Nobroker, Housing.com and others, \"not limited to\" the list); no fee when paid on the school or college website or its POS (SOC; MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "toll",
+        "mcc_list": [
+          4784,
+          4111,
+          4131
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on FASTag loading and toll payments above ₹10,000 per transaction per card (SOC; MITC)",
+        "threshold_spend_inr": 10000,
+        "effective_from": "2026-01-07",
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 0,
+        "min_fee_inr": 0,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": 500,
+      "cheque_bounce_charge_inr": 500
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 0,
+      "gst_applicable": null,
+      "exempted_channels": [
+        "all redemptions"
+      ],
+      "notes": "The iGlobe page and T&C do not mention the redemption fee. Only the Rewards Programme T&C (RWD 4.3.1(b)(ii), undated) names iGlobe as exempt from the INR 99 + GST fee; the exempt lists in the SOC (4 Jun 2026) and MITC (29 Oct 2026) do not name iGlobe, so the exemption rests on RWD alone (see open questions)."
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 50,
+    "grace_period_void_on_revolving_balance": true,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "max",
+      "components": [
+        "Total GST + current-month EMI debits + [the higher of (100% of fees and charges + 5% of retail spends, cash advance and interest) or ₹200] + any unpaid earlier minimum due + over-limit utilisation (MITC section D-b)",
+        "If that amount exceeds the total amount due, the minimum due equals the total amount due"
+      ]
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "SOC and MITC show ₹3,000 for the first and later years with no spend-linked waiver. The fee is NIL for an Insignia Preferred Banking customer.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "first_retail_transaction_within_30_days_and_fee_paid",
+      "benefit_points": "N/A",
+      "effective_value_inr": 3000,
+      "condition": "MakeMyTrip voucher worth ₹3,000 on an eligible retail transaction within 30 days of issue and payment of the annual fee shown in the first statement by its due date; credited within 60 days of issue (T&C 3.1; page)."
+    },
+    "spend_milestones": [
+      {
+        "id": "rbl-iglobe-annual-5l",
+        "label": "10,000 reward points on spends of ₹5 lakh in a year (billed spends of primary and add-on cards; EMI, cash, fees, charges and GST excluded)",
+        "threshold_spend_inr": 500000,
+        "reward_value_inr": null,
+        "period": "annual",
+        "is_repeatable": false,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "id": "rbl-iglobe-annual-8l",
+        "label": "A further 10,000 reward points on spends of ₹8 lakh in a year",
+        "threshold_spend_inr": 800000,
+        "reward_value_inr": null,
+        "period": "annual",
+        "is_repeatable": false,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ]
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "rbl-iglobe-lounge-india",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "Mastercard",
+      "label": "2 complimentary domestic airport lounge visits per calendar quarter at select lounges in India; only one entry per cardmember per visit",
+      "evaluation_engine": {
+        "conditions": {
+          "authorisation_inr": 25,
+          "first_come_first_served": true
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 2,
+      "quota_period": "quarter",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "rbl-iglobe-lounge-intl",
+      "category_id": "lounge",
+      "network_program": "priority_pass",
+      "sponsor": "RBL Bank",
+      "label": "6 complimentary international airport lounge visits per year through a complimentary Priority Pass; non-cardmember guests are charged, and the T&C states visit charges of up to USD 27 for international lounge visits",
+      "evaluation_engine": {
+        "conditions": {
+          "visits_per_year": 6,
+          "visit_charge_usd_up_to": 27
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 6,
+      "quota_period": "annual",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "rbl-iglobe-golf",
+      "category_id": "golf",
+      "network_program": "mastercard_golf",
+      "sponsor": "Mastercard",
+      "label": "4 complimentary golf green-fee rounds a year, one golf lesson each month, and 50% off the green fee beyond 4 rounds; 7 days' advance notice",
+      "evaluation_engine": {
+        "conditions": {
+          "rounds_per_year": 4,
+          "lessons_per_month": 1,
+          "discount_beyond_percent": 50
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 4,
+      "quota_period": "annual",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "rbl-iglobe-concierge",
+      "category_id": "concierge",
+      "network_program": null,
+      "sponsor": "Aspire Lifestyles India Pvt. Ltd.",
+      "label": "24x7 concierge desk (golf, car rental and limousine, hotel, dining, spa and fitness, business services, events, flowers and gifts); +91 22 6232 7777",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 0,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": true,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "RBL Rewards Portal (rblrewards.rbl.bank.in)",
+        "redemption_type": "other",
+        "inr_value_per_point": null,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": "N/A",
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": 0,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": [
+      {
+        "partner_code": "air-india-maharaja-club",
+        "program_name": "Air India Maharaja Club",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 4,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 4,
+        "yearly_cap_points": null,
+        "turnaround_days": 10,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "indigo-bluchip",
+        "program_name": "IndiGo BluChip",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 4,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 4,
+        "yearly_cap_points": null,
+        "turnaround_days": 1,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "airasia-rewards",
+        "program_name": "AirAsia Rewards",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 4,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 4,
+        "yearly_cap_points": null,
+        "turnaround_days": 10,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "ethiopian-shebamiles",
+        "program_name": "Ethiopian Airlines ShebaMiles",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 4,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 4,
+        "yearly_cap_points": null,
+        "turnaround_days": 1,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "spicejet-spiceclub",
+        "program_name": "SpiceJet SpiceClub",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 4,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 4,
+        "yearly_cap_points": null,
+        "turnaround_days": 1,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "air-arabia-air-rewards",
+        "program_name": "Air Arabia Air Rewards",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 4,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 4,
+        "yearly_cap_points": null,
+        "turnaround_days": 1,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "itc-club-itc",
+        "program_name": "ITC Hotels Club ITC",
+        "network_program": null,
+        "type": "hotel",
+        "conversion_ratio": {
+          "card_points": 4,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 4,
+        "yearly_cap_points": null,
+        "turnaround_days": 10,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "orchid-rewards",
+        "program_name": "Orchid Hotels Orchid Rewards",
+        "network_program": null,
+        "type": "hotel",
+        "conversion_ratio": {
+          "card_points": 4,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 4,
+        "yearly_cap_points": null,
+        "turnaround_days": 1,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "radisson-rewards",
+        "program_name": "Radisson Hotel Group Radisson Rewards",
+        "network_program": null,
+        "type": "hotel",
+        "conversion_ratio": {
+          "card_points": 4,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 4,
+        "yearly_cap_points": null,
+        "turnaround_days": 1,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "vietnam-lotusmiles",
+        "program_name": "Vietnam Airlines Lotusmiles",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 4,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 4,
+        "yearly_cap_points": null,
+        "turnaround_days": 1,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "philippine-mabuhay-miles",
+        "program_name": "Philippine Airlines Mabuhay Miles",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 4,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 4,
+        "yearly_cap_points": null,
+        "turnaround_days": 10,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "qatar-privilege-club",
+        "program_name": "Qatar Airways Privilege Club",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 4,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 4,
+        "yearly_cap_points": null,
+        "turnaround_days": 1,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ]
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "merchant_emi_processing_fee_rule",
+        "value": {
+          "rule": "1.5% of the amount or ₹150, whichever is higher, on every EMI conversion made at the merchant at the time of the transaction (SOC; MITC). GST at 18% applies.",
+          "note": "The universal field holds a flat rupee amount only, so merchant_instant_emi_processing_fee_inr is left null."
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "12.5% of the outstanding amount (statement total amount due less net payments), minimum ₹5, maximum ₹1,300; GST at 18% on top",
+          "source": "SOC; MITC section v, applicable from 17 Oct 2025",
+          "grace": "The fee is levied only when the account stays past due for more than three days after the payment due date (MITC section v-d).",
+          "note": "A percentage fee cannot be written as fixed slabs, so late_payment_slabs is empty."
+        }
+      },
+      {
+        "key": "miles_transfer_limits",
+        "value": {
+          "source": "Miles Transfer Programme T&C (PDF created 2026-08-18)",
+          "rule": "No minimum, points must be a multiple of the ratio; up to 50,000 points per request and at most 2 requests per cardholder per month; primary cardholder only; transfers are final; credited usually in 3 business days and up to 10; turnaround_days holds the per-partner maximum (1 or 10 working days).",
+          "not_modelled": "The universal partner_transfers row has no cap per month, so the 2 x 50,000 monthly limit is kept here."
+        }
+      },
+      {
+        "key": "insignia_preferred_fee_note",
+        "value": {
+          "rule": "Annual fee NIL for an Insignia Preferred Banking customer, ₹3,000 otherwise (SOC; MITC).",
+          "source": "SOC row iGlobe; MITC section i"
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://webassets.rbl.bank.in/document/credit-cards/terms-conditions-iglobe-credit-card.pdf",
+              "kind": "iGlobe T&C (welcome, forex, rewards, milestones, fuel waiver, concierge, golf, lounges, payment method)",
+              "date": "PDF created 2026-07-23; Last-Modified 2026-08-05",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/iglobe-credit-card",
+              "kind": "issuer product page",
+              "read": "page text"
+            },
+            {
+              "url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide",
+              "kind": "RBL credit card network availability guide (issuer page, undated): iGlobe ticked for MasterCard only",
+              "read": "rendered page and table cells, 2026-11-07"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/Credit%20Cards/CardsScheduleCharges.pdf",
+              "kind": "Schedule of Charges: annual fee row, finance charge, cash advance, late fee, forex, fuel/rent/utility/education/FASTag fees",
+              "date": "code RBL-CC-SOC-V2-04-06-2026 (4 Jun 2026); PDF created 2026-06-04; Last-Modified 2026-08-29",
+              "read": "pdftotext + page image"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/Credit%20Cards/RBL-MITC-final.pdf",
+              "kind": "MITC cum KFS: joining fee, annual fee table, add-on fees, interest bands, grace period, MAD, late fee, forex, EMI rule",
+              "date": "code RBL-CC-MITC-V2-29-10-2026 (29 Oct 2026); Last-Modified 2026-10-30",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/credit-cards/rbl-cc-cardmember-agreement.pdf",
+              "kind": "Cardmember Agreement: table that links each card to its product T&C",
+              "date": "code RBL-CC-CMA-27-10-2026 (27 Oct 2026)",
+              "read": "pdftotext + embedded links"
+            },
+            {
+              "url": "https://rblrewards.rbl.bank.in/tnc",
+              "kind": "Credit Cards Rewards Programme T&C: redemption fee, 24-month expiry, minimum redemption, reversal rule",
+              "date": "no date printed; read 2026-11-07",
+              "read": "page text"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/credit-cards/rbl-miles-transfer-programme.pdf",
+              "kind": "Miles Transfer Programme T&C: product-wise conversion ratios, 12 partners, limits",
+              "date": "PDF created 2026-08-18",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/category",
+              "kind": "Current credit card list (64 cards): sold-status check",
+              "date": "read 2026-11-07",
+              "read": "page text"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/credit-cards/mastercard-visa-india-lounge-program-lounge-list.pdf",
+              "kind": "RBL Bank India Lounge Program list (not itemised here)",
+              "date": "PDF created 2026-10-15",
+              "read": "pdftotext (first page)"
+            }
+          ],
+          "open_questions": [
+            "Value of one reward point (checked again 2026-11-07): no RBL document states it for iGlobe. Not on the iGlobe product page (all three tabs), the iGlobe T&C (3.3 and 3.4), the SOC, the MITC, the Cardmember Agreement, the Miles Transfer T&C (only 4 points = 1 mile), the Rewards Programme T&C (RWD 4.1 refers to \"the value applicable to the product specific value proposition\" without a number, and RWD 3.1 says accrual varies by card) or the public part of rblrewards.rbl.bank.in (FAQs). The redemption screens sit behind the rewards login, which was not opened. point_value_inr_baseline, effective_base_return_percent and the milestone rupee values are therefore null, as the brief requires. A person with an iGlobe login can read the per-point value off the portal.",
+            "Network (resolved 2026-11-07): RBL's own network availability guide (issuer page, undated) ticks \"iGlobe Credit Card\" for MasterCard only, not Visa or RuPay. That agrees with the iGlobe T&C, whose milestone clause names \"MasterCard\" as the association (T&C 3.3 and 3.4) and whose golf and lounge clauses name Mastercard. The card art shows no network mark and the product page says the lounge programme is \"offered by MasterCard/Visa\"; the guide is preferred because it is the issuer's card-by-card statement.",
+            "Redemption fee: the Rewards Programme T&C (RWD 4.3.1(b)(ii), undated page) lists iGlobe among the cards exempt from the INR 99 + GST redemption fee, but the exempt lists in the SOC (4 Jun 2026) and MITC (29 Oct 2026) name Lumiere, Nova, Insignia, Insignia Prime, World Xclusive, Apex, Aspire, Signature, IRCTC and IOCL and not iGlobe. The RWD exemption is stored (redemption_fee_inr 0) because it is the only document that names the card; RWD cannot be dated, so it cannot be said which is newer.",
+            "Reward point expiry: the iGlobe T&C is silent. 24 months is the Rewards Programme T&C rule (RWD 5.1), which exempts only the Insignia Preferred card.",
+            "Lounge count: the T&C says Priority Pass access to \"1700+\" lounges, the product page says \"1,400+\".",
+            "Milestone credit time: the T&C says within 30 days of crossing the threshold in one clause and \"within days\" in another; the page says 45 days.",
+            "The additional 10,000 points at ₹8 lakh reads as in addition to the 10,000 at ₹5 lakh; the T&C wording (\"additional\") does not say whether the two tiers are cumulative.",
+            "Application route: the iGlobe product page says \"To apply for RBL Bank iGlobe Credit Card, visit your nearest branch or reach out to your Relationship Manager\" and the card list shows only \"Know more\", not \"Apply Now\". That is an offline application route for NRIs, so application_mode stays open.",
+            "Insignia Preferred Banking customers pay NIL; the draft stores the standard ₹3,000.",
+            "Finance charge: MITC says \"up to 3.99% per month (47.88% a year)\" for these cards and then lists bureau-score bands (above 775: 3.35% a month; 725-775: 3.85%; below 725: 3.99%). The draft stores the 3.99% maximum."
+          ],
+          "notes": [
+            "Rewards: 5 points per ₹100 on domestic and 10 per ₹100 on international purchases. Points earned in a month are credited within 45 days of settlement (T&C 3.3).",
+            "Forex markup 1.5% (SOC; MITC; T&C 3.2). Fuel surcharge waiver 1% on ₹500-₹4,000 fuel purchases, up to ₹250 a calendar month; the surcharge is 1% of the transaction (T&C 3.5).",
+            "Joining fee is NIL (MITC); the first-year fee is stored as the annual fee.",
+            "Add-on cards are NIL (MITC \"Insignia Credit Card & iGlobe Credit Card: Nil\")."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

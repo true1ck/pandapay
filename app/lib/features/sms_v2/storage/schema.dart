@@ -11,7 +11,7 @@ abstract final class SmsV2Schema {
 
   /// Bump when a later package adds columns or tables; add the change to
   /// [_migrations] under the new number.
-  static const int version = 2;
+  static const int version = 3;
 
   /// Tables created by this module, in dependency order.
   static const List<String> tableNames = [
@@ -25,6 +25,9 @@ abstract final class SmsV2Schema {
     'v2_review_items',
     'v2_sync_state',
     'v2_rule_stats_by_account',
+    'v2_personal_merchant_alias',
+    'v2_bulk_changes',
+    'v2_bulk_change_items',
   ];
 
   static const String _versionTable = 'sms_v2_schema_version';
@@ -142,6 +145,49 @@ CREATE TABLE IF NOT EXISTS v2_rule_stats_by_account (
   to_review INTEGER NOT NULL DEFAULT 0,
   corrected INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY(namespace, day, rule_id, rule_version)
+)''',
+    ],
+    3: [
+      // "Which other transactions look like this one" must be a single indexed
+      // lookup, not a read of every fact. The shop key and the rule id used to
+      // live only inside the JSON text of a fact. `keyed = 0` marks the rows
+      // that still need their key written (see FactKeys.backfill).
+      'ALTER TABLE v2_facts ADD COLUMN merchant_key TEXT',
+      'ALTER TABLE v2_facts ADD COLUMN rule_id TEXT',
+      'ALTER TABLE v2_facts ADD COLUMN keyed INTEGER NOT NULL DEFAULT 0',
+      'CREATE INDEX IF NOT EXISTS idx_v2_facts_merchant ON v2_facts (namespace, merchant_key, observed_at)',
+      'CREATE INDEX IF NOT EXISTS idx_v2_facts_instrument ON v2_facts (namespace, instrument_id, observed_at)',
+      'CREATE INDEX IF NOT EXISTS idx_v2_facts_rule ON v2_facts (namespace, rule_id, observed_at)',
+      'CREATE INDEX IF NOT EXISTS idx_v2_facts_unkeyed ON v2_facts (namespace) WHERE keyed = 0',
+      // A person's own name for a shop, keyed on the name the SMS prints.
+      // `since` is the earliest SMS time the name applies to.
+      '''
+CREATE TABLE IF NOT EXISTS v2_personal_merchant_alias (
+  namespace TEXT NOT NULL,
+  printed_key TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  since TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (namespace, printed_key)
+)''',
+      // A change applied to many transactions at once, kept so it can be undone.
+      '''
+CREATE TABLE IF NOT EXISTS v2_bulk_changes (
+  namespace TEXT NOT NULL,
+  change_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  detail TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  undone_at TEXT,
+  PRIMARY KEY (namespace, change_id)
+)''',
+      '''
+CREATE TABLE IF NOT EXISTS v2_bulk_change_items (
+  namespace TEXT NOT NULL,
+  change_id TEXT NOT NULL,
+  event_id TEXT NOT NULL,
+  previous TEXT NOT NULL,
+  PRIMARY KEY (namespace, change_id, event_id)
 )''',
     ],
   };

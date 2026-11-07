@@ -1,0 +1,719 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "sbm-paisabazaar-paisa-plus",
+    "name": "SBM Paisabazaar Paisa Plus Credit Card",
+    "issuer_slug": "sbm-bank-india",
+    "network": "rupay",
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 499,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [
+      "virtual_card",
+      "physical_plastic"
+    ],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 1,
+    "point_value_baseline_basis": "SOP: 1 Cash Point = ₹1, no redemption fee; adjusted against the card outstanding via the Paisabazaar app. Points expire 1 year after earning.",
+    "point_expiry_months": 12,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "FD-backed: credit limit is 90% of the fixed deposit; FD tenure 390 days with auto-renewal (KFS).",
+    "rules": [
+      {
+        "parameter": "fd_amount_inr",
+        "operator": ">=",
+        "threshold_value": 5000,
+        "allowed_values": []
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 200,
+    "rounding_mode": null,
+    "base_points_per_block": 2,
+    "base_cashback_percent": 1,
+    "effective_base_return_percent": 1,
+    "cycle_accrual_ceiling_points": 3000,
+    "capping_period_basis": "calendar_month",
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "sbm-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513,
+          7349
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Rentals and property management earn no cash points (SBM Paisa Plus rewards SOP excluded-category MCC list)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-excl-cash",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6010,
+          6011,
+          6051,
+          4829
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Cash, quasi-cash and wire transfers earn no cash points (SBM Paisa Plus rewards SOP excluded-category MCC list)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-excl-finance",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6012,
+          7322,
+          6211
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Financial institutions, debt collection and securities earn no cash points (SBM Paisa Plus rewards SOP excluded-category MCC list)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-excl-wallet",
+      "category_id": "wallet_load",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Debit card to wallet credit earn no cash points (SBM Paisa Plus rewards SOP excluded-category MCC list)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-excl-education",
+      "category_id": "education",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          8211,
+          8241,
+          8244,
+          8249,
+          8220,
+          8299
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Education earn no cash points (SBM Paisa Plus rewards SOP excluded-category MCC list)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-excl-insurance",
+      "category_id": "insurance",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5960,
+          6300,
+          6381
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Insurance earn no cash points (SBM Paisa Plus rewards SOP excluded-category MCC list)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-excl-govt",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          7800,
+          7802,
+          7995,
+          9211,
+          9222,
+          9311,
+          9399,
+          9402,
+          9405
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Government, tax, lottery and gambling earn no cash points (SBM Paisa Plus rewards SOP excluded-category MCC list)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-excl-agri",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          763,
+          780,
+          820,
+          821,
+          822,
+          823,
+          824,
+          825,
+          5261
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Agriculture, horticulture and lawn and garden supply earn no cash points (SBM Paisa Plus rewards SOP excluded-category MCC list)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-excl-utilities",
+      "category_id": "utility",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4900
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Utilities earn no cash points (SBM Paisa Plus rewards SOP excluded-category MCC list)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-excl-contractors",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          1520,
+          1711,
+          1731,
+          1740,
+          1750,
+          1761,
+          1771,
+          1799
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Contractor services earn no cash points (SBM Paisa Plus rewards SOP excluded-category MCC list)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-excl-transport",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4784,
+          4789
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Toll, bridge fees and transportation earn no cash points (SBM Paisa Plus rewards SOP excluded-category MCC list)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5541,
+          5542
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel spends (the SOP names \"Fuel Spends\" without MCC codes; MCC 5541 and 5542 assumed) earn no cash points (SBM Paisa Plus rewards SOP excluded-category MCC list)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-excl-upi-small",
+      "category_id": "upi",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "transaction_amount_lt_inr": 2000,
+        "rail": "upi"
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No cash points on UPI spends below ₹2,000 (SOP)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-online-1-5pct-fd-10k",
+      "category_id": "all_retail",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "online",
+      "channel_type": "all",
+      "conditions": {
+        "cumulative_fd_size_gte_inr": 10000
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 1.5,
+        "cap_reference": "sbm-monthly-cap",
+        "reason": "Online spends: effective cashback 1.5% (₹1.5 on a ₹100 transaction) when the cumulative FD is ₹10,000 or more (SOP)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-online-1pct-fd-5k",
+      "category_id": "all_retail",
+      "priority": 11,
+      "evaluation_type": "accelerator",
+      "rail": "online",
+      "channel_type": "all",
+      "conditions": {
+        "cumulative_fd_size_gte_inr": 5000,
+        "cumulative_fd_size_lt_inr": 10000
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 1,
+        "cap_reference": "sbm-monthly-cap",
+        "reason": "Online spends: effective cashback 1.0% when the cumulative FD is ₹5,000 to under ₹10,000 (SOP)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-other-1pct",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 200,
+        "upi_minimum_inr": 2000
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 2,
+        "cashback_percent": 1,
+        "cap_reference": "sbm-monthly-cap",
+        "reason": "All other spends: 2 cash points per ₹200, effective 1.0%, with a ₹2,000 minimum for UPI spends (SOP)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "sbm-daily-cap",
+      "category_id": "all_retail",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "day",
+      "limit_value": 500,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-monthly-cap",
+      "category_id": "all_retail",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "calendar_month",
+      "limit_value": 3000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.5,
+      "annual_interest_rate_percent": 42
+    },
+    "forex_markup": {
+      "markup_percent": 0,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": null,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": null,
+      "atm_transaction_fee_min_inr": null,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": null,
+        "min_fee_inr": null,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 45,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "5% for ECOM transactions",
+        "100% of interest",
+        "100% of fees"
+      ]
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 99,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 100,
+        "max_balance_inr": 500,
+        "fee_inr": 100
+      },
+      {
+        "min_balance_inr": 501,
+        "max_balance_inr": 5000,
+        "fee_inr": 500
+      },
+      {
+        "min_balance_inr": 5001,
+        "max_balance_inr": 10000,
+        "fee_inr": 600
+      },
+      {
+        "min_balance_inr": 10001,
+        "max_balance_inr": 25000,
+        "fee_inr": 750
+      },
+      {
+        "min_balance_inr": 25001,
+        "max_balance_inr": 50000,
+        "fee_inr": 950
+      },
+      {
+        "min_balance_inr": 50001,
+        "max_balance_inr": null,
+        "fee_inr": 1000
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 50000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "Annual fee ₹499 + GST, waived when spend in the preceding year is ₹50,000 or more. Stated by the KFS (SBM file 12 Oct 2026) and by MITC Table 01 (29 Oct 2026); both are later than the rewards SOP (30 Apr 2026), whose FD tier table shows \"Joining / Annual Fee 0\" and is superseded on this point. Renewal fee ₹499 (MITC Table 06).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 499
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": 0,
+    "fee_per_card_inr": "N/A",
+    "separate_priority_pass": "N/A",
+    "lounge_quota_shared": "N/A",
+    "reward_points_pooled": "N/A",
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "Paisabazaar app, adjusted against card outstanding",
+        "redemption_type": "statement_credit",
+        "inr_value_per_point": 1,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": 500,
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": 0,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": "Source-supported data that cannot be represented faithfully by any existing universal schema field. Do not duplicate data already represented elsewhere. Do not use this section for unknown values, assumptions, or inferred data.",
+    "items": [
+      {
+        "key": "official_research",
+        "value": {
+          "checked_on": "2026-11-05",
+          "source_urls": [
+            "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+            "https://www.sbm.bank.in/pdf/kfs/PB_paisaplus_KFS.pdf",
+            "https://www.sbm.bank.in/pdf/notice-board/PB_paisaplus_Reward-Structure.pdf"
+          ],
+          "facts": [
+            "KFS lists annual INR 499 plus GST, waived at INR 50000 annual spend; rewards PDF lists annual zero.",
+            "Cash points: INR 1 each; daily cap 500/monthly cap 3000; minimum redemption INR 500.",
+            "Online rewards depend on FD slab; UPI below INR 2000 is excluded. Credit limit up to 90% of FD."
+          ],
+          "annual_fee_kfs_inr": 499,
+          "annual_fee_reward_document_inr": 0
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.sbm.bank.in/pdf/kfs/PB_paisaplus_KFS.pdf",
+              "kind": "SBM Bank Paisa Bazaar Credit Card Key Fact Statement (SBM file dated 12 Oct 2026; fees, interest, late fee, MAD)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/pdf/notice-board/PB_paisaplus_Reward-Structure.pdf",
+              "kind": "Paisabazaar Paisa Plus Rewards SOP (PDF created 30 Apr 2026, SBM file dated 4 May 2026; earn, caps, value, exclusions)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/pdf/terms-conditions/SBM-Secured-Credit-Card-T&C.pdf",
+              "kind": "SBM Secured Credit Card MITC and Cardholder Member Agreement, 52 pages (SBM file dated 29 Oct 2026): Table 01 annual fee and waiver, Table 06 renewal and cancellation, Table 07 forex 0% and surcharge 1%",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/images/cards/PB_paisaplus_Rupay_CC.webp",
+              "kind": "Card image for Paisa Plus on the SBM secured credit card page (file name PB_paisaplus_Rupay_CC): shows the RuPay credit logo",
+              "read": "image viewed"
+            },
+            {
+              "url": "https://www.sbm.bank.in/pdf/terms-conditions/PB_paisaplus-MITC.pdf",
+              "kind": "Paisa Plus MITC (PDF created 26 Feb 2026, modified 29 Apr 2026, SBM file dated 12 May 2026): clause 4.2 says the virtual card is \"RuPay / Visa powered (as per the issued network)\"; superseded by the 29 Oct 2026 combined document",
+              "read": "pdftotext"
+            }
+          ],
+          "open_questions": [
+            "Annual fee, resolved to 499: the KFS (12 Oct 2026) and the combined MITC (29 Oct 2026) both say ₹499 + GST, waived at ₹50,000 spend in the preceding year. The rewards SOP (30 Apr 2026) is older and shows joining/annual fee 0 in its FD tier table; it is superseded on fees. A person may still want to ask Paisabazaar whether earlier cohorts keep a zero fee.",
+            "Network, resolved to RuPay from the issuer page card image only (file PB_paisaplus_Rupay_CC shows the RuPay credit logo). No KFS, SOP or MITC names the network; the MITC clause 4.2 is generic (\"RuPay / Visa powered, as per the issued network\"). The SOP rule on UPI spends fits a RuPay card.",
+            "Forex: the KFS says N/A, MITC Table 07 (29 Oct 2026) says 0%. 0 is used; the card is RuPay, so confirm international acceptance.",
+            "The SOP and KFS carry no revision date; dates above are PDF creation dates and SBM server file dates.",
+            "The SOP says fuel, EMI, jewellery, games and lottery earn nothing but gives MCC codes only for the table below it. Fuel is modelled as MCC 5541 and 5542; jewellery and games are not modelled.",
+            "Cap period: the SOP says \"monthly cap of 3000\" without defining calendar month versus statement cycle; calendar_month is assumed.",
+            "Fuel surcharge is 1% (MITC Table 07, \"Surcharge Fee\"); no waiver is stated."
+          ],
+          "notes": [
+            "Credit limit is 90% of the FD; FD tenure 390 days with auto-renewal; closing the card closes the FD (KFS).",
+            "Card cancellation within six months costs ₹499 + GST; surcharge fee 1% (KFS).",
+            "Cost of cash points: 60% borne by Paisabazaar, 40% by SBM (SOP).",
+            "Rewards depend on the cumulative FD size (₹5,000 to under ₹10,000 versus ₹10,000 and above), a per-user attribute the ranking engine cannot see."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

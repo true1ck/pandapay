@@ -1,0 +1,850 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "sbm-novio",
+    "name": "SBM novio Credit Card",
+    "issuer_slug": "sbm-bank-india",
+    "network": null,
+    "network_tier": "N/A",
+    "card_tier": "N/A",
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 299,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [
+      "virtual_card",
+      "physical_plastic"
+    ],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": "Value of a novio coin is not stated: the rewards T&C says coins redeem for vouchers \"at discounted rates, which may vary for each brand\" and have \"no monetary value, except in respect of the value assigned by the Bank\". Left null.",
+    "point_expiry_months": 0,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "FD-backed secured card: the credit limit is 90% of the fixed deposit (KFS). The minimum deposit is not stated in the SBM documents read.",
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": "floor",
+    "base_points_per_block": 5,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "sbm-novio-excl-cash",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6010,
+          6011,
+          6012
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Financial institutions and manual cash disbursements earn nothing (novio RuPay rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-novio-excl-quasi-cash",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6051
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Foreign currency, money orders and travellers cheques earn nothing (novio RuPay rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-novio-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513,
+          7349
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Real estate agents and managers, rentals and property management earn nothing (novio RuPay rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-novio-excl-wallet",
+      "category_id": "wallet_load",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6540,
+          6541
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Stored-value card purchase and load, wallets earn nothing (novio RuPay rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-novio-excl-gambling",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          7800,
+          7801,
+          7995
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Government lotteries, online casinos and betting earn nothing (novio RuPay rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-novio-excl-political",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          8651
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Political organisations earn nothing (novio RuPay rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-novio-excl-securities",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6211
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Security brokers and dealers earn nothing (novio RuPay rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-novio-excl-fuel-dealers",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5172,
+          5983
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel dealers and distributors (petrol pumps, MCC 5541 and 5542, are not in this list) earn nothing (novio RuPay rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-novio-excl-education",
+      "category_id": "education",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          8220,
+          8241,
+          8244,
+          8249,
+          8299,
+          8351
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Educational institutions earn nothing (novio RuPay rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-novio-excl-legal-accounting",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          8111,
+          8931
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Legal and accounting services earn nothing (novio RuPay rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-novio-excl-utility",
+      "category_id": "utility",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4900,
+          4812,
+          4814,
+          4816,
+          4899
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Utilities and telecom earn nothing (novio RuPay rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-novio-excl-insurance",
+      "category_id": "insurance",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5960,
+          6300,
+          6381
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Insurance earn nothing (novio RuPay rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-novio-excl-novelty",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5947
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Card, gift, novelty and souvenir shops earn nothing (novio RuPay rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-novio-excl-railways",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4011,
+          4112
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Railways earn nothing (novio RuPay rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-novio-excl-agri",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          763,
+          820,
+          821,
+          822,
+          823,
+          824,
+          825,
+          742,
+          743,
+          744,
+          780
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Agricultural services, cooperatives, horticulture, landscaping and veterinary services earn nothing (novio RuPay rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-novio-excl-government",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          9211,
+          9222,
+          9223,
+          9311,
+          9399,
+          9400,
+          9402,
+          9405
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Tax payments, court costs, postal services, fines and government services earn nothing (novio RuPay rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-novio-excl-atm",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "rail": "atm"
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "ATM cash withdrawals earn 0 novio coins (rewards T&C table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-novio-excl-emi",
+      "category_id": "emi",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "EMI transactions earn no reward points, even if later reversed or written off (KFS, billing section)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-novio-fuel-upi-10",
+      "category_id": "fuel",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "credit_card_on_upi",
+      "channel_type": "all",
+      "conditions": {
+        "variant": "RuPay",
+        "mcc_list": [
+          5541,
+          5542
+        ],
+        "minimum_transaction_inr": 400,
+        "maximum_transaction_inr": 4000,
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 2,
+        "points_per_block": 10,
+        "cashback_percent": "N/A",
+        "cap_reference": "sbm-novio-fuel-upi-cap",
+        "reason": "RuPay variant: 10 novio coins per ₹100 on fuel paid by UPI at MCC 5541 and 5542, minimum ₹400 and maximum ₹4,000 per transaction, up to 400 coins a month (rewards T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-novio-fuel-pos-1",
+      "category_id": "fuel",
+      "priority": 11,
+      "evaluation_type": "accelerator",
+      "rail": "pos_terminal",
+      "channel_type": "all",
+      "conditions": {
+        "variant": "RuPay",
+        "mcc_list": [
+          5541,
+          5542
+        ],
+        "minimum_transaction_inr": 400,
+        "maximum_transaction_inr": 4000,
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 0.2,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": "sbm-novio-fuel-pos-cap",
+        "reason": "RuPay variant: 1 novio coin per ₹100 on fuel paid by POS at MCC 5541 and 5542, minimum ₹400 and maximum ₹4,000 per transaction, up to 40 coins a month (rewards T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-novio-other-5",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "variant": "RuPay",
+        "includes": [
+          "UPI",
+          "POS",
+          "online"
+        ],
+        "minimum_transaction_inr": 100,
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 5,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "RuPay variant: 5 novio coins per ₹100 on UPI, POS and online spends outside fuel, minimum ₹100 per transaction, no monthly limit (rewards T&C). Only whole ₹100 multiples count."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "sbm-novio-fuel-upi-cap",
+      "category_id": "fuel",
+      "metric": "total_reward_points",
+      "mcc_target_list": [
+        5541,
+        5542
+      ],
+      "period": "calendar_month",
+      "limit_value": 400,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-novio-fuel-pos-cap",
+      "category_id": "fuel",
+      "metric": "total_reward_points",
+      "mcc_target_list": [
+        5541,
+        5542
+      ],
+      "period": "calendar_month",
+      "limit_value": 40,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.5,
+      "annual_interest_rate_percent": 42
+    },
+    "forex_markup": {
+      "markup_percent": 2.49,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": null,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 299,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": 50
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% processing fee on rental payments (MCC 6513), over and above any merchant convenience fee (MITC Table 07; page FAQ 8)",
+        "threshold_spend_inr": null,
+        "effective_from": "2026-07-15",
+        "effective_to": null
+      },
+      {
+        "category_id": "education",
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% processing fee on education payments (MCCs 8211, 8220, 8241, 8244, 8249, 8299), over and above any merchant convenience fee (MITC Table 07; page FAQ 8)",
+        "threshold_spend_inr": null,
+        "effective_from": "2026-07-15",
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": 99,
+      "foreclosure_charge_percent": 3,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 0,
+        "min_fee_inr": 0,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 0,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 45,
+    "grace_period_void_on_revolving_balance": true,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "5% of the total amount due (POS/ECOM)",
+        "10% of cash transactions (MITC Table 11)",
+        "100% of interest",
+        "100% of fees",
+        "plus unpaid earlier minimum dues, any amount over the credit limit and EMI instalments due"
+      ]
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": null,
+        "fee_inr": 499
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 50000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "Annual fee ₹299 + GST from the second year (joining fee nil). Waived when the minimum FD balance maintained is ₹10,000 or more OR annual spends in the preceding year are ₹50,000 or more (KFS; MITC Table 01). Card cancellation ₹599 within two years of issuance.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 299
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": "N/A",
+    "separate_priority_pass": "N/A",
+    "lounge_quota_shared": "N/A",
+    "reward_points_pooled": "N/A",
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "novio app Rewards section: vouchers at brand-specific discounted rates",
+        "redemption_type": "partner_catalogue",
+        "inr_value_per_point": null,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": "N/A",
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": 0,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "verified_network_research",
+        "value": {
+          "product_status": "active",
+          "source_url": "https://www.sbm.bank.in/pdf/kfs/SBM-Credilio-Key-Fact-Statement.pdf",
+          "evidence": "novio KFS: the fee schedule \"is applicable for both VISA and Rupay\". SBM publishes a rewards T&C only for the \"Rupay Variant\"; the page card image shows a RuPay Select card.",
+          "candidates": [
+            {
+              "network": "visa",
+              "network_tier": "N/A",
+              "label": "SBM novio Credit Card (Visa variant)",
+              "source_url": "https://www.sbm.bank.in/pdf/kfs/SBM-Credilio-Key-Fact-Statement.pdf",
+              "evidence": "KFS: fees apply to both Visa and RuPay variants. No Visa variant rewards document is published on the SBM page."
+            },
+            {
+              "network": "rupay",
+              "network_tier": "rupay_select",
+              "label": "SBM novio Credit Card (RuPay variant)",
+              "source_url": "https://www.sbm.bank.in/pdf/notice-board/RP-SBM-Credilio-Rupay.pdf",
+              "evidence": "Rewards T&C titled \"SBM novio Credit Card - Rupay Variant: Rewards Program\"; card image credilio-credit-card.webp shows RuPay Select."
+            }
+          ]
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.sbm.bank.in/pdf/kfs/SBM-Credilio-Key-Fact-Statement.pdf",
+              "kind": "SBM novio Secured Credit Card KFS (SBM file dated 29 Oct 2026): fees, interest (3.5% a month with effect from 6 Jan 2026), late fee, forex",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/pdf/notice-board/RP-SBM-Credilio-Rupay.pdf",
+              "kind": "SBM novio Credit Card - Rupay Variant: Rewards Program T&C, 4 pages (PDF created 24 Jun 2026, SBM file dated 25 Jun 2026): novio coins, fuel limits, excluded MCCs",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/pdf/terms-conditions/SBM-Secured-Credit-Card-T&C.pdf",
+              "kind": "SBM Secured Credit Card MITC and Cardholder Member Agreement, 52 pages (SBM file dated 29 Oct 2026): Tables 01-11 give fees, interest, late fee, forex, surcharge, rent and education fees, cash limits and minimum due for every variant",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+              "kind": "SBM secured credit card page (read 7 Nov 2026): lists the card with its KFS, MITC and reward links; card image https://www.sbm.bank.in/images/cards/credilio-credit-card.webp shows the network",
+              "read": "page text; card image viewed"
+            }
+          ],
+          "open_questions": [
+            "Visa variant: the KFS covers both Visa and RuPay but SBM publishes a rewards T&C only for the RuPay variant, so the Visa variant earn rate is unknown. The reward rules are tagged variant RuPay. Re-checked 7 Nov 2026 (W11): the SBM secured-card page links exactly one Reward Points document for novio, titled \"Rupay Variant\"; no Visa-variant reward document is linked on that page, the Notice Board or the Policies page; the novio KFS (SBM file 29 Oct 2026) says its fee table \"is applicable for both VISA and Rupay\"; the MITC only says a virtual card is \"RuPay / Visa powered (as per the issued network)\"; the page card image shows RuPay Select only. To unblock: ask SBM or Credilio whether a Visa variant is still issued and which rewards document applies to it. Until then the earn rules apply to the RuPay variant only.",
+            "Value of a novio coin is unknown (vouchers at brand-specific discounted rates), so effective return cannot be computed. point_value_inr_baseline is null. Re-read in W11: rewards T&C 3.4 says points \"have no monetary value, except in respect of the value assigned by the Bank\", are not convertible and cannot be redeemed for cash or credit; 2.2 says vouchers are at \"discounted rates, which may vary for each brand\". No document gives a rupee value per coin.",
+            "Fuel limits: the table gives a minimum of ₹400 and a maximum of ₹4,000 per transaction. It is not stated whether a fuel transaction above ₹4,000 earns nothing or earns on ₹4,000. The \"Max RPs earned/month\" of 400 (UPI) and 40 (POS) is assumed to be a calendar month; the T&C does not define the month.",
+            "The rewards T&C carries no revision date (PDF created 24 Jun 2026).",
+            "Tier: the card image shows RuPay Select for the RuPay variant; the Visa tier is not shown."
+          ],
+          "notes": [
+            "Interest on POS/ECOM 3.5% a month (42% a year) with effect from 6 Jan 2026; cash 2.99% a month (35.88% a year). Cash limit 50% of the credit limit; ATM fee 2.5% or ₹299, whichever is higher.",
+            "Card replacement ₹249; FD pre-closure fee 1%; over limit fee nil; rewards redemption fee nil.",
+            "EMI: processing fee ₹99 or 1% (whichever is higher), 1.5% a month, foreclosure ₹99 or 3% of the remaining principal.",
+            "Rent and education fees of 1% took effect on 15 Jul 2026 (MITC note to Table 07).",
+            "Partner is Credilio Financial Technologies; novio coins do not expire (the Bank may change that on 30 days notice)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "flat ₹499 + GST on non-payment of the minimum amount due",
+          "source": "novio KFS (29 Oct 2026) and MITC Table 08"
+        }
+      }
+    ]
+  }
+}

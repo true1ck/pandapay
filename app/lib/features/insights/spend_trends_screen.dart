@@ -20,6 +20,7 @@ import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
 import '../cards/card_summary.dart';
 import '../import/data_transfer_screen.dart';
+import '../sms_v2/ui/rules_refresh_sheet.dart';
 import 'spending_tag_projection.dart';
 import 'spending_visuals.dart';
 
@@ -53,7 +54,8 @@ class _PayeeGroup {
 /// so VPA shape is checked here before it is used as secondary text.
 String? _readableMerchantVpa(String? value) {
   final vpa = value?.trim();
-  if (vpa == null || !RegExp(r'^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+$').hasMatch(vpa)) return null;
+  if (vpa == null || !RegExp(r'^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+$').hasMatch(vpa))
+    return null;
   final at = vpa.indexOf('@');
   if (at <= 0 || at == vpa.length - 1) return null;
   if (vpa.indexOf('@', at + 1) != -1) return null;
@@ -62,20 +64,25 @@ String? _readableMerchantVpa(String? value) {
   if (!RegExp(r'[A-Za-z]').hasMatch(domain)) return null;
   if (RegExp(r'^[0-9a-fA-F]{8,}$').hasMatch(local) ||
       MerchantIdentity.isWeakName(local) ||
-      RegExp(r'^(?:paytmqr|bharatpe)\d', caseSensitive: false).hasMatch(local)) return null;
+      RegExp(r'^(?:paytmqr|bharatpe)\d', caseSensitive: false).hasMatch(local))
+    return null;
   return vpa;
 }
 
 /// P2P transfers are stored as "Transfer to <payee>". Inside a spending
 /// breakdown the payment method already says it was a transfer, so the verb
 /// only eats label space.
-String? _payeeDisplayName(String? name) => MerchantIdentity.payeeDisplayName(name);
+String? _payeeDisplayName(String? name) =>
+    MerchantIdentity.payeeDisplayName(name);
 
 // Opaque addresses still distinguish identities even when hidden in the UI.
 String _merchantGroupKey(TransactionEntry entry) {
   final vpa = entry.merchantVpa?.trim();
-  if (vpa != null && vpa.isNotEmpty) return 'vpa:${SpendingSelection.normalize(vpa)}';
-  final name = _payeeDisplayName(MerchantIdentity.cleanName(entry.merchantName));
+  if (vpa != null && vpa.isNotEmpty)
+    return 'vpa:${SpendingSelection.normalize(vpa)}';
+  final name = _payeeDisplayName(
+    MerchantIdentity.cleanName(entry.merchantName),
+  );
   if (name != null) return 'name:${SpendingSelection.normalize(name)}';
   return 'entry:${entry.id}';
 }
@@ -126,20 +133,10 @@ List<_PayeeGroup> _groupByPayee(
   for (final entry in entries) {
     grouped.putIfAbsent(_merchantGroupKey(entry), () => []).add(entry);
   }
-  return grouped.values
-      .map((group) {
-        final display = _merchantDisplayFor(
-          group,
-          unknownLabel: unknownLabel,
-        );
-        return _PayeeGroup(
-          label: display.label,
-          vpa: display.vpa,
-          entries: group,
-        );
-      })
-      .toList()
-    ..sort((a, b) => b.totalPaise.compareTo(a.totalPaise));
+  return grouped.values.map((group) {
+    final display = _merchantDisplayFor(group, unknownLabel: unknownLabel);
+    return _PayeeGroup(label: display.label, vpa: display.vpa, entries: group);
+  }).toList()..sort((a, b) => b.totalPaise.compareTo(a.totalPaise));
 }
 
 /// Rows for the same calendar period as the aggregate report. The report
@@ -239,6 +236,19 @@ class _SpendTrendsScreenState extends ConsumerState<SpendTrendsScreen> {
           style: BambooFonts.heading(20, color: BambooInk.ink900),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.sync_rounded, size: 22),
+            color: BambooInk.ink900,
+            tooltip: 'Refresh rules and re-sort',
+            onPressed: () async {
+              await showRulesRefreshSheet(context);
+              if (!mounted) return;
+              // New categories were written to the local store: reload.
+              ref.invalidate(spendReportProvider(query));
+              ref.invalidate(spendPeriodTransactionsProvider(query));
+              ref.invalidate(transactionsProvider);
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.ios_share_rounded, size: 20),
             color: BambooInk.ink900,
@@ -1275,15 +1285,16 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
           ),
         )
         .toList();
-    return _ledgerReportCache = LedgerReadModel(
-      ledger: model.snapshot(selected: rows),
-      transactions: rows,
-    ).spendReport(
-      widget.query,
-      ref.read(clockProvider).now(),
-      bankAccounts: _bankAccounts,
-      monthlySeries: true,
-    );
+    return _ledgerReportCache =
+        LedgerReadModel(
+          ledger: model.snapshot(selected: rows),
+          transactions: rows,
+        ).spendReport(
+          widget.query,
+          ref.read(clockProvider).now(),
+          bankAccounts: _bankAccounts,
+          monthlySeries: true,
+        );
   }
 
   String _categoryName(TransactionEntry entry) => entry.categoryLabel;
@@ -1576,7 +1587,9 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
       final model = ref.read(smsV2LedgerReadModelProvider).valueOrNull;
       if (model != null) {
         return _visibleEntries
-            .where((entry) => model.merchantKeyForTransaction(entry) == row.label)
+            .where(
+              (entry) => model.merchantKeyForTransaction(entry) == row.label,
+            )
             .toList();
       }
     }

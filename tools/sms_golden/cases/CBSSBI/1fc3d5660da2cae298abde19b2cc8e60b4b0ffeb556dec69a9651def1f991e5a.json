@@ -1,0 +1,37 @@
+{
+  "id": "review2y:sbi_upi_reversal_credit",
+  "templateHash": "1fc3d5660da2cae298abde19b2cc8e60b4b0ffeb556dec69a9651def1f991e5a",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "JD-CBSSBI-S",
+      "body": "Your A/C XXXXX734321 has credit for UPI/REVERSAL/432100112233/3003 of Rs 2.00 on 03/04/25. Avl Bal Rs 35,317.21.-SBI",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "reversal",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 200
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "734321"
+        }
+      }
+    ]
+  },
+  "note": "A UPI reversal credit is a reversal, not income.",
+  "origin": "review-2y"
+}

@@ -705,9 +705,15 @@ class CorrectionsService {
   }
 
   void _queueCase(SmsCorrection correction, String stage, {String? merchantKey}) {
+    // Facts that only inform (a wallet top-up notice, a fund balance) stay on the phone and are never uploaded, so the
+    // server cannot find them and would refuse the whole correction for good. Name only the facts that were uploaded.
+    final uploadedFactIds = [
+      for (final id in correction.factIds)
+        if (_facts.get(id)?.factType != FactType.info) id,
+    ];
     final payload = <String, Object?>{
       'sourceKey': correction.sourceKey,
-      'factIds': correction.factIds,
+      'factIds': uploadedFactIds,
       if (correction.eventId != null) 'eventId': correction.eventId,
       'correctionKind': correction.kind.wire,
       'corrected': <String, Object?>{},
@@ -723,7 +729,10 @@ class CorrectionsService {
       );
       final skeleton = smsSkeleton(redacted.body);
       final brand = smsTemplateBrand(redacted.sender);
-      payload['redactedTemplate'] = skeleton;
+      // A skeleton that still holds a digit, an address or a link is not shareable; the server would refuse the whole
+      // correction. Send the correction without the template instead.
+      final shareable = smsSkeletonIsShareable(skeleton);
+      if (shareable) payload['redactedTemplate'] = skeleton;
       payload['corrected'] = {
         // Only categorical values enter shared review automatically. Corrected
         // amounts, dates and names stay on-device until an admin makes a
@@ -732,11 +741,12 @@ class CorrectionsService {
           'category': category,
         // The shop, only when it passed the same filters as a shop signal.
         'merchantKey': ?merchantKey,
-        '_template': {
-          'senderBrand': brand,
-          'hash': smsTemplateHash(brand, skeleton),
-          'observedAt': redacted.observedAt.toUtc().toIso8601String(),
-        },
+        if (shareable)
+          '_template': {
+            'senderBrand': brand,
+            'hash': smsTemplateHash(brand, skeleton),
+            'observedAt': redacted.observedAt.toUtc().toIso8601String(),
+          },
       };
     }
     _outbox.enqueue('correction', correction.id, payload);

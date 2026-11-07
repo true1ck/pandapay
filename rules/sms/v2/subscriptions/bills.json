@@ -1,14 +1,14 @@
 [
   {
     "id": "SUB-BIL-DUE-ON-01",
-    "version": 1,
+    "version": 2,
     "family": "bill_due",
     "senders": [
       "*"
     ],
     "priority": 650,
     "match": {
-      "pattern": "bill\\s+dated\\s+(?<sdate>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})\\s+for\\s+(?:your\\s+)?(?<biller>[a-z][a-z0-9&. ]{1,30}?)\\s+connection[\\s\\S]{0,80}?is\\s+due\\s+for\\s+payment\\s+on\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})[\\s\\S]{0,40}?total\\s+amount\\s+payable\\s*:?\\s*(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)",
+      "pattern": "bill\\s+dated\\s+(?<sdate>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})\\s+for\\s+(?:your\\s+)?(?<biller>[a-z][a-z0-9&. ]{1,30}?)\\s+connection[\\s\\S]{0,80}?is\\s+due\\s+for\\s+payment\\s+on\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})[\\s\\S]{0,40}?total\\s+amount\\s+payable\\s*(?:is\\s*)?:?\\s*(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)",
       "flags": "i",
       "rejectAny": [
         "was paid",
@@ -54,11 +54,18 @@
         "sender": "VM-EXAMPL-S",
         "body": "Your bill dated 26-06-2026 for ExampleNet connection having number 000000 was paid on 02-07-2026 . Total amount payable: Rs. 0 .",
         "expectFactTypes": []
+      },
+      {
+        "sender": "VM-JIOFIB-S",
+        "body": "Your bill dated 26-06-2026 for JioFiber connection with JioFixedVoice Number 000000 is due for payment on 02-07-2026. Total amount payable is Rs. 500.00. Overdue charges will be applicable in case of delay.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
       }
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-05T00:00:00Z"
+    "updatedAt": "2026-11-07T00:00:00Z"
   },
   {
     "id": "SUB-BIL-EBILL-01",

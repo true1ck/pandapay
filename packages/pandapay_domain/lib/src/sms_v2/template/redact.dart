@@ -47,7 +47,7 @@ const String _dateCore =
     r'|\d{1,2}[\s-]?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s,-]*\d{2,4}';
 
 final RegExp _pass1 = RegExp(
-  r'(?<email>[\w.\-+]+@[\w.\-]+)'
+  r'(?<email>[\w.\-+*•●]+@[\w.\-]+)'
   r'|(?<url>https?://\S+|\bwww\.\S+|\b[a-z0-9-]+\.(?:com|in|co|io|ly|me|net|org)(?![A-Za-z])(?:/\S*)?)'
   '|(?<date>(?<!\\d)(?:$_dateCore)(?!\\d)'
   r'|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+\d{2,4}(?!\d))'

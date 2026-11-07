@@ -24,7 +24,22 @@ const ROUTE = '/sms/v2/facts\\:batch'; // Express 5: the colon must be escaped
 const denied = (v) => v === false || (v && typeof v === 'object' && v.ok === false);
 
 function fail(res, status, error, detail, extra) {
+  // Only the fixed error word is logged: it says why a phone was refused and holds no value or account.
+  if (status >= 400 && status < 500 && status !== 429) console.warn('sms_v2 facts:batch refused', status, error);
   return res.status(status).json({ error, ...(detail ? { detail } : {}), ...(extra || {}) });
+}
+
+// A rejected item is answered per item with a 200, so nothing else records WHY phones are refused. Count the codes
+// (never ids, accounts or values) so the reason shows up in the server log.
+function logRejections(results) {
+  const counts = {};
+  for (const result of results || []) {
+    if (result.status === 'accepted' || result.status === 'duplicate') continue;
+    const code = result.errors?.[0]?.code || result.status || 'unknown';
+    const key = `${result.kind}:${code}`;
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  if (Object.keys(counts).length) console.warn('sms_v2 facts:batch rejected', JSON.stringify(counts));
 }
 
 function readBody(req) {
@@ -100,6 +115,7 @@ function createFactsHandler({ withUserClient, hooks, deps, categoryOnly = false 
     const backfill = categoryOnly || String(req.query.backfill || '').toLowerCase() === 'true';
     try {
       const out = await withUserClient(req.userId, (client) => storage.ingestBatch(client, req.userId, body, { backfill, categoryOnly, deps, hooks }));
+      logRejections(out.results);
       return res.status(200).json({ results: out.results, serverTime: new Date().toISOString() });
     } catch (err) {
       console.error('sms_v2 facts:batch failed', safeErrorCode(err));
@@ -138,4 +154,4 @@ function registerFactsRoute(app, { requireSmsV2, requireMember, withUserClient, 
     createFactsHandler({ withUserClient, hooks, deps, categoryOnly: true }));
 }
 
-module.exports = { registerFactsRoute, createFactsHandler, readBody, MAX_BODY_BYTES, MAX_INFLATED_BYTES, MAX_ITEMS, ROUTE };
+module.exports = { registerFactsRoute, createFactsHandler, readBody, MAX_BODY_BYTES, MAX_INFLATED_BYTES, MAX_ITEMS, ROUTE, logRejections };

@@ -359,6 +359,11 @@ void main() {
   });
 
   group('GeofenceMonitorService construction/state', () {
+    // The constructor asks for SharedPreferences straight away. Without a mock
+    // that call fails after the test has finished, and the runner then blames
+    // whichever test is running (a flaky CI failure).
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
     test('a freshly constructed service is not monitoring', () {
       final service = GeofenceMonitorService(
         repo: _FakeNearbyMerchantsRepository(),

@@ -29,9 +29,17 @@ void main() {
       'v2_rule_bundle',
       'v2_rule_stats',
       'v2_review_items',
+      'v2_personal_merchant_alias',
+      'v2_bulk_changes',
+      'v2_bulk_change_items',
     }));
     expect(_columns(db, 'v2_facts'), [
       'namespace', 'fact_id', 'source_key', 'fact_type', 'observed_at', 'instrument_id', 'payload', 'uploaded_at',
+      // Added in version 3 so "similar transactions" is an indexed lookup.
+      'merchant_key', 'rule_id', 'keyed',
+    ]);
+    expect(_columns(db, 'v2_personal_merchant_alias'), [
+      'namespace', 'printed_key', 'display_name', 'since', 'updated_at',
     ]);
     expect(_columns(db, 'v2_instruments'), [
       'namespace', 'instrument_id', 'kind', 'issuer_slug', 'mask_digits', 'status', 'payload', 'dirty',

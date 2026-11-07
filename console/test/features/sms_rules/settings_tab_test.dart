@@ -37,7 +37,7 @@ void main() {
     for (final row in fixtureSettings()) {
       expect(find.byKey(Key('setting-${row['key']}')), findsOneWidget, reason: '${row['key']}');
     }
-    expect(find.textContaining('Default 3 · From 2 to 20'), findsOneWidget);
+    expect(find.textContaining('Default 1 · From 1 to 20'), findsOneWidget);
     expect(find.text('Per-user limits'), findsOneWidget);
     expect(find.text('No per-user limits are set.'), findsOneWidget);
     expect(find.byKey(const Key('banner-ai-paused')), findsNothing);
@@ -103,10 +103,10 @@ void main() {
       tester.widget<FilledButton>(find.byKey(const Key('setting-save'))).onPressed,
       isNull,
     );
-    await tester.enterText(find.byKey(const Key('setting-number')), '1');
+    await tester.enterText(find.byKey(const Key('setting-number')), '0');
     await tester.enterText(find.byKey(const Key('reason-text')), 'friends run');
     await tester.pumpAndSettle();
-    expect(find.text('At least 2.'), findsOneWidget);
+    expect(find.text('At least 1.'), findsOneWidget);
     expect(
       tester.widget<FilledButton>(find.byKey(const Key('setting-save'))).onPressed,
       isNull,

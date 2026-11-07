@@ -1,0 +1,37 @@
+{
+  "id": "reviewnoise2y:upi_trf_to_credit_card_bill",
+  "templateHash": "b8745fb87c6dca306ff68c714ffbe430d7732e4a74c472f80a0de9e79b4a07d9",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-SBIUPI-S",
+      "body": "Dear UPI user A/C X4321 debited by 28578.7 on date 03Sep25 trf to Credit card bill Refno 561296058017. If not u? call 1800111109. -SBI",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "card_payment",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 2857870
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "4321"
+        }
+      }
+    ]
+  },
+  "note": "A UPI transfer to a payee called 'Credit card bill' (no bank named) is a card bill payment, not spending.",
+  "origin": "review-noise-2y"
+}

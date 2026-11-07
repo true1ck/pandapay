@@ -45,6 +45,7 @@ const swiggy = (value, key = 'SWIGGY') => ({
 test('the whole learning loop, from a shared layout to a published rule and back to nothing', { skip }, async (t) => {
   // Profiles 0 to 3 opt in at v3, 4 only at v2, 5 never.
   const rig = await startLoopHarness({ profileCount: 6, registerAdmin: registerAllLoopAdminRoutes });
+  await rig.requirePeople(3);
   t.after(() => rig.close());
   const { pool, profiles } = rig;
   const [p1, p2, p3, p4, legacy, never] = profiles;

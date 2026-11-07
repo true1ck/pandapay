@@ -1,0 +1,743 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "paytm-au-credit-card",
+    "name": "Paytm AU Credit Card",
+    "issuer_slug": "au",
+    "network": "rupay",
+    "network_tier": "rupay_platinum",
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 0.5,
+    "point_value_baseline_basis": "FAQ: 1 Reward Point = ₹1 when redeemed on Paytm Gold, ₹0.50 across other categories. Baseline uses ₹0.50; Paytm Gold redemption doubles it.",
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.au.bank.in/personal-banking/credit-cards/paytm-au-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "AU states these criteria are only indicative and reserves the right to approve or decline.",
+    "rules": [
+      {
+        "parameter": "age_years_salaried",
+        "operator": ">=",
+        "threshold_value": 21,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years_salaried",
+        "operator": "<=",
+        "threshold_value": 60,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years_self_employed",
+        "operator": ">=",
+        "threshold_value": 25,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years_self_employed",
+        "operator": "<=",
+        "threshold_value": 65,
+        "allowed_values": []
+      },
+      {
+        "parameter": "residency",
+        "operator": "in",
+        "threshold_value": null,
+        "allowed_values": [
+          "resident_indian"
+        ]
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": 1,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": 0.5,
+    "cycle_accrual_ceiling_points": 3000,
+    "capping_period_basis": "statement_cycle",
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "paytm-excl-wallet",
+      "category_id": "wallet_load",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Wallet reloads earn nothing. (Reward Point Usage T&C, exclusion list 1.)"
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "paytm-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Rental payments / real estate earn nothing. (Reward Point Usage T&C, exclusion list 1.)"
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "paytm-excl-education",
+      "category_id": "education",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Education earns nothing. (Reward Point Usage T&C, exclusion list 1.)"
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "paytm-excl-govt",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          9211,
+          9222,
+          9223,
+          9311,
+          9399,
+          9400,
+          9402,
+          9405
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Government services earn nothing. (Reward Point Usage T&C, exclusion list 1.)"
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "paytm-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5983,
+          5172,
+          5541,
+          5542
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel earns nothing. (Reward Point Usage T&C, exclusion list 1.)"
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "paytm-excl-utilities",
+      "category_id": "utility",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4812,
+          4814,
+          4899,
+          4900
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Utilities earn nothing. (Reward Point Usage T&C, exclusion list 1.)"
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "paytm-excl-transport",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4011,
+          4111,
+          4112,
+          4121,
+          4131,
+          4411,
+          4582,
+          4784,
+          4789,
+          5561,
+          7523
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Transportation earns nothing. (Reward Point Usage T&C, exclusion list 1.)"
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "paytm-excl-insurance",
+      "category_id": "insurance",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5960,
+          6300
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Insurance earns nothing. (Reward Point Usage T&C, exclusion list 1.)"
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "paytm-upi-2rp",
+      "category_id": "upi",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "upi_qr",
+      "channel_type": "paytm_upi",
+      "conditions": {
+        "platform": "Paytm UPI",
+        "transaction_amount_min_inr": 100,
+        "transaction_amount_max_inr": 2000
+      },
+      "action": {
+        "multiplier": 2,
+        "points_per_block": 2,
+        "cashback_percent": "N/A",
+        "cap_reference": "paytm-au-cycle-cap",
+        "reason": "2 Reward Points per ₹100 on Paytm UPI for transactions of ₹100 to ₹2,000."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "paytm-upi-1rp-above-2000",
+      "category_id": "upi",
+      "priority": 11,
+      "evaluation_type": "accelerator",
+      "rail": "upi_qr",
+      "channel_type": "paytm_upi",
+      "conditions": {
+        "platform": "Paytm UPI",
+        "transaction_amount_gt_inr": 2000
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": "paytm-au-cycle-cap",
+        "reason": "1 Reward Point per ₹100 on Paytm UPI for transactions above ₹2,000."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "paytm-online-travel-5rp",
+      "category_id": "all_retail",
+      "priority": 5,
+      "evaluation_type": "accelerator",
+      "rail": "online",
+      "channel_type": "paytm_app",
+      "conditions": {
+        "platform": "Paytm app",
+        "merchant_scope": "MIDs agreed between Paytm and the bank",
+        "nature": "online"
+      },
+      "action": {
+        "multiplier": 5,
+        "points_per_block": 5,
+        "cashback_percent": "N/A",
+        "cap_reference": "paytm-au-cycle-cap",
+        "reason": "5 Reward Points per ₹100 on Paytm online and travel spends made through the Paytm app, identified by agreed merchant IDs."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "paytm-other-upi-1rp-per-400",
+      "category_id": "upi",
+      "priority": 12,
+      "evaluation_type": "accelerator",
+      "rail": "upi_qr",
+      "channel_type": "all",
+      "conditions": {
+        "transaction_amount_gt_inr": 400,
+        "other_upi_apps": true,
+        "per_inr_block": 400
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": "paytm-au-cycle-cap",
+        "reason": "1 Reward Point per ₹400 on UPI done through any other UPI app (non-excluded categories). Block is ₹400, not ₹100."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "paytm-online-1rp",
+      "category_id": "all_retail",
+      "priority": 20,
+      "evaluation_type": "standard_accrual",
+      "rail": "online",
+      "channel_type": "all",
+      "conditions": {
+        "nature": "online",
+        "minimum_transaction_inr": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": "paytm-au-cycle-cap",
+        "reason": "1 Reward Point per ₹100 on online retail spends (minimum ₹100)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "paytm-offline-1rp",
+      "category_id": "all_retail",
+      "priority": 20,
+      "evaluation_type": "standard_accrual",
+      "rail": "pos_terminal",
+      "channel_type": "all",
+      "conditions": {
+        "nature": "offline",
+        "minimum_transaction_inr": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": "paytm-au-cycle-cap",
+        "reason": "1 Reward Point per ₹100 on offline retail spends (minimum ₹100)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "paytm-au-cycle-cap",
+      "category_id": "all_retail",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": 3000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 45
+    },
+    "forex_markup": {
+      "markup_percent": 3.49,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 3.49,
+      "gst_applicable": true,
+      "trigger_condition": "KFS lists one cross-currency markup for foreign-currency, dynamic and static conversion transactions"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 400,
+      "max_txn_inr": 5000,
+      "monthly_waiver_cap_inr": 100
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": 20
+    },
+    "category_surcharges": [
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          5172,
+          5541,
+          5542,
+          5552,
+          5983
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "From 1 Jul 2026: 1% on the whole month's fuel spend when one transaction exceeds ₹10,000 or the calendar-month total exceeds ₹25,000",
+        "threshold_spend_inr": 25000,
+        "effective_from": "2026-07-01",
+        "effective_to": null
+      },
+      {
+        "category_id": "utility",
+        "mcc_list": [
+          4900
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% on utility spend above ₹50,000 in a calendar month",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education_third_party",
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Education paid through third-party apps (CRED, PhonePe, Paytm, MobiKwik, Freecharge etc.), minimum ₹99 per transaction; direct school/college site or POS exempt",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Domestic rental payments, minimum ₹99 per transaction; international rental has no charge",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "transportation",
+        "mcc_list": [
+          4111,
+          4112,
+          4784
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "From 14 Jun 2026: 1% on the whole month's transportation spend once it exceeds the lower of 50% of credit limit or ₹25,000; IRCTC and marquee travel partners excluded",
+        "threshold_spend_inr": 25000,
+        "effective_from": "2026-06-14",
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": 199,
+      "post_purchase_emi_processing_fee_inr": 99,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 500,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 99,
+      "gst_applicable": true,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 50,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "If previous Total Amount Due was paid on time: 5% of principal outstanding + 100% of fees/charges + 100% of interest + due EMIs + 100% annual fee (if applicable) + 100% GST",
+        "If previous Total Amount Due was not paid on time: 2% of principal outstanding + the same 100% components"
+      ]
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "Lifetime free: no joining or annual fee (page and KFS).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "paytm-au-lounge",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "Paytm Travel",
+      "label": "Complimentary domestic airport lounge access via Paytm Travel (for the cardholder and companions)",
+      "evaluation_engine": {
+        "conditions": {
+          "rule": "Book a return flight through Paytm Travel on the Paytm app; minimum round-trip booking value ₹5,000 to generate 1 Lounge QR; max 4 lounge accesses per booking; QR once generated cannot be cancelled or reversed",
+          "booking_channel": "Paytm Travel",
+          "min_round_trip_booking_inr": 5000,
+          "max_per_booking": 4,
+          "source": "Paytm AU product page, re-read 2026-11-07"
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 12,
+      "quota_period": "N/A",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 0,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": 18
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "Paytm Gold on the Paytm app",
+        "redemption_type": "other",
+        "inr_value_per_point": 1,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": "N/A",
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": "N/A",
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "channel": "Other categories (Paytm app and AU rewards portal)",
+        "redemption_type": "other",
+        "inr_value_per_point": 0.5,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": "N/A",
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": 99,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": "Source-supported data that cannot be represented faithfully by any existing universal schema field. Do not duplicate data already represented elsewhere. Do not use this section for unknown values, assumptions, or inferred data.",
+    "items": [
+      {
+        "key": "official_research",
+        "value": {
+          "checked_on": "2026-11-05",
+          "source_urls": [
+            "https://www.au.bank.in/personal-banking/credit-cards/paytm-au-credit-card"
+          ],
+          "facts": [
+            "Issuer page advertises up to 2% rewards on Paytm UPI and 5% on selected Paytm spends.",
+            "One reward point redeems as INR 1 for Paytm Gold or INR 0.50 for other categories."
+          ]
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.au.bank.in/personal-banking/credit-cards/paytm-au-credit-card",
+              "kind": "issuer_page + FAQ",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://www.au.bank.in/pdf/Paytm-AU-Credit-Card-Rewards-TCs.pdf",
+              "kind": "Reward Point Usage T&C (earn rules, cap, exclusions)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.au.bank.in/pdf/credit-card/Schedule-of-Charges-CC.pdf",
+              "kind": "KFS",
+              "date": "Key Fact Statement v1.9, 2 Nov 2026"
+            }
+          ],
+          "open_questions": [
+            "Network: RuPay Platinum is printed on the card image shown on the AU product page (\"Paytm RuPay Platinum\" art with the RuPay Platinum logo); the UPI-linked earn rules fit RuPay. The page also carries a shared \"Visa Cardholders\" offers popup (MakeMyTrip, Times Prime, Alaya Stays) which looks like a shared block rather than a statement about this card; whether a Visa variant also exists is not stated, so only RuPay is set.",
+            "The 5-point merchant ID list is agreed between Paytm and AU and is not published.",
+            "Lounge: 12 complimentary domestic lounge accesses are stated, but the period they run over (year, card year or total) is not.",
+            "Reward Point Usage T&C carries no revision date.",
+            "Conflict: the product page lists \"1 Reward Point per ₹100 spent on Paytm Utility Bill payments via Paytm app\", while the Reward Point Usage T&C excludes utilities (MCCs 4812, 4814, 4899, 4900). The T&C exclusion is kept; the page line may refer to a different MCC."
+          ],
+          "notes": [
+            "Page (re-read 2026-11-07) states the point value as 1 Reward Point = ₹1 on Paytm Gold and ₹0.50 on AU Rewardz; base earn is 1 Reward Point per ₹100 on online and offline spends. Both were already in the draft; no change.",
+            "Lounge (page): 12 complimentary domestic airport lounge accesses on booking return flights via Paytm Travel on the Paytm app; minimum round-trip booking ₹5,000 for 1 Lounge QR; max 4 per booking. Recorded in the lounge benefit.",
+            "Headline \"up to 2% on Paytm UPI\" and \"5% on Paytm spends\" assume ₹1 per point (Paytm Gold). At the ₹0.50 other-category value they are 1% and 2.5%.",
+            "Minimum transaction ₹100 per transaction (₹400 for UPI on other apps).",
+            "Redemption fee ₹99 + GST per successful redemption applies (KFS)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "15% of Total Amount Due, minimum ₹10, maximum ₹1,300",
+          "source": "Key Fact Statement v1.9, 2 Nov 2026, section 5",
+          "note": "Percentage fee cannot be expressed as fixed slabs, so late_payment_slabs is empty."
+        }
+      },
+      {
+        "key": "payment_return_charge",
+        "value": {
+          "rule": "2% of Total Amount Due or ₹500, whichever is higher, on return/failure of card payment (cheque, ECS/NACH, autopay)",
+          "source": "Key Fact Statement v1.9, 2 Nov 2026, section 10"
+        }
+      }
+    ]
+  }
+}

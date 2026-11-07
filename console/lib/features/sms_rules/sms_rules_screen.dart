@@ -542,9 +542,7 @@ class _CorrectionsTabState extends State<_CorrectionsTab> {
             cases = (groups[index]['cases'] as List).cast<Map>();
         return ExpansionTile(
           title: Text('${group['key']} · ${cases.length} cases'),
-          subtitle: Text(
-            '${cases.where((row) => row['is_tester'] == true).length} tester cases',
-          ),
+          subtitle: Text(correctionSubtitle(group, cases)),
           children: [
             for (final row in cases)
               Padding(
@@ -659,4 +657,37 @@ class _ReviewInputDialogState extends State<_ReviewInputDialog> {
       ),
     ],
   );
+}
+
+const _kindWords = {
+  'wrong_category': 'category',
+  'wrong_merchant': 'shop name',
+  'wrong_amount': 'amount',
+  'wrong_date': 'date',
+  'wrong_instrument': 'payment method',
+  'wrong_kind': 'type',
+  'not_financial': 'not a transaction',
+  'missing': 'missed SMS',
+  'wrong_link': 'link',
+  'duplicate': 'duplicate',
+};
+
+/// The line under a pattern: how many different people hit it and what was
+/// wrong, most common first. Falls back to the tester count alone when the
+/// server does not send a summary (an older API).
+String correctionSubtitle(Map group, List<Map> cases) {
+  final testers = cases.where((row) => row['is_tester'] == true).length;
+  final summary = group['summary'];
+  if (summary is! Map) return '$testers tester cases';
+  final people = summary['distinctUsers'] as int? ?? 0;
+  final mix = ((summary['mix'] as Map?) ?? const {}).entries.toList()
+    ..sort((a, b) => (b.value as int).compareTo(a.value as int));
+  final wrong = [
+    for (final entry in mix) '${_kindWords[entry.key] ?? entry.key} ${entry.value}',
+  ].join(', ');
+  return [
+    '$people ${people == 1 ? 'person' : 'different people'}',
+    if (testers > 0) '$testers tester',
+    if (wrong.isNotEmpty) wrong,
+  ].join(' · ');
 }

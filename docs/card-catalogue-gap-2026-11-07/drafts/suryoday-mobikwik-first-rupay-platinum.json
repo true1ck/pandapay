@@ -1,0 +1,269 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "suryoday-mobikwik-first-rupay-platinum",
+    "name": "MobiKwik First Suryoday SFB RuPay Platinum Credit Card",
+    "issuer_slug": "suryoday-small-finance-bank",
+    "network": "rupay",
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": null,
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://suryoday.bank.in/personal/cards/credit-cards/secured-credit-card/",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "KFS: individuals, Indian citizens and residents. FD-backed secured card; service provider 42 Card Solutions Pvt. Ltd.",
+    "rules": [
+      {
+        "parameter": "residency",
+        "operator": "in",
+        "threshold_value": null,
+        "allowed_values": [
+          "resident_indian"
+        ]
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": null,
+    "rounding_mode": null,
+    "base_points_per_block": "N/A",
+    "base_cashback_percent": 1,
+    "effective_base_return_percent": 1,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 2.95,
+      "annual_interest_rate_percent": 35.4
+    },
+    "forex_markup": {
+      "markup_percent": 2.5,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": null,
+      "max_txn_inr": 8000,
+      "monthly_waiver_cap_inr": 40000
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": 20
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% surcharge on rental payments under MCC 6513",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": null,
+        "min_fee_inr": null,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "10% of billed amount",
+        "plus any overdue and over-limit amounts"
+      ]
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "Annual and joining fees are NIL (KFS).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": null,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": "Source-supported data that cannot be represented faithfully by any existing universal schema field. Do not duplicate data already represented elsewhere. Do not use this section for unknown values, assumptions, or inferred data.",
+    "items": [
+      {
+        "key": "official_research",
+        "value": {
+          "checked_on": "2026-11-05",
+          "source_urls": [
+            "https://suryoday.bank.in/personal/cards/credit-cards/secured-credit-card/",
+            "https://suryoday.bank.in/assets/pdf/KFS_SSFB_RuPay_Platinum_Credit_MBK.pdf"
+          ],
+          "facts": [
+            "FD-backed MobiKwik First variant is listed separately from Stable Money.",
+            "Bank listing advertises 1% cashback; KFS lists nil joining/annual fees and 2.5% forex plus GST."
+          ]
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://suryoday.bank.in/assets/pdf/KFS_SSFB_RuPay_Platinum_Credit_MBK.pdf",
+              "kind": "Suryoday SSFB RuPay Platinum (MobiKwik) Key Fact Statement",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://suryoday.bank.in/personal/cards/credit-cards/secured-credit-card/",
+              "kind": "issuer listing page (MobiKwik First tile: \"1% Cashback*\"; page footnote \"#With the capping of ₹3,000\"), re-read 2026-11-07 in the built-in browser",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://www.mobikwik.com/products/first-fd-credit-card",
+              "kind": "MobiKwik (co-brand partner, not issuer) product page: \"Flat 1% Cashback* on UPI and Online spends\"; FAQ \"1% Cashback on all Ecommerce transactions\" and \"1% Cashback on UPI payments made via MobiKwik UPI\"; no terms link for the cashback",
+              "read": "rendered page text, 2026-11-07"
+            },
+            {
+              "url": "https://suryoday.bank.in/assets/pdf/MITC_SSFB_RuPay_Platinum_Credit_Card.pdf",
+              "kind": "Generic Suryoday RuPay Platinum MITC (file dated 17 Jun 2026, 30 pages), clause \"l) CASH BACK PROGRAM\": states no rate, cap, period or merchant list; used only to confirm the cashback rules are not in it",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://suryoday.bank.in/assets/pdf/MITC_SSFB_RuPay_Platinum_Credit_MBK.pdf",
+              "kind": "MobiKwik-linked Suryoday MITC (W11 curl 2026-11-07: HTTP 200, 30 pp, PDF created 24 Jun 2026, server file dated 25 Jun 2026; the earlier W6 read got a 404). Clause l) CASH BACK PROGRAM is word for word the generic MITC clause: no rate, cap, period, exclusions, minimum or MobiKwik-specific text",
+              "read": "pdftotext (W11)"
+            },
+            {
+              "url": "https://suryoday.bank.in/assets/pdf/mitc-ssfb-rupay-platinum-credit-card-5oct.pdf",
+              "kind": "Suryoday MITC w.e.f. 5 Oct 2026 for the Stable Money cards (server file dated 4 Sep 2026): clause q) says \"Cashback eligibility, rates, caps, and exclusions shall be as specified in the KFS of the respective card variant\"; the MobiKwik KFS has no cashback terms",
+              "read": "pdftotext (W11)"
+            },
+            {
+              "url": "https://suryoday.bank.in/assets/pdf/stablemoney-suryoday-sfb-credit-card-cashback.pdf",
+              "kind": "Cashback FAQ PDF that the listing page FAQ \"How can I get information about cashback on Suryoday SFB Rupay Credit Card?\" links to (3 pp, server file dated 2 Jul 2025): written for the Stable Money cards: 0.5% on each eligible transaction, ₹3,000 per billing cycle, 15 excluded MCC groups. Not used for the 1% MobiKwik card",
+              "read": "pdftotext (W11)"
+            }
+          ],
+          "open_questions": [
+            "Cashback (checked 2026-11-07, W6, re-checked W11): no document that states the cap, period, exclusions or minimum transaction for the 1% cashback was found, so no reward rule is written. The issuer listing page links a cashback PDF only for the Stable Money cards (0.5%; stablemoney-suryoday-sfb-credit-card-cashback.pdf); the MobiKwik tile has no \"Know More\" link. The page links a MobiKwik MITC (https://suryoday.bank.in/assets/pdf/MITC_SSFB_RuPay_Platinum_Credit_MBK.pdf): W6 got a 404 page, but on 7 Nov 2026 (W11) it returns a 30-page PDF whose cashback clause is the same generic wording (no rate, cap, period, exclusions or minimum). The only cashback document on the listing is the Stable Money FAQ PDF (0.5%, ₹3,000 per billing cycle, 15 excluded MCC groups); a person could decide whether the listing's shared cashback FAQ and its \"#With the capping of ₹3,000\" footnote mean that cap and those MCC exclusions also apply to the 1% MobiKwik First card, but no Suryoday document says so, so none of it is used. The MobiKwik page (mobikwik.com/products/first-fd-credit-card, W11 re-read) links no cashback terms either, only MobiKwik's site-wide policies, and its testimonials name the \"SBM MobiKwik First Credit Card\". The MobiKwik KFS (https://suryoday.bank.in/assets/pdf/KFS_SSFB_RuPay_Platinum_Credit_MBK.pdf, file dated 24 Jun 2026) has fees only and no reward terms; the generic Suryoday MITC cashback clause gives no rate or cap. The issuer page footnote \"#With the capping of ₹3,000\" is attached to the product line as a whole and does not say per month or per statement cycle or that it covers this variant. The MobiKwik page says 1% on e-commerce and 1% on UPI payments made via MobiKwik UPI, which is a partner statement, not an issuer term. effective_base_return_percent 1 is the advertised figure only. Hold this card until Suryoday or MobiKwik publishes the cashback terms.",
+            "KFS carries no revision date in its text; the PDF metadata shows 24 Jun 2026.",
+            "Do not reuse the Stable Money card's zero forex: this card charges 2.5% + GST (KFS).",
+            "Late payment fee: 2.5% of the outstanding or ₹250 + GST, whichever is higher (KFS); cannot be shown as fixed slabs."
+          ],
+          "notes": [
+            "Cash advances are restricted to 20% of the credit limit; cash advance fee 2.5% of the amount, minimum ₹500 + GST (KFS).",
+            "Fuel surcharge waiver is limited to ₹40,000 in a calendar month with no single transaction above ₹8,000 (KFS)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "2.5% of the outstanding, or ₹250 + GST, whichever is higher",
+          "source": "KFS"
+        }
+      }
+    ]
+  }
+}

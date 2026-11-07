@@ -32,6 +32,7 @@ class SmsV2Pipeline {
     this.confirmedHistory = const {},
     this.categoryIdBySlug = const {},
     this.revision,
+    this.ownerNames = const [],
     RuleEngine? engine,
   }) : engine = engine ?? RuleEngine(),
        _resolver = DefaultInstrumentResolver.fromBundle(bundle) {
@@ -46,11 +47,22 @@ class SmsV2Pipeline {
   final Map<String, String> confirmedHistory;
   final Map<String, String> categoryIdBySlug;
   final String? revision;
+
+  /// The account owner's names, so a payment to or from the owner under their
+  /// own name is a transfer between their accounts, not spending or income.
+  final List<String> ownerNames;
   String get processingRevision => revision ?? '${bundle.bundleVersion}';
   final RuleEngine engine;
   final DefaultInstrumentResolver _resolver;
 
   Database get _db => financial.database.db;
+
+  /// True when a financial rule reads [message]. Used to overrule the intake
+  /// gate for a message it rejected by keyword; it changes nothing.
+  bool readsAsFinancial(SmsMessage message) =>
+      engine.interpret(message, bundle, appVersion: appVersion).outcome ==
+      InterpretOutcome.matched;
+
   late final _facts = FactStore(_db, namespace: namespace);
   late final _instruments = InstrumentStore(_db, namespace: namespace);
   late final _events = EventStore(_db, namespace: namespace);
@@ -344,6 +356,7 @@ class SmsV2Pipeline {
             knownEvents: knownEvents,
             instrumentsById: instrumentsById,
             instrumentIdByFactId: instrumentIds,
+            ownerNames: ownerNames,
           ),
           rules: bundle.linkRules,
         );

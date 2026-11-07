@@ -42,13 +42,27 @@ class SmsImportStore {
           if (triage.kind == SmsTriageKind.sensitive) continue;
           final sourceKey = smsSourceKey(namespace, message.sender, message.body);
           if (triage.kind == SmsTriageKind.unrelated || triage.kind == SmsTriageKind.promotion) {
-            intake.recordDecision(
-              namespace, sourceKey: sourceKey, decision: 'ignored', state: 'final',
-              reasonCode: triage.reasonCode, receivedAt: message.receivedAt.millisecondsSinceEpoch,
-              policyVersion: 'v2',
-            );
-            intake.acknowledge(namespace, sourceKey);
-            continue;
+            // The gate reads keywords and drops some real transactions, so a
+            // header message it rejects gets one pass through the rules first.
+            final overruled = pipeline != null &&
+                message.sender.trim().isNotEmpty &&
+                gateRejectionMayBeOverruled(message.sender) &&
+                pipeline.readsAsFinancial(sms_v2.SmsMessage(
+                  sender: message.sender,
+                  body: message.body,
+                  observedAt: message.receivedAt.toUtc(),
+                  sourceKey: sourceKey,
+                  iosFilter: sms_v2.normalizeSenderBrand(message.sender).iosFilter,
+                ));
+            if (!overruled) {
+              intake.recordDecision(
+                namespace, sourceKey: sourceKey, decision: 'ignored', state: 'final',
+                reasonCode: triage.reasonCode, receivedAt: message.receivedAt.millisecondsSinceEpoch,
+                policyVersion: 'v2',
+              );
+              intake.acknowledge(namespace, sourceKey);
+              continue;
+            }
           }
           if (feedback.matchesFalseTransactionRuleSync(sender: message.sender, body: message.body)) {
             intake.recordDecision(

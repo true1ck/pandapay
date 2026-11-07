@@ -42,6 +42,7 @@ class _Faulty implements CaptureExecutor {
       session: r.session,
       shared: r.shared,
       groups: r.groups,
+      ownerNames: r.ownerNames,
       onCommitted: r.onCommitted,
       debugFault: fault,
     ),
@@ -77,7 +78,10 @@ class _Env {
   );
   late final FinancialStore financial = FinancialStore(database);
 
-  SmsV2Runtime runtime({CaptureExecutor? executor}) {
+  SmsV2Runtime runtime({
+    CaptureExecutor? executor,
+    List<String> Function()? ownerNames,
+  }) {
     final encoded = jsonEncode(bundle.toJson());
     return SmsV2Runtime(
       financial: financial,
@@ -92,6 +96,7 @@ class _Env {
       accountIsCurrent: current,
       clock: () => _now,
       captureExecutor: executor,
+      ownerNames: ownerNames ?? (() => const []),
     );
   }
 
@@ -243,6 +248,46 @@ void main() {
       // A worker that died on purpose never closed its handle (Windows only).
     }
   });
+
+  for (final useWorker in [false, true]) {
+    t(
+      'owner names reach ${useWorker ? 'worker' : 'in-process'} capture',
+      () async {
+        final e = env(useWorker ? 'owner-worker' : 'owner-in-process');
+        final names = <String>[];
+        final runtime = e.runtime(
+          executor: useWorker ? spawn(e) : e.inProcess(),
+          ownerNames: () => names,
+        );
+        final messages = [
+          for (var i = 0; i < 2; i++)
+            QueuedSms(
+              sender: 'VM-ICICIT-S',
+              body:
+                  'ICICI Bank Acct XX4321 debited for Rs ${30000 + i}.00 on 02-Nov-26; ASHA MARIA credited. UPI:43210011223$i. Call 18002662 for dispute. SMS BLOCK 4321 to 9215676766.',
+              receivedAt: DateTime.utc(2026, 11, 2, 10, i),
+            ),
+        ];
+        // The name is read afresh for each capture, including a reused worker.
+        e.deliver([messages.first]);
+        await runtime.capture([messages.first]);
+        expect(
+          e.database.db.select('SELECT type FROM v2_events').single['type'],
+          'purchase',
+        );
+        names.add('Asha Maria Rao');
+        e.deliver([messages.last]);
+        await runtime.capture([messages.last]);
+        expect(
+          e.database.db
+              .select('SELECT type FROM v2_events')
+              .map((r) => r['type']),
+          unorderedEquals(['purchase', 'own_transfer']),
+        );
+        expect(e.pending(), 0);
+      },
+    );
+  }
 
   t('worker path stores exactly what the in-process path stores', () async {
     final messages = _messages(410); // three chunks, history and live mixed

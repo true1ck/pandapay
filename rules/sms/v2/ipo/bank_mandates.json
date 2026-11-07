@@ -470,5 +470,68 @@
     "status": "active",
     "createdBy": "lane-h",
     "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "IPO-ICICI-BLOCK-AGAINST-ISSUER",
+    "version": 1,
+    "family": "ipo_hold",
+    "senders": [
+      "*"
+    ],
+    "priority": 840,
+    "match": {
+      "pattern": "account\\s+no\\.?\\s*[x*]*(?<mask>\\d{2,6})\\s+has\\s+been\\s+blocked\\s+by\\s+an\\s+amount\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s*,?\\s+against\\s+(?:the\\s+)?(?<issue>[a-z0-9&.' ()-]+?)\\s+on\\s+(?<date>\\d{2}-(?:\\d{2}|[a-z]{3})-\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "one-time mandate"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "placed",
+          "purpose": "ipo_asba",
+          "issueName": {
+            "from": "issue",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "held",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "occurredAt": {
+          "from": "date"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "ICICIT-S",
+        "body": "Your ICICI Bank account no XXXXXXXXX123 has been blocked by an amount of INR 15000.00, against the SAMPLE WORKS LTD on 10-08-2026.",
+        "expectFactTypes": [
+          "hold"
+        ]
+      },
+      {
+        "sender": "ICICIT-S",
+        "body": "Your ICICI Bank account no XXXXXXXXX123 has been unblocked by an amount of INR 15000.00, against the SAMPLE WORKS LTD on 15-08-2026.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "review-2y",
+    "updatedAt": "2026-11-07T00:00:00Z"
   }
 ]

@@ -10,6 +10,7 @@ const smsSettingLabels = <String, String>{
   'corrections_per_user_per_day': 'Fixes per person per day',
   'signals_per_user_per_day': 'Shop signals per person per day',
   'signals_min_distinct_users': 'People needed before a shop or name is shown',
+  'testers_count_without_attestation': 'Count testers\' phones without App Check',
   'signals_retention_days': 'Days to keep shop signals',
   'intake_enabled': 'Accept layouts and signals from phones',
   'ai_enabled': 'AI drafting',

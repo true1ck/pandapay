@@ -1,0 +1,646 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "yes-bank-uni",
+    "name": "YES BANK Uni Credit Card",
+    "issuer_slug": "yes",
+    "network": "mastercard",
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 499,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": null,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": "Rewards are issued as Uni coins. The listing calls the reward \"1% cashback in uni coins\" and the product page \"1% Reward points (issued as Uni coins)\"; no YES BANK page or document states what one Uni coin is worth in rupees.",
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/uni-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "Apply on the partner (Uni) website or app; the partner may charge a platform fee. Page: age 21 to 60, salaried or self-employed, minimum net salary ₹25,000 a month or ITR of ₹7.5 lakh; existing YES BANK credit cardholders are not eligible.",
+    "rules": [
+      {
+        "parameter": "age_years",
+        "operator": ">=",
+        "threshold_value": 21,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years",
+        "operator": "<=",
+        "threshold_value": 60,
+        "allowed_values": []
+      },
+      {
+        "parameter": "net_monthly_salary_inr_or_itr_inr",
+        "operator": ">=",
+        "threshold_value": 25000,
+        "allowed_values": []
+      },
+      {
+        "parameter": "employment_type",
+        "operator": "in",
+        "threshold_value": null,
+        "allowed_values": [
+          "salaried",
+          "self_employed"
+        ]
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": null,
+    "rounding_mode": null,
+    "base_points_per_block": "N/A",
+    "base_cashback_percent": 1,
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "uni-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5542,
+          5983,
+          5172,
+          5540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No Uni coins on fuel (Uni page T&C 1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "uni-excl-wallet",
+      "category_id": "wallet",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No Uni coins on wallet loads (T&C 1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "uni-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No Uni coins on rent (T&C 1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "uni-excl-government",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          9034,
+          9211,
+          9222,
+          9223,
+          9311,
+          9399,
+          9402,
+          9405,
+          9700,
+          9701,
+          9702,
+          9751,
+          9754,
+          9950
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No Uni coins on government payments (T&C 1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "uni-excl-education",
+      "category_id": "education",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          8211,
+          8220,
+          8249,
+          8299,
+          8241,
+          8244
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No Uni coins on education (T&C 1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "uni-excl-utility",
+      "category_id": "bills",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4900,
+          4812,
+          4814,
+          4815,
+          4816,
+          4821,
+          4829,
+          4899
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No Uni coins on utility payments (T&C 1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "uni-excl-emi",
+      "category_id": "emi",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No Uni coins on EMI transactions or cash advance / withdrawals (T&C 1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "uni-excl-marketing",
+      "category_id": "other",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5960,
+          5962,
+          5964,
+          5965,
+          5966,
+          5967,
+          5968,
+          5969,
+          7311
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No Uni coins on marketing and advertising services (T&C 1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "uni-excl-international",
+      "category_id": "other",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "transaction_type": "international"
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No Uni coins on international transactions (T&C 1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "uni-base-1pct",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "reward_currency": "Uni coins",
+        "personal_spends_only": false
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 1,
+        "cap_reference": null,
+        "reason": "Page: unlimited 1% reward points (rewards issued as Uni coins); listing: 1% cashback in uni coins on all transactions. The rupee value of a Uni coin is not stated, so 1% is the advertised figure."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.99,
+      "annual_interest_rate_percent": 47.88
+    },
+    "forex_markup": {
+      "markup_percent": 0,
+      "gst_applicable": null
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 0,
+      "gst_applicable": null,
+      "trigger_condition": "MITC/KFS: foreign currency conversion and DCC charges are not applicable to this card"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": null,
+      "max_txn_inr": 7500,
+      "monthly_waiver_cap_inr": 500
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 650,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": 30
+    },
+    "category_surcharges": [
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          5172,
+          5541,
+          5542,
+          5983,
+          9752
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% + GST when one fuel transaction exceeds ₹10,000 or the calendar-month fuel spend exceeds ₹50,000; fee capped at ₹5,000 per transaction (MITC 3(i))",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "utility",
+        "mcc_list": [
+          4900,
+          4814,
+          825,
+          1520,
+          4899,
+          1799,
+          1731,
+          5261,
+          7349,
+          822,
+          820,
+          1761,
+          1771,
+          1740,
+          823,
+          1750,
+          821,
+          824,
+          780,
+          1711,
+          9402,
+          7211,
+          8999,
+          4816
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% + GST on utility and service transactions when the previous calendar month's utility spend exceeded ₹50,000; fee capped at ₹5,000 per transaction (MITC 3(h))",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% of the transaction (minimum ₹1 up to ₹1,000; minimum ₹199 above ₹1,000) + GST; at most 5 rental transactions in 30 days (MITC 3(e))",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "wallet",
+        "mcc_list": [
+          6540
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "No fee on third-party wallet loads up to ₹2,000; 1% + GST above ₹2,000, at most ₹5,000 per transaction (MITC 3(f))",
+        "threshold_spend_inr": 2000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education",
+        "mcc_list": [
+          8211,
+          8220,
+          8249,
+          8299,
+          8241,
+          8244,
+          7911
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% + GST on education paid through third-party sites and apps (CRED, PhonePe, Housing.com, NoBroker, CheQ etc.), capped at ₹5,000 per calendar month; direct school/college site, POS and international education payments are not charged (MITC 3(g))",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "transportation",
+        "mcc_list": [
+          4784,
+          4131,
+          4214,
+          4789,
+          4011
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% + GST when one toll/transport transaction exceeds ₹10,000 or the calendar-month spend exceeds ₹75,000; capped at ₹5,000 per transaction (MITC 3(j))",
+        "threshold_spend_inr": 75000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "passenger_railways",
+        "mcc_list": [
+          4111,
+          4112
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% + GST when one transaction exceeds ₹30,000 or the calendar-month spend exceeds ₹80,000; capped at ₹5,000 per transaction (MITC 3(k))",
+        "threshold_spend_inr": 80000,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": null,
+        "min_fee_inr": 550,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": 450
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 100,
+      "gst_applicable": true,
+      "exempted_channels": [],
+      "notes": "MITC 3(l): ₹100 + GST per redemption request regardless of points; ₹99 + GST convenience fee on flight bookings through points. Not applicable on cards without reward points."
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 50,
+    "grace_period_void_on_revolving_balance": true,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "100% of GST + EMI amount + membership/rental/wallet fees + any amount over the credit limit",
+        "plus the higher of (finance charges + other fees + 2% of retail/cash outstanding) or ₹200 (MITC 6, KFS)"
+      ]
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 50000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "Renewal fee ₹499 + taxes waived on retail spends of ₹50,000 or more within the 12 months before the renewal date; not applicable to lifetime-free cards (Uni page; MITC; KFS). Zero joining fee.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 499
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 0,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/uni-credit-card",
+              "kind": "issuer product page incl. T&C (rendered page text)",
+              "date": "read 2026-11-07"
+            },
+            {
+              "url": "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards",
+              "kind": "issuer card listing (1% cashback in uni coins; renewal ₹499)",
+              "date": "read 2026-11-07"
+            },
+            {
+              "url": "https://www.yes.bank.in/pdf?name=ybl_mitc_pdf.pdf",
+              "kind": "MITC: fees, interest, forex, fuel waiver, late fee; CMITC_V18_05102026 (5 Oct 2026)",
+              "read": "pdf.js text"
+            },
+            {
+              "url": "https://www.yes.bank.in/sites/web/content/published/api/v1.1/assets/CONT07A77C257C7A4BDD85DB97E51D2B5B8F/native/yesbank_key_fact_statement.pdf?download=false&channelToken=21f7ccfa2fc3401091938f541a6f8f2a",
+              "kind": "Key Fact Statement; V_20_28092026 (28 Sep 2026)",
+              "read": "pdf.js text"
+            },
+            {
+              "url": "https://www.yes.bank.in/sites/web/content/published/api/v1.1/assets/CONTE31749D516FF442DB73D463B9277341A/native?siteId=yesbank",
+              "kind": "Card art (uni-card-icon.png, 293x139 px) attached to the \"UNI Credit Card\" tile on the YES BANK credit card listing, whose Know More link is the uni-credit-card page: teal card with \"uni\" and \"YES BANK\" and the Mastercard logo (viewed, W11 2026-11-07)",
+              "read": "image opened in a browser tab"
+            },
+            {
+              "url": "https://www.yes.bank.in/sites/web/content/published/api/v1.1/items?q=(type eq \"ybl-sa-get-familiar\" AND fields.group_name eq \"unicreditcardsalider\")",
+              "kind": "The Uni page's own \"Top Benefits\" slider data (the page text omits it): one slide reads \"Secure online transactions with MasterCard Secure Code\". Card-specific slider group, but a generic security line, so corroboration only.",
+              "read": "page content API, read in the browser (W11)"
+            }
+          ],
+          "open_questions": [
+            "Value of one Uni coin in rupees is not stated by YES BANK (re-checked in wave 3: product page, the page's Top Benefits and More-from items, its FAQs, the listing, MITC V18, the Cardmember Agreement and the Redemption Rules say nothing), so point_value_inr_baseline and effective_base_return_percent are null. The 1% is the advertised rate; the listing calls it \"1% cashback in uni coins\", the product page \"Unlimited 1% Reward points (rewards issued as Uni coins)\". Whether a partner-side coin conversion differs from the 1% is not stated by YES.",
+            "Network (settled 2026-11-07, W11): Mastercard, from card art on the YES BANK listing tile for \"UNI Credit Card\" (Mastercard logo). The product page, MITC and KFS do not name it; the MITC lists a separate \"Uni RuPay Virtual\" and the listing a separate \"UNI Rupay Credit Card\" page (lifetime free), which is a different product and not covered by this record.",
+            "Physical or virtual, and UPI linking, are not stated. The cash-advance fee (2.5% or ₹650) is written for a physical card. The listing compare-record for this card carries \"unlimited international lounge access, 6 domestic\" text that the product page and MITC do not state and that also appears on the virtual-only Klick record; it looks like template filler and is not stored.",
+            "The page \"Top Benefits\" slider and \"More from this card\" items were read in wave 3 from the page's content API: shop and earn Uni coins, zero forex mark-up, 1% fuel surcharge waiver up to ₹500, annual fee waiver on ₹50,000 spend within 12 months of the card anniversary, contactless, MasterCard Secure Code. They add no rate, cap or coin value.",
+            "The page footnote says no coins on \"international transactions\"; the MITC does not repeat this. Reward expiry for Uni coins is not stated (MITC refers co-brand currencies to the product page).",
+            "The MITC fee table shows ₹5,000 in the joining-fee-waiver column for Uni although the joining fee is NIL; ignored as a table artefact."
+          ],
+          "notes": [
+            "Forex mark-up and DCC are not applicable to this card (MITC 3(q), KFS), so both are stored as 0.",
+            "Fuel surcharge waiver: transactions up to ₹7,500, maximum ₹500 per statement cycle (page T&C 2, MITC 4); no waiver on UPI fuel transactions.",
+            "Fuel and utility fee thresholds for Uni are ₹50,000 (the higher tier in the MITC); toll threshold ₹75,000."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "10% of the statement balance or ₹1,350, whichever is lower, per statement; nothing if the current outstanding (statement balance + unbilled) is ₹500 or less",
+          "source": "MITC CMITC_V18_05102026 (5 Oct 2026) 3(b); KFS V_20_28092026 (28 Sep 2026)",
+          "note": "A percentage fee cannot be written as fixed slabs, so late_payment_slabs is empty."
+        }
+      },
+      {
+        "key": "other_charges_rule",
+        "value": {
+          "rules": [
+            "Late payment charge: no charge if the current outstanding (statement balance + unbilled) is up to ₹500; above ₹500, 10% of the statement balance or ₹1,350, whichever is lower, per statement (MITC 3(b), KFS).",
+            "Auto-debit / payment return failure: from 15 Jun 2026, 2.5% or ₹500 whichever is higher on the net payable amount, capped at ₹5,000 per customer per statement (before that 2% or ₹450, cap ₹1,500); cheque return ₹450 (MITC 3(d)).",
+            "Overlimit: ₹550 + GST per transaction that exceeds the limit (facility reintroduced 1 Jun 2026) (MITC 3(c)).",
+            "Cash advance: from 15 Jun 2026, 2.5% or ₹650 whichever is higher; before that 2.5% or ₹500; not applicable to virtual cards; cash withdrawal suspended for the first 6 months after onboarding; limit up to 30% of the credit limit (MITC 3(a), 5)."
+          ],
+          "source": "MITC CMITC_V18_05102026 (5 Oct 2026); KFS V_20_28092026 (28 Sep 2026)",
+          "gst": "18% on all fees and charges (MITC 3(u))"
+        }
+      }
+    ]
+  }
+}

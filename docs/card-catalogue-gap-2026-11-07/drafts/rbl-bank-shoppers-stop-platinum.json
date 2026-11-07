@@ -1,0 +1,642 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "rbl-bank-shoppers-stop-platinum",
+    "name": "RBL Bank Shoppers Stop Platinum Credit Card",
+    "issuer_slug": "rbl",
+    "network": "visa",
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 5000,
+    "annual_fee_inr": 5000,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": false,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 0.5,
+    "point_value_baseline_basis": "T&C 4.2: 1 point = ₹0.50 at Shoppers Stop and up to ₹0.25 on the RBL Rewards Portal. Baseline is the Shoppers Stop value; the portal value is much lower.",
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/rbl-bank-shoppers-stop-platinum-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": null,
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 200,
+    "rounding_mode": "floor",
+    "base_points_per_block": 4,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": "statement_cycle",
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "rbl-ss-platinum-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          32,
+          2541,
+          4001,
+          5542,
+          5541,
+          5172
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel and auto earns no reward points (T&C 4.5)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-ss-platinum-excl-utilities",
+      "category_id": "utility",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4900
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Utilities earns no reward points (T&C 4.5)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-ss-platinum-excl-insurance",
+      "category_id": "insurance",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6300,
+          6310,
+          5960
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Insurance and miscellaneous (5960) earns no reward points (T&C 4.5)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-ss-platinum-excl-quasi-cash",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6050,
+          6051,
+          4829,
+          6011,
+          6010
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Quasi-cash and cash earns no reward points (T&C 4.5)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-ss-platinum-excl-railways",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          66,
+          4011,
+          4112
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Railways earns no reward points (T&C 4.5)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-ss-platinum-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Real estate and rental earns no reward points (T&C 4.5)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-ss-platinum-excl-education",
+      "category_id": "education",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          8220,
+          8244,
+          8249,
+          8211,
+          8241,
+          8299
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Education earns no reward points (T&C 4.5)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-ss-platinum-excl-wallets",
+      "category_id": "wallet_load",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Wallets and service providers earns no reward points (T&C 4.5)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-ss-platinum-excl-government",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          9400,
+          1490,
+          2490,
+          2995,
+          7800,
+          9406,
+          9222,
+          9405,
+          9399,
+          9211,
+          9402,
+          9401,
+          9311,
+          9223
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Government services earns no reward points (T&C 4.5)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-ss-platinum-excl-contracted",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          1711,
+          1740,
+          763,
+          1520,
+          742,
+          1761,
+          1799,
+          1750,
+          1731,
+          1771,
+          780
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Contracted services earns no reward points (T&C 4.5)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-ss-platinum-excl-emi",
+      "category_id": "emi",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "EMI conversion of retail transactions (Split-N-Pay and EMI at POS/web/app), fees, charges and GST earns no reward points (T&C 4.5)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-ss-platinum-ss-universe",
+      "category_id": "all_retail",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "shoppers_stop",
+      "conditions": {
+        "merchant": "Shoppers Stop universe",
+        "per_inr_block": 200,
+        "multiples_of_inr": 200
+      },
+      "action": {
+        "multiplier": 10,
+        "points_per_block": 10,
+        "cashback_percent": "N/A",
+        "cap_reference": "rbl-ss-platinum-ss-cap",
+        "reason": "10 reward points per ₹200 in the Shoppers Stop universe; multiples of ₹200 only, no points on the remainder (T&C 4.2)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-ss-platinum-other",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 200,
+        "multiples_of_inr": 200
+      },
+      "action": {
+        "multiplier": 4,
+        "points_per_block": 4,
+        "cashback_percent": "N/A",
+        "cap_reference": "rbl-ss-platinum-other-cap",
+        "reason": "4 reward points per ₹200 on all other eligible spends (T&C 4.2)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "rbl-ss-platinum-ss-cap",
+      "category_id": "all_retail",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": 1500,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "downgrade_to_base_rate",
+        "points_per_block": 4
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-ss-platinum-other-cap",
+      "category_id": "all_retail",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": 500,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.99,
+      "annual_interest_rate_percent": 47.88
+    },
+    "forex_markup": {
+      "markup_percent": 3.5,
+      "gst_applicable": null
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 3.5,
+      "gst_applicable": null,
+      "trigger_condition": "Schedule of Charges: up to 3.5% on foreign currency, dynamic and static conversion transactions"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": null,
+      "waiver_percent": null,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": null,
+        "trigger_condition": "1% fee on all rental transactions (Schedule of Charges)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "fuel",
+        "mcc_list": [],
+        "fee_percent": 1,
+        "gst_applicable": null,
+        "trigger_condition": "1% fee on each fuel and auto transaction above ₹10,000, capped (Schedule of Charges)",
+        "threshold_spend_inr": 10000,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 0,
+        "min_fee_inr": 0,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "The Schedule of Charges lists the same fee for year 1 and year 2 onwards with no spend waiver. The first-year fee must be paid within 60 days for the welcome benefits.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "first_transaction_within_30_days_and_fee_paid",
+      "benefit_points": "N/A",
+      "effective_value_inr": 5500,
+      "condition": "Shoppers Stop voucher worth ₹2,000 plus a complimentary gift worth up to ₹2,000 (both valid 90 days) and a First Citizen Platinum Aura membership worth ₹1,500 for 12 months."
+    },
+    "spend_milestones": [
+      {
+        "id": "rbl-ss-platinum-quarterly",
+        "label": "Shoppers Stop voucher worth ₹1000 on ₹1,50,000 eligible spend in the previous calendar quarter",
+        "threshold_spend_inr": 150000,
+        "reward_value_inr": 1000,
+        "period": "quarter",
+        "is_repeatable": true,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "id": "rbl-ss-platinum-annual",
+        "label": "Shoppers Stop voucher worth ₹1500 on ₹5,00,000 eligible spend in an anniversary year",
+        "threshold_spend_inr": 500000,
+        "reward_value_inr": 1500,
+        "period": "card_anniversary_year",
+        "is_repeatable": true,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ]
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "rbl-ss-platinum-membership",
+      "category_id": "other",
+      "network_program": null,
+      "sponsor": "Shoppers Stop",
+      "label": "Shoppers Stop First Citizen Platinum Aura membership",
+      "evaluation_engine": {
+        "conditions": {
+          "activated_months": 12
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": 1500,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": null,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": "Source-supported data that cannot be represented faithfully by any existing universal schema field. Do not duplicate data already represented elsewhere. Do not use this section for unknown values, assumptions, or inferred data.",
+    "items": [
+      {
+        "key": "official_research",
+        "value": {
+          "checked_on": "2026-11-05",
+          "source_urls": [
+            "https://www.rbl.bank.in/personal-banking/cards/credit-cards/rbl-bank-shoppers-stop-platinum-credit-card",
+            "https://webassets.rbl.bank.in/document/Credit%20Cards/CardsScheduleCharges.pdf"
+          ],
+          "facts": [
+            "10 points per INR 200 in Shoppers Stop universe, cap 1500 points monthly; 4 per INR 200 on other eligible shopping, cap 500 points monthly.",
+            "Point value INR 0.5 applies at Shoppers Stop; other redemption values are not established here."
+          ]
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://webassets.rbl.bank.in/document/credit-cards/tnc-rbl-bank-shoppers-stop-platinum-credit-card.pdf",
+              "kind": "Card T&C (welcome, earn, caps, milestones, exclusions)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/Credit%20Cards/CardsScheduleCharges.pdf",
+              "kind": "Schedule of Charges (annual fee, finance charge, forex, cash advance)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/rbl-bank-shoppers-stop-platinum-credit-card",
+              "kind": "issuer page",
+              "read": "rendered page text"
+            }
+          ],
+          "open_questions": [
+            "Network is carried over from the Nov 5 draft (visa); neither the T&C nor the page read this session states it.",
+            "Neither the T&C nor the Schedule of Charges carries a revision date.",
+            "Cap period: the T&C says \"monthly cap... reset at the start of each billing cycle\"; modelled as statement_cycle.",
+            "After the 1,500-point Shoppers Stop cap the T&C does not say whether spend falls back to the 4-per-₹200 rate; modelled as downgrade_to_base_rate, which needs review.",
+            "Late fee slabs, over-limit fee (stated NIL) and the fuel fee cap were not extracted in detail from the Schedule of Charges."
+          ],
+          "notes": [
+            "Quarterly bonus: 1,000 reward points per calendar quarter on one single ₹20,000+ purchase in a Shoppers Stop store, only if the previous quarter's eligible spend was ₹50,000; not valid in the End of Season Sale (T&C 4.4). Event bonus, not modelled as a rate.",
+            "Reward points redeem at Shoppers Stop at the higher value and on the RBL Rewards Portal at up to the lower value (T&C 4.2).",
+            "Welcome benefits are gated on a first valid transaction within 30 days and the annual fee being paid within 60 days (T&C 4.1). Vouchers are valid 90 days.",
+            "Milestone spend excludes every category in the exclusion table (T&C 4.3)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,206 @@
+{
+  "agent": "W6",
+  "candidates": [],
+  "fixes": [
+    {
+      "slug": "bandhan-flare",
+      "field": "additional_data.verified_network_research (card_product.network stays null: dual)",
+      "before": "network missing",
+      "after": "alternatives: mastercard (tier mastercard_world) or visa (tier visa_signature)",
+      "evidence": "Bandhan Product Usage Guide with T&C, file dated 14 Aug 2026 (https://creditcards.bandhan.bank.in/landing/uploads/Credit_Card_Product_Usage_Guidelines_14082026_892e11470c.pdf), golf section: 'Flare Cards issued under Mastercard Network' and 'Lumina and Flare Cards on Visa'. Tier names from the Flare card page golf tile (https://creditcards.bandhan.bank.in/card-details/Flare/): 'Applicable for Mastercard World and Visa Sign' ('Sign' read as Signature)."
+    },
+    {
+      "slug": "bandhan-lumina",
+      "field": "additional_data.verified_network_research (card_product.network stays null: dual)",
+      "before": "network missing",
+      "after": "alternatives: mastercard or visa (tier not stated)",
+      "evidence": "Product Usage Guide 14 Aug 2026, Concierge Service: contact routes 'For Lumina Credit Cardholders on VISA network' and 'on MASTERCARD network'; Golf: 'Flare and Lumina cardholders issued on Visa network'."
+    },
+    {
+      "slug": "bandhan-sparks",
+      "field": "card_product.network",
+      "before": "null",
+      "after": "null (not settled)",
+      "evidence": "No per-card network statement for Sparks in any issuer document read. MITC (19 Aug 2026) and KFS (30 Apr 2026) say only that the digital RuPay Flash card is issued to existing physical Visa or Mastercard cardholders; the Product Usage Guide names Visa, Mastercard and RuPay lounge lists for 'eligible' cards without saying which applies. Card art (card-details page, compare page) shows no network logo."
+    },
+    {
+      "slug": "bandhan-ignite",
+      "field": "card_product.network",
+      "before": "null",
+      "after": "null (not settled)",
+      "evidence": "Same as Sparks: no per-card network statement for Ignite in the MITC, KFS, Product Usage Guide, card page or card art."
+    },
+    {
+      "slug": "bandhan-lumina",
+      "field": "fees_and_surcharges.fuel_surcharge.monthly_waiver_cap_inr",
+      "before": 500,
+      "after": 500,
+      "evidence": "MITC (CC/MITC/OA/090726/03/V-01, 19 Aug 2026) fuel row and KFS (CC/KFS/OA/080426/02/V-01, 30 Apr 2026) both say Lumina max waiver INR 500 per statement cycle on INR 500-5,000. The Lumina card page, Compare page and the page Value Chart say INR 1,000, unexplained. Two regulatory documents agree, so 500 stays; website mismatch recorded as an open question for the issuer."
+    },
+    {
+      "slug": "bandhan-sparks",
+      "field": "card_product.point_value_inr_baseline; accrual_engine.effective_base_return_percent",
+      "before": "null; null",
+      "after": "0.25; 0.25",
+      "evidence": "Bandhan Bank Delights FAQ, Accrual (https://delights.bandhan.bank.in/content/faq, undated): 'The value of 1 Delight Point is INR 0.25' and the Bank may change it. Card-page Value Charts use the same figure (Sparks 500 activation points = INR 125). Base 2 points per INR 200 (Product Usage Guide) gives 0.25%."
+    },
+    {
+      "slug": "bandhan-ignite",
+      "field": "card_product.point_value_inr_baseline; accrual_engine.effective_base_return_percent",
+      "before": "null; null",
+      "after": "0.25; 0.5",
+      "evidence": "Delights FAQ INR 0.25 per point; Ignite Value Chart prices 1,000 activation points at INR 250. Base 4 points per INR 200 gives 0.5%."
+    },
+    {
+      "slug": "bandhan-flare",
+      "field": "card_product.point_value_inr_baseline; accrual_engine.effective_base_return_percent",
+      "before": "null; null",
+      "after": "0.25; 1.25",
+      "evidence": "Delights FAQ INR 0.25 per point; Flare Value Chart milestone 5,000 points a month = INR 15,000 a year. Base 10 points per INR 200 gives 1.25%."
+    },
+    {
+      "slug": "bandhan-lumina",
+      "field": "card_product.point_value_inr_baseline; accrual_engine.effective_base_return_percent",
+      "before": "null; null",
+      "after": "0.25; 2",
+      "evidence": "Delights FAQ INR 0.25 per point; Lumina Value Chart milestone 10,000 points a month = INR 30,000 a year. Base 16 points per INR 200 gives 2%. The Value Chart line 'all other transactions INR 4,800 a year on INR 1,00,000 a month' does not reconcile with the stated base rate and is treated as illustrative."
+    },
+    {
+      "slug": "bandhan-sparks",
+      "field": "cap_rules; reward_rules (exclusion)",
+      "before": "no caps, no exclusions",
+      "after": "accelerated points capped at 400 a month then base 2 per INR 200; one exclusion rule for rent, fuel and government MCCs",
+      "evidence": "Product Usage Guide, Accelerated Reward Points: Sparks capped at 400 points per month; Excluded Merchant Category Codes list dated 23 Jun 2026 (https://creditcards.bandhan.bank.in/landing/uploads/Excluded_Merchant_Category_Code_23062026_853953ff5a.pdf). Period 'per month' assumed calendar month (open question)."
+    },
+    {
+      "slug": "bandhan-ignite",
+      "field": "cap_rules; reward_rules (exclusion)",
+      "before": "no caps, no exclusions",
+      "after": "grocery and travel accelerated points share a cap of 800 a month then base 4 per INR 200; exclusion rule added",
+      "evidence": "Product Usage Guide, Accelerated Reward Points (Ignite 800 points per month); Excluded MCC list 23 Jun 2026."
+    },
+    {
+      "slug": "bandhan-flare",
+      "field": "cap_rules; reward_rules (exclusion)",
+      "before": "no caps, no exclusions",
+      "after": "travel accelerated points capped at 2,500 a month then base 10 per INR 200; exclusion rule added",
+      "evidence": "Product Usage Guide, Accelerated Reward Points (Flare 2,500 points per month); Excluded MCC list 23 Jun 2026."
+    },
+    {
+      "slug": "bandhan-lumina",
+      "field": "cap_rules; reward_rules (exclusion)",
+      "before": "no caps, no exclusions",
+      "after": "international accelerated points capped at 5,000 a month then base 16 per INR 200; exclusion rule added",
+      "evidence": "Product Usage Guide, Accelerated Reward Points (Lumina 5,000 points per month); Excluded MCC list 23 Jun 2026."
+    },
+    {
+      "slug": "slice-small-finance-bank-upi-credit-card",
+      "field": "card_product.network",
+      "before": "null",
+      "after": "rupay",
+      "evidence": "slice credit card MITC (https://slice.bank.in/cc-mitc/): section (iv) Statement disputes resolution names 'the respective card network (Rupay)'; section J Tap/Scan and Pay: 'The scan and pay feature is exclusively available on RuPay credit cards'. No other network named on the MITC or https://slice.bank.in/credit-card; card art shows no logo. MITC page undated."
+    },
+    {
+      "slug": "federal-bank-scapia-credit-card",
+      "field": "card_product.joining_fee_inr; card_product.annual_fee_inr",
+      "before": "null; null",
+      "after": "0; 0",
+      "evidence": "Scapia Federal MITC 'Version (10) 27.02.2026' (https://www.federal.bank.in/documents/d/guest/mitc-v10-27_02_26) rows 3-4: Joining Fees Nil, Annual Membership Fees Nil; Federal schedule of charges (https://www.federal.bank.in/documents/d/guest/credit-card-charges, Feb 2026) section 4 Scapia Credit Card: Nil/Nil; Federal page https://www.federal.bank.in/scapia: 'Zero joining and annual fees'."
+    },
+    {
+      "slug": "federal-bank-scapia-credit-card",
+      "field": "fees_and_surcharges.forex_markup; apr; late_payment_slabs; cash_advance; fuel_surcharge",
+      "before": "forex 0 (from agreement); apr, cash advance, fuel waiver, late slabs missing",
+      "after": "forex 0% confirmed; apr 3.75% a month / 45% a year; cash advance 2.5% min INR 500; fuel waiver 1% on up to INR 5,000, max INR 500 a month; late fee slabs 0/100/500/600/750/950/1000; overlimit 2.5% min INR 500",
+      "evidence": "Federal Scapia MITC v10 (27 Feb 2026) rows 6, 7, 11, 12, 15, 16, 22; schedule of charges Feb 2026 section 4."
+    },
+    {
+      "slug": "federal-bank-scapia-credit-card",
+      "field": "card_product.point_value_inr_baseline; accrual_engine.effective_base_return_percent",
+      "before": "null; null",
+      "after": "0.2; 2",
+      "evidence": "Federal page https://www.federal.bank.in/scapia: '1 reward = 1 Scapia Coin' with footnote '5 Scapia coins = INR 1'. Visa rate 10 rewards per INR 100 gives 2% (RuPay 1%)."
+    },
+    {
+      "slug": "indusind-bank-cred-rupay",
+      "field": "card_product.joining_fee_inr; card_product.annual_fee_inr",
+      "before": "null; null",
+      "after": "0; 499",
+      "evidence": "IndusInd Bank Credit Card MITC consolidated file 'MITC-Premium Card Consolidated_13.10.2026' (https://www.indusind.bank.in/content/dam/indusind-corporate/credit-cards/MITC_Premium.pdf) fee table: CRED IndusInd Bank RuPay Credit Card joining NIL, annual 499 with footnote that the annual fee is not applicable for targeted 'Lifetime Free' limited-time promotions; add-on NIL. Launch press release 15 Sep 2025 says 'zero joining fees'."
+    },
+    {
+      "slug": "indusind-bank-cred-rupay",
+      "field": "fees_and_surcharges.apr; forex_markup; dynamic_currency_conversion_dcc; cash_advance; late_payment_slabs",
+      "before": "all null",
+      "after": "apr 3.95% a month / 47.40% a year; forex 3.5% + GST (general rate by exclusion); DCC 2% + GST from 15 Jun 2026; cash advance 2.5% min INR 300; late fee slabs 0/100/500/600/750/900/1100/1300 (from 15 Jun 2026); fuel 1% fee over INR 30,000 a cycle; overlimit 2.5% min INR 500",
+      "evidence": "IndusInd MITC Oct 2026: interest table names CRED IndusInd Bank RuPay in the 3.95% / 47.40% group; Foreign Currency Mark-Up row ends 'All Other Credit Cards (not specified above) 3.5 %' and the CRED card is not named there; DCC row and Fuel Transactions row name the card; late payment table effective 15 June 2026."
+    },
+    {
+      "slug": "indusind-bank-cred-rupay",
+      "field": "redemption_matrix; reward_rules exclusions; point_value_inr_baseline",
+      "before": "no redemption options; exclusion list read only up to FASTag and tolls; value 0.5 carried over",
+      "after": "four redemption options (INR 1 per point on flights, hotels, CRED Store and select CRED Pay; INR 0.50 on utility and credit-card bill payments; 70% limit, 100% for bill payments; 2-year expiry); exclusions extended (tolls 9399/4784, CBDC 7411, jewellery 5944/5094/5051, forex and quasi-cash, EMI/cash/fees); baseline 0.5 re-read and kept",
+      "evidence": "CRED terms Section Z Part II (https://cred.club/terms, page 'Last updated on 28 October 2026') clauses 3.1 and 5.1-5.2, 6.1; IndusInd launch press release 15 Sep 2025 ('every point equivalent to a rupee' on the main routes). CRED programme terms, not IndusInd Bank terms."
+    },
+    {
+      "slug": "suryoday-mobikwik-first-rupay-platinum",
+      "field": "reward_rules",
+      "before": "empty (advertised 1% cashback, no rules document)",
+      "after": "still empty: no document states cap, period, exclusions or minimum transaction",
+      "evidence": "Suryoday listing page https://suryoday.bank.in/personal/cards/credit-cards/secured-credit-card/ links a cashback PDF only for the Stable Money cards; the MobiKwik tile has none. Linked MobiKwik MITC https://suryoday.bank.in/assets/pdf/MITC_SSFB_RuPay_Platinum_Credit_MBK.pdf returns 404. MobiKwik KFS (24 Jun 2026) has fees only; generic Suryoday MITC cashback clause states no rate or cap. Page footnote '#With the capping of INR 3,000' is product-line wide and gives no period. MobiKwik partner page says 1% on e-commerce and on UPI via MobiKwik UPI (partner statement). No rule written."
+    },
+    {
+      "slug": "eternal-sbi-card",
+      "field": "fees_and_surcharges.apr; forex_markup; dynamic_currency_conversion_dcc; late_payment_slabs",
+      "before": "missing",
+      "after": "apr 3.75% a month / 45% a year; forex 3.5%; DCC 3.5% on INR 1,000 or more; cash advance 2.5% min INR 500; overlimit 2.5% min INR 600; late fee slabs 0/100/500/750/950/1100/1300",
+      "evidence": "SBI Card KFS (https://www.sbicard.com/sbi-card-en/assets/docs/pdf/kfs/key-fact-statement.pdf, 'SBI Card_Key fact Statement for 14OCT2026', page 8): finance charges 3.75% p.m. (45% p.a.) for unsecured cards; Foreign Currency Transaction Fee 3.5% for all cards except a named list that does not include Eternal. SBI Cards MITC 'MITC- Common-30OCT26' (https://www.sbicard.com/sbi-card-en/assets/docs/pdf/most-important-terms-and-conditions/mitc-english.pdf) Finance Charges F and Other Charges P. Neither document names Eternal for these two charges."
+    },
+    {
+      "slug": "icici-1838-reserve",
+      "field": "fees_and_surcharges.apr.annual_interest_rate_percent",
+      "before": null,
+      "after": 20,
+      "evidence": "ICICI MITC 'Last updated on Nov 6th, 2026' Section I 2. Finance Charges (2): 1838 Reserve ICICI Bank Credit Card 1.67% per month i.e. 20% per annum on retail transactions and cash advances; same APR for balance transfer, non-payment of minimum due and late payment."
+    },
+    {
+      "slug": "icici-1838-reserve",
+      "field": "card_product.point_value_inr_baseline",
+      "before": null,
+      "after": null,
+      "evidence": "Not stated by ICICI. Checked the 1838 Reserve card page, the MITC (6 Nov 2026), the general credit card T&C (https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/tnc_english.pdf, file dated 28 Sep 2026) and ICICI Rewards pages: none gives a rupee value per reward point. The Times Black 0.40 must not be reused."
+    },
+    {
+      "slug": "icici-times-black",
+      "field": "fees_and_surcharges.apr.annual_interest_rate_percent",
+      "before": null,
+      "after": 45,
+      "evidence": "ICICI MITC 6 Nov 2026 Section I 2. Finance Charges (1): 3.75% per month i.e. 45% per annum on retail transactions and cash advances; item (2) carves out only 1838 Reserve, so Times Black takes the general rate by exclusion (Times Black is not named in the clause)."
+    },
+    {
+      "slug": "axis-bank-kwik",
+      "field": "card_product.point_value_inr_baseline; accrual_engine.effective_base_return_percent",
+      "before": "null; null",
+      "after": "0.2; 0.2",
+      "evidence": "Axis Bank MITC (https://www.axis.bank.in/docs/default-source/default-document-library/mitc-credit-cards.pdf, file dated 8 Oct 2026), termination clause example: a negative balance of 1000 Reward Points converts to INR 200 i.e. INR 0.20 per Reward Point; the MITC fee table lists KWIK Credit Card. This is a conversion value for negative balances, not a Kwik-specific redemption rate; edgerewards.axis.bank.in terms did not load."
+    }
+  ],
+  "unresolved": [
+    { "slug": "bandhan-sparks", "question": "Network: which of Visa or Mastercard (or RuPay) does a new Sparks cardholder get? No issuer document names it per card." },
+    { "slug": "bandhan-ignite", "question": "Network: same as Sparks; no per-card statement found." },
+    { "slug": "bandhan-flare", "question": "Confirm the tier names (the page golf tile says 'Mastercard World and Visa Sign') and whether the customer or the bank chooses the network." },
+    { "slug": "bandhan-lumina", "question": "Fuel waiver cap: MITC and KFS say INR 500, the website says INR 1,000; ask the issuer which is in force. Tier names for the Visa and Mastercard variants are not stated." },
+    { "slug": "bandhan-sparks", "question": "Delight Point value INR 0.25 comes from an undated Delights FAQ that says the Bank may change it; the Delights earn rules sit behind a login. Accelerated cap period 'per month' is assumed calendar month." },
+    { "slug": "icici-1838-reserve", "question": "Value of one reward point is not published by ICICI. Also the card page FAQ says the 1,00,000-point cap is per month while the MITC says per statement cycle (MITC used); reward unit (3 and 2 points per INR 100) is still inferred from the percent wording." },
+    { "slug": "suryoday-mobikwik-first-rupay-platinum", "question": "No cashback rules document is published: need cap, period, exclusions and minimum transaction for the 1% cashback (the linked MobiKwik MITC URL returns 404). Hold the card." },
+    { "slug": "federal-bank-scapia-credit-card", "question": "MITC v11 (30 Apr 2026) and Cardholder Agreements v13 (20 Jun 2026) and v14 (23 Oct 2026) are linked from the Federal page but sit behind a Radware bot check (a CAPTCHA appeared; not attempted). Fees and rates come from MITC v10 (27 Feb 2026) and the Feb 2026 schedule of charges and agree with the live page; a person should confirm v11 and check the v14 earn rules." },
+    { "slug": "eternal-sbi-card", "question": "Annual fee waiver: SBI Card KFS dated 14 Oct 2026 says renewal waived at INR 1 lakh annual spend; the Eternal page says INR 2,00,000 (draft keeps 2,00,000). Interest 3.75% a month and forex 3.5% apply by exclusion from named lists; confirm no Eternal-specific rate." },
+    { "slug": "indusind-bank-cred-rupay", "question": "Annual fee INR 499 versus targeted lifetime-free promotions: which cohort does a new CRED applicant get? Forex 3.5% applies by exclusion; per-product fuel surcharge waiver, EMI fees and lounge terms are not in the MITC rows read." },
+    { "slug": "axis-bank-kwik", "question": "INR 0.20 per EDGE REWARD point is the Axis MITC conversion example, not a Kwik-specific redemption rate; the Kwik EDGE terms page and the updated terms 'w.e.f. 28th August 2026' were not readable." },
+    { "slug": "slice-small-finance-bank-upi-credit-card", "question": "RuPay network tier (Platinum or Select) is not stated; the MITC page carries no revision date." }
+  ],
+  "notes": {
+    "flash_variant": "Flash is a fully digital RuPay credit card issued only to existing physical Visa or Mastercard cardholders of Sparks, Ignite, Flare or Lumina. It shares the physical card's credit limit on a separate card account, cannot be used at POS, has joining and renewal fee nil, interest 3.5% a month (42% a year), forex 3.5%, fuel waiver 1% up to INR 150 per cycle on INR 500-2,500, no accelerated rewards, and earns 2 points per INR 200 (MITC, KFS, Product Usage Guide). It is an add-on account of a physical card, not a standalone product; not drafted.",
+    "blocked_pages": "federal.bank.in raised a Radware bot check on direct document links; no CAPTCHA was attempted and no further requests were made to that site's browser pages. edgerewards.axis.bank.in terms pages rendered blank."
+  }
+}

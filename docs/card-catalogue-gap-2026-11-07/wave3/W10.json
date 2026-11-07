@@ -1,0 +1,139 @@
+{
+  "agent": "W10",
+  "cards": [
+    {
+      "slug": "rbl-bank-nova",
+      "status": "complete",
+      "network": "dual: mastercard/visa",
+      "network_evidence": "RBL Bank 'Your RBL Bank Credit Card Network Availability Guide' (https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide, issuer page, undated, read 2026-11-07): row 'Nova Credit Card' ticked for MasterCard and Visa, RuPay not ticked. Card art on the product page (nova_card.webp, nova_card_0.webp) shows no network mark; the T&C names networks only generically.",
+      "changes": [
+        "network candidates (additional_data verified_network_research): none -> mastercard + visa, evidence: RBL network availability guide row for Nova (card_product.network stays null because two networks are issued)",
+        "application_mode: 'open' (assumption) -> null, evidence: card list and product page show only 'Know more' and 'Express Your Interest' (https://www.rbl.bank.in/nova-form), no 'Apply Now'; Nova is not labelled 'By invite only' (Lumiere is); Nova T&C, MITC and Cardmember Agreement say nothing about invitation, so neither open nor invite_only is stated",
+        "open question on cap period: reworded to record that the T&C cap sentence says 'calendar month' while another bullet defines 'one month' as one billing cycle; calendar_month kept because the cap sentence is explicit"
+      ],
+      "still_missing": [
+        "Whether a customer can apply directly: RBL offers only an Express Your Interest form and does not say whether it leads to an application or an invitation; application_mode is null",
+        "What the 12-per-INR 200 flight, hotel and e-gift spend earns after the 30,000-point monthly cap is not stated; modelled as falling back to 4 per INR 200 (schema allows only downgrade or zero)",
+        "Nova T&C refers to 'the above-mentioned program partners' but prints none; all 12 partners from the Miles Transfer T&C are used",
+        "Which of the two networks a new customer is issued is not stated",
+        "Milestone e-gift card repeating every calendar quarter is read from the T&C wording, not stated as 'repeatable'"
+      ]
+    },
+    {
+      "slug": "rbl-bank-world-safari-lite",
+      "status": "still_blocked",
+      "network": "multi: mastercard/rupay/visa",
+      "network_evidence": "RBL network availability guide (issuer page, undated, read 2026-11-07): row 'World Safari Lite Credit Card' ticked for MasterCard, RuPay and Visa (the only card in the guide ticked on all three). The product page has no card art or network mark.",
+      "changes": [
+        "network candidates (additional_data verified_network_research): none -> mastercard + rupay + visa, evidence: RBL network availability guide row for World Safari Lite; RuPay-variant rule from Rewards Programme T&C 5.4 (offline UPI under INR 2,000 at small merchants earns no base points, voucher or milestone benefits) noted",
+        "base rate: re-checked and left null. Read the product page (all sections), World Safari Lite T&C (3.4 a-e), the application-form KFS (kfs-1000.pdf, RBL_KFS/16/06/2026), MITC, Cardmember Agreement, Rewards Programme T&C (3.1 'accrual varies for each Credit Card'; 5.4 'as defined in respective product terms') and the card list: none states any earn for non-travel spend; 3.4(d) only lists categories 'not eligible to earn'",
+        "added the application-form KFS as a source (fees and finance charges only, no reward rate, no network)"
+      ],
+      "still_missing": [
+        "Whether everyday non-travel eligible spend earns reward points, and at what rate. RBL prints a rate only for domestic travel MCCs (1 point per INR 100, T&C 3.4a) and for flight and hotel bookings on the RBL rewards portal (5 per INR 100, T&C 3.4b). Action for a person: ask RBL in writing (cardservices@rbl.bank.in, toll free 1800 102 6222), or the product owner decides to publish the card as travel-only earn",
+        "Whether international travel spend earns anything (only 'domestic travel' is stated)",
+        "Which of the three networks a new customer is issued is not stated",
+        "Milestone tiers 5,000 and 10,000 points: cumulative or not is not stated; welcome-benefit fee wording differs between T&C ('first month membership fees') and page ('annual fee')"
+      ]
+    },
+    {
+      "slug": "rbl-bank-iglobe",
+      "status": "complete",
+      "network": "mastercard",
+      "network_evidence": "RBL network availability guide (issuer page, undated, read 2026-11-07): row 'iGlobe Credit Card' ticked for MasterCard only. Consistent with iGlobe T&C 3.3 and 3.4, which name 'MasterCard' as the association. Card art shows no network mark.",
+      "changes": [
+        "network evidence: 'Mastercard rests on T&C 3.7 and 3.8, confirm against the card' -> confirmed Mastercard-only by RBL network availability guide; source added",
+        "point value: left null. Re-checked iGlobe page (all tabs), T&C, SOC, MITC, Cardmember Agreement, Miles Transfer T&C (only 4 points = 1 mile), Rewards Programme T&C (RWD 3.1, 4.1: no number) and the public rewards portal FAQ; no document states a rupee value for an iGlobe point. Open question reworded; effective return and milestone rupee values stay null as the brief requires",
+        "redemption fee note: 'SOC, MITC and RWD 4.3.1(b)(ii) list iGlobe as exempt' -> only RWD 4.3.1(b)(ii) (undated) names iGlobe; the SOC (4 Jun 2026) and MITC (29 Oct 2026) exempt lists name Lumiere, Nova, Insignia, Insignia Prime, World Xclusive, Apex, Aspire, Signature, IRCTC and IOCL but not iGlobe. redemption_fee_inr 0 kept (only document naming the card); conflict recorded as an open question, RWD cannot be dated",
+        "application route: kept open; the iGlobe page says 'To apply ... visit your nearest branch or reach out to your Relationship Manager'"
+      ],
+      "still_missing": [
+        "Rupee value of one iGlobe reward point: no RBL document states it; the redemption screens are behind the rewards login (a person with an iGlobe login can read it)",
+        "Whether the iGlobe redemption-fee exemption in RWD still holds, since the newer MITC and SOC lists omit it",
+        "Whether the two milestone tiers (10,000 at INR 5 lakh, further 10,000 at INR 8 lakh) are cumulative; milestone credit time (30 days, 'within days', 45 days) differs between T&C and page"
+      ]
+    },
+    {
+      "slug": "rbl-bank-bankbazaar-savemax",
+      "status": "complete",
+      "network": "dual: mastercard/visa",
+      "network_evidence": "RBL network availability guide (issuer page, undated, read 2026-11-07): row 'Bankbazaar SaveMax Credit Card' ticked for MasterCard and Visa, RuPay not ticked; the product page also says 'available on MasterCard & VISA network'. (The SaveMax Pro row is MasterCard only.)",
+      "changes": [
+        "network: confirmed dual mastercard/visa (already recorded); evidence note extended in open questions",
+        "point value: left null. Re-checked issuer page, SaveMax T&C 3.3 and 3.3.1, SOC, MITC, Cardmember Agreement and Rewards Programme T&C; none gives a rupee value for a SaveMax point. Open question reworded; effective return stays null as the brief requires",
+        "application route: re-checked the card list (SaveMax shows 'Know more' only) and the product page (no card-specific apply control, no invitation or discontinuation sentence). The SaveMax Pro page says verbatim 'This card can be sourced through invite only'; the SaveMax page does not. No BankBazaar co-brand roles document found. application_mode stays null; open question rewritten with this evidence"
+      ],
+      "still_missing": [
+        "Rupee value of one SaveMax reward point: not stated; redemption screens are behind the rewards login",
+        "Whether new applications are accepted (application_mode null): RBL shows no Apply Now and no statement either way; ask RBL",
+        "'Grocery' has no MCC or merchant definition in the T&C, so the 5x rule has no MCC list; what grocery spend earns after the 1,000-point monthly cap is not stated (modelled as base 1 per INR 100)",
+        "Whether Zomato cashback spend also earns reward points is not stated"
+      ]
+    },
+    {
+      "slug": "rbl-bank-movies-and-more",
+      "status": "complete",
+      "network": "mastercard",
+      "network_evidence": "RBL network availability guide (issuer page, undated, read 2026-11-07): row 'Movies & More Credit Card' ticked for MasterCard only. The T&C names MasterCard, VISA and RuPay only as the networks whose MCCs classify dining outlets (3.3 i).",
+      "changes": [
+        "network: confirmed Mastercard-only by the RBL network availability guide (already recorded); open question added with the evidence",
+        "point value: left null. Re-checked issuer page, Movies & More T&C 3.3 and 3.4, BookMyShow offers guide, SOC, MITC, Cardmember Agreement and Rewards Programme T&C; none gives a rupee value for a point. Open question reworded; effective return and milestone rupee values stay null as the brief requires",
+        "application route: re-checked the card list (Movies & More shows 'Know more' only) and the product page (no card-specific apply control; no invitation, discontinuation or transition sentence, unlike Popcorn which carries a 20 Dec 2025 transition notice and SaveMax Pro which says 'invite only'). The page speaks in the present tense. application_mode stays null; open question rewritten with this evidence"
+      ],
+      "still_missing": [
+        "Rupee value of one Movies & More reward point: not stated; redemption screens are behind the rewards login",
+        "Whether new applications are accepted (application_mode null): RBL shows no Apply Now and no statement either way; ask RBL",
+        "Cap wording ('maximum of 1000 accelerated reward points per month', 1,000 on dining and 1,000 on select merchants) could mean total points or bonus points above base; modelled as total points per billing cycle, then base 1 per INR 100 as T&C 3.3 iii says"
+      ]
+    },
+    {
+      "slug": "bandhan-ignite",
+      "status": "still_blocked",
+      "network": null,
+      "network_evidence": "None found. No Bandhan document or card art names the network for Ignite. Read: MITC (19 Aug 2026), KFS (30 Apr 2026), Cardholder's Agreement (30 Apr 2026, generic 'VISA / MasterCard or RuPay network'), Product Usage Guide (14 Aug 2026; networks named only for Flare and Lumina in golf and concierge sections; Visa, Mastercard and RuPay lounge lists linked generically for all four cards), EMI T&C, Credit Card Program Policy, Excluded MCC list, Ignite card page, Compare page, home page and bandhan.bank.in contactless credit card FAQ. Ignite card art (card-page hero Igniteperspective, Compare tile Name_on_card_4, step-2 and step-4 mock-ups) shows the card front with no network mark.",
+      "changes": [
+        "network open question: rewritten with every document and image checked, why each fails, and the action needed; no network candidates recorded (nothing changed in card_product.network)",
+        "added the Ignite card page and card-art images as a source in provenance",
+        "press headlines on bandhan.bank.in/news (CNBC-TV18, Business Standard: four variants 'on Mastercard') recorded as a lead only: third-party, and they conflict with the Guide, which says Flare and Lumina ship on Visa or Mastercard"
+      ],
+      "still_missing": [
+        "Network of Ignite (Visa or Mastercard; the MITC/KFS Flash footnote 'existing physical Visa or Mastercard cardholders' implies the physical cards are not RuPay but does not say which). Action for a person: ask Bandhan credit-card support in writing which network Ignite ships on and whether the customer chooses, or read it off an issued card or welcome kit (the application flow at applycc.bandhan.bank.in needs a mobile number and was not opened)",
+        "The Mastercard domestic lounge list linked from the Guide returned 403 and was not pursued"
+      ]
+    },
+    {
+      "slug": "bandhan-sparks",
+      "status": "still_blocked",
+      "network": null,
+      "network_evidence": "None found. Same documents as Ignite: no Bandhan document names the network for Sparks. Sparks card art (card-page hero Sparksperspective, Compare tile Name_on_card_1, step-2 Sparks_Step2 and step-4 sparks_Step4 mock-ups) shows the card front with no network mark.",
+      "changes": [
+        "network open question: rewritten with every document and image checked, why each fails, and the action needed; no network candidates recorded",
+        "added the Sparks card page and card-art images as a source in provenance",
+        "press headlines on bandhan.bank.in/news recorded as a lead only (third-party, conflicts with the Guide)"
+      ],
+      "still_missing": [
+        "Network of Sparks (Visa or Mastercard; not stated). Action for a person: ask Bandhan credit-card support in writing which network Sparks ships on and whether the customer chooses, or read it off an issued card or welcome kit"
+      ]
+    },
+    {
+      "slug": "csb-bank-jupiter-edge-plus-rupay",
+      "status": "complete",
+      "network": "rupay",
+      "network_evidence": "CSB product page 'Edge+ CSB Bank RuPay Credit Card' (https://www.csb.bank.in/csb-bank-edge-credit-card), CSB-hosted T&C ('Edge+ CSB Bank Rupay Credit Card', PDF created 5 Sep 2026) and MITC (updated 25 Aug 2026, uploaded 30 Oct 2026, 'Edge+ CSB Rupay and Master Card'). Previously recorded; unchanged.",
+      "changes": [
+        "earn rule open question: 'whether card swipe or online card spends earn anything needs a person' -> stated as CSB's T&C 3a defines it (PDF created 5 Sep 2026): Jewels 'only for transactions on the Jupiter UPI App' (UPI Intent, Scan & Pay, Collect) with the Edge+ RuPay card, not other UPI apps; no Jewel earn on swipe, tap or online card payments with the RuPay card is stated, so none is drafted. Rates: 5% Jewels on other eligible spend; 50% Jewels on 10 listed shopping brands only when the statement cycle's qualified spend is above INR 15,000, else 5% (45% credited at cycle end only above INR 15,000); 25% Jewels on Jupiter Flights. The CSB page headline 10% / 5% / 1% cashback matches 50 / 25 / 5 Jewels per INR 100 at INR 0.20, and the same page says 'Scan with UPI, Pay with Credit Card', so it does not conflict",
+        "which source is newer: CSB-hosted T&C PDF (created 5 Sep 2026, HTTP Last-Modified 7 Sep 2026) < Jupiter-hosted T&C (page metadata modified 15 Oct 2026) ; Jupiter Edge+ page modified 24 Jul 2026 and rewards page 29 Jun 2026 are older; MITC (25 Aug 2026, uploaded 30 Oct 2026) has no Jewel rates. Added the three Jupiter pages as sources",
+        "effective date and travel cap conflict recorded: CSB PDF says old structure till 4 Oct 2026 and updated one from 5 Oct 2026 with Jupiter Flights uncapped; the newer Jupiter-hosted text says till 30 Sep and from 10 Oct 2026 with Jupiter Flights capped at 5,000 Jewels per statement cycle. CSB PDF kept (issuer's own document; shopping and 'Others' rules identical in both); newer text flagged",
+        "point_value_inr_baseline 0.14 kept; Jewel values confirmed: INR 0.20 per Jewel for Jupiter Flights, Jupiter Store, Brand Vouchers, Digital Gold and INR 0.14 for Statement Credit, Bill Payments, Cash/Cash Equivalent, stated identically in the CSB T&C (3A) and the Jupiter-hosted T&C, and shown as 100 Jewels = INR 20 / INR 14 on Jupiter's rewards and Edge+ pages. Outlier: Jupiter Edge+ page FAQ says '5 Jewels for INR 1' for cash (older page; T&C prevails)",
+        "joining fee: INR 999 kept; conflict recorded: CSB page INR 499 'for first 2 lakh users', Jupiter Edge+ page INR 0 'limited period offer' (regular INR 999), MITC (newest dated document) and KFS INR 999; annual fee nil in all",
+        "note added: Jupiter-hosted T&C says once the Edge+ Mastercard add-on is issued the RuPay card's travel benefit ceases and moves to the Mastercard (25% on flights and hotels, cap 7,500 Jewels); not modelled"
+      ],
+      "still_missing": [
+        "Which travel-cap text is live: 5,000 Jewels per statement cycle on Jupiter Flights (Jupiter-hosted T&C, newer) or no cap (CSB PDF); confirm in the Jupiter app T&C screen or with CSB",
+        "Reward unit: no document says in words that 'X% Jewels' means X Jewels per INR 100; used because it reproduces the CSB headline percentages and the Jupiter FAQ figures, flagged",
+        "What earns after the shopping category (10,000) or merchant (3,000) cap is not stated; downgrade to 5 Jewels assumed. Transaction-level cap of 1,000 Jewels has no schema period and sits in rule conditions",
+        "Fuel surcharge waiver INR 100 maximum has no stated period; rounding mode, crediting delay and minimum redemption threshold not stated"
+      ]
+    }
+  ]
+}

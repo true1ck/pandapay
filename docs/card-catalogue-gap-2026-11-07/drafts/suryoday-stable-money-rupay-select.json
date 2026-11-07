@@ -1,0 +1,600 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "suryoday-stable-money-rupay-select",
+    "name": "Stable Money Suryoday RuPay Select Credit Card",
+    "issuer_slug": "suryoday-small-finance-bank",
+    "network": "rupay",
+    "network_tier": null,
+    "card_tier": "N/A",
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [
+      "virtual_card",
+      "physical_plastic"
+    ],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": null,
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://suryoday.bank.in/personal/cards/credit-cards/secured-credit-card/",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "FD-backed secured card: needs an existing un-liened, non-corporate, non-tax-saver FD with Suryoday SFB; age above 18 and below 80; resident individual (issuer page). Credit limit is tied to the FD; the bank may liquidate the FD if the account is more than 60 days overdue or the outstanding reaches 98% of the FD value.",
+    "rules": [
+      {
+        "parameter": "age_years",
+        "operator": ">=",
+        "threshold_value": 18,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years",
+        "operator": "<=",
+        "threshold_value": 80,
+        "allowed_values": []
+      },
+      {
+        "parameter": "suryoday_fd",
+        "operator": "==",
+        "threshold_value": 1,
+        "allowed_values": []
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": null,
+    "rounding_mode": null,
+    "base_points_per_block": "N/A",
+    "base_cashback_percent": 0.5,
+    "effective_base_return_percent": 0.5,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": "statement_cycle",
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "ssfb-select-excl-wallet",
+      "category_id": "wallet_load",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4814,
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Wallet recharges earns no cashback (Stable Money cashback FAQ, excluded MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "ssfb-select-excl-financial",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4829,
+          6012,
+          6050,
+          6051,
+          6300,
+          6381,
+          6399,
+          6531,
+          6532,
+          6533,
+          6534,
+          6535,
+          6611,
+          6760,
+          7276
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Financial institutions earns no cashback (Stable Money cashback FAQ, excluded MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "ssfb-select-excl-government",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          8111,
+          9211,
+          9222,
+          9223,
+          9311,
+          9321,
+          9313,
+          9314,
+          9399,
+          9402,
+          9405,
+          9411,
+          8398
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Government services and charities earns no cashback (Stable Money cashback FAQ, excluded MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "ssfb-select-excl-insurance",
+      "category_id": "insurance",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5960,
+          6300,
+          6381,
+          6399
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Insurance earns no cashback (Stable Money cashback FAQ, excluded MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "ssfb-select-excl-railway",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4112
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Railway earns no cashback (Stable Money cashback FAQ, excluded MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "ssfb-select-excl-cash-investments",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6010,
+          6011,
+          6012,
+          6211
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Mutual funds and manual or automated cash earns no cashback (Stable Money cashback FAQ, excluded MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "ssfb-select-excl-education",
+      "category_id": "education",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          8299,
+          8211,
+          8220,
+          8241,
+          8244,
+          8249
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Education earns no cashback (Stable Money cashback FAQ, excluded MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "ssfb-select-excl-transport",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4111,
+          4119,
+          4121,
+          4131,
+          4214,
+          4789,
+          4784
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Transport earns no cashback (Stable Money cashback FAQ, excluded MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "ssfb-select-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5541,
+          5542,
+          5983
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel earns no cashback (Stable Money cashback FAQ, excluded MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "ssfb-select-excl-utilities",
+      "category_id": "utility",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4900
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Electric, gas, sanitary and water utilities earns no cashback (Stable Money cashback FAQ, excluded MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "ssfb-select-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Real estate agents and managers, rentals earns no cashback (Stable Money cashback FAQ, excluded MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "ssfb-select-cashback-0-5",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 0.5,
+        "cap_reference": "ssfb-select-cashback-cap",
+        "reason": "0.5% cashback on each eligible transaction (cashback FAQ)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "ssfb-select-cashback-cap",
+      "category_id": "all_retail",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": "N/A",
+      "limit_value_inr": 3000,
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 2.95,
+      "annual_interest_rate_percent": 35.4
+    },
+    "forex_markup": {
+      "markup_percent": 0,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": null,
+      "max_txn_inr": 8000,
+      "monthly_waiver_cap_inr": 40000
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": 20
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% surcharge on rental payments under MCC 6513",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": 300,
+      "foreclosure_charge_percent": 3,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 0,
+        "min_fee_inr": 0,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 20,
+    "grace_period_void_on_revolving_balance": true,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "10% of billed amount",
+        "plus EMIs and any overdue and over-limit amounts"
+      ]
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "Joining and annual fees are NIL (KFS effective 5 Oct 2026). The older KFS (26 May 2026) charged ₹150 + GST, waived at ₹50,000 spend; it is superseded.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": null,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "superseded_research_provenance",
+        "value": {
+          "research_method": "direct review of official issuer/partner pages and published terms; no browser automation response assumed",
+          "verified_at": "2026-10-17T16:48:32.669Z",
+          "source_urls": [
+            "https://suryoday.bank.in/personal/cards/credit-cards/secured-ssfb-rupay-select/",
+            "https://suryoday.bank.in/assets/pdf/kfs-select-26-may.pdf",
+            "https://suryoday.bank.in/assets/pdf/mitc-select-26-may.pdf"
+          ],
+          "effective_date_caveats": "KFS document applies to Select cards issued from 2026-05-26; product page marks cashback w.e.f. 1-Aug but does not expose a year in extracted page text. Confirm full effective date and cashback cap basis in human review.",
+          "fact_claims": [
+            "Suryoday is issuer; Stable Money is distributor/partner. Select variant is FD-backed; the issuer requires an existing eligible FD and ties the limit to FD collateral.",
+            "Current Select KFS for cards issued from 26 May 2026: joining fee ₹0; annual fee ₹150 + GST, waived at annual spend ₹50,000 or more; physical card issuance ₹499 + GST; replacement ₹499 + GST.",
+            "Issuer product page advertises 0.5% cashback with a ₹3,000 cap (the cap period is not specified in the page text) and UPI-powered usage. RuPay Select benefits shown include gym, spa/salon, golf and health-check offers; exact eligibility/quotas are not encoded without their terms.",
+            "KFS: APR 2.95% monthly / 35.40% annual plus GST; forex 2.50% plus GST; minimum due 10% plus EMI/overdue/overlimit amounts; fuel surcharge 1%; fuel waiver limited to eligible transactions up to ₹8,000 each and ₹40,000 per calendar month; rental surcharge 1% under MCC 6513."
+          ],
+          "aliases": [],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "₹250 or 1% of the outstanding amount, whichever is lower, + GST",
+          "source": "Suryoday select KFS effective 5 Oct 2026"
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://suryoday.bank.in/assets/pdf/kfs-ssfb-rupay-select-credit-card-5oct.pdf",
+              "kind": "Suryoday select RuPay KFS effective 5 Oct 2026",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://suryoday.bank.in/assets/pdf/stablemoney-suryoday-sfb-credit-card-cashback.pdf",
+              "kind": "Stable Money cashback FAQ (0.5%, ₹3,000 cycle cap, excluded MCCs); undated, example uses May 2025 dates",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://suryoday.bank.in/assets/pdf/stable-money-credit-card-5oct2026.pdf",
+              "kind": "Changes applicable from 5 Oct 2026 (second-card fees, closure fee, recovery)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://suryoday.bank.in/personal/cards/credit-cards/secured-credit-card/",
+              "kind": "issuer page listing the current documents",
+              "read": "rendered page text"
+            }
+          ],
+          "open_questions": [
+            "The cashback FAQ is undated and its worked example uses May 2025 dates; the issuer page says 0.5% cashback is effective from 1 Aug (year not shown). Treat the cap and MCC list as current but confirm.",
+            "RuPay Select network benefits (lounge, golf, spa, health checks) are not in the KFS and were not modelled.",
+            "MITC (5 Oct 2026) was fetched for the card but not read in full."
+          ],
+          "notes": [
+            "The Nov 5 correction is confirmed: with the 5 Oct 2026 KFS the annual fee is nil and the foreign currency surcharge is NIL. The earlier ₹150 / 2.5% values came from the 26 May 2026 KFS.",
+            "Cashback is limited to ₹3,000 per billing cycle; excluded MCCs are listed in the cashback FAQ.",
+            "Second card issuance fee (incl. GST) from 5 Oct 2026: virtual or physical Select card ₹500. Early closure or limit-reduction fee ₹150 incl. GST within 3 months.",
+            "Fuel surcharge waiver is limited to ₹40,000 a calendar month with no single transaction above ₹8,000."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

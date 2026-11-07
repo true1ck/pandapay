@@ -1,0 +1,761 @@
+{
+  "agent": "S2",
+  "issuers": [
+    {
+      "issuer": "Axis Bank",
+      "listing_url": "https://www.axis.bank.in/cards/credit-card",
+      "read_on": "2026-11-07",
+      "offered_count": 69,
+      "matched_live": [
+        "airtel-axis-bank-credit-card",
+        "axis-bank-ace",
+        "axis-atlas",
+        "axis-bank-cashback-credit-card",
+        "axis-bank-magnus",
+        "axis-bank-my-zone",
+        "axis-bank-my-zone-easy",
+        "axis-bank-neo",
+        "axis-bank-privilege",
+        "axis-bank-reserve",
+        "axis-bank-rewards-credit-card",
+        "axis-bank-select",
+        "axis-horizon-credit-card",
+        "flipkart-axis-bank-credit-card",
+        "google-pay-flex-axis-bank",
+        "indianoil-axis-bank-credit-card",
+        "axis-indianoil-premium",
+        "indianoil-easy-axis-bank",
+        "lic-axis-bank-platinum",
+        "lic-axis-bank-signature",
+        "axis-samsung-infinite",
+        "axis-samsung-signature",
+        "axis-bank-scapia-credit-card",
+        "spicejet-axis-bank-voyage-black",
+        "spicejet-axis-bank-voyage",
+        "axis-bank-vistara-infinite",
+        "vistara-axis-bank-signature"
+      ],
+      "matched_drafts": [
+        "axis-bank-indigo",
+        "axis-bank-indigo-premium",
+        "axis-bank-kwik",
+        "axis-bank-scapia-credit-card",
+        "axis-bank-shoppers-stop",
+        "axis-bank-supermoney-rupay",
+        "google-pay-flex-axis-bank"
+      ],
+      "missing": [
+        {
+          "name": "Axis Bank Pride Platinum Credit Card",
+          "product_url": "https://www.axis.bank.in/cards/credit-card/pride-platinum-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed on the Axis credit card listing page and in Axis Key Fact Sheet PDF (states 'last updated on 8th October 2026'), Retail Cards table. Product page: 'Exclusively tailored to suit the brave personnel serving in Indian Defence Forces and the Government of India employees'. Eligibility-restricted to defence/government personnel."
+        },
+        {
+          "name": "Axis Bank Pride Signature Credit Card",
+          "product_url": "https://www.axis.bank.in/cards/credit-card/pride-signature-credit-card",
+          "status": "sold",
+          "variant_of": "Axis Bank Pride Platinum Credit Card (higher tier of the same Pride family, separate fee tier)",
+          "partner": null,
+          "evidence": "Listed on the Axis credit card listing page and in Axis Key Fact Sheet PDF (states 'last updated on 8th October 2026'), Retail Cards table (PRIDE SIGNATURE). Product page refers to Indian Defence personnel; eligibility-restricted like Pride Platinum."
+        },
+        {
+          "name": "Fibe Axis Bank Credit Card",
+          "product_url": "https://www.axis.bank.in/cards/credit-card/fibe-axis-bank-credit-card",
+          "status": "existing_customers_only",
+          "variant_of": null,
+          "partner": "Fibe",
+          "evidence": "Listed on the Axis listing page. Product page eligibility note: 'Fibe Axis Bank Credit Card is sourced only to exisitng to Fibe customers' (sic). Existing customers of the partner Fibe, not of Axis. Also in Key Fact Sheet Partnership Cards."
+        },
+        {
+          "name": "Axis Bank Freecharge Credit Card",
+          "product_url": "https://www.axis.bank.in/cards/credit-card/axis-bank-freecharge-credit-card",
+          "status": "invite_only",
+          "variant_of": null,
+          "partner": "Freecharge",
+          "evidence": "Listed on the Axis listing page and in Key Fact Sheet. Product page: 'Axis Bank Freecharge Credit Card is an invite only model, wherein, if the customer is eligible, he/she shall be able to see the banner on their Freecharge Mobile App.'"
+        },
+        {
+          "name": "Axis Bank Freecharge Plus Credit Card",
+          "product_url": "https://www.axis.bank.in/cards/credit-card/axis-bank-freecharge-plus-credit-card",
+          "status": "invite_only",
+          "variant_of": "Axis Bank Freecharge Credit Card (separate fee tier)",
+          "partner": "Freecharge",
+          "evidence": "Listed on the Axis listing page and in Key Fact Sheet. Its product page carries the same sentence: 'Axis Bank Freecharge Credit Card is an invite only model...' (Freecharge app banner for eligible customers)."
+        },
+        {
+          "name": "Flipkart Axis Bank Super Elite Credit Card",
+          "product_url": "https://www.axis.bank.in/cards/credit-card/flipkart-axis-bank-super-elite-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": "Flipkart",
+          "evidence": "Listed on the Axis listing page and in Key Fact Sheet Partnership Cards (FLIPKART SUPER ELITE). Product page has an eligibility section and no restriction text. Separate product and fee tier from the Flipkart Axis Bank Credit Card (live)."
+        },
+        {
+          "name": "Miles & More Axis Bank World Credit Card",
+          "product_url": "https://www.axis.bank.in/cards/credit-card/miles-more-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": "Miles & More (Lufthansa Group)",
+          "evidence": "Listed on the Axis listing page ('Miles and More Axis Bank Credit Card'). Product page names 'Axis Bank Miles & More World Credit Card' and a 'World Select' tier. Key Fact Sheet Partnership Cards lists MILES and MORE World."
+        },
+        {
+          "name": "Miles & More Axis Bank World Select Credit Card",
+          "product_url": "https://www.axis.bank.in/cards/credit-card/miles-more-credit-card",
+          "status": "sold",
+          "variant_of": "Miles & More Axis Bank World Credit Card",
+          "partner": "Miles & More (Lufthansa Group)",
+          "evidence": "Same product page as the World card ('Axis Bank Miles & More World Select Credit Card'); Key Fact Sheet lists MILES and MORE World Select as its own column (separate fee tier)."
+        },
+        {
+          "name": "Axis Bank Vistara Credit Card",
+          "product_url": "https://www.axis.bank.in/cards/credit-card/axis-bank-vistara-credit-card",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": "Vistara / Air India",
+          "evidence": "Listed on the Axis listing page ('AXIS BANK VISTARA Credit Card') and Key Fact Sheet. Product page (read through the fetch tool; direct download got 403) carries: 'The Axis Bank Vistara Credit Card will be discontinued for spends post 15 December 2026'. No statement on new applications for the base card."
+        },
+        {
+          "name": "Axis Bank Privilege Easy Credit Card",
+          "product_url": "https://www.axis.bank.in/cards/credit-card/privilege-easy-credit-card",
+          "status": "sold",
+          "variant_of": "Axis Bank Privilege Credit Card (FD-backed version, own fee)",
+          "partner": null,
+          "evidence": "Listed on the Axis listing page under FD-linked credit cards and in Key Fact Sheet Secured Cards. Product page: fixed-deposit-backed secured card, 'Minimum Fixed Deposit of Rs 65,000; Maximum of Rs 25,00,000'."
+        },
+        {
+          "name": "IKEA Family Credit Card by Axis Bank",
+          "product_url": "https://www.axis.bank.in/forward-together/migrate-credit-cards/transfer-citi-axis-ikea-credit-card",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": "IKEA",
+          "evidence": "Former 'IKEA Family Credit Card by Citi', migrated to Axis on 15 July 2024 (Axis Citi transition page). Named in Axis Key Fact Sheet PDF (states 'last updated on 8th October 2026'), Partnership Cards (IKEA Family Credit Card by Axis Bank). No new-application statement found."
+        },
+        {
+          "name": "Axis Bank Olympus Credit Card",
+          "product_url": "https://www.axis.bank.in/forward-together/migrate-credit-cards/transfer-citi-olympus-credit-card",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Axis Citi transition page maps 'Citi Prestige Credit Card' to 'Axis Bank OLYMPUS Credit Card'. Named in Axis Key Fact Sheet PDF (states 'last updated on 8th October 2026'), Affluent Cards (OLYMPUS). Not on the Axis new-application listing page."
+        },
+        {
+          "name": "Axis Bank Magnus for Burgundy Credit Card",
+          "product_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/sosc-credit-cards.pdf",
+          "status": "existing_customers_only",
+          "variant_of": "Axis Bank Magnus Credit Card",
+          "partner": null,
+          "evidence": "Axis Key Fact Sheet PDF (states 'last updated on 8th October 2026'), Affluent Cards (MAGNUS for Burgundy); footnote: 'MAGNUS for Burgundy - Applicable only for Burgundy customers maintaining the requisite individual Burgundy relationship (www.axis.bank.in/magnus)'. No separate card page on the listing."
+        },
+        {
+          "name": "Axis Bank Burgundy Private - The One Card",
+          "product_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/sosc-credit-cards.pdf",
+          "status": "existing_customers_only",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Axis Key Fact Sheet PDF (states 'last updated on 8th October 2026'), Affluent Cards (BURGUNDY PRIVATE - The One Card); footnote: 'Burgundy Private CC: Applicable only for Burgundy Private clients maintaining the requisite individual Burgundy Private relationship' (https://www.axis.bank.in/burgundy-private/eligibility-criteria)."
+        },
+        {
+          "name": "Axis Bank Primus Credit Card",
+          "product_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/sosc-credit-cards.pdf",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Axis Key Fact Sheet PDF (states 'last updated on 8th October 2026'), Affluent Cards (PRIMUS Credit Card); fee/charge footnotes mention PRIMUS several times. Not on the listing page; no availability statement."
+        },
+        {
+          "name": "Axis Bank Visa Gold Credit Card",
+          "product_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/sosc-credit-cards.pdf",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Axis Key Fact Sheet PDF (states 'last updated on 8th October 2026'), 'Legacy Cards' table (product name 'VISA GOLD Credit Card' ). [segment: legacy] Not on the Axis new-application listing; no product page found. The Legacy table is followed by the printed text 'Version No: O0011108922_06_2022'."
+        },
+        {
+          "name": "Axis Bank Visa Silver Credit Card",
+          "product_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/sosc-credit-cards.pdf",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Axis Key Fact Sheet PDF (states 'last updated on 8th October 2026'), 'Legacy Cards' table (product name 'VISA SILVER Credit Card' ). [segment: legacy] Not on the Axis new-application listing; no product page found. The Legacy table is followed by the printed text 'Version No: O0011108922_06_2022'."
+        },
+        {
+          "name": "Axis Bank Buzz Credit Card",
+          "product_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/sosc-credit-cards.pdf",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Axis Key Fact Sheet PDF (states 'last updated on 8th October 2026'), 'Legacy Cards' table (product name 'BUZZ Credit Card' ). [segment: legacy] Not on the Axis new-application listing; no product page found. The Legacy table is followed by the printed text 'Version No: O0011108922_06_2022'."
+        },
+        {
+          "name": "Axis Bank My Wings Credit Card",
+          "product_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/sosc-credit-cards.pdf",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Axis Key Fact Sheet PDF (states 'last updated on 8th October 2026'), 'Legacy Cards' table (product name 'MY WINGS Credit Card' ). [segment: legacy] Not on the Axis new-application listing; no product page found. The Legacy table is followed by the printed text 'Version No: O0011108922_06_2022'."
+        },
+        {
+          "name": "Axis Bank My Choice Credit Card",
+          "product_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/sosc-credit-cards.pdf",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Axis Key Fact Sheet PDF (states 'last updated on 8th October 2026'), 'Legacy Cards' table (product name 'MY CHOICE Credit Card' ). [segment: legacy] Not on the Axis new-application listing; no product page found. The Legacy table is followed by the printed text 'Version No: O0011108922_06_2022'."
+        },
+        {
+          "name": "Axis Bank Titanium Credit Card",
+          "product_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/sosc-credit-cards.pdf",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Axis Key Fact Sheet PDF (states 'last updated on 8th October 2026'), 'Legacy Cards' table (product name 'TITANIUM Credit Card' ). [segment: legacy] Not on the Axis new-application listing; no product page found. The Legacy table is followed by the printed text 'Version No: O0011108922_06_2022'."
+        },
+        {
+          "name": "Axis Bank Platinum Credit Card",
+          "product_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/sosc-credit-cards.pdf",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Axis Key Fact Sheet PDF (states 'last updated on 8th October 2026'), 'Legacy Cards' table (product name 'PLATINUM Credit Card' ). [segment: legacy] Not on the Axis new-application listing; no product page found. The Legacy table is followed by the printed text 'Version No: O0011108922_06_2022'."
+        },
+        {
+          "name": "Axis Bank Signature Credit Card",
+          "product_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/sosc-credit-cards.pdf",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Axis Key Fact Sheet PDF (states 'last updated on 8th October 2026'), 'Legacy Cards' table (product name 'SIGNATURE Credit Card' ). [segment: legacy] Not on the Axis new-application listing; no product page found. The Legacy table is followed by the printed text 'Version No: O0011108922_06_2022'."
+        },
+        {
+          "name": "Axis Bank Infinite Credit Card",
+          "product_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/sosc-credit-cards.pdf",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Axis Key Fact Sheet PDF (states 'last updated on 8th October 2026'), 'Legacy Cards' table (product name 'INFINITE Credit Card' ). [segment: legacy] Not on the Axis new-application listing; no product page found. The Legacy table is followed by the printed text 'Version No: O0011108922_06_2022'."
+        },
+        {
+          "name": "Axis Bank Secured Gold Credit Card",
+          "product_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/sosc-credit-cards.pdf",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Axis Key Fact Sheet PDF (states 'last updated on 8th October 2026'), 'Secured Cards' table (SECURED GOLD Credit Card). [segment: secured/FD-backed, older tier] Not among the three FD-linked cards on the listing page (IndianOil Easy, Privilege Easy, My Zone Easy)."
+        },
+        {
+          "name": "Axis Bank Secured Silver Credit Card",
+          "product_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/sosc-credit-cards.pdf",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Axis Key Fact Sheet PDF (states 'last updated on 8th October 2026'), 'Secured Cards' table (SECURED SILVER Credit Card). [segment: secured/FD-backed, older tier] Not among the three FD-linked cards on the listing page (IndianOil Easy, Privilege Easy, My Zone Easy)."
+        },
+        {
+          "name": "Axis Bank Platinum Secured Credit Card",
+          "product_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/sosc-credit-cards.pdf",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Axis Key Fact Sheet PDF (states 'last updated on 8th October 2026'), 'Secured Cards' table (PLATINUM SECURED Credit Card). [segment: secured/FD-backed, older tier] Not among the three FD-linked cards on the listing page (IndianOil Easy, Privilege Easy, My Zone Easy)."
+        },
+        {
+          "name": "Axis Bank Insta Easy Credit Card",
+          "product_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/sosc-credit-cards.pdf",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Axis Key Fact Sheet PDF (states 'last updated on 8th October 2026'), 'Secured Cards' table (INSTA EASY Credit Card). [segment: secured/FD-backed, older tier] Not among the three FD-linked cards on the listing page (IndianOil Easy, Privilege Easy, My Zone Easy)."
+        },
+        {
+          "name": "Axis Bank Flipkart Secured Credit Card",
+          "product_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/sosc-credit-cards.pdf",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Axis Key Fact Sheet PDF (states 'last updated on 8th October 2026'), 'Secured Cards' table (FLIPKART SECURED Credit Card). [segment: secured/FD-backed, older tier] Not among the three FD-linked cards on the listing page (IndianOil Easy, Privilege Easy, My Zone Easy)."
+        },
+        {
+          "name": "Axis Bank My Zone Instant Credit Card",
+          "product_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/sosc-credit-cards.pdf",
+          "status": "unknown",
+          "variant_of": "Axis Bank My Zone Credit Card",
+          "partner": null,
+          "evidence": "Axis Key Fact Sheet PDF (states 'last updated on 8th October 2026'), named only inside the fuel surcharge refund paragraph ('MY ZONE INSTANT Credit Card'); no table column and no product page. [segment: secured/instant]"
+        },
+        {
+          "name": "Axis Bank PurchaseCard",
+          "product_url": "https://www.axis.bank.in/cards/commercial-credit-card/purchase-card",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed under 'Commercial Credit Cards' in the Axis cards menu (link https://www.axis.bank.in/cards/commercial-credit-card). [segment: commercial] No availability statement on the menu; commercial cards are by application through Axis business teams. Page body only partly read."
+        },
+        {
+          "name": "Axis Bank Central Travel Account Card",
+          "product_url": "https://www.axis.bank.in/cards/commercial-credit-card/central-travel-account-card",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed under 'Commercial Credit Cards' in the Axis cards menu (link https://www.axis.bank.in/cards/commercial-credit-card). [segment: commercial] No availability statement on the menu; commercial cards are by application through Axis business teams. Page body only partly read."
+        },
+        {
+          "name": "Axis Bank Purchase Rewards Card",
+          "product_url": "https://www.axis.bank.in/cards/commercial-credit-card/purchase-reward-card",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed under 'Commercial Credit Cards' in the Axis cards menu (link https://www.axis.bank.in/cards/commercial-credit-card). [segment: commercial] No availability statement on the menu; commercial cards are by application through Axis business teams. Page body only partly read."
+        },
+        {
+          "name": "Axis Bank Purchase Control (Virtual Card)",
+          "product_url": "https://www.axis.bank.in/cards/commercial-credit-card/purchase-control-virtual-card",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed under 'Commercial Credit Cards' in the Axis cards menu (link https://www.axis.bank.in/cards/commercial-credit-card). [segment: commercial] No availability statement on the menu; commercial cards are by application through Axis business teams. Page body only partly read."
+        },
+        {
+          "name": "Axis Bank Executive Corporate Credit Card (tooltip: My Business Credit Card)",
+          "product_url": "https://www.axis.bank.in/cards/commercial-credit-card/axis-bank-executive-corporate-credit-card",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed under 'Commercial Credit Cards' in the Axis cards menu (link https://www.axis.bank.in/cards/commercial-credit-card). [segment: commercial] No availability statement on the menu; commercial cards are by application through Axis business teams. Page body only partly read."
+        },
+        {
+          "name": "Axis Bank Corporate Card with Individual Liability",
+          "product_url": "https://www.axis.bank.in/cards/commercial-credit-card/corporate-card-with-individual-liability",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed under 'Commercial Credit Cards' in the Axis cards menu (link https://www.axis.bank.in/cards/commercial-credit-card). [segment: commercial] No availability statement on the menu; commercial cards are by application through Axis business teams. Page body only partly read."
+        },
+        {
+          "name": "Axis Bank Corporate Credit Card with Corporate Liability",
+          "product_url": "https://www.axis.bank.in/cards/commercial-credit-card/corporate-credit-card-with-corporate-liability",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed under 'Commercial Credit Cards' in the Axis cards menu (link https://www.axis.bank.in/cards/commercial-credit-card). [segment: commercial] No availability statement on the menu; commercial cards are by application through Axis business teams. Page body only partly read."
+        }
+      ],
+      "stale_live": [
+        {
+          "slug": "axis-bank-aura",
+          "evidence": "Axis product page https://www.axis.bank.in/cards/credit-card/axis-bank-aura-credit-card says 'This credit card is no longer available. Explore our wide range of Axis Bank...' (sentence cut off in the page text). The card is still shown on the listing page and the Key Fact Sheet still prints 'AURA (Health) Credit Card' (fee INR 749), so it is serviced but not sold."
+        }
+      ],
+      "live_closed_to_new": [
+        {
+          "slug": "axis-samsung-infinite",
+          "evidence": "'We are currently not accepting applications for SAMSUNG AXIS BANK INFINITE Credit Card. Therefore, please proceed to apply for the SAMSUNG AXIS BANK SIGNATURE Credit Card instead.' (https://www.axis.bank.in/cards/credit-card/samsung-axis-bank-infinite-credit-card)"
+        },
+        {
+          "slug": "axis-bank-vistara-infinite",
+          "evidence": "'The Axis Bank Vistara Credit Card will be discontinued for spends post 15 December 2026 following the merger of Vistara with Air India... apply for another Axis Bank Credit Card today.' (https://www.axis.bank.in/cards/credit-card/axis-bank-vistara-infinite-credit-card)"
+        },
+        {
+          "slug": "vistara-axis-bank-signature",
+          "evidence": "Same sentence about discontinuation for spends after 15 December 2026 (https://www.axis.bank.in/cards/credit-card/axis-bank-vistara-signature-credit-card)"
+        }
+      ],
+      "notes": "Listing read at https://www.axis.bank.in/cards/credit-card (about 40 cards named) plus the Axis Key Fact Sheet PDF https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/sosc-credit-cards.pdf ('last updated on 8th October 2026'; names retail, partnership, affluent, legacy and secured cards) and the Citi transition page https://www.axis.bank.in/forward-together/migrate-credit-cards (15 July 2024). Former Citi cards now serviced by Axis: Citi Rewards and CitiBusiness -> REWARDS (live); IndianOil Citi / CitiBusiness -> IndianOil Premium (live); PremierMiles -> HORIZON (live); Prestige -> OLYMPUS (missing); Cash Back -> CASHBACK (live); First Citizen -> Shoppers Stop (draft); IKEA Family -> IKEA Family Credit Card by Axis Bank (missing). ACCESS: after a burst of parallel downloads the Axis site returned 403 'Access Denied' to curl for the Magnus, Kwik, base Vistara product pages, two Citi transition pages (cashback, rewards), commercial cards page, NRI page and the KFS PDF; the built-in browser pane was also refused. No User-Agent or cookie changes were made. The fetch tool (WebFetch) was not refused for the base Vistara page, the commercial cards menu and the KFS PDF, so those were read through it; the NRI page (https://www.axis.bank.in/nri/nri-credit-card) was refused there too and was NOT read, so NRI-specific Axis cards are unchecked. The Magnus and Kwik pages were not read (both already held: Magnus live, Kwik draft). Closed or ending but still live in catalogue (not stale): Samsung Axis Bank Infinite page says 'We are currently not accepting applications for SAMSUNG AXIS BANK INFINITE Credit Card' (use Samsung Signature); Vistara Signature and Vistara Infinite pages say 'The Axis Bank Vistara Credit Card will be discontinued for spends post 15 December 2026 following the merger of Vistara with Air India'; Axis Select page says it is complimentary exclusively for Burgundy customers. Axis Bank Freecharge and Freecharge Plus share one invite-only statement. Legacy and secured rows come only from the Key Fact Sheet tables and have no product page; treat as low priority. Axis Bank Rewards page mentions 'Lifetime free and migrated card' variants of the same product. offered_count = live matched + non-live drafts + missing (stale_live excluded); of the 37 missing, 15 are retail/partner/affluent rows and 22 are legacy, secured or commercial rows."
+    },
+    {
+      "issuer": "Kotak Mahindra Bank",
+      "listing_url": "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards.html",
+      "read_on": "2026-11-07",
+      "offered_count": 39,
+      "matched_live": [
+        "kotak-corporate-platinum-credit-card",
+        "indianoil-kotak-credit-card",
+        "indigo-kotak-premium",
+        "kotak-biz-credit-card",
+        "kotak-cashback-plus-prime-credit-card",
+        "kotak-infinite-credit-card",
+        "kotak-solitaire-credit-card",
+        "kotak-upi-rupay-credit-card",
+        "kotak-white-credit-card",
+        "myntra-kotak-credit-card",
+        "kotak-solitaire-business-credit-card",
+        "kotak-urbane-gold-credit-card",
+        "kotak-white-reserve",
+        "kotak-bizedge-credit-card",
+        "kotak-corporate-wealth-signature-credit-card",
+        "kotak-feast-gold-credit-card",
+        "indigo-kotak-credit-card",
+        "kotak-811-credit-card",
+        "kotak-air-credit-card",
+        "kotak-air-plus-credit-card",
+        "kotak-air-plus-prime-credit-card",
+        "kotak-cashback-plus-credit-card",
+        "kotak-privy-league-signature-credit-card",
+        "kotak-811-dream-different",
+        "kotak-league-platinum-credit-card",
+        "kotak-mojo-platinum-credit-card",
+        "kotak-privy-league-platinum-corporate-credit-card",
+        "kotak-purchase-credit-card",
+        "pvr-inox-kotak-credit-card",
+        "pvr-kotak-gold-credit-card",
+        "pvr-kotak-platinum-credit-card",
+        "kotak-royale-signature-credit-card",
+        "kotak-zen-signature-credit-card"
+      ],
+      "matched_drafts": [],
+      "missing": [
+        {
+          "name": "Kotak Private Credit Card",
+          "product_url": "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/kotak-private-credit-card.html",
+          "status": "invite_only",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listing tile: 'A Statement in Metal. A World Beyond.' ... 'By Invitation only'. Metal card."
+        },
+        {
+          "name": "Kotak NRI Royale Signature Credit Card",
+          "product_url": "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/nri-royale-signature-card.html",
+          "status": "sold",
+          "variant_of": "Royale Signature Credit Card (NRI version)",
+          "partner": null,
+          "evidence": "Listing tile 'NRI Royale Signature Credit Card' and NRI menu entry; product page heading 'Apply for Kotak NRI Royale Signature Credit Card'. The resident Royale Signature card (live) is marked 'Discontinued for new applications' but this NRI card is not."
+        },
+        {
+          "name": "Kotak Corporate Gold Credit Card",
+          "product_url": "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/corporate-gold-card.html",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listing tile 'Corporate Gold Credit Card' and Business menu entry; page heading 'Apply for Kotak Corporate Gold Credit Card Online'. No restriction text. [segment: commercial]"
+        },
+        {
+          "name": "Kotak Fortune Gold Credit Card",
+          "product_url": "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/fortune-gold-card.html",
+          "status": "closed_to_new_applications",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Related-products widget on Kotak business/fuel/movie/shopping/travel category pages: 'Fortune Gold Credit Card (Discontinued)' and 'Discontinued for new applications'."
+        },
+        {
+          "name": "Kotak Basic Corporate Credit Card (CCCL)",
+          "product_url": "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/corporate-credit-card.html",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Named only in the insurance table of the Kotak Corporate Credit Card page: 'Insurance is valid for the following Corporate T&E card variants ... Basic Corporate Credit Card (CCCL)'. No tile or product page. [segment: commercial]"
+        },
+        {
+          "name": "Kotak Classic Corporate Credit Card (CCCL)",
+          "product_url": "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/corporate-credit-card.html",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Named only in the same insurance table ('Classic Corporate Credit Card (CCCL)'). No tile or product page. [segment: commercial]"
+        }
+      ],
+      "stale_live": [
+        {
+          "slug": "indigo-kotak-6e-rewards",
+          "evidence": "Kotak IndiGo page (https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/indigo-xl-credit-card.html) FAQ: 'If you have upgraded from the 6E Rewards card to the IndiGo Kotak Premium card...' and '6E Rewards balance was converted to IndiGo BluChips... by 3rd October '25'. The credit-cards listing shows only 'Indigo Kotak Credit Card' and 'Indigo Kotak Premium Credit Card'; the IndiGo T&C PDF (https://images.kotak.com/bank/mailers/2025/files/Kotak%20IndiGo%20Credit%20Card%20TnC.pdf) names only those two."
+        },
+        {
+          "slug": "indigo-kotak-6e-rewards-xl-credit-card",
+          "evidence": "Same Kotak IndiGo FAQ: 'if they had a 6E Rewards XL card, post activating the new IndiGo card (within 30 days)' - the 6E Rewards XL card was replaced by the new IndiGo cards (October 2025). Not on the current listing."
+        },
+        {
+          "slug": "indigo-kotak-xl",
+          "evidence": "The URL .../indigo-xl-credit-card.html is now titled 'Indigo Kotak Premium Credit Card' (page h1) and the listing tile for it reads 'Indigo Kotak Premium Credit Card'; no 'XL' card is listed. Likely the same product as live slug indigo-kotak-premium under an older name."
+        },
+        {
+          "slug": "kotak-travel-agent-credit-card",
+          "evidence": "Not on the Kotak credit-cards listing page, not on any of the 19 Kotak card pages read (6 category pages: business, corporate, fuel, movie, shopping, travel; 13 product pages) and not in the co-brand T&C page."
+        },
+        {
+          "slug": "kotak-delight-platinum-credit-card",
+          "evidence": "Not on the listing. Only trace is a leftover sentence on the NRI Royale Signature page: 'The Delight Platinum Card offers you Waiver of this surcharge of 1 % that is levied.' No product page or tile."
+        },
+        {
+          "slug": "kotak811-super-money-credit-card",
+          "evidence": "No mention of a Kotak811 Super Money card on the listing page or any of the 19 Kotak card pages read (listing shows Kotak 811 Credit card and 811 Dream Different Credit Card only)."
+        }
+      ],
+      "live_closed_to_new": [
+        {
+          "slug": "pvr-kotak-gold-credit-card",
+          "evidence": "Kotak listing tile reads 'Discontinued for new applications'"
+        },
+        {
+          "slug": "kotak-mojo-platinum-credit-card",
+          "evidence": "Kotak listing tile reads 'Discontinued for new applications'"
+        },
+        {
+          "slug": "kotak-royale-signature-credit-card",
+          "evidence": "Kotak listing tile reads 'Discontinued for new applications'"
+        },
+        {
+          "slug": "kotak-privy-league-signature-credit-card",
+          "evidence": "Kotak listing tile reads 'Discontinued for new applications'"
+        },
+        {
+          "slug": "kotak-urbane-gold-credit-card",
+          "evidence": "Kotak listing tile reads 'Discontinued for new applications'"
+        },
+        {
+          "slug": "pvr-kotak-platinum-credit-card",
+          "evidence": "Kotak listing tile reads 'Discontinued for new applications'"
+        },
+        {
+          "slug": "kotak-feast-gold-credit-card",
+          "evidence": "Related-products widget: 'Feast Gold Credit Card (Discontinued)' / 'Discontinued for new applications' (no listing tile)"
+        },
+        {
+          "slug": "kotak-biz-credit-card",
+          "evidence": "Biz Credit Card tile: 'This is an invite-only credit card.' (still serviced; invite only, not closed)"
+        },
+        {
+          "slug": "kotak-solitaire-credit-card",
+          "evidence": "Tile: 'An invite-only card crafted exclusively for the select few' (invite only, not closed)"
+        }
+      ],
+      "notes": "Listing read at https://www.kotak.bank.in/en/personal-banking/cards/credit-cards.html (33 product tiles with data-des-link paths), 6 category pages (business, corporate, fuel, movie, shopping, travel), 13 product pages and the co-brand T&C page (https://www.kotak.bank.in/en/terms-conditions/co-brand-credit-card.html, names IndiGo, PVR INOX, IndianOil co-brands). The old kotak.com domain redirects (301) to kotak.bank.in. Both live slugs (kotak 15, kotak-mahindra-bank 24) are one issuer and were matched together. Matched through the listing: 33 live slugs. Myntra Kotak Credit Card (live myntra-kotak-credit-card) is advertised on Kotak pages as a banner ('Myntra Kotak Credit Card - Instant Discount of 7.5% on Myntra') but has no listing tile. Kotak Privy League Platinum Corporate (live) is named in the Corporate Credit Card insurance table. Live fee mismatch worth a look (not researched): the IndiGo Kotak Credit Card tile shows Joining/Annual Fee Rs 0 while live indigo-kotak-credit-card carries 1500. Live cards that Kotak marks 'Discontinued for new applications' are listed under live_closed_to_new, not stale. The corporate Kotak T&E Corporate and Wealth Signature Corporate headings are descriptions of Corporate Platinum and Corporate Wealth Signature, not extra products. offered_count = live matched + missing (cards Kotak lists or services, including those it tags Discontinued; stale_live excluded)."
+    },
+    {
+      "issuer": "IndusInd Bank",
+      "listing_url": "https://www.indusind.bank.in/in/en/personal/cards/credit-card.html",
+      "read_on": "2026-11-07",
+      "offered_count": 40,
+      "matched_live": [
+        "indusind-avios-visa-infinite-credit-card",
+        "indusind-celesta-credit-card",
+        "club-vistara-indusind-bank-explorer",
+        "indusind-bank-cred-rupay",
+        "indusind-crest-credit-card",
+        "indusind-duo-card",
+        "indusind-duo-plus",
+        "eazydiner-indusind-signature",
+        "eazydiner-indusind-platinum",
+        "indusind-iconia-amex",
+        "indusind-iconia-visa",
+        "indusind-indulge-credit-card",
+        "indusind-intermiles-voyage-visa",
+        "indusind-jio-bp-mobility-plus-credit-card",
+        "indusind-legend",
+        "indusind-nexxt-credit-card",
+        "indusind-pinnacle-credit-card",
+        "indusind-pinnacle-world-credit-card",
+        "indusind-pioneer-heritage-credit-card",
+        "indusind-pioneer-legacy-credit-card",
+        "indusind-platinum-aura-edge",
+        "indusind-platinum",
+        "indusind-platinum-rupay",
+        "indusind-platinum-select",
+        "indusind-platinum-visa",
+        "indusind-samman-rupay-credit-card",
+        "indusind-signature-visa",
+        "indusind-tiger-credit-card"
+      ],
+      "matched_drafts": [
+        "indusind-bank-cred-rupay"
+      ],
+      "missing": [
+        {
+          "name": "Indus Solitaire Credit Card",
+          "product_url": "https://www.indusind.bank.in/in/en/personal/cards/credit-card/solitaire-credit-card.html",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Shown in the 'All Credit Cards' list on the IndusInd listing page without an 'Apply Now' button and without a Discontinued tag; named as a current product in the IndusInd MITC fee table ('Indus Solitaire Credit Card')."
+        },
+        {
+          "name": "Pioneer Private Credit Card",
+          "product_url": "https://www.indusind.bank.in/in/en/personal/cards/credit-card/pioneer-private.html",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Shown in the 'All Credit Cards' list ('Pioneer Private') without 'Apply Now' and without a Discontinued tag; fee table in the MITC lists 'Pioneer Private Credit Card'. Page does not say invite only in text read."
+        },
+        {
+          "name": "ePay Amex Credit Card",
+          "product_url": "https://www.indusind.bank.in/in/en/personal/cards/credit-card/epay-amex-card.html",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Shown in the 'All Credit Cards' list without 'Apply Now' and without a Discontinued tag; named in the MITC fee table ('ePay Amex Credit Card'). Page text: 'ePay AMEX Credit Card - Rewards & Global Acceptance'."
+        },
+        {
+          "name": "Platinum Master Credit Card",
+          "product_url": "https://www.indusind.bank.in/in/en/personal/cards/credit-card/platinum-master-credit-card.html",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Shown in the 'All Credit Cards' list ('Platinum Master Credit Card') without 'Apply Now' and without a Discontinued tag."
+        },
+        {
+          "name": "Platinum Aura Credit Card",
+          "product_url": "https://www.indusind.bank.in/in/en/personal/cards/credit-card/platinum-aura-visa-and-mastercard-credit-card.html",
+          "status": "closed_to_new_applications",
+          "variant_of": "Platinum Aura Edge Visa/Mastercard Credit Card (older version)",
+          "partner": null,
+          "evidence": "Listing entry reads 'Platinum Aura Credit Card (Discontinued)'; the MITC footnote lists 'Discontinued cards - Platinum Aura, Platinum Select, Iconia, ...'."
+        },
+        {
+          "name": "Platinum Aura Edge Credit Card Exclusively for Government Sector Employees",
+          "product_url": "https://www.indusind.bank.in/in/en/personal/cards/credit-card/platinum-aura-edge-credit-card-for-government-employees.html",
+          "status": "closed_to_new_applications",
+          "variant_of": "Platinum Aura Edge Visa/Mastercard Credit Card",
+          "partner": null,
+          "evidence": "Listing entry '... - (Discontinued)'. Page: 'we have discontinued this product for new sourcing, and same is only displayed as a reference for existing IndusInd Bank Platinum Aura Edge Credit Cardholders (Exclusively for Government Sector Employees)'."
+        },
+        {
+          "name": "InterMiles Odyssey Amex Credit Card",
+          "product_url": "https://www.indusind.bank.in/in/en/personal/cards/credit-card/intermiles-odyssey-amex-credit-card.html",
+          "status": "closed_to_new_applications",
+          "variant_of": "InterMiles Odyssey Visa Credit Card (Amex network version)",
+          "partner": "InterMiles",
+          "evidence": "Listing entry 'InterMiles Odyssey Amex Credit Card (Discontinued)'; important-updates page: relationship with InterMiles concluded on 4 variants (Odyssey Visa, Odyssey Amex, Voyage Amex, Voyage Visa) w.e.f. August 24."
+        },
+        {
+          "name": "InterMiles Odyssey Visa Credit Card",
+          "product_url": "https://www.indusind.bank.in/in/en/personal/cards/credit-card/intermiles-odyssey-visa-credit-card.html",
+          "status": "closed_to_new_applications",
+          "variant_of": null,
+          "partner": "InterMiles",
+          "evidence": "Listing entry 'InterMiles Odyssey Visa Credit Card (Discontinued)'; MITC footnote lists 'Intermiles IndusInd Bank Odyssey Credit Card' as discontinued."
+        },
+        {
+          "name": "InterMiles Voyage Amex Credit Card",
+          "product_url": "https://www.indusind.bank.in/in/en/personal/cards/credit-card/intermiles-voyage-amex-credit-card.html",
+          "status": "closed_to_new_applications",
+          "variant_of": "Intermiles Voyage Visa Credit Card (Amex network version)",
+          "partner": "InterMiles",
+          "evidence": "Listing entry 'InterMiles Voyage Amex Credit Card (Discontinued)'. Voyage Visa (live) carries the same Discontinued tag."
+        },
+        {
+          "name": "Poonawalla Fincorp IndusInd Bank eLITE RuPay Credit Card",
+          "product_url": "https://www.indusind.bank.in/in/en/personal/cards/credit-card/poonawalla-platinum-rupay-credit-card.html",
+          "status": "closed_to_new_applications",
+          "variant_of": null,
+          "partner": "Poonawalla Fincorp",
+          "evidence": "Listing entry 'Poonawalla Fincorp IndusInd Bank eLITE RuPay Credit Card (Discontinued)'; MITC footnote lists it among discontinued cards."
+        },
+        {
+          "name": "IndusInd Bank Secured Credit Card (Credit Card Against FD)",
+          "product_url": "https://induseasycredit.indusind.bank.in/customer/credit-card/secured-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Linked from the IndusInd cards menu as 'Credit Card Against FD' / 'Secured Credit Card' (apply flow on induseasycredit.indusind.bank.in). Not read in detail; fixed-deposit backed."
+        },
+        {
+          "name": "IndusInd Bank Duo Premier Card",
+          "product_url": "https://www.indusind.bank.in/in/en/personal/cards/credit-card/duo-card.html",
+          "status": "closed_to_new_applications",
+          "variant_of": "Duo Card / Duo Plus Card",
+          "partner": null,
+          "evidence": "Duo Card page value table lists 'Duo Plus' (Joining Rs 1500, Annual Rs 799) and 'Duo Premier' (Joining Rs 3000, Annual Rs 799) as variants. Page: 'we have discontinued this product for new sourcing, and same is only displayed as a reference for existing IndusInd Bank Duo Credit Cardholders.'"
+        }
+      ],
+      "stale_live": [],
+      "live_closed_to_new": [
+        {
+          "slug": "club-vistara-indusind-bank-explorer",
+          "evidence": "Listing: 'Club Vistara Explorer Credit Card (Discontinued)'; page: 'Due to merger of Club Vistara with Air India, your IndusInd Bank Vistara Explorer Credit Card is getting Migrated to different variant'"
+        },
+        {
+          "slug": "indusind-duo-card",
+          "evidence": "Listing: 'Duo Card (Discontinued)'; page: 'we have discontinued this product for new sourcing'"
+        },
+        {
+          "slug": "indusind-duo-plus",
+          "evidence": "Duo Plus is a variant shown on the Duo Card page, which is discontinued for new sourcing"
+        },
+        {
+          "slug": "indusind-iconia-amex",
+          "evidence": "Listing: 'Iconia Amex Credit Card (Discontinued)'"
+        },
+        {
+          "slug": "indusind-iconia-visa",
+          "evidence": "Listing: 'Iconia Visa Credit Card (Discontinued)'"
+        },
+        {
+          "slug": "indusind-intermiles-voyage-visa",
+          "evidence": "Listing: 'Intermiles Voyage Visa Credit Card (Discontinued)'"
+        },
+        {
+          "slug": "indusind-platinum-select",
+          "evidence": "Listing: 'Platinum Select Credit Card (Discontinued)'"
+        },
+        {
+          "slug": "indusind-signature-visa",
+          "evidence": "Listing: 'Signature Visa Credit Card (Discontinued)'"
+        }
+      ],
+      "notes": "Listing read at https://www.indusind.bank.in/in/en/personal/cards/credit-card.html (the old indusind.com domain 301-redirects to indusind.bank.in). The page has an 'Instant Credit Cards' block (all with Apply Now) and an 'All Credit Cards' list that tags withdrawn cards '(Discontinued)'. Also read 34 product pages, the important-updates page and the MITC PDF https://www.indusind.bank.in/content/dam/indusind-corporate/schedule-of-charges/credit-cards/MITC_Premium.pdf (footnote: 'Discontinued cards - Platinum Aura, Platinum Select, Iconia, Intermiles IndusInd Bank Odyssey Credit Card, Intermiles IndusInd Bank Voyage Credit Card, Platinum Aura Edge Credit Card (For Government Sector) and Poonawalla Fincorp IndusInd Bank eLITE RuPay Credit Card'). offered_count = live matched + missing (cards the issuer lists or services, including those it tags Discontinued; stale_live excluded). Cards with Apply Now: Platinum RuPay, EazyDiner Platinum, Legend, EazyDiner, Platinum Aura Edge Visa/Master, Platinum Visa, Pinnacle, Avios Visa Infinite, Nexxt, Samman (government employees only), Tiger. Live cards with no Apply Now and no Discontinued tag (status unknown, not necessarily invite only): CRED RuPay, Jio-bp Mobility+, Indulge, Pioneer Heritage, Pioneer Legacy, Crest, Celesta. Possible duplicates inside live (not stale): indusind-pinnacle-credit-card and indusind-pinnacle-world-credit-card are both 'Pinnacle' (the issuer lists one Pinnacle Credit Card at pinnacle-world-credit-card.html); indusind-platinum and indusind-platinum-visa look like the same Platinum Visa product. No live card was found that IndusInd has stopped listing. Samman is an eligibility-restricted card (government employees only). No co-brand card on the listing beyond Tiger (Bajaj Capital group), CRED, Jio-bp, EazyDiner and the discontinued InterMiles/Poonawalla ones."
+    },
+    {
+      "issuer": "IDFC FIRST Bank",
+      "listing_url": "https://www.idfcfirst.bank.in/credit-card",
+      "read_on": "2026-11-07",
+      "offered_count": 28,
+      "matched_live": [
+        "idfc-first-ashva-metal",
+        "idfc-first-business-max",
+        "idfc-first-business-multiplier",
+        "idfc-first-diamond-reserve",
+        "idfc-first-business",
+        "idfc-first-classic",
+        "idfc-first-corporate",
+        "idfc-first-digital",
+        "idfc-first-earn",
+        "idfc-first-millennia",
+        "idfc-first-private",
+        "idfc-first-purchase",
+        "idfc-first-select",
+        "idfc-first-swyp",
+        "idfc-first-wealth",
+        "idfc-first-wow",
+        "idfc-first-wow-black",
+        "idfc-first-gaj-metal",
+        "idfc-first-hello-cashback",
+        "hpcl-idfc-first-power-plus",
+        "hpcl-idfc-first-power",
+        "indigo-idfc-first-dual-card",
+        "idfc-first-lic-classic",
+        "idfc-first-lic-select",
+        "idfc-first-mayura-metal",
+        "idfc-first-micro-enterprise",
+        "idfc-first-quantum-plus"
+      ],
+      "matched_drafts": [],
+      "missing": [
+        {
+          "name": "FIRST WOW! Credit Card for NRIs",
+          "product_url": "https://www.idfcfirst.bank.in/credit-card/wow/nri-credit-card",
+          "status": "sold",
+          "variant_of": "FIRST WOW!",
+          "partner": null,
+          "evidence": "Listed under NRI menu ('NRI Credit Card' -> /credit-card/wow/nri-credit-card). Page: 'FIRST WOW! Credit Card for NRIs is fixed-deposit-backed premium credit card' with zero forex markup, needs an IDFC FIRST NRE savings account. Same FIRST WOW! product line restricted to NRIs; may not warrant its own catalogue row."
+        }
+      ],
+      "stale_live": [
+        {
+          "slug": "club-vistara-idfc-first",
+          "evidence": "Not on the IDFC FIRST credit-card listing (no Vistara tile anywhere). Issuer notice https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Communication-for-Club-Vistara-Card-Closure-CS5.pdf: 'the Club Vistara IDFC FIRST Credit Card programme will end on 30th September 2026 following the Vistara-Air India transition... From 1st October 2026, the Club Vistara Credit Card will no longer be available for transactions.'"
+        }
+      ],
+      "live_closed_to_new": [
+        {
+          "slug": "idfc-first-gaj-metal",
+          "evidence": "Listing tag 'Invite Only' (still sold by invitation)"
+        },
+        {
+          "slug": "idfc-first-private",
+          "evidence": "Listing tag 'Invite Only' (still sold by invitation)"
+        }
+      ],
+      "notes": "Listing read at https://www.idfcfirst.bank.in/credit-card (the old idfcfirstbank.com domain 301-redirects to idfcfirst.bank.in) plus 33 product/category pages. Listing tags 'Invite Only' on Gaj: Credit Card and FIRST Private only (every IDFC page shows an 'Invite Only' chip in the shared header, which refers to Gaj). All other live cards matched by name. FIRST Power and Power+ share one product page (/credit-card/hpcl-power-fuel-credit-card); LIC Classic and LIC Select share /credit-card/lic-credit-card; IndiGo IDFC FIRST Dual Card has a joining-fee variant (Rs 4,999 + GST) and an FD-backed variant (FD of Rs 1,00,000) on one page. 'Step Up Credit Card' (startup menu) resolves to the same page as FIRST Business (/credit-card/business-credit-card-sme), so it is an alias, not an extra card. Business Max and Business Multiplier are commercial cards. The MITC PDF at /content/dam/idfcfirstbank/pdf/credit-card/MITC-Document-Customer.pdf names only the Ashva and Mayura metal variants, no new products. offered_count = live matched + missing (stale_live excluded)."
+    }
+  ]
+}

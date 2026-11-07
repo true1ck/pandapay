@@ -1,0 +1,706 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "slice-small-finance-bank-upi-credit-card",
+    "name": "slice UPI Credit Card",
+    "issuer_slug": "slice-small-finance-bank",
+    "network": "rupay",
+    "network_tier": null,
+    "card_tier": "N/A",
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [
+      "virtual_card"
+    ],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 0.01,
+    "point_value_baseline_basis": "MITC: monies redeem for cash into the slice savings account at 1% of balance up to ₹3,00,000, 1.5% for ₹3,00,001-₹5,00,000, 2% above ₹5,00,000 and 3% only with both a ₹5,00,000 monies balance and a ₹5,00,000 average quarterly savings balance. 1 monies per ₹1 at the 1% slab is ₹0.01 per monies.",
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://slice.bank.in/credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "Earlier research recorded a minimum age of 18; not re-read.",
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 1,
+    "rounding_mode": null,
+    "base_points_per_block": 1,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": 1,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "slice-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5541,
+          5542,
+          5983,
+          5172
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel earns no monies (MITC exclusion table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "slice-excl-transport",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4111,
+          4112,
+          4784,
+          4789
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Railways, transit and transportation earn no monies."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "slice-excl-telecom-utility",
+      "category_id": "utility",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4814,
+          4900
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Telecom and utility payments earn no monies."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "slice-excl-education",
+      "category_id": "education",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Education earns no monies."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "slice-excl-government",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          9211,
+          9222,
+          9311,
+          9405,
+          9399,
+          9402
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Government and post office earn no monies."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "slice-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513,
+          7349
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Rent payments and property management earn no monies."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "slice-excl-wallet",
+      "category_id": "wallet_load",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6539,
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Wallet loading earns no monies."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "slice-excl-gaming",
+      "category_id": "gaming",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5816,
+          7800,
+          7801,
+          7802,
+          7995
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Online gaming and gambling earn no monies."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "slice-excl-insurance",
+      "category_id": "insurance",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5960,
+          6300,
+          6381,
+          3429,
+          6529
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Insurance earns no monies."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "slice-excl-finance",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6012,
+          6541,
+          6051,
+          820,
+          821,
+          822,
+          823,
+          824,
+          825,
+          763,
+          780,
+          5260
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Financial institutions, quasi-cash and agriculture earn no monies."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "slice-excl-cash",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6010
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Cash withdrawal earns no monies."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "slice-excl-emi",
+      "category_id": "emi",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Transactions converted to EMI (\"sliced\") earn no monies."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "slice-excl-international",
+      "category_id": "international_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "International transactions earn no monies."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "slice-monies-1",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "1 monies per ₹1 spent on eligible transactions on the slice credit card, directly or via UPI. Value depends on the redemption slab, from 1% to 3%."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.5,
+      "annual_interest_rate_percent": 42
+    },
+    "forex_markup": {
+      "markup_percent": 0,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 0,
+      "gst_applicable": true,
+      "trigger_condition": "MITC: DCC mark-up ₹0"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 2,
+      "waiver_percent": 0,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": null,
+      "atm_transaction_fee_min_inr": null,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          5541,
+          5542,
+          5983,
+          5172
+        ],
+        "fee_percent": 2,
+        "gst_applicable": true,
+        "trigger_condition": "2% (minimum ₹10) when cumulative fuel spend in a statement cycle exceeds ₹25,000",
+        "threshold_spend_inr": 25000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "utility",
+        "mcc_list": [
+          4900
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% (minimum ₹10) on utility spend above ₹25,000",
+        "threshold_spend_inr": 25000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% (minimum ₹10) on rent spend above ₹10,000",
+        "threshold_spend_inr": 10000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education_third_party",
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% (minimum ₹10) on education payments via third-party apps",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "wallet_load",
+        "mcc_list": [
+          6539,
+          6540
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% (minimum ₹10) on wallet loading",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": 0,
+      "post_purchase_emi_processing_fee_inr": 0,
+      "foreclosure_charge_percent": 3.5,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": null,
+        "min_fee_inr": null,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 100,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 101,
+        "max_balance_inr": 500,
+        "fee_inr": 100
+      },
+      {
+        "min_balance_inr": 501,
+        "max_balance_inr": 1000,
+        "fee_inr": 500
+      },
+      {
+        "min_balance_inr": 1001,
+        "max_balance_inr": 5000,
+        "fee_inr": 600
+      },
+      {
+        "min_balance_inr": 5001,
+        "max_balance_inr": 10000,
+        "fee_inr": 750
+      },
+      {
+        "min_balance_inr": 10001,
+        "max_balance_inr": 25000,
+        "fee_inr": 900
+      },
+      {
+        "min_balance_inr": 25001,
+        "max_balance_inr": 50000,
+        "fee_inr": 1100
+      },
+      {
+        "min_balance_inr": 50001,
+        "max_balance_inr": null,
+        "fee_inr": 1300
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "No joining or annual fee (MITC). slice reserves the right to levy renewal fees on card renewal.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": null,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "Cash to slice savings account, monies balance up to ₹3,00,000",
+        "redemption_type": "cashback",
+        "inr_value_per_point": 0.01,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": "N/A",
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": 0,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "channel": "Cash to slice savings account, balance ₹3,00,001 to ₹5,00,000",
+        "redemption_type": "cashback",
+        "inr_value_per_point": 0.015,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": "N/A",
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": 0,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "channel": "Cash to slice savings account, balance above ₹5,00,000",
+        "redemption_type": "cashback",
+        "inr_value_per_point": 0.02,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": "N/A",
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": 0,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "superseded_research_provenance",
+        "value": {
+          "research_method": "direct review of official issuer/partner pages and published terms; no browser automation response assumed",
+          "verified_at": "2026-10-17T16:48:32.669Z",
+          "source_urls": [
+            "https://slice.bank.in/credit-card",
+            "https://slice.bank.in/cc-mitc/",
+            "https://slice.bank.in/cc-terms/"
+          ],
+          "effective_date_caveats": "Official current page does not identify a single network in the extracted text. Keep network null pending card-specific issued variant evidence. 3% is conditional on balance requirements, not a flat earning rate.",
+          "fact_claims": [
+            "Issuer is slice Small Finance Bank Ltd; advertised current product name is slice UPI Credit Card. “Slice Super Card” is retained as an alias only, not a second product.",
+            "MITC lists ₹0 joining, annual and replacement fees; bank-transfer-from-credit-limit fee is 2.5% (minimum ₹25); forex and DCC markups are ₹0.",
+            "Reward currency “monies”: 1 monies per ₹1 eligible spend, including eligible UPI; exclusions include EMI-converted, wallet load, fuel, insurance, rent, education, tax/government, online gaming/gambling, excluded MCCs and international transactions.",
+            "Cash redemption to slice savings account has balance-based rates: 1% up to ₹3,00,000 monies balance; 1.5% ₹3,00,001–₹5,00,000; 2% above ₹5,00,000; 3% only when both average quarterly savings balance is at least ₹5,00,000 and monies balance is at least ₹5,00,000. Monies lapse on closure/inactivity conditions in MITC."
+          ],
+          "aliases": [
+            "Slice Super Card",
+            "slice credit card",
+            "Slice UPI card"
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://slice.bank.in/cc-mitc/",
+              "kind": "slice credit card MITC (fees, finance charges, late fee, monies, exclusion MCCs)",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://slice.bank.in/credit-card",
+              "kind": "product page (\"upto 3% cashback\", zero joining, annual and forex charges)",
+              "read": "rendered page text"
+            }
+          ],
+          "open_questions": [
+            "Network (settled 2026-11-07, W6): RuPay. The slice MITC page (https://slice.bank.in/cc-mitc/) section (iv) Statement disputes resolution names \"the respective card network (Rupay)\" and section J Tap/Scan and Pay says \"The scan and pay feature is exclusively available on RuPay credit cards\"; no other network is named anywhere on the MITC or on https://slice.bank.in/credit-card, and the card art shows no network logo. A person may still want to confirm RuPay tier (the MITC states none).",
+            "The page headline \"up to 3% cashback\" is the top redemption slab, which needs a ₹5,00,000 monies balance AND a ₹5,00,000 average quarterly savings balance. The base is 1%.",
+            "The MITC page shows no revision date; the page was read on 2026-11-07.",
+            "\"Slice Super Card\" is an alias of this product, not a second card.",
+            "The fuel row says \"2% (min ₹10) on spends above ₹25,000\" in one place and applies it to cumulative statement-cycle spend in another; the cycle reading is used."
+          ],
+          "notes": [
+            "Bank transfer from the credit limit: 2.5% fee (minimum ₹25) plus GST (not in the universal schema).",
+            "monies are forfeited if the card is closed or inactive for a continuous year."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

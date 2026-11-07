@@ -53,6 +53,7 @@ class HistoryCategoryRecheck {
     required this.accountIsCurrent,
     this.categoryIdBySlug = const {},
     this.onlySources,
+    this.onlyEventIds,
   }) {
     if (!from.isBefore(to)) throw ArgumentError('Choose a nonempty period');
     SmsV2Schema.ensure(db);
@@ -83,6 +84,10 @@ class HistoryCategoryRecheck {
   /// decision stays locked.
   final Set<CategorySource>? onlySources;
 
+  /// When set, only these events are looked at (a bulk change from the edit
+  /// screen); the period then only bounds which of them count.
+  final Set<String>? onlyEventIds;
+
   final FinancialStore financial;
   final String namespace;
   final RuleBundle bundle;
@@ -107,11 +112,19 @@ class HistoryCategoryRecheck {
     ))
       row['event_id'] as String,
   };
-  late final _periodEvents = _events
-      .listSince(from)
-      .where((event) => event.occurredAt.isBefore(to))
-      .map((event) => event.eventId)
-      .toSet();
+  late final _periodEvents = onlyEventIds != null
+      ? {
+          for (final id in onlyEventIds!)
+            if (_events.get(id) case final event?)
+              if (!event.occurredAt.isBefore(from) &&
+                  event.occurredAt.isBefore(to))
+                event.eventId,
+        }
+      : _events
+            .listSince(from)
+            .where((event) => event.occurredAt.isBefore(to))
+            .map((event) => event.eventId)
+            .toSet();
   late final _awaiting = _periodEvents.intersection(_pendingMoneyEvents());
   late final _targets = _periodEvents.difference(_awaiting).toList()..sort();
   String get _key {
@@ -135,7 +148,8 @@ class HistoryCategoryRecheck {
       'from': from.toUtc().toIso8601String(),
       'to': to.toUtc().toIso8601String(),
       if (onlySources != null)
-        'onlySources': (onlySources!.map((source) => source.wire).toList()..sort()),
+        'onlySources': (onlySources!.map((source) => source.wire).toList()
+          ..sort()),
       'targets': _targets,
     });
     return 'history:categories:${sha256.convert(utf8.encode(revision))}';
@@ -168,17 +182,20 @@ class HistoryCategoryRecheck {
     }
   }
 
+  /// [restart] ignores a saved "already done" record for the same rules and
+  /// looks at every spend again: the person asked for a fresh pass.
   Future<HistoryCategoryReport> run({
     int chunkSize = 25,
     bool Function()? shouldContinue,
     void Function(HistoryCategoryReport)? onProgress,
+    bool restart = false,
   }) async {
     if (chunkSize < 1 || chunkSize > 50) {
       throw ArgumentError('Use chunks of 1 to 50 events');
     }
     _check();
     final key = _key;
-    final saved = _state.get(key);
+    final saved = restart ? null : _state.get(key);
     final progress = saved == null
         ? <String, Object?>{
             'complete': false,

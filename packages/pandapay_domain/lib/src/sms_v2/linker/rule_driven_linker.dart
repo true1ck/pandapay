@@ -6,6 +6,7 @@ import '../contract/interfaces.dart';
 import '../contract/rule_bundle.dart';
 import '../contract/types.dart';
 import 'link_context.dart';
+import 'person_name.dart';
 import 'receipt_policy.dart';
 
 /// What a link rule means to the matching code. Link rules only set
@@ -808,7 +809,9 @@ class _Run {
           return false;
         if (!_maskOk(c.counterparty?.accountMask, _inst(d)?.maskDigits))
           return false;
-        return _isOwnDebit(d) || _isOwnCredit(c);
+        return _isOwnDebit(d) ||
+            _isOwnCredit(c) ||
+            _sameHolderAcrossAccounts(d, c);
       case LinkRuleKind.refund:
         final refund = otherRole == LegRole.original ? f : g;
         final purchase = otherRole == LegRole.original ? g : f;
@@ -1799,6 +1802,12 @@ class _Run {
   bool _standsAlone(LinkRule rule, LegRole role, Fact f) {
     switch (kinds[rule]!) {
       case LinkRuleKind.cardBill:
+        // A bank debit typed as a bill payment may join a card receipt, but on
+        // its own it is a plain bill payment (a utility bill), not a card bill.
+        if (role == LegRole.debitLeg) {
+          return f is MovementFact && f.purpose == MovementPurpose.cardPayment;
+        }
+        return role == LegRole.creditLeg;
       case LinkRuleKind.walletTopup:
         return role == LegRole.debitLeg || role == LegRole.creditLeg;
       case LinkRuleKind.ipo:
@@ -2030,7 +2039,25 @@ class _Run {
 
   bool _isOwnDebit(Fact d) =>
       d.counterparty?.kind == CounterpartyKind.own ||
-      _ownMask(d.counterparty?.accountMask, d);
+      _ownMask(d.counterparty?.accountMask, d) ||
+      _namedAsOwner(d.counterparty?.name);
+
+  /// The account owner's names, from the profile.
+  List<String> get _ownerNames {
+    final c = context;
+    return c is RuleLinkContext ? c.ownerNames : const [];
+  }
+
+  /// The counterparty is the account owner under their own name.
+  bool _namedAsOwner(String? name) => nameIsOneOf(name, _ownerNames);
+
+  /// A debit "to NAME" on one bank account and a credit "from NAME" on a
+  /// different one: the bank prints the holder's name on both sides, so this
+  /// is the owner moving their own money, whatever the name is.
+  bool _sameHolderAcrossAccounts(Fact d, Fact c) =>
+      _inst(d)?.kind == InstrumentKind.bankAccount &&
+      _inst(c)?.kind == InstrumentKind.bankAccount &&
+      namesDescribeSamePerson(d.counterparty?.name, c.counterparty?.name);
 
   bool _isOwnCredit(Fact c) => _isOwnDebit(c);
 

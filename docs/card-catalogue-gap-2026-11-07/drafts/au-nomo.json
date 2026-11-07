@@ -1,0 +1,660 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "au-nomo",
+    "name": "AU NOMO Credit Card",
+    "issuer_slug": "au",
+    "network": null,
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 199,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": null,
+    "application_mode": "open",
+    "form_factors": [
+      "nfc_contactless"
+    ],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": 5000,
+    "point_value_inr_baseline": 0.25,
+    "point_value_baseline_basis": "Product page FAQ: \"2 Reward Points per ₹100 on retails spends (1 RP = ₹0.25)\". AU Rewardz FAQ says a point's value depends on the card variant and redemption category, so ₹0.25 is the page's stated value for this card, not a guaranteed redemption rate.",
+    "point_expiry_months": 24,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.au.bank.in/personal-banking/credit-cards/nomo-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "all_pass",
+    "notes": "Secured card. Needs a fixed deposit in the applicant's own sole name with AU: minimum ₹20,000, cumulative/re-invest, auto-renewed; a lien is marked on 100% of the FD value; FD created for this card is 24 months 0 days (page FAQ). Credit limit is up to 80% of the FD amount (CMA 24.1). Joint, HUF, partnership, tax-saving, third-party and no-callable FDs are not eligible. AU says the criteria are indicative.",
+    "rules": [
+      {
+        "parameter": "age_years",
+        "operator": ">=",
+        "threshold_value": 18,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years",
+        "operator": "<=",
+        "threshold_value": 99,
+        "allowed_values": []
+      },
+      {
+        "parameter": "residency",
+        "operator": "in",
+        "threshold_value": null,
+        "allowed_values": [
+          "resident_indian"
+        ]
+      },
+      {
+        "parameter": "au_fixed_deposit_amount_inr",
+        "operator": ">=",
+        "threshold_value": 20000,
+        "allowed_values": []
+      },
+      {
+        "parameter": "au_fixed_deposit_sole_ownership",
+        "operator": "==",
+        "threshold_value": 1,
+        "allowed_values": []
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": "floor",
+    "base_points_per_block": 2,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": 0.5,
+    "cycle_accrual_ceiling_points": 5000,
+    "capping_period_basis": "statement_cycle",
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "nomo-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Rent earns no Reward Points (page FAQ, CMA 23.5.1 and 23.6). MCC list not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "nomo-excl-cash",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Cash earns no Reward Points (page FAQ, CMA 23.5.1 and 23.6). MCC list not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "nomo-excl-quasi-cash",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "transaction_type": "quasi_cash"
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Quasi-cash earns no Reward Points (page FAQ, CMA 23.5.1 and 23.6). MCC list not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "nomo-excl-education",
+      "category_id": "education",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Education earns no Reward Points (page FAQ, CMA 23.5.1 and 23.6). MCC list not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "nomo-excl-govt",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Government earns no Reward Points (page FAQ, CMA 23.5.1 and 23.6). MCC list not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "nomo-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel earns no Reward Points (page FAQ, CMA 23.5.1 and 23.6). MCC list not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "nomo-excl-emi",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "transaction_type": "emi"
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "EMI transactions and conversions earns no Reward Points (page FAQ, CMA 23.5.1 and 23.6). MCC list not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "nomo-excl-bbps",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "platform": "AU 0101 BBPS"
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "BBPS bill payments on the AU 0101 app earns no Reward Points (page FAQ, CMA 23.5.1 and 23.6). MCC list not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "nomo-base-2rp",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 2,
+        "points_per_block": 2,
+        "cashback_percent": "N/A",
+        "cap_reference": "nomo-total-cycle-cap",
+        "reason": "Page: 2 Reward Points per ₹100 on retail spends (1 RP = ₹0.25), so about 0.5% in value."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "nomo-bills-1rp",
+      "category_id": "bills",
+      "priority": 25,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "includes": [
+          "utility",
+          "telecom"
+        ],
+        "max_points_per_transaction": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": "nomo-total-cycle-cap",
+        "reason": "Page: 1 Reward Point on utility; CMA 23.5.1: 1 point per ₹100 on utility and telecom, at most 100 points per transaction."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "nomo-insurance-1rp",
+      "category_id": "insurance",
+      "priority": 25,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": "nomo-total-cycle-cap",
+        "reason": "Page: 1 Reward Point (per ₹100) on insurance."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "nomo-total-cycle-cap",
+      "category_id": "all_retail",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": 5000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 45
+    },
+    "forex_markup": {
+      "markup_percent": 0.99,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 0.99,
+      "gst_applicable": true,
+      "trigger_condition": "KFS lists one cross-currency markup for foreign-currency, dynamic and static conversion transactions"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 400,
+      "max_txn_inr": 5000,
+      "monthly_waiver_cap_inr": 100
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": 50
+    },
+    "category_surcharges": [
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          5172,
+          5541,
+          5542,
+          5552,
+          5983
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "From 1 Jul 2026: 1% on the whole month's fuel spend when one transaction exceeds ₹10,000 or the calendar-month total exceeds ₹25,000",
+        "threshold_spend_inr": 25000,
+        "effective_from": "2026-07-01",
+        "effective_to": null
+      },
+      {
+        "category_id": "utility",
+        "mcc_list": [
+          4900
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% on utility spend above ₹50,000 in a calendar month",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education_third_party",
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Education paid through third-party apps (CRED, PhonePe, Paytm, MobiKwik, Freecharge etc.), minimum ₹99 per transaction; direct school/college site or POS exempt",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Domestic rental payments, minimum ₹99 per transaction; international rental has no charge",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "transportation",
+        "mcc_list": [
+          4111,
+          4112,
+          4784
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "From 14 Jun 2026: 1% on the whole month's transportation spend once it exceeds the lower of 50% of credit limit or ₹25,000; IRCTC and marquee travel partners excluded",
+        "threshold_spend_inr": 25000,
+        "effective_from": "2026-06-14",
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": 199,
+      "post_purchase_emi_processing_fee_inr": 99,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 500,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 99,
+      "gst_applicable": true,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 50,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "If previous Total Amount Due was paid on time: 5% of principal outstanding + 100% of fees/charges + 100% of interest + due EMIs + 100% annual fee (if applicable) + 100% GST",
+        "If previous Total Amount Due was not paid on time: 2% of principal outstanding + the same 100% components"
+      ]
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "One-time joining fee ₹199 + GST (KFS \"₹199 (one time)\"); page FAQ: free from the 2nd year onwards, so there is no annual fee to waive.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "first_transaction_within_30_days_of_card_setup",
+      "benefit_points": 500,
+      "effective_value_inr": 125,
+      "condition": "500 Reward Points on the first transaction within 30 days of card setup (page). Value ₹125 is 500 points at the page's ₹0.25 per point."
+    },
+    "spend_milestones": [
+      {
+        "id": "nomo-m1",
+        "label": "500 bonus Reward Points on ₹25,000 retail spend in a quarter (fuel and cash excluded)",
+        "threshold_spend_inr": 25000,
+        "reward_value_inr": 125,
+        "period": "quarter",
+        "is_repeatable": true,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "id": "nomo-m2",
+        "label": "Doubled quarterly bonus on ₹50,000 retail spend in a quarter (\"Double it at ₹50,000\"; whether 1,000 total or 500 more is not stated)",
+        "threshold_spend_inr": 50000,
+        "reward_value_inr": null,
+        "period": "quarter",
+        "is_repeatable": true,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ]
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "nomo-domestic-lounge",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "AU Small Finance Bank",
+      "label": "Domestic airport lounge access (spend-based)",
+      "evaluation_engine": {
+        "conditions": {
+          "rule": "Spend at least ₹50,000 net retail in a calendar quarter to unlock access in the next calendar quarter",
+          "primary_cardholder_only": true,
+          "validation_swipe_inr": 2,
+          "effective_from": "2026-04-10"
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 2,
+      "quota_period": "quarter",
+      "value_estimate_inr": "N/A",
+      "effective_from": "2026-04-10",
+      "effective_to": null
+    },
+    {
+      "benefit_id": "nomo-railway-lounge",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "AU Small Finance Bank",
+      "label": "Railway lounge access, for the cardholder and add-on cardholders",
+      "evaluation_engine": {
+        "conditions": {
+          "add_on_cardholders_eligible": true,
+          "guests_chargeable": true,
+          "validation_swipe_inr": 2
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 2,
+      "quota_period": "quarter",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 0,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": 18
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "AU Rewardz (e-vouchers, recharges, travel); value stated on the NOMO page",
+        "redemption_type": "other",
+        "inr_value_per_point": 0.25,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": "N/A",
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": 99,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.au.bank.in/personal-banking/credit-cards/nomo-credit-card",
+              "kind": "issuer_page + FAQ",
+              "read": "rendered page text including hidden accordions and popups"
+            },
+            {
+              "url": "https://www.au.bank.in/pdf/credit-card/Schedule-of-Charges-CC.pdf",
+              "kind": "KFS",
+              "date": "Key Fact Statement v1.9, 2 Nov 2026"
+            },
+            {
+              "url": "https://www.au.bank.in/credit-cards/mitc(with-schedule-of-charges).pdf",
+              "kind": "MITC",
+              "date": "MITC v2.23, 2 Nov 2026"
+            },
+            {
+              "url": "https://www.au.bank.in/credit-cards/credit-card-member-agreement.pdf",
+              "kind": "Cardmember Agreement (reward caps 23.5, exclusions 23.6, secured card 24)",
+              "date": "Cardmember Agreement, undated copy (the copy under /pdf/credit-card/ is dated 16 May 2026 and has no Zaggle section)"
+            },
+            {
+              "url": "https://www.au.bank.in/pdf/zenith-credit-card/revision-of-usage-terms-and-conditions_jan_25-4.pdf",
+              "kind": "domestic lounge T&C",
+              "date": "Revision of AU Credit Card Usage Terms & Conditions, w.e.f. 10 Apr 2026"
+            },
+            {
+              "url": "https://www.au.bank.in/pdfs/nomo-credit-card/Railway%20Lounges.pdf",
+              "kind": "railway lounge T&C",
+              "date": "Railway Lounge Access Program, 4 Oct 2024"
+            },
+            {
+              "url": "https://www.au.bank.in/personal-banking/credit-cards",
+              "kind": "AU current credit card list (card is listed)",
+              "date": "2026-11-07"
+            }
+          ],
+          "open_questions": [
+            "Network: UNRESOLVED after a second sweep on 2026-11-07 (wave 3, W7). The NOMO page, KFS v1.9, MITC v2.23, the Cardmember Agreement of 16 May 2026 (secured card section 23 included) and the NOMO card art (listing tile and the page's nomo_card art: purple and black card with the NOMO wordmark, chip and contactless mark, no network mark) state none. The 10 Apr 2026 usage terms (NOMO is in the domestic lounge table) and the railway lounge T&C say only \"Visa/RuPay\" or \"VISA/RuPay Credit Card\", which covers every AU card. Clauses 3.14 to 3.16 of the Cardmember Agreement allow a network change at renewal (\"network selection, if applicable\"). visa.co.in, mastercard.co.in, npci.org.in and rupay.co.in carry no AU card list. Needs a physical NOMO card, the AU 0101 app card view, or a written answer from AU (1800 1200 1500; creditcard.support@aubank.in is the KFS grievance contact for NOMO). card_product.network left null.",
+            "Cash advance limit (SETTLED, small residual): KFS v1.9 (2 Nov 2026, Credit Limit table on page 4) lists NOMO at \"70% of the card limit\" and directly under it \"50% of the card limit (w.e.f., 7th Nov'2025)\", i.e. a dated revision that supersedes the 70% row. MITC v2.23 (also dated 2 Nov 2026, PDF built about 20 minutes before the KFS) still lists NOMO at 70% with no revision row. 50% is used because only the KFS carries the effective date and it was produced last; the MITC table looks stale. AU has not been asked to confirm; the card statement states the limit that applies to a given card.",
+            "Domestic lounge: the page FAQ says 2 visits on ₹20,000 spent in the previous quarter; the page feature text and the 10 Apr 2026 T&C say ₹50,000. The T&C is used.",
+            "The ₹50,000 quarterly milestone says \"Double it\": not stated whether the bonus becomes 1,000 points or 500 more. reward_value_inr left null.",
+            "Rewardz FAQ says a point's value depends on card variant and redemption category; the NOMO page states ₹0.25 only.",
+            "MCC lists for the exclusions are not published for this card."
+          ],
+          "notes": [
+            "Reward Points are earned on transaction amounts in multiples of ₹100 (CMA 23.22), so rounding is modelled as floor.",
+            "Secured card: FD of at least ₹20,000 held with AU; credit limit up to 80% of the FD (CMA 24.1); FD cannot be broken until card dues are settled and the card is closed; no partial withdrawal (page FAQ).",
+            "Reward Points are capped at 5,000 per statement cycle on all MCCs (page FAQ, CMA 23.5). Points expire 2 years after accrual (CMA 23.8).",
+            "Forex markup is 0.99% (KFS). Fuel surcharge waiver is up to ₹100 per statement month on ₹400 to ₹5,000 (KFS). Xpress EMI: convert transactions of ₹2,000 or more (page).",
+            "Card liability cover: zero liability on lost or stolen cards, with skimming and online fraud protection (page).",
+            "Interest 3.75% a month (45% a year) on all AU retail cards (KFS section 4)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "15% of Total Amount Due, minimum ₹10, maximum ₹1,300",
+          "source": "Key Fact Statement v1.9, 2 Nov 2026, section 5",
+          "note": "Percentage fee cannot be expressed as fixed slabs, so late_payment_slabs is empty."
+        }
+      },
+      {
+        "key": "payment_return_charge",
+        "value": {
+          "rule": "2% of Total Amount Due or ₹500, whichever is higher, on return/failure of card payment (cheque, ECS/NACH, autopay)",
+          "source": "Key Fact Statement v1.9, 2 Nov 2026, section 10"
+        }
+      }
+    ]
+  }
+}

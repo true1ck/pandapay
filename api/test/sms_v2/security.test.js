@@ -120,3 +120,53 @@ test('Postgres adapter binds profile, device and budgets and validates response'
   assert.match(called.sql, /sms_v2_consume_rate/);
   assert.deepEqual(called.values, ['d', JSON.stringify(checks)]);
 });
+
+test('a tester the owner chose to count is eligible without App Check; limits still treat the phone as unverified', async () => {
+  const asked = [];
+  const security = createSecurity({
+    env: { SMS_V2_ATTESTATION_BINDING: 'off' }, verifyToken: verifier(), now: () => now,
+    withUserClient: async (profile, operation) => operation({
+      query: async (sql) => { asked.push(sql); return { rows: [{ counts: true }] }; },
+    }),
+    consume: async () => ({ allowed: true, retryAfterSeconds: 0 }),
+    log: () => {},
+  });
+  const first = request();
+  assert.equal(await security.verifyAttestation(first), true);
+  assert.equal(first.smsV2Security.verified, false, 'rate limits trust only a real attestation');
+  assert.equal(first.smsV2Security.sharedLearningEligible, true);
+  const second = request();
+  await security.verifyAttestation(second);
+  assert.equal(second.smsV2Security.sharedLearningEligible, true);
+  assert.equal(asked.length, 1, 'asked once a minute per account, not on every request');
+  assert.match(asked[0], /sms_v2_tester_counts/);
+});
+
+test('a phone that is not counted, or when the question fails, stays not eligible and the request is never refused for it', async () => {
+  for (const withUserClient of [
+    async (_profile, operation) => operation({ query: async () => ({ rows: [{ counts: false }] }) }),
+    async () => { throw new Error('database down'); },
+  ]) {
+    const security = createSecurity({
+      env: { SMS_V2_ATTESTATION_BINDING: 'off' }, verifyToken: verifier(), now: () => now, withUserClient,
+      consume: async () => ({ allowed: true, retryAfterSeconds: 0 }), log: () => {},
+    });
+    const req = request();
+    assert.equal(await security.verifyAttestation(req), true);
+    assert.equal(req.smsV2Security.sharedLearningEligible, false);
+  }
+});
+
+test('a real attestation is unchanged by the tester setting', async () => {
+  let asked = 0;
+  const security = createSecurity({
+    env: { SMS_V2_ATTESTATION_BINDING: 'off' }, verifyToken: verifier(), now: () => now,
+    withUserClient: async () => { asked++; return false; },
+    consume: async () => ({ allowed: true, retryAfterSeconds: 0 }), log: () => {},
+  });
+  const req = request(token());
+  assert.equal(await security.verifyAttestation(req), true);
+  assert.equal(req.smsV2Security.verified, true);
+  assert.equal(req.smsV2Security.sharedLearningEligible, true);
+  assert.equal(asked, 0, 'no question is asked for an attested phone');
+});

@@ -1,0 +1,67 @@
+[
+  {
+    "rule": "IGN-BROADBAND-PAYMENT-DUE-REMINDER",
+    "positive": [
+      {
+        "sender": "VM-ALEGBB-S",
+        "body": "Dear user_one, Payment of Rs 700/- is due. Please pay to avoid disconnection. For online payment visit example.com - Example Broadband"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-ALEGBB-S",
+        "body": "Dear user_one, we have received your payment of Rs 700/-. Thank you - Example Broadband"
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear user_one, Payment of Rs 700/- is due. Please pay to avoid disconnection."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-JIO-FIBER-BILL-REMINDER",
+    "positive": [
+      {
+        "sender": "VM-JIOFBR-S",
+        "body": "Dear Customer, Bill dated 01-Jan-26 for your JioHome connection with JioFixedVoice Number +910000000000 is due for payment today. Total amount payable is Rs 999.00. Please pay immediately to avoid disruption."
+      },
+      {
+        "sender": "VM-JIOFBR-S",
+        "body": "ALERT! The Internet and Voice services on your JioHome connection with JioFixedVoice Number +910000000000 have been barred due to non-payment of Rs 999.00 for bill dated 01-Jan-26. Please pay immediately to restore services."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-JIOFBR-S",
+        "body": "Dear Customer, Payment of Rs 999.00 for your JioHome connection was received successfully. Thank you."
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Bill dated 01-Jan-26 is due for payment today. Total amount payable is Rs 999.00."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-LOAN-OFFER-DISBURSAL-VERIFY",
+    "positive": [
+      {
+        "sender": "VM-YESBNK-S",
+        "body": "Funds ready for Disbursal Please verify the disbursal of Rs 50,000.00 to your YES BANK Credit Card 1234. Proceed: example.in/YESBNK/abc"
+      },
+      {
+        "sender": "VM-YESBNK-S",
+        "body": "Reminder Authorize the transfer of Rs 50,000.00 to your YES BANK Credit Card 1234 by clicking here: example.in/YESBNK/abc"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-YESBNK-S",
+        "body": "Rs 50,000.00 has been credited to your YES BANK Credit Card 1234 on 01-01-26 as loan disbursal."
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Funds ready for Disbursal Please verify the disbursal of Rs 50,000.00."
+      }
+    ]
+  }
+]

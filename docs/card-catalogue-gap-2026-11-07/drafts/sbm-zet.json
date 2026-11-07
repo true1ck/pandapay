@@ -1,0 +1,250 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "sbm-zet",
+    "name": "SBM ZET Credit Card",
+    "issuer_slug": "sbm-bank-india",
+    "network": "rupay",
+    "network_tier": "N/A",
+    "card_tier": "N/A",
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [
+      "virtual_card",
+      "physical_plastic"
+    ],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": "N/A",
+    "point_value_baseline_basis": "N/A",
+    "point_expiry_months": "N/A",
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "FD-backed secured card: the credit limit is 90% of the fixed deposit (KFS). The minimum deposit is not stated in the SBM documents read.",
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": "N/A",
+    "rounding_mode": "N/A",
+    "base_points_per_block": "N/A",
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.5,
+      "annual_interest_rate_percent": 42
+    },
+    "forex_markup": {
+      "markup_percent": 2.49,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": null,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 3.5,
+      "atm_transaction_fee_min_inr": 300,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": 50
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% processing fee on rental payments (MCC 6513), over and above any merchant convenience fee (MITC Table 07; page FAQ 8)",
+        "threshold_spend_inr": null,
+        "effective_from": "2026-07-15",
+        "effective_to": null
+      },
+      {
+        "category_id": "education",
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% processing fee on education payments (MCCs 8211, 8220, 8241, 8244, 8249, 8299), over and above any merchant convenience fee (MITC Table 07; page FAQ 8)",
+        "threshold_spend_inr": null,
+        "effective_from": "2026-07-15",
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": 99,
+      "foreclosure_charge_percent": 3,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": null,
+        "min_fee_inr": null,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 45,
+    "grace_period_void_on_revolving_balance": true,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "max",
+      "components": [
+        "5% of the outstanding amount or ₹100, whichever is greater (POS/ECOM)",
+        "10% of cash transactions",
+        "100% of interest",
+        "100% of fees",
+        "plus overdue minimum payments, any amount over the credit limit and EMI instalments due"
+      ]
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "Membership and annual fees are nil (KFS; MITC Table 01). Card replacement ₹249 + GST; card cancellation ₹499 + GST within two years of activation (with effect from 23 Oct 2026, KFS).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": "N/A",
+    "separate_priority_pass": "N/A",
+    "lounge_quota_shared": "N/A",
+    "reward_points_pooled": "N/A",
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.sbm.bank.in/pdf/kfs/SBM-Bank-ZET-Credit-Card-KFS.pdf",
+              "kind": "SBM ZET Credit Card KFS (SBM file dated 12 Oct 2026; late fee and cancellation fee marked with effect from 23 Oct 2026)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/pdf/terms-conditions/SBM-Secured-Credit-Card-T&C.pdf",
+              "kind": "SBM Secured Credit Card MITC and Cardholder Member Agreement, 52 pages (SBM file dated 29 Oct 2026): Tables 01-11 give fees, interest, late fee, forex, surcharge, rent and education fees, cash limits and minimum due for every variant",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+              "kind": "SBM secured credit card page (read 7 Nov 2026): lists the card with its KFS, MITC and reward links; card image https://www.sbm.bank.in/images/cards/sbm-zet-card.webp shows the network",
+              "read": "page text; card image viewed"
+            }
+          ],
+          "open_questions": [
+            "HELD, no published reward rate: the SBM page links only a KFS and an MITC for ZET and describes UPI payments plus FD interest; there is no SBM reward document. Partner pages on zetapp.in advertise cashback tied to a paid ZET Plus subscription and gift-voucher discounts; those are partner marketing, not an SBM document, and are not used as facts. Re-checked 7 Nov 2026 (W11): the page links a \"Reward Points\" document for MobiKwik First, Kredit.Pe, novio, Niyo, OneCard, Step-Up and Paisa Plus but none for ZET; the 29 Oct 2026 MITC clause I says \"For SBM secured credit card rewards construct please refer to the respective card program on the SBM bank website\" (that same page); the older SBM-hosted ZET MITC (25 pp, PDF created 24 Jan 2025) and Cardmember Agreement (17 pp) only say cash transactions earn no reward points; the ZET KFS (12 Oct 2026) has no reward terms. To unblock: ask SBM or ZET for the ZET rewards document and the card's reward unit and value.",
+            "Network: the page text calls it \"an FD-backed RuPay credit card\" and the card image shows the RuPay logo. The KFS does not name the network.",
+            "The minimum deposit is not stated by SBM; MITC Table 06 only shows virtual cards for FDs below ₹5,000 and physical cards at ₹5,000 or more.",
+            "Fuel surcharge: the KFS says \"Surcharge Fee 1%\"; MITC clause 8.7 ties it to fuel. No waiver is stated."
+          ],
+          "notes": [
+            "Cash interest 3.5% a month from day one; cash limit 50% of the credit limit; ATM fee 3.5% or ₹300, whichever is higher.",
+            "EMI: processing fee ₹99 or 1% (whichever is higher) per conversion, 1.5% a month, foreclosure ₹99 or 3% of the remaining principal (MITC Table, EMI charges).",
+            "The 1% rent and education fees took effect on 15 Jul 2026 (MITC note to Table 07)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "5% of the total outstanding, minimum ₹50 and maximum ₹1,000, + GST (with effect from 23 Oct 2026)",
+          "source": "ZET KFS (12 Oct 2026) and MITC Table 08"
+        }
+      }
+    ]
+  }
+}

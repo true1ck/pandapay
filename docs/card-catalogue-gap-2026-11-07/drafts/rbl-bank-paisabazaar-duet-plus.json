@@ -1,0 +1,904 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "rbl-bank-paisabazaar-duet-plus",
+    "name": "RBL Bank Paisabazaar Duet Plus Credit Card",
+    "issuer_slug": "rbl",
+    "network": "mastercard",
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 1499,
+    "annual_fee_inr": 1499,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": false,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": "N/A",
+    "point_value_baseline_basis": "Cashback card: the page says \"No points. Just Cashback.\"",
+    "point_expiry_months": "N/A",
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/rbl-bank-paisabazaar-duet-plus-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": null,
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": "N/A",
+    "rounding_mode": "floor",
+    "base_points_per_block": "N/A",
+    "base_cashback_percent": 1,
+    "effective_base_return_percent": 1,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": "calendar_month",
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "rbl-duet-plus-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          32,
+          2541,
+          4001,
+          5542,
+          5541,
+          5172
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel and auto earns no cashback (T&C 3.2 and 3.7, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-duet-plus-excl-railways",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          66,
+          4011,
+          4112
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Railways earns no cashback (T&C 3.2 and 3.7, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-duet-plus-excl-utilities",
+      "category_id": "bills",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4900
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Utilities earns no cashback (T&C 3.2 and 3.7, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-duet-plus-excl-wallet",
+      "category_id": "wallet",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Wallet and service providers earns no cashback (T&C 3.2 and 3.7, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-duet-plus-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Real estate and rental earns no cashback (T&C 3.2 and 3.7, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-duet-plus-excl-govt",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          9400,
+          1490,
+          2490,
+          2995,
+          7800,
+          9406,
+          9222,
+          9405,
+          9399,
+          9211,
+          9402,
+          9401,
+          9311,
+          9223
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Government services earns no cashback (T&C 3.2 and 3.7, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-duet-plus-excl-insurance",
+      "category_id": "insurance",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6300,
+          6310
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Insurance earns no cashback (T&C 3.2 and 3.7, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-duet-plus-excl-cash",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6011,
+          6010
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Cash earns no cashback (T&C 3.2 and 3.7, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-duet-plus-excl-quasi",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6050,
+          6051,
+          4829
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Quasi-cash earns no cashback (T&C 3.2 and 3.7, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-duet-plus-excl-education",
+      "category_id": "education",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          8220,
+          8244,
+          8249,
+          8211,
+          8241,
+          8299
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Education earns no cashback (T&C 3.2 and 3.7, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-duet-plus-excl-contracted",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          1711,
+          1740,
+          763,
+          1520,
+          742,
+          1761,
+          1799,
+          1750,
+          1731,
+          1771,
+          780
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Contracted services earns no cashback (T&C 3.2 and 3.7, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-duet-plus-excl-misc",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5960
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Miscellaneous (5960) earns no cashback (T&C 3.2 and 3.7, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-duet-plus-excl-bills2pay",
+      "category_id": "bills",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Bills2Pay (utility bills paid through the RBL MyBank app or Internet banking; no MCC) earns no cashback (T&C 3.2 and 3.7, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-duet-plus-excl-emi",
+      "category_id": "emi",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "EMI conversion of retail transactions (Split-N-Pay and EMI requested at POS, web or app) earns no cashback (T&C 3.2 and 3.7, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-duet-plus-dining-2-5pct",
+      "category_id": "dining",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5812,
+          5814
+        ],
+        "minimum_transaction_inr": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 2.5,
+        "cap_reference": "rbl-duet-plus-travel-dining-cap",
+        "reason": "2.5% cashback on dining (restaurants and fast food MCCs 5812, 5814), shared INR 200 a month cap with travel (T&C 3.2, 3.7)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-duet-plus-travel-2-5pct",
+      "category_id": "travel",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4111,
+          4511,
+          4582,
+          3000,
+          3005,
+          3009,
+          3020,
+          3026,
+          3032,
+          3034,
+          3040,
+          3058,
+          3075,
+          3136,
+          3236,
+          3246
+        ],
+        "minimum_transaction_inr": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 2.5,
+        "cap_reference": "rbl-duet-plus-travel-dining-cap",
+        "reason": "2.5% cashback on travel (commuter transport 4111, airlines 4511 and 3000-series airline MCCs, airports 4582), shared INR 200 a month cap with dining (T&C 3.2, 3.7)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-duet-plus-other-1pct",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "minimum_transaction_inr": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 1,
+        "cap_reference": "rbl-duet-plus-other-cap",
+        "reason": "1% cashback on other eligible retail and online spends, INR 300 a month cap; no cashback below INR 100 per transaction; decimals rounded down (T&C 3.2)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "rbl-duet-plus-total-cap",
+      "category_id": "all_retail",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "calendar_month",
+      "limit_value": "N/A",
+      "limit_value_inr": 500,
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-duet-plus-travel-dining-cap",
+      "category_id": "dining",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "calendar_month",
+      "limit_value": "N/A",
+      "limit_value_inr": 200,
+      "post_limit_behavior": {
+        "action": "downgrade_to_base_rate",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": "rbl-duet-plus-total-cap",
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-duet-plus-other-cap",
+      "category_id": "all_retail",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "calendar_month",
+      "limit_value": "N/A",
+      "limit_value_inr": 300,
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": "rbl-duet-plus-total-cap",
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.99,
+      "annual_interest_rate_percent": 47.88
+    },
+    "forex_markup": {
+      "markup_percent": 3.5,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 3.5,
+      "gst_applicable": true,
+      "trigger_condition": "SOC: markup up to 3.5% on foreign currency, dynamic and static conversion transactions; also on rupee transactions at an international location or at India-located merchants registered overseas (MITC: 3.5% on all cards except Nova, Insignia, iGlobe, World Xclusive, World Safari family and Lumiere)"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 500,
+      "max_txn_inr": 4000,
+      "monthly_waiver_cap_inr": 100
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on all rental transactions, no cap stated (SOC, MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          32,
+          2541,
+          4001,
+          5542,
+          5541,
+          5172
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on each fuel and auto transaction above INR 10,000, at most INR 3,000 per transaction; the amount includes the surcharge (MITC)",
+        "threshold_spend_inr": 10000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "bills",
+        "mcc_list": [
+          4900
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on aggregate utility spend above INR 50,000 in a month per card (SOC, MITC)",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education",
+        "mcc_list": [
+          8220,
+          8244,
+          8249,
+          8211,
+          8241,
+          8299
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on education payments made through third-party apps such as Cred, PhonePe, Paytm, Mobikwik, Freecharge; payments on the school or college website or its POS carry no fee (SOC, MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "other",
+        "mcc_list": [
+          4784,
+          4111,
+          4131
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on FASTag loading and toll payments above INR 10,000 per transaction per card (SOC, MITC)",
+        "threshold_spend_inr": 10000,
+        "effective_from": "2026-01-07",
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 0,
+        "min_fee_inr": 0,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": 500,
+      "cheque_bounce_charge_inr": 500
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 0,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": "Cashback card with no points to redeem (page: \"No points. Just Cashback.\"); cashback is credited to the card account. The MITC INR 99 + GST redemption fee applies to reward points, so it does not apply here."
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 50,
+    "grace_period_void_on_revolving_balance": true,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "max",
+      "components": [
+        "Total GST + current month EMI debits",
+        "Higher of (100% of fees and charges + 5% of retail spends, cash advance and interest) or INR 200",
+        "Previously unpaid minimum amount due, if any",
+        "Overlimit utilisation amount, if any",
+        "If this sum exceeds the total amount due, the minimum due equals the total amount due"
+      ]
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 400000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "Annual fee of INR 1,499 (plus GST) for the next membership year is waived when eligible retail spend in the membership year is INR 4,00,000 or more (T&C 3.6, page, MITC). Fuel and auto, utilities, insurance, quasi-cash, railways, rent, education, wallet, government, contracted services, cash, miscellaneous, Bills2Pay, EMI conversions, fees, charges and GST do not count.",
+      "excluded_category_ids": [
+        "fuel",
+        "bills",
+        "insurance",
+        "cash_withdrawal",
+        "excluded_spend",
+        "rent",
+        "education",
+        "wallet",
+        "government",
+        "emi"
+      ],
+      "excluded_mcc_list": [
+        32,
+        2541,
+        4001,
+        5542,
+        5541,
+        5172,
+        4900,
+        6300,
+        6310,
+        6050,
+        6051,
+        4829,
+        66,
+        4011,
+        4112,
+        6513,
+        8220,
+        8244,
+        8249,
+        8211,
+        8241,
+        8299,
+        6540,
+        9400,
+        1490,
+        2490,
+        2995,
+        7800,
+        9406,
+        9222,
+        9405,
+        9399,
+        9211,
+        9402,
+        9401,
+        9311,
+        9223,
+        1711,
+        1740,
+        763,
+        1520,
+        742,
+        1761,
+        1799,
+        1750,
+        1731,
+        1771,
+        780,
+        6011,
+        6010,
+        5960
+      ],
+      "waives_fee_inr": 1499
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "first_transaction_within_30_days_and_fee_paid",
+      "benefit_points": "N/A",
+      "effective_value_inr": 250,
+      "condition": "One-time INR 250 cashback for a card purchase within 30 days of issuance and payment of the annual membership fee by the payment due date; credited within 2 weeks of purchase settlement; debited again if net spend within the 30 days falls to nil; paid accounts only (T&C 3.1)."
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "rbl-duet-plus-bms",
+      "category_id": "movie",
+      "network_program": null,
+      "sponsor": "BookMyShow",
+      "label": "Weekend movie ticket offer: INR 200 discount or one free ticket, whichever is lower, once a month",
+      "evaluation_engine": {
+        "conditions": {
+          "days": "Saturday and Sunday shows",
+          "primary_card_only": true,
+          "pay_in_full_for_at_least_one_ticket": true,
+          "platform": "BookMyShow app or website"
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 1,
+      "quota_period": "calendar_month",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 200,
+    "separate_priority_pass": "N/A",
+    "lounge_quota_shared": "N/A",
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "12.5% of the outstanding amount (statement total amount due less net payments), minimum INR 5, maximum INR 1,300, plus 18% GST; levied only when the account stays past due for more than 3 days after the payment due date",
+          "source": "MITC RBL-CC-MITC-V2-29-10-2026 section A.v (effective 17 Oct 2025); SOC RBL-CC-SOC-V2-04-06-2026",
+          "note": "A percentage fee cannot be expressed as fixed slabs, so late_payment_slabs is empty."
+        }
+      },
+      {
+        "key": "merchant_emi_processing_fee_rule",
+        "value": {
+          "rule": "1.5% of the amount or INR 150, whichever is higher, on EMI conversions done at the merchant outlet, website or app; plus 18% GST",
+          "source": "MITC section A.iii; SOC",
+          "note": "emi_charges has no percentage field, so merchant_instant_emi_processing_fee_inr is null. Post-purchase EMI and foreclosure charges are not stated in the MITC text read."
+        }
+      },
+      {
+        "key": "finance_charge_bands",
+        "value": {
+          "rule": "Up to 3.99% per month (47.88% a year). MITC bands by CIBIL score: above 775 = 3.35% a month, 725 to 775 = 3.85%, below 725 = 3.99%. Interest-free period up to 50 days, not available if the previous balance was not paid in full or cash was withdrawn.",
+          "source": "MITC section A.iv and A.iii.c; SOC",
+          "note": "The draft stores the 3.99% maximum. The band a given cardholder gets is not published per card."
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/rbl-bank-paisabazaar-duet-plus-credit-card",
+              "kind": "issuer product page (cashback, welcome, BookMyShow, fuel surcharge, fees tab, excluded-MCC table)",
+              "read": "rendered page text, fetched 2026-11-07"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/Credit%20Cards/CardsScheduleCharges.pdf",
+              "kind": "Schedule of Charges, footer RBL-CC-SOC-V2-04-06-2026 (4 Jun 2026): membership fee, finance charge, late fee, cash advance, forex markup, redemption fee, 1% category fees",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/Credit%20Cards/RBL-MITC-final.pdf",
+              "kind": "MITC cum KFS, footer RBL-CC-MITC-V2-29-10-2026 (29 Oct 2026): per-card fee and waiver, add-on fee, grace period, minimum due, late fee, interest bands",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/credit-cards/rbl-cc-cardmember-agreement.pdf",
+              "kind": "Cardmember Agreement, footer RBL-CC-CMA-27-10-2026 (27 Oct 2026): points reversal 12.9, 24-month points expiry 12.19, primary-only redemption 12.21",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/category",
+              "kind": "RBL current credit card list (\"Showing 64 Cards\"): product is on the list, with \"Know more\" only unless stated otherwise per card",
+              "read": "rendered page text, fetched 2026-11-07"
+            },
+            {
+              "url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide",
+              "kind": "RBL network availability guide: which networks each card is issued on",
+              "read": "rendered page text, fetched 2026-11-07"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/credit-cards/paisabazaar-duet-plus-cc-tnc.pdf",
+              "kind": "Duet Plus T&C (6 pages; no printed date, PDF created 18 Dec 2025): 3.1 welcome, 3.2 cashback, 3.3 BookMyShow, 3.5 fuel, 3.6 fee waiver, 3.7 MCC table",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/credit-cards/credit-line-paisabazaar-role-responsibilities.pdf",
+              "kind": "Co-brand partner roles document (PDF created 15 Aug 2025): Paisabazaar markets and solicits applications; KYC is done by RBL",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/offer-pdfs/bms-offers.pdf",
+              "kind": "RBL BookMyShow offers guide (PDF created 6 Jan 2026): \"Paisabazaar Duet Plus: buy 1 get 1, up to Rs. 200, Saturday and Sunday, once a month\"",
+              "read": "pdftotext"
+            }
+          ],
+          "open_questions": [
+            "Annual fee waiver: the SOC (4 Jun 2026) shows INR 1,499 for both years with no waiver marker, while the issuer page, T&C 3.6 and the MITC (29 Oct 2026) all state the waiver on INR 4 lakh spend in the previous membership year. The three newer sources are used.",
+            "The \"Travel and Dining\" MCC list (T&C 3.7) holds only commuter transport 4111, airlines (4511 and the 3000-series), airports 4582 and restaurants and fast food (5812, 5814). Hotels and travel agencies are not in it although the page says \"all travel and dining transactions\".",
+            "Contracted services appear in the excluded-MCC table on the page and in T&C 3.7 but not in the category list of T&C 3.2; treated as excluded.",
+            "The INR 500 combined monthly maximum is stated on the page only; the T&C states the two sub-caps (INR 200 and INR 300). Both are modelled, with the INR 500 total as parent.",
+            "Cap period is the calendar month (page and T&C), while the fee tables use the billing cycle; modelled as calendar_month.",
+            "Whether new applications are open: RBL lists the card with \"Know more\" only, but the partner roles document says Paisabazaar solicits applications. application_mode set to open on that basis; confirm.",
+            "The Xpress Cash instant-loan facility has its own terms (https://webassets.rbl.bank.in/pdfs/Emailer/terms-xpress-cash.pdf) which were not read; not modelled.",
+            "Interest: the SOC and MITC give \"up to 3.99% a month\" and score bands (3.35%, 3.85%, 3.99%); no per-card rate is published, so the 3.99% maximum is stored.",
+            "The per-card T&C carries no printed revision date. PDF creation dates are quoted in the sources list; the SOC (4 Jun 2026), MITC (29 Oct 2026) and Cardmember Agreement (27 Oct 2026) carry footer reference codes with dates.",
+            "Joining fee: the MITC says \"Joining Fee NIL\" and charges the first-year membership fee after the first debit transaction. joining_fee_inr here repeats the SOC \"Annual Fee (1st Year)\" so the first-year cost is visible, the same convention as the Shoppers Stop overlay."
+          ],
+          "notes": [
+            "Cashback card: no points. Network is Mastercard only (RBL network guide and issuer page).",
+            "Cashback is credited within 2 weeks of settlement; the minimum eligible transaction is INR 100; amounts are rounded down (T&C 3.2).",
+            "Fuel surcharge reversal: 1% up to INR 100 a month on fuel purchases between INR 500 and INR 4,000 (excluding the surcharge); purchases of INR 499 or less pay a INR 10 surcharge, purchases of INR 4,001 or more pay 1% with no reversal; GST is not reversed (T&C 3.5).",
+            "Weekend BookMyShow offer: INR 200 off or one free ticket (whichever is lower) on Saturday and Sunday shows, once a month, primary card only; the free ticket requires paying in full for at least one other ticket (T&C 3.3)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

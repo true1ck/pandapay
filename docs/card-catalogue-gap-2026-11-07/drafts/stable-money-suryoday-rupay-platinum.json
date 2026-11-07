@@ -1,0 +1,962 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Use null for unknown or unverified values, N/A for genuinely inapplicable fields, and [] only when the absence of items is verified. Research draft pending human document review; not authorized for production publication.",
+  "card_product": {
+    "slug": "stable-money-suryoday-rupay-platinum",
+    "name": "Stable Money Suryoday RuPay Platinum Credit Card",
+    "issuer_slug": "suryoday-small-finance-bank",
+    "network": "rupay",
+    "network_tier": "rupay_platinum",
+    "card_tier": "entry",
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [
+      "virtual_card",
+      "physical_plastic"
+    ],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": "N/A",
+    "point_value_baseline_basis": "Cashback-based card; reward points are not the published accrual currency.",
+    "point_expiry_months": "N/A",
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": "N/A",
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://suryoday.bank.in/personal/cards/credit-cards/secured-credit-card/",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "FD-backed secured card: needs an existing un-liened, non-corporate, non-tax-saver FD with Suryoday SFB; age above 18 and below 80; resident individual (issuer page). Credit limit is tied to the FD; the bank may liquidate the FD if the account is more than 60 days overdue or the outstanding reaches 98% of the FD value.",
+    "rules": [
+      {
+        "parameter": "age_years",
+        "operator": ">=",
+        "threshold_value": 18,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years",
+        "operator": "<=",
+        "threshold_value": 80,
+        "allowed_values": []
+      },
+      {
+        "parameter": "suryoday_fd",
+        "operator": "==",
+        "threshold_value": 1,
+        "allowed_values": []
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": "N/A",
+      "min_annual_itr_inr": "N/A",
+      "min_existing_issuer_credit_limit_inr": "N/A",
+      "min_cibil_score": "N/A",
+      "is_contractually_enforceable": false
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": null,
+    "rounding_mode": null,
+    "base_points_per_block": "N/A",
+    "base_cashback_percent": 0.5,
+    "effective_base_return_percent": 0.5,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": "statement_cycle",
+    "reversal_policy": {
+      "mode": "N/A",
+      "negative_balance_allowed": "N/A",
+      "negative_balance_settlement": "N/A"
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "ssfb-platinum-excl-wallet",
+      "category_id": "wallet_load",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4814,
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Wallet recharges earns no cashback (Stable Money cashback FAQ, excluded MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "ssfb-platinum-excl-financial",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4829,
+          6012,
+          6050,
+          6051,
+          6300,
+          6381,
+          6399,
+          6531,
+          6532,
+          6533,
+          6534,
+          6535,
+          6611,
+          6760,
+          7276
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Financial institutions earns no cashback (Stable Money cashback FAQ, excluded MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "ssfb-platinum-excl-government",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          8111,
+          9211,
+          9222,
+          9223,
+          9311,
+          9321,
+          9313,
+          9314,
+          9399,
+          9402,
+          9405,
+          9411,
+          8398
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Government services and charities earns no cashback (Stable Money cashback FAQ, excluded MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "ssfb-platinum-excl-insurance",
+      "category_id": "insurance",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5960,
+          6300,
+          6381,
+          6399
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Insurance earns no cashback (Stable Money cashback FAQ, excluded MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "ssfb-platinum-excl-railway",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4112
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Railway earns no cashback (Stable Money cashback FAQ, excluded MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "ssfb-platinum-excl-cash-investments",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6010,
+          6011,
+          6012,
+          6211
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Mutual funds and manual or automated cash earns no cashback (Stable Money cashback FAQ, excluded MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "ssfb-platinum-excl-education",
+      "category_id": "education",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          8299,
+          8211,
+          8220,
+          8241,
+          8244,
+          8249
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Education earns no cashback (Stable Money cashback FAQ, excluded MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "ssfb-platinum-excl-transport",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4111,
+          4119,
+          4121,
+          4131,
+          4214,
+          4789,
+          4784
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Transport earns no cashback (Stable Money cashback FAQ, excluded MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "ssfb-platinum-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5541,
+          5542,
+          5983
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel earns no cashback (Stable Money cashback FAQ, excluded MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "ssfb-platinum-excl-utilities",
+      "category_id": "utility",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4900
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Electric, gas, sanitary and water utilities earns no cashback (Stable Money cashback FAQ, excluded MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "ssfb-platinum-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Real estate agents and managers, rentals earns no cashback (Stable Money cashback FAQ, excluded MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "ssfb-platinum-cashback-0-5",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 0.5,
+        "cap_reference": "ssfb-platinum-cashback-cap",
+        "reason": "0.5% cashback on each eligible transaction (cashback FAQ)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "ssfb-platinum-cashback-cap",
+      "category_id": "all_retail",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": "N/A",
+      "limit_value_inr": 3000,
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 2.95,
+      "annual_interest_rate_percent": 35.4
+    },
+    "forex_markup": {
+      "markup_percent": 0,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": null,
+      "max_txn_inr": 8000,
+      "monthly_waiver_cap_inr": 40000
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": 20
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% surcharge on rental payments under MCC 6513",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": 300,
+      "foreclosure_charge_percent": 3,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 0,
+        "min_fee_inr": 0,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 0,
+      "gst_applicable": false,
+      "exempted_channels": [],
+      "notes": "Cashback is credited to the credit card account and adjusted against the balance on the next statement. No separate cashback redemption fee is specified in the reviewed issuer documents."
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 20,
+    "grace_period_void_on_revolving_balance": true,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "10% of billed amount",
+        "plus EMIs and any overdue and over-limit amounts"
+      ]
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "Joining and annual fees are NIL (KFS effective 5 Oct 2026). The older KFS (26 May 2026) charged ₹150 + GST, waived at ₹50,000 spend; it is superseded.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": null,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "Automatic credit to credit card account",
+        "redemption_type": "statement_credit",
+        "inr_value_per_point": "N/A",
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": "N/A",
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": 0,
+        "effective_from": "2026-10-05",
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": "Overflow data and provenance only. The official KFS and MITC effective 2026-10-05 are the primary source for fees and terms. The issuer product page currently says age above 18 and below 80, so the age thresholds remain 19 and 79 in the integer-based eligibility representation. The proposed ₹5,000 contactless limit is not established by the official-source context reviewed here and remains null. Partner-reported lounge terms are retained as unconfirmed, not as fully verified issuer terms.",
+    "items": [
+      {
+        "key": "product_identity",
+        "value": {
+          "issuer": "Suryoday Small Finance Bank",
+          "distributor": "Stable Money",
+          "service_provider": "42 Card Solutions Pvt. Ltd.",
+          "network": "RuPay",
+          "variant": "Platinum",
+          "source_url": "https://suryoday.bank.in/assets/pdf/kfs-ssfb-rupay-platinum-credit-card-5oct.pdf",
+          "effective_from": "2026-10-05",
+          "document_version": "KFS w.e.f. 05/10/2026",
+          "document_page": 1
+        }
+      },
+      {
+        "key": "fd_collateral_and_credit_limit",
+        "value": {
+          "description": "The card is secured against an eligible fixed deposit with a lien. The bank assigns the credit limit according to internal policies and/or the linked fixed deposit. The exact Platinum minimum FD amount and collateral ratio are not established by the reviewed KFS.",
+          "fd_minimum_inr": null,
+          "collateral_ratio_percent": null,
+          "credit_limit_formula": "Assigned by the bank based on internal policies and/or linked fixed deposit, wherever applicable.",
+          "source_url": "https://suryoday.bank.in/assets/pdf/kfs-ssfb-rupay-platinum-credit-card-5oct.pdf",
+          "verified_at": "2026-10-17T21:57:00+05:30",
+          "effective_from": "2026-10-05",
+          "effective_to": null,
+          "document_version": "KFS w.e.f. 05/10/2026",
+          "document_page": 2,
+          "reason_unknown": "Exact Platinum-specific minimum FD and collateral ratio remain unverified."
+        }
+      },
+      {
+        "key": "cashback_cap",
+        "value": {
+          "advertised_cashback_percent": 0.5,
+          "advertised_general_capping_inr": 3000,
+          "cap_period": null,
+          "cap_metric": null,
+          "eligible_spend_definition": null,
+          "excluded_mccs": [],
+          "source_url": "https://suryoday.bank.in/personal/cards/credit-cards/secured-credit-card/",
+          "verified_at": "2026-10-17T21:57:00+05:30",
+          "effective_from": null,
+          "effective_to": null,
+          "reason_unknown": "The issuer page advertises a ₹3,000 cap but the reviewed effective KFS does not establish its period or exact calculation. No monthly or annual period has been assumed."
+        }
+      },
+      {
+        "key": "physical_and_virtual_card_issuance",
+        "value": {
+          "initial_physical_card_issuance_fee_inr": 0,
+          "replacement_card_fee_inr": 0,
+          "second_virtual_platinum_card_fee_inr": 150,
+          "second_physical_platinum_card_fee_inr": 250,
+          "second_virtual_or_physical_select_card_fee_inr": 500,
+          "second_card_fees_include_gst": true,
+          "source_url": "https://suryoday.bank.in/assets/pdf/kfs-ssfb-rupay-platinum-credit-card-5oct.pdf",
+          "effective_from": "2026-10-05",
+          "document_version": "KFS w.e.f. 05/10/2026",
+          "document_page": 2
+        }
+      },
+      {
+        "key": "early_closure_and_limit_reduction",
+        "value": {
+          "fee_inr_including_gst": 150,
+          "trigger": "Credit limit reduced to ₹4,500 or less within three months of card issuance.",
+          "fee_applies_once": true,
+          "source_url": "https://suryoday.bank.in/assets/pdf/kfs-ssfb-rupay-platinum-credit-card-5oct.pdf",
+          "verified_at": "2026-10-17T21:57:00+05:30",
+          "effective_from": "2026-10-05",
+          "document_version": "KFS w.e.f. 05/10/2026",
+          "document_page": 1
+        }
+      },
+      {
+        "key": "billing_and_payment_operational_terms",
+        "value": {
+          "payment_due_day": 5,
+          "days_from_statement_generation_to_repayment": 20,
+          "billing_cycle_change_frequency": "A billing-cycle change request may be made only once every six months after card activation.",
+          "late_payment_fee_grace_period_days": 3,
+          "finance_charge_grace_period": false,
+          "dispute_notification_deadline_days": 15,
+          "source_url": "https://suryoday.bank.in/assets/pdf/kfs-ssfb-rupay-platinum-credit-card-5oct.pdf",
+          "verified_at": "2026-10-17T21:57:00+05:30",
+          "effective_from": "2026-10-05",
+          "document_version": "KFS w.e.f. 05/10/2026",
+          "document_page": 2
+        }
+      },
+      {
+        "key": "emi_terms",
+        "value": {
+          "interest_rate_percent_per_annum": 18,
+          "available_tenures_months": [
+            3,
+            6,
+            9,
+            12
+          ],
+          "processing_fee_formula": "3% of principal or ₹300, whichever is greater.",
+          "preclosure_fee_formula": "3% of principal outstanding at foreclosure or ₹300, whichever is greater.",
+          "source_url": "https://suryoday.bank.in/assets/pdf/kfs-ssfb-rupay-platinum-credit-card-5oct.pdf",
+          "verified_at": "2026-10-17T21:57:00+05:30",
+          "effective_from": "2026-10-05",
+          "effective_to": null,
+          "document_version": "KFS w.e.f. 05/10/2026",
+          "document_pages": [
+            1,
+            2
+          ]
+        }
+      },
+      {
+        "key": "cash_advance_terms",
+        "value": {
+          "fee_formula": "Up to 2.5% of amount withdrawn, minimum ₹500 plus GST.",
+          "cash_limit_percent": 20,
+          "interest_from_withdrawal_date": true,
+          "source_url": "https://suryoday.bank.in/assets/pdf/kfs-ssfb-rupay-platinum-credit-card-5oct.pdf",
+          "verified_at": "2026-10-17T21:57:00+05:30",
+          "effective_from": "2026-10-05",
+          "document_version": "KFS w.e.f. 05/10/2026",
+          "document_page": 1
+        }
+      },
+      {
+        "key": "fuel_surcharge_waiver_terms",
+        "value": {
+          "surcharge_percent": 1,
+          "eligible_fuel_spend_cap_inr_per_calendar_month": 40000,
+          "maximum_single_transaction_inr": 8000,
+          "transactions_over_either_limit_eligible_for_waiver": false,
+          "source_url": "https://suryoday.bank.in/assets/pdf/kfs-ssfb-rupay-platinum-credit-card-5oct.pdf",
+          "verified_at": "2026-10-17T21:57:00+05:30",
+          "effective_from": "2026-10-05",
+          "document_version": "KFS w.e.f. 05/10/2026",
+          "document_page": 2
+        }
+      },
+      {
+        "key": "rental_payment_terms",
+        "value": {
+          "mcc": 6513,
+          "surcharge_percent": 1,
+          "gst_and_applicable_government_taxes": true,
+          "maximum_credit_limit_utilization_for_rent_percent_per_calendar_month": 40,
+          "source_url": "https://suryoday.bank.in/assets/pdf/kfs-ssfb-rupay-platinum-credit-card-5oct.pdf",
+          "verified_at": "2026-10-17T21:57:00+05:30",
+          "effective_from": "2026-10-05",
+          "document_version": "KFS w.e.f. 05/10/2026",
+          "document_page": 2
+        }
+      },
+      {
+        "key": "account_closure_and_fd_lien",
+        "value": {
+          "early_closure_fee_trigger": "The KFS specifies a ₹150 fee including GST if the credit limit is reduced to ₹4,500 or less within three months of card issuance. Other closure conditions and charges require confirmation from the full MITC and account-specific terms.",
+          "fd_liquidation_conditions": [
+            "Account overdue for more than 60 days.",
+            "Outstanding amount reaches 98% of the fixed deposit value."
+          ],
+          "lien_release_condition": "The lien is removed after successful cancellation and clearance of all dues.",
+          "source_url": "https://suryoday.bank.in/assets/pdf/mitc-ssfb-rupay-platinum-credit-card-5oct.pdf",
+          "verified_at": "2026-10-17T21:57:00+05:30",
+          "effective_from": "2026-10-05",
+          "document_version": "MITC w.e.f. 05/10/2026",
+          "document_pages": [
+            18,
+            19
+          ]
+        }
+      },
+      {
+        "key": "insurance_status",
+        "value": {
+          "specific_active_policy_verified": false,
+          "description": "The MITC insurance disclosure indicates that insurance cover is currently not applicable. The issuer marketing page also mentions insurance-related benefits, but the exact active policy, sum insured and activation terms for this specific product require clarification. No policy is populated in insurance_and_protection without verified applicable terms.",
+          "source_url": "https://suryoday.bank.in/assets/pdf/mitc-ssfb-rupay-platinum-credit-card-5oct.pdf",
+          "verified_at": "2026-10-17T21:57:00+05:30",
+          "effective_from": "2026-10-05",
+          "effective_to": null,
+          "document_version": "MITC w.e.f. 05/10/2026",
+          "document_page": 18
+        }
+      },
+      {
+        "key": "contact_details",
+        "value": {
+          "customer_service_toll_free": "1800 266 7711",
+          "customer_service_email": "smile@suryodaybank.com",
+          "credit_card_service_email": "scc@suryodaybank.com",
+          "source_url": "https://suryoday.bank.in/personal/cards/credit-cards/secured-credit-card/",
+          "verified_at": "2026-10-17T21:57:00+05:30"
+        }
+      },
+      {
+        "key": "operational_terms",
+        "value": {
+          "cashback_crediting": "Cashback credited to the credit card account is adjusted against the balance on the next credit card statement; confirm full details in the MITC.",
+          "card_inactivity": "The previous draft stated that six months without transactions may result in temporary blocking and one year of inactivity may lead to closure after 30 days' notice. These specific terms require verification against the applicable current MITC.",
+          "default_fd_liquidation": "The previous draft reported possible FD liquidation when the account is overdue for more than 60 days or the outstanding reaches 98% of FD value; confirm the exact clauses in the full current MITC.",
+          "source_url": "https://suryoday.bank.in/assets/pdf/mitc-ssfb-rupay-platinum-credit-card-5oct.pdf",
+          "document_version": "MITC w.e.f. 05/10/2026",
+          "verified_at": "2026-10-17T21:57:00+05:30"
+        }
+      },
+      {
+        "key": "rule_provenance",
+        "value": {
+          "card_product.joining_fee_inr": {
+            "source_url": "https://suryoday.bank.in/assets/pdf/kfs-ssfb-rupay-platinum-credit-card-5oct.pdf",
+            "verified_at": "2026-10-17T21:57:00+05:30",
+            "effective_from": "2026-10-05",
+            "effective_to": null,
+            "document_version": "KFS w.e.f. 05/10/2026",
+            "document_page": 1
+          },
+          "card_product.annual_fee_inr": {
+            "source_url": "https://suryoday.bank.in/assets/pdf/kfs-ssfb-rupay-platinum-credit-card-5oct.pdf",
+            "verified_at": "2026-10-17T21:57:00+05:30",
+            "effective_from": "2026-10-05",
+            "effective_to": null,
+            "document_version": "KFS w.e.f. 05/10/2026",
+            "document_page": 1
+          },
+          "card_product.contactless_pin_free_limit_inr": {
+            "source_url": null,
+            "verified_at": "2026-10-17T21:57:00+05:30",
+            "effective_from": null,
+            "effective_to": null,
+            "document_version": null,
+            "document_page": null,
+            "reason_unknown": "The reviewed official-source context does not state a card-specific contactless PIN-free limit. The proposed ₹5,000 value has not been verified."
+          },
+          "eligibility_engine.rules[0]": {
+            "source_url": "https://suryoday.bank.in/personal/cards/credit-cards/secured-credit-card/",
+            "verified_at": "2026-10-17T21:57:00+05:30",
+            "effective_from": null,
+            "effective_to": null,
+            "document_version": "Current issuer product webpage",
+            "document_page": null,
+            "source_wording": "Age must be above 18 years and below 80 years.",
+            "normalization": "For integer age_years, represented as minimum 19 and maximum 79."
+          },
+          "eligibility_engine.rules[1]": {
+            "source_url": "https://suryoday.bank.in/personal/cards/credit-cards/secured-credit-card/",
+            "verified_at": "2026-10-17T21:57:00+05:30",
+            "effective_from": null,
+            "effective_to": null,
+            "document_version": "Current issuer product webpage",
+            "document_page": null,
+            "source_wording": "Age must be above 18 years and below 80 years.",
+            "normalization": "For integer age_years, represented as minimum 19 and maximum 79."
+          },
+          "accrual_engine.base_cashback_percent": {
+            "source_url": "https://suryoday.bank.in/assets/pdf/kfs-ssfb-rupay-platinum-credit-card-5oct.pdf",
+            "verified_at": "2026-10-17T21:57:00+05:30",
+            "effective_from": "2026-10-05",
+            "effective_to": null,
+            "document_version": "KFS w.e.f. 05/10/2026",
+            "document_page": 1
+          },
+          "accrual_engine.effective_base_return_percent": {
+            "source_url": "https://suryoday.bank.in/assets/pdf/kfs-ssfb-rupay-platinum-credit-card-5oct.pdf",
+            "verified_at": "2026-10-17T21:57:00+05:30",
+            "effective_from": "2026-10-05",
+            "effective_to": null,
+            "document_version": "KFS w.e.f. 05/10/2026",
+            "document_page": 1,
+            "calculation": "Published cashback rate is 0.5%; actual realized return depends on eligible transactions and applicable caps."
+          },
+          "fees_and_surcharges.apr": {
+            "source_url": "https://suryoday.bank.in/assets/pdf/kfs-ssfb-rupay-platinum-credit-card-5oct.pdf",
+            "verified_at": "2026-10-17T21:57:00+05:30",
+            "effective_from": "2026-10-05",
+            "effective_to": null,
+            "document_version": "KFS w.e.f. 05/10/2026",
+            "document_page": 1
+          },
+          "fees_and_surcharges.forex_markup": {
+            "source_url": "https://suryoday.bank.in/assets/pdf/kfs-ssfb-rupay-platinum-credit-card-5oct.pdf",
+            "verified_at": "2026-10-17T21:57:00+05:30",
+            "effective_from": "2026-10-05",
+            "effective_to": null,
+            "document_version": "KFS w.e.f. 05/10/2026",
+            "document_page": 1,
+            "note": "KFS states foreign currency surcharge NIL."
+          },
+          "fees_and_surcharges.cash_advance": {
+            "source_url": "https://suryoday.bank.in/assets/pdf/kfs-ssfb-rupay-platinum-credit-card-5oct.pdf",
+            "verified_at": "2026-10-17T21:57:00+05:30",
+            "effective_from": "2026-10-05",
+            "effective_to": null,
+            "document_version": "KFS w.e.f. 05/10/2026",
+            "document_page": 1
+          },
+          "fees_and_surcharges.fuel_surcharge": {
+            "source_url": "https://suryoday.bank.in/assets/pdf/kfs-ssfb-rupay-platinum-credit-card-5oct.pdf",
+            "verified_at": "2026-10-17T21:57:00+05:30",
+            "effective_from": "2026-10-05",
+            "effective_to": null,
+            "document_version": "KFS w.e.f. 05/10/2026",
+            "document_page": 2
+          },
+          "fees_and_surcharges.category_surcharges[0]": {
+            "source_url": "https://suryoday.bank.in/assets/pdf/kfs-ssfb-rupay-platinum-credit-card-5oct.pdf",
+            "verified_at": "2026-10-17T21:57:00+05:30",
+            "effective_from": "2026-10-05",
+            "effective_to": null,
+            "document_version": "KFS w.e.f. 05/10/2026",
+            "document_page": 2
+          },
+          "fees_and_surcharges.emi_charges": {
+            "source_url": "https://suryoday.bank.in/assets/pdf/kfs-ssfb-rupay-platinum-credit-card-5oct.pdf",
+            "verified_at": "2026-10-17T21:57:00+05:30",
+            "effective_from": "2026-10-05",
+            "effective_to": null,
+            "document_version": "KFS w.e.f. 05/10/2026",
+            "document_pages": [
+              1,
+              2
+            ]
+          },
+          "statement_and_late_fees.grace_period_days": {
+            "source_url": "https://suryoday.bank.in/assets/pdf/kfs-ssfb-rupay-platinum-credit-card-5oct.pdf",
+            "verified_at": "2026-10-17T21:57:00+05:30",
+            "effective_from": "2026-10-05",
+            "effective_to": null,
+            "document_version": "KFS w.e.f. 05/10/2026",
+            "document_page": 2,
+            "note": "Twenty days is the period from statement generation to repayment; a separate three-day grace period applies to late payment fees subject to terms."
+          },
+          "statement_and_late_fees.late_payment_slabs": {
+            "source_url": "https://suryoday.bank.in/assets/pdf/kfs-ssfb-rupay-platinum-credit-card-5oct.pdf",
+            "verified_at": "2026-10-17T21:57:00+05:30",
+            "effective_from": "2026-10-05",
+            "effective_to": null,
+            "document_version": "KFS w.e.f. 05/10/2026",
+            "document_page": 1,
+            "note": "Late fee is the lower of ₹250 or 1% of outstanding amount. The schema cannot fully express this formula in its slab structure."
+          },
+          "fee_waiver_and_milestones.annual_fee_waiver": {
+            "source_url": "https://suryoday.bank.in/assets/pdf/kfs-ssfb-rupay-platinum-credit-card-5oct.pdf",
+            "verified_at": "2026-10-17T21:57:00+05:30",
+            "effective_from": "2026-10-05",
+            "effective_to": null,
+            "document_version": "KFS w.e.f. 05/10/2026",
+            "document_page": 1,
+            "note": "Joining and annual fees are nil."
+          },
+          "lifestyle_and_network_benefits[0]": {
+            "source_url": "https://admin.stablemoney.in/api/media/file/Stable_Money_FD-Backed%20Credit%20Card_Details_of%20_Offers_Benefits.pdf",
+            "verified_at": "2026-10-17T21:57:00+05:30",
+            "effective_from": null,
+            "effective_to": null,
+            "document_version": "Stable Money FD-Backed Credit Card Details of Offers & Benefits",
+            "document_page": null,
+            "note": "Lounge quota and physical-card conditions come from partner material and have not been independently confirmed against the Platinum-specific KFS/MITC effective 2026-10-05."
+          },
+          "redemption_matrix.direct_options[0]": {
+            "source_url": "https://suryoday.bank.in/assets/pdf/mitc-ssfb-rupay-platinum-credit-card-5oct.pdf",
+            "verified_at": "2026-10-17T21:57:00+05:30",
+            "effective_from": "2026-10-05",
+            "effective_to": null,
+            "document_version": "MITC w.e.f. 05/10/2026",
+            "document_page": null,
+            "note": "Automatic statement-credit mechanics require full MITC confirmation."
+          }
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "₹250 or 1% of the outstanding amount, whichever is lower, + GST",
+          "source": "Suryoday platinum KFS effective 5 Oct 2026"
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://suryoday.bank.in/assets/pdf/kfs-ssfb-rupay-platinum-credit-card-5oct.pdf",
+              "kind": "Suryoday platinum RuPay KFS effective 5 Oct 2026",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://suryoday.bank.in/assets/pdf/stablemoney-suryoday-sfb-credit-card-cashback.pdf",
+              "kind": "Stable Money cashback FAQ (0.5%, ₹3,000 cycle cap, excluded MCCs); undated, example uses May 2025 dates",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://suryoday.bank.in/assets/pdf/stable-money-credit-card-5oct2026.pdf",
+              "kind": "Changes applicable from 5 Oct 2026 (second-card fees, closure fee, recovery)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://suryoday.bank.in/personal/cards/credit-cards/secured-credit-card/",
+              "kind": "issuer page listing the current documents",
+              "read": "rendered page text"
+            }
+          ],
+          "open_questions": [
+            "The cashback FAQ is undated and its worked example uses May 2025 dates; the issuer page says 0.5% cashback is effective from 1 Aug (year not shown). Treat the cap and MCC list as current but confirm.",
+            "RuPay Platinum network benefits (lounge, golf, spa, health checks) are not in the KFS and were not modelled.",
+            "MITC (5 Oct 2026) was fetched for the card but not read in full."
+          ],
+          "notes": [
+            "The Nov 5 correction is confirmed: with the 5 Oct 2026 KFS the annual fee is nil and the foreign currency surcharge is NIL. The earlier ₹150 / 2.5% values came from the 26 May 2026 KFS.",
+            "Cashback is limited to ₹3,000 per billing cycle; excluded MCCs are listed in the cashback FAQ.",
+            "Second card issuance fee (incl. GST) from 5 Oct 2026: virtual Platinum ₹150, physical Platinum ₹250. Early closure or limit-reduction fee ₹150 incl. GST within 3 months.",
+            "Fuel surcharge waiver is limited to ₹40,000 a calendar month with no single transaction above ₹8,000."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

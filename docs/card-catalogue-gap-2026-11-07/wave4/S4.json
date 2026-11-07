@@ -1,0 +1,688 @@
+{
+  "agent": "S4",
+  "issuers": [
+    {
+      "issuer": "Equitas Small Finance Bank",
+      "listing_url": "https://equitas.bank.in/personal-banking/pay/credit-cards/",
+      "read_on": "2026-11-07",
+      "offered_count": 3,
+      "matched_live": [
+        "equitas-tiga",
+        "equitas-selfe",
+        "equitas-powermiles"
+      ],
+      "matched_drafts": [],
+      "missing": [],
+      "stale_live": [
+        {
+          "slug": "equitas-elegance",
+          "evidence": "Not on the issuer's credit-card listing (https://equitas.bank.in/personal-banking/pay/credit-cards/, read 7 Nov 2026), which shows only Tiga, Selfe and Powermiles with APPLY NOW. The page bundle contains only three card page components (tiga, selfe, powermiles). The word Elegance does not occur anywhere in the page HTML. The credit-card schedule of charges (CC_SOC, applicable from 31 Mar 2025) names no variants, so it neither confirms nor denies."
+        },
+        {
+          "slug": "equitas-excite",
+          "evidence": "Same as equitas-elegance: not on the 7 Nov 2026 listing, the word Excite does not occur in the page HTML, and only tiga/selfe/powermiles page components exist in the site bundle."
+        }
+      ],
+      "notes": "equitas.bank.in refuses plain fetches (HTTP 503 'Request Rejected' from curl and the fetch tool), so it was read in the built-in browser pane; the old www.equitasbank.com/credit-card URL 301s to equitas.bank.in/credit-card which is a 404. Selfe: the issuer page says the buyer chooses Visa or RuPay and Regular/Green/Metal design (Metal has additional charges) inside one product at Annual Fee Rs 1000; live has Selfe as RuPay only, so a Selfe Visa and a Selfe Metal variant exist at the issuer but are not sold as separate products, so they are not listed as missing. Selfe product URL: https://equitas.bank.in/personal-banking/pay/credit-cards/selfe-credit-card/ ; Tiga: .../tiga-credit-card/ ; PowerMiles: .../powermiles-credit-card/. The credit-card schedule-of-charges PDF could not be saved (the site served it as a download, a save dialog appeared in the pane once; it was then read in-page via fetch)."
+    },
+    {
+      "issuer": "Ujjivan Small Finance Bank",
+      "listing_url": "https://www.ujjivansfb.bank.in/cards/co-branded-credit-cards",
+      "read_on": "2026-11-07",
+      "offered_count": 2,
+      "matched_live": [
+        "ujjivan-sfb-platinum",
+        "ujjivan-sfb-elite"
+      ],
+      "matched_drafts": [],
+      "missing": [],
+      "stale_live": [],
+      "notes": "Ujjivan's only credit-card page is 'Ujjivan SFB Co-branded Credit Cards': BOBCARD Ujjivan SFB Platinum Credit Card and BOBCARD UJJIVAN-SFB Elite, both with BOBCARD as partner. No apply button on the page: FAQ says to contact your RM/BM, who shares a DIY journey link (status therefore 'sold' by RM-assisted application, not public self-serve). Network not stated in text (card image file names say Rupay_Platinum / Rupay_Select). Live has them under two slugs (ujjivan-small-finance-bank -> ujjivan-sfb-elite, ujjivan-sfb -> ujjivan-sfb-platinum). No other Ujjivan credit card is referenced on the site."
+    },
+    {
+      "issuer": "Federal Bank",
+      "listing_url": "https://www.federal.bank.in/credit-cards",
+      "read_on": "2026-11-07",
+      "offered_count": 10,
+      "matched_live": [
+        "federal-bank-scapia-credit-card"
+      ],
+      "matched_drafts": [
+        "federal-bank-scapia-credit-card"
+      ],
+      "missing": [
+        {
+          "name": "Federal Bank Signet Credit Card",
+          "product_url": "https://www.federal.bank.in/credit-cards",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Named as an organic Federal Bank card in the issuer's own charges schedule (Signet, Imperio, Celesta, Wave): Federal Bank schedule 'CHARGES APPLICABLE FOR FEDERAL BANK CREDIT CARD' w.e.f. 01-04-2026 (https://www.federal.bank.in/documents/d/guest/credit-card-charges-w-e-f-from-01-04-2026, read 7 Nov 2026). Listing page itself blocked by CAPTCHA, so sold/not-sold is unconfirmed."
+        },
+        {
+          "name": "Federal Bank Imperio Credit Card",
+          "product_url": "https://www.federal.bank.in/credit-cards",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Organic card in the same issuer charges schedule. Federal Bank schedule 'CHARGES APPLICABLE FOR FEDERAL BANK CREDIT CARD' w.e.f. 01-04-2026 (https://www.federal.bank.in/documents/d/guest/credit-card-charges-w-e-f-from-01-04-2026, read 7 Nov 2026). A web-search snippet of federal.bank.in shows a page titled 'MC Imperio Credit Card - Product Features' (https://www.federal.bank.in/-/celesta-credit-card-product-features-3), suggesting a Mastercard version; not opened."
+        },
+        {
+          "name": "Federal Bank Celesta Credit Card",
+          "product_url": "https://www.federal.bank.in/credit-cards",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Organic card in the same issuer charges schedule. Federal Bank schedule 'CHARGES APPLICABLE FOR FEDERAL BANK CREDIT CARD' w.e.f. 01-04-2026 (https://www.federal.bank.in/documents/d/guest/credit-card-charges-w-e-f-from-01-04-2026, read 7 Nov 2026)"
+        },
+        {
+          "name": "Federal Bank Wave Credit Card (floater card)",
+          "product_url": "https://www.federal.bank.in/credit-cards",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Column 'Wave (Floater Card)' in the issuer's schedule: no joining or annual fee, cash advance NIL, TDS note says 'not applicable for Wave Credit Card'. Federal Bank schedule 'CHARGES APPLICABLE FOR FEDERAL BANK CREDIT CARD' w.e.f. 01-04-2026 (https://www.federal.bank.in/documents/d/guest/credit-card-charges-w-e-f-from-01-04-2026, read 7 Nov 2026)"
+        },
+        {
+          "name": "Federal Bank Amplifi Credit Card",
+          "product_url": "https://www.federal.bank.in/co-branded-credit-cards",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed under 'Fin Tech Credit Card Charges (In-Organic (Cobranded) Credit Card)' as 1.1 Amplifi (Joining Rs 2000, annual Rs 2000, forex 0). Partner not named in the schedule. Federal Bank schedule 'CHARGES APPLICABLE FOR FEDERAL BANK CREDIT CARD' w.e.f. 01-04-2026 (https://www.federal.bank.in/documents/d/guest/credit-card-charges-w-e-f-from-01-04-2026, read 7 Nov 2026)"
+        },
+        {
+          "name": "Federal Bank Magnifi Credit Card",
+          "product_url": "https://www.federal.bank.in/co-branded-credit-cards",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed under 'Fin Tech Credit Card Charges (In-Organic (Cobranded) Credit Card)' as 1.2 Magnifi (joining/annual NA, forex 3.5%). Partner not named. Federal Bank schedule 'CHARGES APPLICABLE FOR FEDERAL BANK CREDIT CARD' w.e.f. 01-04-2026 (https://www.federal.bank.in/documents/d/guest/credit-card-charges-w-e-f-from-01-04-2026, read 7 Nov 2026)"
+        },
+        {
+          "name": "Federal Bank Simplifi Credit Card",
+          "product_url": "https://www.federal.bank.in/co-branded-credit-cards",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed under 'Fin Tech Credit Card Charges (In-Organic (Cobranded) Credit Card)' as 1.3 Simplifi (joining/annual NA, forex 3.5%). Partner not named. Federal Bank schedule 'CHARGES APPLICABLE FOR FEDERAL BANK CREDIT CARD' w.e.f. 01-04-2026 (https://www.federal.bank.in/documents/d/guest/credit-card-charges-w-e-f-from-01-04-2026, read 7 Nov 2026)"
+        },
+        {
+          "name": "Federal Bank Jupiter Credit Card",
+          "product_url": "https://www.federal.bank.in/co-branded-credit-cards",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": "Jupiter",
+          "evidence": "Listed as co-brand item 2 'Jupiter Credit card' (no joining fee, annual Rs 999 waived on Rs 1.2 lakh spend, forex 2%). Federal Bank schedule 'CHARGES APPLICABLE FOR FEDERAL BANK CREDIT CARD' w.e.f. 01-04-2026 (https://www.federal.bank.in/documents/d/guest/credit-card-charges-w-e-f-from-01-04-2026, read 7 Nov 2026). The Jupiter card now also exists on CSB Bank (live under CSB); whether the Federal one is still sold is not shown."
+        },
+        {
+          "name": "Federal Bank OneCard Credit Card",
+          "product_url": "https://www.federal.bank.in/co-branded-credit-cards",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": "OneCard",
+          "evidence": "Listed as co-brand item 3 'One card.' (no joining/annual fee, metal add-on card Rs 3000, forex 1%). Federal Bank schedule 'CHARGES APPLICABLE FOR FEDERAL BANK CREDIT CARD' w.e.f. 01-04-2026 (https://www.federal.bank.in/documents/d/guest/credit-card-charges-w-e-f-from-01-04-2026, read 7 Nov 2026). A web-search snippet of the issuer's co-branded page also names OneCard and Scapia as the co-brands."
+        },
+        {
+          "name": "Federal Bank SBI Platinum Credit Card",
+          "product_url": "https://www.sbicard.com/en/personal/credit-cards/banking-partnership/federal-bank-sbi-platinum-credit-card.page",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": "SBI Card",
+          "evidence": "SBI Card's own sitemap (https://www.sbicard.com/en/sitemap.page, read 7 Nov 2026) lists a banking-partnership page 'Federal Bank SBI Platinum Credit Card'. The page body could not be read by the fetch tool (generic shell), so availability is unconfirmed; looks like a legacy page. Overlaps with the SBI Card sweep."
+        },
+        {
+          "name": "Federal Bank SBI Gold and More Card",
+          "product_url": "https://www.sbicard.com/en/personal/credit-cards/banking-partnership/federal-bank-sbi-gold-and-more-credit-card.page",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": "SBI Card",
+          "evidence": "SBI Card's own sitemap lists 'Federal Bank SBI Gold and More Card' under banking-partnership. Body unreadable by the fetch tool; looks like a legacy page. Overlaps with the SBI Card sweep."
+        }
+      ],
+      "stale_live": [],
+      "notes": "ISSUER PAGE UNREADABLE: every federal.bank.in HTML page (home, /credit-cards, /co-branded-credit-cards) returned a Radware bot-manager CAPTCHA ('your activity and behavior ... made us think that you are a bot') in both the fetch tool and the built-in browser. No CAPTCHA was attempted and no workaround used. The names above come from the issuer's own PDF charges schedule (the PDF host was not behind the wall), which proves a card exists in the fee schedule dated 1 Apr 2026, not that it is sold today (Wave 2 rule 4), so every status is 'unknown'. offered_count 10 = the ten names in the schedule (Signet, Imperio, Celesta, Wave, Amplifi, Magnifi, Simplifi, Jupiter, OneCard, Scapia); the two SBI co-brand entries are extra. A person should open https://www.federal.bank.in/credit-cards and /co-branded-credit-cards in an ordinary browser to confirm which are sold. Amplifi/Magnifi/Simplifi partner(s) are not named in the schedule."
+    },
+    {
+      "issuer": "South Indian Bank",
+      "listing_url": "https://www.southindianbank.bank.in/personal/cards/credit-card",
+      "read_on": "2026-11-07",
+      "offered_count": 4,
+      "matched_live": [
+        "south-indian-bank-simplysave-sbi-card",
+        "south-indian-bank-sbi-card-prime"
+      ],
+      "matched_drafts": [],
+      "missing": [
+        {
+          "name": "SIB One Co-Branded Credit Card",
+          "product_url": "https://www.southindianbank.bank.in/personal/cards/credit-card/sib-one-co-branded-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": "OneCard (One Consumer Services)",
+          "evidence": "Issuer page 'SIB One Co-Branded Credit Card': 'premium, 100% digital card with lifetime-free benefits. Powered by SIB and M/s One Consumer Services', metal-based Visa Signature, 1% forex, instant virtual issuance via the OneCard app. KFS: https://www.southindianbank.bank.in/userfiles/upload/sib_onecard_kfs.pdf. The page carries no restriction wording; a third-party search snippet claims it is issued only to pre-approved customers (not issuer evidence)."
+        },
+        {
+          "name": "Secured SIB One Co-Branded Credit Card",
+          "product_url": "https://www.southindianbank.bank.in/personal/cards/credit-card/secured-sib-one-co-branded-credit-card",
+          "status": "sold",
+          "variant_of": "SIB One Co-Branded Credit Card",
+          "partner": "OneCard (One Consumer Services)",
+          "evidence": "Issuer page: fixed-deposit-backed lifetime-free card, 'zero joining and annual fees', Visa Signature, 100% of deposit offered as limit, 1% forex. Issued by SIB with OneConsumer Pvt Ltd. T&C: https://www.southindianbank.bank.in/userfiles/upload/tandc_secured_sib_onecard.pdf"
+        }
+      ],
+      "stale_live": [],
+      "notes": "Issuer lists four cards under 'SIB Co-Branded Credit Cards': SIB One, Secured SIB One, South Indian Bank SBI Platinum Card, South Indian Bank SimplySAVE SBI Card. 'South Indian Bank SBI Platinum Card' (https://www.southindianbank.bank.in/personal/cards/credit-card/south-indian-bank-sbi-platinum-card) shows Rs 2,999 + GST, Rs 3,000 welcome voucher, 10 points per Rs 100 on dining/groceries/department stores, 2 points otherwise, 1% fuel waiver, Priority Pass; that is the SBI Card PRIME feature set, so it is treated as the live 'South Indian Bank SBI Card PRIME' (name differs; flag for a human to confirm, SBI Card's own sitemap names the page 'South Indian Bank SBI Platinum Credit Card'). www.southindianbank.bank.in/ returns 403 to the fetch tool, so it was read in the built-in browser. The SBI-Card ELITE tier is not listed by SIB."
+    },
+    {
+      "issuer": "Karnataka Bank",
+      "listing_url": "https://www.karnatakabank.bank.in/personal/credit-cards",
+      "read_on": "2026-11-07",
+      "offered_count": 2,
+      "matched_live": [
+        "karnataka-bank-sbi-card-prime",
+        "karnataka-bank-simplysave-sbi-card"
+      ],
+      "matched_drafts": [],
+      "missing": [],
+      "stale_live": [],
+      "notes": "Issuer page says 'The following two variants of Co-branded credit card will be offered': Karnataka Bank SimplySave SBI Card and Karnataka Bank SBI Card Prime (non-risk-participation tie-up with SBI Card). Product pages: /personal/cards/prime-sbi-credit-card and /personal/cards/simplysave-sbi-card. No Karnataka Bank own-brand card. SBI Card's sitemap also lists a legacy 'Karnataka Bank SBI Platinum Credit Card' page; Karnataka's own site does not."
+    },
+    {
+      "issuer": "Jammu & Kashmir Bank",
+      "listing_url": "https://jkb.bank.in/transactions/services/credit-cards",
+      "read_on": "2026-11-07",
+      "offered_count": 3,
+      "matched_live": [],
+      "matched_drafts": [],
+      "missing": [
+        {
+          "name": "J&K Bank Eminent Credit Card (earlier World Credit Card)",
+          "product_url": "https://jkb.bank.in/transactions/services/credit-cards",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Issuer 'Types of Cards' tab: 'EMINENT CARD (Earlier World Credit Card)', annual fee INR 1,500, joining zero, forex 1.99%, 2 domestic lounge visits per quarter; golf privileges via a Mastercard India golf programme. Apply online link: https://digital.jkbank.com/JKBCreditCard"
+        },
+        {
+          "name": "J&K Bank Platinum Privilege Credit Card (earlier Government Card)",
+          "product_url": "https://jkb.bank.in/transactions/services/credit-cards",
+          "status": "invite_only",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Issuer tab: 'PLATINUM PRIVILEGE CARD (Earlier Government Card)' with 'Eligibility: Only Govt MOU employees are eligible for this card.' Zero joining and annual fee."
+        },
+        {
+          "name": "J&K Bank Platinum Credit Card",
+          "product_url": "https://jkb.bank.in/transactions/services/credit-cards",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Issuer tab: 'PLATINUM CARD (Earlier Platinum Card will continue as Platinum Card)', annual fee INR 500, 'This variant includes cards from MasterCard, VISA and RuPay networks' (one product, three networks, so not listed as separate variants). RuPay credit card UPI-enabled."
+        }
+      ],
+      "stale_live": [],
+      "notes": "One page lists all three cards; there are no separate product URLs. MITC/KFS and T&C PDFs are linked from the page. No live J&K Bank card exists. Platinum Privilege is restricted to Govt MOU employees, so status recorded as invite_only (restricted eligibility) rather than a public product."
+    },
+    {
+      "issuer": "City Union Bank",
+      "listing_url": "https://cityunionbank.bank.in/Creditcard",
+      "read_on": "2026-11-07",
+      "offered_count": 11,
+      "matched_live": [
+        "city-union-bank-sbi-card-prime",
+        "city-union-bank-simplysave-sbi-card"
+      ],
+      "matched_drafts": [],
+      "missing": [
+        {
+          "name": "CUB CSK/SRH RuPay Platinum Credit Card (lifetime free)",
+          "product_url": "https://cityunionbank.bank.in/co-branded-creditcard",
+          "status": "sold",
+          "variant_of": null,
+          "partner": "Chennai Super Kings / Sunrisers Hyderabad",
+          "evidence": "Listed in City Union Bank Key Fact Statement for Credit Cards KFS_V6 updated 03.10.2026 (https://cityunionbank.bank.in/filemanager/Oct26/KFS_V6%20English.pdf): joining NIL, annual NIL. Issuer page has 'Apply CSK Credit Card' (/co-branded-creditcard) and 'Apply SRH Credit Card' (/srh-bankingpartner): two team editions (Chennai Super Kings, Sunrisers Hyderabad) of the same variant. Rewards doc: https://cityunionbank.bank.in/filemanager/Apr26/CSK_SRHRewards_Features.pdf"
+        },
+        {
+          "name": "CUB CSK/SRH Master Platinum Credit Card (first year free)",
+          "product_url": "https://cityunionbank.bank.in/co-branded-creditcard",
+          "status": "sold",
+          "variant_of": "CUB CSK/SRH RuPay Platinum Credit Card (lifetime free)",
+          "partner": "Chennai Super Kings / Sunrisers Hyderabad",
+          "evidence": "KFS V6 row 'CUB CSK/SRH MASTER PLATINUM CREDIT CARD (FIRST YEAR FREE)': joining NIL, annual Rs 1000 + GST from year 2 (waived on spends). Same CSK / SRH apply pages as above."
+        },
+        {
+          "name": "CUB CSK/SRH Master World Credit Card (first year free)",
+          "product_url": "https://cityunionbank.bank.in/co-branded-creditcard",
+          "status": "sold",
+          "variant_of": "CUB CSK/SRH RuPay Platinum Credit Card (lifetime free)",
+          "partner": "Chennai Super Kings / Sunrisers Hyderabad",
+          "evidence": "KFS V6 row 'CUB CSK/SRH MASTER WORLD CREDIT CARD (FIRST YEAR FREE)': joining NIL, annual Rs 4000 + GST from year 2 (waived on spends). Same CSK / SRH apply pages."
+        },
+        {
+          "name": "CUB SalarySe Level Up Credit Card (lifetime free)",
+          "product_url": "https://cityunionbank.bank.in/cub-salaryse-level-up-credit-card",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": "SalarySe",
+          "evidence": "Issuer page 'About CUB SalarySe Level UP Credit Card' (updated 05-10-2026) describes the card, 12 lounge visits a year, 1% forex on physical card; KFS V6 lists 'CUB SALARY SE LEVEL UP CREDIT CARD (LIFETIME FREE)'. The page has no apply button (apply route via the SalarySe partner is not shown), so status unknown."
+        },
+        {
+          "name": "CUB SalarySe Level Up Credit Card (paid variant)",
+          "product_url": "https://cityunionbank.bank.in/cub-salaryse-level-up-credit-card",
+          "status": "unknown",
+          "variant_of": "CUB SalarySe Level Up Credit Card (lifetime free)",
+          "partner": "SalarySe",
+          "evidence": "KFS V6 row 'CUB SALARY SE LEVEL UP CREDIT CARD (PAID VARIANT)': joining Rs 500 + GST, annual Rs 500 + GST (waived on Rs 2L spend), forex 1%. Same page, no apply button."
+        },
+        {
+          "name": "CUB Kavach Credit Card (secured, RuPay / Mastercard)",
+          "product_url": "https://cityunionbank.bank.in/cub-kavach-terms-and-conditions",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Issuer page has 'Apply Secured Credit Card (CUB Kavach)' (https://cubdigital.cub.bank.in/cub-depend-webapp/). KFS V6 row 'CUB KAVACH RUPAY / MASTER CREDIT CARD': joining/annual NIL, interest 2% p.m. Docs: https://cityunionbank.bank.in/filemanager/Jun26/KFS%20Kavach.pdf. One product in two networks."
+        },
+        {
+          "name": "CUB Sastra Alumni Platinum Credit Card (RuPay / Mastercard)",
+          "product_url": "https://cityunionbank.bank.in/filemanager/Oct26/KFS_V6%20English.pdf",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": "SASTRA University (alumni)",
+          "evidence": "Only named in City Union Bank Key Fact Statement for Credit Cards KFS_V6 updated 03.10.2026 (https://cityunionbank.bank.in/filemanager/Oct26/KFS_V6%20English.pdf): 'CUB SASTRA ALUMNI RUPAY/MASTER PLATINUM CREDIT CARD', joining/annual NIL. No product page, no apply link and not in the issuer's sitemap; presumably limited to SASTRA University alumni."
+        },
+        {
+          "name": "CUB Sastra Alumni RuPay Select Credit Card",
+          "product_url": "https://cityunionbank.bank.in/filemanager/Oct26/KFS_V6%20English.pdf",
+          "status": "unknown",
+          "variant_of": "CUB Sastra Alumni Platinum Credit Card (RuPay / Mastercard)",
+          "partner": "SASTRA University (alumni)",
+          "evidence": "Only named in City Union Bank Key Fact Statement for Credit Cards KFS_V6 updated 03.10.2026 (https://cityunionbank.bank.in/filemanager/Oct26/KFS_V6%20English.pdf): 'CUB SASTRA ALUMNI RUPAY SELECT CREDIT CARD', joining Rs 999 + GST, annual Rs 999 + GST (waived on Rs 2L spend), forex 1%. No product page or apply link."
+        },
+        {
+          "name": "Dhi CUB Visa Signature Credit Card",
+          "product_url": "https://cityunionbank.bank.in/Creditcard",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Issuer page https://cityunionbank.bank.in/Creditcard (updated 05-06-2026) is built around 'Dhi CUB Visa Signature Credit Card' (1.25% cashback for 2 years, fuel surcharge reimbursement) and says CUB 'launched Dhi CUB VISA Signature / Platinum / Master / Rupay credit cards ... with an initial focus on issuing these cards to existing current and savings deposit customers'. MITC v27 (Feb 2026): https://cityunionbank.bank.in/filemanager/Jun26/DhiCard_MITC.pdf. No apply button on the page; Dhi is not in the Oct 2026 KFS table."
+        }
+      ],
+      "stale_live": [
+        {
+          "slug": "city-union-bank-sbi-card-elite",
+          "evidence": "Not listed on any CUB credit-card page (cityunionbank.bank.in/Creditcard, sitemap read 7 Nov 2026, no SBI Card co-brand at all) and SBI Card's own sitemap (https://www.sbicard.com/en/sitemap.page, 7 Nov 2026) lists only 'City Union Bank SBI Card PRIME' and 'City Union Bank SimplySAVE SBI Card' for CUB, no ELITE page."
+        }
+      ],
+      "notes": "cityunionbank.com 301/JS-redirects to cityunionbank.bank.in. CUB's own card pages do not mention the SBI co-brands; matched_live for the two SBI cards rests on SBI Card's sitemap (pages exist), not on CUB's site. offered_count 11 = 9 CUB-issued rows above (counting CSK/SRH, SalarySe, Sastra variants separately, Kavach and Dhi once) + the two SBI co-brand cards. CSK and SRH are two team editions of the same three variants and are listed once per variant. The KFS says 'Dhi' nowhere, so Dhi may be on its way out; a person should confirm. The SRH/'SGI Exclusive' page (/cub-shriram-credit-card) is an employee-campaign form for Shriram General Insurance staff; not filled, not a separate card."
+    },
+    {
+      "issuer": "Tamilnad Mercantile Bank",
+      "listing_url": "https://www.tmb.bank.in/personal/retail-cards",
+      "read_on": "2026-11-07",
+      "offered_count": 6,
+      "matched_live": [],
+      "matched_drafts": [],
+      "missing": [
+        {
+          "name": "TMB VIBE360 Credit Card",
+          "product_url": "https://www.tmb.bank.in/personal/retail-cards/tmb-vibe360-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Issuer retail-cards page 'Apply now'. 'Deposit-linked credit card, zero annual fee... designed exclusively for both NRI and Resident customers who maintain a Term Deposit of Rs.50,000 and above'; limit Rs 30,000 to Rs 10,00,000."
+        },
+        {
+          "name": "TMB Vertex Credit Card",
+          "product_url": "https://www.tmb.bank.in/personal/retail-cards/tmb-vertex-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Issuer page: Term-Deposit-backed card, free joining, zero annual fee, limit Rs 20,000 to Rs 5,00,000 (the page eligibility text still says 'TMB VIBE360' - a copy slip on the issuer's page)."
+        },
+        {
+          "name": "TMB Titanium Credit Card",
+          "product_url": "https://www.tmb.bank.in/personal/savings/tmb-titanium-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Issuer page: Term-Deposit-backed, free joining, zero annual fee, gross annual income Rs 2,00,000+, described as 'A premium RuPay Credit Card'."
+        },
+        {
+          "name": "TMB Platinum Credit Card",
+          "product_url": "https://www.tmb.bank.in/personal/savings/tmb-platinum-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Issuer page: Term Deposit of Rs 50,000+ for min 3 years, no joining/annual fee, limit up to 75% of deposit; 'A Premium RuPay Platinum Credit Card'."
+        },
+        {
+          "name": "TMB Phoenix (RuPay) Credit Card",
+          "product_url": "https://www.tmb.bank.in/personal/savings/tmb-phoenix-rupay-credit-card",
+          "status": "existing_customers_only",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Issuer page: business-focused RuPay Platinum card; 'available to individuals or proprietors who maintain a Current Account with TMB for at least one year and have filed income tax returns for the last two years', min income Rs 3 lakh."
+        },
+        {
+          "name": "TMB Wings (RuPay) Credit Card",
+          "product_url": "https://www.tmb.bank.in/personal/retail-cards/tmb-wings-rupay-credit-card",
+          "status": "existing_customers_only",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Issuer page: RuPay Platinum everyday card; 'available to individuals with an active TMB Savings Account maintained for at least one year', ITRs for 2 years, min income Rs 3 lakh."
+        }
+      ],
+      "stale_live": [],
+      "notes": "Six cards on the issuer retail-cards page (tmb.bank.in; tmbnet.in is only internet banking). A 'New Customer' lead form exists (https://www.tmb.bank.in/lead-form-credit-card, not filled). Four cards are Term-Deposit-backed (status 'sold' since a new customer can book the deposit); Phoenix and Wings require an existing account of 1 year. Networks stated: Titanium, Platinum, Phoenix and Wings RuPay; VIBE360 and Vertex network not stated in the text read."
+    },
+    {
+      "issuer": "Dhanlaxmi Bank",
+      "listing_url": "https://www.dhan.bank.in/credit-card/",
+      "read_on": "2026-11-07",
+      "offered_count": 3,
+      "matched_live": [],
+      "matched_drafts": [],
+      "missing": [
+        {
+          "name": "Dhan Namaste Credit Card (VISA Platinum)",
+          "product_url": "https://www.dhan.bank.in/credit-card-pl/",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Issuer listing: 'Dhan Namaste Credit Card - VISA Platinum Credit Card' with Know more / Apply (https://www.dhan.bank.in/apply). Page: minimum gross income Rs 6 lakh, 5% cashback at supermarkets/department stores (max Rs 50 a month)."
+        },
+        {
+          "name": "Dhan Vriddhi Credit Card (RuPay Platinum)",
+          "product_url": "https://www.dhan.bank.in/rupay-cc-Dhan-Vriddhi/",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Issuer listing with Apply. Page: nil joining fee, annual fee Rs 400 (waived on Rs 50,000 spend), 2 points per Rs 100, 1 domestic lounge per half year, credit card on UPI."
+        },
+        {
+          "name": "Dhan Samriddhi Credit Card (RuPay Select)",
+          "product_url": "https://www.dhan.bank.in/rupay-CC-Dhan-Samriddhi/",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Issuer listing with Apply. Page: nil joining fee, annual fee Rs 800 (waived above Rs 1 lakh spend), 1 domestic lounge per quarter and 1 abroad per half year."
+        }
+      ],
+      "stale_live": [],
+      "notes": "dhanbank.com redirects to dhan.bank.in. No Dhanlaxmi card is in the live catalogue."
+    },
+    {
+      "issuer": "Jana Small Finance Bank",
+      "listing_url": "https://www.jana.bank.in/cards-ent",
+      "read_on": "2026-11-07",
+      "offered_count": 0,
+      "matched_live": [],
+      "matched_drafts": [],
+      "missing": [],
+      "stale_live": [],
+      "notes": "jana.bank.in Cards pages list only RuPay debit cards (Select/Platinum/Classic) and prepaid-style offers. Site map (636 links, https://www.jana.bank.in/sitemap/) has no credit-card page. A web search found one aggregator page claiming an FD-backed Jana card and another saying Jana does not offer one; neither is issuer evidence. Treated as no credit card."
+    },
+    {
+      "issuer": "Utkarsh Small Finance Bank",
+      "listing_url": "https://www.utkarsh.bank.in/personal/cards/credit-card",
+      "read_on": "2026-11-07",
+      "offered_count": 5,
+      "matched_live": [],
+      "matched_drafts": [],
+      "missing": [
+        {
+          "name": "Utkarsh Eternal Credit Card",
+          "product_url": "https://www.utkarsh.bank.in/personal/cards/credit-card/eternal",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Issuer listing (Read more). Page: no annual fee first year, Rs 1,999 from year 2 (waived on Rs 1.5 lakh spend), 1.25% cashback, 1% fuel surcharge refund. Page FAQ also covers a 'Credit Card against FD'."
+        },
+        {
+          "name": "Utkarsh Rhodium Credit Card",
+          "product_url": "https://www.utkarsh.bank.in/personal/cards/credit-card/rhodium",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Issuer listing. Page: no fee first year, Rs 4,999 from year 2 (waived on Rs 5 lakh spend), lounge access up to 4 times a calendar quarter, 1.25% cashback."
+        },
+        {
+          "name": "Utkarsh SmartGen Credit Card",
+          "product_url": "https://www.utkarsh.bank.in/personal/cards/credit-card/smartgen",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Issuer listing. Page: no fee first year, Rs 199 + taxes from year 2 (waived on Rs 50,000), 1% cashback."
+        },
+        {
+          "name": "Utkarsh superCard",
+          "product_url": "https://www.utkarsh.bank.in/personal/cards/credit-card/supercard",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Issuer listing. Page: no joining/annual fee, 5% and 2% cashback on non-UPI spends on Myntra and Flipkart, 1% on all other UPI and non-UPI spends; application includes creating a deposit. Brand partner not named on the page."
+        },
+        {
+          "name": "Utkarsh Wish Credit Card",
+          "product_url": "https://www.utkarsh.bank.in/personal/cards/credit-card/wish-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": "PhonePe",
+          "evidence": "Issuer listing. Page: no joining/annual fee, 3% reward points on recharges and bill payments through the PhonePe app, 1% on scan and pay through PhonePe, application includes creating a deposit."
+        }
+      ],
+      "stale_live": [],
+      "notes": "Page footer also lists a 'Secured Card Support' line and securedcc@utkarsh.bank.in, and the Eternal/Rhodium/SmartGen pages carry 'Credit Card against FD' FAQs, so some or all cards may have a deposit-backed form; not shown as separate products on the listing. No Utkarsh card is in the live catalogue. Networks not stated in the text read."
+    },
+    {
+      "issuer": "Unity Small Finance Bank",
+      "listing_url": "https://unity.bank.in/personal-banking/cards/credit-card",
+      "read_on": "2026-11-07",
+      "offered_count": 4,
+      "matched_live": [],
+      "matched_drafts": [],
+      "missing": [
+        {
+          "name": "Unity Bank Zero Credit Card",
+          "product_url": "https://cards.unity.bank.in/",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Issuer 'Choose your card': 'Lifetime free credit card ... Start your journey with an FD of just Rs 2,000', zero joining/annual, 0% forex, up to 1.5% cashback. Page title says RuPay."
+        },
+        {
+          "name": "Unity Bank Vibe Credit Card",
+          "product_url": "https://cards.unity.bank.in/",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Issuer 'Choose your card': start with an FD of Rs 25,000, 0% forex, 10 complimentary airport lounge visits a year, up to 2% cashback."
+        },
+        {
+          "name": "Roarbank Credit Card (Unity SFB)",
+          "product_url": "https://unity.bank.in/personal-banking/cards/credit-card/usfb-roarbank-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": "Roarbank",
+          "evidence": "Issuer listing with Apply Now: 'India's first 2-in-1 Credit Card that combines a digital savings account', up to 20% cashback on top 2 chosen categories, interest-free up to 62 days."
+        },
+        {
+          "name": "Unity Bank BharatPe Credit Card",
+          "product_url": "https://unity.bank.in/personal-banking/cards/credit-card/usfb-bharatpe-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": "BharatPe",
+          "evidence": "Issuer listing: lifetime free, 2% uncapped rewards, 8 complimentary domestic lounge visits, UPI on credit card; repayment link on consumer.bharatpe.in."
+        }
+      ],
+      "stale_live": [],
+      "notes": "Four cards on the issuer page, none in live. Zero and Vibe share one microsite (cards.unity.bank.in) rather than separate product pages; Gift Cards offers 'exclusively on Zero' and 'on Vibe' are linked."
+    },
+    {
+      "issuer": "Capital Small Finance Bank",
+      "listing_url": "https://www.capital.bank.in/debit-cards",
+      "read_on": "2026-11-07",
+      "offered_count": 0,
+      "matched_live": [],
+      "matched_drafts": [],
+      "missing": [],
+      "stale_live": [],
+      "notes": "capital.bank.in lists debit cards (Classic, Platinum, Business, Virtual) and Kisan Credit Card only; no credit card page or link. (www.capitalbank.co.in is no longer the site; navigation there failed.)"
+    },
+    {
+      "issuer": "Airtel Finance",
+      "listing_url": "https://www.airtel.in/finance/credit-card/",
+      "read_on": "2026-11-07",
+      "offered_count": 1,
+      "matched_live": [
+        "airtel-axis-bank-credit-card"
+      ],
+      "matched_drafts": [],
+      "missing": [],
+      "stale_live": [],
+      "notes": "Airtel Finance is a distributor: its credit-card pages all promote the Airtel Axis Bank Credit Card (live under the Axis issuer key). It also has landing pages titled 'Airtel Axis Bank RuPay Credit Card' (/finance/credit-card/rupay) and 'Credit Card Against FD' (Axis-issued, FD with Axis Bank, /finance/credit-card/credit-card-against-fixed-deposit); their bodies are generic SEO text with no separate card name, fee or benefits, so they are not recorded as distinct products. Left to the Axis sweep to say whether an Axis RuPay or FD-backed Airtel variant exists."
+    },
+    {
+      "issuer": "Bank of Maharashtra",
+      "listing_url": "https://bankofmaharashtra.bank.in/bom-sbi-credit-cards",
+      "read_on": "2026-11-07",
+      "offered_count": 3,
+      "matched_live": [
+        "bank-of-maharashtra-sbi-card-prime",
+        "bank-of-maharashtra-simplysave-sbi-card",
+        "bank-of-maharashtra-sbi-card-elite"
+      ],
+      "matched_drafts": [],
+      "missing": [],
+      "stale_live": [],
+      "notes": "Issuer page lists Bank of Maharashtra SimplySAVE SBI Credit Card, SBI Credit Card PRIME and SBI Credit Card ELITE (pages /bom-sbi-credit-cards-simplysave, -prime, -elite). FAQ on the same page: the bank 'has taken a strategic decision to exit from credit card business'; its own legacy cards are being closed and replaced by the SBI Card co-brand. The /credit-cards URL linked from the home page is a 404."
+    },
+    {
+      "issuer": "Punjab & Sind Bank",
+      "listing_url": "https://punjabandsind.bank.in/content/credit-cards",
+      "read_on": "2026-11-07",
+      "offered_count": 3,
+      "matched_live": [
+        "punjab-sind-bank-sbi-card-prime",
+        "punjab-sind-bank-simplysave-sbi-card",
+        "punjab-sind-bank-sbi-card-elite"
+      ],
+      "matched_drafts": [],
+      "missing": [],
+      "stale_live": [],
+      "notes": "Issuer page 'PSB SBI Co-branded Credit Cards' lists PSB Simply SAVE SBI Card (Rs 499), PSB SBI Card PRIME (Rs 2,999) and PSB SBI Card ELITE (Rs 4,999). punjabandsindbank.co.in is not the site; punjabandsind.bank.in is."
+    },
+    {
+      "issuer": "DCB Bank",
+      "listing_url": "https://www.dcb.bank.in/personal/cards",
+      "read_on": "2026-11-07",
+      "offered_count": 5,
+      "matched_live": [],
+      "matched_drafts": [],
+      "missing": [
+        {
+          "name": "DCB ZET Credit Card",
+          "product_url": "https://www.dcb.bank.in/personal/cards/secured-card/dcb-zet-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": "ZET",
+          "evidence": "Issuer 'Secured Credit Card' list with Apply Now: 'Fixed Deposit backed RuPay Credit Card', FD from Rs 2,000, lifetime free renewal, 90% of FD as limit, UPI on ZET / PhonePe / Google Pay."
+        },
+        {
+          "name": "DCB novio Credit Card (RuPay Platinum / RuPay Select)",
+          "product_url": "https://www.dcb.bank.in/personal/cards/secured-card/dcb-novio-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": "novio",
+          "evidence": "Issuer page: FD-secured RuPay card, FD from Rs 2,000, lifetime free; fee table lists 'DCB novio Credit Card (Rupay Platinum)' and '(Rupay Select)', both Nil/Nil; applied for in the novio app (pick Select or Platinum). KFS: https://www.dcb.bank.in/api/dcb/assets/2026-04/KFS-DCB-Novio-Card.pdf"
+        },
+        {
+          "name": "DCB Niyo Credit Card",
+          "product_url": "https://www.dcb.bank.in/personal/cards/secured-card/dcb-niyo-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": "Niyo",
+          "evidence": "Issuer page: 'DCB Niyo Secured Credit Card', secured by a lien on a DCB Savings Account, limit 90% of lien amount, instant, no credit-score check. Network not stated in the text read."
+        },
+        {
+          "name": "DCB PayLess Platinum Credit Card",
+          "product_url": "https://www.dcb.bank.in/personal/cards/secured-card/dcb-payless-platinum-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Issuer page with Apply Now: secured against DCB Fixed Deposit, 'powered by RuPay', 90% of FD as limit, 1 domestic lounge a quarter, Rs 250 cashback on Rs 50,000 quarterly spend."
+        },
+        {
+          "name": "DCB PayLess Select Credit Card",
+          "product_url": "https://www.dcb.bank.in/personal/cards/secured-card/dcb-payless-select-card",
+          "status": "sold",
+          "variant_of": "DCB PayLess Platinum Credit Card",
+          "partner": null,
+          "evidence": "Issuer page with Apply Now: premium FD-secured RuPay card, 9 lounge visits a year (1 international + 2 domestic per quarter), Rs 1,000 cashback on Rs 1 lakh quarterly spend."
+        }
+      ],
+      "stale_live": [],
+      "notes": "Not in the assigned list or the skip list; found through a web search lead and confirmed on the issuer's own pages. All five DCB cards are secured (FD or savings-lien). SBM's ZET / novio / Niyo Global are different issuer variants and already drafts; these are DCB-issued versions. DCB's card page names no unsecured credit card."
+    },
+    {
+      "issuer": "ESAF Small Finance Bank",
+      "listing_url": "https://www.esaf.bank.in/credit-card/",
+      "read_on": "2026-11-07",
+      "offered_count": 1,
+      "matched_live": [],
+      "matched_drafts": [],
+      "missing": [
+        {
+          "name": "ESAF INORI RuPay Platinum Credit Card",
+          "product_url": "https://www.esaf.bank.in/credit-card/",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Issuer page 'INORI - RuPay Platinum Credit Card': 1.25% cashback on bill amounts, insurance cover up to Rs 2 lakh, concierge, merchant offers; 'Apply Now' https://www.esaf.bank.in/apply-credit-card/; MITC Aug 2026 (https://www.esaf.bank.in/wp-content/uploads/2026/08/Most-Important-Terms-And-Conditions-MITC-Inori_English.pdf)."
+        }
+      ],
+      "stale_live": [],
+      "notes": "Not in the assigned list; found by web-search lead and confirmed on the issuer's page. A third-party page mentions FD-backed ESAF cards; the issuer page shows only INORI."
+    },
+    {
+      "issuer": "Saraswat Co-operative Bank",
+      "listing_url": "https://www.saraswat.bank.in/navigation.aspx?id=Credit-Cards",
+      "read_on": "2026-11-07",
+      "offered_count": 2,
+      "matched_live": [],
+      "matched_drafts": [],
+      "missing": [
+        {
+          "name": "Saraswat Bank RuPay Platinum Credit Card",
+          "product_url": "https://www.saraswat.bank.in/content.aspx?id=Credit-Card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Issuer page 'Credit Card' under Cards > Credit Cards: 'To Apply, visit your nearest branch'; schedule of charges for all RuPay credit cards w.e.f. January 2026; 'Main terms and conditions of Rupay Platinum Credit Card'."
+        },
+        {
+          "name": "Saraswat Bank Secured RuPay Platinum Credit Card",
+          "product_url": "https://www.saraswat.bank.in/content.aspx?id=Secured-Credit-Card",
+          "status": "sold",
+          "variant_of": "Saraswat Bank RuPay Platinum Credit Card",
+          "partner": null,
+          "evidence": "Issuer page 'Secured Credit Card': 'To Apply, visit your nearest branch'; additional T&C for Secured Rupay Platinum Credit Card."
+        }
+      ],
+      "stale_live": [],
+      "notes": "Branch-only application (no online apply link on the pages). Its 2025-2028 credit card policy (third-party search snippet) says no co-brand or corporate cards."
+    },
+    {
+      "issuer": "Other issuers checked, no own credit card found",
+      "listing_url": "https://www.rbi.org.in/Scripts/ATMView.aspx",
+      "read_on": "2026-11-07",
+      "offered_count": 0,
+      "matched_live": [],
+      "matched_drafts": [],
+      "missing": [],
+      "stale_live": [],
+      "notes": "RBI's bank-wise ATM/POS/Card statistics page (https://www.rbi.org.in/Scripts/ATMView.aspx, Sept 2026 edition) opens, but its XLSX/PDF files on rbidocs.rbi.org.in answered a plain fetch with an empty reply and a human-verification image page, so the issuer list could not be read; no workaround was tried. Checked by web search only (no issuer evidence of a credit card): North East SFB (is now slice, covered elsewhere), Cosmos Co-operative Bank (debit only in search), Nainital Bank (only a salary-account mention of a free first-year credit card), Fincare/Shivalik SFBs (merged / no card), NBFCs (no stand-alone NBFC issuer found beyond SBI Card; Poonawalla Fincorp co-brands via IndusInd). Lead for the AU sweep: an 'Aditya Birla Capital AU Small Finance Bank Credit Card' (ABC Flex) page appears in search results; not opened here. Not looked at: Kerala Bank, TJSB, NKGSB and other co-operative banks."
+    }
+  ]
+}

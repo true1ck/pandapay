@@ -1,0 +1,745 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "yes-bank-pop-club-rupay",
+    "name": "YES BANK POP-CLUB RuPay Credit Card",
+    "issuer_slug": "yes",
+    "network": "rupay",
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 399,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": "No YES BANK page or document states the rupee value of a POPcoin. The partner (POPtech) home page says \"1 POPcoin = ₹1\" but its Terms (mypop.in/tnc) say coins are redeemed as a discount up to a maximum per purchase set by the company, or converted to cashback \"at a rate the Company sets\". The earlier partner-app read (₹0.10 per coin on cash conversion) conflicts. Wave 3 (W11, 7 Nov 2026) re-read all eight FAQs on the YES page (the \"View More\" ones too): \"What are the ways to use POPcoins?\" lists discounts in the POPclub app, \"minis\" sample packs, exclusive deals and discounts on 100+ D2C brands, with no rupee value, and the fee FAQ calls the 400 POPcoins credited when the ₹399 fee is paid \"a cashback\" without a per-coin value. MITC V18, the KFS, the Cardmember Agreement and the Redemption Rules (YES Rewardz only) have no POPcoin redemption terms. Left null.",
+    "point_expiry_months": 12,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/pop-club-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "Apply through the partner (Pop Club) website or app; the partner may charge a platform fee. Page: age 21 to 60, salaried or self-employed, minimum net salary ₹25,000 a month or ITR of ₹7.5 lakh; existing YES BANK credit cardholders are not eligible.",
+    "rules": [
+      {
+        "parameter": "age_years",
+        "operator": ">=",
+        "threshold_value": 21,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years",
+        "operator": "<=",
+        "threshold_value": 60,
+        "allowed_values": []
+      },
+      {
+        "parameter": "net_monthly_salary_inr_or_itr_inr",
+        "operator": ">=",
+        "threshold_value": 25000,
+        "allowed_values": []
+      },
+      {
+        "parameter": "employment_type",
+        "operator": "in",
+        "threshold_value": null,
+        "allowed_values": [
+          "salaried",
+          "self_employed"
+        ]
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": 2,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "popclub-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5542,
+          5983,
+          5172,
+          5540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No POPcoins on fuel (page T&C asterisk note)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "popclub-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No POPcoins on rent; at most 5 rental transactions in every 30 days (page T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "popclub-excl-wallet",
+      "category_id": "wallet",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No POPcoins on wallet loads (page T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "popclub-excl-government",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          9034,
+          9211,
+          9222,
+          9223,
+          9311,
+          9399,
+          9402,
+          9405,
+          9700,
+          9701,
+          9702,
+          9751,
+          9754,
+          9950
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No POPcoins on government services (page T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "popclub-excl-marketing",
+      "category_id": "other",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5960,
+          5962,
+          5964,
+          5965,
+          5966,
+          5967,
+          5968,
+          5969,
+          7311
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No POPcoins on marketing / advertising categories (page T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "popclub-excl-cash",
+      "category_id": "other",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6011
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No POPcoins on ATM withdrawals / cash advance (page T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "popclub-excl-utility",
+      "category_id": "bills",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4900
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No POPcoins on utility payments (page T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "popclub-excl-insurance",
+      "category_id": "insurance",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6300
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No POPcoins on insurance premiums (page T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "popclub-excl-poi",
+      "category_id": "other",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6538
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No POPcoins on POI funding transactions (page T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "popclub-excl-emi",
+      "category_id": "emi",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No POPcoins on transactions converted into EMI (page T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "popclub-excl-education",
+      "category_id": "education",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          8211,
+          8220,
+          8249,
+          8299,
+          8241,
+          8244
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "From 1 Jun 2026: no POPcoins on education transactions (page T&C)."
+      },
+      "effective_from": "2026-06-01",
+      "effective_to": null
+    },
+    {
+      "id": "popclub-online-10",
+      "category_id": "online",
+      "priority": 10,
+      "evaluation_type": "standard_accrual",
+      "rail": "online",
+      "channel_type": "all",
+      "conditions": {
+        "minimum_transaction_inr": 100,
+        "per_inr_block": 100,
+        "personal_spends_only": true
+      },
+      "action": {
+        "multiplier": 10,
+        "points_per_block": 10,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Page: earn 10 POPcoins on every ₹100 spent on e-commerce / online transactions. Minimum transaction ₹100. Personal spends only."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "popclub-other-2",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "minimum_transaction_inr": 100,
+        "not_online": true,
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 2,
+        "points_per_block": 2,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "FAQ: earn 2 POPcoins on every ₹100 spent on all other transactions. Minimum transaction ₹100."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.99,
+      "annual_interest_rate_percent": 47.88
+    },
+    "forex_markup": {
+      "markup_percent": 3.5,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 1,
+      "gst_applicable": true,
+      "trigger_condition": "1% + GST when a transaction is billed in INR at an international location or at an overseas-registered merchant in India (MITC 3(q), KFS)"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 1000,
+      "max_txn_inr": 3500,
+      "monthly_waiver_cap_inr": 100
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 650,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": 30
+    },
+    "category_surcharges": [
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          5172,
+          5541,
+          5542,
+          5983,
+          9752
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% + GST when one fuel transaction exceeds ₹10,000 or the calendar-month fuel spend exceeds ₹25,000; fee capped at ₹5,000 per transaction (MITC 3(i))",
+        "threshold_spend_inr": 25000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "utility",
+        "mcc_list": [
+          4900,
+          4814,
+          825,
+          1520,
+          4899,
+          1799,
+          1731,
+          5261,
+          7349,
+          822,
+          820,
+          1761,
+          1771,
+          1740,
+          823,
+          1750,
+          821,
+          824,
+          780,
+          1711,
+          9402,
+          7211,
+          8999,
+          4816
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% + GST on utility and service transactions when the previous calendar month's utility spend exceeded ₹25,000; fee capped at ₹5,000 per transaction (MITC 3(h))",
+        "threshold_spend_inr": 25000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% of the transaction (minimum ₹1 up to ₹1,000; minimum ₹199 above ₹1,000) + GST; at most 5 rental transactions in 30 days (MITC 3(e))",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "wallet",
+        "mcc_list": [
+          6540
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "No fee on third-party wallet loads up to ₹2,000; 1% + GST above ₹2,000, at most ₹5,000 per transaction (MITC 3(f))",
+        "threshold_spend_inr": 2000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education",
+        "mcc_list": [
+          8211,
+          8220,
+          8249,
+          8299,
+          8241,
+          8244,
+          7911
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% + GST on education paid through third-party sites and apps (CRED, PhonePe, Housing.com, NoBroker, CheQ etc.), capped at ₹5,000 per calendar month; direct school/college site, POS and international education payments are not charged (MITC 3(g))",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "transportation",
+        "mcc_list": [
+          4784,
+          4131,
+          4214,
+          4789,
+          4011
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% + GST when one toll/transport transaction exceeds ₹10,000 or the calendar-month spend exceeds ₹50,000; capped at ₹5,000 per transaction (MITC 3(j))",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "passenger_railways",
+        "mcc_list": [
+          4111,
+          4112
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% + GST when one transaction exceeds ₹30,000 or the calendar-month spend exceeds ₹80,000; capped at ₹5,000 per transaction (MITC 3(k))",
+        "threshold_spend_inr": 80000,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": null,
+        "min_fee_inr": 550,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": 450
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": "The ₹100 + GST redemption fee in the YES MITC is for YES Rewardz points. POPcoins are the partner currency redeemed on the partner platform; no redemption fee is stated for them."
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 50,
+    "grace_period_void_on_revolving_balance": true,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "100% of GST + EMI amount + membership/rental/wallet fees + any amount over the credit limit",
+        "plus the higher of (finance charges + other fees + 2% of retail/cash outstanding) or ₹200 (MITC 6, KFS)"
+      ]
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 150000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "Zero joining fee. Annual membership fee ₹399 + taxes is charged if the spend condition is not met; spending ₹1.5 lakh in the card anniversary year waives it (page T&C 2, MITC fee table, KFS). Cards issued under the \"Lifetime Free\" offer are exempt from the annual fee (page); the page calls lifetime free a limited-time offer and the cohort for a new applicant is not stated.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 399
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "annual_fee_payment",
+      "benefit_points": 400,
+      "effective_value_inr": null,
+      "condition": "On payment of the ₹399 annual fee, 400 POPcoins are credited (page T&C 2). Rupee value of a POPcoin is not stated by YES BANK."
+    },
+    "spend_milestones": [
+      {
+        "id": "popclub-1-5l",
+        "label": "1,500 extra POPcoins on crossing ₹1.5 lakh spend in the card anniversary year (also waives the annual fee; lifetime-free cards get the POPcoins too)",
+        "threshold_spend_inr": 150000,
+        "reward_value_inr": null,
+        "period": "card_anniversary_year",
+        "is_repeatable": null,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ]
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": null,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": "Source-supported data that cannot be represented faithfully by any existing universal schema field. Do not duplicate data already represented elsewhere. Do not use this section for unknown values, assumptions, or inferred data.",
+    "items": [
+      {
+        "key": "official_research",
+        "value": {
+          "checked_on": "2026-11-05",
+          "source_urls": [
+            "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards",
+            "https://www.yesbank.in/content/published/api/v1.1/assets/CONT07A77C257C7A4BDD85DB97E51D2B5B8F/native/yesbank_key_fact_statement.pdf?channelToken=21f7ccfa2fc3401091938f541a6f8f2a&download=false",
+            "https://popclub.co/",
+            "https://play.google.com/store/apps/details?id=com.popclub.android"
+          ],
+          "facts": [
+            "Online earns 10 POPcoins per INR 100; other eligible spends earn 2 POPcoins per INR 100.",
+            "Published standard renewal fee is INR 399; issuer acknowledges lifetime-free offers separately.",
+            "Partner app listing describes partial cashback conversion at 10 POPcoins per INR 1; shop discounts have separate restrictions."
+          ],
+          "cash_conversion_inr_per_point": 0.1,
+          "unconditional_point_baseline_unconfirmed": true
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/pop-club-credit-card",
+              "kind": "issuer page incl. FAQ and T&C footnotes (rendered page text; footnotes captured on the 7 Nov 2026 re-read)",
+              "read": "browser"
+            },
+            {
+              "url": "https://www.yes.bank.in/pdf?name=ybl_mitc_pdf.pdf",
+              "kind": "YES BANK Credit Card MITC, CMITC_V18_05102026 (5 Oct 2026): fee table, interest, forex, fuel waiver, late fee",
+              "read": "pdf.js text, opened from the site link"
+            },
+            {
+              "url": "https://www.yes.bank.in/sites/web/content/published/api/v1.1/assets/CONT07A77C257C7A4BDD85DB97E51D2B5B8F/native/yesbank_key_fact_statement.pdf?download=false&channelToken=21f7ccfa2fc3401091938f541a6f8f2a",
+              "kind": "Key Fact Statement - Credit Cards, V_20_28092026 (28 Sep 2026): fee table, waiver spend, forex, fuel waiver",
+              "read": "pdf.js text"
+            },
+            {
+              "url": "https://www.yes.bank.in/pdf?name=ybagreement_credit_cardmember.pdf",
+              "kind": "Credit Card Cardmember Agreement, header V08_28072026 (28 Jul 2026): generic legal terms; no POP-CLUB rates or POPcoin terms in it",
+              "read": "pdf.js text"
+            },
+            {
+              "url": "https://mypop.in/",
+              "kind": "Partner (POPtech) home page linked from the YES page \"What is POPcoins? Click here\": states 1 POPcoin = ₹1 (marketing line, not a YES document)",
+              "read": "browser"
+            },
+            {
+              "url": "https://mypop.in/tnc",
+              "kind": "Partner Terms and Conditions (undated): coin redemption as a capped discount, cashback conversion at a company-set rate",
+              "read": "browser"
+            },
+            {
+              "url": "https://www.yes.bank.in/sites/web/content/published/api/v1.1/assets/CONTD9B3F02021314F189FE294CDF4734FD4/native?siteId=yesbank",
+              "kind": "Card art (pop-club-cc-icon-image.png, 141x161 px) on the YES BANK credit card listing tile for POP-CLUB: \"pop\", \"YES BANK\" and \"RuPay PLATINUM\" with a contactless mark (viewed, W11 7 Nov 2026). Together with the page line \"Credit on UPI with RuPay\" this settles the network.",
+              "read": "image opened in a browser tab"
+            }
+          ],
+          "open_questions": [
+            "POPcoin rupee value (W11, 7 Nov 2026: YES BANK documents searched again for POPcoin redemption terms, none found; see point_value_baseline_basis): still not stated in any YES BANK page or document. The partner home page says 1 POPcoin = ₹1 but the partner Terms say coins redeem as a discount up to a per-purchase maximum or convert to cashback at a rate the company sets, and an earlier partner-app read gave 10 coins per ₹1 for cash conversion. point_value_inr_baseline stays null until a person decides which, if any, to rely on.",
+            "Fee cohort: the page calls \"Lifetime Free\" a limited-time offer. A new applicant may get a lifetime-free card (no renewal fee) or the ₹399 card; the page does not say which cohort is open. annual_fee_inr 399 is the standard fee (page, MITC, KFS).",
+            "Fuel surcharge waiver cap: the page footnote and the MITC/KFS bullet say ₹100 per statement cycle on ₹1,000 to ₹3,500 from 1 Jun 2026, but the MITC and KFS cap tables still list \"POP-CLUB INR 300\" (the pre-1-Jun figure). ₹100 is stored.",
+            "Whether the card is physical or virtual is not stated; the cash-advance fee (2.5% or ₹650, MITC) is written for a physical card.",
+            "The 1,500-POPcoin milestone is described per \"anniversary year\"; the page does not say whether it repeats each year, so is_repeatable is null. Whether the 400 POPcoins on paying the annual fee repeats on every renewal is also not stated.",
+            "POPcoin exclusions on the page are listed by MCC and are \"not exhaustive and only indicative\"; the education exclusion starts 1 Jun 2026."
+          ],
+          "notes": [
+            "FIXED: annual fee ₹399 is now confirmed by the page, the MITC fee table (POP-CLUB: joining NIL, annual ₹399, waiver on ₹1,50,000 spend) and the KFS.",
+            "FIXED: forex mark-up 3.50% from 15 Jun 2026 (3.40% before) and DCC 1% (MITC 3(q), KFS); interest 3.99% a month / 47.88% a year (MITC, KFS, page).",
+            "FIXED: fuel surcharge waiver footnote found: valid on ₹1,000 to ₹3,500 and ₹100 per statement cycle from 1 Jun 2026; before that ₹400 to ₹5,000 and ₹300.",
+            "POPcoins are credited after the monthly statement and expire 365 days after credit (FAQ). Minimum transaction ₹100. POPcoins are awarded on personal spends only; at most 5 rental transactions are allowed in every 30 days.",
+            "Credit on UPI with RuPay (page). The MITC lists POP-CLUB with Anq Phi and Paisabazaar Paisasave for forex and in the fuel-cap tables."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "10% of the statement balance or ₹1,350, whichever is lower, per statement; nothing if the current outstanding (statement balance + unbilled) is ₹500 or less",
+          "source": "MITC CMITC_V18_05102026 (5 Oct 2026) 3(b); KFS V_20_28092026 (28 Sep 2026)",
+          "note": "A percentage fee cannot be written as fixed slabs, so late_payment_slabs is empty."
+        }
+      },
+      {
+        "key": "other_charges_rule",
+        "value": {
+          "rules": [
+            "Late payment charge: no charge if the current outstanding (statement balance + unbilled) is up to ₹500; above ₹500, 10% of the statement balance or ₹1,350, whichever is lower, per statement (MITC 3(b), KFS).",
+            "Auto-debit / payment return failure: from 15 Jun 2026, 2.5% or ₹500 whichever is higher on the net payable amount, capped at ₹5,000 per customer per statement (before that 2% or ₹450, cap ₹1,500); cheque return ₹450 (MITC 3(d)).",
+            "Overlimit: ₹550 + GST per transaction that exceeds the limit (facility reintroduced 1 Jun 2026) (MITC 3(c)).",
+            "Cash advance: from 15 Jun 2026, 2.5% or ₹650 whichever is higher; before that 2.5% or ₹500; not applicable to virtual cards; cash withdrawal suspended for the first 6 months after onboarding; limit up to 30% of the credit limit (MITC 3(a), 5)."
+          ],
+          "source": "MITC CMITC_V18_05102026 (5 Oct 2026); KFS V_20_28092026 (28 Sep 2026)",
+          "gst": "18% on all fees and charges (MITC 3(u))"
+        }
+      }
+    ]
+  }
+}

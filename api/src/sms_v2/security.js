@@ -254,6 +254,22 @@ function createSecurity({
       ceiling: spec.setting && env[spec.env] === undefined ? SETTINGS[spec.setting].max : configuredLimit(env, spec),
     }))]));
   const results = new WeakMap();
+  // Whether this account is a tester the owner chose to count without App Check. Asked of the database at most once
+  // a minute per account, and never able to fail a request: a failure means "no".
+  const testerCache = new Map();
+  async function testerCounts(profileId) {
+    if (typeof withUserClient !== 'function' || !profileId) return false;
+    const cached = testerCache.get(profileId);
+    if (cached && cached.until > now()) return cached.value;
+    let value = false;
+    try {
+      value = await withUserClient(profileId, async (client) =>
+        (await client.query('SELECT pandapay.sms_v2_tester_counts() AS counts')).rows[0]?.counts === true);
+    } catch { value = false; }
+    if (testerCache.size >= 2000) testerCache.clear();
+    testerCache.set(profileId, { value, until: now() + 60000 });
+    return value;
+  }
   const security = {
     async verifyAttestation(req) {
       if (results.has(req)) return results.get(req);
@@ -266,14 +282,18 @@ function createSecurity({
         outcome = 'bound_elsewhere';
       }
       security.setState(req, claims);
+      // A tester's phone that cannot attest (a free Apple developer account) can still count, when the owner says so.
+      if (!claims && await testerCounts(req.userId)) security.setState(req, null, { tester: true });
       const allowed = !!claims || mode === 'monitor';
       results.set(req, allowed);
       if (!claims) log({ event: 'sms_v2_attestation', mode, outcome });
       return allowed;
     },
-    setState(req, claims) {
+    setState(req, claims, { tester = false } = {}) {
       const verified = !!claims;
-      const state = Object.freeze({ verified, sharedLearningEligible: verified, appId: claims?.appId || null });
+      // `verified` still means "passed App Check" (rate limits trust only that); `sharedLearningEligible` is what
+      // the Learning page and shared cases count, and may also be true for a tester the owner chose to count.
+      const state = Object.freeze({ verified, sharedLearningEligible: verified || tester, appId: claims?.appId || null });
       Object.defineProperty(req, 'smsV2Security', { value: state, configurable: true });
     },
     // Stored console settings for the public keys; {} when unreadable.

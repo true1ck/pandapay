@@ -1,0 +1,797 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "cheq-au-credit-card",
+    "name": "CheQ AU Credit Card",
+    "issuer_slug": "au",
+    "network": null,
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [
+      "virtual_card",
+      "physical_plastic"
+    ],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 0.5,
+    "point_value_baseline_basis": "CheQ T&C: 2 CheQ Points = ₹1 on flights, hotels and gift cards; 4 points = ₹1 on bill payments. Baseline uses 2 points = ₹1.",
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.au.bank.in/personal-banking/credit-cards/cheq-au-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "AU states these criteria are only indicative and reserves the right to approve or decline.",
+    "rules": [
+      {
+        "parameter": "age_years_salaried",
+        "operator": ">=",
+        "threshold_value": 21,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years_salaried",
+        "operator": "<=",
+        "threshold_value": 60,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years_self_employed",
+        "operator": ">=",
+        "threshold_value": 25,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years_self_employed",
+        "operator": "<=",
+        "threshold_value": 65,
+        "allowed_values": []
+      },
+      {
+        "parameter": "residency",
+        "operator": "in",
+        "threshold_value": null,
+        "allowed_values": [
+          "resident_indian"
+        ]
+      },
+      {
+        "parameter": "cheq_app_registered_user",
+        "operator": "==",
+        "threshold_value": 1,
+        "allowed_values": []
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 200,
+    "rounding_mode": "floor",
+    "base_points_per_block": 2,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": 0.5,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": "calendar_month",
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "cheq-excl-wallet",
+      "category_id": "wallet_load",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Wallet reloads earns nothing (CheQ AU Reward Points Usage T&C, Exclusion Categories)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cheq-excl-jewellery",
+      "category_id": "jewellery",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5944,
+          5094
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Jewellery and gold earns nothing (CheQ AU Reward Points Usage T&C, Exclusion Categories)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cheq-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Rent / real estate earns nothing (CheQ AU Reward Points Usage T&C, Exclusion Categories)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cheq-excl-insurance",
+      "category_id": "insurance",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6300,
+          6381,
+          5960,
+          6012,
+          6051,
+          6399
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Insurance earns nothing (CheQ AU Reward Points Usage T&C, Exclusion Categories)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cheq-excl-education",
+      "category_id": "education",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Education earns nothing (CheQ AU Reward Points Usage T&C, Exclusion Categories)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cheq-excl-govt",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          9211,
+          9222,
+          9223,
+          9311,
+          9399,
+          9400,
+          9402,
+          9405
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Government services earns nothing (CheQ AU Reward Points Usage T&C, Exclusion Categories)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cheq-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5983,
+          5172,
+          5541,
+          5542
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel earns nothing (CheQ AU Reward Points Usage T&C, Exclusion Categories)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cheq-excl-gaming",
+      "category_id": "gaming",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5816
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Digital gaming earns nothing (CheQ AU Reward Points Usage T&C, Exclusion Categories)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cheq-excl-cash",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6010,
+          6011
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Cash earns nothing (CheQ AU Reward Points Usage T&C, Exclusion Categories)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cheq-12pct-partners",
+      "category_id": "all_retail",
+      "priority": 5,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "partner_brands",
+      "conditions": {
+        "minimum_transaction_inr": 200,
+        "partner_brands": [
+          "Amazon",
+          "Flipkart",
+          "Zomato",
+          "BigBasket",
+          "Apple Products (Unicorn)",
+          "CheQ Travel (flights and hotels)"
+        ],
+        "also": "utility bills paid via the CheQ app",
+        "applies_to": "Visa variant; RuPay variant only via CheQ app UPI or CheQ Travel/utility",
+        "identified_by": "merchant ID"
+      },
+      "action": {
+        "multiplier": 12,
+        "points_per_block": 24,
+        "cashback_percent": "N/A",
+        "cap_reference": "cheq-accelerated-monthly-cap",
+        "reason": "12% CheQ points = 24 points per ₹200 on partner brands and CheQ-app utility bills. At 2 points = ₹1 that is about 6% in value (3% when redeemed on bills at 4 points = ₹1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cheq-5pct-categories",
+      "category_id": "all_retail",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "minimum_transaction_inr": 200,
+        "mcc_list": [
+          5814,
+          5812,
+          5262,
+          5611,
+          5621,
+          5651,
+          5691,
+          5699,
+          5732,
+          5942,
+          5311,
+          5631,
+          5641,
+          5999,
+          7296,
+          5310,
+          5331,
+          5399,
+          5655,
+          5661,
+          5681,
+          5698,
+          5941,
+          5945,
+          5411,
+          5499,
+          4112,
+          4511,
+          4131,
+          4722,
+          4723,
+          4011,
+          4121,
+          7011
+        ],
+        "applies_to": "Visa variant; RuPay variant only via CheQ app UPI"
+      },
+      "action": {
+        "multiplier": 5,
+        "points_per_block": 10,
+        "cashback_percent": "N/A",
+        "cap_reference": "cheq-accelerated-monthly-cap",
+        "reason": "5% CheQ points = 10 points per ₹200 on listed dining, shopping, grocery and travel MCCs. About 2.5% in value at 2 points = ₹1."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cheq-upi-2-5pct",
+      "category_id": "upi",
+      "priority": 12,
+      "evaluation_type": "accelerator",
+      "rail": "upi_qr",
+      "channel_type": "cheq_upi",
+      "conditions": {
+        "minimum_transaction_inr": 200,
+        "app": "CheQ UPI",
+        "variant": "RuPay"
+      },
+      "action": {
+        "multiplier": 2.5,
+        "points_per_block": 5,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "2.5% CheQ points = 5 points per ₹200 on UPI through the CheQ app on the RuPay variant; UPI via other apps earns zero. Outside the accelerated cap."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cheq-base-1pct",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "minimum_transaction_inr": 200
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 2,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "1% CheQ points = 2 points per ₹200 on all other eligible spends; no monthly or annual cap on base rewards. About 0.5% in value."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "cheq-accelerated-monthly-cap",
+      "category_id": "all_retail",
+      "metric": "bonus_reward_points",
+      "mcc_target_list": [],
+      "period": "calendar_month",
+      "limit_value": 12000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "downgrade_to_base_rate",
+        "points_per_block": 2
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 45
+    },
+    "forex_markup": {
+      "markup_percent": 3.49,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 3.49,
+      "gst_applicable": true,
+      "trigger_condition": "KFS lists one cross-currency markup for foreign-currency, dynamic and static conversion transactions"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 400,
+      "max_txn_inr": 5000,
+      "monthly_waiver_cap_inr": 150
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": 20
+    },
+    "category_surcharges": [
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          5172,
+          5541,
+          5542,
+          5552,
+          5983
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "From 1 Jul 2026: 1% on the whole month's fuel spend when one transaction exceeds ₹10,000 or the calendar-month total exceeds ₹25,000",
+        "threshold_spend_inr": 25000,
+        "effective_from": "2026-07-01",
+        "effective_to": null
+      },
+      {
+        "category_id": "utility",
+        "mcc_list": [
+          4900
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% on utility spend above ₹50,000 in a calendar month",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education_third_party",
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Education paid through third-party apps (CRED, PhonePe, Paytm, MobiKwik, Freecharge etc.), minimum ₹99 per transaction; direct school/college site or POS exempt",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Domestic rental payments, minimum ₹99 per transaction; international rental has no charge",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "transportation",
+        "mcc_list": [
+          4111,
+          4112,
+          4784
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "From 14 Jun 2026: 1% on the whole month's transportation spend once it exceeds the lower of 50% of credit limit or ₹25,000; IRCTC and marquee travel partners excluded",
+        "threshold_spend_inr": 25000,
+        "effective_from": "2026-06-14",
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": 199,
+      "post_purchase_emi_processing_fee_inr": 99,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 500,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 99,
+      "gst_applicable": true,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 50,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "If previous Total Amount Due was paid on time: 5% of principal outstanding + 100% of fees/charges + 100% of interest + due EMIs + 100% annual fee (if applicable) + 100% GST",
+        "If previous Total Amount Due was not paid on time: 2% of principal outstanding + the same 100% components"
+      ]
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "Lifetime free per KFS and product page. The LED card variant has a one-time ₹999 + GST fee.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "pay_at_least_minimum_due_on_first_statement",
+      "benefit_points": "N/A",
+      "effective_value_inr": 695,
+      "condition": "Complimentary EazyDiner Prime membership valued at ₹695, issued after paying at least the minimum due on the first statement; no cash value (CheQ partner T&C)."
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 0,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": 18
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "CheQ Travel flights and hotels",
+        "redemption_type": "flight_hotel_booking",
+        "inr_value_per_point": 0.5,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": "N/A",
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": "N/A",
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "channel": "Top brand gift cards on CheQ",
+        "redemption_type": "partner_catalogue",
+        "inr_value_per_point": 0.5,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": "N/A",
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": "N/A",
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "channel": "Bill payments on CheQ",
+        "redemption_type": "statement_credit",
+        "inr_value_per_point": 0.25,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": "N/A",
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": "N/A",
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": "Source-supported data that cannot be represented faithfully by any existing universal schema field. Do not duplicate data already represented elsewhere. Do not use this section for unknown values, assumptions, or inferred data.",
+    "items": [
+      {
+        "key": "official_research",
+        "value": {
+          "checked_on": "2026-11-05",
+          "source_urls": [
+            "https://www.au.bank.in/personal-banking/credit-cards/cheq-au-credit-card",
+            "https://cheq.one/legal/credit-card-terms-and-conditions",
+            "https://www.au.bank.in/pdf/credit-card/Schedule-of-Charges-CC.pdf"
+          ],
+          "facts": [
+            "Linked Visa and RuPay cards share an account; classic/LED choices are not separate credit accounts.",
+            "Issuer page and partner terms advertise lifetime-free with INR 999 plus GST one-time LED fee.",
+            "Bank fee PDF instead lists classic INR 499 joining/renewal and LED INR 1499 joining/499 renewal.",
+            "Points expire after 24 months; accelerated monthly cap 12000 CheQ points."
+          ]
+        }
+      },
+      {
+        "key": "linked_networks_from_issuer",
+        "value": {
+          "networks": [
+            "visa",
+            "rupay"
+          ],
+          "shared_credit_account": true,
+          "source_url": "https://www.au.bank.in/personal-banking/credit-cards/cheq-au-credit-card"
+        }
+      },
+      {
+        "key": "verified_network_research",
+        "value": {
+          "product_status": "active",
+          "source_url": "https://www.au.bank.in/personal-banking/credit-cards/cheq-au-credit-card",
+          "evidence": "AU product page FAQ: apply from the CheQ app and you receive 2 cards, 1 Visa and 1 RuPay, on one credit account. The Visa card is the LED card.",
+          "candidates": [
+            {
+              "network": "visa",
+              "network_tier": "N/A",
+              "label": "CheQ AU Credit Card (Visa, LED)",
+              "source_url": "https://www.au.bank.in/personal-banking/credit-cards/cheq-au-credit-card",
+              "evidence": "Page: \"Your Visa card illuminates automatically with every POS transaction\"."
+            },
+            {
+              "network": "rupay",
+              "network_tier": "N/A",
+              "label": "CheQ AU Credit Card (RuPay)",
+              "source_url": "https://www.au.bank.in/personal-banking/credit-cards/cheq-au-credit-card",
+              "evidence": "Page: link your RuPay card to CheQ UPI and earn 5 CheQ points per ₹200."
+            }
+          ]
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.au.bank.in/personal-banking/credit-cards/cheq-au-credit-card",
+              "kind": "issuer_page + FAQ",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://www.au.bank.in/pdf/credit-card/CheQ-Rewards-TnC.pdf",
+              "kind": "AU CheQ Reward Points Usage T&C (earn rules, MCCs, exclusions)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.au.bank.in/pdf/credit-card/Schedule-of-Charges-CC.pdf",
+              "kind": "KFS",
+              "date": "Key Fact Statement v1.9, 2 Nov 2026"
+            },
+            {
+              "url": "https://cheq.one/legal/credit-card-terms-and-conditions",
+              "kind": "partner T&C, published 6 Nov 2026 (redemption values, expiry, welcome gift); partner document, not the bank's",
+              "read": "page text via fetch tool"
+            }
+          ],
+          "open_questions": [
+            "Fee conflict is resolved: the bank KFS v1.9 (2 Nov 2026) says lifetime free with ₹999 + GST one-time for the LED card only, matching the partner. The older \"₹499 / ₹1,499\" figures in an earlier fee schedule are superseded.",
+            "The cap is \"12,000 points per month\" in the AU FAQ and \"per statement cycle\" in the CheQ partner T&C; modelled as calendar_month per the bank document.",
+            "Partner-brand merchant ID list is not published in the documents read.",
+            "Redemption values (2/2/4 points per ₹1) come from the partner T&C, not an AU document.",
+            "Points expire 24 months after credit (AU FAQ and partner T&C agree)."
+          ],
+          "notes": [
+            "Rewards credited 2-3 working days after settlement (AU FAQ).",
+            "Fuel surcharge waiver 1% for ₹500-5,000, up to ₹150 per statement month (KFS).",
+            "LED variant one-time fee ₹999 + GST is not in joining_fee_inr (set 0) because the schema has one joining fee."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "15% of Total Amount Due, minimum ₹10, maximum ₹1,300",
+          "source": "Key Fact Statement v1.9, 2 Nov 2026, section 5",
+          "note": "Percentage fee cannot be expressed as fixed slabs, so late_payment_slabs is empty."
+        }
+      },
+      {
+        "key": "payment_return_charge",
+        "value": {
+          "rule": "2% of Total Amount Due or ₹500, whichever is higher, on return/failure of card payment (cheque, ECS/NACH, autopay)",
+          "source": "Key Fact Statement v1.9, 2 Nov 2026, section 10"
+        }
+      }
+    ]
+  }
+}

@@ -21,7 +21,8 @@ final RegExp _url = RegExp(
   r'https?://\S+|\bwww\.\S+|\b[a-z0-9-]+\.(?:com|in|co|io|ly|me|net|org)(?:/\S*)?',
   caseSensitive: false,
 );
-final RegExp _vpa = RegExp(r'[\w.\-+]+@[\w.\-]+');
+// The part before the @ may be partly hidden by the bank (`ab***@gmail.com`), so the hiding characters count too.
+final RegExp _vpa = RegExp(r'[\w.\-+*•●]+@[\w.\-]+');
 final RegExp _prefixedAmount = RegExp(
   r'(?<![A-Za-z])(?:rs\.?|inr|₹)\s*\d[\d,]*(?:\.\d+)?(?:\s*/-)?',
   caseSensitive: false,
@@ -55,8 +56,9 @@ final RegExp _wordRuns = RegExp(r'<W>(?:[ ]+<W>)+');
 /// digit `#`. Placeholders already present (from redaction) are kept.
 String smsSkeleton(String body) {
   var s = body.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).join(' ');
-  s = s.replaceAll(_url, '<URL>');
+  // Emails first: `ab***@gmail.com` must not be left as `ab***@<URL>`, which still carries an address.
   s = s.replaceAll(_vpa, '<VPA>');
+  s = s.replaceAll(_url, '<URL>');
   s = s.replaceAll(_prefixedAmount, '<AMT>');
   s = s.replaceAll(_date, '<DATE>');
   s = s.replaceAll(_bareAmount, '<AMT>');
@@ -70,6 +72,18 @@ String smsSkeleton(String body) {
   );
   return s;
 }
+
+final RegExp _digit = RegExp(r'\d');
+final RegExp _addressOrLink = RegExp(r'@|https?://', caseSensitive: false);
+
+/// True when [skeleton] may leave the phone as a shared template: no digit, no `@` and no link survive, and it is
+/// not huge. The server applies the same rule and refuses a case whose template breaks it, so the phone checks
+/// first and sends the correction without the template instead of having the whole correction refused.
+bool smsSkeletonIsShareable(String skeleton) =>
+    skeleton.isNotEmpty &&
+    skeleton.length <= 20000 &&
+    !_digit.hasMatch(skeleton) &&
+    !_addressOrLink.hasMatch(skeleton);
 
 /// Counts, for each lower-case word, how many of [skeletons] contain it.
 Map<String, int> skeletonWordFrequency(Iterable<String> skeletons) {

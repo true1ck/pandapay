@@ -5,6 +5,7 @@ import 'personal_format_form.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../app/design/app_theme.dart';
 import '../../../app/design/bamboo_components.dart';
 import '../../../app/design/widgets.dart';
@@ -364,7 +365,17 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
     final dismissed =
         ref.watch(dismissedReviewItemsProvider).valueOrNull ?? const [];
     return Scaffold(
-      appBar: AppBar(title: const Text('Needs review')),
+      appBar: AppBar(
+        title: const Text('Needs review'),
+        actions: [
+          IconButton(
+            key: const Key('open-corrections-status'),
+            tooltip: 'Your corrections',
+            icon: const Icon(Icons.fact_check_outlined),
+            onPressed: () => context.push('/sms-v2/corrections'),
+          ),
+        ],
+      ),
       body: AppBackground(
         child: Column(
           children: [

@@ -50,7 +50,7 @@ Spend is capped: monthly budget, requests and tokens per minute are console sett
 
 - **Phones** see only their own rows and the rules everyone receives. Direct database access as an app user returns nothing from any learning table, even for the person's own rows (`api/test/sms_v2/learning_security_pg.test.js`).
 - **Admins** (roles `owner`, `operator`; role `reviewer` and `readonly` have no learning access) see the console's Learning pages through a private API on a separate listener. Reading needs `learning.read`; every change needs `learning.publish`, a fresh sign-in and a written reason.
-- **K-anonymity.** A shop appears in the Learning pages only when at least K distinct, attested people have reported it (setting `signals_min_distinct_users`, default 3, never below 2); the page then shows how they split between categories, so disagreement is visible. One account sending the same signal 100 times counts once. Phones that did not pass App Check are stored but never counted. The console shows counts and the split between categories, not people.
+- **K-anonymity.** A shop appears in the Learning pages only when at least K distinct, attested people have reported it (setting `signals_min_distinct_users`, editable in the console from 1 to 20; the default is 1 during the friends run, where every tester has opted in, and it should be raised before a public launch so that one person cannot decide); the page then shows how they split between categories, so disagreement is visible. One account sending the same signal 100 times counts once. Phones that did not pass App Check are stored but never counted. The console shows counts and the split between categories, not people.
 - **Accounts list.** The console's "Reporters" section lists the pseudonymous account ids that sent the most in the last 7 days (up to 90 can be chosen), with counts only, so an admin can find a flood and set a per-account limit. It shows no message, layout text or name.
 - **Audit.** Every setting change, per-account limit, decision, draft, publish, rejection, requeue and block is written to `admin_audit_log` with the admin, the reason and the before and after values. Refused calls are not audited because they change nothing.
 
@@ -99,3 +99,18 @@ Phone filters (section 2), the K threshold, attestation, one row per account, sh
 | Withdrawal and account deletion | triggers named in section 6 | `learning_security_pg.test.js`, `learning_loop_e2e_pg.test.js` |
 | Prompts treat layouts and shop names as data; nothing the AI returns is published | `api/src/sms_v2/template_worker.js`, `merchant_suggestions.js` | `api/test/sms_v2_learning_prompt_injection.test.js` |
 | Retention | `api/src/sms_v2/rules_store.js` (`pruneSignals`) | `api/test/sms_v2/learning_signals_pg.test.js` |
+
+## Friends run: seeing a tester whose phone cannot pass App Check (7 Nov 2026)
+
+A free Apple developer account cannot produce an App Check token, so every layout, signal and case from such a phone is
+stored as not eligible and never reaches the Learning page. The console setting `testers_count_without_attestation`
+(Settings tab, default **off**) changes that for profiles listed in `sms_v2_testers` only:
+
+- On: those profiles count as eligible like an attested phone. Rate limits still treat the phone as unverified.
+- Off, or the profile is not in `sms_v2_testers`: nothing changes.
+- The list is a table (`sms_v2_testers`), edited by the owner; there is no console screen for it yet.
+
+The admin Corrections list also shows, for each layout, how many **different people** reported it, the mix of what was
+wrong (category, shop name, payment method, type, amount, date, missed SMS), and the totals of shared against
+private cases. Patterns many people hit come first. Account ids are never part of that answer.
+

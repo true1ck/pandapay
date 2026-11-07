@@ -102,7 +102,7 @@ test('settings and per-user limits on a fully migrated Postgres', { skip: !url |
   // No reason, bad values and unknown keys.
   assert.equal((await call('PUT', '/admin/sms/v2/settings/signals_min_distinct_users', { value: 4, expectedUpdatedAt: null })).status, 400);
   assert.equal((await call('PUT', '/admin/sms/v2/settings/signals_min_distinct_users', { value: 4, reason: 'x', expectedUpdatedAt: null })).status, 400);
-  const tooLow = await call('PUT', '/admin/sms/v2/settings/signals_min_distinct_users', { value: 1, reason: 'friends run', expectedUpdatedAt: null });
+  const tooLow = await call('PUT', '/admin/sms/v2/settings/signals_min_distinct_users', { value: 0, reason: 'friends run', expectedUpdatedAt: null });
   assert.equal(tooLow.status, 422);
   assert.equal(tooLow.body.error, 'setting_invalid');
   assert.equal((await call('PUT', '/admin/sms/v2/settings/not_a_key', { value: 1, reason: 'friends run', expectedUpdatedAt: null })).status, 404);

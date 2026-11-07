@@ -110,7 +110,12 @@ class PgTx {
       [version, JSON.stringify(signed), signed.expiresAt]);
   }
   async listBundles(limit = 100) {
-    return (await this.c.query('SELECT * FROM sms_v2_bundles ORDER BY bundle_version DESC LIMIT $1', [limit])).rows.map(bundleRow);
+    // Summary columns only. `body` and `served_body` are whole rule sets (about 2.8 MB each, two per bundle), so reading
+    // them here made the list take over 5 s and fail once there were a few bundles. The list never returns them.
+    return (await this.c.query(
+      'SELECT bundle_version, manifest, sha256, signature, key_id, cohort, golden_report, status, published_by, created_at FROM sms_v2_bundles ORDER BY bundle_version DESC LIMIT $1',
+      [limit],
+    )).rows.map(bundleRow);
   }
   async audit(a) {
     await this.c.query(

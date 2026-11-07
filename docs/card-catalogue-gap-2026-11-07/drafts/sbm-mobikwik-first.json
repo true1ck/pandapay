@@ -1,0 +1,456 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "sbm-mobikwik-first",
+    "name": "SBM MobiKwik First Credit Card",
+    "issuer_slug": "sbm-bank-india",
+    "network": "rupay",
+    "network_tier": "N/A",
+    "card_tier": "N/A",
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": "N/A",
+    "point_value_baseline_basis": "Cashback card: cashback is credited to the MobiKwik Wallet in rupees and \"can be encashed or transferred to the bank account\" (rewards T&C).",
+    "point_expiry_months": "N/A",
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "FD-backed secured card: the credit limit is 90% of the fixed deposit (KFS). The minimum deposit is not stated in the SBM documents read.",
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": "N/A",
+    "rounding_mode": "round",
+    "base_points_per_block": "N/A",
+    "base_cashback_percent": 1,
+    "effective_base_return_percent": 1,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "sbm-mbk-excl-dating-gambling",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          7273,
+          7995
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Dating and escort services and gambling earn no cashback (rewards T&C excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-mbk-excl-govt-tax",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          9399,
+          9311
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Government services and tax payments earn no cashback (rewards T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-mbk-excl-funding-5406",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5406
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "\"Funding transaction\" (MCC 5406 in the cashback list) earns no cashback."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-mbk-excl-funding-6540",
+      "category_id": "wallet_load",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "\"Funding transaction\" (MCC 6540 in the shared excluded table, section 4) earns no cashback."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-mbk-excl-financial",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6012
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Financial institutions (merchandise and services) earn no cashback."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-mbk-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Real estate agents and rentals earn no cashback."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-mbk-excl-emi",
+      "category_id": "emi",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Transactions converted to EMI earn no cashback, even if the EMI is later foreclosed or cancelled (rewards T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-mbk-excl-other-upi-apps",
+      "category_id": "upi",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "rail": "credit_card_on_upi",
+        "platform": "any UPI app other than MobiKwik"
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "UPI transactions with the card registered on any app other than MobiKwik (Paytm, Google Pay, PhonePe and others) earn nothing (rewards T&C: \"NIL\")."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-mbk-upi-mobikwik-1pct",
+      "category_id": "upi",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "credit_card_on_upi",
+      "channel_type": "mobikwik_app",
+      "conditions": {
+        "platform": "MobiKwik app (@ikwik handle)",
+        "minimum_transaction_inr": 2000
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 1,
+        "cap_reference": null,
+        "reason": "1% cashback on UPI transactions made through the MobiKwik app with the card, minimum transaction value ₹2,000 (rewards T&C, programme effective 1 Feb 2026)."
+      },
+      "effective_from": "2026-02-01",
+      "effective_to": null
+    },
+    {
+      "id": "sbm-mbk-online-pos-1pct",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "includes": [
+          "online e-commerce merchants",
+          "offline POS merchants"
+        ],
+        "minimum_transaction_inr": 0
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 1,
+        "cap_reference": null,
+        "reason": "1% cashback on online e-commerce and offline POS merchants, no minimum transaction value; rounded to the nearest rupee per transaction (rewards T&C, effective 1 Feb 2026)."
+      },
+      "effective_from": "2026-02-01",
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.5,
+      "annual_interest_rate_percent": 42
+    },
+    "forex_markup": {
+      "markup_percent": 3,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": null,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 250,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": 30
+    },
+    "category_surcharges": [],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": null,
+        "min_fee_inr": null,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 45,
+    "grace_period_void_on_revolving_balance": true,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "max",
+      "components": [
+        "5% of the outstanding amount or ₹100, whichever is greater (POS/ECOM)",
+        "10% of cash transactions",
+        "100% of interest",
+        "100% of fees",
+        "plus overdue minimum payments, any amount over the credit limit and EMI instalments due"
+      ]
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "Membership and annual maintenance fees are nil (KFS; MITC Table 01). Physical card fee ₹200; card cancellation within six months of activation ₹200 (KFS; MITC Table 06).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": "N/A",
+    "separate_priority_pass": "N/A",
+    "lounge_quota_shared": "N/A",
+    "reward_points_pooled": "N/A",
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "MobiKwik Wallet: cashback credited within 7 working days of statement generation, can be encashed or transferred to the bank account",
+        "redemption_type": "cashback",
+        "inr_value_per_point": "N/A",
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": "N/A",
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": null,
+        "effective_from": "2026-02-01",
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.sbm.bank.in/pdf/kfs/MobiKwik-First-Card-KFS.pdf",
+              "kind": "SBM MobiKwik First Credit Card KFS (SBM file dated 12 Oct 2026): fees, interest, late fee, forex, cash limit",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/pdf/notice-board/Mobikwik-RP.pdf",
+              "kind": "SBM MobiKwik First Card Rewards Program T&C: cashback programme effective 1 Feb 2026 (PDF created 10 Feb 2026, SBM file dated 12 May 2026); also keeps the superseded SuperCash programme valid till 31 Jan 2026",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/pdf/terms-conditions/SBM-Secured-Credit-Card-T&C.pdf",
+              "kind": "SBM Secured Credit Card MITC and Cardholder Member Agreement, 52 pages (SBM file dated 29 Oct 2026): Tables 01-11 give fees, interest, late fee, forex, surcharge, rent and education fees, cash limits and minimum due for every variant",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+              "kind": "SBM secured credit card page (read 7 Nov 2026): lists the card with its KFS, MITC and reward links; card image https://www.sbm.bank.in/images/cards/mobikwik-card.webp shows the network",
+              "read": "page text; card image viewed"
+            }
+          ],
+          "open_questions": [
+            "Network: no SBM document names it. RuPay is read from the card image on the SBM page (the RuPay logo is on the MobiKwik First card); the rewards T&C also treats the card as UPI-linked, which fits a RuPay credit card.",
+            "No cap, period limit or maximum is stated in the cashback T&C. App and wallet terms on mobikwik.com were not read.",
+            "The \"funding transaction\" exclusion has two MCCs: the cashback table says 5406, the shared excluded table (headed SuperCash and Cashback) says 6540. Both are excluded here.",
+            "The rewards T&C carries no revision date beyond \"effective 1 Feb 2026\" and also lists the older SuperCash rates (10% online and POS, 5% and 1% UPI) that ended 31 Jan 2026. Only the cashback programme is modelled.",
+            "The page FAQ (items 7-10) says a 1% processing fee on rent and education applies from 15 Jul 2026 without naming variants. MITC Table 07 shows 0% for this card, so no surcharge is modelled.",
+            "The minimum FD and eligibility rules are not stated in any SBM document read for this card.",
+            "Fuel surcharge: the KFS says \"Surcharge Fee 1% of the transaction amount\"; MITC clause 8.7 ties it to fuel. No waiver is stated."
+          ],
+          "notes": [
+            "Different product from suryoday-mobikwik-first-rupay-platinum: issuer is SBM Bank (India) Ltd, not Suryoday Small Finance Bank, with its own KFS (forex 3%, interest 3.5% a month, late fee 2.5% or ₹200, cash fee 2.5% or ₹250). The Suryoday card has forex 2.5% and interest 2.95% a month.",
+            "Cashback is credited to the MobiKwik Wallet within 7 working days of statement generation and is forfeited if no wallet is opened within 30 days of bill generation.",
+            "Cash interest 3.5% a month from day one; cash limit 30% of the credit limit."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "2.5% of the total outstanding or ₹200, whichever is higher, + GST",
+          "source": "MobiKwik First KFS (12 Oct 2026) and MITC Table 08"
+        }
+      }
+    ]
+  }
+}

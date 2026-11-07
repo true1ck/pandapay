@@ -140,9 +140,17 @@ async function startLoopHarness({ profileCount = 4, registerAdmin, adminPaths, s
     await Promise.all([pool.end(), privatePool.end()]);
   }
 
+  // The default is one person (friends run). Scenarios about how many people must agree ask for their own K.
+  const requirePeople = async (people) => {
+    await pool.query(
+      `INSERT INTO sms_v2_settings(key,value,updated_by,reason) VALUES('signals_min_distinct_users',$1::jsonb,$2,'test: K for this scenario')
+       ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = clock_timestamp()`, [JSON.stringify(people), admin]);
+    clearSettingsCache();
+  };
+
   return {
     pool, privatePool, profiles, admin, signer, publicUrl, adminUrl: adminUrlBase,
-    withUserClient, helpers, asUser, asAdmin, consent, close,
+    withUserClient, helpers, asUser, asAdmin, consent, close, requirePeople,
     setFreshMfa: (value) => { mfaFresh = value; },
   };
 }

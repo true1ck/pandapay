@@ -1,3 +1,4 @@
+import '../features/sms_v2/ui/corrections_status_screen.dart';
 import '../features/sms_v2/ui/migration_report_screen.dart';
 import '../features/sms_v2/ui/found_instruments_screen.dart';
 import '../features/sms_v2/ui/review_inbox_screen.dart';
@@ -564,6 +565,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       return AppRoute.preOnboarding.contains(path) ? AppRoute.home : null;
     },
     routes: [
+      GoRoute(
+        path: '/sms-v2/corrections',
+        builder: (_, _) => const CorrectionsStatusScreen(),
+      ),
       GoRoute(
         path: '/sms-v2/migration',
         builder: (_, _) => const MigrationReportScreen(),

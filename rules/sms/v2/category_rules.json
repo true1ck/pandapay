@@ -4525,5 +4525,467 @@
     "category": "travel",
     "priority": 950,
     "source": "catalogue"
+  },
+  {
+    "merchantKey": "COMPASS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "EATCLUB",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ANTHROPIC",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "OWNLY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "POPO VENTURES",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "THE PIZZA BAKERY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PARIS PANINI",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CALIFORNIA BURRITO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SAPPHIRE FOODS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "IMPRESARIO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FAST FOOD",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FOODS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SNACKS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MEALS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TIFFIN",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CANTEEN",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "JUICE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "HYPER MARKET",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "HYPERMARKET",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FUELLING",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FUELS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "COLIVE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "rent",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "RENTOMOJO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "rent",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "STANZA LIVING",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "rent",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "YULU",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DISTRICT MOVIES",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CURSOR",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TRAE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "APPLE INDIA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "WESTSIDE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ZUDIO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "LEVIS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ARVIND LIFESTYLE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SNITCH",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PANTALOONS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TWILIO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SPACESHIP",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ORACLE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FITNESS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "GYM",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ICONICFITNESS",
+    "match": "prefix",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CENTRAL BOARD",
+    "match": "prefix",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "government",
+    "priority": 800,
+    "source": "catalogue"
   }
 ]

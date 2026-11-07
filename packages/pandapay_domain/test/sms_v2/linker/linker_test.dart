@@ -108,6 +108,62 @@ void main() {
     );
   });
 
+  group('LINK-CARD-BILL with a bill-payment debit', () {
+    // A bank's "bill pay" debit does not say what was paid. A card receipt for
+    // the same amount shortly after says it was a card bill.
+    final billDebit = debit(
+      'bill_payment',
+      93000,
+      at: '2026-11-19T12:44:00Z',
+      inst: hdfcAcct,
+    );
+    final cardReceipt = credit(
+      'card_payment',
+      93000,
+      at: '2026-11-19T13:03:00Z',
+      inst: hdfcCard,
+    );
+
+    test('the debit and the card receipt are one card bill payment', () {
+      final e = _only(linkAll([billDebit, cardReceipt]));
+      expect(shape(e), 'card_bill_payment[credit_leg,debit_leg]');
+      expect(e.amountMinor, 93000);
+    });
+
+    test('the receipt first gives the same pair', () {
+      final e = _only(linkAll([cardReceipt, billDebit]));
+      expect(shape(e), 'card_bill_payment[credit_leg,debit_leg]');
+    });
+
+    test('a bill-payment debit with no card receipt is a plain bill payment', () {
+      expect(shapes(linkAll([billDebit])), ['bill_payment[debit_leg]']);
+    });
+
+    test('a different amount does not join', () {
+      final other = credit(
+        'card_payment',
+        90000,
+        at: '2026-11-19T13:03:00Z',
+        inst: hdfcCard,
+      );
+      expect(shapes(linkAll([billDebit, other])), [
+        'bill_payment[debit_leg]',
+        'card_bill_payment[credit_leg]',
+      ]);
+    });
+
+    test('a debit typed as a card payment still stands alone as a card bill', () {
+      final typed = debit(
+        'card_payment',
+        93000,
+        at: '2026-11-19T12:44:00Z',
+        inst: hdfcAcct,
+        counterparty: party(kind: 'own'),
+      );
+      expect(shapes(linkAll([typed])), ['card_bill_payment[debit_leg]']);
+    });
+  });
+
   group('LINK-WALLET-TOPUP', () {
     test(
       'bank top-up and wallet credit pair; the wallet purchase is the spend',
@@ -702,6 +758,90 @@ void main() {
 
     test('an own debit with no credit seen is still an own transfer', () {
       expect(shapes(linkAll([out])), ['own_transfer[debit_leg]']);
+    });
+
+    // A bank prints the holder's name on both sides of a transfer, so the
+    // user's own name (or the same name on two of their accounts) marks it.
+    final toSelf = debit(
+      'purchase',
+      3000000,
+      at: '2026-11-02T10:00:00Z',
+      inst: hdfcAcct,
+      counterparty: party(name: 'ASHA MARIA'),
+    );
+    final fromSelf = credit(
+      'p2p',
+      3000000,
+      at: '2026-11-02T10:01:00Z',
+      inst: hdfcSaving,
+      counterparty: party(name: 'ASHA MARIA RAO'),
+    );
+
+    test('a debit to the owner\'s own name is an own transfer', () {
+      expect(
+        shapes(linkAll([toSelf], ownerNames: const ['Asha Maria Rao'])),
+        ['own_transfer[debit_leg]'],
+      );
+    });
+
+    test('without the owner\'s name a lone debit to a person stays a payment', () {
+      expect(shapes(linkAll([toSelf])), ['purchase[debit_leg]']);
+    });
+
+    test('a credit from the owner\'s own name is an own transfer', () {
+      expect(
+        shapes(linkAll([fromSelf], ownerNames: const ['Asha Maria Rao'])),
+        ['own_transfer[credit_leg]'],
+      );
+    });
+
+    test('the same name on a debit and a credit across two accounts pairs', () {
+      expect(shapes(linkAll([toSelf, fromSelf])), [
+        'own_transfer[credit_leg,debit_leg]',
+      ]);
+    });
+
+    test('the same name on one account only does not pair', () {
+      final sameAccount = credit(
+        'p2p',
+        3000000,
+        at: '2026-11-02T10:01:00Z',
+        inst: hdfcAcct,
+        counterparty: party(name: 'ASHA MARIA RAO'),
+      );
+      expect(shapes(linkAll([toSelf, sameAccount])), [
+        'p2p_in[credit_leg]',
+        'purchase[debit_leg]',
+      ]);
+    });
+
+    test('a look-alike name with another surname does not pair', () {
+      final other = credit(
+        'p2p',
+        3000000,
+        at: '2026-11-02T10:01:00Z',
+        inst: hdfcSaving,
+        counterparty: party(name: 'ASHA IYER'),
+      );
+      expect(shapes(linkAll([toSelf, other])), [
+        'p2p_in[credit_leg]',
+        'purchase[debit_leg]',
+      ]);
+    });
+
+    test('a look-alike surname is not the owner', () {
+      expect(
+        shapes(linkAll([
+          debit(
+            'purchase',
+            3000000,
+            at: '2026-11-02T10:00:00Z',
+            inst: hdfcAcct,
+            counterparty: party(name: 'ASHA IYER'),
+          ),
+        ], ownerNames: const ['Asha Maria Rao'])),
+        ['purchase[debit_leg]'],
+      );
     });
   });
 

@@ -71,6 +71,10 @@ smsV2RuntimeProvider = FutureProvider<SmsV2Runtime?>((ref) async {
     loadShippedBundle: () =>
         rootBundle.loadString('assets/sms_rules/baseline_bundle.json'),
     accountIsCurrent: current,
+    ownerNames: () {
+      final name = cache.financialStore.database.profileDisplayName(namespace);
+      return name == null ? const [] : [name];
+    },
     hasSharingConsent: () async {
       if (!current()) return false;
       final granted = await ref.read(

@@ -26,7 +26,7 @@ SMS_PRIVATE_DIR=/tmp/PRIVATE SMS_BUNDLE=<bundle>.json SMS_REPLAY_PREFIX=<prefix>
   flutter test --no-pub --concurrency=1 test/tool
 ```
 
-Optional variables: `SMS_SAMPLE` (default `label-sample.drafted.jsonl`), `SMS_CORPUS` (default `sms.jsonl`), `SMS_REPLAY_CORPUS=0` to replay only the sample. The test prints counts only and writes only inside `SMS_PRIVATE_DIR`. Besides outcomes, each report holds invariants: transaction count, totals, open review items, money facts reused by more than one counted event, card-bill and IPO events counted as spending.
+Optional variables: `SMS_SAMPLE` (default `label-sample.drafted.jsonl`), `SMS_CORPUS` (default `sms.jsonl`), `SMS_REPLAY_CORPUS=0` to replay only the sample, `SMS_OWNER_NAMES` (comma-separated names of the account owner as the profile holds them, so a payment to or from the owner under their own name is read as a transfer between their accounts; leave it unset to see what the phone does with no profile name). The test prints counts only and writes only inside `SMS_PRIVATE_DIR`. Besides outcomes, each report holds invariants: transaction count, totals, open review items, money facts reused by more than one counted event, card-bill and IPO events counted as spending.
 
 ## Scorer
 

@@ -1,0 +1,152 @@
+{
+  "agent": "W4b",
+  "candidates": [
+    {
+      "name": "RBL Bank BankBazaar SaveMax",
+      "slug": "rbl-bank-bankbazaar-savemax",
+      "status": "drafted",
+      "reason": "On RBL's current card list (64 cards) and network guide (Mastercard and Visa); product page, T&C and MITC all read. Fee NIL/NIL, 5 points per INR 100 on grocery capped at 1,000 points a billing cycle, 1 point per INR 100 base with a 14-category exclusion table (six added 15 Oct 2024), 10% BookMyShow (INR 100, monthly) and 10% Zomato cashback (INR 100, monthly). Open: rupee value of a point is not stated, grocery MCCs not defined, post-cap behaviour not stated, and the list shows 'Know more' only with no Apply Now (application_mode left null).",
+      "sources": [
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/rbl-bank-bankbazaar-savemax-credit-card",
+        "https://webassets.rbl.bank.in/document/credit-cards/tnc-bankbazaar-savemax-credit-card.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/CardsScheduleCharges.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/RBL-MITC-final.pdf",
+        "https://webassets.rbl.bank.in/document/credit-cards/rbl-cc-cardmember-agreement.pdf",
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide",
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/category",
+        "https://webassets.rbl.bank.in/document/offer-pdfs/bms-offers.pdf"
+      ]
+    },
+    {
+      "name": "RBL Bank BankBazaar SaveMax Pro",
+      "slug": null,
+      "status": "not_sold",
+      "reason": "Invite-only. RBL's own product page says verbatim: '**This card can be sourced through invite only.' The card list also shows 'Know more' only. Brief rule 4 says invite-only is not drafted. If a person wants it catalogued for existing holders, the sourced facts are: fee INR 1,499 first year and later (SOC, MITC; no waiver); Mastercard only (network guide); 10 points per INR 100 on grocery and 5 per INR 100 on fuel, each capped at 1,000 points a month, 2 points per INR 100 base, excluded categories as in SaveMax but fuel is not excluded from the 5x (T&C 3.3); welcome 5,000 points on a transaction within 30 days plus fee paid (T&C 3.4); milestones 2,000 points at INR 2 lakh and a further 4,000 at INR 4 lakh a year (T&C 3.5); 10% BookMyShow up to INR 100 monthly and 10% Zomato up to INR 100 monthly. T&C file is named sept-22 and was created 18 Dec 2025.",
+      "sources": [
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/rbl-bank-bankbazaar-savemax-pro-credit-card",
+        "https://webassets.rbl.bank.in/document/pdfs/terms-bankbazaar-savemax-pro-sept-22.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/CardsScheduleCharges.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/RBL-MITC-final.pdf",
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide",
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/category"
+      ]
+    },
+    {
+      "name": "RBL Bank Paisabazaar Duet Plus",
+      "slug": "rbl-bank-paisabazaar-duet-plus",
+      "status": "drafted",
+      "reason": "On RBL's current list and network guide (Mastercard only); page, T&C, MITC and the partner roles document read. Cashback card, no points: 2.5% on travel and dining (INR 200 a month), 1% on other eligible spend (INR 300 a month), INR 500 combined, minimum INR 100 per transaction, INR 250 welcome cashback, weekend BookMyShow offer, fuel surcharge reversal INR 100 a month, fee INR 1,499 waived next year on INR 4 lakh spend. Open: the SOC (4 Jun 2026) shows no waiver while page, T&C and MITC (29 Oct 2026) do; the travel and dining MCC list contains no hotels or travel agencies; the roles document says Paisabazaar solicits applications while RBL's list shows no Apply Now.",
+      "sources": [
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/rbl-bank-paisabazaar-duet-plus-credit-card",
+        "https://webassets.rbl.bank.in/document/credit-cards/paisabazaar-duet-plus-cc-tnc.pdf",
+        "https://webassets.rbl.bank.in/document/credit-cards/credit-line-paisabazaar-role-responsibilities.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/CardsScheduleCharges.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/RBL-MITC-final.pdf",
+        "https://webassets.rbl.bank.in/document/credit-cards/rbl-cc-cardmember-agreement.pdf",
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide",
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/category",
+        "https://webassets.rbl.bank.in/document/offer-pdfs/bms-offers.pdf"
+      ]
+    },
+    {
+      "name": "RBL Bank Popcorn",
+      "slug": null,
+      "status": "not_sold",
+      "reason": "Replaced/transitioned. RBL's Popcorn page opens with: 'With effect from December 20, 2025, your existing RBL BookMyShow Popcorn Credit Card will be transitioned. For complete details, please refer to the email sent on your registered mail address.' Its banner promotes the RBL Bank Play Credit Card instead, and the card list shows 'Know more' only with no Apply Now. No other BookMyShow-family page (Fun+, Blockbuster, Movies & More) carries a transition notice. Caveat: the SOC, MITC and the Jan 2026 BookMyShow guide still list Popcorn for existing holders, and the card has no published points rate anyway (it earns monthly BookMyShow tickets, INR 25 weekly cashback and a fuel surcharge waiver of INR 100 a month, fee INR 1,000, Mastercard), so under brief rule 5 it would be 'held' even if sold.",
+      "sources": [
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/rbl-bank-popcorn-credit-card",
+        "https://webassets.rbl.bank.in/document/credit-cards/terms-popcorn-cc-oct-19.pdf",
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/category",
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide",
+        "https://webassets.rbl.bank.in/document/offer-pdfs/bms-offers.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/RBL-MITC-final.pdf"
+      ]
+    },
+    {
+      "name": "RBL Bank Movies & More",
+      "slug": "rbl-bank-movies-and-more",
+      "status": "drafted",
+      "reason": "On RBL's current list and network guide (Mastercard only); page, T&C (PDF created 15 May 2026), MITC, SOC and the BookMyShow guide read. Fee INR 1,000 waived next year on INR 1.5 lakh spend; 20 points per INR 100 on Wednesday dining, 10 per INR 100 at BookMyShow, Pizza Hut and KFC (each capped at 1,000 points a billing month, then base), 1 point base; milestones 5,000 points at INR 2 lakh and a further 10,000 at INR 3.5 lakh; welcome BookMyShow tickets worth INR 1,000; monthly INR 250/INR 500 tiers; fuel surcharge waiver INR 100 a month. Open: rupee value of a point not stated; cap could mean bonus rather than total points; the list shows 'Know more' only (application_mode left null) though no discontinuation notice was found.",
+      "sources": [
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/rbl-bank-movies-and-more-credit-card",
+        "https://webassets.rbl.bank.in/document/credit-cards/terms-conditions-movies-more.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/CardsScheduleCharges.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/RBL-MITC-final.pdf",
+        "https://webassets.rbl.bank.in/document/credit-cards/rbl-cc-cardmember-agreement.pdf",
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide",
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/category",
+        "https://webassets.rbl.bank.in/document/offer-pdfs/bms-offers.pdf"
+      ]
+    },
+    {
+      "name": "RBL Bank IRCTC",
+      "slug": "rbl-bank-irctc",
+      "status": "drafted",
+      "reason": "On RBL's current list with an Apply Now button; the network guide ticks Mastercard and RuPay, so the two variants go in verified_network_research. Page, T&C (PDF created 18 May 2026), FAQ, lounge, cancellation-protection and roles documents, MITC and SOC read. Fee INR 500 flat; 5 points per INR 200 on IRCTC train tickets, 3 on FASTag/NCMC/UTS, 2 on IRCTC flights and hotels (1,000 points a billing cycle each), 1 point base; 1 point = INR 1 on IRCTC train redemption only; 500 points per INR 75,000 calendar quarter; welcome 500 points; 8 railway lounge visits a year (2 a quarter); 1% IRCTC charge waiver up to INR 200 a month; INR 5,000 train cancellation protection; points expire after 2 years. Open: portal point value, shared versus per-feature cap, redemption fee exemption wording, welcome threshold wording.",
+      "sources": [
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/irctc-rbl-bank-credit-card",
+        "https://webassets.rbl.bank.in/document/credit-cards/tnc-irctc-rbl-bank-rupay-credit-card.pdf",
+        "https://webassets.rbl.bank.in/document/credit-cards/irctc-rbl-bank-credit-card-faqs.pdf",
+        "https://webassets.rbl.bank.in/document/credit-cards/irctc-cc-complimentary-railway-lounge-access.pdf",
+        "https://webassets.rbl.bank.in/document/credit-cards/irctc-cc-train-cancellation-protection.pdf",
+        "https://webassets.rbl.bank.in/document/credit-cards/irctc-executive-lounge-list.pdf",
+        "https://webassets.rbl.bank.in/document/credit-cards/redemption-process-via-pay-by-points-irctc-cc.pdf",
+        "https://webassets.rbl.bank.in/document/credit-cards/irctc-rbl-bank-credit-card-role-responsibilities.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/CardsScheduleCharges.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/RBL-MITC-final.pdf",
+        "https://webassets.rbl.bank.in/document/credit-cards/rbl-cc-cardmember-agreement.pdf",
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide",
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/category"
+      ]
+    },
+    {
+      "name": "RBL Bank LazyPay",
+      "slug": null,
+      "status": "not_sold",
+      "reason": "Gone from RBL's public offering. It is absent from RBL's current card list (64 cards) and from the network availability guide, and no product page was found: the RBL list links none, and a guessed product URL on the same pattern as the other cards returned 404. It survives only in documents that must cover existing cardholders: the Schedule of Charges (4 Jun 2026) and MITC (29 Oct 2026) both show fee NIL/NIL, and the Cardmember Agreement (27 Oct 2026) links a T&C PDF (created 15 Oct 2024). If a person wants it catalogued for existing holders, the sourced facts are: 1% cashback up to INR 500 a month on retail and online spend outside fuel, railways, utilities, wallet, rent, government, insurance, cash/quasi-cash, education, contracted services, miscellaneous, Bills2Pay and EMI conversions (from 15 Oct 2024); INR 250 welcome cashback on a purchase of INR 99 or more within 30 days; network not stated in the T&C and not in the RBL network guide.",
+      "sources": [
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/category",
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide",
+        "https://webassets.rbl.bank.in/document/credit-cards/tnc-lazy-pay-credit-card.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/CardsScheduleCharges.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/RBL-MITC-final.pdf",
+        "https://webassets.rbl.bank.in/document/credit-cards/rbl-cc-cardmember-agreement.pdf"
+      ]
+    }
+  ],
+  "fixes": [],
+  "unresolved": [
+    {
+      "slug": "rbl-bank-bankbazaar-savemax",
+      "question": "Rupee value of one reward point: not stated in the T&C, MITC, SOC, Cardmember Agreement or page. The RBL Rewards portal (rblrewards.rbl.bank.in) is login-gated and was not read. Needed to compute effective return on the 1 and 5 points per INR 100 rates."
+    },
+    {
+      "slug": "rbl-bank-movies-and-more",
+      "question": "Same rupee-value-of-a-point gap as SaveMax, so the 1, 10 and 20 points per INR 100 rates and the 5,000/10,000 point milestones cannot be turned into rupees."
+    },
+    {
+      "slug": "rbl-bank-bankbazaar-savemax",
+      "question": "Is the card open to new applicants? RBL's list shows 'Know more' only and the page links to no application form; application_mode is null. Also unresolved: grocery MCCs are undefined, and the T&C does not say whether grocery spend earns the base 1 point after the 1,000-point monthly cap (modelled as downgrade to base)."
+    },
+    {
+      "slug": "rbl-bank-movies-and-more",
+      "question": "Is the card open to new applicants? List shows 'Know more' only, no discontinuation notice found (unlike Popcorn). Also: does the '1000 accelerated reward points' monthly cap mean total points or bonus points above base; T&C 3.2 says the monthly offer needs 2 tickets while the INR 250 tier is for one ticket."
+    },
+    {
+      "slug": "rbl-bank-paisabazaar-duet-plus",
+      "question": "Schedule of Charges (4 Jun 2026) lists INR 1,499 for both years with no waiver marker, while the page, T&C 3.6 and MITC (29 Oct 2026) waive the next year's fee on INR 4 lakh spend. The newer sources are used; confirm with RBL. Also: the Travel and Dining MCC list has no hotel or travel-agency codes although the page says 'all travel and dining'."
+    },
+    {
+      "slug": "rbl-bank-irctc",
+      "question": "Is the 1,000-point monthly cap per accelerated feature (as T&C 3.2 b, c, d repeat it) or one shared cap (FAQ wording)? Does the MITC (29 Oct 2026) really exempt the IRCTC card from the INR 99 + GST redemption fee (SOC does not)? Which network variant does a new applicant get, Mastercard or RuPay? The INR 1 per point value applies to IRCTC train bookings only."
+    },
+    {
+      "slug": "rbl-bank-bankbazaar-savemax-pro",
+      "question": "Policy call: SaveMax Pro is invite-only per its page, so brief rule 4 makes it not_sold, but existing invited holders would see it in their SMS. Facts are in the candidate reason if a person wants it drafted as application_mode invite_only."
+    },
+    {
+      "slug": "rbl-bank-shoppers-stop-gold",
+      "question": "For the Shoppers Stop overlay owner (not edited by W4b): the open question 'neither the T&C nor the Schedule of Charges carries a revision date' is stale for the SOC, whose footer reads RBL-CC-SOC-V2-04-06-2026 (4 Jun 2026). The SOC and the MITC (RBL-CC-MITC-V2-29-10-2026) also state what that overlay lists as not extracted: late fee 12.5% of outstanding, minimum INR 5, maximum INR 1,300 (MITC: effective 17 Oct 2025); fuel and auto fee 1% above INR 10,000 capped at INR 3,000 per transaction; all fees carry 18% GST (so forex and DCC gst_applicable could be true); add-on fee INR 200 on other cards but NIL on Shoppers Stop Gold and Platinum and INR 200 on Black per the MITC table; cheque return and auto-debit reversal INR 500. Applies equally to rbl-bank-shoppers-stop-platinum and rbl-bank-shoppers-stop-black."
+    }
+  ]
+}

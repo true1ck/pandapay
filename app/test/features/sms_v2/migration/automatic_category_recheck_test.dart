@@ -123,39 +123,54 @@ void main() {
         CategorySource.ai,
       ]) {
         final decision = decisions[eventBySource[source]]!;
-        expect(decision.slug, 'dining', reason: '${source.wire} spends follow the new rule');
+        expect(
+          decision.slug,
+          'dining',
+          reason: '${source.wire} spends follow the new rule',
+        );
         expect(decision.source, CategorySource.shared, reason: source.wire);
       }
-      for (final source in [CategorySource.user, CategorySource.historyConfirmed]) {
+      for (final source in [
+        CategorySource.user,
+        CategorySource.historyConfirmed,
+      ]) {
         final decision = decisions[eventBySource[source]]!;
-        expect(decision.slug, 'groceries', reason: '${source.wire} is never touched');
+        expect(
+          decision.slug,
+          'groceries',
+          reason: '${source.wire} is never touched',
+        );
         expect(decision.source, source);
       }
       expect(report.changed, 4);
       // The money is untouched and the display rows follow the ledger.
       final names = {
-        for (final row in financial.entities(_namespace, 'transactions')) row['event_id']: row['category_name'],
+        for (final row in financial.entities(_namespace, 'transactions'))
+          row['event_id']: row['category_name'],
       };
       expect(names[eventBySource[CategorySource.fallback]], 'Dining');
       expect(names[eventBySource[CategorySource.user]], isNot('Dining'));
     },
   );
 
-  test('the source filter is part of the job identity, so a plain pass is not skipped', () async {
-    await pass().run(chunkSize: 50);
-    expect(pass().onlySources, automaticCategorySources);
-    final plain = HistoryCategoryRecheck(
-      financial: financial,
-      namespace: _namespace,
-      bundle: after,
-      from: DateTime.utc(1970),
-      to: _now.add(const Duration(days: 2)),
-      accountIsCurrent: () => true,
-    );
-    // Without a filter the history-confirmed spend is re-evaluated as before.
-    final report = await plain.run(chunkSize: 50);
-    expect(report.data['alreadyApplied'], isNot(true));
-  });
+  test(
+    'the source filter is part of the job identity, so a plain pass is not skipped',
+    () async {
+      await pass().run(chunkSize: 50);
+      expect(pass().onlySources, automaticCategorySources);
+      final plain = HistoryCategoryRecheck(
+        financial: financial,
+        namespace: _namespace,
+        bundle: after,
+        from: DateTime.utc(1970),
+        to: _now.add(const Duration(days: 2)),
+        accountIsCurrent: () => true,
+      );
+      // Without a filter the history-confirmed spend is re-evaluated as before.
+      final report = await plain.run(chunkSize: 50);
+      expect(report.data['alreadyApplied'], isNot(true));
+    },
+  );
 
   test('a second pass for the same rule set changes nothing', () async {
     await pass().run(chunkSize: 50);
@@ -164,20 +179,53 @@ void main() {
     expect(second.changed, 0);
   });
 
+  test(
+    'a forced pass looks at every spend again even for a rule set already applied',
+    () async {
+      await pass().run(chunkSize: 50);
+      final plainSecond = await pass().run(chunkSize: 50);
+      expect(plainSecond.data['alreadyApplied'], isTrue);
+      final forced = await pass().run(chunkSize: 50, restart: true);
+      expect(forced.data['alreadyApplied'], isNot(true));
+      expect(forced.complete, isTrue);
+      // Nothing left to change, and the person's own choices are still untouched.
+      expect(forced.changed, 0);
+      final decisions = ledger().categoryDecisions();
+      for (final source in [
+        CategorySource.user,
+        CategorySource.historyConfirmed,
+      ]) {
+        expect(decisions[eventBySource[source]]!.source, source);
+      }
+    },
+  );
+
   test('the account is checked between batches', () async {
     var checks = 0;
     await expectLater(
       pass(current: () => ++checks < 4).run(chunkSize: 1),
       throwsStateError,
     );
-    expect(ledger().categoryDecisions().values.where((d) => d.slug == 'dining').length, lessThan(4));
+    expect(
+      ledger()
+          .categoryDecisions()
+          .values
+          .where((d) => d.slug == 'dining')
+          .length,
+      lessThan(4),
+    );
   });
 
   test('money waiting for the server holds the pass back', () async {
     final entry = ledger().list().first;
     database.db.execute(
       "INSERT INTO v2_outbox(namespace,id,kind,payload) VALUES(?,?,?,?)",
-      [_namespace, 'ledger:${entry.entryId}', 'ledger', jsonEncode(entry.toJson())],
+      [
+        _namespace,
+        'ledger:${entry.entryId}',
+        'ledger',
+        jsonEncode(entry.toJson()),
+      ],
     );
     final report = await pass().run(chunkSize: 50);
     expect(report.awaitingSync, 1);

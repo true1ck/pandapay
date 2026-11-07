@@ -1,0 +1,952 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "rbl-bank-movies-and-more",
+    "name": "RBL Bank Movies & More Credit Card",
+    "issuer_slug": "rbl",
+    "network": "mastercard",
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 1000,
+    "annual_fee_inr": 1000,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": false,
+    "application_mode": null,
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": "Not stated in the Movies & More T&C, MITC, SOC, Cardmember Agreement or on the issuer page. The RBL Rewards portal (login required) was not read, so the rupee value of one reward point is unknown.",
+    "point_expiry_months": 24,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/rbl-bank-movies-and-more-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": null,
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": 1,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": "statement_cycle",
+    "reversal_policy": {
+      "mode": "proportional_deduction",
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "rbl-mm-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          32,
+          2541,
+          4001,
+          5542,
+          5541,
+          5172
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel and auto earns no base or accelerated reward points (T&C 3.3 vi and 3.8, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-mm-excl-railways",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          66,
+          4011,
+          4112
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Railways earns no base or accelerated reward points (T&C 3.3 vi and 3.8, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-mm-excl-utilities",
+      "category_id": "bills",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4900
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Utilities earns no base or accelerated reward points (T&C 3.3 vi and 3.8, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-mm-excl-wallet",
+      "category_id": "wallet",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Wallet and service providers earns no base or accelerated reward points (T&C 3.3 vi and 3.8, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-mm-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Real estate and rental earns no base or accelerated reward points (T&C 3.3 vi and 3.8, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-mm-excl-govt",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          9400,
+          1490,
+          2490,
+          2995,
+          7800,
+          9406,
+          9222,
+          9405,
+          9399,
+          9211,
+          9402,
+          9401,
+          9311,
+          9223
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Government services earns no base or accelerated reward points (T&C 3.3 vi and 3.8, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-mm-excl-insurance",
+      "category_id": "insurance",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6300,
+          6310
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Insurance earns no base or accelerated reward points (T&C 3.3 vi and 3.8, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-mm-excl-cash",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6011,
+          6010
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Cash earns no base or accelerated reward points (T&C 3.3 vi and 3.8, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-mm-excl-quasi",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6050,
+          6051,
+          4829
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Quasi-cash earns no base or accelerated reward points (T&C 3.3 vi and 3.8, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-mm-excl-education",
+      "category_id": "education",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          8220,
+          8244,
+          8249,
+          8211,
+          8241,
+          8299
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Education earns no base or accelerated reward points (T&C 3.3 vi and 3.8, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-mm-excl-contracted",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          1711,
+          1740,
+          763,
+          1520,
+          742,
+          1761,
+          1799,
+          1750,
+          1731,
+          1771,
+          780
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Contracted services earns no base or accelerated reward points (T&C 3.3 vi and 3.8, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-mm-excl-misc",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5960
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Miscellaneous (5960) earns no base or accelerated reward points (T&C 3.3 vi and 3.8, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-mm-excl-bills2pay",
+      "category_id": "bills",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Bills2Pay (utility bills paid through the RBL MyBank app or Internet banking; no MCC) earns no base or accelerated reward points (T&C 3.3 vi and 3.8, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-mm-excl-emi",
+      "category_id": "emi",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "EMI conversion of retail transactions (Split-N-Pay and EMI requested at POS, web or app) earns no base or accelerated reward points (T&C 3.3 vi and 3.8, issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-mm-dining-wednesday-20",
+      "category_id": "dining",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100,
+        "weekday": "Wednesday",
+        "merchant_category": "dining outlets identified by network MCC"
+      },
+      "action": {
+        "multiplier": 20,
+        "points_per_block": 20,
+        "cashback_percent": "N/A",
+        "cap_reference": "rbl-mm-dining-cap",
+        "reason": "20 reward points per INR 100 on dining on Wednesdays only; up to 1,000 points a billing month, then 1 point per INR 100 (T&C 3.3)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-mm-bookmyshow-10",
+      "category_id": "entertainment",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100,
+        "merchants": [
+          "BookMyShow website and mobile app"
+        ]
+      },
+      "action": {
+        "multiplier": 10,
+        "points_per_block": 10,
+        "cashback_percent": "N/A",
+        "cap_reference": "rbl-mm-select-merchants-cap",
+        "reason": "10 reward points per INR 100 on BookMyShow; shares the 1,000-point monthly cap with Pizza Hut and KFC, then 1 point per INR 100 (T&C 3.3)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-mm-pizzahut-kfc-10",
+      "category_id": "dining",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100,
+        "merchants": [
+          "Pizza Hut outlets",
+          "KFC outlets"
+        ],
+        "identification": "by the dining MCC allotted by the network; RBL gives no points if the outlet is registered under another MCC"
+      },
+      "action": {
+        "multiplier": 10,
+        "points_per_block": 10,
+        "cashback_percent": "N/A",
+        "cap_reference": "rbl-mm-select-merchants-cap",
+        "reason": "10 reward points per INR 100 at Pizza Hut and KFC; shares the 1,000-point monthly cap with BookMyShow (T&C 3.3)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-mm-base",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "1 reward point per INR 100 on every other valid retail purchase outside the excluded categories (T&C 3.3 v)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "rbl-mm-dining-cap",
+      "category_id": "dining",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": 1000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "downgrade_to_base_rate",
+        "points_per_block": 1
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-mm-select-merchants-cap",
+      "category_id": "entertainment",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": 1000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "downgrade_to_base_rate",
+        "points_per_block": 1
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.99,
+      "annual_interest_rate_percent": 47.88
+    },
+    "forex_markup": {
+      "markup_percent": 3.5,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 3.5,
+      "gst_applicable": true,
+      "trigger_condition": "SOC: markup up to 3.5% on foreign currency, dynamic and static conversion transactions; also on rupee transactions at an international location or at India-located merchants registered overseas (MITC: 3.5% on all cards except Nova, Insignia, iGlobe, World Xclusive, World Safari family and Lumiere)"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 500,
+      "max_txn_inr": 4000,
+      "monthly_waiver_cap_inr": 100
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on all rental transactions, no cap stated (SOC, MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          32,
+          2541,
+          4001,
+          5542,
+          5541,
+          5172
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on each fuel and auto transaction above INR 10,000, at most INR 3,000 per transaction; the amount includes the surcharge (MITC)",
+        "threshold_spend_inr": 10000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "bills",
+        "mcc_list": [
+          4900
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on aggregate utility spend above INR 50,000 in a month per card (SOC, MITC)",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education",
+        "mcc_list": [
+          8220,
+          8244,
+          8249,
+          8211,
+          8241,
+          8299
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on education payments made through third-party apps such as Cred, PhonePe, Paytm, Mobikwik, Freecharge; payments on the school or college website or its POS carry no fee (SOC, MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "other",
+        "mcc_list": [
+          4784,
+          4111,
+          4131
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on FASTag loading and toll payments above INR 10,000 per transaction per card (SOC, MITC)",
+        "threshold_spend_inr": 10000,
+        "effective_from": "2026-01-07",
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 0,
+        "min_fee_inr": 0,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": 500,
+      "cheque_bounce_charge_inr": 500
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 99,
+      "gst_applicable": true,
+      "exempted_channels": [],
+      "notes": "MITC: INR 99 + GST on redemption of reward points earned on RBL credit cards."
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 50,
+    "grace_period_void_on_revolving_balance": true,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "max",
+      "components": [
+        "Total GST + current month EMI debits",
+        "Higher of (100% of fees and charges + 5% of retail spends, cash advance and interest) or INR 200",
+        "Previously unpaid minimum amount due, if any",
+        "Overlimit utilisation amount, if any",
+        "If this sum exceeds the total amount due, the minimum due equals the total amount due"
+      ]
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 150000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "Annual fee of INR 1,000 (plus GST) is waived for the next year when eligible spend in the preceding anniversary year is INR 1,50,000 or more (T&C 3.6, page, MITC, SOC). Fuel and auto, railways, utilities, wallet, rent, government, insurance, cash, quasi-cash, education, miscellaneous, Bills2Pay and EMI conversions do not count.",
+      "excluded_category_ids": [
+        "fuel",
+        "excluded_spend",
+        "bills",
+        "wallet",
+        "rent",
+        "government",
+        "insurance",
+        "cash_withdrawal",
+        "education",
+        "emi"
+      ],
+      "excluded_mcc_list": [
+        32,
+        2541,
+        4001,
+        5542,
+        5541,
+        5172,
+        66,
+        4011,
+        4112,
+        4900,
+        6540,
+        6513,
+        9400,
+        1490,
+        2490,
+        2995,
+        7800,
+        9406,
+        9222,
+        9405,
+        9399,
+        9211,
+        9402,
+        9401,
+        9311,
+        9223,
+        6300,
+        6310,
+        6011,
+        6010,
+        6050,
+        6051,
+        4829,
+        8220,
+        8244,
+        8249,
+        8211,
+        8241,
+        8299,
+        5960
+      ],
+      "waives_fee_inr": 1000
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "first_transaction_within_30_days_and_fee_paid",
+      "benefit_points": "N/A",
+      "effective_value_inr": 1000,
+      "condition": "Four BookMyShow movie tickets worth INR 1,000 (INR 1,000 discount or 4 free tickets, whichever is lower): two transactions of up to INR 500 each, minimum two tickets per transaction. Needs a valid retail transaction within 30 days of issuance and payment of the first-year fee by the first payment due date; valid 60 days after the first statement (T&C 3.1, page)."
+    },
+    "spend_milestones": [
+      {
+        "id": "rbl-mm-milestone-2l",
+        "label": "5,000 bonus reward points on valid purchases of INR 2 lakh or more in the billing year",
+        "threshold_spend_inr": 200000,
+        "reward_value_inr": null,
+        "period": "card_anniversary_year",
+        "is_repeatable": true,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "id": "rbl-mm-milestone-3-5l",
+        "label": "Additional 10,000 bonus reward points on valid purchases of INR 3.5 lakh or more in the billing year (15,000 in total)",
+        "threshold_spend_inr": 350000,
+        "reward_value_inr": null,
+        "period": "card_anniversary_year",
+        "is_repeatable": true,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ]
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "rbl-mm-monthly-1000",
+      "category_id": "movie",
+      "network_program": null,
+      "sponsor": "BookMyShow",
+      "label": "Monthly movie offer, lower tier: INR 250 off (or one ticket, whichever is lower) on INR 10,000 to under 15,000 spend in the billing cycle; one monthly offer per cycle, the higher tier replaces this one",
+      "evaluation_engine": {
+        "conditions": {
+          "monthly_spend_ge_inr": 10000,
+          "monthly_spend_lt_inr": 15000,
+          "single_transaction": true
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 1,
+      "quota_period": "calendar_month",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "rbl-mm-monthly-1500",
+      "category_id": "movie",
+      "network_program": null,
+      "sponsor": "BookMyShow",
+      "label": "Monthly movie offer, higher tier: INR 500 off (or two tickets, whichever is lower) on INR 15,000 or more spend in the billing cycle, single transaction",
+      "evaluation_engine": {
+        "conditions": {
+          "monthly_spend_ge_inr": 15000,
+          "single_transaction": true,
+          "max_tickets": 2
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 1,
+      "quota_period": "calendar_month",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 200,
+    "separate_priority_pass": "N/A",
+    "lounge_quota_shared": "N/A",
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "RBL Rewards portal (rblrewards.rbl.bank.in) and RBL MyBank app: catalogue, vouchers, travel, shopping",
+        "redemption_type": "partner_catalogue",
+        "inr_value_per_point": null,
+        "max_bill_percentage_payable_via_points": null,
+        "min_points_per_txn": null,
+        "cycle_points_burn_cap": null,
+        "redemption_fee_inr": 99,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [
+    {
+      "promo_id": "rbl-mm-bms-10pct",
+      "category_id": "movie",
+      "network_program": "N/A",
+      "sponsor": "BookMyShow",
+      "platform": "BookMyShow website or app",
+      "offer_type": "instant_discount",
+      "discount_percent": 10,
+      "max_discount_inr": 100,
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": true,
+      "is_permanent_card_feature": true,
+      "valid_from": null,
+      "valid_to": null
+    }
+  ],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "12.5% of the outstanding amount (statement total amount due less net payments), minimum INR 5, maximum INR 1,300, plus 18% GST; levied only when the account stays past due for more than 3 days after the payment due date",
+          "source": "MITC RBL-CC-MITC-V2-29-10-2026 section A.v (effective 17 Oct 2025); SOC RBL-CC-SOC-V2-04-06-2026",
+          "note": "A percentage fee cannot be expressed as fixed slabs, so late_payment_slabs is empty."
+        }
+      },
+      {
+        "key": "merchant_emi_processing_fee_rule",
+        "value": {
+          "rule": "1.5% of the amount or INR 150, whichever is higher, on EMI conversions done at the merchant outlet, website or app; plus 18% GST",
+          "source": "MITC section A.iii; SOC",
+          "note": "emi_charges has no percentage field, so merchant_instant_emi_processing_fee_inr is null. Post-purchase EMI and foreclosure charges are not stated in the MITC text read."
+        }
+      },
+      {
+        "key": "finance_charge_bands",
+        "value": {
+          "rule": "Up to 3.99% per month (47.88% a year). MITC bands by CIBIL score: above 775 = 3.35% a month, 725 to 775 = 3.85%, below 725 = 3.99%. Interest-free period up to 50 days, not available if the previous balance was not paid in full or cash was withdrawn.",
+          "source": "MITC section A.iv and A.iii.c; SOC",
+          "note": "The draft stores the 3.99% maximum. The band a given cardholder gets is not published per card."
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/rbl-bank-movies-and-more-credit-card",
+              "kind": "issuer product page (welcome, monthly, milestones, rewards, fuel, fees)",
+              "read": "rendered page text, fetched 2026-11-07"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/Credit%20Cards/CardsScheduleCharges.pdf",
+              "kind": "Schedule of Charges, footer RBL-CC-SOC-V2-04-06-2026 (4 Jun 2026): membership fee, finance charge, late fee, cash advance, forex markup, redemption fee, 1% category fees",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/Credit%20Cards/RBL-MITC-final.pdf",
+              "kind": "MITC cum KFS, footer RBL-CC-MITC-V2-29-10-2026 (29 Oct 2026): per-card fee and waiver, add-on fee, grace period, minimum due, late fee, interest bands",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/credit-cards/rbl-cc-cardmember-agreement.pdf",
+              "kind": "Cardmember Agreement, footer RBL-CC-CMA-27-10-2026 (27 Oct 2026): points reversal 12.9, 24-month points expiry 12.19, primary-only redemption 12.21",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/category",
+              "kind": "RBL current credit card list (\"Showing 64 Cards\"): product is on the list, with \"Know more\" only unless stated otherwise per card",
+              "read": "rendered page text, fetched 2026-11-07"
+            },
+            {
+              "url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide",
+              "kind": "RBL network availability guide: which networks each card is issued on",
+              "read": "rendered page text, fetched 2026-11-07"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/credit-cards/terms-conditions-movies-more.pdf",
+              "kind": "Movies & More T&C (7 pages; no printed date, PDF created 15 May 2026): 3.1 welcome, 3.2 monthly, 3.3 points, 3.4 milestones, 3.5 fuel, 3.6 fee waiver, 3.7 BookMyShow discount, 3.8 MCC table",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/offer-pdfs/bms-offers.pdf",
+              "kind": "RBL BookMyShow offers guide (PDF created 6 Jan 2026): monthly INR 250 / INR 500 tiers and \"10% discount, up to Rs. 100, 15 times a year\"",
+              "read": "pdftotext"
+            }
+          ],
+          "open_questions": [
+            "Value of one reward point (checked again 2026-11-07): no RBL document states it for Movies & More. Not on the issuer page, the Movies & More T&C (3.3, 3.4), the BookMyShow offers guide, the SOC, the MITC, the Cardmember Agreement, or the Rewards Programme T&C (RWD 4.1 refers to \"the value applicable to the product specific value proposition\" without a number; RWD 3.1 says accrual varies by card). The redemption screens sit behind the rewards login, which was not opened. point_value_inr_baseline and effective_base_return_percent are null, as the brief requires. A person with a Movies & More login can read the per-point value off the portal.",
+            "Network (confirmed 2026-11-07): the RBL network availability guide (issuer page, undated) ticks \"Movies & More Credit Card\" for MasterCard only, not Visa or RuPay. The T&C names \"MasterCard, VISA & RuPay\" only as the networks whose MCCs classify dining outlets (3.3 i), which says nothing about this card.",
+            "Cap wording is \"a maximum of 1000 accelerated reward points per month (1000 on dining and 1000 on the select merchants)\". Modelled as total points under each accelerator per billing cycle; it could instead mean bonus points above the base rate. After the cap the T&C says spend earns the base 1 point per INR 100 (T&C 3.3 iii), which is modelled.",
+            "T&C 3.2 says the monthly offer applies on booking a minimum of 2 tickets, yet the INR 250 tier is for one ticket (page and BookMyShow guide). The page and guide figures are modelled.",
+            "Contracted services appear in the T&C 3.8 table and the page footnote but not in the category list of T&C 3.3 vi; treated as excluded.",
+            "Whether new applications are accepted (checked 2026-11-07, still open): the RBL card list shows \"Know more\" only for Movies & More (no \"Apply Now\", no \"Express Your Interest\"), and the product page has no card-specific application control (its only Apply Now buttons are the site-wide World Safari menu links) and no sentence about invitation, discontinuation or transition. The Popcorn page, by contrast, carries a notice that existing Popcorn cards are being transitioned from 20 Dec 2025, and the SaveMax Pro page says \"invite only\"; Movies & More and Blockbuster carry neither. The page text speaks in the present tense (\"comes at an annual fee of INR 1,000\"). application_mode is left null. Action: ask RBL whether Movies & More is open to new applicants.",
+            "T&C 4.4 refers to \"the Play Credit Card\" and 3.1 iv names the shared BookMyShow offer \"Popcorn, Fun Plus, Movies & More, Blockbuster\"; these look like copy-paste in the T&C and do not change the terms read.",
+            "Milestone year is \"one year from the date of card issuance\" (T&C 3.4 v); spend of add-on cards counts (3.4 vii). Stored as card_anniversary_year.",
+            "Points expiry: the Cardmember Agreement 12.19 says points not redeemed within 24 months expire; the product T&C does not override it. Stored as 24.",
+            "Interest: the SOC and MITC give \"up to 3.99% a month\" and score bands (3.35%, 3.85%, 3.99%); no per-card rate is published, so the 3.99% maximum is stored.",
+            "The per-card T&C carries no printed revision date. PDF creation dates are quoted in the sources list; the SOC (4 Jun 2026), MITC (29 Oct 2026) and Cardmember Agreement (27 Oct 2026) carry footer reference codes with dates.",
+            "Joining fee: the MITC says \"Joining Fee NIL\" and charges the first-year membership fee after the first debit transaction. joining_fee_inr here repeats the SOC \"Annual Fee (1st Year)\" so the first-year cost is visible, the same convention as the Shoppers Stop overlay."
+          ],
+          "notes": [
+            "Network is Mastercard only (RBL network guide and issuer page).",
+            "Bonus points are credited within 30 days of the transaction or of crossing the milestone threshold (T&C 3.3 vii, 3.4 vi).",
+            "Fuel surcharge waiver: 1% up to INR 100 a month on fuel purchases between INR 500 and INR 4,000; INR 499 or less pays a INR 10 surcharge, INR 4,001 or more pays 1% with no waiver; GST is not reversed (T&C 3.5).",
+            "The 10% BookMyShow discount (up to INR 100 per booking, 15 times in a calendar year, primary card only) is a separate benefit from the monthly tier offers (T&C 3.7).",
+            "If the customer holds another RBL card, the credit limit of the new card merges with the existing limit (T&C 4.10); not modelled."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

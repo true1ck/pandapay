@@ -34,6 +34,42 @@ function settingsHelper(admin) {
 
 // ---------------------------------------------------------------- 1. poisoning
 
+test('by default one attested person is enough to show a shop; a phone that did not pass App Check still adds nothing', { skip }, async (t) => {
+  const rig = await startLoopHarness({ profileCount: 2, registerAdmin: registerAllLoopAdminRoutes });
+  t.after(() => rig.close());
+  const [a, c] = rig.profiles;
+  for (const id of rig.profiles) await rig.consent(id);
+  const admin = rig.asAdmin();
+  const candidates = async () => (await admin.get('/admin/sms/v2/learning/categories')).body.candidates;
+  assert.deepEqual(await candidates(), []);
+  // K is 1, but an unattested phone is held back and never counts.
+  assert.equal((await rig.asUser(c, { verified: false }).post('/sms/v2/learning-signals', { items: [signal('dining')] })).status, 202);
+  assert.deepEqual(await candidates(), []);
+  // One attested person is enough at the default.
+  assert.equal((await rig.asUser(a).post('/sms/v2/learning-signals', { items: [signal('dining')] })).status, 202);
+  const shown = await candidates();
+  assert.equal(shown.length, 1);
+  assert.deepEqual([shown[0].merchantKey, shown[0].category, shown[0].users, shown[0].keyUsers], ['SWIGGY', 'dining', 1, 1]);
+
+  // The Learning page's summary works at K = 1 (it failed with 22023 while the database refused K below 2),
+  // and the database still refuses a K below 1.
+  const summary = await admin.get('/admin/sms/v2/learning/summary');
+  assert.equal(summary.status, 200);
+  assert.equal(summary.body.minUsers, 1);
+  const db = await rig.privatePool.connect();
+  try {
+    await db.query('BEGIN');
+    await db.query('SET LOCAL ROLE pandapay_admin_api');
+    await db.query("SELECT set_config('pandapay.admin_actor', $1, true)", [rig.admin]);
+    await db.query("SELECT set_config('pandapay.admin_permission', 'learning.read', true)");
+    await db.query('SELECT pandapay.sms_v2_learning_summary(30, 1)');
+    await assert.rejects(db.query('SELECT pandapay.sms_v2_learning_summary(30, 0)'), (error) => error.code === '22023');
+  } finally {
+    await db.query('ROLLBACK').catch(() => {});
+    db.release();
+  }
+});
+
 test('poisoning: a shop appears only for K distinct attested people; repeats and unattested phones add nothing', { skip }, async (t) => {
   const rig = await startLoopHarness({ profileCount: 5, registerAdmin: registerAllLoopAdminRoutes });
   t.after(() => rig.close());
@@ -44,8 +80,10 @@ test('poisoning: a shop appears only for K distinct attested people; repeats and
   const candidates = async () => (await admin.get('/admin/sms/v2/learning/categories')).body.candidates;
 
   const stored = (await admin.get('/admin/sms/v2/settings')).body.settings.find((row) => row.key === 'signals_min_distinct_users');
-  assert.equal(stored.effective ?? stored.value, 3, 'the default K is 3');
-  assert.equal((await setSetting('signals_min_distinct_users', 1, 'Trying to let one person decide')).status, 422, 'K can never drop below 2');
+  assert.equal(stored.effective ?? stored.value, 1, 'the default K is 1 during the friends run');
+  assert.equal((await setSetting('signals_min_distinct_users', 0, 'Nobody has to agree')).status, 422, 'K can never drop below 1');
+  // This test is about poisoning, so it asks for three people.
+  assert.equal((await setSetting('signals_min_distinct_users', 3, 'Three people for the poisoning test')).status, 200);
 
   // Two accounts agree: no shop yet.
   for (const id of [a, b]) assert.equal((await rig.asUser(id).post('/sms/v2/learning-signals', { items: [signal('dining')] })).status, 202);
@@ -240,6 +278,7 @@ test('authorisation: app users reach nothing private; roles and fresh sign-in ar
 
 test('deletion: withdrawing sharing and deleting an account leave nothing of the person in any learning table', { skip }, async (t) => {
   const rig = await startLoopHarness({ profileCount: 3, registerAdmin: registerAllLoopAdminRoutes });
+  await rig.requirePeople(3);
   t.after(() => rig.close());
   const [p, q, r] = rig.profiles;
   const admin = rig.asAdmin();

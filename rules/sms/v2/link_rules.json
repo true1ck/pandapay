@@ -103,7 +103,8 @@
           "factType": "movement",
           "direction": "debit",
           "purpose": [
-            "card_payment"
+            "card_payment",
+            "bill_payment"
           ],
           "instrumentKind": [
             "bank_account"
@@ -263,7 +264,8 @@
           "direction": "debit",
           "purpose": [
             "transfer",
-            "p2p"
+            "p2p",
+            "purchase"
           ],
           "instrumentKind": [
             "bank_account"

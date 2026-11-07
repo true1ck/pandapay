@@ -121,7 +121,9 @@ class DefaultCategoryResolver implements CategoryResolver {
   /// - only spend types get one (see [categorisedEventTypes])
   /// - a refund takes [linkedPurchase]'s decision, or runs the resolver on its
   ///   own counterparty when there is no linked purchase
-  /// - `p2p_out` is `other` unless the user has a rule for the payee
+  /// - `p2p_out` is `other` unless the user has a rule for the payee, or the
+  ///   payee's whole name is a known business (a catalogue rule matching the
+  ///   entire merchant key)
   CategoryDecision? decide({
     required EventType eventType,
     required CategoryInput input,
@@ -137,6 +139,25 @@ class DefaultCategoryResolver implements CategoryResolver {
     };
     final user = _best(_rulesOf(input.userRules), keys, input.senderBrand, _contextOf(input), _compareUser, (s) => s == CategorySource.user);
     if (user != null) return _decide(user, CategorySource.user, CategoryConfidence.user, 'user');
+
+    // A bank's "trf to ZOMATO LTD" cannot say whether the payee is a person or
+    // a business. When the payee's whole name is a known business (after
+    // aliases), the catalogue category applies. A partial match never does, and
+    // a payee with no merchant key (a person, an own account) stays `other`.
+    final merchantKey = keyer.keyFor(input.counterparty);
+    if (merchantKey != null) {
+      final business = _best(
+        _rulesOf(input.bundleRules),
+        {merchantKey},
+        input.senderBrand,
+        _contextOf(input),
+        _compareLongestFirst,
+        (s) => s == CategorySource.catalogue,
+      );
+      if (business != null && business.whole) {
+        return _decide(business, CategorySource.catalogue, CategoryConfidence.catalogueExact, 'catalogue');
+      }
+    }
     return _fallback;
   }
 

@@ -27,6 +27,7 @@ class CaptureChunkRequest {
     required this.session,
     required this.shared,
     required this.groups,
+    required this.ownerNames,
     this.onCommitted,
     this.debugFault,
   });
@@ -37,6 +38,7 @@ class CaptureChunkRequest {
   final int session;
   final RuleBundle shared;
   final List<CaptureGroup> groups;
+  final List<String> ownerNames;
 
   /// Called on the calling isolate with the entity names a worker committed
   /// (including for a chunk whose caller already timed out), so the live
@@ -72,6 +74,7 @@ void runCaptureChunk({
   required String appVersion,
   required Map<String, String> categoryIdBySlug,
   required List<CaptureGroup> groups,
+  required List<String> ownerNames,
   void Function(void Function() work) transact = _direct,
 }) {
   final categories = CategorySnapshot.load(
@@ -89,6 +92,7 @@ void runCaptureChunk({
     categoryIdBySlug: categoryIdBySlug,
     engine: engine,
     revision: '$overlayRevision:personal:${personalRules.revision}',
+    ownerNames: ownerNames,
   );
   for (final group in groups) {
     if (group.messages.isEmpty) continue;
@@ -139,6 +143,7 @@ class InProcessCaptureExecutor implements CaptureExecutor {
       appVersion: request.appVersion,
       categoryIdBySlug: request.categoryIdBySlug,
       groups: request.groups,
+      ownerNames: request.ownerNames,
     );
     await Future<void>.delayed(
       Duration.zero,

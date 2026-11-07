@@ -1,0 +1,669 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "au-traverse-nri",
+    "name": "AU Traverse Credit Card for NRIs",
+    "issuer_slug": "au",
+    "network": null,
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 4999,
+    "annual_fee_inr": 4999,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": null,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": "Value of one AU Reward Point is not stated for Traverse: the page (hidden accordions included, re-read 2026-11-07) has no redemption or point-value text, the welcome gift (MakeMyTrip voucher) and milestone benefit (Taj voucher) T&Cs are voucher terms with no point conversion, and AU Rewardz FAQ and Cardmember Agreement clause 22.11 say the rate depends on the card variant and redemption category and defer to the variant page. Left null on purpose.",
+    "point_expiry_months": 24,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.au.bank.in/premium-banking/credit-cards/traverse-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "all_pass",
+    "notes": "Apply at a branch. Needs both an NRE account and an NRE FD with AU.",
+    "rules": [
+      {
+        "parameter": "residency",
+        "operator": "in",
+        "threshold_value": null,
+        "allowed_values": [
+          "non_resident_indian"
+        ]
+      },
+      {
+        "parameter": "au_nre_account",
+        "operator": "==",
+        "threshold_value": 1,
+        "allowed_values": []
+      },
+      {
+        "parameter": "au_nre_fd",
+        "operator": "==",
+        "threshold_value": 1,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years",
+        "operator": ">=",
+        "threshold_value": 18,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years",
+        "operator": "<=",
+        "threshold_value": 75,
+        "allowed_values": []
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": "floor",
+    "base_points_per_block": 2,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": 25000,
+    "capping_period_basis": "statement_cycle",
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "traverse-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel MCC transactions are not eligible for Reward Points (Traverse page note, re-read 2026-11-07). MCC lists not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "traverse-excl-emi",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "EMI MCC transactions are not eligible for Reward Points (Traverse page note, re-read 2026-11-07). MCC lists not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "traverse-excl-cash",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Cash MCC transactions are not eligible for Reward Points (Traverse page note, re-read 2026-11-07). MCC lists not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "traverse-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Rent MCC transactions are not eligible for Reward Points (Traverse page note, re-read 2026-11-07). MCC lists not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "traverse-excl-education",
+      "category_id": "education",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Education MCC transactions are not eligible for Reward Points (Traverse page note, re-read 2026-11-07). MCC lists not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "traverse-excl-govt",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Government MCC transactions are not eligible for Reward Points (Traverse page note, re-read 2026-11-07). MCC lists not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "traverse-international-4rp",
+      "category_id": "international_spend",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "transaction_type": "international"
+      },
+      "action": {
+        "multiplier": 2,
+        "points_per_block": 4,
+        "cashback_percent": "N/A",
+        "cap_reference": "traverse-total-cycle-cap",
+        "reason": "Page (re-read 2026-11-07): 4 Reward Points per ₹100 on international spends."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "traverse-bills-1rp",
+      "category_id": "bills",
+      "priority": 25,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "includes": [
+          "utility",
+          "telecom"
+        ],
+        "max_points_per_transaction": 100
+      },
+      "action": {
+        "multiplier": 0.5,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": "traverse-total-cycle-cap",
+        "reason": "Page: 1 Reward Point per ₹100 on insurance, utility and telecom payments; at most 100 points per utility and telecom transaction."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "traverse-insurance-1rp",
+      "category_id": "insurance",
+      "priority": 25,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0.5,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": "traverse-total-cycle-cap",
+        "reason": "Page: 1 Reward Point per ₹100 on insurance."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "traverse-domestic-2rp",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "transaction_type": "domestic"
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 2,
+        "cashback_percent": "N/A",
+        "cap_reference": "traverse-total-cycle-cap",
+        "reason": "Page: 2 Reward Points per ₹100 on domestic spends."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "traverse-total-cycle-cap",
+      "category_id": "all_retail",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": 25000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 45
+    },
+    "forex_markup": {
+      "markup_percent": 0.99,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 0.99,
+      "gst_applicable": true,
+      "trigger_condition": "KFS lists one cross-currency markup for foreign-currency, dynamic and static conversion transactions"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 400,
+      "max_txn_inr": 5000,
+      "monthly_waiver_cap_inr": 250
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 0,
+      "atm_transaction_fee_min_inr": 0,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": 50
+    },
+    "category_surcharges": [
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          5172,
+          5541,
+          5542,
+          5552,
+          5983
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "From 1 Jul 2026: 1% on the whole month's fuel spend when one transaction exceeds ₹10,000 or the calendar-month total exceeds ₹25,000",
+        "threshold_spend_inr": 25000,
+        "effective_from": "2026-07-01",
+        "effective_to": null
+      },
+      {
+        "category_id": "utility",
+        "mcc_list": [
+          4900
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% on utility spend above ₹50,000 in a calendar month",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education_third_party",
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Education paid through third-party apps (CRED, PhonePe, Paytm, MobiKwik, Freecharge etc.), minimum ₹99 per transaction; direct school/college site or POS exempt",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Domestic rental payments, minimum ₹99 per transaction; international rental has no charge",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "transportation",
+        "mcc_list": [
+          4111,
+          4112,
+          4784
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "From 14 Jun 2026: 1% on the whole month's transportation spend once it exceeds the lower of 50% of credit limit or ₹25,000; IRCTC and marquee travel partners excluded",
+        "threshold_spend_inr": 25000,
+        "effective_from": "2026-06-14",
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": 199,
+      "post_purchase_emi_processing_fee_inr": 99,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 500,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 99,
+      "gst_applicable": true,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 50,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "If previous Total Amount Due was paid on time: 5% of principal outstanding + 100% of fees/charges + 100% of interest + due EMIs + 100% annual fee (if applicable) + 100% GST",
+        "If previous Total Amount Due was not paid on time: 2% of principal outstanding + the same 100% components"
+      ]
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 600000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "Waiver on completing ₹6 lakh spends in a card anniversary year (page).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 4999
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "card_activation_within_30_days_of_card_setup",
+      "benefit_points": "N/A",
+      "effective_value_inr": 5000,
+      "condition": "MakeMyTrip gift card/voucher worth ₹5,000 (GyFTR); claim within 180 days of the first eligibility message (Welcome Benefit T&C)."
+    },
+    "spend_milestones": [
+      {
+        "id": "traverse-taj-10l",
+        "label": "Taj voucher worth ₹10,000",
+        "threshold_spend_inr": 1000000,
+        "reward_value_inr": 10000,
+        "period": "card_anniversary_year",
+        "is_repeatable": true,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ]
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "traverse-spa",
+      "category_id": "other",
+      "network_program": null,
+      "sponsor": "AU Small Finance Bank",
+      "label": "Complimentary airport spa access",
+      "evaluation_engine": {
+        "conditions": {
+          "max_per_quarter": 1
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 4,
+      "quota_period": "annual",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "traverse-lounge",
+      "category_id": "lounge",
+      "network_program": "priority_pass",
+      "sponsor": "AU Small Finance Bank",
+      "label": "Domestic and international airport lounge access",
+      "evaluation_engine": {
+        "conditions": {
+          "page": "2 complimentary domestic and international airport lounge accesses per quarter",
+          "priority_pass_doc": "Priority Pass terms list Traverse at 2 international lounge accesses per calendar quarter; Priority Pass use within India is chargeable at USD 35 per visit",
+          "primary_cardholder_only": true
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 2,
+      "quota_period": "quarter",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "traverse-meet-assist",
+      "category_id": "concierge",
+      "network_program": null,
+      "sponsor": "AU Small Finance Bank",
+      "label": "Complimentary airport meet and assist (end-to-end VIP check-in; page: 4 services a year, 1 per quarter; book via concierge 1800 210 0298)",
+      "evaluation_engine": {
+        "conditions": {
+          "max_per_quarter": 1
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 4,
+      "quota_period": "annual",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 0,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": 18
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [
+    {
+      "promo_id": "traverse-duty-free",
+      "category_id": "other",
+      "network_program": "N/A",
+      "sponsor": "AU Small Finance Bank",
+      "platform": "duty-free shopping",
+      "offer_type": "flat_cashback_₹500_on_min_spend_₹10000",
+      "discount_percent": "N/A",
+      "max_discount_inr": 500,
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": false,
+      "is_permanent_card_feature": true,
+      "valid_from": null,
+      "valid_to": null
+    }
+  ],
+  "additional_data": {
+    "_notes": "Source-supported data that cannot be represented faithfully by any existing universal schema field. Do not duplicate data already represented elsewhere. Do not use this section for unknown values, assumptions, or inferred data.",
+    "items": [
+      {
+        "key": "official_research",
+        "value": {
+          "checked_on": "2026-11-05",
+          "source_urls": [
+            "https://www.au.bank.in/premium-banking/credit-cards/traverse-credit-card"
+          ],
+          "facts": [
+            "NRI product requires AU NRE banking relationship. Annual membership INR 4999 plus tax.",
+            "Advertises four airport spa visits annually, at most one per quarter."
+          ]
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.au.bank.in/premium-banking/credit-cards/traverse-credit-card",
+              "kind": "issuer_page",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://www.au.bank.in/pdf/credit-card/Schedule-of-Charges-CC.pdf",
+              "kind": "KFS",
+              "date": "Key Fact Statement v1.9, 2 Nov 2026"
+            },
+            {
+              "url": "https://www.au.bank.in/pdf/traverse-credit-card/welcome-benefit.pdf",
+              "kind": "welcome T&C",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.au.bank.in/pdf/traverse-milestone-benefit.pdf",
+              "kind": "milestone T&C",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.au.bank.in/credit-cards/mitc(with-schedule-of-charges).pdf",
+              "kind": "MITC: points terms are by reference to the Cardmember Agreement",
+              "date": "MITC v2.23, 2 Nov 2026",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.au.bank.in/credit-cards/credit-card-member-agreement.pdf",
+              "kind": "Cardmember Agreement 23.5 (25,000 point cap lists Traverse NRI), 23.8, 23.22",
+              "date": "undated",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.au.bank.in/pdf/zenith-plus-credit-card/Priority%20Pass%20Lounges.pdf",
+              "kind": "Priority Pass usage T&C (Traverse: 2 international accesses per calendar quarter, USD 35 per paid visit)",
+              "date": "undated",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.au.bank.in/pdf/zenith-plus-credit-card/au-small-finance-bank-cc-airport-lounge-terms-conditions.pdf",
+              "kind": "airport lounge program T&C (spend-based domestic lounge excludes Zenith+ and Traverse; names \"Visa/RuPay\" generically)",
+              "date": "undated; revision w.e.f. 10 Apr 2026",
+              "read": "pdftotext"
+            }
+          ],
+          "open_questions": [
+            "RESOLVED on re-check 2026-11-07: the page now states the earn rates (4 Reward Points per ₹100 international, 2 domestic, 1 on insurance, utility and telecom, max 100 points per utility/telecom transaction). The card is no longer held for lack of a rate.",
+            "Network: UNRESOLVED after a second sweep on 2026-11-07 (wave 3, W7). The Traverse page, its NRI and premium listing pages, the Traverse welcome, milestone and Meet & Assist T&Cs and the Priority Pass usage T&C name no network. The Traverse card art (listing tile and product-page art: navy card, chip, no contactless mark, no network mark on the front) shows none. The AU lounge programme T&C names \"Visa/RuPay\" for every eligible AU card and excludes Traverse from the domestic programme. Also silent: KFS v1.9 and MITC v2.23 (they name a network only for the CheQ Visa, and list Traverse (NRI) only for fees, the 0.99% markup and the Priority Pass charge), and the Cardmember Agreement of 16 May 2026 (clauses 3.14 to 3.16 allow a network change at renewal and use \"VISA/RuPay\" for every card). visa.co.in, mastercard.co.in, npci.org.in and rupay.co.in carry no AU card list. Needs a physical card or the AU 0101 app card view, or a written answer from AU (1800 1200 1500; creditcard.support@aubank.in; Traverse concierge 1800 210 0298). card_product.network left null.",
+            "Reward Point value in rupees: not stated for Traverse (see point_value_baseline_basis). Ask AU, or read the value from a Traverse redemption screen in AU Rewardz, before filling it. effective_base_return_percent left null.",
+            "Lounge: the page says 2 complimentary domestic and international accesses per quarter; the Priority Pass T&C gives Traverse 2 international per quarter and says Priority Pass use in India is chargeable, and the spend-based domestic programme excludes Traverse. Whether the 2 per quarter are domestic or international or either is unclear. Recorded as 2 per quarter, Priority Pass.",
+            "Exclusion MCC lists are not published for Traverse (categories only). Cash and fuel are also excluded from milestone spend.",
+            "Whether international spend is defined by merchant location or currency is not stated."
+          ],
+          "notes": [
+            "Reward Points are earned in multiples of ₹100 (CMA 23.22), modelled as floor; points expire after 2 years (CMA 23.8); 25,000-point per-cycle cap on all MCCs is from the CMA 23.5 table.",
+            "KFS lists ₹4,999 for both Zenith+ and Traverse in one row; joining fee set equal to annual per the KFS header \"Joining fee ... / Annual membership fees\".",
+            "Zero cash-withdrawal fee and 0.99% forex markup per KFS.",
+            "Fuel surcharge waiver up to ₹250 per statement month."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "15% of Total Amount Due, minimum ₹10, maximum ₹1,300",
+          "source": "Key Fact Statement v1.9, 2 Nov 2026, section 5",
+          "note": "Percentage fee cannot be expressed as fixed slabs, so late_payment_slabs is empty."
+        }
+      },
+      {
+        "key": "payment_return_charge",
+        "value": {
+          "rule": "2% of Total Amount Due or ₹500, whichever is higher, on return/failure of card payment (cheque, ECS/NACH, autopay)",
+          "source": "Key Fact Statement v1.9, 2 Nov 2026, section 10"
+        }
+      }
+    ]
+  }
+}

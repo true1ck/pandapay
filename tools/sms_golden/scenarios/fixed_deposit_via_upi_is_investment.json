@@ -1,0 +1,43 @@
+{
+  "id": "fixed_deposit_via_upi_is_investment",
+  "description": "A UPI payment to the bank that holds a fixed deposit made through an investing app is an investment, not spending.",
+  "knownInstruments": [
+    {
+      "kind": "bank_account",
+      "issuerSlug": "icici",
+      "maskDigits": "4321"
+    }
+  ],
+  "messages": [
+    {
+      "sender": "VM-ICICIT-S",
+      "body": "ICICI Bank Acct XX4321 debited for Rs 50000.00 on 03-Nov-26; Suryoday Small credited. UPI:432100445566. Call 18002662 for dispute. SMS BLOCK 4321 to 9215676766.",
+      "observedAt": "2026-11-03T10:00:00Z"
+    }
+  ],
+  "expect": {
+    "events": [
+      {
+        "type": "investment",
+        "legRoles": [
+          "debit_leg"
+        ]
+      }
+    ],
+    "instruments": [
+      {
+        "kind": "bank_account",
+        "issuerSlug": "icici",
+        "maskDigits": "4321"
+      }
+    ],
+    "totals": {
+      "from": "2026-10-31T18:30:00Z",
+      "to": "2026-11-30T18:30:00Z",
+      "spendMinor": 0,
+      "incomeMinor": 0,
+      "investmentMinor": 5000000,
+      "transactionCount": 1
+    }
+  }
+}

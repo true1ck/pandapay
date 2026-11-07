@@ -102,7 +102,11 @@ function createCorrectionsHandler({ withUserClient, hooks }) {
       }));
       return res.status(200).json(response);
     } catch (error) {
-      if (error.status) return res.status(error.status).json({ error: error.message });
+      if (error.status) {
+        // The code is a fixed word (never a value from the phone), so it is safe to log and is the only way to learn why a phone was refused.
+        console.warn('sms_v2 corrections refused', error.status, error.message);
+        return res.status(error.status).json({ error: error.message });
+      }
       console.error('sms_v2 corrections failed', error?.code || 'internal');
       return res.status(503).json({ error: 'corrections_unavailable' });
     }
@@ -236,7 +240,7 @@ async function listCases(client, query) {
       (query.status && !['open', 'decided'].includes(query.status)))
     throw Object.assign(new Error('correction_query_invalid'), { status: 400 });
   const rows = await client.query(
-    `SELECT case_id,source_key,correction_kind,stage,trace,corrected,template_hash,sender_brand,
+    `SELECT profile_id,case_id,source_key,correction_kind,stage,trace,corrected,template_hash,sender_brand,
      redacted_template,is_tester,shared_learning_eligible,status,decision,reason,created_at
      FROM sms_v2_correction_cases WHERE ($1::text IS NULL OR status=$1)
      ORDER BY is_tester DESC,created_at DESC,case_id LIMIT 500`, [query.status || null]);
@@ -246,7 +250,33 @@ async function listCases(client, query) {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(row);
   }
-  return { groups: [...groups].map(([key, cases]) => ({ key, cases })) };
+  // Account ids stay out of the answer; the admin gets how many different people reported, not who.
+  const summarise = (entries) => {
+    const mix = {};
+    for (const entry of entries) mix[entry.correction_kind] = (mix[entry.correction_kind] || 0) + 1;
+    return {
+      cases: entries.length,
+      distinctUsers: new Set(entries.map((entry) => entry.profile_id)).size,
+      testerCases: entries.filter((entry) => entry.is_tester).length,
+      openCases: entries.filter((entry) => entry.status === 'open').length,
+      mix,
+    };
+  };
+  const strip = ({ profile_id: _profile, ...rest }) => rest; // eslint-disable-line no-unused-vars
+  const shared = (entry) => entry.template_hash !== null || Object.keys(entry.corrected || {}).length > 0;
+  return {
+    groups: [...groups]
+      .map(([key, entries]) => ({ key, cases: entries.map(strip), summary: summarise(entries) }))
+      // The patterns many different people hit come first.
+      .sort((a, b) => b.summary.distinctUsers - a.summary.distinctUsers || b.summary.cases - a.summary.cases
+        || String(a.key).localeCompare(String(b.key))),
+    totals: {
+      ...summarise(rows.rows),
+      // Cases that carried a layout or a category/shop from someone who opted in, against those that carried nothing.
+      sharedCases: rows.rows.filter(shared).length,
+      privateCases: rows.rows.filter((entry) => !shared(entry)).length,
+    },
+  };
 }
 
 async function decideCase(client, caseId, body, actorId) {

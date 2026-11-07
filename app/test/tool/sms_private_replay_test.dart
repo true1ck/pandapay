@@ -6,6 +6,8 @@
 //   $SMS_BUNDLE (default bundle.json)   a built rule bundle
 //   $SMS_SAMPLE (default label-sample.drafted.jsonl)  labeled sample rows
 //   $SMS_CORPUS (default sms.jsonl)     the full corpus, one message per line
+// Optional: $SMS_OWNER_NAMES, comma-separated names of the account owner, as
+// the profile would hold them (transfers under these names are the owner's own).
 // Writes only inside SMS_PRIVATE_DIR, owner-readable only:
 //   $SMS_REPLAY_PREFIX-sample-phone.json and $SMS_REPLAY_PREFIX-corpus-phone.json
 //   (prefix default `replay`). The sample file is the optional fourth argument
@@ -37,8 +39,9 @@ String _sender(Map row) => row['iosFilter'] == null
 Future<Map<String, Object?>> replay(
   List<Map> rows,
   String encoded,
-  RuleBundle bundle,
-) async {
+  RuleBundle bundle, {
+  List<String> ownerNames = const [],
+}) async {
   final ordered = [...rows]
     ..sort(
       (a, b) =>
@@ -59,6 +62,7 @@ Future<Map<String, Object?>> replay(
       verify: (raw) async => raw == encoded ? bundle : null,
       loadShippedBundle: () async => encoded,
       accountIsCurrent: () => true,
+      ownerNames: () => ownerNames,
     );
     await runtime.capture([
       for (final raw in ordered)
@@ -184,6 +188,10 @@ void main() {
       final env = Platform.environment;
       final base = Directory(dir!).resolveSymbolicLinksSync();
       final prefix = env['SMS_REPLAY_PREFIX'] ?? 'replay';
+      final ownerNames = [
+        for (final name in (env['SMS_OWNER_NAMES'] ?? '').split(','))
+          if (name.trim().isNotEmpty) name.trim(),
+      ];
       final encoded = File(
         '$base/${env['SMS_BUNDLE'] ?? 'bundle.json'}',
       ).readAsStringSync();
@@ -199,7 +207,12 @@ void main() {
           for (final line in File(samplePath).readAsLinesSync())
             ((jsonDecode(line) as Map)['message'] as Map),
         ];
-        final report = await replay(rows, encoded, bundle);
+        final report = await replay(
+          rows,
+          encoded,
+          bundle,
+          ownerNames: ownerNames,
+        );
         writePrivate('$base/$prefix-sample-phone.json', report);
         printOnSuccess(
           'sample rows=${rows.length} transactions=${report['transactionCount']}',
@@ -211,7 +224,12 @@ void main() {
           for (final line in File(corpusPath).readAsLinesSync())
             jsonDecode(line) as Map,
         ];
-        final report = await replay(rows, encoded, bundle);
+        final report = await replay(
+          rows,
+          encoded,
+          bundle,
+          ownerNames: ownerNames,
+        );
         writePrivate('$base/$prefix-corpus-phone.json', report);
         printOnSuccess(
           'corpus rows=${rows.length} transactions=${report['transactionCount']}',
