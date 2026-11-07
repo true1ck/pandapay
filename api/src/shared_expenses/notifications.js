@@ -24,9 +24,20 @@ function enabled(options = {}) {
   return (options.enabled ?? config.sharedExpenseNotificationsEnabled) === true;
 }
 
+/**
+ * A name that is safe to show in a push: control characters stripped,
+ * whitespace collapsed, capped at 40 characters. Returns null when nothing is left.
+ */
+function cleanLabel(value) {
+  if (typeof value !== 'string') return null;
+  const clean = value.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40).trim();
+  return clean || null;
+}
+
 /** Who needs to hear about a committed command, and what to tell them. */
 function plan({ kind, payload, actorMemberName, contextName, members, actorId }) {
-  const who = actorMemberName || 'Someone';
+  const label = cleanLabel(actorMemberName);
+  const who = label || 'Someone';
   const where = contextName ? ` in ${contextName}` : '';
   const others = members.filter((m) => m.profileId && m.profileId !== actorId);
   switch (kind) {
@@ -45,11 +56,11 @@ function plan({ kind, payload, actorMemberName, contextName, members, actorId })
     case 'invitation.requested':
       return others
         .filter((m) => m.role === 'owner')
-        .map((m) => ({ profileId: m.profileId, title: 'Someone wants to join', body: `${who} asked to join${where || ' your split'}. Approve or decline.` }));
+        .map((m) => ({ profileId: m.profileId, title: `${who} wants to join`, body: `${who} asked to join${where || ' your split'}. Approve or decline.` }));
     case 'invitation.joined':
       return others
         .filter((m) => m.role === 'owner')
-        .map((m) => ({ profileId: m.profileId, title: 'Invite accepted', body: `${who} joined${where || ' your split'}.` }));
+        .map((m) => ({ profileId: m.profileId, title: label ? `${label} joined` : 'Invite accepted', body: `${who} joined${where || ' your split'}.` }));
     default:
       return [];
   }
@@ -57,7 +68,7 @@ function plan({ kind, payload, actorMemberName, contextName, members, actorId })
 
 async function loadAudience(client, contextId, actorId) {
   const members = await client.query(
-    `SELECT m.member_id, m.profile_id, m.role, m.display_name
+    `SELECT m.member_id, m.profile_id, m.role, shared_expenses._member_label(m.display_name, m.profile_id) AS display_name
        FROM shared_expenses.members m
       WHERE m.context_id = $1 AND m.state = 'active' AND m.profile_id IS NOT NULL
       LIMIT 200`,
@@ -154,4 +165,4 @@ async function notifyAfterCommit({ withUserClient, actorId, kind, payload, conte
   }
 }
 
-module.exports = { notifyAfterCommit, plan, enabled };
+module.exports = { notifyAfterCommit, plan, enabled, cleanLabel };

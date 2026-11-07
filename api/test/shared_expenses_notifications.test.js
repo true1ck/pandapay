@@ -137,3 +137,49 @@ test('the switch can still turn it off', async () => {
   assert.equal(sent, 0);
   assert.equal(calls, 0);
 });
+
+test('join request title carries the label; no label falls back to "Someone"', () => {
+  const requested = (actorMemberName) => plan({ ...base, actorMemberName, kind: 'invitation.requested', payload: {} });
+  assert.equal(requested('Ravi')[0].title, 'Ravi wants to join');
+  assert.match(requested('Ravi')[0].body, /^Ravi asked to join/);
+  for (const none of [null, undefined, '', '   ', '\n\t']) {
+    assert.equal(requested(none)[0].title, 'Someone wants to join');
+    assert.match(requested(none)[0].body, /^Someone asked to join/);
+  }
+});
+
+test('a 200-character label with newlines is cleaned and capped at 40 characters', () => {
+  const nasty = `  Ravi\r\n\u0007Kumar\u0000${'x'.repeat(200)}\n`;
+  const [out] = plan({ ...base, actorMemberName: nasty, kind: 'invitation.requested', payload: {} });
+  const label = out.title.replace(/ wants to join$/, '');
+  assert.ok(label.length <= 40, `label length ${label.length}`);
+  assert.doesNotMatch(out.title + out.body, /[\u0000-\u001f\u007f]/);
+  assert.match(label, /^Ravi Kumar/);
+  assert.doesNotMatch(out.title, /\s{2,}/);
+});
+
+test('invite accepted: "<label> joined" with a label, "Invite accepted" without', () => {
+  const joined = (actorMemberName) => plan({ ...base, actorMemberName, kind: 'invitation.joined', payload: {} });
+  assert.equal(joined('Ravi')[0].title, 'Ravi joined');
+  assert.equal(joined(null)[0].title, 'Invite accepted');
+  assert.deepEqual(joined('Ravi').map((o) => o.profileId), [owner]);
+});
+
+test('claimantProfileName and the phone suffix never reach the push text', async () => {
+  const seen = [];
+  const withUserClient = async (profileId, fn) => fn({
+    async query(sql, params) {
+      seen.push({ sql: sql.replace(/\s+/g, ' ').slice(0, 60), params });
+      if (/invitation_audience/.test(sql)) {
+        return { rows: [{ result: { contextId: ctx, contextName: 'Goa trip', claimantName: 'Mom', claimantProfileName: 'Secret Profile Name', claimantPhoneSuffix: '4821', owners: [owner] } }] };
+      }
+      if (/notification_preferences/.test(sql)) return { rowCount: 0, rows: [] };
+      if (/INSERT INTO notifications/.test(sql)) return { rowCount: 1, rows: [{ id: 'n1' }] };
+      return { rows: [] };
+    },
+  });
+  await notifyAfterCommit({ withUserClient, actorId: friend, kind: 'invitation.requested', payload: {}, contextId: ctx, operationId: 'op-k', tokenHash: 'a'.repeat(64), options: { enabled: true }, logger: quiet });
+  const insert = seen.find((s) => s.sql.startsWith('INSERT INTO notifi'));
+  assert.equal(insert.params[2], 'Mom wants to join');
+  assert.doesNotMatch(`${insert.params[2]} ${insert.params[3]}`, /Secret|4821/);
+});

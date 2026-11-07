@@ -7,6 +7,8 @@ const {parseSharedExpenseSourceReference}=require('./source_reference');
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 function uuid(value,field) {if(!v.matches(UUID,value))v.fail('INVALID_INPUT',field);return value;}
 function text(value,field,max) {if(typeof value!=='string'||!value.trim()||value.length>max||/[\u0000-\u001f\u007f]/.test(value))v.fail('INVALID_INPUT',field);}
+/** Same normalisation the database applies: strip control chars, collapse whitespace, trim, cap 40. */
+function cleanLabel(value) {return value.replace(/[\u0000-\u001f\u007f-\u009f]+/g,' ').replace(/\s+/g,' ').trim().slice(0,40).trim();}
 function day(value,field) {
   if(!v.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/,value)||value.startsWith('0000'))v.fail('INVALID_INPUT',field);
   const parsed=new Date(`${value}T00:00:00.000Z`);
@@ -59,6 +61,9 @@ function validateCommand(value) {
       v.record(p,['contextId','memberId','accept'],'payload');uuid(p.memberId,'payload.memberId');if(typeof p.accept!=='boolean')v.fail('INVALID_INPUT','payload.accept');break;
     case 'member.invite':
       v.record(p,['contextId','memberId','displayName'],'payload','INVALID_INPUT',['profileId']);uuid(p.memberId,'payload.memberId');text(p.displayName,'payload.displayName',120);if(Object.hasOwn(p,'profileId'))uuid(p.profileId,'payload.profileId');break;
+    case 'member.rename':
+      v.record(p,['contextId','memberId','displayName'],'payload');uuid(p.memberId,'payload.memberId');
+      if(typeof p.displayName!=='string'||p.displayName.length>400||!cleanLabel(p.displayName))v.fail('INVALID_INPUT','payload.displayName');break;
     case 'expense.propose':proposal(p);break;
     case 'expense.respond':
       v.record(p,['contextId','expenseId','revisionId','decision'],'payload');uuid(p.expenseId,'payload.expenseId');uuid(p.revisionId,'payload.revisionId');requireEnum(p.decision,['approve','reject'],'payload.decision');break;
@@ -75,7 +80,7 @@ function validateCommand(value) {
   return {command:input,requestHash:commandHash(input)};
 }
 const JSON_COMMANDS=Object.freeze({
-  'member.invite':'invite_member',
+  'member.invite':'invite_member','member.rename':'rename_member',
   'expense.propose':'submit_proposal','expense.respond':'respond_expense',
   'settlement.report':'report_settlement','settlement.respond':'respond_settlement',
 });

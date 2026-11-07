@@ -95,6 +95,21 @@
       },
       "canonical": "{\"kind\":\"settlement.report\",\"operationId\":\"33333333-3333-4333-8333-333333333333\",\"payload\":{\"amountMinor\":\"30000\",\"contextId\":\"22222222-2222-4222-8222-222222222222\",\"currency\":\"INR\",\"method\":\"upi\",\"paidOn\":\"2026-11-04\",\"payerMemberId\":\"11111111-1111-4111-8111-111111111111\",\"receiverMemberId\":\"44444444-4444-4444-8444-444444444444\",\"reference\":\"utr:synthetic-123\",\"settlementId\":\"33333333-3333-4333-8333-333333333333\"},\"schemaVersion\":1}",
       "sha256": "3740c69edfc07bd866dc90db9cf6cdde86c2b280efabd45d0f68d0ea9719cc16"
+    },
+    {
+      "id": "rename_member",
+      "input": {
+        "schemaVersion": 1,
+        "operationId": "33333333-3333-4333-8333-333333333333",
+        "kind": "member.rename",
+        "payload": {
+          "contextId": "22222222-2222-4222-8222-222222222222",
+          "memberId": "44444444-4444-4444-8444-444444444444",
+          "displayName": "Rahul K"
+        }
+      },
+      "canonical": "{\"kind\":\"member.rename\",\"operationId\":\"33333333-3333-4333-8333-333333333333\",\"payload\":{\"contextId\":\"22222222-2222-4222-8222-222222222222\",\"displayName\":\"Rahul K\",\"memberId\":\"44444444-4444-4444-8444-444444444444\"},\"schemaVersion\":1}",
+      "sha256": "1301b6b120d3f0b6596b8a74f07c71ca457460744a39932dce8f3f0fc6fcc687"
     }
   ]
 }
