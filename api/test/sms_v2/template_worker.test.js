@@ -6,6 +6,7 @@ const {
   fillSynthetic,
   buildPrompt,
   validateDraft,
+  stampDraft,
   runTemplateWorkerOnce,
   createGeminiTemplateProvider,
 } = require("../../src/sms_v2/template_worker");
@@ -466,4 +467,23 @@ test("the worker hands the report counts, past mistakes and sibling layouts to t
   assert.deepEqual(prompt.userReports, { not_financial: 2 });
   assert.equal(prompt.previousMistakes[0].reason, "overmatches");
   assert.equal(siblings, 1);
+});
+
+test("the worker stamps the fields it owns, so a model slip there never fails a draft", () => {
+  const slipped = {
+    ...rule(),
+    id: "AI-wrong",
+    version: 7,
+    status: "active",
+    createdBy: "admin:someone",
+    senders: ["OTHERBK"],
+    match: { ...rule().match, templateHash: "f".repeat(64) },
+  };
+  assert.notDeepEqual(validateDraft(slipped, template, config.model), []);
+  assert.deepEqual(validateDraft(stampDraft(slipped, template, config.model), template, config.model), []);
+  // The model's own parts are kept and still validated.
+  const stamped = stampDraft({ ...rule(), match: { ...rule().match, pattern: "(" } }, template, config.model);
+  assert.equal(stamped.match.pattern, "(");
+  assert.notDeepEqual(validateDraft(stamped, template, config.model), []);
+  assert.equal(stampDraft(null, template, config.model), null);
 });

@@ -37,7 +37,10 @@ test('a layout that gives orders is carried as a quoted value and never joins th
     assert.equal(asked.expectedRuleId, benignPrompt.expectedRuleId);
     assert.equal(asked.templateHash, template.template_hash);
     assert.equal(asked.senderBrand, template.sender_brand);
-    assert.equal(prompt.split(JSON.stringify(body)).length, 2, 'the layout text appears once, as the redactedBody value');
+    // The layout text is only ever a quoted value: as redactedBody, and as the
+    // synthetic sample (the same text, since it has no placeholders to fill).
+    assert.equal(asked.syntheticSample, body);
+    assert.equal(prompt.split(JSON.stringify(body)).length, 3, 'the layout text appears only as the redactedBody and syntheticSample values');
   }
 });
 
