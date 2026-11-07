@@ -596,6 +596,9 @@ class SharedExpensesRuntime extends ChangeNotifier {
 
   final _renameOverlay = <String, String>{};
 
+  /// Friend splits whose counterpart was just renamed here: contextId -> name.
+  final _directTitles = <String, String>{};
+
   /// Renames still on their way to the server, newest typed name winning.
   Map<String, String> _pendingRenames(String contextId) {
     final out = <String, String>{};
@@ -629,6 +632,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     required String contextId,
     required String memberId,
     required String name,
+    bool directCounterpart = false,
   }) async {
     _current();
     final clean = sharedCleanMemberName(name);
@@ -650,6 +654,8 @@ class SharedExpensesRuntime extends ChangeNotifier {
     await store.enqueue(command);
     _current();
     _renameOverlay['$contextId:$memberId'] = clean;
+    // In a friend split the other person's name IS the split's title.
+    if (directCounterpart) _directTitles[contextId] = clean;
     syncLag = true;
     _notify();
     await refresh();
@@ -657,6 +663,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     if (store.operation(command.operationId)?.state ==
         SharedCommandState.committed) {
       _renameOverlay.remove('$contextId:$memberId');
+      _directTitles.remove(contextId);
     }
     return command.operationId;
   }
@@ -1009,7 +1016,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     return SharedGroupPresentation(
       id: id,
       direct: details['kind'] == 'direct',
-      title: details['name'] as String,
+      title: _directTitles[id] ?? details['name'] as String,
       expenses: SharedPage(
         items: expenseRows,
         hasMore: expensePage['hasMore'] == true,
@@ -1075,11 +1082,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
       SharedHubTab tab,
     ) {
       return SharedPage(
-        items: [
-          for (final raw in data['items'] as List)
-            if (!store.isContextRevoked((raw as Map)['contextId'] as String))
-              _contextRow(Map<String, Object?>.from(raw)),
-        ],
+        items: contextRows(data['items'] as List),
         hasMore: data['hasMore'] == true,
         incomplete: syncLag,
         hasPrevious: after[tab] != null,
@@ -1099,7 +1102,9 @@ class SharedExpensesRuntime extends ChangeNotifier {
             SharedActivityRow(
               id: (raw as Map)['contextId'] as String,
               description: _activityCopy(raw['kind']),
-              contextLabel: raw['contextName'] as String?,
+              contextLabel:
+                  _directTitles[raw['contextId']] ??
+                  raw['contextName'] as String?,
               occurredAtLabel: raw['createdAt'] as String,
             ),
         ],
@@ -1114,7 +1119,44 @@ class SharedExpensesRuntime extends ChangeNotifier {
     );
   }
 
-  static SharedContextRow _contextRow(Map<String, Object?> row) {
+  /// Rows for a list of context records, with a just-typed friend name shown
+  /// at once and a number ending under rows that would look identical.
+  @visibleForTesting
+  List<SharedContextRow> contextRows(List<Object?> items) {
+    final rows = [
+      for (final raw in items)
+        if (!store.isContextRevoked((raw as Map)['contextId'] as String))
+          _contextRow(Map<String, Object?>.from(raw)),
+    ];
+    final hints = sharedSameNameHints([
+      for (final raw in items)
+        if (!store.isContextRevoked((raw as Map)['contextId'] as String))
+          (
+            id: raw['contextId'] as String,
+            label: _directTitles[raw['contextId']] ?? raw['name'] as String,
+            suffix: _suffixOf(
+              raw['counterpartPhoneSuffix'] ?? raw['phoneSuffix'],
+            ),
+          ),
+    ]);
+    return [
+      for (final r in rows)
+        hints[r.id] == null || r.subtitle != null
+            ? r
+            : SharedContextRow(
+                id: r.id,
+                title: r.title,
+                balance: r.balance,
+                state: r.state,
+                subtitle: hints[r.id],
+              ),
+    ];
+  }
+
+  static String? _suffixOf(Object? v) =>
+      v is String && RegExp(r'^[0-9]{4}$').hasMatch(v) ? v : null;
+
+  SharedContextRow _contextRow(Map<String, Object?> row) {
     final invited = row['membershipState'] == 'invited';
     final known = row['owedMinor'] is String && row['owingMinor'] is String;
     final balance = known
@@ -1127,7 +1169,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
           );
     return SharedContextRow(
       id: row['contextId'] as String,
-      title: row['name'] as String,
+      title: _directTitles[row['contextId']] ?? row['name'] as String,
       balance: balance,
       state: invited
           ? SharedContextState.pendingInvite

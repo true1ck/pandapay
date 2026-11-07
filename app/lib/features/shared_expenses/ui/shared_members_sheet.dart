@@ -217,6 +217,7 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
         contextId: widget.contextId,
         memberId: member.id,
         name: name,
+        directCounterpart: roster.direct && !self,
       );
       if (!mounted) return;
       setState(() {

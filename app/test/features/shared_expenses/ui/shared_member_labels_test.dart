@@ -34,7 +34,7 @@ class Runtime extends SharedExpensesRuntime {
     : super(isCurrent: () => true);
   List<SharedEditorMember> people = const [];
   List<SharedJoinRequest> requests = const [];
-  bool owner = true;
+  bool owner = true, direct = false;
   @override
   Future<List<SharedInboxInvite>> inviteInbox() async => const [];
   @override
@@ -52,7 +52,7 @@ class Runtime extends SharedExpensesRuntime {
     return SharedRoster(
       name: 'Trip Group',
       ownMemberId: me,
-      direct: false,
+      direct: direct,
       canInvite: owner && proposalsEnabled,
       members: [
         for (final m in people)
@@ -148,11 +148,7 @@ void main() {
       throwsFormatException,
     );
     await expectLater(
-      runtime.renameMember(
-        contextId: group,
-        memberId: friend,
-        name: 'a' * 41,
-      ),
+      runtime.renameMember(contextId: group, memberId: friend, name: 'a' * 41),
       throwsFormatException,
     );
     expect(runtime.store.readPendingOperations().items, isEmpty);
@@ -321,10 +317,7 @@ void main() {
       }),
     );
     expect(find.text('Rahul wants to join "Goa"'), findsOneWidget);
-    expect(
-      find.text('Signed in as Rahul Kumar · ${dot}4821'),
-      findsOneWidget,
-    );
+    expect(find.text('Signed in as Rahul Kumar · ${dot}4821'), findsOneWidget);
   });
 
   testWidgets('join card without profile data falls back gracefully', (
@@ -344,5 +337,71 @@ void main() {
       join({'memberName': 'Asha', 'claimantProfileName': 'Asha'}),
     );
     expect(find.byKey(const Key('join-signed-in-as')), findsNothing);
+  });
+
+  Map<String, Object?> ctxRow(String id, String name, {String? suffix}) => {
+    'contextId': id,
+    'name': name,
+    'owedMinor': '0',
+    'owingMinor': '0',
+    'expenseCount': '0',
+    'counterpartPhoneSuffix': ?suffix,
+  };
+
+  test('renaming a friend retitles the friend split at once', () async {
+    final rows = [ctxRow(group, 'Rahul'), ctxRow(other, 'Asha')];
+    expect(runtime.contextRows(rows).map((r) => r.title), ['Rahul', 'Asha']);
+    await runtime.renameMember(
+      contextId: group,
+      memberId: friend,
+      name: 'Rahul Kumar',
+      directCounterpart: true,
+    );
+    expect(runtime.contextRows(rows).map((r) => r.title), [
+      'Rahul Kumar',
+      'Asha',
+    ]);
+  });
+
+  test('renaming yourself does not retitle the friend split', () async {
+    await runtime.renameMember(contextId: group, memberId: me, name: 'Sujay K');
+    expect(runtime.contextRows([ctxRow(group, 'Rahul')]).single.title, 'Rahul');
+  });
+
+  test('friend rows with the same title get a number ending', () {
+    final rows = runtime.contextRows([
+      ctxRow(group, 'Rahul', suffix: '4821'),
+      ctxRow(other, 'Rahul', suffix: '1190'),
+      ctxRow(friend, 'Asha', suffix: '7777'),
+    ]);
+    expect(rows.map((r) => r.subtitle), ['${dot}4821', '${dot}1190', null]);
+    final unknown = runtime.contextRows([
+      ctxRow(group, 'Rahul'),
+      ctxRow(other, 'Rahul'),
+    ]);
+    expect(unknown.map((r) => r.subtitle), [null, null]);
+  });
+
+  testWidgets('editing a friend in a direct split retitles the friend list', (
+    tester,
+  ) async {
+    runtime.direct = true;
+    runtime.people = [
+      const SharedEditorMember(me, 'You', profileId: account, role: 'owner'),
+      const SharedEditorMember(friend, 'Rahul', profileId: friend),
+    ];
+    await openMembers(tester);
+    await tester.tap(find.byKey(Key('edit-name-$friend')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('rename-member-field')),
+      'Rahul Kumar',
+    );
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(
+      runtime.contextRows([ctxRow(group, 'Rahul')]).single.title,
+      'Rahul Kumar',
+    );
   });
 }
