@@ -51,14 +51,18 @@ function createTemplateStore({ withUserClient }) {
         return {
           items: rows.map((row) => ({
             templateHash: row.template_hash,
+            // The sync contract allows only pending, ready and rejected; any other
+            // value makes the phone refuse the whole sync response.
             status:
               row.ai_status === "ready"
                 ? "ready"
                 : row.ai_status === "failed"
-                  ? "failed"
-                  : "queued",
-            ruleId: row.ai_draft?.id || null,
-            ruleVersion: row.ai_draft?.version || null,
+                  ? "rejected"
+                  : "pending",
+            // The contract wants a string and an integer here, so leave them out
+            // (never null) when there is no draft.
+            ...(row.ai_draft?.id ? { ruleId: row.ai_draft.id } : {}),
+            ...(row.ai_draft?.version ? { ruleVersion: row.ai_draft.version } : {}),
             ...(row.ai_status === "ready" && row.ai_draft
               ? { rule: row.ai_draft }
               : {}),

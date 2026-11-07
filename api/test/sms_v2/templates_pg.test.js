@@ -201,7 +201,13 @@ test("rejecting a draft needs a reason, withdraws the private rule and teaches t
   const state = async () => (await pool.query("SELECT ai_status,ai_draft,failure_code,admin_decision,admin_reason,admin_note,decided_by,result_revision FROM sms_v2_unknown_templates WHERE template_hash=$1", [hash])).rows[0];
   const before = await state();
   assert.equal(before.ai_status, "ready");
-  const sync = async () => (await phone.get("/sms/v2/sync")).body.aiResults.find((entry) => entry.templateHash === hash);
+  // Every sync body must satisfy the contract the phone validates: one status
+  // outside pending, ready and rejected makes the phone drop the whole response.
+  const sync = async () => {
+    const body = (await phone.get("/sms/v2/sync")).body;
+    assert.equal(validateResponse("sync", body).ok, true, JSON.stringify(validateResponse("sync", body).errors));
+    return body.aiResults.find((entry) => entry.templateHash === hash);
+  };
   assert.equal((await sync()).status, "ready");
 
   const path = `/admin/sms/v2/templates/${hash}/reject`;
@@ -225,7 +231,7 @@ test("rejecting a draft needs a reason, withdraws the private rule and teaches t
   assert.equal(after.failure_code, "admin_rejected");
   assert.deepEqual([after.admin_decision, after.admin_reason, after.admin_note, after.decided_by], ["rejected", "overmatches", "It also read card bills", rig.admin]);
   assert.ok(BigInt(after.result_revision) > BigInt(before.result_revision), "the revision moves so phones fetch the change");
-  assert.equal((await sync()).status, "failed", "the sender's next sync replaces the private rule with 'failed'");
+  assert.equal((await sync()).status, "rejected", "the sender's next sync replaces the private rule with 'rejected'");
   assert.equal((await admin.post(path, { reason: "overmatches" })).status, 409, "already rejected");
   const audited = (await pool.query("SELECT action,reason FROM admin_audit_log WHERE admin_id=$1 AND action='sms_v2_template_reject'", [rig.admin])).rows;
   assert.deepEqual(audited, [{ action: "sms_v2_template_reject", reason: "It also read card bills" }]);
@@ -308,7 +314,7 @@ test("a failed or rejected layout can be requeued, and a blocked one never reach
   const after = await row();
   assert.deepEqual([after.ai_status, after.failure_code, after.admin_decision, after.admin_reason], ["queued", null, null, null]);
   assert.ok(BigInt(after.result_revision) > BigInt(ready.result_revision));
-  assert.equal((await sync()).status, "queued", "the phone sees it queued again");
+  assert.equal((await sync()).status, "pending", "the phone sees it pending again");
   const claimed = await worker.claim();
   assert.equal(claimed.template_hash, hash, "the worker takes it again");
   await worker.finish(claimed, { model: "test-model", code: "worker_failed" });
@@ -321,7 +327,7 @@ test("a failed or rejected layout can be requeued, and a blocked one never reach
   assert.equal(blocked.status, 200, JSON.stringify(blocked.body));
   const gone = await row();
   assert.deepEqual([gone.ai_status, gone.ai_draft, gone.lease_id, gone.admin_reason], ["blocked", null, null, "Looks like marketing"]);
-  assert.equal((await sync()).status, "queued", "blocked is shown to phones as queued");
+  assert.equal((await sync()).status, "pending", "blocked is shown to phones as pending");
   assert.equal(await worker.claim(), null);
   assert.equal((await runTemplateWorkerOnce({ store: worker, provider, config })).status, "idle");
   assert.equal(calls, callsBefore, "the provider is never called for a blocked layout");
