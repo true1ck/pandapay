@@ -184,3 +184,54 @@ cd api && node --test test/shared_expenses_phone.test.js test/shared_expenses_no
 PANDAPAY_SHARED_EXPENSES_TEST_URL=postgres://postgres@127.0.0.1:55440/shared_expenses_test node --test db/tests/shared_expenses_postgres.test.js
 PANDAPAY_SHARED_EXPENSES_NAMES_RACE_URL=postgres://postgres@127.0.0.1:55440/shared_expenses_names_race_test node --test db/tests/shared_expenses_names_race_postgres.test.js
 ```
+
+---
+
+# Join identity: security review fixes (supersede anything above that disagrees)
+
+Applied in place to `20261116100000_shared_expense_join_identity.sql` (unshipped). Local undo: see "Local rollback" below.
+
+- **Consent and replay.** `sharePhone` is part of the claim request hash, so a changed choice under the same `operationId` is `operation_conflict`.
+  The SQL claim marks only a first (non-replayed) call with `fresh:true` (never stored in the ledger; the API strips it). The API attaches a number
+  only when `fresh` is true, and `attach_claimant_phone` additionally requires that the request's `last_claim_op` is the same operation, that consent
+  is still `not_asked` and nothing was captured yet. A replay, or a claim that a newer claim superseded, can never re-share.
+- **"Ask without sharing" keeps no digits.** For `declined` and `none` the flat `verifiedPhoneSuffix` / `claimantPhoneSuffix` keys and
+  `claimantPhone.last4` are `null`. `shared` keeps the last four (set by the attach), `not_asked` (old app) and phone-bound invites behave as before.
+- **Friends list is private to its creator.** `friend_name_taken` (and `existingContextId`) is only produced when the caller is the creator acting on their own
+  split (create, invite into a direct split, rename of the counterpart). The counterpart renaming their own row is never checked against the creator's list.
+  A split only counts while its friend is still there: active, invited with a live invitation or none yet, or brand new (less than a day old with no counterpart).
+  A removed/declined friend or an unanswered, expired invitation frees the name. The direct-split seat count ignores declined people.
+- **Reveal budget.** Tap reveals and look-alike full numbers share 5 per hour and 30 per day per owner; look-alike disclosures also need the owner's verified phone
+  and are charged once per request per hour. When the budget is spent the item stays `lookalike:true` but has no `fullNumber`; the list still succeeds.
+  The API decrypts inside the reveal transaction and rolls it back (audit row included) when the ciphertext cannot be read, so a failed reveal costs nothing.
+  `owner_phone_required` is its own 409 body.
+- **check-phone** needs the owner's verified phone (`owner_phone_required`), is audited (`phone_reveals.via='check'`) and capped at 20 per owner per day (429 `check_rate_limited`), on top of 3 per request.
+- **Caps before revival.** An expired group-link request is only revived when the hourly claim rate, the 20-pending cap and the member limit still allow it.
+- **Pending only.** `numberStatus`, `lookalike` and `duplicateOf` are computed only while a request is pending; afterwards `unknown` / `false` / `[]`.
+- **Names.** `label_key` now also folds Cyrillic ѕ ԁ ԛ һ ӏ ԝ ѵ and Greek ι ε κ υ τ β χ η ω γ μ, strips combining marks in every block (U+0300–036F, 1AB0–1AFF, 1DC0–1DFF, 20D0–20FF, FE20–FE2F) then recomposes,
+  and drops symbols, emoji, punctuation and invisible characters (so emoji-only names are `invalid_member_name`). Reserved (`member_name_reserved`): exactly `you`, `me`, `myself`; anything starting
+  with `owner`, `admin`, `support`, `someone`, `unknown`, `deleted`, `formermember`; anything containing `pandapay`. ("me" and "you" are exact-only on purpose: otherwise Meera, Mehul and Youssef would be refused.)
+  Vectors (`labelKey`, `cleanLabel`, `reserved`) are in `contracts/shared_expenses/v1/label_key_vectors.json` and run against both SQL and Node.
+- **Cleaning everywhere.** `_member_label`, preview `ownerName`/`contextName`, the context title, `maskName` and list names pass through the cleaner (bidi, zero-width, controls). Friend names are capped at 40 code points; group names keep their 120 limit
+  (a 40 cap on group names would break existing ones) but lose invisible/bidi/control characters.
+- **Purge.** The lazy purge is scoped to the rows being touched (the reader's own splits, or one request), uses `FOR UPDATE SKIP LOCKED` with a batch limit, and never fails a read: a read-only transaction or a lock problem just skips it.
+  The hourly `purge_expired_claimant_phones()` does everything due (1000 per run) and is scheduled with pg_cron when that extension exists at migration time; without pg_cron, schedule it from the host.
+  The hourly job does not know about the API flag: turning the feature off does not delete ciphertext already stored; it just stops being shown or revealed, and it is purged at resolution/expiry like any other.
+- **Account deletion.** Indexed by `claimed_profile_id`. The `BEFORE DELETE` trigger on `public.profiles` also nulls `phone_reveals.owner_profile_id` and can never abort the deletion (any scrub error becomes a WARNING).
+  `pandapay.execute_account_deletion` (shipped, not edited) ends in `delete from profiles`, so the same trigger covers it; data reset paths that delete the profile row are covered the same way.
+- **Group-link requests notify the owner.** `invitation_audience(token)` also accepts the group-link token and resolves it to the caller's own request, so the owner gets one "<name> wants to join" row (deduped on replay, no phone data).
+- **Config.** `docker-compose.prod.yml` and `.env.prod.example` carry `SHARED_EXPENSE_PHONE_SHARING_ENABLED` (default false) and `SHARED_EXPENSE_PHONE_ENC_KEYS` (no default); the API logs a key-free warning at startup when the flag is on and the ring is unusable.
+
+## Local rollback (development databases only)
+
+`docs/implementation/shared-expenses/rollback_join_identity_local.sql` removes everything this migration created (including the trigger on `public.profiles`, the table, the columns and every stored ciphertext) and restores the earlier definition of every function the migration replaced.
+```
+psql "$LOCAL_DB_URL" -v ON_ERROR_STOP=1 -1 -f docs/implementation/shared-expenses/rollback_join_identity_local.sql
+psql "$LOCAL_DB_URL" -v ON_ERROR_STOP=1 -1 -f db/supabase/migrations/20261116100000_shared_expense_join_identity.sql
+```
+`db/tests/shared_expenses_rollback_postgres.test.js` (opt-in, `PANDAPAY_SHARED_EXPENSES_ROLLBACK_URL=postgres://.../shared_expenses_rollback_test`) proves the schema (functions with owners and grants, columns, indexes, triggers, constraints) is identical after rollback, that re-applying gives the same schema as the first application, and that it rolls back again.
+
+## Corrected JSON
+
+`claimantPhone` keeps its keys; `last4` is `null` for `declined` and `none`, and `numberStatus` is `unknown` (`lookalike:false`, `duplicateOf:[]`) once the request is resolved.
+Claim reply (flag on): `{contextId, memberId, invitationId, status, phoneShare}` (the internal `fresh` marker never leaves the API). Reveal error bodies: `phone_not_available`, `owner_phone_required` (409), `reveal_rate_limited` (429).

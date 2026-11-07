@@ -86,13 +86,14 @@ const TOKEN = 'A'.repeat(43);
 function harness({ enabled, ring, contacts = { phone: { verified: true, value: NUMBER } }, handlers = {} }) {
   const routes = new Map(), queries = [];
   const app = { get: (p, ...h) => routes.set('GET ' + p, h[h.length - 1]), post: (p, ...h) => routes.set('POST ' + p, h[h.length - 1]) };
-  const withUserClient = async (_user, fn) => fn({
+  let rolledBack = 0;
+  const withUserClient = async (_user, fn) => { try { return await fn({
     async query(sql, params = []) {
       queries.push({ sql: sql.replace(/\s+/g, ' ').trim(), params });
       for (const [re, fnr] of Object.entries(handlers)) if (new RegExp(re).test(sql)) return { rows: [{ result: fnr(params) }] };
       return { rows: [{ result: {} }] };
     },
-  });
+  }); } catch (e) { rolledBack += 1; throw e; } };
   const errors = [];
   registerInvitationRoutes(app, { protect: (fn) => [fn], withUserClient, sendError: (res, e) => { errors.push(e); res.status(500).json({ error: e.message }); }, secret: SECRET, phone: { enabled: () => enabled, ring: () => ring } });
   async function call(method, path, { body = {}, query = {} } = {}) {
@@ -101,14 +102,15 @@ function harness({ enabled, ring, contacts = { phone: { verified: true, value: N
     try { await routes.get(method + ' ' + path)({ body, query, params: {}, userId: USER, verifiedSession: { verifiedContacts: contacts } }, res); } catch (e) { errors.push(e); out.code = 400; }
     return out;
   }
-  return { call, queries, errors };
+  return { call, queries, errors, rolledBack: () => rolledBack };
 }
 
 const claimBody = (extra = {}) => ({ token: TOKEN, operationId: '44444444-4444-4444-8444-444444444444', ...extra });
 const claimResult = { contextId: INV, memberId: OTHER, invitationId: '55555555-5555-4555-8555-555555555555', status: 'awaiting_owner' };
+const fresh = { ...claimResult, fresh: true };
 
 test('feature off: claim stores nothing, answers as before, and the new endpoints do not exist', async () => {
-  const h = harness({ enabled: false, ring: ringOf('k1', { k1: key() }), handlers: { claim_invitation: () => ({ ...claimResult }) } });
+  const h = harness({ enabled: false, ring: ringOf('k1', { k1: key() }), handlers: { claim_invitation: () => ({ ...fresh }) } });
   const r = await h.call('POST', '/shared-expenses/invitations/claim', { body: claimBody({ sharePhone: true }) });
   assert.deepEqual(r.body, { contextId: INV, memberId: OTHER, status: 'awaiting_owner' }, 'no invitationId, no phoneShare');
   assert.equal(h.queries.length, 1, 'no attach call');
@@ -128,7 +130,7 @@ test('feature on: consent is sent, the number is encrypted before it leaves Node
   for (const m of ['log', 'info', 'warn', 'error', 'debug']) { originals[m] = console[m]; console[m] = (...a) => spy.push(a.join(' ')); }
   let h, r;
   try {
-    h = harness({ enabled: true, ring, handlers: { claim_invitation: () => ({ ...claimResult }), attach_claimant_phone: () => ({ attached: true }) } });
+    h = harness({ enabled: true, ring, handlers: { claim_invitation: () => ({ ...fresh }), attach_claimant_phone: () => ({ attached: true }) } });
     r = await h.call('POST', '/shared-expenses/invitations/claim', { body: claimBody({ sharePhone: true }) });
   } finally { Object.assign(console, originals); }
   assert.deepEqual(r.body, { ...claimResult, phoneShare: 'shared' });
@@ -138,16 +140,19 @@ test('feature on: consent is sent, the number is encrypted before it leaves Node
   const everything = JSON.stringify(h.queries.map((q) => q.params.map((p) => (Buffer.isBuffer(p) ? p.toString('latin1') : p))));
   assert.ok(!everything.includes('7234512345'), 'plaintext number never sent to the database');
   assert.ok(!spy.join('\n').includes('7234512345'), 'and never logged');
-  assert.equal(attach.params[2], '+91');
-  assert.equal(attach.params[3], '+91 72••• •2345');
-  assert.equal(decryptPhone(ring, claimResult.invitationId, attach.params[4], attach.params[5]), NUMBER);
-  assert.match(attach.params[1], /^[a-f0-9]{64}$/);
+  assert.equal(attach.params[1], claimBody().operationId, 'bound to the claim that asked for it');
+  assert.equal(attach.params[3], '+91');
+  assert.equal(attach.params[4], '+91 72••• •2345');
+  assert.equal(decryptPhone(ring, claimResult.invitationId, attach.params[5], attach.params[6]), NUMBER);
+  assert.match(attach.params[2], /^[a-f0-9]{64}$/);
+  assert.equal(attach.params[7], '2345');
+  assert.equal('fresh' in r.body, false, 'the marker is internal');
 });
 
 test('feature on: decline, email-only and old-app claims record the right consent and store no number', async () => {
   const ring = ringOf('k1', { k1: key() });
   const run = async (contacts, body) => {
-    const h = harness({ enabled: true, ring, contacts, handlers: { claim_invitation: () => ({ ...claimResult }) } });
+    const h = harness({ enabled: true, ring, contacts, handlers: { claim_invitation: () => ({ ...fresh }) } });
     const r = await h.call('POST', '/shared-expenses/invitations/claim', { body });
     return { r, h };
   };
@@ -164,7 +169,7 @@ test('feature on: decline, email-only and old-app claims record the right consen
 });
 
 test('missing key ring: the claim works and no number is stored', async () => {
-  const h = harness({ enabled: true, ring: null, handlers: { claim_invitation: () => ({ ...claimResult }) } });
+  const h = harness({ enabled: true, ring: null, handlers: { claim_invitation: () => ({ ...fresh }) } });
   const r = await h.call('POST', '/shared-expenses/invitations/claim', { body: claimBody({ sharePhone: true }) });
   assert.equal(r.body.phoneShare, 'not_asked');
   assert.ok(!h.queries.some((q) => /attach_claimant_phone/.test(q.sql)));
@@ -172,7 +177,7 @@ test('missing key ring: the claim works and no number is stored', async () => {
 
 test('an attach failure keeps the claim and stores nothing', async () => {
   const ring = ringOf('k1', { k1: key() });
-  const h = harness({ enabled: true, ring, handlers: { claim_invitation: () => ({ ...claimResult }), attach_claimant_phone: () => ({ attached: false }) } });
+  const h = harness({ enabled: true, ring, handlers: { claim_invitation: () => ({ ...fresh }), attach_claimant_phone: () => ({ attached: false }) } });
   assert.equal((await h.call('POST', '/shared-expenses/invitations/claim', { body: claimBody({ sharePhone: true }) })).body.phoneShare, 'not_asked');
 });
 
@@ -248,4 +253,86 @@ test('push audience and notifier never gain a phone field', () => {
   const fs = require('node:fs');
   const src = fs.readFileSync(require.resolve('../src/shared_expenses/notifications.js'), 'utf8');
   assert.ok(!/claimant_?phone|phone_?share|e164|fullNumber/i.test(src));
+});
+
+test('consent is part of the request hash; a replayed claim (no fresh marker) never attaches', async () => {
+  const ring = ringOf('k1', { k1: key() });
+  const run = async (body, result) => {
+    const h = harness({ enabled: true, ring, handlers: { claim_invitation: () => result, attach_claimant_phone: () => ({ attached: true }) } });
+    await h.call('POST', '/shared-expenses/invitations/claim', { body });
+    return h;
+  };
+  const yes = await run(claimBody({ sharePhone: true }), { ...fresh });
+  const no = await run(claimBody({ sharePhone: false }), { ...fresh });
+  const none = await run(claimBody(), { ...fresh });
+  const hashes = [yes, no, none].map((x) => x.queries[0].params[4]);
+  assert.equal(new Set(hashes).size, 3, 'a changed choice is a different request');
+  const replay = await run(claimBody({ sharePhone: true }), { ...claimResult });
+  assert.ok(!replay.queries.some((q) => /attach_claimant_phone/.test(q.sql)), 'stored replies carry no fresh marker');
+  const off = harness({ enabled: false, ring, handlers: { claim_invitation: () => ({ ...fresh }) } });
+  await off.call('POST', '/shared-expenses/invitations/claim', { body: claimBody({ sharePhone: true }) });
+  const off2 = harness({ enabled: false, ring, handlers: { claim_invitation: () => ({ ...fresh }) } });
+  await off2.call('POST', '/shared-expenses/invitations/claim', { body: claimBody() });
+  assert.equal(off.queries[0].params[4], off2.queries[0].params[4], 'with the feature off the hash ignores sharePhone, exactly as before');
+});
+
+test('reveal: an undecryptable ciphertext rolls the whole transaction back (no budget spent) and uses its own code for a missing owner phone', async () => {
+  const ring = ringOf('k1', { k1: key() });
+  const body = { invitationId: claimResult.invitationId.toUpperCase(), operationId: claimBody().operationId };
+  const h = harness({ enabled: true, ring, handlers: { reveal_claimant_phone: () => ({ invitationId: claimResult.invitationId, enc: Buffer.alloc(40).toString('hex'), keyId: 'k1' }) } });
+  const r = await h.call('POST', '/shared-expenses/invitations/reveal-phone', { body });
+  assert.equal(r.code, 409);assert.deepEqual(r.body, { error: 'phone_not_available' });
+  assert.equal(h.rolledBack(), 1);
+  assert.equal(h.queries[0].params[0], claimResult.invitationId, 'ids are lower-cased before they reach the database');
+  const sealed = encryptPhone(ring, claimResult.invitationId, NUMBER);
+  const ok = harness({ enabled: true, ring, handlers: { reveal_claimant_phone: () => ({ invitationId: claimResult.invitationId.toUpperCase(), enc: sealed.enc.toString('hex'), keyId: 'k1' }) } });
+  const good = await ok.call('POST', '/shared-expenses/invitations/reveal-phone', { body });
+  assert.equal(good.body.invitationId, claimResult.invitationId);assert.equal(good.body.e164, NUMBER);assert.equal(ok.rolledBack(), 0);
+  const need = harness({ enabled: true, ring, handlers: { reveal_claimant_phone: () => ({ error: 'owner_phone_required' }) } });
+  const n = await need.call('POST', '/shared-expenses/invitations/reveal-phone', { body });
+  assert.equal(n.code, 409);assert.deepEqual(n.body, { error: 'owner_phone_required' });
+  const chk = harness({ enabled: true, ring, handlers: { check_claimant_phone: () => ({ error: 'check_rate_limited' }) } });
+  assert.equal((await chk.call('POST', '/shared-expenses/invitations/check-phone', { body: { invitationId: claimResult.invitationId, phoneNumber: NUMBER } })).code, 429);
+});
+
+test('names that reach other people are cleaned before they are masked', () => {
+  const { maskName } = require('../src/shared_expenses/invitations');
+  assert.equal(maskName('Ra\u202ehul\u200b  Kumar Sharma'), 'Rahul S.');
+  assert.equal(maskName('\u202e\u200b'), null);
+  assert.equal(maskName('x'.repeat(100)), 'x'.repeat(40));
+});
+
+test('reserved-name vectors are shared with SQL', () => {
+  for (const v of vectors.reserved) assert.equal(isReservedLabel(v.input), v.reserved, JSON.stringify(v.input));
+  assert.ok(!isReservedLabel('Meera') && !isReservedLabel('Youssef') && isReservedLabel('Admin Team') && isReservedLabel('xPandaPay'));
+});
+
+test('compose and env example carry the new settings, off by default, secret key ring with no default', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const repo = path.resolve(__dirname, '../..');
+  const compose = fs.readFileSync(path.join(repo, 'docker-compose.prod.yml'), 'utf8');
+  const env = fs.readFileSync(path.join(repo, '.env.prod.example'), 'utf8');
+  assert.match(compose, /SHARED_EXPENSE_PHONE_SHARING_ENABLED: "\$\{SHARED_EXPENSE_PHONE_SHARING_ENABLED:-false\}"/);
+  assert.match(compose, /SHARED_EXPENSE_PHONE_ENC_KEYS: "\$\{SHARED_EXPENSE_PHONE_ENC_KEYS:-\}"/);
+  assert.match(env, /^SHARED_EXPENSE_PHONE_SHARING_ENABLED=false$/m);
+  assert.match(env, /^SHARED_EXPENSE_PHONE_ENC_KEYS=$/m);
+  assert.doesNotMatch(env, /SHARED_EXPENSE_PHONE_ENC_KEYS=.*[A-Za-z0-9+\/]{32,}/, 'no real key in the example');
+});
+
+test('startup warns, without key material, when sharing is on but the key ring is unusable', () => {
+  process.env.API_DATABASE_URL ||= 'postgres://unused:unused@localhost:5432/pandapay';
+  process.env.JWT_ACCESS_SECRET ||= 'ci_only_not_a_real_secret';
+  const { registerSharedExpenseRoutes } = require('../src/shared_expenses/routes');
+  const lines = [];
+  const original = process.stderr.write;
+  process.stderr.write = (chunk) => { lines.push(String(chunk)); return true; };
+  try {
+    const app = { get() {}, post() {} };
+    registerSharedExpenseRoutes(app, { requireAuth() {}, withUserClient() {}, invitationSecret: SECRET, phone: { enabled: () => true, ring: () => null } });
+    registerSharedExpenseRoutes(app, { requireAuth() {}, withUserClient() {}, invitationSecret: SECRET, phone: { enabled: () => false, ring: () => null } });
+    registerSharedExpenseRoutes(app, { requireAuth() {}, withUserClient() {}, invitationSecret: SECRET, phone: { enabled: () => true, ring: () => ringOf('k1', { k1: key() }) } });
+  } finally { process.stderr.write = original; }
+  const warns = lines.filter((l) => l.includes('shared_expense_phone_sharing_enabled_without_usable_key_ring'));
+  assert.equal(warns.length, 1, 'only the broken configuration warns');
+  assert.ok(!/[A-Za-z0-9+/]{40,}/.test(warns[0].replace(/shared_expense_phone_sharing_enabled_without_usable_key_ring/, '')));
 });

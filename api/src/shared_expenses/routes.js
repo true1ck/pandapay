@@ -58,6 +58,10 @@ function registerSharedExpenseRoutes(app,{requireAuth,withUserClient,invitationS
     try {uuid(req.userId,'actorId');await handler(req,res);}catch(error){sendError(res,error);}
   }];
   let ring;const phoneOpts=phone||{enabled:()=>config.sharedExpensePhoneSharingEnabled===true,ring:()=>(ring===undefined?(ring=parseKeyRing(config.sharedExpensePhoneEncKeys)):ring)};
+  // Loud, key-free warning when the feature is switched on but cannot store anything.
+  if(phoneOpts.enabled()===true&&!phoneOpts.ring()) {
+    process.stderr.write(JSON.stringify({level:'warn',ts:new Date().toISOString(),msg:'shared_expense_phone_sharing_enabled_without_usable_key_ring',hint:'set SHARED_EXPENSE_PHONE_ENC_KEYS; join requests will carry no phone number until then'})+'\n');
+  }
   registerInvitationRoutes(app,{protect,withUserClient,sendError,secret:invitationSecret,phone:phoneOpts,androidPackageId:config.androidPackageId,
     notify:(args)=>notifyAfterCommit({withUserClient,...args})});
   app.get('/shared-expenses/capabilities',...protect(async(req,res)=>{

@@ -194,3 +194,36 @@ test('a direct split with only the generic fallback title omits "in <split>"', (
   const [named] = plan({ ...base, kind: 'invitation.requested', payload: {}, contextName: 'Goa trip' });
   assert.match(named.body, /^Asha asked to join "Goa trip"\./);
 });
+
+test('group-link join request: one "wants to join" inbox row per owner, deduped on replay, no phone data', async () => {
+  const LINK_HASH = 'b'.repeat(64);
+  const owner2 = '55555555-5555-4555-8555-555555555555';
+  const inbox = new Map();
+  const audienceCalls = [];
+  const withUserClient = async (profileId, fn) => fn({
+    async query(sql, params) {
+      if (/invitation_audience/.test(sql)) {
+        audienceCalls.push(params[0]);
+        return { rows: [{ result: { contextId: ctx, contextName: 'Goa trip', claimantName: 'Ravi', claimantPhoneSuffix: '4821', owners: [owner, owner2] } }] };
+      }
+      if (/notification_preferences/.test(sql)) return { rowCount: 0, rows: [] };
+      if (/INSERT INTO notifications/.test(sql)) {
+        const key = `${params[0]}|${params[5]}`;
+        if (inbox.has(key)) return { rowCount: 0, rows: [] };
+        inbox.set(key, { profileId: params[0], title: params[2], body: params[3] });
+        return { rowCount: 1, rows: [{ id: key }] };
+      }
+      return { rows: [] };
+    },
+  });
+  const args = { withUserClient, actorId: friend, kind: 'invitation.requested', payload: {}, contextId: ctx, operationId: 'op-link', tokenHash: LINK_HASH, options: { enabled: true }, logger: quiet };
+  assert.equal(await notifyAfterCommit(args), 2);
+  assert.equal(await notifyAfterCommit(args), 0, 'a replayed claim does not notify again');
+  assert.deepEqual(audienceCalls, [LINK_HASH, LINK_HASH], 'the link token is what the audience lookup receives');
+  const rows = [...inbox.values()];
+  assert.deepEqual(rows.map((r) => r.profileId).sort(), [owner, owner2].sort());
+  for (const r of rows) {
+    assert.equal(r.title, 'Ravi wants to join');
+    assert.doesNotMatch(`${r.title} ${r.body}`, /\d{3,}|4821/);
+  }
+});

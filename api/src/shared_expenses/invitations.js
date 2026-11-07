@@ -3,6 +3,7 @@ const crypto=require('node:crypto');
 const {uuid}=require('./commands');
 const {record,fail}=require('./validation');
 const {encryptPhone,decryptPhone}=require('./phone_crypto');
+const {cleanLabel}=require('./label');
 const {describePhone}=require('./phone_display');
 const TOKEN=/^[A-Za-z0-9_-]{43}$/;
 function normalizePhone(value) {
@@ -35,7 +36,7 @@ function tokenHash(token) {if(!TOKEN.test(token))fail('INVALID_INPUT','token');r
 /** First name and last initial only: enough to recognise a person, not to profile them. */
 function maskName(name) {
   if(typeof name!=='string')return null;
-  const parts=name.trim().split(/\s+/).filter(Boolean);
+  const parts=cleanLabel(name).split(/\s+/).filter(Boolean);
   if(!parts.length)return null;
   return parts.length===1?parts[0].slice(0,40):parts[0].slice(0,40)+' '+Array.from(parts[parts.length-1])[0]+'.';
 }
@@ -128,23 +129,24 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
     let result;
     try {
       result=await withUserClient(req.userId,async client=>{
-        const r=(await client.query('SELECT shared_expenses.claim_invitation($1::text,$2::text,$3::text,$4::uuid,$5::text,$6::text) AS result',[hash,phone,last4,b.operationId,requestHash({tokenHash:hash,accept:true}),share==='shared'?null:share])).rows[0].result;
+        const r=(await client.query('SELECT shared_expenses.claim_invitation($1::text,$2::text,$3::text,$4::uuid,$5::text,$6::text) AS result',[hash,phone,last4,b.operationId,requestHash({tokenHash:hash,accept:true,sharePhone:on&&Object.hasOwn(b,'sharePhone')?b.sharePhone:null}),share==='shared'?null:share])).rows[0].result;
         let phoneShare=share==='shared'?'not_asked':(share||'not_asked');
-        const ring=share==='shared'&&r?.status==='awaiting_owner'&&r.invitationId?phoneOpts.ring():null;
+        const ring=share==='shared'&&r?.fresh===true&&r?.status==='awaiting_owner'&&r.invitationId?phoneOpts.ring():null;
         if(ring) {
           // The number is bound to the invitation id, which this very call may have just created,
           // so it is attached afterwards in the same transaction. Any failure keeps the claim and stores nothing.
           await client.query('SAVEPOINT attach_phone');
           try {
             const sealed=encryptPhone(ring,r.invitationId,e164),shown=describePhone(e164);
-            const attached=(await client.query('SELECT shared_expenses.attach_claimant_phone($1::uuid,$2::text,$3::text,$4::text,$5::bytea,$6::text) AS result',[r.invitationId,phone,shown.countryCode,shown.mask,sealed.enc,sealed.keyId])).rows[0].result;
+            const attached=(await client.query('SELECT shared_expenses.attach_claimant_phone($1::uuid,$2::uuid,$3::text,$4::text,$5::text,$6::bytea,$7::text,$8::text) AS result',[r.invitationId,b.operationId,phone,shown.countryCode,shown.mask,sealed.enc,sealed.keyId,last4])).rows[0].result;
             if(attached?.attached===true)phoneShare='shared';
             await client.query('RELEASE SAVEPOINT attach_phone');
           } catch(_) {
             await client.query('ROLLBACK TO SAVEPOINT attach_phone');
           }
         }
-        return on?{...r,phoneShare}:(({invitationId,...rest})=>rest)(r);
+        const {fresh,...reply}=r;
+        return on?{...reply,phoneShare}:(({invitationId,...rest})=>rest)(reply);
       });
     }catch(error){
       // A number-bound invite needs a verified number; say that instead of "wrong number".
@@ -158,18 +160,31 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
     if(!phoneOn())return res.status(404).json({error:'not_found'});
     const b=req.body;record(b,['invitationId','operationId']);uuid(b.invitationId,'invitationId');uuid(b.operationId,'operationId');
     res.set('Cache-Control','no-store');
-    const r=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.reveal_claimant_phone($1::uuid) AS result',[b.invitationId])).rows[0].result);
-    if(r.error)return res.status(r.error==='reveal_rate_limited'?429:409).json({error:r.error});
-    const plain=decryptPhone(phoneOpts.ring(),r.invitationId,Buffer.from(String(r.enc),'hex'),r.keyId);
-    if(!plain)return res.status(409).json({error:'phone_not_available'});
-    res.json({invitationId:r.invitationId,e164:plain,revealedAt:new Date().toISOString()});
+    const invitationId=b.invitationId.toLowerCase();
+    const undecryptable=Symbol('undecryptable');
+    let out;
+    try {
+      out=await withUserClient(req.userId,async client=>{
+        const r=(await client.query('SELECT shared_expenses.reveal_claimant_phone($1::uuid) AS result',[invitationId])).rows[0].result;
+        if(r.error)return {error:r.error};
+        // Decrypt before the reveal counts: if it cannot be read, the transaction (audit row included) is rolled back.
+        const plain=decryptPhone(phoneOpts.ring(),String(r.invitationId).toLowerCase(),Buffer.from(String(r.enc),'hex'),r.keyId);
+        if(!plain)throw undecryptable;
+        return {invitationId:String(r.invitationId).toLowerCase(),e164:plain};
+      });
+    }catch(error){
+      if(error===undecryptable)return res.status(409).json({error:'phone_not_available'});
+      throw error;
+    }
+    if(out.error)return res.status(out.error==='reveal_rate_limited'?429:409).json({error:out.error});
+    res.json({invitationId:out.invitationId,e164:out.e164,revealedAt:new Date().toISOString()});
   });
   route('/shared-expenses/invitations/check-phone',async(req,res)=>{
     if(!phoneOn())return res.status(404).json({error:'not_found'});
     const b=req.body;record(b,['invitationId','phoneNumber']);uuid(b.invitationId,'invitationId');
     const typed=phoneHash(secret,b.phoneNumber);
     const r=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.check_claimant_phone($1::uuid,$2::text) AS result',[b.invitationId,typed])).rows[0].result);
-    if(r.error)return res.status(r.error==='check_attempts_exhausted'?429:409).json({error:r.error});
+    if(r.error)return res.status(['check_attempts_exhausted','check_rate_limited'].includes(r.error)?429:409).json({error:r.error});
     res.json({matches:r.matches===true?true:r.matches===false?false:null,attemptsLeft:r.attemptsLeft});
   });
   route('/shared-expenses/invitations/respond',async(req,res)=>{
