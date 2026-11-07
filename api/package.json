@@ -1,7 +1,7 @@
 {
   "name": "pandapay-api",
   "version": "1.0.0",
-  "description": "PandaPay product API \u2014 verifies JWTs issued by auth/, sets RLS session context, exposes the product database to both Flutter apps.",
+  "description": "PandaPay product API — verifies JWTs issued by auth/, sets RLS session context, exposes the product database to both Flutter apps.",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
@@ -11,12 +11,13 @@
     "check": "node --check src/index.js && node --check src/card_state_v2.js && node --check scripts/recompute_card_state.js && node --check scripts/audit_catalogue.js && node --check src/statement_import.js && node --check src/readiness.js && node --check src/auth.js && node --check src/config.js && node --check src/db.js && node --check src/nearby_discovery.js && node --check src/notification_service.js && node --check src/notification_test.js && node --check src/support_tickets.js && node --check src/data_error_reports.js && node --check src/feedback_rate_limit.js && node --check src/observability.js && node --check src/admin_rule_families.js && node --check src/admin_referral_operations.js && node --check src/card_discovery.js && node --check src/card_identity.js && node --check src/card_limit_parser.js && node --check src/due_date_parser.js && node --check src/cycles.js && node --check src/email_ingest.js && node --check src/imap_test.js && node --check src/sms_parser.js && node --check src/subscription_parser.js && node --check src/reward_math.js && node --check src/transaction_dedup.js && node --check src/source_identity.js && node --check src/merchant_category.js && node --check scripts/collect_card_pipeline.js && node --check scripts/import_card_pipeline.js && node --check scripts/audit_sms_export.js && node --check src/import_resolvers.js && node --check src/spend_reports.js && node --check src/recurring.js && node --check src/monthly_report.js && node --check src/csv.js && node --check src/imap_client.js && node --check src/imap_poller.js && node --check src/referral_rules.js && node --check src/referral_routes.js && node --check src/rewards_worker.js && node --check src/sms_observation_migration.js && node --check src/security_feature_config.js && node --check src/notification_routes.js && node --check src/notification_outbox.js && node --check src/notification_outbox_worker.js && node --check src/notification_outbox_health.js && node scripts/check_sms_v2.js"
   },
   "dependencies": {
-    "express": "^5.1.0",
-    "pg": "^8.16.3",
-    "jsonwebtoken": "^9.0.2",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
-    "ajv": "^8.20.0",
-    "ajv-formats": "^3.0.1"
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "libphonenumber-js": "1.12.10",
+    "pg": "^8.16.3"
   }
 }
