@@ -1,0 +1,512 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "kvb-visa-platinum",
+    "name": "KVB Platinum Credit Card (Visa Platinum)",
+    "issuer_slug": "karur-vysya-bank",
+    "network": "visa",
+    "network_tier": "visa_platinum",
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 599,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": null,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": "No KVB document read gives the rupee value of one reward point: the MITC says the construct is on the card variant page, the page states points only, the redemption page lists IVR, net or mobile banking and \"redemption by cash back\" through the Credit Card Cell without a rate, and the Card Member Agreement has no rewards section. Redemption costs ₹99 per request; minimum 2,000 points for the first redemption; unclaimed points lapse once in 3 years or if the minimum amount due is unpaid for more than 60 days (MITC).",
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.kvb.bank.in/personal/cards/kvb-credit-cards/kvb-credit-card/kvb-platinum-credit-card/",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "KVB page: credit limit minimum ₹0.25 lakh, maximum ₹5.00 lakh; card valid 5 years; secured option against an FD is available; contactless up to ₹5,000. Eligibility rules, age and income criteria are not published on the page or in the MITC.",
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 150,
+    "rounding_mode": null,
+    "base_points_per_block": 2,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "kvb-platinum-travel",
+      "category_id": "travel",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "wording": "2x rewards",
+        "applies_to": "domestic and international travel, hotels and air tickets",
+        "multiplier_basis": "multiple of the base rate (assumed; the page does not say what the multiplier applies to)",
+        "per_inr_block": 150
+      },
+      "action": {
+        "multiplier": 2,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "2x rewards on domestic and international travel, hotels and air tickets (KVB Platinum page). The resulting points per ₹150 are not stated."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "kvb-platinum-dining",
+      "category_id": "dining",
+      "priority": 11,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "wording": "1.5x rewards",
+        "applies_to": "restaurants",
+        "multiplier_basis": "multiple of the base rate (assumed)",
+        "per_inr_block": 150
+      },
+      "action": {
+        "multiplier": 1.5,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "1.5x rewards on restaurants (page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "kvb-platinum-medical",
+      "category_id": "health",
+      "priority": 11,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "wording": "1.5x rewards",
+        "applies_to": "medical",
+        "multiplier_basis": "multiple of the base rate (assumed)",
+        "per_inr_block": 150
+      },
+      "action": {
+        "multiplier": 1.5,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "1.5x rewards on medical spends (page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "kvb-platinum-insurance",
+      "category_id": "insurance",
+      "priority": 11,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "wording": "1.5x rewards",
+        "applies_to": "insurance",
+        "multiplier_basis": "multiple of the base rate (assumed)",
+        "per_inr_block": 150
+      },
+      "action": {
+        "multiplier": 1.5,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "1.5x rewards on insurance (page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "kvb-platinum-movies",
+      "category_id": "entertainment",
+      "priority": 11,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "wording": "1.5x rewards",
+        "applies_to": "movie tickets",
+        "multiplier_basis": "multiple of the base rate (assumed)",
+        "per_inr_block": 150
+      },
+      "action": {
+        "multiplier": 1.5,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "1.5x rewards on movie tickets (page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "kvb-platinum-books",
+      "category_id": "other",
+      "priority": 11,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "wording": "1.5x rewards",
+        "applies_to": "books",
+        "multiplier_basis": "multiple of the base rate (assumed)",
+        "per_inr_block": 150
+      },
+      "action": {
+        "multiplier": 1.5,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "1.5x rewards on books (page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "kvb-platinum-rail-car-rental",
+      "category_id": "travel",
+      "priority": 12,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "wording": "1.5x rewards",
+        "applies_to": "rail tickets and car rentals",
+        "multiplier_basis": "multiple of the base rate (assumed)",
+        "per_inr_block": 150
+      },
+      "action": {
+        "multiplier": 1.5,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "1.5x rewards on rail tickets and car rentals (page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "kvb-platinum-base",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 150
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 2,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "2 reward points for every ₹150 spent (KVB Platinum page). Which categories earn nothing is not stated."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.25,
+      "annual_interest_rate_percent": 39
+    },
+    "forex_markup": {
+      "markup_percent": 3.5,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": "No separate DCC markup is stated; the 3.5% Currency Conversion Factor is described for foreign-currency transactions"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 500,
+      "max_txn_inr": 4000,
+      "monthly_waiver_cap_inr": 200
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 1,
+      "atm_transaction_fee_min_inr": 300,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": 40
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% service charge on rent payments",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "wallet_load",
+        "mcc_list": [
+          6540,
+          6541
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% on wallet loading transactions exceeding ₹1,000",
+        "threshold_spend_inr": 1000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education_third_party",
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% on education payments made through third-party apps; payments made directly to colleges or schools on their websites or POS machines are exempt",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": 300,
+      "foreclosure_charge_percent": 3,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 500,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 99,
+      "gst_applicable": true,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": true,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "5% of the outstanding principal (purchases and cash advance) plus 100% of interest, fees and charges, unpaid minimum due of earlier cycles, any overlimit amount, EMI and BT EMI, and GST (MITC); the card page adds \"minimum of Rs.200\""
+      ]
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 199,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 200,
+        "max_balance_inr": 500,
+        "fee_inr": 100
+      },
+      {
+        "min_balance_inr": 501,
+        "max_balance_inr": 2500,
+        "fee_inr": 300
+      },
+      {
+        "min_balance_inr": 2501,
+        "max_balance_inr": 10000,
+        "fee_inr": 500
+      },
+      {
+        "min_balance_inr": 10001,
+        "max_balance_inr": 25000,
+        "fee_inr": 800
+      },
+      {
+        "min_balance_inr": 25001,
+        "max_balance_inr": null,
+        "fee_inr": 1000
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 100000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "KFS cum MITC: joining fee NIL, annual fee ₹599 + GST; from the 2nd year the fee is waived on minimum retail spends of ₹1,00,000 other than cash withdrawal in the previous year. Net spends exclude fuel transactions, instalments, fees, charges, GST, cash withdrawals and reversals. The 2025 MITC said the annual fee is \"waived for 1st year\"; the 2026 documents do not repeat that.",
+      "excluded_category_ids": [
+        "fuel",
+        "emi"
+      ],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 599
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "card_activation",
+      "benefit_points": 500,
+      "effective_value_inr": null,
+      "condition": "500 bonus reward points on card activation (page); conditions and credit timing are not stated, and the rupee value is unknown because the point value is not published."
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 0,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "IVR (1800 419 6500), internet or mobile banking (Credit Cards, Rewards, Loyalty points redemption), or Credit Card Cell for cash back",
+        "redemption_type": "other",
+        "inr_value_per_point": null,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": 2000,
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": 99,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "payment_return_charge",
+        "value": {
+          "rule": "2% of the Total Amount Due, minimum ₹450, on a returned payment; over-limit fee 2.5% of the over-limit amount, minimum ₹500 (an overlimit facility needs explicit consent)",
+          "source": "KFS cum MITC (Aug 2026)"
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.kvb.bank.in/docs/mitc-english.pdf",
+              "kind": "KFS cum MITC: fees, interest, forex, late fee, MAD, fuel surcharge, redemption fee, card names and Visa variants",
+              "date": "PDF created 2026-08-20",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.kvb.bank.in/personal/cards/kvb-credit-cards/kvb-credit-card/kvb-platinum-credit-card/",
+              "kind": "KVB Platinum Credit Card page (Features and Others tabs)",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://www.kvb.bank.in/personal/cards/kvb-credit-cards/kvb-credit-card/",
+              "kind": "KVB credit card list page: the card is live with Apply Now and listed beside Oura, Samara, Alturas, Eternis and the corporate card",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://www.kvb.bank.in/credit-card-offers/retail-credit-card-offers",
+              "kind": "Retail credit card offers page: card type \"Visa Platinum, Visa Signature (Honour)\" on every merchant offer (network evidence; the merchant offers are time-limited and not modelled)",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://www.kvb.bank.in/reward-points-redemption",
+              "kind": "Reward points redemption page: IVR, internet or mobile banking, or the Credit Card Cell for cash back; no rate",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://www.kvb.bank.in/card-member-agreement",
+              "kind": "Card Member Agreement (read for reward and lounge terms: none found)",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://www.kvb.bank.in/docs/retail-credit-card-mitc.pdf",
+              "kind": "Earlier MITC Version 2.0 (superseded): annual fee \"Waived for 1st year\" and add-on card joining fee ₹200 for retail cards; the 2026 KFS cum MITC drops both columns",
+              "date": "Version 2.0 dated 2025-03-04",
+              "read": "pdftotext"
+            }
+          ],
+          "open_questions": [
+            "NAMING: the work queue names \"KVB Visa Platinum\" and \"KVB Visa Signature\" from the March 2025 MITC. KVB now sells these as \"KVB Platinum Credit Card\" (Visa Platinum variant, MITC card name \"Platinum\") and \"KVB Honour Credit Card\" (Visa Signature variant, MITC card name \"Honor\"); the retail offers page confirms \"Visa Platinum, Visa Signature (Honour)\". The slugs keep the queue names. The queue file is superseded by the 2026 KFS cum MITC.",
+            "Value of one reward point in rupees: not stated in any KVB document read, so point_value_inr_baseline and effective_base_return_percent are null and the accelerator rules carry a multiplier but no points per block.",
+            "Reward multipliers: the page says \"1.5x rewards\" on restaurants, medical, books, insurance, rail tickets, movie tickets and car rentals and \"2x rewards\" on travel, hotels and air tickets without saying what the multiplier applies to; it is read as a multiple of the base 2 points per ₹150, which would give 3 and 4 points per ₹150, but the issuer does not state those numbers.",
+            "Categories that earn no points, any monthly or annual points cap, rounding and the minimum transaction are not stated.",
+            "First-year annual fee: the March 2025 MITC said \"Waived for 1st year\"; the August 2026 KFS cum MITC and the card page list joining fee nil and annual fee ₹599 with a waiver from the 2nd year on spend. Whether the first-year fee is billed needs a person to confirm; the 2026 documents are followed.",
+            "Cash withdrawal fee conflict: the KFS cum MITC says ₹300 per transaction or 1% of the amount, whichever is higher; the card page says 2% of the cash withdrawn or ₹300, whichever is higher. The MITC value (1%) is used.",
+            "Redemption conflict: the KFS cum MITC says a minimum of 800 points for later redemptions; the card page says 250. Both agree on 2,000 points for the first redemption and a ₹99 fee per request.",
+            "Add-on card fee: the card page says \"Free\"; the March 2025 MITC said ₹200 for retail add-on cards; the 2026 MITC has no add-on fee column. Free is used; the maximum number of add-on cards is not stated.",
+            "The KFS cum MITC says the retail annual-fee waiver spend counts \"retail spends other than cash withdrawal in the previous year\" and its note excludes fuel, instalments, fees, charges, GST, cash withdrawals and reversals; the period is read as the card anniversary year.",
+            "KVB also sells Oura (Visa Platinum, ₹2,999), Samara (Visa Signature, ₹5,999), Alturas and Eternis (Visa Infinite, ₹14,999 and ₹29,999) and Visa-network corporate cards, and a co-branded KVB SBI card; none is in the candidate list, and Oura and Samara are also described as Visa Platinum and Visa Signature, so they must not be confused with these two cards.",
+            "Merchant offers on the retail offers page are dated Visa coupons (many ended before 7 Nov 2026) and are not modelled."
+          ],
+          "notes": [
+            "Interest 3.25% a month (39% a year) on purchases and cash advances; interest-free period 15 to 45 days on retail purchases when the previous balance is paid in full (MITC). Payment due dates are the 5th, 10th, 15th, 20th or 25th; billing date is 15 days before the due date.",
+            "Fuel surcharge 1%, waived for single transactions of ₹500 to ₹4,000, maximum ₹200 per billing cycle (MITC and page). Forex 3.5%. Card replacement ₹199 (waived for fraud or reissue on expiry). Fee on cash payment at a branch ₹100. Cash advance limit 40% of the credit limit.",
+            "EMI conversion from ₹500 at 15% to 22% depending on vintage and balance transfer from ₹10,000 at 18% (page); EMI or BT processing ₹300 or 1% of the loan, whichever is higher, and 3% foreclosure (MITC).",
+            "The Platinum and Honour pages both say \"Primary Security Nil (option for secured card against FD available)\"."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

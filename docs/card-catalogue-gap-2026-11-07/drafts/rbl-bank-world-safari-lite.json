@@ -1,0 +1,668 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "rbl-bank-world-safari-lite",
+    "name": "RBL Bank World Safari Lite Credit Card",
+    "issuer_slug": "rbl",
+    "network": null,
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 1000,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": null,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 0.05,
+    "point_value_baseline_basis": "Product page: on the RBL Bank Rewards Portal one point is worth ₹0.25 on flight and hotel bookings and ₹0.05 on all other redemptions; points are redeemable only on that portal. The baseline is the ₹0.05 value that applies to every redemption; ₹0.25 applies to flights and hotels only. A ₹99 + GST fee applies per redemption day.",
+    "point_expiry_months": 24,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/world-safari-lite-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": null,
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": null,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": "proportional_deduction",
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "rbl-wsl-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          32,
+          2541,
+          4001,
+          5542,
+          5541,
+          5172
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel and auto earns no reward points (World Safari Lite T&C 3.4(d))."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-wsl-excl-utilities",
+      "category_id": "utility",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4900
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Utilities earns no reward points (World Safari Lite T&C 3.4(d))."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-wsl-excl-wallets",
+      "category_id": "wallet_load",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Wallets and service providers earns no reward points (World Safari Lite T&C 3.4(d))."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-wsl-excl-insurance",
+      "category_id": "insurance",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6300,
+          6310
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Insurance earns no reward points (World Safari Lite T&C 3.4(d))."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-wsl-excl-railways",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          66,
+          4011,
+          4112
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Railways earns no reward points (World Safari Lite T&C 3.4(d))."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-wsl-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Real estate and rental earns no reward points (World Safari Lite T&C 3.4(d))."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-wsl-excl-miscellaneous",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5960
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Miscellaneous earns no reward points (World Safari Lite T&C 3.4(d))."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-wsl-excl-emi",
+      "category_id": "emi",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "EMI conversion of retail transactions (Split-N-Pay and EMI requested at POS/web/app) earns no points (MITC; MITC: base points are not accrued on EMI conversion for any RBL card)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-wsl-portal-travel-5",
+      "category_id": "travel",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "smartbuy_or_equivalent_portal",
+      "channel_type": "rbl_rewards_portal",
+      "conditions": {
+        "platform": "RBL Rewards Portal",
+        "purchases": [
+          "flight bookings",
+          "hotel bookings"
+        ],
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 5,
+        "points_per_block": 5,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "5 reward points per ₹100 on flight and hotel bookings made on the RBL rewards portal (T&C 3.4(b); page \"5X\")."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-wsl-domestic-travel-1",
+      "category_id": "travel",
+      "priority": 20,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "transaction_type": "domestic",
+        "per_inr_block": 100,
+        "travel_mccs": "Airlines 3000-3350, Hotels and Motels 3501-3999 and 7011, Transportation 4111, 4119, 4121, 4131, 4214, 4215, 4225, 4411, 4457, 4468, 4511, 4582, 4722, 4723, 4784, 4789"
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "1 reward point per ₹100 on eligible domestic travel purchases in the Airlines, Hotels & Motels and Transportation merchant categories (T&C 3.4(a),(e); World Safari Lite and Plus travel MCC list)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.99,
+      "annual_interest_rate_percent": 47.88
+    },
+    "forex_markup": {
+      "markup_percent": 0,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 0,
+      "gst_applicable": true,
+      "trigger_condition": "SOC and MITC list one markup for \"Foreign Currency Transaction / Dynamic & Static Conversion Transactions\"; it also applies to INR transactions at an overseas location and at overseas-registered merchants located in India"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": null,
+      "waiver_percent": null,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on the transaction amount for all rental transactions (SOC; MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          32,
+          2541,
+          4001,
+          5542,
+          5541,
+          5172
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on each fuel and auto transaction above ₹10,000, at most ₹3,000 per transaction; the amount includes surcharge and purchase (SOC; MITC)",
+        "threshold_spend_inr": 10000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "utility",
+        "mcc_list": [
+          4900
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee when utility spends on the card exceed ₹50,000 in a month (SOC: \"per month per card\"; MITC: \"aggregate utility spends\")",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education",
+        "mcc_list": [
+          8220,
+          8244,
+          8249,
+          8211,
+          8241,
+          8299
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on education payments made through third-party apps (Cred, PhonePe, Cheqedu, Paytm, Mobikwik, Nobroker, Housing.com and others, \"not limited to\" the list); no fee when paid on the school or college website or its POS (SOC; MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "toll",
+        "mcc_list": [
+          4784,
+          4111,
+          4131
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on FASTag loading and toll payments above ₹10,000 per transaction per card (SOC; MITC)",
+        "threshold_spend_inr": 10000,
+        "effective_from": "2026-01-07",
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 0,
+        "min_fee_inr": 0,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": 500,
+      "cheque_bounce_charge_inr": 500
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 99,
+      "gst_applicable": true,
+      "exempted_channels": [],
+      "notes": "INR 99 + GST per redemption day (SOC; MITC; RWD 4.3)."
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 50,
+    "grace_period_void_on_revolving_balance": true,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "max",
+      "components": [
+        "Total GST + current-month EMI debits + [the higher of (100% of fees and charges + 5% of retail spends, cash advance and interest) or ₹200] + any unpaid earlier minimum due + over-limit utilisation (MITC section D-b)",
+        "If that amount exceeds the total amount due, the minimum due equals the total amount due"
+      ]
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "SOC and MITC show ₹1,000 for the first and later years with no spend-linked waiver.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "first_eligible_transaction_within_30_days_and_fee_paid",
+      "benefit_points": "N/A",
+      "effective_value_inr": 1000,
+      "condition": "Vouchers worth ₹1,000+ (page: Ixigo voucher of ₹599 off flights and hotels, plus a Swiggy One membership) on an eligible transaction within 30 days of issue; the page says the annual fee must be paid by its due date, while T&C 3.2(c) says the \"first month membership fees\"; mailed within 90 days of issue (T&C) or within 30 days of meeting eligibility (page)."
+    },
+    "spend_milestones": [
+      {
+        "id": "rbl-wsl-annual-2-5l",
+        "label": "5,000 reward points on eligible spends of ₹2.5 lakh in a membership year",
+        "threshold_spend_inr": 250000,
+        "reward_value_inr": 250,
+        "period": "card_anniversary_year",
+        "is_repeatable": false,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "id": "rbl-wsl-annual-5l",
+        "label": "10,000 reward points on eligible spends of ₹5 lakh in a membership year",
+        "threshold_spend_inr": 500000,
+        "reward_value_inr": 500,
+        "period": "card_anniversary_year",
+        "is_repeatable": false,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ]
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "rbl-wsl-lounge-india",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "RBL Bank",
+      "label": "1 complimentary domestic airport lounge visit per calendar quarter, earned by eligible spends of ₹50,000 or more in the previous calendar quarter; primary cardholder only, lapses if unused",
+      "evaluation_engine": {
+        "conditions": {
+          "previous_quarter_spend_gte_inr": 50000,
+          "primary_cardholder_only": true,
+          "authorisation_up_to_inr": 25
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 1,
+      "quota_period": "quarter",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "rbl-wsl-lounge-intl",
+      "category_id": "lounge",
+      "network_program": "lounge_key",
+      "sponsor": "RBL Bank",
+      "label": "1 complimentary international airport lounge visit per calendar quarter through a Lounge Key voucher, earned by spends of ₹50,000 or more in that quarter and claimed in the MyCard app; voucher valid 180 days",
+      "evaluation_engine": {
+        "conditions": {
+          "quarter_spend_gte_inr": 50000,
+          "claim_channel": "RBL MyCard app",
+          "voucher_validity_days": 180
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 1,
+      "quota_period": "quarter",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 200,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": false,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "RBL Bank Rewards Portal: flight and hotel bookings",
+        "redemption_type": "flight_hotel_booking",
+        "inr_value_per_point": 0.25,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": "N/A",
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": 99,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "channel": "RBL Bank Rewards Portal: all other redemptions",
+        "redemption_type": "other",
+        "inr_value_per_point": 0.05,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": "N/A",
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": 99,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "merchant_emi_processing_fee_rule",
+        "value": {
+          "rule": "1.5% of the amount or ₹150, whichever is higher, on every EMI conversion made at the merchant at the time of the transaction (SOC; MITC). GST at 18% applies.",
+          "note": "The universal field holds a flat rupee amount only, so merchant_instant_emi_processing_fee_inr is left null."
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "12.5% of the outstanding amount (statement total amount due less net payments), minimum ₹5, maximum ₹1,300; GST at 18% on top",
+          "source": "SOC; MITC section v, applicable from 17 Oct 2025",
+          "grace": "The fee is levied only when the account stays past due for more than three days after the payment due date (MITC section v-d).",
+          "note": "A percentage fee cannot be written as fixed slabs, so late_payment_slabs is empty."
+        }
+      },
+      {
+        "key": "addon_card_fee_rule",
+        "value": {
+          "rule": "MITC: ₹200 annual fee per add-on cardholder. The lounge benefit does not apply to add-on cards (T&C 3.3.2(b)).",
+          "source": "MITC section iii"
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://webassets.rbl.bank.in/document/credit-cards/tnc-world-safari-lite.pdf",
+              "kind": "World Safari Lite T&C (forex, welcome, lounges, rewards, exclusion table, milestones)",
+              "date": "PDF created 2026-03-30; Last-Modified 2026-05-19",
+              "read": "pdftotext + page images for the exclusion table"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/credit-cards/world-safari-lite-and-plus-travel-mcc-list.pdf",
+              "kind": "Travel category MCC list (Airlines, Hotels and Motels, Transportation)",
+              "date": "PDF created 2025-12-10; Last-Modified 2026-01-01",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/credit-cards/welcome-benefit-world-safari-lite-credit-card.pdf",
+              "kind": "Welcome benefit T&C (Ixigo voucher, Swiggy One)",
+              "date": "PDF created 2026-09-02",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/world-safari-lite-credit-card",
+              "kind": "issuer product page (point values, lounge, milestones)",
+              "read": "page text"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/Credit%20Cards/CardsScheduleCharges.pdf",
+              "kind": "Schedule of Charges: annual fee row, finance charge, cash advance, late fee, forex, fuel/rent/utility/education/FASTag fees",
+              "date": "code RBL-CC-SOC-V2-04-06-2026 (4 Jun 2026); PDF created 2026-06-04; Last-Modified 2026-08-29",
+              "read": "pdftotext + page image"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/Credit%20Cards/RBL-MITC-final.pdf",
+              "kind": "MITC cum KFS: joining fee, annual fee table, add-on fees, interest bands, grace period, MAD, late fee, forex, EMI rule",
+              "date": "code RBL-CC-MITC-V2-29-10-2026 (29 Oct 2026); Last-Modified 2026-10-30",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/credit-cards/rbl-cc-cardmember-agreement.pdf",
+              "kind": "Cardmember Agreement: table that links each card to its product T&C",
+              "date": "code RBL-CC-CMA-27-10-2026 (27 Oct 2026)",
+              "read": "pdftotext + embedded links"
+            },
+            {
+              "url": "https://rblrewards.rbl.bank.in/tnc",
+              "kind": "Credit Cards Rewards Programme T&C: redemption fee, 24-month expiry, minimum redemption, reversal rule",
+              "date": "no date printed; read 2026-11-07",
+              "read": "page text"
+            },
+            {
+              "url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/category",
+              "kind": "Current credit card list (64 cards): sold-status check",
+              "date": "read 2026-11-07",
+              "read": "page text"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/credit-cards/mastercard-visa-india-lounge-program-lounge-list.pdf",
+              "kind": "RBL Bank India Lounge Program list (not itemised here)",
+              "date": "PDF created 2026-10-15",
+              "read": "pdftotext (first page)"
+            }
+          ],
+          "open_questions": [
+            "Base rate: the T&C and page state earn rates only for domestic travel (1 point per ₹100) and portal flights and hotels (5 per ₹100). No rate is stated for any other eligible spend, although the exclusion table implies other categories may earn. base_points_per_block and the return percent are left null; a person must confirm whether non-travel spend earns anything.",
+            "Network: no issuer document or card art read names Visa, Mastercard or RuPay (T&C: \"MasterCard/RuPay/VISA\"). Left null.",
+            "International travel: only \"domestic travel\" earns 1 point per ₹100; whether international airline, hotel or transport spend earns anything is not stated.",
+            "Welcome benefit: T&C 3.2(c) conditions the voucher on paying the \"first month membership fees\", while the page says the annual fee; the card carries an annual fee. Ixigo offer valid to 31 Dec 2026 per the welcome T&C.",
+            "Milestone tiers: T&C 3.5(b) says \"additional 10,000\" points at ₹5 lakh; it is not stated whether this adds to the 5,000 at ₹2.5 lakh. Rupee values use the ₹0.05 baseline (₹0.25 would be 5x).",
+            "Lounge: T&C 3.3.1 requires ₹50,000 spend in the same calendar quarter for the international voucher; 3.3.2 and the page tie the domestic visit to the previous quarter. The page says one visit per quarter \"within and outside India\".",
+            "Points value for flights and hotels is ₹0.25, so the 5X earn is a 1.25% return only if redeemed on flights or hotels; at ₹0.05 it is 0.25%.",
+            "Reward point expiry is the Rewards Programme T&C rule (24 months, RWD 5.1); the product T&C is silent.",
+            "Finance charge: MITC says \"up to 3.99% per month (47.88% a year)\" for these cards and then lists bureau-score bands (above 775: 3.35% a month; 725-775: 3.85%; below 725: 3.99%). The draft stores the 3.99% maximum."
+          ],
+          "notes": [
+            "Zero forex markup: 0% on World Safari Lite (SOC; MITC; T&C 3.1).",
+            "Excluded from earning: Fuel & Auto, Utilities, Wallet, Insurance, Railways, Rental and Miscellaneous (5960) (T&C 3.4(d) and its MCC table; the table is an image in the PDF and was read from the page image). Travel merchant categories are Airlines, Hotels & Motels and Transportation as defined by the network.",
+            "No fuel surcharge waiver is stated for this card.",
+            "Joining fee is NIL (MITC); the first-year fee is stored as the annual fee."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

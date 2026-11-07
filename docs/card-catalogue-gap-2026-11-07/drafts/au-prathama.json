@@ -1,0 +1,607 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "au-prathama",
+    "name": "AU Prathama Credit Card",
+    "issuer_slug": "au",
+    "network": null,
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 100,
+    "annual_fee_inr": 100,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": null,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": "Value of one AU Reward Point is not stated on the Prathama page or its FAQ. AU Rewardz FAQ: value depends on card variant and redemption category.",
+    "point_expiry_months": 24,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.au.bank.in/personal-banking/credit-cards/prathama-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "AU states these criteria are only indicative and reserves the right to approve or decline.",
+    "rules": [
+      {
+        "parameter": "age_years_salaried",
+        "operator": ">=",
+        "threshold_value": 21,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years_salaried",
+        "operator": "<=",
+        "threshold_value": 60,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years_self_employed",
+        "operator": ">=",
+        "threshold_value": 25,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years_self_employed",
+        "operator": "<=",
+        "threshold_value": 65,
+        "allowed_values": []
+      },
+      {
+        "parameter": "residency",
+        "operator": "in",
+        "threshold_value": null,
+        "allowed_values": [
+          "resident_indian"
+        ]
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": "floor",
+    "base_points_per_block": 1,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": 25000,
+    "capping_period_basis": "statement_cycle",
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "prathama-contactless-2rp",
+      "category_id": "all_retail",
+      "priority": 20,
+      "evaluation_type": "accelerator",
+      "rail": "contactless",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 2,
+        "points_per_block": 2,
+        "cashback_percent": "N/A",
+        "cap_reference": "prathama-total-cycle-cap",
+        "reason": "FAQ: 2 Reward Points per ₹100 on contactless (Tap & Pay) transactions."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "prathama-cycle-over-5000-2rp",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "cycle_spend_gt_inr": 5000,
+        "applies_to": "incremental spend beyond ₹5,000 in a statement cycle"
+      },
+      "action": {
+        "multiplier": 2,
+        "points_per_block": 2,
+        "cashback_percent": "N/A",
+        "cap_reference": "prathama-incremental-cycle-cap",
+        "reason": "Page: 2 Reward Points per ₹100 on incremental spends once the cycle crosses ₹5,000; CMA 23.5.2 caps this at 1,000 points per statement cycle. Threshold-gated; the engine cannot know whether it was crossed, so review before projecting."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "prathama-base-1rp",
+      "category_id": "all_retail",
+      "priority": 35,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": "prathama-total-cycle-cap",
+        "reason": "Page FAQ: 1 Reward Point per ₹100 on all other eligible transactions."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "prathama-bills-1rp",
+      "category_id": "bills",
+      "priority": 25,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "includes": [
+          "utility",
+          "telecom"
+        ],
+        "max_points_per_transaction": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": "prathama-total-cycle-cap",
+        "reason": "Page footnote: at most 100 Reward Points per transaction on utility and telecom spends; the rate is the 1 point per ₹100 base."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "prathama-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Rent earns no Reward Points (page FAQ and footnote). MCC lists not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "prathama-excl-cash",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Cash and cash-like transactions earns no Reward Points (page FAQ and footnote). MCC lists not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "prathama-excl-education",
+      "category_id": "education",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Education fees earns no Reward Points (page FAQ and footnote). MCC lists not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "prathama-excl-govt",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Government payments earns no Reward Points (page FAQ and footnote). MCC lists not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "prathama-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel earns no Reward Points (page FAQ and footnote). MCC lists not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "prathama-excl-emi",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "EMI transactions and conversions earns no Reward Points (page FAQ and footnote). MCC lists not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "prathama-excl-bbps",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "BBPS earns no Reward Points (page FAQ and footnote). MCC lists not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "prathama-excl-transport",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Transportation earns no Reward Points (page FAQ and footnote). MCC lists not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "prathama-incremental-cycle-cap",
+      "category_id": "all_retail",
+      "metric": "bonus_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": 1000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "downgrade_to_base_rate",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "prathama-total-cycle-cap",
+      "category_id": "all_retail",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": 25000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 45
+    },
+    "forex_markup": {
+      "markup_percent": 3.49,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 3.49,
+      "gst_applicable": true,
+      "trigger_condition": "KFS lists one cross-currency markup for foreign-currency, dynamic and static conversion transactions"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 400,
+      "max_txn_inr": 5000,
+      "monthly_waiver_cap_inr": 100
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": 20
+    },
+    "category_surcharges": [
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          5172,
+          5541,
+          5542,
+          5552,
+          5983
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "From 1 Jul 2026: 1% on the whole month's fuel spend when one transaction exceeds ₹10,000 or the calendar-month total exceeds ₹25,000",
+        "threshold_spend_inr": 25000,
+        "effective_from": "2026-07-01",
+        "effective_to": null
+      },
+      {
+        "category_id": "utility",
+        "mcc_list": [
+          4900
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% on utility spend above ₹50,000 in a calendar month",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education_third_party",
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Education paid through third-party apps (CRED, PhonePe, Paytm, MobiKwik, Freecharge etc.), minimum ₹99 per transaction; direct school/college site or POS exempt",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Domestic rental payments, minimum ₹99 per transaction; international rental has no charge",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "transportation",
+        "mcc_list": [
+          4111,
+          4112,
+          4784
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "From 14 Jun 2026: 1% on the whole month's transportation spend once it exceeds the lower of 50% of credit limit or ₹25,000; IRCTC and marquee travel partners excluded",
+        "threshold_spend_inr": 25000,
+        "effective_from": "2026-06-14",
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": 199,
+      "post_purchase_emi_processing_fee_inr": 99,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 500,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 99,
+      "gst_applicable": true,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 50,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "If previous Total Amount Due was paid on time: 5% of principal outstanding + 100% of fees/charges + 100% of interest + due EMIs + 100% annual fee (if applicable) + 100% GST",
+        "If previous Total Amount Due was not paid on time: 2% of principal outstanding + the same 100% components"
+      ]
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 75000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "From the 2nd year: ₹75,000 spends in the previous card anniversary year. No joining fee waiver.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 100
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "N/A",
+      "benefit_points": "N/A",
+      "effective_value_inr": "N/A",
+      "condition": "FAQ: no welcome benefit on Prathama."
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 0,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": 18
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": "Source-supported data that cannot be represented faithfully by any existing universal schema field. Do not duplicate data already represented elsewhere. Do not use this section for unknown values, assumptions, or inferred data.",
+    "items": [
+      {
+        "key": "official_research",
+        "value": {
+          "checked_on": "2026-11-05",
+          "source_urls": [
+            "https://www.au.bank.in/personal-banking/credit-cards/prathama-credit-card"
+          ],
+          "facts": [
+            "2 points per INR 100 contactless; after INR 5000 cycle spend, 2 points per INR 100 incremental eligible spend."
+          ]
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.au.bank.in/personal-banking/credit-cards/prathama-credit-card",
+              "kind": "issuer_page + FAQ",
+              "read": "rendered page text including hidden accordions and popups, re-read 2026-11-07 (base rate and exclusions are in the FAQ)"
+            },
+            {
+              "url": "https://www.au.bank.in/pdf/credit-card/Schedule-of-Charges-CC.pdf",
+              "kind": "KFS",
+              "date": "Key Fact Statement v1.9, 2 Nov 2026"
+            },
+            {
+              "url": "https://www.au.bank.in/credit-cards/mitc(with-schedule-of-charges).pdf",
+              "kind": "MITC: points terms are by reference to the Cardmember Agreement",
+              "date": "MITC v2.23, 2 Nov 2026",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.au.bank.in/credit-cards/credit-card-member-agreement.pdf",
+              "kind": "Cardmember Agreement 23.5 (25,000 point cap lists Prathama), 23.5.2 (Prathama 2 points above ₹5,000, max 1,000 per cycle), 23.8, 23.22",
+              "date": "undated",
+              "read": "pdftotext"
+            }
+          ],
+          "open_questions": [
+            "Network: UNRESOLVED. The Prathama page has no popup naming a network, the card art shows no network logo, and no Prathama-specific PDF exists. card_product.network left null.",
+            "Reward Point value in rupees: not stated for Prathama. AU Rewardz FAQ says it depends on card variant and redemption category. effective_base_return_percent left null.",
+            "CMA 23.5.2 says Prathama holders can earn \"a maximum of 1000 Reward Points per statement cycle\" after the ₹5,000 threshold: modelled as a cap on the incremental 2-point rate only; whether it caps all points is not stated.",
+            "Exclusion MCC lists are not published for Prathama (categories only)."
+          ],
+          "notes": [
+            "500 bonus Reward Points on each successful recurring-payment (standing instruction) setup, once per merchant for life (page FAQ); event bonus, not a spend rate, so not modelled.",
+            "Resolved from the page FAQ: 1 Reward Point per ₹100 on all other eligible transactions; at most 100 points per utility or telecom transaction.",
+            "Reward Points are earned in multiples of ₹100 (CMA 23.22), modelled as floor; points expire after 2 years (CMA 23.8)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "15% of Total Amount Due, minimum ₹10, maximum ₹1,300",
+          "source": "Key Fact Statement v1.9, 2 Nov 2026, section 5",
+          "note": "Percentage fee cannot be expressed as fixed slabs, so late_payment_slabs is empty."
+        }
+      },
+      {
+        "key": "payment_return_charge",
+        "value": {
+          "rule": "2% of Total Amount Due or ₹500, whichever is higher, on return/failure of card payment (cheque, ECS/NACH, autopay)",
+          "source": "Key Fact Statement v1.9, 2 Nov 2026, section 10"
+        }
+      }
+    ]
+  }
+}

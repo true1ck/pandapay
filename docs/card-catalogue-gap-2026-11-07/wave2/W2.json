@@ -1,0 +1,215 @@
+{
+  "agent": "W2",
+  "candidates": [
+    {
+      "name": "YES BANK ANQ Phi",
+      "slug": null,
+      "status": "not_sold",
+      "reason": "Issuer product page says in plain text: \"We are no longer accepting applications for YES BANK Anq Phi Credit Card.\" The 28 Sep 2026 Key Fact Statement (V_20_28092026) does not mention Anq at all, although it lists the other co-brand fee rows. The MITC CMITC_V18_05102026 still carries an Anq Phi row (fees 0 / 499, forex 3.40% to 3.50%, fuel waiver cap 300) for existing cardholders. Not drafted. For the record: 24 reward points per ₹200 on travel, dining, hotels, groceries, apparel and entertainment, 4 points on select categories, annual fee 499 waived on ₹1,20,000 spend, MCCs defined by Mastercard (page glossary).",
+      "sources": [
+        "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/anq-phi-credit-card",
+        "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards",
+        "https://www.yes.bank.in/pdf?name=ybl_mitc_pdf.pdf",
+        "https://www.yes.bank.in/sites/web/content/published/api/v1.1/assets/CONT07A77C257C7A4BDD85DB97E51D2B5B8F/native/yesbank_key_fact_statement.pdf?download=false&channelToken=21f7ccfa2fc3401091938f541a6f8f2a"
+      ]
+    },
+    {
+      "name": "YES BANK ANQ Pi",
+      "slug": null,
+      "status": "not_sold",
+      "reason": "No product page, no menu entry and no listing card exist on yes.bank.in. The name appears only in an older co-brand MITC (an undated Mizo translation, ybl_cobrand_mitc_mizo.pdf), where it is a lifetime-free RuPay variant with no add-on cards and no cash advance. It is absent from the current MITC CMITC_V18_05102026 (0 matches), the KFS V_20_28092026 and the listing. A web search of yes.bank.in and yesbank.in surfaced nothing newer. Treated as a retired variant.",
+      "sources": [
+        "https://www.yes.bank.in/sites/web/content/published/api/v1.1/assets/CONT5B893B14FC184383B53C68F9BEB44E49/native/ybl_cobrand_mitc_mizo.pdf?download=false",
+        "https://www.yes.bank.in/pdf?name=ybl_mitc_pdf.pdf",
+        "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards"
+      ]
+    },
+    {
+      "name": "YES BANK UNI",
+      "slug": "yes-bank-uni",
+      "status": "drafted",
+      "reason": "Sold, partner-led (apply on the Uni site or app; existing YES credit cardholders are not eligible). Joining 0, annual 499 waived on ₹50,000 retail spend in the 12 months before renewal. 1% reward issued as Uni coins with no cap; forex and DCC not applicable; 3.99% a month; fuel waiver on transactions up to ₹7,500, ₹500 a cycle. Network and the rupee value of a Uni coin are not stated anywhere, so both stay null and the 1% is stored only as the advertised cashback figure.",
+      "sources": [
+        "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/uni-credit-card",
+        "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards",
+        "https://www.yes.bank.in/pdf?name=ybl_mitc_pdf.pdf",
+        "https://www.yes.bank.in/sites/web/content/published/api/v1.1/assets/CONT07A77C257C7A4BDD85DB97E51D2B5B8F/native/yesbank_key_fact_statement.pdf?download=false&channelToken=21f7ccfa2fc3401091938f541a6f8f2a"
+      ]
+    },
+    {
+      "name": "YES BANK FREO",
+      "slug": null,
+      "status": "not_sold",
+      "reason": "Issuer product page: \"We are no longer accepting applications for YES BANK FREO Credit Card\"; existing cardholders are asked to call 1800-103-1212 to be upgraded to another variant. The card is not on the listing grid (only in the site mega-menu) and is absent from the 28 Sep 2026 KFS. The MITC still has a FREO row (399 / 399, forex 3.40%, fuel cap 125) for existing cardholders.",
+      "sources": [
+        "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/freo-credit-card",
+        "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards",
+        "https://www.yes.bank.in/pdf?name=ybl_mitc_pdf.pdf"
+      ]
+    },
+    {
+      "name": "YES BANK FREO RuPay",
+      "slug": null,
+      "status": "not_sold",
+      "reason": "No product page exists. The site menu HTML carries the link /freo-rupay-credit-card inside an HTML comment (switched off), and opening that address lands on the generic RuPay Virtual card page, which does not mention FREO. The name appears only in the older co-brand MITC (undated Mizo translation) as a lifetime-free virtual variant. Absent from the current MITC (0 matches), the KFS and the listing; the parent FREO card is closed to applications.",
+      "sources": [
+        "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/freo-rupay-credit-card",
+        "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/freo-credit-card",
+        "https://www.yes.bank.in/sites/web/content/published/api/v1.1/assets/CONT5B893B14FC184383B53C68F9BEB44E49/native/ybl_cobrand_mitc_mizo.pdf?download=false",
+        "https://www.yes.bank.in/pdf?name=ybl_mitc_pdf.pdf"
+      ]
+    },
+    {
+      "name": "YES BANK FinBooster",
+      "slug": "yes-bank-finbooster",
+      "status": "drafted",
+      "reason": "Sold, partner-led (BankBazaar; apply on the partner site or app). Lifetime free. Earn in YES Rewardz points per ₹200: 10 on online dining, 6 on online grocery and apparel, 2 on other retail; 13 exclusions; one point is worth ₹0.10 as statement credit and ₹0.25 on flights and hotels (Redemption Rules). Fuel waiver ₹500 to ₹3,000, ₹100 a cycle; forex 3.50%; 3.99% a month. Network is inferred as Visa from the page's \"MCC as defined by VISA\" footnotes and must be confirmed from card art.",
+      "sources": [
+        "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/finbooster-card",
+        "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards",
+        "https://www.yes.bank.in/pdf?name=ybl_mitc_pdf.pdf",
+        "https://www.yes.bank.in/pdf?name=redemption_rules.pdf",
+        "https://www.yes.bank.in/sites/web/content/published/api/v1.1/assets/CONT07A77C257C7A4BDD85DB97E51D2B5B8F/native/yesbank_key_fact_statement.pdf?download=false&channelToken=21f7ccfa2fc3401091938f541a6f8f2a"
+      ]
+    },
+    {
+      "name": "YES BANK FinBooster RuPay",
+      "slug": null,
+      "status": "not_sold",
+      "reason": "No such product in the issuer's current material: no product page, no menu entry (the Virtual RuPay menu lists PaisaSave RuPay, Klick, RuPay, UNI RuPay, AI Inside RuPay, novio RuPay and Max), and the current MITC and KFS have a single \"Finbooster\" row. A \"FinBooster RuPay\" variant appears only in the older co-brand MITC (undated Mizo translation). The existing FinBooster page is the one drafted.",
+      "sources": [
+        "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards",
+        "https://www.yes.bank.in/pdf?name=ybl_mitc_pdf.pdf",
+        "https://www.yes.bank.in/sites/web/content/published/api/v1.1/assets/CONT5B893B14FC184383B53C68F9BEB44E49/native/ybl_cobrand_mitc_mizo.pdf?download=false"
+      ]
+    },
+    {
+      "name": "YES BANK Paisasave RuPay",
+      "slug": "yes-bank-paisasave-rupay",
+      "status": "drafted",
+      "reason": "Still offered, but only to existing holders of the YES BANK Paisabazaar PaisaSave Credit Card through the iris by YES app, so application_mode is invite_only. Virtual-only RuPay card, linked to UPI, lifetime free. 6% cashback (12 points per ₹200, 1 point = ₹1) on dining and travel MCCs except UPI, 1% (2 points) on other spends and on UPI above ₹2,000, 3,000 points a cycle cap on the 6% tier, long exclusion list. Rates changed on 15 Dec 2025 (previous 3% / 1.5%).",
+      "sources": [
+        "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/paisabazaar-rupay-credit-card",
+        "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards",
+        "https://www.yes.bank.in/pdf?name=ybl_mitc_pdf.pdf",
+        "https://www.yes.bank.in/sites/web/content/published/api/v1.1/assets/CONT07A77C257C7A4BDD85DB97E51D2B5B8F/native/yesbank_key_fact_statement.pdf?download=false&channelToken=21f7ccfa2fc3401091938f541a6f8f2a"
+      ]
+    },
+    {
+      "name": "YES BANK RIO / Zagg",
+      "slug": "yes-bank-zagg",
+      "status": "held",
+      "reason": "One product, not two: the issuer lists only Zagg (the page assets are named rio_*, and cards issued before 10 Jan 2025 earn Rio coins). Sold, partner-led (Zagg app), lifetime free for new cards, 2 domestic lounge visits a calendar quarter after ₹50,000 prior-quarter spend, fuel waiver ₹400 to ₹5,000 and ₹250 a cycle, forex 3.50%. HELD because no reward rate for the current card is published: the page only gives a legacy footnote for pre-10-Jan-2025 cards (0.5 Rio coins per ₹50 non-UPI, 1.5 per ₹50 UPI) and the \"earn cashbacks\" benefit is an image. Drafted with no reward rules; the importer will skip it.",
+      "sources": [
+        "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/zagg-credit-card",
+        "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards",
+        "https://www.yes.bank.in/pdf?name=ybl_mitc_pdf.pdf",
+        "https://www.yes.bank.in/pdf?name=ybl_yes_bank_domestic_lounge_access.pdf"
+      ]
+    }
+  ],
+  "fixes": [
+    {
+      "slug": "yes-bank-pop-club-rupay",
+      "field": "card_product.annual_fee_inr",
+      "before": "399 (carried over from the 5 Nov read; unverified because the PDFs timed out)",
+      "after": "399 (confirmed)",
+      "evidence": "MITC CMITC_V18_05102026 section A1 fee table, row \"POP - CLUB: joining NIL, annual INR 399, annual-fee waiver spend INR 1,50,000\"; KFS V_20_28092026 membership-fee table (\"POP - CLUB Nil / INR 399\") and waiver table (\"Spend INR 1,50,000 in card anniversary year\"); product page \"Annual Membership Fee (Renewal): ₹399 + applicable taxes ... Not Applicable for Life Time Free Card\"."
+    },
+    {
+      "slug": "yes-bank-pop-club-rupay",
+      "field": "card_product.joining_fee_inr",
+      "before": "0 (page only)",
+      "after": "0 (confirmed)",
+      "evidence": "MITC fee table and KFS list POP-CLUB joining fee as NIL."
+    },
+    {
+      "slug": "yes-bank-pop-club-rupay",
+      "field": "fee_waiver_and_milestones.annual_fee_waiver",
+      "before": "threshold N/A; condition said the ₹399 renewal fee could not be re-verified",
+      "after": "threshold 150000 per card anniversary year, waives 399; lifetime-free cohort exempt",
+      "evidence": "Product page T&C 2: \"Customers who cross the milestone of INR 1.5L in an anniversary year ... will not be charged with the annual fee\"; MITC fee table; KFS waiver table."
+    },
+    {
+      "slug": "yes-bank-pop-club-rupay",
+      "field": "fee_waiver_and_milestones.welcome_and_renewal_gift",
+      "before": "null",
+      "after": "400 POPcoins on payment of the ₹399 annual fee",
+      "evidence": "Product page T&C 2: \"On payment of the annual fee of Rs.399, customers will get 400 POPcoins.\""
+    },
+    {
+      "slug": "yes-bank-pop-club-rupay",
+      "field": "fee_waiver_and_milestones.spend_milestones[popclub-1-5l]",
+      "before": "label \"1,500 extra POPcoins on crossing ₹1.5 lakh spend\", condition not found, is_repeatable false",
+      "after": "1,500 POPcoins on crossing ₹1.5 lakh in a card anniversary year (same spend also waives the annual fee; lifetime-free cards also get the 1,500); is_repeatable null",
+      "evidence": "Product page T&C 2 and the double-asterisk note. The page does not say whether it repeats yearly, so repeatable is null, not false."
+    },
+    {
+      "slug": "yes-bank-pop-club-rupay",
+      "field": "fees_and_surcharges.fuel_surcharge",
+      "before": "waiver 1%, range and cap null (footnote missed)",
+      "after": "waiver 1% on ₹1,000 to ₹3,500, maximum ₹100 per statement cycle from 1 Jun 2026 (before: ₹400 to ₹5,000, ₹300)",
+      "evidence": "Product page T&C 1a/1b; MITC section 4 bullet \"Effective 1st June 2026 ... between INR 1,000 and INR 3,500 ... maximum waiver of INR 100 per statement cycle for POP-Club\"; KFS p5. Conflict: the MITC and KFS cap tables still print \"POP-CLUB INR 300\"."
+    },
+    {
+      "slug": "yes-bank-pop-club-rupay",
+      "field": "fees_and_surcharges.forex_markup.markup_percent",
+      "before": "null",
+      "after": "3.5 (GST applies); 3.40% before 15 Jun 2026",
+      "evidence": "MITC section 3(q) table, row \"YES Prosperity Rewards / Cashback / Cashback Plus / POP-CLUB / ANQ Phi / Finbooster / Paisabazaar Paisasave ...: 3.40% then 3.50% effective 15 June 2026\"; KFS p6 same row."
+    },
+    {
+      "slug": "yes-bank-pop-club-rupay",
+      "field": "fees_and_surcharges.dynamic_currency_conversion_dcc.fee_percent",
+      "before": "null",
+      "after": "1 (GST applies)",
+      "evidence": "MITC 3(q) and KFS p6: DCC mark-up 1% + GST on INR-billed international or overseas-merchant transactions."
+    },
+    {
+      "slug": "yes-bank-pop-club-rupay",
+      "field": "fees_and_surcharges.apr",
+      "before": "3.99% a month / 47.88% (from the earlier read, unverified)",
+      "after": "3.99% a month / 47.88% a year (confirmed)",
+      "evidence": "MITC section A2 (\"Other Credit Cards\"), KFS finance-charge table, product page."
+    },
+    {
+      "slug": "yes-bank-pop-club-rupay",
+      "field": "fees_and_surcharges.cash_advance, category_surcharges, banking_penalties, reward_redemption_fee; statement_and_late_fees",
+      "before": "all null",
+      "after": "cash advance 2.5% or ₹650 (30% limit); fuel, utility, rent, wallet, education, toll and rail fees; overlimit ₹550; cheque return ₹450; grace up to 50 days; MAD formula; late fee 10% of statement balance, max ₹1,350 (rule stored in additional_data)",
+      "evidence": "MITC sections 3(a) to 3(l), 5 and 6; KFS pp3 to 7. Redemption fee left null because the ₹100 fee applies to YES Rewardz, not POPcoins."
+    },
+    {
+      "slug": "yes-bank-pop-club-rupay",
+      "field": "reward_rules (exclusions)",
+      "before": "no exclusions (\"exclusion list not on the page\")",
+      "after": "11 exclusion rules: fuel, rent, wallet load, government, marketing/advertising, ATM/cash, utility, insurance, POI funding, EMI conversions, and education from 1 Jun 2026; personal spends only; at most 5 rental transactions per 30 days",
+      "evidence": "Product page T&C asterisk note and MCC table (fuel 5542, 5983, 5172, 5540; rent 6513; wallet 6540; utility 4900; insurance 6300; POI 6538; ATM 6011; government and marketing MCC lists; education 8211, 8220, 8249, 8299, 8241, 8244)."
+    },
+    {
+      "slug": "yes-bank-pop-club-rupay",
+      "field": "card_product.point_value_inr_baseline",
+      "before": "null (partner pages conflicting)",
+      "after": "null (still not stated by YES BANK)",
+      "evidence": "No YES page, MITC, KFS or Cardmember Agreement (V08_28072026, 0 mentions of POP) gives a POPcoin value. Partner home page mypop.in says 1 POPcoin = ₹1, but partner Terms (mypop.in/tnc) say redemption is a capped discount or cashback conversion \"at a rate the Company sets\"."
+    },
+    {
+      "slug": "yes-bank-pop-club-rupay",
+      "field": "card_product.data_source_tier",
+      "before": "issuer_page",
+      "after": "issuer_mitc_plus_manual_audit",
+      "evidence": "MITC CMITC_V18_05102026 and KFS V_20_28092026 were opened from the issuer site and read this session (the earlier timeouts were a plain-fetch problem; the browser route worked)."
+    }
+  ],
+  "unresolved": [
+    { "slug": "yes-bank-pop-club-rupay", "question": "What is one POPcoin worth in rupees? YES documents are silent; partner pages disagree (1 coin = ₹1 on the partner home page, company-set conversion in the partner Terms, 10 coins per ₹1 in the earlier partner-app read)." },
+    { "slug": "yes-bank-pop-club-rupay", "question": "Which fee cohort is open to a new applicant: the lifetime-free offer (\"limited time\") or the ₹399 card? Does the 1,500-POPcoin milestone and the 400-coin fee-payment credit repeat every anniversary year?" },
+    { "slug": "yes-bank-pop-club-rupay", "question": "Fuel waiver cap: ₹100 (page footnote and MITC bullet, from 1 Jun 2026) versus ₹300 (MITC and KFS cap tables). Is the card physical or virtual (cash-advance fee applies only to physical)?" },
+    { "slug": "yes-bank-uni", "question": "Network (Visa, Mastercard or RuPay) is not stated; what is a Uni coin worth in rupees; is the card physical or virtual; is it UPI-linkable? The Top Benefits section of the page is an image and was not readable." },
+    { "slug": "yes-bank-finbooster", "question": "Confirm the network from card art (Visa is inferred from the MCC footnotes only). Is there any cap on the 10-point and 6-point tiers? Is the card physical or virtual, and is it UPI-linkable? The Rewards Subscription Plan was not read." },
+    { "slug": "yes-bank-paisasave-rupay", "question": "Is the 3,000-point cycle cap on the 6% tier only, or on total points? Confirm the fuel waiver cap (₹125) and whether UPI fuel gets any waiver. The card is open only to existing PaisaSave cardholders: decide whether it belongs in the public catalogue." },
+    { "slug": "yes-bank-zagg", "question": "What does the current Zagg card earn? No reward rate is published for cards issued after 10 Jan 2025 (benefit image unreadable). Network is also not stated (UPI-linked, which suggests RuPay). RIO is treated as the same card as Zagg." },
+    { "slug": null, "question": "Other YES BANK cards on the listing that no wave-2 candidate covers: UNI RuPay, PaisaSave (non-RuPay), Klick, RuPay Virtual, AI Inside and AI Inside RuPay, novio and novio RuPay, Niyo, Max, BYOC, Wellness, EMI, Essence, Select, ACE, Elite+, Reserv, Marquee, Prosperity cards. A person should decide whether any should be added." },
+    { "slug": null, "question": "The MITC file and the product-page \"MITC\" links all resolve to one generic MITC (CMITC_V18_05102026); the old per-co-brand MITC (ybl_fintech_mitc_2024.pdf) redirects to it. PDFs could not be saved to disk (the site blocks curl, and its content policy blocks posting to localhost), so they were read in a browser tab; a reviewer should open the same links." }
+  ]
+}

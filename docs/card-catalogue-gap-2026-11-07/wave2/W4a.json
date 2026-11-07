@@ -1,0 +1,117 @@
+{
+  "agent": "W4a",
+  "candidates": [
+    {
+      "name": "RBL Bank Lumiere",
+      "slug": null,
+      "status": "not_sold",
+      "reason": "RBL's current credit card list (https://www.rbl.bank.in/personal-banking/cards/credit-cards/category, 64 cards, read 2026-11-07) labels Lumiere \"By invite only\" with an \"Express Your Interest\" button; the product page's only call to action is an interest form (/lumiere-form), which was viewed but not filled. Not drafted, per the brief. Facts already read, in case a person wants an invite-only draft: Lumiere T&C (webassets.rbl.bank.in/document/credit-cards/tnc-lumiere-credit-card.pdf, PDF created 2026-07-14, link taken from the Cardmember Agreement) states annual fee INR 50,000 + GST (same in SOC and MITC), welcome e-gift card INR 30,000 (Taj Experiences or Marriott), 4 points per INR 200 and 20 per INR 200 on lumiere.rbl.bank.in, 1 point = INR 1, no point expiry, 1 point = 1 partner mile (Air Asia, Air India, Qatar Airways, Club ITC), unlimited domestic and international lounge for the primary cardholder (10 guest visits abroad a year), 0% forex, 3.4% a month finance charge (MITC), 1% fuel waiver on INR 500-10,000 capped at INR 1,000 a month, three free add-ons then INR 5,000 each. The T&C refers to exclusions but prints none, and no document read names the network.",
+      "sources": [
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/category",
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/lumiere-credit-card",
+        "https://webassets.rbl.bank.in/document/credit-cards/tnc-lumiere-credit-card.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/CardsScheduleCharges.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/RBL-MITC-final.pdf"
+      ]
+    },
+    {
+      "name": "RBL Bank Nova",
+      "slug": "rbl-bank-nova",
+      "status": "drafted",
+      "reason": "Listed on the current card list (Know more / Express Your Interest, not labelled invite only), product page, T&C, SOC and MITC all current. Fee 12,500 (waived at 10 lakh), 4 points per INR 200 and 12 per INR 200 on the Nova portal (cap 30,000 a month), 1 point = INR 1, 2% forex, 3.4% finance charge, welcome and renewal INR 12,500 e-gift card, quarterly INR 3 lakh milestone, lounge and golf quotas. Network not stated anywhere.",
+      "sources": [
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/nova-credit-card",
+        "https://drws17a9qx558.cloudfront.net/document/credit-cards/tnc-nova-credit-card.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/CardsScheduleCharges.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/RBL-MITC-final.pdf",
+        "https://webassets.rbl.bank.in/document/credit-cards/rbl-miles-transfer-programme.pdf",
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/category"
+      ]
+    },
+    {
+      "name": "RBL Bank iGlobe",
+      "slug": "rbl-bank-iglobe",
+      "status": "drafted",
+      "reason": "Listed on the current card list (Know more only), product page, T&C (Aug 2026), SOC and MITC current. NRI-only card, bill payment only from an RBL NRE account. Fee 3,000 (NIL for Insignia Preferred Banking customers), 5 points per INR 100 domestic and 10 international, 1.5% forex, milestones at 5 and 8 lakh, lounge, golf, concierge, fuel waiver. Network set to Mastercard from the T&C golf and lounge clauses. The value of a point is not published, so effective return is null.",
+      "sources": [
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/iglobe-credit-card",
+        "https://webassets.rbl.bank.in/document/credit-cards/terms-conditions-iglobe-credit-card.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/CardsScheduleCharges.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/RBL-MITC-final.pdf",
+        "https://webassets.rbl.bank.in/document/credit-cards/rbl-miles-transfer-programme.pdf",
+        "https://rblrewards.rbl.bank.in/tnc"
+      ]
+    },
+    {
+      "name": "RBL Bank World Safari Lite",
+      "slug": "rbl-bank-world-safari-lite",
+      "status": "drafted",
+      "reason": "Listed with Apply Now on the current card list; product page, T&C (May 2026), welcome-benefit T&C, travel MCC list, SOC and MITC current. Fee 1,000, 0% forex, 5 points per INR 100 on portal flights and hotels, 1 per INR 100 on domestic travel, 1 point = INR 0.25 (flights, hotels) or 0.05 (other), milestones, lounge vouchers. No earn rate is published for non-travel spend and no network is stated.",
+      "sources": [
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/world-safari-lite-credit-card",
+        "https://webassets.rbl.bank.in/document/credit-cards/tnc-world-safari-lite.pdf",
+        "https://webassets.rbl.bank.in/document/credit-cards/world-safari-lite-and-plus-travel-mcc-list.pdf",
+        "https://webassets.rbl.bank.in/document/credit-cards/welcome-benefit-world-safari-lite-credit-card.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/CardsScheduleCharges.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/RBL-MITC-final.pdf"
+      ]
+    },
+    {
+      "name": "RBL Bank World Safari Plus",
+      "slug": "rbl-bank-world-safari-plus",
+      "status": "drafted",
+      "reason": "Listed with Apply Now on the current card list; product page and T&C (16 Sep 2026), travel insurance schedule, SOC and MITC current. Fee 6,000, 0% forex, 5 points per INR 100 on portal travel, 2 on domestic travel, 1 elsewhere, 1 point = INR 1 (flights, hotels) or 0.10 (other), 6,000-point welcome, Marriott and Taj milestones, lounges, Mastercard golf, USD 100,000 travel insurance, five partner offers, miles transfer at 3:1.",
+      "sources": [
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/world-safari-plus-credit-card",
+        "https://webassets.rbl.bank.in/document/credit-cards/tnc-world-safari-plus.pdf",
+        "https://webassets.rbl.bank.in/document/credit-cards/travel-insurance-world-safari-plus.pdf",
+        "https://webassets.rbl.bank.in/document/credit-cards/world-safari-lite-and-plus-travel-mcc-list.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/CardsScheduleCharges.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/RBL-MITC-final.pdf",
+        "https://webassets.rbl.bank.in/document/credit-cards/rbl-miles-transfer-programme.pdf"
+      ]
+    },
+    {
+      "name": "RBL Bank SalarySe UP",
+      "slug": "rbl-bank-salaryse-up",
+      "status": "drafted",
+      "reason": "Listed on the current card list (Know more only), product page, T&C (May 2026), SOC and MITC current. Virtual RuPay card with SalarySe: 1 point per INR 100, 5X (cap 1,000 a month) and 10X (cap 8,000 a month) on UPI on the SalarySe app, 1 point = INR 0.20 in the SalarySe app or 0.10 on the RBL portal, fee 499 waived at 2 lakh, welcome points.",
+      "sources": [
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/salaryse-up-credit-card",
+        "https://webassets.rbl.bank.in/document/credit-cards/tnc-salary-se-up-credit-card.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/CardsScheduleCharges.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/RBL-MITC-final.pdf",
+        "https://rblrewards.rbl.bank.in/tnc"
+      ]
+    },
+    {
+      "name": "RBL Bank IndianOil XTRA",
+      "slug": "rbl-bank-indianoil-xtra",
+      "status": "drafted",
+      "reason": "Listed with Apply Now on the current card list; product page, T&C (May 2026), FAQ, SOC and MITC current. Mastercard and RuPay (dual network). Fee 1,500 waived at 2.75 lakh, 15 fuel points per INR 100 at select IndianOil stations (cap 2,000 a month), 2 per INR 100 elsewhere, 1 fuel point = INR 0.50 via XTRA Reward conversion or 0.10 elsewhere, 3,000-point welcome, quarterly 75,000 milestone, 1% fuel waiver capped at INR 200 a month.",
+      "sources": [
+        "https://www.rbl.bank.in/personal-banking/cards/credit-cards/indianoil-rbl-bank-xtra-credit-card",
+        "https://webassets.rbl.bank.in/document/credit-cards/tnc-indianoil-rbl-bank-extra-credit-card.pdf",
+        "https://webassets.rbl.bank.in/document/credit-cards/indianoil-rbl-bank-credit-card-faqs.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/CardsScheduleCharges.pdf",
+        "https://webassets.rbl.bank.in/document/Credit%20Cards/RBL-MITC-final.pdf",
+        "https://rblrewards.rbl.bank.in/tnc"
+      ]
+    }
+  ],
+  "fixes": [],
+  "unresolved": [
+    { "slug": null, "question": "Lumiere (not drafted): RBL's card list says \"By invite only\". Decide whether an invite-only card belongs in the catalogue; if yes, its T&C (tnc-lumiere-credit-card.pdf) is fully read, but it prints no exclusion list and no network." },
+    { "slug": "rbl-bank-nova", "question": "Network is not stated by any document or the card art. The page and card list offer only \"Express your interest\" (not Apply Now, and not labelled invite only like Lumiere), so application_mode open is an assumption. The T&C names no miles partners and the page shows a KrisFlyer logo the Miles Transfer T&C does not list. What accelerated spend earns after the 30,000-point monthly cap is not stated." },
+    { "slug": "rbl-bank-iglobe", "question": "RBL publishes no rupee value for an iGlobe point, so effective return is null. Network Mastercard rests on T&C golf and lounge clauses; the page says \"MasterCard/Visa\" for lounges and the card art shows no logo. Point expiry (24 months) is the programme rule, not stated in the product T&C." },
+    { "slug": "rbl-bank-world-safari-lite", "question": "No earn rate is published for spend other than domestic travel and portal flights and hotels, so base rate and return are null. Network not stated. T&C welcome clause says \"first month membership fees\" while the page says annual fee." },
+    { "slug": "rbl-bank-world-safari-plus", "question": "MakeMyTrip offer window printed as 1 to 31 March 2028 in the T&C (likely a typo), so dates are left null. International travel spend outside the portal appears to earn nothing; confirm. Network Mastercard rests on the page's golf paragraph and T&C 3.7 (\"Mastercard network only\")." },
+    { "slug": "rbl-bank-salaryse-up", "question": "Baseline point value is the 0.10 RBL portal value (0.20 in the SalarySe app). What the 5X and 10X tiers earn after their caps is not stated beyond the T&C illustration; the monthly period is modelled as the billing cycle." },
+    { "slug": "rbl-bank-indianoil-xtra", "question": "Baseline point value is 0.10 (0.50 only when converted to XTRA Reward points for fuel at IndianOil stations). The month for the 2,000-point cap is undefined and the earn above the cap conflicts between T&C 3.2 and FAQ 2. The XRP conversion fee waiver reads \">5000\" with no unit. The IOCL station MID/TID list was not read." }
+  ],
+  "observations": [
+    "Schedule of Charges date: the document carries the code RBL-CC-SOC-V2-04-06-2026 (4 Jun 2026) and a PDF creation date of 4 Jun 2026; the server Last-Modified header is 29 Aug 2026. The MITC is RBL-CC-MITC-V2-29-10-2026 (29 Oct 2026) and the Cardmember Agreement RBL-CC-CMA-27-10-2026. The earlier rbl.mjs open question that the three Shoppers Stop drafts have no SOC revision date can now be answered, and the SOC and MITC also settle their late fee (12.5% of outstanding, min 5, max 1,300), over-limit fee (NIL) and fuel fee (1% above INR 10,000 a transaction, max INR 3,000). Those entries were not edited.",
+    "Convention difference: the MITC states Joining Fee NIL and a separate annual membership fee, so these drafts store joining_fee_inr 0 and the first-year fee as annual_fee_inr; the three Shoppers Stop drafts store the first-year fee as the joining fee too.",
+    "Point-value baselines are the lowest value that applies to every redemption (WSL 0.05, WSP 0.10, SalarySe 0.10, XTRA 0.10); the higher route values (0.25, 1.0, 0.20, 0.50) are in point_value_baseline_basis and redemption_matrix."
+  ]
+}

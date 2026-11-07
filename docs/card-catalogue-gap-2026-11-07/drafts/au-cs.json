@@ -1,0 +1,1048 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "au-cs",
+    "name": "AU CS Credit Card",
+    "issuer_slug": "au",
+    "network": null,
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": null,
+    "application_mode": "open",
+    "form_factors": [
+      "nfc_contactless"
+    ],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": 5000,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": "Value of one AU Reward Point is not stated for this card. The AU Rewardz FAQ says it depends on card variant and redemption category.",
+    "point_expiry_months": 24,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.au.bank.in/personal-banking/credit-cards/au-cs-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "Page names the card as for Company Secretaries but lists no membership proof; add-on cardholders 18+. AU says the criteria are only indicative.",
+    "rules": [
+      {
+        "parameter": "age_years_salaried",
+        "operator": ">=",
+        "threshold_value": 21,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years_salaried",
+        "operator": "<=",
+        "threshold_value": 60,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years_self_employed",
+        "operator": ">=",
+        "threshold_value": 25,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years_self_employed",
+        "operator": "<=",
+        "threshold_value": 65,
+        "allowed_values": []
+      },
+      {
+        "parameter": "residency",
+        "operator": "in",
+        "threshold_value": null,
+        "allowed_values": [
+          "resident_indian"
+        ]
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": "floor",
+    "base_points_per_block": 2,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": 25000,
+    "capping_period_basis": "statement_cycle",
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "cs-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5983,
+          5541,
+          5542,
+          5172
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel earns nothing (AU CS Reward Points T&C (undated))."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cs-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Rent earns nothing (AU CS Reward Points T&C (undated))."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cs-excl-wallet",
+      "category_id": "wallet_load",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Wallet loads earn nothing (AU CS Reward Points T&C (undated))."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cs-excl-cash",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6010,
+          6011
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Cash earns nothing (AU CS Reward Points T&C (undated))."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cs-excl-education",
+      "category_id": "education",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Education earns nothing (AU CS Reward Points T&C (undated))."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cs-excl-govt",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          9211,
+          9222,
+          9223,
+          9311,
+          9399,
+          9402,
+          9405,
+          9950
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Government earns nothing (AU CS Reward Points T&C (undated)). MCC 9311 is also listed under Tax Payments (8 points): the T&C conflicts with itself, exclusion wins here."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cs-excl-bbps",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "platform": "AU 0101 BBPS"
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "BBPS bill payments on the AU 0101 app earn nothing (T&C exclusions)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cs-excl-emi",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "transaction_type": "emi_or_quasi_cash"
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "EMI and quasi-cash transactions earn nothing (page note)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cs-excl-transport",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_group": "transportation"
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Transportation earns nothing (page note)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cs-dining-8rp",
+      "category_id": "dining",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5811,
+          5812,
+          5813,
+          5814
+        ]
+      },
+      "action": {
+        "multiplier": 4,
+        "points_per_block": 8,
+        "cashback_percent": "N/A",
+        "cap_reference": "cs-accelerated-cycle-cap",
+        "reason": "8 Reward Points per ₹100 on dining: restaurants 5811-5813 and QSR 5814 (AU CS Reward Points T&C (undated))."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cs-travel-8rp",
+      "category_id": "travel",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4722,
+          4723,
+          4511,
+          3000,
+          3001,
+          3004,
+          3005,
+          3006,
+          3007,
+          3008,
+          3009,
+          3010,
+          3011,
+          3012,
+          3013,
+          3014,
+          3015,
+          3016,
+          3017,
+          3018,
+          3020,
+          3021,
+          3022,
+          3023,
+          3024,
+          3025,
+          3026,
+          3027,
+          3028,
+          3029,
+          3030,
+          3031,
+          3032,
+          3034,
+          3035,
+          3037,
+          3038,
+          3039,
+          3040,
+          3042,
+          3043,
+          3044,
+          3045,
+          3047,
+          3048,
+          3049,
+          3050,
+          3051,
+          3052,
+          3054,
+          3058,
+          3061,
+          3064,
+          3066,
+          3068,
+          3069,
+          3071,
+          3072,
+          3075,
+          3076,
+          3077,
+          3078,
+          3079,
+          3082,
+          3083,
+          3084,
+          3085,
+          3088,
+          3089,
+          3090,
+          3096,
+          3098,
+          3099,
+          3100,
+          3102,
+          3103,
+          3111,
+          3112,
+          3115,
+          3127,
+          3129,
+          3132,
+          3136,
+          3144,
+          3146,
+          3156,
+          3161,
+          3167,
+          3171,
+          3174,
+          3175,
+          3177,
+          3180,
+          3181,
+          3182,
+          3183,
+          3184,
+          3186,
+          3187,
+          3190,
+          3191,
+          3193,
+          3196,
+          3200,
+          3204,
+          3206,
+          3211,
+          3212,
+          3213,
+          3217,
+          3219,
+          3220,
+          3221,
+          3228,
+          3234,
+          3236,
+          3240,
+          3245,
+          3246,
+          3247,
+          3248,
+          3252,
+          3256,
+          3259,
+          3260,
+          3261,
+          3266,
+          3267,
+          3280,
+          3282,
+          3285,
+          3286,
+          3287,
+          3294,
+          3295,
+          3297,
+          3298,
+          3299,
+          3300,
+          3301
+        ],
+        "otas": "only airline and hotel bookings through online travel agencies; bus, train and cab bookings via OTAs earn nothing"
+      },
+      "action": {
+        "multiplier": 4,
+        "points_per_block": 8,
+        "cashback_percent": "N/A",
+        "cap_reference": "cs-accelerated-cycle-cap",
+        "reason": "8 Reward Points per ₹100 on travel: airline MCCs, 4722, 4723 and 4511 (AU CS Reward Points T&C (undated))."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cs-tax-8rp",
+      "category_id": "government",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          9311,
+          7276
+        ]
+      },
+      "action": {
+        "multiplier": 4,
+        "points_per_block": 8,
+        "cashback_percent": "N/A",
+        "cap_reference": "cs-accelerated-cycle-cap",
+        "reason": "8 Reward Points per ₹100 on tax payments, MCCs 9311 and 7276 (AU CS Reward Points T&C (undated)). 9311 is also in the exclusion list."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cs-software-8rp",
+      "category_id": "other",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5734,
+          5045
+        ],
+        "category_label": "software purchases"
+      },
+      "action": {
+        "multiplier": 4,
+        "points_per_block": 8,
+        "cashback_percent": "N/A",
+        "cap_reference": "cs-accelerated-cycle-cap",
+        "reason": "8 Reward Points per ₹100 on software purchases, MCCs 5734 and 5045 (AU CS Reward Points T&C (undated))."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cs-bills-1rp",
+      "category_id": "bills",
+      "priority": 25,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4812,
+          4814,
+          4899,
+          4900
+        ],
+        "max_points_per_transaction": 100
+      },
+      "action": {
+        "multiplier": 0.5,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": "cs-total-cycle-cap",
+        "reason": "1 Reward Point per ₹100 on telecom and utilities (MCCs 4812, 4814, 4899, 4900), at most 100 points per transaction (AU CS Reward Points T&C (undated); page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cs-insurance-1rp",
+      "category_id": "insurance",
+      "priority": 25,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5960,
+          6300
+        ]
+      },
+      "action": {
+        "multiplier": 0.5,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": "cs-total-cycle-cap",
+        "reason": "1 Reward Point per ₹100 on insurance (MCCs 5960, 6300) (AU CS Reward Points T&C (undated))."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cs-base-2rp",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 2,
+        "cashback_percent": "N/A",
+        "cap_reference": "cs-total-cycle-cap",
+        "reason": "2 Reward Points per ₹100 on all other retail spends (AU CS Reward Points T&C (undated))."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "cs-accelerated-cycle-cap",
+      "category_id": "dining",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": 5000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": "cs-total-cycle-cap",
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cs-total-cycle-cap",
+      "category_id": "all_retail",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": 25000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 2.99,
+      "annual_interest_rate_percent": 35.88
+    },
+    "forex_markup": {
+      "markup_percent": 1.99,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 1.99,
+      "gst_applicable": true,
+      "trigger_condition": "KFS lists one cross-currency markup for foreign-currency, dynamic and static conversion transactions"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 400,
+      "max_txn_inr": 5000,
+      "monthly_waiver_cap_inr": 250
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": 20
+    },
+    "category_surcharges": [
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          5172,
+          5541,
+          5542,
+          5552,
+          5983
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "From 1 Jul 2026: 1% on the whole month's fuel spend when one transaction exceeds ₹10,000 or the calendar-month total exceeds ₹25,000",
+        "threshold_spend_inr": 25000,
+        "effective_from": "2026-07-01",
+        "effective_to": null
+      },
+      {
+        "category_id": "utility",
+        "mcc_list": [
+          4900
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% on utility spend above ₹50,000 in a calendar month",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education_third_party",
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Education paid through third-party apps (CRED, PhonePe, Paytm, MobiKwik, Freecharge etc.), minimum ₹99 per transaction; direct school/college site or POS exempt",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Domestic rental payments, minimum ₹99 per transaction; international rental has no charge",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "transportation",
+        "mcc_list": [
+          4111,
+          4112,
+          4784
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "From 14 Jun 2026: 1% on the whole month's transportation spend once it exceeds the lower of 50% of credit limit or ₹25,000; IRCTC and marquee travel partners excluded",
+        "threshold_spend_inr": 25000,
+        "effective_from": "2026-06-14",
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": 199,
+      "post_purchase_emi_processing_fee_inr": 0,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 500,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 99,
+      "gst_applicable": true,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 50,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "If previous Total Amount Due was paid on time: 5% of principal outstanding + 100% of fees/charges + 100% of interest + due EMIs + 100% annual fee (if applicable) + 100% GST",
+        "If previous Total Amount Due was not paid on time: 2% of principal outstanding + the same 100% components"
+      ]
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "Lifetime free: no joining or annual fee (page and KFS).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "spend_5000_within_30_days_of_card_activation",
+      "benefit_points": 2000,
+      "effective_value_inr": null,
+      "condition": "2,000 bonus Reward Points on ₹5,000 spends within 30 days of card activation, credited within 3 working days; plus a SwiggyOne Quarterly Dining Membership on ₹10,000 spends within 30 days of activation. Primary cardholder (AU CS Welcome Benefit T&C, undated)."
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "cs-domestic-lounge",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "AU Small Finance Bank",
+      "label": "Domestic airport lounge access",
+      "evaluation_engine": {
+        "conditions": {
+          "rule": "Lounge T&C: spend at least ₹50,000 net retail in a calendar quarter to unlock access in the next quarter (for CA and CS from 1 Oct 2026). Page: access only if the card stays purchase-active during the quarter.",
+          "primary_cardholder_only": true,
+          "validation_swipe_inr": 2
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 2,
+      "quota_period": "quarter",
+      "value_estimate_inr": "N/A",
+      "effective_from": "2026-10-01",
+      "effective_to": null
+    },
+    {
+      "benefit_id": "cs-concierge",
+      "category_id": "concierge",
+      "network_program": null,
+      "sponsor": "AU Small Finance Bank",
+      "label": "Dedicated concierge, 24x7 (1800 210 0298)",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "cs-swiggyone",
+      "category_id": "other",
+      "network_program": null,
+      "sponsor": "Swiggy",
+      "label": "SwiggyOne Quarterly Dining Membership as a welcome benefit on ₹10,000 spend within 30 days of activation",
+      "evaluation_engine": {
+        "conditions": {
+          "welcome_benefit": true
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 0,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": 18
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [
+    {
+      "promo_id": "cs-icsi-25pct",
+      "category_id": "other",
+      "network_program": "N/A",
+      "sponsor": "ICSI annual membership fee paid with the card",
+      "platform": "ICSI membership renewal",
+      "offer_type": "cashback",
+      "discount_percent": 25,
+      "max_discount_inr": "N/A",
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": true,
+      "is_permanent_card_feature": true,
+      "valid_from": null,
+      "valid_to": null
+    },
+    {
+      "promo_id": "cs-mmt",
+      "category_id": "travel",
+      "network_program": "N/A",
+      "sponsor": "MakeMyTrip",
+      "platform": "MakeMyTrip (Visa offer link)",
+      "offer_type": "complimentary_flight_seats_and_hotel_discount",
+      "discount_percent": "N/A",
+      "max_discount_inr": "N/A",
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": false,
+      "is_permanent_card_feature": true,
+      "valid_from": null,
+      "valid_to": null
+    },
+    {
+      "promo_id": "cs-timesprime",
+      "category_id": "entertainment",
+      "network_program": "N/A",
+      "sponsor": "Times Prime",
+      "platform": "Times Prime (Visa offer link)",
+      "offer_type": "complimentary_annual_membership",
+      "discount_percent": "N/A",
+      "max_discount_inr": "N/A",
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": false,
+      "is_permanent_card_feature": true,
+      "valid_from": null,
+      "valid_to": null
+    },
+    {
+      "promo_id": "cs-alaya",
+      "category_id": "travel",
+      "network_program": "N/A",
+      "sponsor": "Alaya Stays",
+      "platform": "Alaya Stays (Visa offer link)",
+      "offer_type": "stay_3_pay_2_and_50pct_off_second_night",
+      "discount_percent": "N/A",
+      "max_discount_inr": "N/A",
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": false,
+      "is_permanent_card_feature": true,
+      "valid_from": null,
+      "valid_to": null
+    }
+  ],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "verified_network_research",
+        "value": {
+          "finding_status": "partial",
+          "product_status": "active",
+          "source_url": "https://www.au.bank.in/personal-banking/credit-cards/au-cs-credit-card",
+          "evidence": "Page popup titled \"Visa Exclusive Offers\" lists MakeMyTrip, Times Prime and Alaya Stays through Visa-branded partner links. The card image file on the page is named \"CS_Credit_Card Op3_without-VISA\", meaning a Visa logo was edited out of the art. No AU document states the network outright.",
+          "candidates": [
+            {
+              "network": "visa",
+              "network_tier": "N/A",
+              "label": "AU CS Credit Card",
+              "source_url": "https://www.au.bank.in/personal-banking/credit-cards/au-cs-credit-card",
+              "evidence": "Popup heading \"Visa Exclusive Offers\"; card art asset name \"without-VISA\"."
+            }
+          ]
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.au.bank.in/personal-banking/credit-cards/au-cs-credit-card",
+              "kind": "issuer_page + FAQ + popups",
+              "read": "rendered page text including hidden accordions and popups"
+            },
+            {
+              "url": "https://www.au.bank.in/pdfs/au-cs-credit-card/AU-CS-Credit-Card-Reward-Points-Terms-and-Conditions.pdf",
+              "kind": "AU CS Credit Card Reward Points T&C (earn rates, MCC lists, exclusions)",
+              "date": "undated",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.au.bank.in/pdfs/au-cs-credit-card/CS_Card-welcome-benefits-terms-and-conditions.pdf",
+              "kind": "welcome benefit T&C",
+              "date": "undated",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.au.bank.in/pdfs/au-cs-credit-card/CS-Card-ICSI-Membership-Fee-Benefit-Terms-and-Conditions.pdf",
+              "kind": "ICSI membership fee benefit T&C",
+              "date": "2026-06-04",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.au.bank.in/pdf/zenith-plus-credit-card/au-small-finance-bank-cc-airport-lounge-terms-conditions.pdf",
+              "kind": "airport lounge program T&C (CA and CS from 1 Oct 2026)",
+              "date": "undated; revision w.e.f. 10 Apr 2026",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.au.bank.in/pdf/credit-card/Schedule-of-Charges-CC.pdf",
+              "kind": "KFS (lifetime free, 1.99% forex, 2.99% interest, ₹250 fuel waiver, zero Xpress EMI fee)",
+              "date": "Key Fact Statement v1.9, 2 Nov 2026"
+            },
+            {
+              "url": "https://www.au.bank.in/credit-cards/credit-card-member-agreement.pdf",
+              "kind": "Cardmember Agreement (25,000 cap and 5,000 cap for CA/CS in 23.5)",
+              "date": "Cardmember Agreement, undated copy (the copy under /pdf/credit-card/ is dated 16 May 2026 and has no Zaggle section)"
+            },
+            {
+              "url": "https://www.au.bank.in/personal-banking/credit-cards",
+              "kind": "AU current credit card list (card is listed)",
+              "date": "2026-11-07"
+            }
+          ],
+          "open_questions": [
+            "Network: popup \"Visa Exclusive Offers\" and the \"without-VISA\" art file name point to Visa, but no AU document states it outright. card_product.network left null; one candidate recorded.",
+            "Value of one AU Reward Point: not stated for this card.",
+            "MCC 9311 appears in both the 8-point Tax Payments list and the Education & Govt exclusion list; modelled as excluded.",
+            "Cap after the 5,000-point cycle limit on the 8-point categories: not stated. Modelled as zero accrual for those categories.",
+            "Lounge: the page says access needs the card to stay \"purchase-active\"; the lounge T&C says ₹50,000 retail spend in the previous quarter, effective for CA and CS from 1 Oct 2026. T&C used.",
+            "The reward T&C and welcome T&C carry no date."
+          ],
+          "notes": [
+            "Reward Points are earned on transaction amounts in multiples of ₹100 (CMA 23.22), so rounding is modelled as floor.",
+            "Page figures: 8 points on dining, travel, tax payments and software; 2 points on retail; 1 point on utility, telecom and insurance; max 100 points per utility/telecom transaction; max 5,000 points per cycle on the 8-point categories.",
+            "ICSI benefit: flat 25% cashback on the annual ICSI membership fee paid with the card, calculated on the fee excluding GST, once per card anniversary year, primary cardholder, credited within 60 days (ICSI T&C, 4 Jun 2026).",
+            "Protection (page): air accident cover ₹50 lacs; card liability cover; credit shield up to ₹5 lacs; purchase protection up to ₹25,000; baggage and flight delay, loss of passport, plane hijack.",
+            "Fuel surcharge waiver up to ₹250 per statement cycle on ₹400 to ₹5,000. Zero processing fee on Xpress EMI (KFS). Forex 1.99%. Interest 2.99% a month (35.88% a year). Cash limit 20%."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "15% of Total Amount Due, minimum ₹10, maximum ₹1,300",
+          "source": "Key Fact Statement v1.9, 2 Nov 2026, section 5",
+          "note": "Percentage fee cannot be expressed as fixed slabs, so late_payment_slabs is empty."
+        }
+      },
+      {
+        "key": "payment_return_charge",
+        "value": {
+          "rule": "2% of Total Amount Due or ₹500, whichever is higher, on return/failure of card payment (cheque, ECS/NACH, autopay)",
+          "source": "Key Fact Statement v1.9, 2 Nov 2026, section 10"
+        }
+      }
+    ]
+  }
+}

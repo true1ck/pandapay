@@ -1,0 +1,164 @@
+{
+  "agent": "W5",
+  "candidates": [
+    {
+      "name": "IndiGo Axis Bank Credit Card",
+      "slug": "axis-bank-indigo",
+      "status": "drafted",
+      "reason": "Live on axis.bank.in with Apply Now; listed in the Oct 2026 MITC fee table (799/799). Earn 1 / 2 / 3 IndiGo BluChips per 100 rupees, 1,200-BluChip welcome, renewal and two milestone vouchers, 1 domestic lounge a quarter on 50,000 spend. A BluChip has no rupee value in any Axis or IndiGo document, so point value and effective return are null. Network Visa from the page caption and card art (art is labelled AI generated, tier left null). No fuel surcharge waiver is stated.",
+      "sources": [
+        "https://www.axis.bank.in/cards/credit-card/indigo-axis-bank-credit-card",
+        "https://www.axis.bank.in/docs/default-source/default-document-library/final_indigo-base_customer-tnc.pdf",
+        "https://www.axis.bank.in/docs/default-source/default-document-library/mitc-credit-cards.pdf",
+        "https://www.axis.bank.in/docs/default-source/default-document-library/axis-bank-airport-lounge-access-program.pdf",
+        "https://campaign.axis.bank.in/generic/terms-and-conditions-generic-all.pdf",
+        "https://www.goindigo.in/loyalty/faq.html",
+        "https://www.goindigo.in/loyalty/terms-and-conditions.html",
+        "https://www.goindigo.in/loyalty/partners/axis-credit-card.html"
+      ]
+    },
+    {
+      "name": "IndiGo Axis Bank Premium Credit Card",
+      "slug": "axis-bank-indigo-premium",
+      "status": "drafted",
+      "reason": "Live on axis.bank.in with Apply Now; listed in the Oct 2026 MITC (5,000/5,000, forex 2.5%). Earn 2 base, 3 on grocery and hotel, 7 on IndiGo channels; 5,000-BluChip plus 6E Eats welcome and renewal; four 5,000-BluChip milestones; 2 domestic lounges a quarter and 2 international a year via Priority Pass; BookMyShow buy-one-get-one up to 250 rupees a month. BluChip has no rupee value, so point value is null. Network Visa Signature from card art. The T&C says grocery and hotel in its table but grocery and dining in one sentence.",
+      "sources": [
+        "https://www.axis.bank.in/cards/credit-card/indigo-axis-bank-premium-credit-card",
+        "https://www.axis.bank.in/docs/default-source/default-document-library/final_indigo-premium_customer-tnc.pdf",
+        "https://www.axis.bank.in/docs/default-source/default-document-library/mitc-credit-cards.pdf",
+        "https://www.axis.bank.in/docs/default-source/default-document-library/axis-bank-airport-lounge-access-program.pdf",
+        "https://campaign.axis.bank.in/generic/terms-and-conditions-indigopremium.pdf",
+        "https://www.axis.bank.in/offers/dining-delights/up-to-inr-1000-off-on-the-axis-bank-dining-program",
+        "https://www.goindigo.in/loyalty/partners/axis-credit-card.html"
+      ]
+    },
+    {
+      "name": "KVB Visa Platinum",
+      "slug": "kvb-visa-platinum",
+      "status": "drafted",
+      "reason": "Still sold, under the name KVB Platinum Credit Card (Visa Platinum variant): live page with Apply Now, listed in the Aug 2026 KFS cum MITC as Platinum (Visa Platinum), nil joining, 599 annual, waived from year 2 on 1 lakh retail spend. Earn 2 points per 150 rupees plus 1.5x and 2x category lines whose basis is not stated. No document gives a rupee value per point, so value and effective return are null. The queue's retail-credit-card-mitc.pdf is the superseded March 2025 version.",
+      "sources": [
+        "https://www.kvb.bank.in/personal/cards/kvb-credit-cards/kvb-credit-card/kvb-platinum-credit-card/",
+        "https://www.kvb.bank.in/docs/mitc-english.pdf",
+        "https://www.kvb.bank.in/docs/retail-credit-card-mitc.pdf",
+        "https://www.kvb.bank.in/credit-card-offers/retail-credit-card-offers",
+        "https://www.kvb.bank.in/reward-points-redemption",
+        "https://www.kvb.bank.in/card-member-agreement"
+      ]
+    },
+    {
+      "name": "KVB Visa Signature",
+      "slug": "kvb-visa-signature",
+      "status": "drafted",
+      "reason": "Still sold, under the name KVB Honour Credit Card (MITC spelling Honor, Visa Signature variant): live page with Apply Now, nil joining, 999 annual, waived from year 2 on 3 lakh retail spend. Earn 3 points per 150 rupees plus 2x and 4x category lines whose basis is not stated; 4 complimentary lounge visits in India with no period stated; 700 activation points. No rupee value per point is published. Not to be confused with KVB Samara, which is also a Visa Signature card at 5,999.",
+      "sources": [
+        "https://www.kvb.bank.in/personal/cards/kvb-credit-cards/kvb-credit-card/kvb-honour-credit-card/",
+        "https://www.kvb.bank.in/docs/mitc-english.pdf",
+        "https://www.kvb.bank.in/docs/retail-credit-card-mitc.pdf",
+        "https://www.kvb.bank.in/credit-card-offers/retail-credit-card-offers",
+        "https://www.kvb.bank.in/reward-points-redemption",
+        "https://www.kvb.bank.in/card-member-agreement"
+      ]
+    }
+  ],
+  "fixes": [
+    {
+      "slug": "axis-bank-shoppers-stop",
+      "field": "card_product.network / card_product.network_tier",
+      "before": "null / unset",
+      "after": "visa / visa_platinum",
+      "evidence": "Card art on the axis.bank.in Shoppers Stop page banner (shopper-stop-credit-card-desktop-1366x400-v1.webp): VISA logo with 'Platinum' beneath, Shoppers Stop mark. Page text and T&C never name the network, so the open question now asks a person to confirm against an issued card."
+    },
+    {
+      "slug": "google-pay-flex-axis-bank",
+      "field": "card_product.network",
+      "before": "null",
+      "after": "rupay",
+      "evidence": "Card art on the axis.bank.in Google Pay Flex page banner (google-pay-flex-credit-card-1366x400-w1.webp): RuPay logo beside the Axis Bank mark. Page text and T&C never name the network."
+    },
+    {
+      "slug": "csb-bank-jupiter-edge-plus-rupay",
+      "field": "reward_rules / cap_rules",
+      "before": "[] / []  (held: no reward rule)",
+      "after": "3 earn rules (50 Jewels per 100 rupees on 10 listed shopping brands when cycle spend is above 15,000 else 5; 25 on Jupiter Flights; 5 on all other eligible spend), 9 exclusion rows from the T&C MCC list, 2 caps (10,000 Jewels category, 3,000 merchant per statement cycle); the 1,000-Jewel transaction cap sits in rule conditions",
+      "evidence": "CSB-hosted 'Terms and Conditions - Edge CSB Bank Rupay Credit Card, Edge+ CSB Bank Rupay Credit Card' (https://www.csb.bank.in/pdf/edge_csb_bank_credit_card_terms_and_conditions_2025.pdf, PDF created 5 Sep 2026), Rewards Programme section 2 'Rewards structure for Edge+ CSB Bank Rupay Card' (structure applicable from 5 Oct 2026) and the ineligible MCC list."
+    },
+    {
+      "slug": "csb-bank-jupiter-edge-plus-rupay",
+      "field": "card_product.point_value_inr_baseline / accrual_engine",
+      "before": "null / base_block null, base_points null, effective return null",
+      "after": "0.14 / block 100, 5 Jewels, effective base return 0.7 percent",
+      "evidence": "Same T&C, 'Redemption Slabs (Edge+ CSB Bank Card)': 1 Jewel = Re 0.20 for Jupiter Flights, Store, Brand Vouchers, Digital Gold; 1 Jewel = Re 0.14 for statement credit, bill payments, cash. Lower value used as baseline; at 0.20 the rates equal the page headline 10 / 5 / 1 percent."
+    },
+    {
+      "slug": "csb-bank-jupiter-edge-plus-rupay",
+      "field": "fees_and_surcharges.fuel_surcharge / category_surcharges / statement_and_late_fees",
+      "before": "fuel waiver null; only a fuel fee surcharge row; no MAD",
+      "after": "fuel waiver 1 percent on 400 to 3,000 rupees (maximum 100, period unstated); added rent 1 percent min 149, wallet 1 percent, third-party education 1 percent, utility 1 percent above 20,000 rows; MAD formula with 500-rupee floor",
+      "evidence": "CSB MITC (https://www.csb.bank.in/pdf/edge-csb-bank-ruPay-credit-card-mitc_2025.pdf, updated 25 Aug 2026, uploaded 30 Oct 2026) fee table and footnote ***; KFS updated 5 Nov 2025 (Minimum Amount Due)."
+    },
+    {
+      "slug": "csb-bank-jupiter-edge-plus-rupay",
+      "field": "availability",
+      "before": "not re-checked",
+      "after": "sold: csb.bank.in/csb-bank-edge-credit-card shows Edge+ CSB Bank RuPay Credit Card live with Apply now, MITC updated Aug 2026",
+      "evidence": "CSB product page read 2026-11-07. Page advertises 499-rupee joining fee for the first 2 lakh users; MITC and KFS say 999, which is kept."
+    },
+    {
+      "slug": "indian-overseas-bank-rupay-platinum",
+      "field": "availability (open question)",
+      "before": "'proposed to be launched'; do not publish until on sale is confirmed",
+      "after": "on sale: IOB RuPay FAQ (updated 7 Oct 2026) says 'At present the following types of cards are issued by IOB: RuPay Classic, RuPay Platinum, RuPay Select'",
+      "evidence": "https://www.iob.bank.in/en/Frequently-Asked-Questions-Rupay-Credit-Cards (Q2); Aug 2026 MITC fee table lists the variants with no 'proposed' marker; the 'proposed' asterisk is on a Schedule of Charges PDF created 21 Oct 2023. FAQ Q3 says all IOB customers can apply (non-customers not addressed)."
+    },
+    {
+      "slug": "indian-overseas-bank-rupay-platinum",
+      "field": "reward_rules / accrual_engine / card_product.point_value_inr_baseline / redemption_matrix",
+      "before": "[] / nulls / null / empty (held: no reward rate)",
+      "after": "1 point per 100 rupees (POS and e-commerce, minimum 100 per transaction) / block 100, 1 point, effective 0.25 percent / 0.25 / minimum 750 points to redeem",
+      "evidence": "IOB credit card page (last updated 5 Nov 2026), 'Features of Rupay Credit Card', and RuPay FAQ Q27 (updated 7 Oct 2026): 'Each point will have a value of Rs. 0.25'; Platinum minimum 750 points."
+    },
+    {
+      "slug": "indian-overseas-bank-rupay-platinum",
+      "field": "fee_waiver / fuel_surcharge / apr / cash_advance / addon / lifestyle / insurance",
+      "before": "waiver null; fuel waiver null; no apr; cash fee min 22.5 and limit null; add-on null; no lounge; no insurance",
+      "after": "annual fee 250 waived at 1,00,000 spend; fuel waiver 1 percent on 400 to 5,000, 250 per cycle; 2.5 percent a month (30 a year); cash fee 2.25 percent with the 22.5 minimum removed (it restated 22.50 per 1,000) and limit 40 percent; up to 4 add-ons free; lounge 1 domestic a quarter and 1 international a year; NPCI personal accident cover 2 lakh",
+      "evidence": "IOB MITC (https://www.iob.bank.in/documents/d/guest/mitc-iob-credit-cards, PDF created 20 Aug 2026) sections 1, 3, 4, 6, 7; IOB credit card page Features of Rupay Credit Card."
+    },
+    {
+      "slug": "indian-overseas-bank-rupay-select",
+      "field": "availability (open question)",
+      "before": "'proposed to be launched'; do not publish until on sale is confirmed",
+      "after": "on sale: same FAQ Q2 and MITC evidence as Platinum",
+      "evidence": "https://www.iob.bank.in/en/Frequently-Asked-Questions-Rupay-Credit-Cards (Q2); IOB MITC fee table."
+    },
+    {
+      "slug": "indian-overseas-bank-rupay-select",
+      "field": "reward_rules / accrual_engine / card_product.point_value_inr_baseline / redemption_matrix",
+      "before": "[] / nulls / null / empty (held: no reward rate)",
+      "after": "1 point per 100 rupees (POS and e-commerce, minimum 100 per transaction) / block 100, 1 point, effective 0.25 percent / 0.25 / minimum 1,000 points to redeem",
+      "evidence": "IOB credit card page, Select column (the page text there is headed 'RuPay Platinum Credit Cards', a copy slip; the 1,000 minimum and FAQ Q27 'Platinum, Signature and Select' show it is the Select rule)."
+    },
+    {
+      "slug": "indian-overseas-bank-rupay-select",
+      "field": "fee_waiver / fuel_surcharge / apr / cash_advance / addon / lifestyle / insurance",
+      "before": "waiver null; fuel waiver null; no apr; cash fee min 22.5 and limit null; add-on null; no lounge; no insurance",
+      "after": "annual fee 500 waived at 1,00,000 spend; fuel waiver 1 percent on 400 to 5,000, 250 per cycle; 2.5 percent a month (30 a year); cash fee 2.25 percent (22.5 minimum removed) and limit 40 percent; up to 4 add-ons free; lounge 2 domestic a quarter and 2 international a year; NPCI personal accident cover 10 lakh",
+      "evidence": "IOB MITC (PDF created 20 Aug 2026) and IOB credit card page Features of Rupay Credit Card."
+    }
+  ],
+  "unresolved": [
+    { "slug": "axis-bank-indigo", "question": "Value of one IndiGo BluChip in rupees: Axis and IndiGo both say BluChips have no monetary value and the Cash + BluChips rate varies, so no point value or effective return can be stated. Decide whether the catalogue may carry a BluChip card with a null value." },
+    { "slug": "axis-bank-indigo", "question": "Network tier and UPI: card art shows Visa and an apparent Signature mark but is labelled AI generated; the T&C caps credit-card-on-UPI earns at 750 BluChips a month while the MITC UPI section lists only RuPay cards. Confirm network, tier and UPI linkability against an issued card." },
+    { "slug": "axis-bank-indigo", "question": "Fuel surcharge waiver is not stated for either IndiGo card (neither is in the MITC refunded or not-refunded lists)." },
+    { "slug": "axis-bank-indigo-premium", "question": "Premium accelerated category: T&C table and Axis page say grocery and hotel; one T&C sentence and IndiGo's partner page say grocery and dining. Rule is written for hotels." },
+    { "slug": "axis-bank-indigo-premium", "question": "Network Visa Signature rests on card art only; the page text and T&C never name it. Dining Delights maximum (1,000 rupees) is the program headline; its asterisked terms were not read." },
+    { "slug": "kvb-visa-platinum", "question": "Rupee value of one KVB reward point is not published, and the 1.5x / 2x multipliers have no stated base. Confirm what the multipliers apply to and the point value, or the card will earn no usable rate. First-year annual fee: March 2025 MITC said waived, 2026 documents are silent." },
+    { "slug": "kvb-visa-signature", "question": "Lounge access (4 visits) has no stated period, spend criteria or lounge list; reward multipliers 2x and 4x have no stated base; no point value. Cash-advance fee conflicts between MITC (1 percent) and page (2 percent)." },
+    { "slug": "kvb-visa-platinum", "question": "KVB also sells Oura, Samara, Alturas, Eternis and a KVB SBI co-branded card that are not in the candidate list; decide whether they should be added to the work queue." },
+    { "slug": "csb-bank-jupiter-edge-plus-rupay", "question": "T&C 3a says Jewels are earned only on Jupiter UPI app transactions while the CSB page says 1 percent on all online and offline spends; the draft follows the T&C. Also confirm joining fee (999 per MITC versus 499 for the first 2 lakh users on the page) and what earns after the shopping caps." },
+    { "slug": "indian-overseas-bank-rupay-platinum", "question": "FAQ says all IOB customers can apply; whether non-customers can is not stated, so application_mode open needs a person. Lounge spend criteria and lounge list are not stated; MCC exclusions and points expiry period are not stated." },
+    { "slug": "indian-overseas-bank-rupay-select", "question": "Same as Platinum: non-customer eligibility, lounge terms, MCC exclusions and points expiry are not stated. The IOB page also lists a RuPay EKAA Super Premium Credit Card that is not in the catalogue or research lists." },
+    { "slug": "google-pay-flex-axis-bank", "question": "While on the Flex page for the network, the page now states a welcome reward of 1,750 rupees in Stars plus a 250-rupee gift card (subject to Google Pay offers), which bears on the open welcome-benefit question in axis.mjs; not edited because the assignment covered network only." }
+  ]
+}

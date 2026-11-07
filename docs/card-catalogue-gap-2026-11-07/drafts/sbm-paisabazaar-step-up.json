@@ -1,0 +1,463 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "sbm-paisabazaar-step-up",
+    "name": "SBM Paisabazaar Step Up Credit Card",
+    "issuer_slug": "sbm-bank-india",
+    "network": null,
+    "network_tier": "N/A",
+    "card_tier": "N/A",
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": null,
+    "application_mode": "open",
+    "form_factors": [
+      "virtual_card",
+      "physical_plastic"
+    ],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 0.25,
+    "point_value_baseline_basis": "Step Up rewards structure: \"1 Reward Point = Rs. 0.25\"; no redemption fee; a minimum of 400 reward points is needed to redeem in the Paisabazaar app. Expiry is not stated.",
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "FD-backed: credit limit 90% of the FD; minimum FD ₹2,000 (KFS). Only a virtual card is issued for an FD of ₹2,000; the FD is on auto renewal and closes with the card (KFS).",
+    "rules": [
+      {
+        "parameter": "fd_amount_inr",
+        "operator": ">=",
+        "threshold_value": 2000,
+        "allowed_values": []
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": "N/A",
+    "base_points_per_block": 1,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": 0.25,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "sbm-stepup-excl-wallet",
+      "category_id": "wallet_load",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "E-wallet loading earns no reward points (Step Up rewards structure, disallowed categories)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-stepup-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Rent payment earns no reward points."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-stepup-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5541
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel payment (MCC 5541) earns no reward points. The document lists only MCC 5541 for fuel."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-stepup-excl-utility",
+      "category_id": "utility",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4900
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Utility payment earns no reward points."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-stepup-excl-insurance",
+      "category_id": "insurance",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6300
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Insurance premium and related payments earn no reward points."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-stepup-excl-cash",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6010,
+          6011
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Cash disbursements and ATM cash advances earn no reward points."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-stepup-excl-emi",
+      "category_id": "emi",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "EMI payments earn no reward points."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-stepup-base-1",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "1 reward point on every purchase of ₹100 on regular purchases, worth ₹0.25 a point, about 0.25% (Step Up rewards structure)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3,
+      "annual_interest_rate_percent": 36
+    },
+    "forex_markup": {
+      "markup_percent": 3.5,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 2,
+      "waiver_percent": null,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 250,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": 50
+    },
+    "category_surcharges": [],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": null,
+        "min_fee_inr": null,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 45,
+    "grace_period_void_on_revolving_balance": true,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "5% of the outstanding amount (POS/ECOM)",
+        "10% of cash transactions (MITC Table 11)",
+        "100% of interest",
+        "100% of fees",
+        "plus unpaid earlier minimum dues and any amount over the credit limit"
+      ]
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 100,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 101,
+        "max_balance_inr": 1000,
+        "fee_inr": 250
+      },
+      {
+        "min_balance_inr": 1001,
+        "max_balance_inr": 10000,
+        "fee_inr": 500
+      },
+      {
+        "min_balance_inr": 10001,
+        "max_balance_inr": null,
+        "fee_inr": 750
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "Annual and renewal fee ₹0 (KFS; MITC Table 01). Joining fee: MITC Table 01 (29 Oct 2026) shows 0; the KFS (12 Oct 2026) charges ₹500 + GST on a ₹2,000 FD, ₹250 + GST on a ₹5,000 FD and nil above ₹5,000. Card cancellation ₹499 + GST in the first six months; replacement ₹200 + GST.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": "N/A",
+    "separate_priority_pass": "N/A",
+    "lounge_quota_shared": "N/A",
+    "reward_points_pooled": "N/A",
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "Paisabazaar app; redeemed points are adjusted in the next billing cycle",
+        "redemption_type": "statement_credit",
+        "inr_value_per_point": 0.25,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": 400,
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": 0,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "verified_network_research",
+        "value": {
+          "product_status": "active",
+          "source_url": "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+          "evidence": "The card image for Paisabazaar Step Up on the SBM page (paisa-bazaar.webp) shows two cards: a Mastercard Platinum card and a RuPay Select credit card. No SBM document states which one is issued to a given applicant.",
+          "candidates": [
+            {
+              "network": "mastercard",
+              "network_tier": "mastercard_platinum",
+              "label": "SBM Paisabazaar Step Up Credit Card (Mastercard Platinum)",
+              "source_url": "https://www.sbm.bank.in/images/cards/paisa-bazaar.webp",
+              "evidence": "Card image on the SBM secured credit card page shows the Mastercard logo and \"Platinum\"."
+            },
+            {
+              "network": "rupay",
+              "network_tier": "rupay_select",
+              "label": "SBM Paisabazaar Step Up Credit Card (RuPay Select)",
+              "source_url": "https://www.sbm.bank.in/images/cards/paisa-bazaar.webp",
+              "evidence": "Card image on the SBM secured credit card page shows the RuPay credit logo and \"Select\"."
+            }
+          ]
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.sbm.bank.in/pdf/kfs/PB_KFS.pdf",
+              "kind": "Paisabazaar Step-Up SBM Credit Card KFS, 11 pages (SBM file dated 12 Oct 2026; examples use 2020 dates): joining fee tiers, late fee, forex, interest",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/pdf/notice-board/Stepup-Reward-Structure.pdf",
+              "kind": "Step Up reward structure, 2 pages (PDF created 14 Feb 2025, modified 21 Feb 2025; SBM file dated 3 Feb 2026): 1 point per ₹100, ₹0.25 a point, disallowed MCCs",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/pdf/terms-conditions/SBM-Secured-Credit-Card-T&C.pdf",
+              "kind": "SBM Secured Credit Card MITC and Cardholder Member Agreement, 52 pages (SBM file dated 29 Oct 2026): Tables 01-11 give fees, interest, late fee, forex, surcharge, rent and education fees, cash limits and minimum due for every variant",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+              "kind": "SBM secured credit card page (read 7 Nov 2026): lists the card with its KFS, MITC and reward links; card image https://www.sbm.bank.in/images/cards/paisa-bazaar.webp shows the network",
+              "read": "page text; card image viewed"
+            }
+          ],
+          "open_questions": [
+            "Joining fee: the KFS (12 Oct 2026) charges ₹500 + GST on a ₹2,000 FD, ₹250 + GST on a ₹5,000 FD and nil above ₹5,000; MITC Table 01 (29 Oct 2026, later) shows 0 for all. 0 is used; confirm for small FDs.",
+            "The rewards structure is the oldest document in the set (PDF created 14 Feb 2025). It says \"Currently, you will get 1 Reward Point on every purchase of Rs. 100\" and states no cap, expiry or minimum spend.",
+            "Network: the card image shows both a Mastercard Platinum and a RuPay Select card; no document says how the variant is assigned. Whether the RuPay Select card can be linked to UPI is not stated, so is_upi_linkable is left null.",
+            "Annualised interest: the KFS shows 3.00% a month and 42.58% a year (compounded); MITC Table 03 shows 3% a month or 36% a year. 36 is used.",
+            "Grace period: the KFS says 20 to 50 days, up to 48 days; the MITC says the interest-free period will not exceed 45 days. 45 is used.",
+            "The disallowed list names fuel by MCC 5541 only, utilities by 4900 and insurance by 6300; other MCCs in those categories are not named.",
+            "Fuel surcharge: the KFS says \"up to 2% of transaction amount\"; MITC Table 07 says 2%. No waiver is stated."
+          ],
+          "notes": [
+            "ATM fee 2.5% or ₹250, whichever is higher; cash limit 50% of the credit limit; cash interest 3% a month from day one.",
+            "Forex 3.5%; rent and education fees 0%."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "up to ₹100 nil; ₹100 to ₹1,000 ₹250; ₹1,000 to ₹10,000 ₹500; above ₹10,000 ₹750 (+ GST), charged on the outstanding amount",
+          "source": "Step Up KFS (12 Oct 2026) and MITC Table 08"
+        }
+      }
+    ]
+  }
+}

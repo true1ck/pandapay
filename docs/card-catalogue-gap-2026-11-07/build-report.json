@@ -1,0 +1,22 @@
+{
+  "built_at": "2026-11-07T09:46:10.370Z",
+  "cards": [
+    {
+      "slug": "yes-bank-finbooster",
+      "name": "YES BANK FinBooster Credit Card",
+      "file": "yes.mjs",
+      "valid": true,
+      "issues": [],
+      "rules": 16,
+      "earn_rules": 3,
+      "exclusions": 13,
+      "caps": 0,
+      "milestones": 0,
+      "benefits": 1,
+      "joining": 0,
+      "annual": 0,
+      "network": null,
+      "open_questions": 6
+    }
+  ]
+}

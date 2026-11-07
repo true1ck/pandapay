@@ -1,0 +1,1168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "rbl-bank-nova",
+    "name": "RBL Bank Nova Credit Card",
+    "issuer_slug": "rbl",
+    "network": null,
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 12500,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": null,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 1,
+    "point_value_baseline_basis": "Nova T&C (Rewards Program): 1 Reward Point = ₹1, redeemable at nova.rbl.bank.in on flights, hotels, e-gift cards, miles transfer, experiences, events, gifting, merchandise and philanthropy. Only one value is stated, no lower fallback.",
+    "point_expiry_months": 36,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": true,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/nova-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": null,
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 200,
+    "rounding_mode": null,
+    "base_points_per_block": 4,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": 2,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": "calendar_month",
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "rbl-nova-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          32,
+          2541,
+          4001,
+          5542,
+          5541,
+          5172
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel and auto earns no reward points (Nova T&C Table 1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-nova-excl-utilities",
+      "category_id": "utility",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4900
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Utilities earns no reward points (Nova T&C Table 1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-nova-excl-insurance",
+      "category_id": "insurance",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6300,
+          6310
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Insurance earns no reward points (Nova T&C Table 1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-nova-excl-quasi-cash",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6050,
+          6051,
+          4829
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Quasi-cash earns no reward points (Nova T&C Table 1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-nova-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Real estate and rental earns no reward points (Nova T&C Table 1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-nova-excl-wallets",
+      "category_id": "wallet_load",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Wallets and service providers earns no reward points (Nova T&C Table 1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-nova-excl-education",
+      "category_id": "education",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          8220,
+          8244,
+          8249,
+          8211,
+          8241,
+          8299
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Education earns no reward points (Nova T&C Table 1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-nova-excl-government",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          9400,
+          1490,
+          2490,
+          2995,
+          7800,
+          9406,
+          9222,
+          9405,
+          9399,
+          9211,
+          9402,
+          9401,
+          9311,
+          9223
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Government services earns no reward points (Nova T&C Table 1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-nova-excl-contracted",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          1711,
+          1740,
+          763,
+          1520,
+          742,
+          1761,
+          1799,
+          1750,
+          1731,
+          1771,
+          780
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Contracted services earns no reward points (Nova T&C Table 1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-nova-excl-cash",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6011,
+          6010
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Cash earns no reward points (Nova T&C Table 1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-nova-excl-railways",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          66,
+          4011,
+          4112
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Railways earns no reward points (Nova T&C Table 1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-nova-excl-miscellaneous",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5960
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Miscellaneous earns no reward points (Nova T&C Table 1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-nova-excl-bills2pay",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "channel": "bills2pay"
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Bills2Pay payments (RBL MyBank bill payment facility) earn no points (Nova T&C Table 1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-nova-excl-emi",
+      "category_id": "emi",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "EMI conversion of retail transactions (Split-N-Pay and EMI requested at POS/web/app) earns no points (Nova T&C Table 1; MITC: base points are not accrued on EMI conversion for any RBL card)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-nova-excl-fees",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fees, charges and GST are not part of the qualifying purchase value (Nova T&C Table 1: charges and GST)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-nova-portal-travel-12",
+      "category_id": "travel",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "smartbuy_or_equivalent_portal",
+      "channel_type": "nova.rbl.bank.in",
+      "conditions": {
+        "platform": "nova.rbl.bank.in",
+        "per_inr_block": 200,
+        "purchases": [
+          "flight bookings",
+          "hotel bookings"
+        ]
+      },
+      "action": {
+        "multiplier": 3,
+        "points_per_block": 12,
+        "cashback_percent": "N/A",
+        "cap_reference": "rbl-nova-portal-cap",
+        "reason": "3X accelerated points, i.e. 12 per ₹200, on flight and hotel bookings made through nova.rbl.bank.in (Nova T&C, Rewards Program)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-nova-portal-egift-12",
+      "category_id": "other",
+      "priority": 11,
+      "evaluation_type": "accelerator",
+      "rail": "smartbuy_or_equivalent_portal",
+      "channel_type": "nova.rbl.bank.in",
+      "conditions": {
+        "platform": "nova.rbl.bank.in",
+        "per_inr_block": 200,
+        "purchases": [
+          "e-gift card purchases"
+        ]
+      },
+      "action": {
+        "multiplier": 3,
+        "points_per_block": 12,
+        "cashback_percent": "N/A",
+        "cap_reference": "rbl-nova-portal-cap",
+        "reason": "3X accelerated points, i.e. 12 per ₹200, on e-gift card purchases made through nova.rbl.bank.in (Nova T&C, Rewards Program)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-nova-base",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 200
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 4,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "4 reward points per ₹200 spent on the card, outside the excluded categories (Nova T&C, Rewards Program; page: \"anywhere\")."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "rbl-nova-portal-cap",
+      "category_id": "travel",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "calendar_month",
+      "limit_value": 30000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "downgrade_to_base_rate",
+        "points_per_block": 4
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.4,
+      "annual_interest_rate_percent": 40.8
+    },
+    "forex_markup": {
+      "markup_percent": 2,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 2,
+      "gst_applicable": true,
+      "trigger_condition": "SOC and MITC list one markup for \"Foreign Currency Transaction / Dynamic & Static Conversion Transactions\"; it also applies to INR transactions at an overseas location and at overseas-registered merchants located in India"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": null,
+      "waiver_percent": 1,
+      "min_txn_inr": 500,
+      "max_txn_inr": 10000,
+      "monthly_waiver_cap_inr": 1000
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on the transaction amount for all rental transactions (SOC; MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          32,
+          2541,
+          4001,
+          5542,
+          5541,
+          5172
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on each fuel and auto transaction above ₹10,000, at most ₹3,000 per transaction; the amount includes surcharge and purchase (SOC; MITC)",
+        "threshold_spend_inr": 10000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "utility",
+        "mcc_list": [
+          4900
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee when utility spends on the card exceed ₹50,000 in a month (SOC: \"per month per card\"; MITC: \"aggregate utility spends\")",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education",
+        "mcc_list": [
+          8220,
+          8244,
+          8249,
+          8211,
+          8241,
+          8299
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on education payments made through third-party apps (Cred, PhonePe, Cheqedu, Paytm, Mobikwik, Nobroker, Housing.com and others, \"not limited to\" the list); no fee when paid on the school or college website or its POS (SOC; MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "toll",
+        "mcc_list": [
+          4784,
+          4111,
+          4131
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on FASTag loading and toll payments above ₹10,000 per transaction per card (SOC; MITC)",
+        "threshold_spend_inr": 10000,
+        "effective_from": "2026-01-07",
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 0,
+        "min_fee_inr": 0,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": 500,
+      "cheque_bounce_charge_inr": 500
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 0,
+      "gst_applicable": null,
+      "exempted_channels": [
+        "all redemptions"
+      ],
+      "notes": "SOC and MITC: the INR 99 + GST redemption fee does not apply to the Nova card; RWD 4.3.1(b)(iv) lists it as exempt."
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 50,
+    "grace_period_void_on_revolving_balance": true,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "max",
+      "components": [
+        "Total GST + current-month EMI debits + [the higher of (100% of fees and charges + 5% of retail spends, cash advance and interest) or ₹200] + any unpaid earlier minimum due + over-limit utilisation (MITC section D-b)",
+        "If that amount exceeds the total amount due, the minimum due equals the total amount due"
+      ]
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 1000000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "The next anniversary year's fee (₹12,500 + GST) is not levied when spends reach ₹10 lakh in the card anniversary year (Nova T&C; SOC; MITC). Spends in the excluded categories of Table 1 do not count.",
+      "excluded_category_ids": [
+        "fuel",
+        "utility",
+        "insurance",
+        "cash_withdrawal",
+        "rent",
+        "wallet_load",
+        "education",
+        "government",
+        "excluded_spend"
+      ],
+      "excluded_mcc_list": [
+        32,
+        2541,
+        4001,
+        5542,
+        5541,
+        5172,
+        4900,
+        6300,
+        6310,
+        6050,
+        6051,
+        4829,
+        6513,
+        6540,
+        8220,
+        8244,
+        8249,
+        8211,
+        8241,
+        8299,
+        9400,
+        1490,
+        2490,
+        2995,
+        7800,
+        9406,
+        9222,
+        9405,
+        9399,
+        9211,
+        9402,
+        9401,
+        9311,
+        9223,
+        1711,
+        1740,
+        763,
+        1520,
+        742,
+        1761,
+        1799,
+        1750,
+        1731,
+        1771,
+        780,
+        6011,
+        6010,
+        66,
+        4011,
+        4112,
+        5960
+      ],
+      "waives_fee_inr": 12500
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "first_retail_transaction_within_37_days_and_fee_paid",
+      "benefit_points": "N/A",
+      "effective_value_inr": 12500,
+      "condition": "E-gift card worth ₹12,500, a choice of Taj Experiences or Luxe, on a retail transaction within 37 calendar days of issue and payment of the annual fee shown in the first statement; reflected within 60 days of issue. A renewal benefit of the same ₹12,500 e-gift card applies on a retail transaction within 30 days of each anniversary and payment of that year's fee (Nova T&C). The redemption link is valid 120 days."
+    },
+    "spend_milestones": [
+      {
+        "id": "rbl-nova-quarterly-gift",
+        "label": "E-gift card worth ₹10,000 (Taj Experiences, Tata CLiQ Luxury, MakeMyTrip or Marriott Bonvoy) on spends of ₹3 lakh or more in a calendar quarter",
+        "threshold_spend_inr": 300000,
+        "reward_value_inr": 10000,
+        "period": "quarter",
+        "is_repeatable": true,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ]
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "rbl-nova-lounge-india",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "RBL Bank",
+      "label": "Complimentary domestic airport lounge visits: 12 per calendar year in total across primary, add-on cardholders and their guests",
+      "evaluation_engine": {
+        "conditions": {
+          "shared_with": [
+            "add_on_cardholders",
+            "guests"
+          ],
+          "authorisation_up_to_inr": 25
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 12,
+      "quota_period": "annual",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "rbl-nova-lounge-intl",
+      "category_id": "lounge",
+      "network_program": "priority_pass",
+      "sponsor": "RBL Bank",
+      "label": "Complimentary international airport lounge visits for the primary cardholder: 12 per calendar year; guests (including add-on cardholders) 4 per calendar year",
+      "evaluation_engine": {
+        "conditions": {
+          "primary_visits_per_calendar_year": 12,
+          "guest_visits_per_calendar_year": 4,
+          "extra_visit_charge_usd_up_to": 35,
+          "international_transactions_must_be_enabled": true
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 12,
+      "quota_period": "annual",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "rbl-nova-golf",
+      "category_id": "golf",
+      "network_program": null,
+      "sponsor": "RBL Bank",
+      "label": "4 complimentary golf rounds and 12 golf lessons a year for the primary cardholder (green fee only; caddy, cart, insurance and equipment are paid at the club)",
+      "evaluation_engine": {
+        "conditions": {
+          "rounds_per_year": 4,
+          "lessons_per_year": 12
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 4,
+      "quota_period": "annual",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": null,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": true,
+    "reward_points_pooled": true,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "nova.rbl.bank.in: flight and hotel bookings",
+        "redemption_type": "flight_hotel_booking",
+        "inr_value_per_point": 1,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": "N/A",
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": 0,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "channel": "nova.rbl.bank.in: e-gift cards, experiences, events, gifting, physical merchandise, philanthropy",
+        "redemption_type": "other",
+        "inr_value_per_point": 1,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": "N/A",
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": 0,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": [
+      {
+        "partner_code": "air-india-maharaja-club",
+        "program_name": "Air India Maharaja Club",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 2,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 2,
+        "yearly_cap_points": null,
+        "turnaround_days": 10,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "indigo-bluchip",
+        "program_name": "IndiGo BluChip",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 2,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 2,
+        "yearly_cap_points": null,
+        "turnaround_days": 1,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "airasia-rewards",
+        "program_name": "AirAsia Rewards",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 2,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 2,
+        "yearly_cap_points": null,
+        "turnaround_days": 10,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "ethiopian-shebamiles",
+        "program_name": "Ethiopian Airlines ShebaMiles",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 2,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 2,
+        "yearly_cap_points": null,
+        "turnaround_days": 1,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "spicejet-spiceclub",
+        "program_name": "SpiceJet SpiceClub",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 2,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 2,
+        "yearly_cap_points": null,
+        "turnaround_days": 1,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "air-arabia-air-rewards",
+        "program_name": "Air Arabia Air Rewards",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 2,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 2,
+        "yearly_cap_points": null,
+        "turnaround_days": 1,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "itc-club-itc",
+        "program_name": "ITC Hotels Club ITC",
+        "network_program": null,
+        "type": "hotel",
+        "conversion_ratio": {
+          "card_points": 2,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 2,
+        "yearly_cap_points": null,
+        "turnaround_days": 10,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "orchid-rewards",
+        "program_name": "Orchid Hotels Orchid Rewards",
+        "network_program": null,
+        "type": "hotel",
+        "conversion_ratio": {
+          "card_points": 2,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 2,
+        "yearly_cap_points": null,
+        "turnaround_days": 1,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "radisson-rewards",
+        "program_name": "Radisson Hotel Group Radisson Rewards",
+        "network_program": null,
+        "type": "hotel",
+        "conversion_ratio": {
+          "card_points": 2,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 2,
+        "yearly_cap_points": null,
+        "turnaround_days": 1,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "vietnam-lotusmiles",
+        "program_name": "Vietnam Airlines Lotusmiles",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 2,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 2,
+        "yearly_cap_points": null,
+        "turnaround_days": 1,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "philippine-mabuhay-miles",
+        "program_name": "Philippine Airlines Mabuhay Miles",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 2,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 2,
+        "yearly_cap_points": null,
+        "turnaround_days": 10,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "qatar-privilege-club",
+        "program_name": "Qatar Airways Privilege Club",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 2,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 2,
+        "yearly_cap_points": null,
+        "turnaround_days": 1,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ]
+  },
+  "dynamic_promotions_registry": [
+    {
+      "promo_id": "rbl-nova-dining-district",
+      "category_id": "dining",
+      "network_program": "N/A",
+      "sponsor": "District / Zomato",
+      "platform": "District or Zomato app, select fine-dine restaurants",
+      "offer_type": "instant_discount",
+      "discount_percent": 10,
+      "max_discount_inr": 3000,
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": false,
+      "is_permanent_card_feature": true,
+      "valid_from": null,
+      "valid_to": null
+    }
+  ],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "merchant_emi_processing_fee_rule",
+        "value": {
+          "rule": "1.5% of the amount or ₹150, whichever is higher, on every EMI conversion made at the merchant at the time of the transaction (SOC; MITC). GST at 18% applies.",
+          "note": "The universal field holds a flat rupee amount only, so merchant_instant_emi_processing_fee_inr is left null."
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "12.5% of the outstanding amount (statement total amount due less net payments), minimum ₹5, maximum ₹1,300; GST at 18% on top",
+          "source": "SOC; MITC section v, applicable from 17 Oct 2025",
+          "grace": "The fee is levied only when the account stays past due for more than three days after the payment due date (MITC section v-d).",
+          "note": "A percentage fee cannot be written as fixed slabs, so late_payment_slabs is empty."
+        }
+      },
+      {
+        "key": "miles_transfer_limits",
+        "value": {
+          "source": "Miles Transfer Programme T&C (PDF created 2026-08-18)",
+          "rule": "No minimum, points must be a multiple of the ratio; up to 50,000 points per request and at most 2 requests per cardholder per month; primary cardholder only; transfers are final; credited usually in 3 business days and up to 10; turnaround_days holds the per-partner maximum (1 or 10 working days).",
+          "not_modelled": "The universal partner_transfers row has no cap per month, so the 2 x 50,000 monthly limit is kept here."
+        }
+      },
+      {
+        "key": "addon_card_fee_rule",
+        "value": {
+          "rule": "Two add-on cards are free; ₹3,000 one-time fee per card beyond two (MITC section iii).",
+          "source": "MITC"
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://drws17a9qx558.cloudfront.net/document/credit-cards/tnc-nova-credit-card.pdf",
+              "kind": "Nova T&C (fee waiver, welcome and renewal gift, rewards, cap, milestone, lounge, golf, fuel, forex, Table 1 exclusions); link taken from the Cardmember Agreement table",
+              "date": "PDF created 2026-07-07; Last-Modified 2026-08-05",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/nova-credit-card",
+              "kind": "issuer product page",
+              "read": "page text and DOM; no card network stated"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/Credit%20Cards/CardsScheduleCharges.pdf",
+              "kind": "Schedule of Charges: annual fee row, finance charge, cash advance, late fee, forex, fuel/rent/utility/education/FASTag fees",
+              "date": "code RBL-CC-SOC-V2-04-06-2026 (4 Jun 2026); PDF created 2026-06-04; Last-Modified 2026-08-29",
+              "read": "pdftotext + page image"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/Credit%20Cards/RBL-MITC-final.pdf",
+              "kind": "MITC cum KFS: joining fee, annual fee table, add-on fees, interest bands, grace period, MAD, late fee, forex, EMI rule",
+              "date": "code RBL-CC-MITC-V2-29-10-2026 (29 Oct 2026); Last-Modified 2026-10-30",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/credit-cards/rbl-cc-cardmember-agreement.pdf",
+              "kind": "Cardmember Agreement: table that links each card to its product T&C",
+              "date": "code RBL-CC-CMA-27-10-2026 (27 Oct 2026)",
+              "read": "pdftotext + embedded links"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/credit-cards/rbl-miles-transfer-programme.pdf",
+              "kind": "Miles Transfer Programme T&C: product-wise conversion ratios, 12 partners, limits",
+              "date": "PDF created 2026-08-18",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/category",
+              "kind": "Current credit card list (64 cards): sold-status check",
+              "date": "read 2026-11-07",
+              "read": "page text"
+            },
+            {
+              "url": "https://www.rbl.bank.in/nova-form",
+              "kind": "the \"Express your interest\" page the product page links to (viewed only, nothing entered)",
+              "read": "page text"
+            }
+          ],
+          "open_questions": [
+            "Network: no issuer document or card art read states Visa, Mastercard or RuPay (the T&C only says \"MasterCard/RuPay/VISA\" generically). Left null.",
+            "Application route: the product page and the current card list offer only an \"Express your interest\" form, not \"Apply Now\". Unlike Lumiere, the list does not label Nova \"By invite only\". Whether a customer can apply directly is not stated; application_mode \"open\" is an assumption.",
+            "Cap period and fallback: the 30,000-point cap is on accelerated points \"in a calendar month\"; what the 12-per-₹200 spend earns after the cap is not stated. Modelled as falling back to 4 per ₹200.",
+            "Nova T&C refers to \"the above-mentioned program partners\" for miles transfer but prints no partner list, and the product page shows a KrisFlyer logo that the Miles Transfer T&C (12 partners) does not list. All 12 partners from the Miles Transfer T&C are used; confirm which apply to Nova.",
+            "Lounge visits: the T&C says \"a calendar year\" for both the 12 domestic and 12 international visits; the product page does not give a period. Modelled as annual.",
+            "Milestone repeat: the T&C says the e-gift card is earned on ₹3 lakh \"in a calendar quarter\"; is_repeatable true assumes it repeats each quarter.",
+            "The T&C general terms item 11 names the \"Insignia Preferred Banking Credit Card\" (copy-paste in the issuer document); read as Nova.",
+            "Finance charge: the MITC states Nova (with Lumiere and Insignia) separately at 3.4% a month (40.8% a year); that rate is stored. All other cards are \"up to 3.99% a month\" with bureau-score bands."
+          ],
+          "notes": [
+            "The card-list headline \"6% value back on gift cards, hotel and flight bookings\" is 12 points per ₹200 at ₹1 per point through the Nova portal; the base rate is 2%.",
+            "Fee: SOC and MITC show ₹12,500 for the first and later years; the MITC \"Joining Fee: NIL\" applies, so joining_fee_inr is 0 and the first-year fee is stored as the annual fee (the three Shoppers Stop drafts store the first-year fee as the joining fee).",
+            "Forex markup 2% (SOC; MITC; T&C). Fuel surcharge waiver 1% on ₹500-₹10,000 transactions, capped at ₹1,000 a month (calendar month).",
+            "Reward points expire after 36 months if not redeemed (Nova T&C)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

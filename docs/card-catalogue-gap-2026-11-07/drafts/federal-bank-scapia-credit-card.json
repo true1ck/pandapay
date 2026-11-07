@@ -1,0 +1,420 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "federal-bank-scapia-credit-card",
+    "name": "Scapia Federal Bank Credit Card",
+    "issuer_slug": "federal-bank",
+    "network": null,
+    "network_tier": null,
+    "card_tier": "N/A",
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [
+      "virtual_card"
+    ],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 0.2,
+    "point_value_baseline_basis": "Federal Bank product page https://www.federal.bank.in/scapia (read 2026-11-07): \"1 reward = 1 Scapia Coin\" with the footnote \"5 Scapia coins = ₹1\", so one reward/coin is ₹0.20. The Federal Cardholder Agreement itself gives the 1 reward = 1 coin ratio but no rupee value; the Axis and BOBCARD Scapia terms agree on 5 coins = ₹1. The coin value is set by Scapia and can change.",
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.federal.bank.in/scapia",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": null,
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": 10,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": 2,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "fscapia-excl",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Money transfers, rent, cash withdrawals, EMI transactions, forex transactions, education and school fees, utility, telecom and cable spends earn nothing (Cardholder Agreement, Earn Rewards b)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "fscapia-travel-20",
+      "category_id": "travel",
+      "priority": 5,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "scapia_app",
+      "conditions": {
+        "platform": "Scapia app",
+        "purchases": "travel"
+      },
+      "action": {
+        "multiplier": 20,
+        "points_per_block": 20,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "20% rewards on travel purchases made on the Scapia app (Agreement e)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "fscapia-visa-10",
+      "category_id": "all_retail",
+      "priority": 20,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "variant": "Visa",
+        "minimum_transaction_inr": 20
+      },
+      "action": {
+        "multiplier": 10,
+        "points_per_block": 10,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "10% rewards on every purchase of ₹20 and above on the Visa card (Agreement d)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "fscapia-rupay-5",
+      "category_id": "all_retail",
+      "priority": 21,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "variant": "RuPay",
+        "minimum_transaction_inr": 500
+      },
+      "action": {
+        "multiplier": 5,
+        "points_per_block": 5,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "5% rewards on eligible spends of more than ₹500 on the RuPay card (Agreement d)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 45
+    },
+    "forex_markup": {
+      "markup_percent": 0,
+      "gst_applicable": null
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": null,
+      "max_txn_inr": 5000,
+      "monthly_waiver_cap_inr": 500
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": 10
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% + GST on rent, max ₹3,000 per transaction (MITC row 18)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "wallet",
+        "mcc_list": [
+          6540
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% + GST on wallet load, max ₹3,000 per transaction (MITC row 18)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "fuel",
+        "mcc_list": [],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Fuel spends over ₹50,000 in a month: 1% + GST convenience fee, max ₹3,000 per transaction (MITC row 16)",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "bills",
+        "mcc_list": [],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Utility spends over ₹50,000 in a month: 1% + GST convenience fee, max ₹3,000 per transaction (MITC row 17)",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": 99,
+      "foreclosure_charge_percent": 2,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 500,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 0,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 99,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 100,
+        "max_balance_inr": 500,
+        "fee_inr": 100
+      },
+      {
+        "min_balance_inr": 501,
+        "max_balance_inr": 5000,
+        "fee_inr": 500
+      },
+      {
+        "min_balance_inr": 5001,
+        "max_balance_inr": 10000,
+        "fee_inr": 600
+      },
+      {
+        "min_balance_inr": 10001,
+        "max_balance_inr": 25000,
+        "fee_inr": 750
+      },
+      {
+        "min_balance_inr": 25001,
+        "max_balance_inr": 50000,
+        "fee_inr": 950
+      },
+      {
+        "min_balance_inr": 50001,
+        "max_balance_inr": null,
+        "fee_inr": 1000
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "No joining or annual fee: Nil in the Scapia Federal MITC (version 10, 27 Feb 2026, rows 3 and 4) and in the Federal Bank schedule of charges (file dated Feb 2026); the Federal page says \"Zero joining and annual fees\".",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": null,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "superseded_research_provenance",
+        "value": {
+          "research_method": "direct review of official issuer/partner pages and published terms; no browser automation response assumed",
+          "verified_at": "2026-10-17T16:48:32.669Z",
+          "source_urls": [
+            "https://www.scapia.cards/",
+            "https://www.federal.bank.in/documents/d/guest/cardholder_agreement-v11-30_04_26"
+          ],
+          "effective_date_caveats": "Federal Bank agreement version last updated 2026-06-01; current partner page confirms linked networks and spend threshold. Obtain/currently match the application MITC for rewards and charges before publication.",
+          "fact_claims": [
+            "Federal Bank issues the co-branded Scapia Federal Credit Card; Scapia is marketing/distribution partner.",
+            "Official Scapia site describes linked Visa and RuPay cards on a combined credit account. Keep network variants linked and do not force one scalar network; SmartForex / zero-forex feature is stated for Visa only.",
+            "Current site states lounge privilege unlocks on combined monthly spend of ₹20,000 across Visa and RuPay cards. International-terminal reward offer requires a ₹50,000 Scapia-app international flight booking; site marks that offer effective 27 Feb 2026.",
+            "Older partner press material states 10% rewards and zero joining/annual fees, but current reward conversion, exclusions and fee schedule require the current MITC and are not promoted into fixed universal rates here."
+          ],
+          "aliases": [],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "verified_network_research",
+        "value": {
+          "product_status": "active",
+          "source_url": "https://www.federal.bank.in/documents/d/guest/cardholder_agreement-v11-30_04_26",
+          "evidence": "Federal Scapia Cardholder Agreement (v11, 30 Apr 2026) describes a Scapia Federal Visa card and a Scapia Federal RuPay card on one account with different earn rates.",
+          "candidates": [
+            {
+              "network": "visa",
+              "network_tier": "N/A",
+              "label": "Scapia Federal Credit Card (Visa)",
+              "source_url": "https://www.federal.bank.in/documents/d/guest/cardholder_agreement-v11-30_04_26",
+              "evidence": "Agreement d: 10% rewards on purchases of ₹20 and above."
+            },
+            {
+              "network": "rupay",
+              "network_tier": "N/A",
+              "label": "Scapia Federal Credit Card (RuPay)",
+              "source_url": "https://www.federal.bank.in/documents/d/guest/cardholder_agreement-v11-30_04_26",
+              "evidence": "Agreement d: 5% rewards on eligible spends of more than ₹500."
+            }
+          ]
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.federal.bank.in/documents/d/guest/cardholder_agreement-v11-30_04_26",
+              "kind": "Scapia Federal Credit Card Cardholder Agreement v11, 30 Apr 2026, 73 pages (earn rewards, zero forex)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.federal.bank.in/documents/d/guest/mitc-v10-27_02_26",
+              "kind": "Scapia Federal Credit Card MITC, \"Version (10) 27.02.2026\", 27 pages (joining/annual Nil, APR 45%, forex 0%, late fee slabs, fuel waiver, cash advance, EMI)",
+              "date": "2026-02-27",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.federal.bank.in/documents/d/guest/credit-card-charges",
+              "kind": "Federal Bank schedule of charges for credit cards, section 4 \"Scapia Credit Card\" (file dated Feb 2026): joining/annual Nil, forex Nil, APR 45% (3.75% a month)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.federal.bank.in/scapia",
+              "kind": "Federal Scapia product page: \"Zero joining and annual fees\", \"Zero forex markup\", 10% rewards on VISA, 5% on RuPay spends of Rs 500 or more, 5 Scapia coins = Rs 1",
+              "read": "rendered page text in built-in browser"
+            }
+          ],
+          "open_questions": [
+            "Fee and interest figures (joining Nil, annual Nil, APR 45% a year / 3.75% a month, forex 0%, late fee slabs, fuel waiver max ₹500 a month) come from MITC version 10 dated 27 Feb 2026 and the Feb 2026 schedule of charges, and agree with the live product page. The Federal page now links MITC v11 (30 Apr 2026), but that PDF sits behind a bot check and was not opened; a person should confirm v11 did not change fees or the interest rate.",
+            "Earn rules were read from Cardholder Agreement v11 (30 Apr 2026). The Federal page now links Agreement v14 (23 Oct 2026) and v13 (20 Jun 2026), which were not read; check whether the 10% (Visa) and 5% (RuPay, above ₹500) rates, the exclusions and the ₹20,000 monthly spend condition for airport privileges still hold. The product page text still shows 10% on VISA and 5% on RuPay of Rs 500 or more.",
+            "Lounge access and other benefits: the page says unlimited domestic lounge, dining, shopping or spa on spending ₹20,000 every preceding month; the benefit quota and exact conditions are in the Agreement and were not modelled.",
+            "Interest: the Federal charges schedule says the APR on other Federal cards moves with average balance; for Scapia it states a flat 45% (3.75% a month).",
+            "The older partner material that mentioned zero fees could not be matched to a Federal Bank document; the zero fees are now confirmed by the MITC, the schedule of charges and the Federal page.",
+            "Post-purchase EMI interest is 14% to 20% a year; in-store EMI 16% (Pinelabs) and 15.99% (PayU). Merchant instant EMI processing fee is left null because the MITC gives ₹99 for in-store and 1% or ₹99 for online platforms."
+          ],
+          "notes": [
+            "The headline \"10% / 5% / 20% rewards\" are Scapia-coin percentages; at 5 coins = ₹1 (Federal page footnote, also the Axis and BOBCARD terms) the value is about 2% (Visa), 1% (RuPay) and 4% (20% travel on the Scapia app).",
+            "Zero forex mark-up (Agreement Benefits 2; MITC row 22)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

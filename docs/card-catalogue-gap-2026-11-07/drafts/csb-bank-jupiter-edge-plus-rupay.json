@@ -1,0 +1,651 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "csb-bank-jupiter-edge-plus-rupay",
+    "name": "Jupiter Edge+ CSB Bank RuPay Credit Card",
+    "issuer_slug": "csb-bank",
+    "network": "rupay",
+    "network_tier": null,
+    "card_tier": "N/A",
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 999,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [
+      "virtual_card"
+    ],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 0.14,
+    "point_value_baseline_basis": "CSB-hosted Edge/Edge+ T&C (PDF created 5 Sep 2026), Redemption Slabs: 1 Jewel = ₹0.20 when redeemed for Jupiter Flights, Jupiter Store, Brand Vouchers or Digital Gold; 1 Jewel = ₹0.14 for Statement Credit, Bill Payments or Cash/Cash-equivalent. Baseline uses the lower, cash-equivalent value. Jupiter or the bank may change the rates; the app shows the rate at redemption. Jewels do not expire except after 365 days of card inactivity or 90 days of unpaid dues.",
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.csb.bank.in/csb-bank-edge-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": null,
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": 5,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": 0.7,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": "statement_cycle",
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "csb-edge-plus-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5983,
+          5172,
+          5542,
+          5541
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel earns no Jewels (T&C Rewards Programme, ineligible MCC list)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "csb-edge-plus-excl-government",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          9211,
+          9222,
+          9223,
+          9311,
+          9399
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Government-related transactions, fines, tax and court payments earn no Jewels."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "csb-edge-plus-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Rent payments earn no Jewels."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "csb-edge-plus-excl-utility",
+      "category_id": "bills",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4900,
+          4814,
+          4816,
+          4899
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Utility bill payments (electricity, gas, telecom, cable and similar) earn no Jewels."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "csb-edge-plus-excl-wallet",
+      "category_id": "wallet",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Wallet loads, gift or prepaid card loads and voucher purchases earn no Jewels."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "csb-edge-plus-excl-cash",
+      "category_id": "other",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6010,
+          6011,
+          6051,
+          4829
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Cash advances, quasi-cash and wire transfers earn no Jewels."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "csb-edge-plus-excl-insurance",
+      "category_id": "insurance",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6381,
+          6300
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Insurance premiums and sales earn no Jewels."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "csb-edge-plus-excl-emi",
+      "category_id": "emi",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "All types of EMI transactions (EasyEMI, SmartEMI, Dial-an-EMI and similar), payment of outstanding balances and card fees and charges earn no Jewels."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "csb-edge-plus-excl-other-mcc",
+      "category_id": "other",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5816,
+          5933,
+          5935,
+          6012,
+          6211,
+          7995,
+          7800,
+          7801,
+          7802,
+          8651,
+          8661,
+          7276,
+          7322,
+          4784,
+          8111,
+          8351,
+          8398,
+          8641,
+          5817,
+          7273,
+          7994,
+          8931
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Digital games, pawn shops, salvage yards, financial institutions, brokers, gambling and lotteries, political and religious organisations, tax preparation, debt collection, tolls, legal, child-care, charity, associations, digital apps, dating, arcades and accounting earn no Jewels (T&C MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "csb-edge-plus-shopping-50",
+      "category_id": "online",
+      "priority": 5,
+      "evaluation_type": "accelerator",
+      "rail": "upi_qr",
+      "channel_type": "jupiter_upi_app",
+      "conditions": {
+        "brands": [
+          "Amazon",
+          "Flipkart",
+          "Myntra",
+          "Tata Cliq",
+          "Ajio",
+          "Nykaa",
+          "Croma",
+          "Reliance Digital",
+          "Trent Retail / Tata Retail",
+          "Reliance Retail"
+        ],
+        "platform": "Jupiter UPI app only (UPI Intent, Scan and Pay, UPI Collect)",
+        "cycle_statement_spend_gt_inr": 15000,
+        "jewels_per_inr_100_if_threshold_missed": 5,
+        "instant_jewels_per_inr_100": 5,
+        "remaining_jewels_credited_at_cycle_end_per_inr_100": 45,
+        "transaction_level_cap_jewels": 1000
+      },
+      "action": {
+        "multiplier": 10,
+        "points_per_block": 50,
+        "cashback_percent": "N/A",
+        "cap_reference": "csb-edge-plus-shopping-category-cap",
+        "reason": "50% Jewels (50 per ₹100) on the listed shopping brands from 5 Oct 2026, only when that billing cycle's qualified spend exceeds ₹15,000; otherwise 5% (5 per ₹100). 5% is credited instantly, the other 45% at cycle end and cancelled if cycle spend is ₹15,000 or less (T&C Edge+ rewards structure)."
+      },
+      "effective_from": "2026-10-05",
+      "effective_to": null
+    },
+    {
+      "id": "csb-edge-plus-travel-25",
+      "category_id": "travel",
+      "priority": 6,
+      "evaluation_type": "accelerator",
+      "rail": "upi_qr",
+      "channel_type": "jupiter_upi_app",
+      "conditions": {
+        "brands": [
+          "Jupiter Flights"
+        ],
+        "platform": "Jupiter UPI app only"
+      },
+      "action": {
+        "multiplier": 5,
+        "points_per_block": 25,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "25% Jewels (25 per ₹100) on flights booked through Jupiter Flights; no maximum is listed from 5 Oct 2026 (5,000 Jewels per cycle applied until 4 Oct 2026) (T&C)."
+      },
+      "effective_from": "2026-10-05",
+      "effective_to": null
+    },
+    {
+      "id": "csb-edge-plus-others-5",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "upi_qr",
+      "channel_type": "jupiter_upi_app",
+      "conditions": {
+        "platform": "Jupiter UPI app only (UPI Intent, Scan and Pay, UPI Collect)",
+        "applies_to": "every eligible spend outside the shopping and travel brands, including other categories at those brands"
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 5,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "5% Jewels (5 per ₹100) on all other eligible spends (T&C category \"Others\"). T&C 3a limits Jewel earning to transactions on the Jupiter UPI app."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "csb-edge-plus-shopping-category-cap",
+      "category_id": "online",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": 10000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "downgrade_to_base_rate",
+        "points_per_block": 5
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "csb-edge-plus-shopping-merchant-cap",
+      "category_id": "online",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": 3000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "downgrade_to_base_rate",
+        "points_per_block": 5
+      },
+      "parent_cap_id": "csb-edge-plus-shopping-category-cap",
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 45
+    },
+    "forex_markup": {
+      "markup_percent": 3.5,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 1,
+      "gst_applicable": true,
+      "trigger_condition": "MITC: 1.0% on every DCC transaction"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 400,
+      "max_txn_inr": 3000,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": null,
+      "atm_transaction_fee_min_inr": null,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [
+      {
+        "category_id": "fuel",
+        "mcc_list": [],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fuel transaction fee on the amount above ₹10,000, or on monthly fuel spends above ₹50,000 when higher",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% of the transaction amount, minimum fee ₹149",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "wallet_load",
+        "mcc_list": [
+          6540
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% of the transaction amount on wallet top-ups",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education_third_party",
+        "mcc_list": [],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% of the transaction amount on education payments made on third-party websites or apps",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "utility",
+        "mcc_list": [],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% of the transaction amount on utility payments above ₹20,000 or when monthly spends are above ₹50,000",
+        "threshold_spend_inr": 20000,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": 99,
+      "foreclosure_charge_percent": 3,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 0,
+        "min_fee_inr": 0,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": 0,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "All outstanding EMI instalments due in the cycle (principal, interest, taxes, processing fee)",
+        "100% of interest",
+        "100% of charges and fees",
+        "100% of government taxes",
+        "2% of fresh principal outstanding",
+        "Entire unpaid minimum amount due of earlier cycles",
+        "If the result is below ₹500 the minimum amount due is ₹500; if the total amount due is below ₹500 it equals the total amount due (KFS and T&C)"
+      ]
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "Annual membership fee is Nil; Edge+ RuPay joining fee ₹999 one time (MITC uploaded 30 Oct 2026). The CSB product page advertises ₹499 joining fee \"for first 2 lakh users\".",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 0,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "superseded_research_provenance",
+        "value": {
+          "research_method": "direct review of official issuer/partner pages and published terms; no browser automation response assumed",
+          "verified_at": "2026-10-17T16:48:32.669Z",
+          "source_urls": [
+            "https://web.jupiter.money/rupay-csb/web-ob/landing",
+            "https://jupiter.money/edge-csb-credit-card-mitc/"
+          ],
+          "effective_date_caveats": "Reward rates are presented as “Jewels”/cashback marketing on Jupiter landing page; exact conversion, transaction exclusions and reward caps need supporting terms. Keep baseline point value unknown.",
+          "fact_claims": [
+            "CSB Bank is issuer; Jupiter/Europa Neo Marketing Private Limited is partner. Current issuer terms cover Edge+ RuPay and Mastercard variants; this record is the RuPay variant only.",
+            "Jupiter product page advertises 50% Jewels on listed shopping brands, 25% on flights booked through Jupiter and 5% on other eligible spends; reward unit-to-INR value and caps are not established by that landing page.",
+            "MITC updated 25 Aug 2026; revised fees effective 7 Sep 2026. Edge+ RuPay joining fee ₹999; annual membership fee nil; physical card issuance nil; replacement fee ₹249.",
+            "RuPay credit card is advertised for UPI scan-and-pay. A separate Edge+ Mastercard variant exists and is not included here."
+          ],
+          "aliases": [],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "5% of the outstanding amount due, minimum ₹250, maximum ₹2,000",
+          "source": "CSB Edge / Edge+ MITC (updated 25 Aug 2026, uploaded 30 Oct 2026) and KFS (5 Nov 2025)"
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.csb.bank.in/csb-bank-edge-credit-card",
+              "kind": "CSB Bank product page \"Edge+ CSB Bank RuPay Credit Card\" (live with Apply now; read 2026-11-07): headline 10% / 5% / 1% cashback, ₹499 joining fee for first 2 lakh users",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://www.csb.bank.in/pdf/edge-csb-bank-ruPay-credit-card-mitc_2025.pdf",
+              "kind": "Edge CSB / Edge+ CSB RuPay / Edge+ CSB Mastercard MITC, updated 25 Aug 2026, fees applicable from 7 Sep 2026, uploaded 30 Oct 2026 (25 pages)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.csb.bank.in/pdf/edge_csb_bank_credit_card_terms_and_conditions_2025.pdf",
+              "kind": "Edge CSB / Edge+ CSB T&C (PDF created 5 Sep 2026): Jewel earn rates, caps, redemption slabs, ineligible MCC list",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.csb.bank.in/pdf/key_fact_statement_edge_csb_bank_credit_card_2025.pdf",
+              "kind": "Edge CSB / Edge+ CSB KFS updated 5 Nov 2025, charges from 6 Dec 2025 (agrees with the MITC on fees)",
+              "read": "pdftotext"
+            }
+          ],
+          "open_questions": [
+            "Earn only on the Jupiter UPI app: T&C 3a says the Edge+ RuPay card earns Jewels \"only for transactions on the Jupiter UPI App\" (UPI Intent, Scan and Pay, UPI Collect) and not on other UPI apps. The CSB page headline says 1% cashback on \"all online & offline spends\". The three rules are written for Jupiter UPI only; whether card swipe or online card spends earn anything needs a person.",
+            "Jewel value: ₹0.20 each for Jupiter Flights, Jupiter Store, Brand Vouchers and Digital Gold; ₹0.14 each for statement credit, bill payments and cash. Baseline uses ₹0.14 (0.7% on the 5-Jewel base rate). At ₹0.20 the T&C rates equal the page headline 10% shopping, 5% travel and 1% other.",
+            "Rates changed on 5 Oct 2026: the T&C lists the structure to 4 Oct 2026 (shopping 50% Jewels always, travel capped at 5,000 Jewels per cycle) and from 5 Oct 2026 (shopping 50% only when cycle spend is above ₹15,000, else 5%; travel uncapped). Only the current structure is modelled.",
+            "Shopping merchant cap 3,000 Jewels and transaction-level cap 1,000 Jewels per statement cycle are in the T&C; the schema has no per-transaction period, so the 1,000 sits in the rule conditions and only the 10,000 category cap and 3,000 merchant cap are cap rows. What earns after a cap is hit is not stated; downgrade to the 5-Jewel rate is assumed.",
+            "Joining fee: ₹999 + GST in the MITC and KFS; the CSB page says ₹499 for the first 2 lakh users. ₹999 is used.",
+            "Fuel surcharge waiver: 1% with a maximum of ₹100, on spends of ₹400 to ₹3,000 (MITC footnote); the period for the ₹100 maximum is not stated, so monthly_waiver_cap_inr is null. The page-level surcharge is ₹10 up to ₹400 and 1% above.",
+            "Insurance and concierge benefit (personal accident and total permanent disability up to ₹2 lakh, 24/7 concierge) is \"limited to Platinum Variant Card (BIN 653038)\"; whether Edge+ RuPay is that BIN is not stated, so it is not modelled.",
+            "The MITC covers three cards (Edge CSB RuPay joining nil; Edge+ CSB RuPay ₹999; Edge+ CSB Mastercard ₹999 with nil forex). This draft is the Edge+ RuPay card only. The non-plus Edge card (flat 2% Jewels, ₹250 welcome voucher) is a separate product not in the catalogue.",
+            "Rounding mode and the Jewel crediting delay are not stated. Minimum redemption threshold is shown in the Jupiter app, not in the documents."
+          ],
+          "notes": [
+            "Card replacement ₹249. Interest 3.75% a month (45% a year), interest-free period 13 to 47 days. EMI processing ₹99 or 1% of the converted amount, whichever is higher; foreclosure 3% of remaining principal. Overlimit transactions are not allowed. Jewels earned in a cycle are locked and earning pauses while the minimum amount due is unpaid.",
+            "Held in the earlier pass for lack of a reward rate; the rates are now stated in the CSB-hosted T&C, so the card can be imported once the open questions above are cleared."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

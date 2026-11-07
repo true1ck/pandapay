@@ -1,0 +1,580 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "axis-bank-scapia-credit-card",
+    "name": "Scapia Axis Bank Credit Card",
+    "issuer_slug": "axis",
+    "network": null,
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 0.2,
+    "point_value_baseline_basis": "Scapia terms: 5 Scapia Coins = ₹1, redeemable only on the Scapia app (flights, hotels, buses and other services). Value can be revised on one month's notice.",
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.axis.bank.in/cards/credit-card/scapia-axis-bank-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "Scapia terms: activate within 30 days of issue; up to ₹5,000 limit released before physical delivery.",
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": 10,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": 2,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "scapia-excl-wallet",
+      "category_id": "wallet_load",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Wallet loading earns nothing (Scapia T&C 4.3)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "scapia-excl-education",
+      "category_id": "education",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Education and school fees earn nothing (T&C 4.3)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "scapia-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel and fuel surcharge earn nothing (T&C 4.3)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "scapia-excl-government",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Government services earn nothing (T&C 4.3)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "scapia-excl-emi",
+      "category_id": "emi",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "EMI transactions earn nothing; rewards are not reinstated on EMI cancellation (T&C 4.3)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "scapia-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Real-estate rentals earn nothing (T&C 4.3)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "scapia-excl-insurance",
+      "category_id": "insurance",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Insurance earns nothing (T&C 4.3)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "scapia-excl-utility",
+      "category_id": "utility",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Utility payments earn nothing (T&C 4.3)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "scapia-excl-other",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Business services, crypto and MOTO, financial institutions, gift cards, bridge/road fees and tolls earn nothing (T&C 4.3 and MCC table; the table lists categories, the MCC numbers were not extractable)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "scapia-app-travel-20pct",
+      "category_id": "travel",
+      "priority": 5,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "scapia_app",
+      "conditions": {
+        "platform": "Scapia app",
+        "bookings": [
+          "flights",
+          "hotels",
+          "bus"
+        ]
+      },
+      "action": {
+        "multiplier": 20,
+        "points_per_block": 20,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "4% value back (equivalent to 20% rewards, at 5 coins = ₹1) on eligible Scapia-app flight, hotel and bus bookings; no maximum cap (T&C 4.7)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "scapia-mastercard-2pct",
+      "category_id": "all_retail",
+      "priority": 20,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "minimum_transaction_inr": 20,
+        "variant": "Mastercard"
+      },
+      "action": {
+        "multiplier": 10,
+        "points_per_block": 10,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "2% value back (equivalent to 10% rewards) on all eligible spends of ₹20 and above on the Mastercard card (T&C 4.6)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "scapia-rupay-1pct",
+      "category_id": "all_retail",
+      "priority": 21,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "minimum_transaction_inr": 500,
+        "variant": "RuPay"
+      },
+      "action": {
+        "multiplier": 5,
+        "points_per_block": 5,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "1% value back (equivalent to 5% rewards) on all eligible spends of ₹500 and above on the RuPay card (T&C 4.6)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 55.55
+    },
+    "forex_markup": {
+      "markup_percent": 0,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 0,
+      "gst_applicable": true,
+      "trigger_condition": "MITC: same markup on international transactions in Indian currency and on INR transactions with foreign-registered merchants"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": null,
+      "max_txn_inr": 5000,
+      "monthly_waiver_cap_inr": 500
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": null,
+      "atm_transaction_fee_min_inr": null,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on each rental transaction",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "wallet_load",
+        "mcc_list": [
+          6540
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% once cumulative wallet loads reach ₹10,000 in a statement cycle (from 20 Dec 2024)",
+        "threshold_spend_inr": 10000,
+        "effective_from": "2024-12-20",
+        "effective_to": null
+      },
+      {
+        "category_id": "fuel",
+        "mcc_list": [],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% once cumulative fuel spend reaches ₹50,000 in a statement cycle (from 20 Dec 2024)",
+        "threshold_spend_inr": 50000,
+        "effective_from": "2024-12-20",
+        "effective_to": null
+      },
+      {
+        "category_id": "utility",
+        "mcc_list": [
+          4814,
+          4899,
+          4900
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% once cumulative utility payments reach ₹25,000 in a statement cycle",
+        "threshold_spend_inr": 25000,
+        "effective_from": "2024-12-20",
+        "effective_to": null
+      },
+      {
+        "category_id": "gaming",
+        "mcc_list": [
+          5816
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% once online skill-gaming spend reaches ₹10,000 in a statement cycle",
+        "threshold_spend_inr": 10000,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 500,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 500,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 501,
+        "max_balance_inr": 5000,
+        "fee_inr": 500
+      },
+      {
+        "min_balance_inr": 5001,
+        "max_balance_inr": 10000,
+        "fee_inr": 750
+      },
+      {
+        "min_balance_inr": 10001,
+        "max_balance_inr": 50000,
+        "fee_inr": 1200
+      },
+      {
+        "min_balance_inr": 50001,
+        "max_balance_inr": null,
+        "fee_inr": 1300
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "No joining or annual fee (T&C 3.1, MITC).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "scapia-domestic-lounge",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "Axis Bank / Scapia",
+      "label": "Unlimited complimentary domestic lounge, meals, shopping and spa access",
+      "evaluation_engine": {
+        "conditions": {
+          "min_net_spend_inr_per_billing_cycle": 20000,
+          "spend_aggregated_across_variants": true,
+          "entry": "complimentary entry for the cardholder only via a Scapia-app QR code",
+          "enabled_after_billing_date_working_days": "3-5"
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": null,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": "Source-supported data that cannot be represented faithfully by any existing universal schema field. Do not duplicate data already represented elsewhere. Do not use this section for unknown values, assumptions, or inferred data.",
+    "items": [
+      {
+        "key": "official_research",
+        "value": {
+          "checked_on": "2026-11-05",
+          "source_urls": [
+            "https://www.axis.bank.in/cards/credit-card/scapia-axis-bank-credit-card",
+            "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-scapia-credit-card.pdf?sfvrsn=47849d4_3"
+          ],
+          "facts": [
+            "Eligible daily spends earn 10% in Scapia Coins; Scapia-app bookings earn 20% in coins.",
+            "5 Scapia Coins redeem for INR 1 on eligible Scapia-app services.",
+            "Domestic lounge and airport privileges unlock on INR 20000 monthly spend."
+          ],
+          "coin_value_inr": 0.2,
+          "reward_percent_is_coin_earn_not_cashback": true
+        }
+      },
+      {
+        "key": "verified_network_research",
+        "value": {
+          "product_status": "active",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-scapia-credit-card.pdf",
+          "evidence": "Scapia Axis T&C 4.6 and 7.2 describe a Mastercard variant and a RuPay variant that share one credit account and one spend threshold.",
+          "candidates": [
+            {
+              "network": "mastercard",
+              "network_tier": "N/A",
+              "label": "Scapia Axis Bank Credit Card (Mastercard)",
+              "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-scapia-credit-card.pdf",
+              "evidence": "T&C 4.6: 2% value back on eligible spends of ₹20 and above."
+            },
+            {
+              "network": "rupay",
+              "network_tier": "N/A",
+              "label": "Scapia Axis Bank Credit Card (RuPay)",
+              "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-scapia-credit-card.pdf",
+              "evidence": "T&C 4.6: 1% value back on eligible spends of ₹500 and above."
+            }
+          ]
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-scapia-credit-card.pdf",
+              "kind": "Scapia Axis member T&C (earn, coins, forex, lounge)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.axis.bank.in/docs/default-source/default-document-library/mitc-credit-cards.pdf",
+              "kind": "MITC (fees, interest, forex, penalties)",
+              "read": "pdftotext + page images for the interest table"
+            }
+          ],
+          "open_questions": [
+            "T&C carries no revision date.",
+            "The MCC numbers behind the ineligible categories were not extractable from the PDF table; exclusions are category-level.",
+            "Scapia Coin value can change on one month's notice (T&C 5.2.2); 5 coins = ₹1 is the current value.",
+            "Lounge visit count: terms say \"Unlimited\" once the ₹20,000 cycle spend is met; guest entry is paid."
+          ],
+          "notes": [
+            "The headline \"10% rewards\" and \"20% rewards\" are Scapia-coin percentages. At 5 coins = ₹1 the real value is 2% (Mastercard), 1% (RuPay) and 4% on Scapia-app travel bookings, as the T&C itself states (\"2% value back (equivalent to 10% rewards)\").",
+            "Fuel surcharge waiver for fuel transactions up to ₹5,000, maximum ₹500 per statement cycle (MITC).",
+            "Zero forex mark-up on international transactions (T&C 6, MITC)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

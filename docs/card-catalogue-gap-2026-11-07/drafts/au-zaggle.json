@@ -1,0 +1,405 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "au-zaggle",
+    "name": "AU Zaggle Credit Card",
+    "issuer_slug": "au",
+    "network": null,
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [
+      "virtual_card",
+      "nfc_contactless"
+    ],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": 5000,
+    "point_value_inr_baseline": 0.25,
+    "point_value_baseline_basis": "Cardmember Agreement (Zaggle rewards): \"Each 1 Zagg Coin shall be equivalent to 1 Reward Point. Each Reward Point shall carry a redemption value of ₹0.25\". Product page repeats \"1 Zagg Coin = ₹0.25\". Points valid 24 months from accrual.",
+    "point_expiry_months": 24,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.au.bank.in/personal-banking/credit-cards/au-zaggle-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "Apply through the zagg.money app. A customer can apply for only one network variant (page FAQ). The UPI mobile number must match the card mobile number. AU says the criteria are only indicative.",
+    "rules": [
+      {
+        "parameter": "age_years_salaried",
+        "operator": ">=",
+        "threshold_value": 21,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years_salaried",
+        "operator": "<=",
+        "threshold_value": 60,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years_self_employed",
+        "operator": ">=",
+        "threshold_value": 25,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years_self_employed",
+        "operator": "<=",
+        "threshold_value": 65,
+        "allowed_values": []
+      },
+      {
+        "parameter": "residency",
+        "operator": "in",
+        "threshold_value": null,
+        "allowed_values": [
+          "resident_indian"
+        ]
+      },
+      {
+        "parameter": "zagg_money_app_registered_user",
+        "operator": "==",
+        "threshold_value": 1,
+        "allowed_values": []
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": null,
+    "rounding_mode": null,
+    "base_points_per_block": null,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": 2000,
+    "capping_period_basis": "statement_cycle",
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [],
+  "cap_rules": [
+    {
+      "id": "zaggle-total-cycle-cap",
+      "category_id": "all_retail",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": 2000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 45
+    },
+    "forex_markup": {
+      "markup_percent": 3.49,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 3.49,
+      "gst_applicable": true,
+      "trigger_condition": "KFS lists one cross-currency markup for foreign-currency, dynamic and static conversion transactions"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 400,
+      "max_txn_inr": 5000,
+      "monthly_waiver_cap_inr": 100
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": 20
+    },
+    "category_surcharges": [
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          5172,
+          5541,
+          5542,
+          5552,
+          5983
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "From 1 Jul 2026: 1% on the whole month's fuel spend when one transaction exceeds ₹10,000 or the calendar-month total exceeds ₹25,000",
+        "threshold_spend_inr": 25000,
+        "effective_from": "2026-07-01",
+        "effective_to": null
+      },
+      {
+        "category_id": "utility",
+        "mcc_list": [
+          4900
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% on utility spend above ₹50,000 in a calendar month",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education_third_party",
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Education paid through third-party apps (CRED, PhonePe, Paytm, MobiKwik, Freecharge etc.), minimum ₹99 per transaction; direct school/college site or POS exempt",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Domestic rental payments, minimum ₹99 per transaction; international rental has no charge",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "transportation",
+        "mcc_list": [
+          4111,
+          4112,
+          4784
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "From 14 Jun 2026: 1% on the whole month's transportation spend once it exceeds the lower of 50% of credit limit or ₹25,000; IRCTC and marquee travel partners excluded",
+        "threshold_spend_inr": 25000,
+        "effective_from": "2026-06-14",
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": 199,
+      "post_purchase_emi_processing_fee_inr": 99,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 500,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 99,
+      "gst_applicable": true,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 50,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "If previous Total Amount Due was paid on time: 5% of principal outstanding + 100% of fees/charges + 100% of interest + due EMIs + 100% annual fee (if applicable) + 100% GST",
+        "If previous Total Amount Due was not paid on time: 2% of principal outstanding + the same 100% components"
+      ]
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "Lifetime free: no joining or annual fee (page and KFS).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 0,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": 18
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "zagg.money app: statement credit / cashback, minimum 1,000 Reward Points, posted about 30 days after the request",
+        "redemption_type": "statement_credit",
+        "inr_value_per_point": 0.25,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": 1000,
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": "N/A",
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "verified_network_research",
+        "value": {
+          "product_status": "active",
+          "source_url": "https://www.au.bank.in/personal-banking/credit-cards/au-zaggle-credit-card",
+          "evidence": "AU product page: reward blocks for \"AU Zaggle Visa Credit Card\" and \"AU Zaggle RuPay Credit Card\"; FAQ: \"you can apply for only one network variant of the card\". Cardmember Agreement section 23.33 has separate earning structures \"A. AU Zaggle RuPay Credit Card\" and \"B. AU Zaggle Visa Credit Card\".",
+          "candidates": [
+            {
+              "network": "visa",
+              "network_tier": "N/A",
+              "label": "AU Zaggle Visa Credit Card",
+              "source_url": "https://www.au.bank.in/credit-cards/credit-card-member-agreement.pdf",
+              "evidence": "CMA 23.33 B: Visa variant earns 8% Zagg Coins on contactless up to ₹5,000, 4% on e-commerce, 2% on other retail. Page shows the same variant."
+            },
+            {
+              "network": "rupay",
+              "network_tier": "N/A",
+              "label": "AU Zaggle RuPay Credit Card",
+              "source_url": "https://www.au.bank.in/credit-cards/credit-card-member-agreement.pdf",
+              "evidence": "CMA 23.33 A: RuPay variant earns 4%/8% on zagg.money UPI, 2% on other UPI apps and 2% on other retail. Page shows the same variant."
+            }
+          ]
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.au.bank.in/personal-banking/credit-cards/au-zaggle-credit-card",
+              "kind": "issuer_page + FAQ",
+              "read": "rendered page text including hidden accordions and popups"
+            },
+            {
+              "url": "https://www.au.bank.in/credit-cards/credit-card-member-agreement.pdf",
+              "kind": "Cardmember Agreement section 23.33 (Zaggle reward structure, cap, minimum, value, redemption)",
+              "date": "Cardmember Agreement, undated copy (the copy under /pdf/credit-card/ is dated 16 May 2026 and has no Zaggle section)"
+            },
+            {
+              "url": "https://www.au.bank.in/pdf/credit-card/Schedule-of-Charges-CC.pdf",
+              "kind": "KFS (lifetime free, 3.49% forex, ₹100 fuel waiver, 20% cash limit)",
+              "date": "Key Fact Statement v1.9, 2 Nov 2026"
+            },
+            {
+              "url": "https://www.au.bank.in/credit-cards/mitc(with-schedule-of-charges).pdf",
+              "kind": "MITC",
+              "date": "MITC v2.23, 2 Nov 2026"
+            },
+            {
+              "url": "https://www.au.bank.in/personal-banking/credit-cards",
+              "kind": "AU current credit card list (card is listed)",
+              "date": "2026-11-07"
+            }
+          ],
+          "open_questions": [
+            "HELD: AU states rates as \"X% Zagg Coins\" and gives the value of a coin (₹0.25) but never says how many coins one percent means per ₹100 spent. If 8% meant 8 coins per ₹100 the value is 2%; if it meant 8% of spend the value is 8%. No reward rule written so the importer does not guess; the structure is kept in notes below.",
+            "Network: both variants are issued and named by AU, so this is resolved as dual; the importer reads verified_network_research.",
+            "Whether the ₹99 + GST redemption fee in the KFS applies to Zagg Coin redemption through the zagg.money app: not stated for this program.",
+            "The CMA copy carrying the Zaggle clause is undated; the dated copy under /pdf/credit-card/ (16 May 2026) lacks it.",
+            "Page says Visa contactless earns 8% on transactions between ₹500 and ₹5,000 and 2% above ₹5,000; the CMA says 8% on contactless \"not exceeding ₹5,000\" with a ₹500 minimum for any earn. Consistent, noted for completeness."
+          ],
+          "notes": [
+            "Structure as published (not modelled). RuPay variant: 4% Zagg Coins on zagg.money UPI up to ₹10,000 cumulative statement-cycle spend; 8% on the part above ₹10,000; 2% on UPI through other UPI apps; 2% on all other eligible retail. Visa variant: 8% on contactless of ₹500 to ₹5,000, 2% on contactless above ₹5,000; 4% on e-commerce; 2% on all other eligible retail. Page also lists 2% on POS and 2% on RuPay e-commerce.",
+            "Reward Points accrue only on eligible retail transactions of ₹500 or more. Capped at 2,000 Reward Points per statement cycle. Credited to the zagg.money account on statement generation. Valid 24 months from accrual (CMA 23.33; page FAQ says 2 years from the statement credit month).",
+            "Redemption only through the zagg.money app, minimum 1,000 points, as statement credit about 30 days after the request; once redeemed it cannot be reversed (CMA 23.33).",
+            "Forex 3.49%, cash limit 20%, fuel surcharge waiver 1% up to ₹100 per statement cycle on ₹400 to ₹5,000 (page, KFS). Contactless payments up to ₹5,000.",
+            "AU and Zaggle have a revenue sharing agreement as co-brand partners (page)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents",
+          "held": true,
+          "held_reason": "Reward percentages are stated in Zagg Coins with no definition of coins per ₹100."
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "15% of Total Amount Due, minimum ₹10, maximum ₹1,300",
+          "source": "Key Fact Statement v1.9, 2 Nov 2026, section 5",
+          "note": "Percentage fee cannot be expressed as fixed slabs, so late_payment_slabs is empty."
+        }
+      },
+      {
+        "key": "payment_return_charge",
+        "value": {
+          "rule": "2% of Total Amount Due or ₹500, whichever is higher, on return/failure of card payment (cheque, ECS/NACH, autopay)",
+          "source": "Key Fact Statement v1.9, 2 Nov 2026, section 10"
+        }
+      }
+    ]
+  }
+}

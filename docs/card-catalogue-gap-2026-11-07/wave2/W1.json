@@ -1,0 +1,158 @@
+{
+  "agent": "W1",
+  "candidates": [
+    {
+      "name": "AU NOMO",
+      "slug": "au-nomo",
+      "status": "drafted",
+      "reason": "Listed on AU's current card list and product page with an Apply button. FD-backed (secured) card: joining fee 199 one time, no annual fee from year 2, 0.99% forex, 2 points per ₹100 retail (1 point = ₹0.25 per the page), 5,000 point cycle cap, quarterly milestone, 2 domestic and 2 railway lounge visits a quarter. Network not stated anywhere AU publishes (left null). KFS v1.9 and MITC v2.23 disagree on the cash limit (50% vs 70%); the page FAQ and the 10 Apr 2026 lounge T&C disagree on the lounge spend (20,000 vs 50,000).",
+      "sources": [
+        "https://www.au.bank.in/personal-banking/credit-cards/nomo-credit-card",
+        "https://www.au.bank.in/pdf/credit-card/Schedule-of-Charges-CC.pdf",
+        "https://www.au.bank.in/credit-cards/mitc(with-schedule-of-charges).pdf",
+        "https://www.au.bank.in/credit-cards/credit-card-member-agreement.pdf",
+        "https://www.au.bank.in/pdf/zenith-credit-card/revision-of-usage-terms-and-conditions_jan_25-4.pdf",
+        "https://www.au.bank.in/pdfs/nomo-credit-card/Railway%20Lounges.pdf"
+      ]
+    },
+    {
+      "name": "AU Xcite",
+      "slug": "au-xcite",
+      "status": "drafted",
+      "reason": "Listed on AU's card list, in the KFS (annual fee 249, waiver at 1,00,000) and on its product page (no card-specific Apply button, only the generic Apply links). Earn: 15 points per ₹100 on dining, movies, grocery and departmental stores; 3 per ₹100 base; 1 per ₹100 on utility, telecom and insurance; 2X on days 1 to 5 of each month; 25,000 point cycle cap (CMA). Value of one point and network not stated.",
+      "sources": [
+        "https://www.au.bank.in/personal-banking/credit-cards/swipeup-program/xcite-credit-card",
+        "https://www.au.bank.in/pdf/credit-card/Schedule-of-Charges-CC.pdf",
+        "https://www.au.bank.in/credit-cards/mitc(with-schedule-of-charges).pdf",
+        "https://www.au.bank.in/credit-cards/credit-card-member-agreement.pdf",
+        "https://www.au.bank.in/pdf/xcite-credit-card/railway-lounges.pdf"
+      ]
+    },
+    {
+      "name": "AU Xcite ACE",
+      "slug": "au-xcite-ace",
+      "status": "held",
+      "reason": "Sold (listed, KFS annual fee 749). Held because the only reward statement is three monthly-spend cashback tiers (1% on ₹7,500, 2% on ₹12,500, 3% on ₹20,000) with no stated basis (whole spend or increment), eligible spends, cap or payout, and no terms PDF is linked. Draft written with no reward rules so the importer skips it; tiers kept verbatim in the notes. Fees, lounges (2 domestic a quarter, 8 railway a year), fuel waiver and cash limit are drafted.",
+      "sources": [
+        "https://www.au.bank.in/personal-banking/credit-cards/swipeup-program/xcite-ace-credit-card",
+        "https://www.au.bank.in/pdf/credit-card/Schedule-of-Charges-CC.pdf",
+        "https://www.au.bank.in/credit-cards/mitc(with-schedule-of-charges).pdf",
+        "https://www.au.bank.in/pdf/zenith-credit-card/revision-of-usage-terms-and-conditions_jan_25-4.pdf"
+      ]
+    },
+    {
+      "name": "AU Xcite Ultra",
+      "slug": "au-xcite-ultra",
+      "status": "drafted",
+      "reason": "Listed, KFS annual fee 749, waiver at 2,00,000. Earn: 12 points per ₹100 international, 8 online, 4 offline, 1 on utility, telecom and insurance; 25,000 point cycle cap; 5,000 point milestone at ₹2.5 lakh a year; 2 domestic lounge visits a quarter. The page names an \"Xcite Ultra RuPay Credit Card\" outright, so RuPay exists; a Visa variant is only hinted by Visa-branded partner links. Network left null with one candidate recorded. Value of one point not stated.",
+      "sources": [
+        "https://www.au.bank.in/personal-banking/credit-cards/swipeup-program/xcite-ultra-credit-card",
+        "https://www.au.bank.in/pdf/credit-card/Schedule-of-Charges-CC.pdf",
+        "https://www.au.bank.in/credit-cards/mitc(with-schedule-of-charges).pdf",
+        "https://www.au.bank.in/credit-cards/credit-card-member-agreement.pdf",
+        "https://www.au.bank.in/pdf/zenith-credit-card/revision-of-usage-terms-and-conditions_jan_25-4.pdf"
+      ]
+    },
+    {
+      "name": "AU InstaPay RuPay",
+      "slug": null,
+      "status": "not_sold",
+      "reason": "AU's own product page says the card \"is exclusively available to our existing Credit cardholders\" and \"Currently applicable for the select base only\"; it is virtual only and shares the credit limit of an existing primary card. It is still on the card list and in the KFS (lifetime free, cash advance not applicable), so a person may choose to catalogue it as invite_only. Not drafted under brief rule 4. Reward on the page: 1% cashback on dining, pharmacy, departmental, grocery and supermarket MCCs, minimum transaction ₹200, capped ₹100 per statement cycle; the KFS forex table does not list InstaPay.",
+      "sources": [
+        "https://www.au.bank.in/personal-banking/credit-cards/instapay-credit-card",
+        "https://www.au.bank.in/personal-banking/credit-cards",
+        "https://www.au.bank.in/pdf/credit-card/Schedule-of-Charges-CC.pdf"
+      ]
+    },
+    {
+      "name": "AU Kosmo",
+      "slug": "au-kosmo",
+      "status": "held",
+      "reason": "Sold (listed, lifetime free per KFS). AU publishes no reward rate: the page says only \"Earn Kiwi rewards\" on UPI scan and pay and on eCom, POS and contactless, and the Cardmember Agreement has no Kosmo or Kiwi section. The Kiwi app terms are a partner document and were not used. Written with no reward rules so the importer skips it. Network not named (UPI linking points to RuPay; a template popup also lists Visa offers).",
+      "sources": [
+        "https://www.au.bank.in/personal-banking/credit-cards/kosmo-credit-card",
+        "https://www.au.bank.in/pdf/credit-card/Schedule-of-Charges-CC.pdf",
+        "https://www.au.bank.in/credit-cards/mitc(with-schedule-of-charges).pdf",
+        "https://www.au.bank.in/credit-cards/credit-card-member-agreement.pdf"
+      ]
+    },
+    {
+      "name": "AU Zaggle",
+      "slug": "au-zaggle",
+      "status": "held",
+      "reason": "Sold (listed, lifetime free). Two networks are issued and named by AU (Visa and RuPay, Cardmember Agreement 23.33 and the page), so network is resolved as dual. Point value stated: 1 Zagg Coin = 1 Reward Point = ₹0.25. Held because AU states rates as \"X% Zagg Coins\" (RuPay: 4% and 8% on zagg.money UPI, 2% elsewhere; Visa: 8% contactless, 4% e-commerce, 2% other) and never defines how many coins one percent is per ₹100, so no value can be computed without guessing. Cap 2,000 points a cycle, ₹500 minimum transaction. Written with no reward rules; structure kept in notes.",
+      "sources": [
+        "https://www.au.bank.in/personal-banking/credit-cards/au-zaggle-credit-card",
+        "https://www.au.bank.in/credit-cards/credit-card-member-agreement.pdf",
+        "https://www.au.bank.in/pdf/credit-card/Schedule-of-Charges-CC.pdf"
+      ]
+    },
+    {
+      "name": "AU CA Metal",
+      "slug": "au-ca-metal",
+      "status": "drafted",
+      "reason": "Listed on AU's card list and page, lifetime free, 1.99% forex, 2.99% a month interest, zero Xpress EMI fee. Reward T&C (6 Mar 2026) gives full MCC lists: 8 points per ₹100 on dining, travel (airlines and OTA air and hotel), tax and software, 5,000 point cycle cap; 2 on other retail; 1 on utility, telecom, insurance. Welcome 2,000 points plus SwiggyOne; ICAI 25% cashback; 2 domestic lounge visits a quarter. Network and point value not stated (page popup says \"Visa Exclusive Offers\").",
+      "sources": [
+        "https://www.au.bank.in/personal-banking/credit-cards/ca-credit-card",
+        "https://www.au.bank.in/pdf/ca-credit-card/AU-CA-Credit-Card-Reward-Points-Terms-and-Conditions.pdf",
+        "https://www.au.bank.in/pdf/ca-credit-card/ca-card-welcome-benefits-terms-and-conditions.pdf",
+        "https://www.au.bank.in/pdf/ca-credit-card/ca-card-icai-membership-tnc.pdf",
+        "https://www.au.bank.in/pdf/zenith-plus-credit-card/au-small-finance-bank-cc-airport-lounge-terms-conditions.pdf",
+        "https://www.au.bank.in/pdf/credit-card/Schedule-of-Charges-CC.pdf"
+      ]
+    },
+    {
+      "name": "AU CS",
+      "slug": "au-cs",
+      "status": "drafted",
+      "reason": "Listed on AU's card list and page, lifetime free, same reward structure as CA (8/2/1 points per ₹100, 5,000 point cycle cap, MCC lists in the CS Reward Points T&C, undated), welcome 2,000 points plus SwiggyOne, ICSI 25% cashback (4 Jun 2026), 2 domestic lounge visits a quarter. Network and point value not stated (page popup says \"Visa Exclusive Offers\"; card art asset is named \"without-VISA\").",
+      "sources": [
+        "https://www.au.bank.in/personal-banking/credit-cards/au-cs-credit-card",
+        "https://www.au.bank.in/pdfs/au-cs-credit-card/AU-CS-Credit-Card-Reward-Points-Terms-and-Conditions.pdf",
+        "https://www.au.bank.in/pdfs/au-cs-credit-card/CS_Card-welcome-benefits-terms-and-conditions.pdf",
+        "https://www.au.bank.in/pdfs/au-cs-credit-card/CS-Card-ICSI-Membership-Fee-Benefit-Terms-and-Conditions.pdf",
+        "https://www.au.bank.in/pdf/credit-card/Schedule-of-Charges-CC.pdf"
+      ]
+    }
+  ],
+  "fixes": [
+    { "slug": "au-ananta", "field": "card_product.network", "before": null, "after": null, "evidence": "Still unresolved. Ananta page hidden popup \"Visa Cardholders\" (MakeMyTrip Visa Signature offer link, Times Prime, Alaya) and text \"Special offers basis your selected network variant\" (also in AU's card-guide blog) show Visa is one variant and others exist. Not confirmed: card art (ananta image, no logo), TnC_Ananta_Lounge.pdf (names no network). The same \"Visa Cardholders\" popup is on the Paytm AU page whose art is RuPay Platinum, so it is a shared template block. One candidate recorded in verified_network_research (finding_status partial)." },
+    { "slug": "au-ananta", "field": "card_product.point_value_inr_baseline", "before": null, "after": 0.25, "evidence": "Ananta product page FAQ \"Are there any milestone benefits\" table: 5,000 bonus points = ₹1,250; 50,000 = ₹12,500. AU Rewardz FAQ (rewardz.au.bank.in/faqs) says value varies by variant and redemption category." },
+    { "slug": "au-ananta", "field": "accrual_engine.base_points_per_block / effective_base_return_percent / rounding_mode / cycle_accrual_ceiling_points", "before": "null / null / null / null", "after": "2 / 0.5 (derived: 2 x 0.25 per ₹100) / floor / 25000", "evidence": "Ananta page FAQ \"What Reward Points do Cardholders earn on other spending categories\": 2 per ₹100 on all other retail, 1 per ₹100 on insurance, utility, telecom (max 100 per utility/telecom transaction). Cardmember Agreement 23.5 table (25,000 per cycle), 23.22 (multiples of ₹100)." },
+    { "slug": "au-ananta", "field": "reward_rules", "before": "3 accelerator rules, no base, no exclusions", "after": "added base 2/100, bills 1/100, insurance 1/100 and 8 category exclusions (cash and quasi-cash, rent, education, government, fuel, EMI, BBPS, transportation)", "evidence": "Ananta page FAQ note: no points on Cash, Rent, Education & Govt, EMI, Fuel, BBPS, Transportation and Quasi Cash. MCC lists not published for this card." },
+    { "slug": "au-ananta", "field": "fee_waiver_and_milestones.spend_milestones[].reward_value_inr", "before": "null x4", "after": "1250 / 2500 / 3750 / 5000", "evidence": "Ananta page FAQ milestone table column \"Value in ₹\"." },
+    { "slug": "au-laksya", "field": "card_product.network", "before": null, "after": null, "evidence": "Still unresolved. TnC_Laksya_Lounge.pdf (28 Nov 2025) says \"Visa/RuPay Network\" for every eligible AU card; Laksya page hidden popup \"Visa Cardholders\" is the shared template block; card art shows no logo. One candidate recorded (partial)." },
+    { "slug": "au-laksya", "field": "accrual_engine.base_points_per_block / rounding_mode / cycle_accrual_ceiling_points", "before": "null / null / null", "after": "2 / floor / 25000", "evidence": "Laksya page FAQ: 2 points per ₹100 on all other retail, 1 on insurance, utility, telecom (max 100 per utility/telecom transaction); no points on Cash, Rent, Education & Govt, EMI, Fuel, BBPS, Transportation, Quasi Cash. CMA 23.5 and 23.22." },
+    { "slug": "au-laksya", "field": "card_product.point_value_inr_baseline", "before": null, "after": null, "evidence": "Not stated on the Laksya page, FAQ or welcome T&C. AU Rewardz FAQ says it depends on variant and redemption category. The welcome choice (4,000 points or ₹1,000 voucher) is a choice, not a stated conversion." },
+    { "slug": "au-laksya", "field": "lifestyle_and_network_benefits[laksya-domestic-lounge].quota", "before": "qty 8, per N/A, split unknown", "after": "qty 8, per annual, max 2 per quarter after ₹50,000 spent in the previous quarter", "evidence": "Laksya page FAQ \"Does the AU Laksya Credit Card offer airport lounge access\" and the lounge popup \"8 Domestic Lounge visits per calendar year (max 2 per quarter)\"." },
+    { "slug": "au-prathama", "field": "card_product.network", "before": null, "after": null, "evidence": "Still unresolved. Prathama page has no network word anywhere in its HTML (checked the full DOM), card art shows no logo, no card-specific PDF exists." },
+    { "slug": "au-prathama", "field": "accrual_engine.base_points_per_block / rounding_mode / cycle_accrual_ceiling_points", "before": "null / null / null", "after": "1 / floor / 25000", "evidence": "Prathama page FAQ \"What Reward Points do I earn on other spends\": 1 per ₹100 on all other eligible transactions; exclusions list; CMA 23.5.2 (2 points above ₹5,000 a cycle, max 1,000 per cycle), 23.5 table (25,000)." },
+    { "slug": "au-prathama", "field": "card_product.point_value_inr_baseline", "before": null, "after": null, "evidence": "Not stated on the Prathama page or FAQ." },
+    { "slug": "au-tejas", "field": "card_product.network", "before": null, "after": null, "evidence": "Still unresolved. Tejas page hidden popup \"Visa Cardholders\" is the shared template block; no lounge benefit so no lounge T&C; card art shows no logo. One candidate recorded (partial)." },
+    { "slug": "au-tejas", "field": "reward_rules[tejas-rewardz-5rp].cond and base rate", "before": "5 points rule with undefined category; base rate unknown", "after": "5 per ₹100 only on purchases through the AU Rewardz portal (flights, hotels, voucher shopping, bill payments); base 1 per ₹100 on all other spends; 500 bonus points need 5 transactions of ₹500 or more in one statement cycle; exclusions added", "evidence": "Tejas page FAQ \"How can Cardholders earn accelerated Reward Points on this card\", \"What Reward Points do Cardholders earn on other spending categories\", \"Are there any milestone benefits\". CMA 23.5 (25,000 cap lists Tejas)." },
+    { "slug": "au-tejas", "field": "card_product.point_value_inr_baseline", "before": null, "after": null, "evidence": "Not stated on the Tejas page, FAQ or welcome T&C." },
+    { "slug": "paytm-au-credit-card", "field": "card_product.network / network_tier", "before": "null / null", "after": "rupay / rupay_platinum", "evidence": "Card image on the AU product page (aemassets.au.bank.in/is/image/aubank/1875x2974-Paytm-Rupay-Platinum-active) shows Paytm, AU Small Finance Bank and the RuPay Platinum logo. Page also carries the shared \"Visa Cardholders\" popup; no Visa variant is named, so only RuPay is set." },
+    { "slug": "paytm-au-credit-card", "field": "lifestyle_and_network_benefits[paytm-au-lounge].quota", "before": "qty null", "after": "qty 12, booking return flights on Paytm Travel, min round trip ₹5,000 per Lounge QR, max 4 per booking, period not stated", "evidence": "Paytm AU product page lounge popup, re-read 2026-11-07." },
+    { "slug": "paytm-au-credit-card", "field": "card_product.point_value_inr_baseline / base rate", "before": "0.5 / 1 point per ₹100", "after": "unchanged", "evidence": "Page restates 1 point = ₹1 on Paytm Gold and ₹0.5 on AU Rewardz, and 1 point per ₹100 on online and offline spends. New conflict noted: page lists 1 point per ₹100 on Paytm utility bill payments while the Reward Point Usage T&C excludes utilities." },
+    { "slug": "au-traverse-nri", "field": "reward_rules / accrual_engine / cap_rules", "before": "no reward rule (held: no rate published)", "after": "international 4 per ₹100, domestic 2, insurance/utility/telecom 1 (max 100 per utility/telecom transaction), exclusions fuel, EMI, cash, rent, education, government; 25,000 point cycle cap", "evidence": "Traverse product page FAQ block now prints the rates (re-read 2026-11-07); CMA 23.5 table lists Traverse NRI at 25,000 per cycle." },
+    { "slug": "au-traverse-nri", "field": "lifestyle_and_network_benefits lounge and meet-and-assist", "before": "qty null", "after": "lounge 2 per quarter (Priority Pass); meet and assist 4 a year, 1 per quarter", "evidence": "Traverse page; Priority Pass Lounges.pdf lists Traverse at 2 international per calendar quarter, USD 35 per paid visit." },
+    { "slug": "au-traverse-nri", "field": "card_product.network", "before": null, "after": null, "evidence": "Not stated in the Traverse page, lounge or Priority Pass T&C, or card art read." }
+  ],
+  "unresolved": [
+    { "slug": "au-ananta", "question": "Which network or networks are issued (page says \"selected network variant\" and shows only a Visa Cardholders popup)? Needs the card's back, the AU 0101 app card view, or the application journey." },
+    { "slug": "au-laksya", "question": "Which network is issued (lounge T&C says Visa/RuPay generically)?" },
+    { "slug": "au-prathama", "question": "Which network is issued (nothing in any AU document read)?" },
+    { "slug": "au-tejas", "question": "Which network is issued (only the shared Visa Cardholders popup)?" },
+    { "slug": "au-nomo", "question": "Network not stated anywhere. Also: cash advance limit 50% (KFS) or 70% (MITC v2.23)? Lounge spend 20,000 (FAQ) or 50,000 (10 Apr 2026 T&C)? Does the 50,000 quarterly milestone give 1,000 points in total or 500 more?" },
+    { "slug": "au-xcite", "question": "Network not stated. Value of one point not stated. Is the card open to new applications (no card-specific Apply button)? Does the page note \"base Reward Points only (3 per ₹100)\" qualify the 2X first-five-days bonus?" },
+    { "slug": "au-xcite-ace", "question": "How do the 1%, 2%, 3% monthly cashback tiers work (basis, cap, eligible spends, payout)? AU publishes no terms; ask AU or find a terms PDF." },
+    { "slug": "au-xcite-ultra", "question": "Is there a Visa variant besides the named RuPay variant? Value of one point? Welcome benefit (headline mentions one, none listed)? Air accident cover is ₹20 lacs in one place and ₹50 lacs in another." },
+    { "slug": "au-kosmo", "question": "What does the card earn? AU publishes no Kiwi reward rate; the Kiwi terms (partner document) were not used. Network not named (RuPay likely)." },
+    { "slug": "au-zaggle", "question": "How many Zagg Coins per ₹100 does \"4%\", \"8%\", \"2%\" mean? Does the ₹99 + GST redemption fee apply to Zagg Coin redemption in the zagg.money app? Which Cardmember Agreement copy is current (the undated one has the Zaggle clause; the 16 May 2026 copy under /pdf/credit-card/ does not)?" },
+    { "slug": "au-ca-metal", "question": "Network (popup \"Visa Exclusive Offers\" only). Value of one point. MCC 9311 is in both the 8-point tax list and the exclusion list. Does spend beyond the 5,000 point cycle cap on the 8-point categories earn the 2-point base? Page says lounge needs the card to be purchase-active; lounge T&C says ₹50,000 in the previous quarter from 1 Oct 2026." },
+    { "slug": "au-cs", "question": "Network (popup \"Visa Exclusive Offers\" and art asset named without-VISA). Value of one point. Same 9311 conflict, cap behaviour and lounge-rule conflict as CA. Reward T&C and welcome T&C are undated." },
+    { "slug": "au-traverse-nri", "question": "Network not stated. Value of one point. Are the 2 lounge visits a quarter domestic, international or either (Priority Pass use in India is chargeable and the spend-based domestic programme excludes Traverse)?" },
+    { "slug": "paytm-au-credit-card", "question": "Does a Visa variant exist (shared Visa Cardholders popup on the page, but the art is RuPay Platinum)? Do Paytm app utility bill payments earn 1 point per ₹100 (page) or nothing (Reward Point Usage T&C)? Over what period do the 12 lounge accesses run?" },
+    { "slug": "au-instapay", "question": "Whether to catalogue InstaPay as invite_only anyway: AU lists it, but only for a select base of existing AU cardholders." }
+  ]
+}

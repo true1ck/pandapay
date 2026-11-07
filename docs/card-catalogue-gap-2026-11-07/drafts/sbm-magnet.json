@@ -1,0 +1,252 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "sbm-magnet",
+    "name": "SBM Magnet Credit Card",
+    "issuer_slug": "sbm-bank-india",
+    "network": "visa",
+    "network_tier": "visa_platinum",
+    "card_tier": "N/A",
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": null,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": "N/A",
+    "point_value_baseline_basis": "N/A",
+    "point_expiry_months": "N/A",
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "FD-backed secured card: the credit limit is 90% of the fixed deposit (KFS). The minimum deposit is not stated in the SBM documents read.",
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": "N/A",
+    "rounding_mode": "N/A",
+    "base_points_per_block": "N/A",
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 2.5,
+      "annual_interest_rate_percent": 30
+    },
+    "forex_markup": {
+      "markup_percent": 2.49,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": null,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 300,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": 50
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% processing fee on rental payments (MCC 6513), over and above any merchant convenience fee (MITC Table 07; page FAQ 8)",
+        "threshold_spend_inr": null,
+        "effective_from": "2026-07-15",
+        "effective_to": null
+      },
+      {
+        "category_id": "education",
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% processing fee on education payments (MCCs 8211, 8220, 8241, 8244, 8249, 8299), over and above any merchant convenience fee (MITC Table 07; page FAQ 8)",
+        "threshold_spend_inr": null,
+        "effective_from": "2026-07-15",
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 0,
+        "min_fee_inr": 0,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 0,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 45,
+    "grace_period_void_on_revolving_balance": true,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "5% of the outstanding amount for POS/ECOM",
+        "10% of the outstanding amount for cash transactions",
+        "100% of the outstanding amount for interest and fees"
+      ]
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": null,
+        "fee_inr": 299
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "Joining and annual fees are nil and no waiver applies (KFS; MITC Table 01). Card replacement ₹249; cancellation ₹499 + GST in the first year of activation; FD closure fee 1%.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": "N/A",
+    "separate_priority_pass": "N/A",
+    "lounge_quota_shared": "N/A",
+    "reward_points_pooled": "N/A",
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.sbm.bank.in/pdf/kfs/SBM-Magnet-CC-Key-Fact-Statement.pdf",
+              "kind": "SBM Magnet Secured Credit Card KFS (PDF created 9 Jun 2026, SBM file dated 9 Jun 2026; the page links no newer one)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/pdf/terms-conditions/SBM-Secured-Credit-Card-T&C.pdf",
+              "kind": "SBM Secured Credit Card MITC and Cardholder Member Agreement, 52 pages (SBM file dated 29 Oct 2026): Tables 01-11 give fees, interest, late fee, forex, surcharge, rent and education fees, cash limits and minimum due for every variant",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+              "kind": "SBM secured credit card page (read 7 Nov 2026): lists the card with its KFS, MITC and reward links; card image https://www.sbm.bank.in/images/cards/SBM-Magnet-Gild-Card.webp shows the network",
+              "read": "page text; card image viewed"
+            }
+          ],
+          "open_questions": [
+            "HELD, no published reward rate: the SBM page says the card earns \"unlimited magnet coins as rewards\" and links only a KFS and an MITC. No rate, cap, exclusion list or coin value is published by SBM.",
+            "Naming: the card image on the SBM page for Magnet is labelled \"Gild\" (Visa Platinum, file SBM-Magnet-Gild-Card.webp), and a partner-hosted copy of the KFS is titled \"SBM MAGNET GILD\". The KFS and MITC call the product \"SBM Magnet\". A person should confirm Magnet and Gild are one live product.",
+            "Network: Visa Platinum is read from that card image only; no SBM document names the network. A third-party aggregator lists a Magnet RuPay variant; no SBM document confirms it.",
+            "The KFS says payments are made through the \"Rupicard Mobile app\", which looks like stale wording; the MITC lists the partner as Vistas Technolabs (ZET).",
+            "Fuel surcharge: the KFS says \"Surcharge Fee 1%\"; MITC clause 8.7 ties it to fuel. No waiver is stated."
+          ],
+          "notes": [
+            "Interest on POS/ECOM 2.5% a month (30% a year); cash 3.3% a month (40% a year). Cash limit 50% of the credit limit; ATM fee 2.5% or ₹300, whichever is higher.",
+            "Page text: \"earn FD interest up to 7% p.a.\" on the deposit.",
+            "Rent and education fees of 1% took effect on 15 Jul 2026 (MITC note to Table 07)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "flat ₹299 + GST on non-payment of the minimum amount due",
+          "source": "Magnet KFS (9 Jun 2026) and MITC Table 08"
+        }
+      }
+    ]
+  }
+}

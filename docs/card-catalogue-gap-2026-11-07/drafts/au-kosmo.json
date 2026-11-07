@@ -1,0 +1,360 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "au-kosmo",
+    "name": "AU Kosmo Credit Card",
+    "issuer_slug": "au",
+    "network": null,
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [
+      "virtual_card",
+      "nfc_contactless"
+    ],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": 5000,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": "AU publishes no rate or value for Kiwi rewards.",
+    "point_expiry_months": 24,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.au.bank.in/personal-banking/credit-cards/kosmo-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "AU states these criteria are only indicative and reserves the right to approve or decline.",
+    "rules": [
+      {
+        "parameter": "age_years_salaried",
+        "operator": ">=",
+        "threshold_value": 21,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years_salaried",
+        "operator": "<=",
+        "threshold_value": 60,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years_self_employed",
+        "operator": ">=",
+        "threshold_value": 25,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years_self_employed",
+        "operator": "<=",
+        "threshold_value": 65,
+        "allowed_values": []
+      },
+      {
+        "parameter": "residency",
+        "operator": "in",
+        "threshold_value": null,
+        "allowed_values": [
+          "resident_indian"
+        ]
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": null,
+    "rounding_mode": null,
+    "base_points_per_block": null,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 45
+    },
+    "forex_markup": {
+      "markup_percent": 3.49,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 3.49,
+      "gst_applicable": true,
+      "trigger_condition": "KFS lists one cross-currency markup for foreign-currency, dynamic and static conversion transactions"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 400,
+      "max_txn_inr": 5000,
+      "monthly_waiver_cap_inr": 100
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": 20
+    },
+    "category_surcharges": [
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          5172,
+          5541,
+          5542,
+          5552,
+          5983
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "From 1 Jul 2026: 1% on the whole month's fuel spend when one transaction exceeds ₹10,000 or the calendar-month total exceeds ₹25,000",
+        "threshold_spend_inr": 25000,
+        "effective_from": "2026-07-01",
+        "effective_to": null
+      },
+      {
+        "category_id": "utility",
+        "mcc_list": [
+          4900
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% on utility spend above ₹50,000 in a calendar month",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education_third_party",
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Education paid through third-party apps (CRED, PhonePe, Paytm, MobiKwik, Freecharge etc.), minimum ₹99 per transaction; direct school/college site or POS exempt",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Domestic rental payments, minimum ₹99 per transaction; international rental has no charge",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "transportation",
+        "mcc_list": [
+          4111,
+          4112,
+          4784
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "From 14 Jun 2026: 1% on the whole month's transportation spend once it exceeds the lower of 50% of credit limit or ₹25,000; IRCTC and marquee travel partners excluded",
+        "threshold_spend_inr": 25000,
+        "effective_from": "2026-06-14",
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": 199,
+      "post_purchase_emi_processing_fee_inr": 99,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 500,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 99,
+      "gst_applicable": true,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 50,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "If previous Total Amount Due was paid on time: 5% of principal outstanding + 100% of fees/charges + 100% of interest + due EMIs + 100% annual fee (if applicable) + 100% GST",
+        "If previous Total Amount Due was not paid on time: 2% of principal outstanding + the same 100% components"
+      ]
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "Lifetime free: no joining or annual fee (page and KFS).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 0,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": 18
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "verified_network_research",
+        "value": {
+          "finding_status": "partial",
+          "product_status": "active",
+          "source_url": "https://www.au.bank.in/personal-banking/credit-cards/kosmo-credit-card",
+          "evidence": "Page FAQ: to authenticate UPI transactions a separate UPI PIN is created \"when linking your RuPay Credit Card to any UPI app\", in an answer about the Kosmo card. The page never prints \"RuPay\" next to the card name, and a template popup lists Visa offers.",
+          "candidates": [
+            {
+              "network": "rupay",
+              "network_tier": "N/A",
+              "label": "AU Kosmo Credit Card (UPI-linked)",
+              "source_url": "https://www.au.bank.in/personal-banking/credit-cards/kosmo-credit-card",
+              "evidence": "Page FAQ on UPI PIN for the Kosmo card names the RuPay Credit Card; InstaPay FAQ on the AU site says only RuPay credit cards can be linked to UPI."
+            }
+          ]
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.au.bank.in/personal-banking/credit-cards/kosmo-credit-card",
+              "kind": "issuer_page + FAQ",
+              "read": "rendered page text including hidden accordions and popups"
+            },
+            {
+              "url": "https://www.au.bank.in/pdf/credit-card/Schedule-of-Charges-CC.pdf",
+              "kind": "KFS (lifetime free, 3.49% forex, ₹100 fuel waiver, 20% cash limit)",
+              "date": "Key Fact Statement v1.9, 2 Nov 2026"
+            },
+            {
+              "url": "https://www.au.bank.in/credit-cards/mitc(with-schedule-of-charges).pdf",
+              "kind": "MITC",
+              "date": "MITC v2.23, 2 Nov 2026"
+            },
+            {
+              "url": "https://www.au.bank.in/credit-cards/credit-card-member-agreement.pdf",
+              "kind": "Cardmember Agreement (no Kosmo or Kiwi reward section found)",
+              "date": "Cardmember Agreement, undated copy (the copy under /pdf/credit-card/ is dated 16 May 2026 and has no Zaggle section)"
+            },
+            {
+              "url": "https://www.au.bank.in/personal-banking/credit-cards",
+              "kind": "AU current credit card list (card is listed)",
+              "date": "2026-11-07"
+            }
+          ],
+          "open_questions": [
+            "HELD: AU publishes no reward rate. The page says only \"Earn Kiwi rewards on every UPI Scan & Pay\" and \"Kiwi rewards on eCom, POS & contactless transactions\". The Cardmember Agreement has no Kosmo or Kiwi section. The Kiwi app terms are a partner document and were not used. No reward rule written so the importer skips it.",
+            "Network: not named on the page. UPI linking points to RuPay, but a template popup also lists Visa offers. Left null.",
+            "Fuel surcharge waiver cap: the product page and KFS say ₹100 per statement cycle; a template popup on the same page says ₹250. KFS used.",
+            "The \"RuPay Offer\" popup on this page names the \"ABC Pro RuPay Credit Card\", so it is copied template text, not Kosmo terms."
+          ],
+          "notes": [
+            "Kiwi rewards are not earned on cash, rent, education & govt, insurance, EMI, fuel and BBPS transactions (page note). Not written as rules, to keep the card with no earn logic.",
+            "Rewards earned in a statement cycle are credited to the Kiwi account on statement generation and viewed in the Kiwi app (page FAQ). Apply through the Kiwi app (page FAQ).",
+            "Forex 3.49%, cash limit 20%, fuel waiver up to ₹100 per statement month on ₹400 to ₹5,000 (KFS). Add-on cards offered; Xpress EMI on ₹500+ transactions with ₹2,000 minimum total."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents",
+          "held": true,
+          "held_reason": "AU publishes no Kiwi reward rate for the card."
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "15% of Total Amount Due, minimum ₹10, maximum ₹1,300",
+          "source": "Key Fact Statement v1.9, 2 Nov 2026, section 5",
+          "note": "Percentage fee cannot be expressed as fixed slabs, so late_payment_slabs is empty."
+        }
+      },
+      {
+        "key": "payment_return_charge",
+        "value": {
+          "rule": "2% of Total Amount Due or ₹500, whichever is higher, on return/failure of card payment (cheque, ECS/NACH, autopay)",
+          "source": "Key Fact Statement v1.9, 2 Nov 2026, section 10"
+        }
+      }
+    ]
+  }
+}

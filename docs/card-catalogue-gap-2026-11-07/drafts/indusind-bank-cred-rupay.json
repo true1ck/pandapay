@@ -1,0 +1,788 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "indusind-bank-cred-rupay",
+    "name": "CRED IndusInd Bank RuPay Credit Card",
+    "issuer_slug": "indusind-bank",
+    "network": "rupay",
+    "network_tier": null,
+    "card_tier": "N/A",
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 499,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [
+      "virtual_card"
+    ],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 0.5,
+    "point_value_baseline_basis": "CRED Section Z Part II 5.1, re-read 2026-11-07 (page \"Last updated on 28 October 2026\"): 1 CRED Reward Point = ₹1 on flights, hotels, CRED Store and select CRED Pay partner merchants; ₹0.50 on utility and credit-card bill payments made in the CRED app. The IndusInd launch press release (15 Sep 2025) also says every point is equivalent to a rupee on the main redemption routes. Baseline uses the lower value. Redemption is a CRED programme term, not an IndusInd Bank term.",
+    "point_expiry_months": 24,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.indusind.bank.in/content/dam/indusind-corporate/credit-cards/MITC_Premium.pdf",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "CRED Section Z: at least 18, resident of India, existing CRED user, active CRED membership throughout, bank creditworthiness checks.",
+    "rules": [
+      {
+        "parameter": "age_years",
+        "operator": ">=",
+        "threshold_value": 18,
+        "allowed_values": []
+      },
+      {
+        "parameter": "residency",
+        "operator": "in",
+        "threshold_value": null,
+        "allowed_values": [
+          "resident_indian"
+        ]
+      },
+      {
+        "parameter": "cred_member",
+        "operator": "==",
+        "threshold_value": 1,
+        "allowed_values": []
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": "round",
+    "base_points_per_block": 1,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": 0.5,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": "statement_cycle",
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "cred-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5983,
+          5172,
+          5542,
+          5541
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel earns no points (Section Z 3.1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cred-excl-education",
+      "category_id": "education",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5111,
+          5192,
+          5943,
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299,
+          8351
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Education earns no points."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cred-excl-government",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          9211,
+          9222,
+          9232,
+          9311,
+          9399,
+          9402,
+          8931
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Government institutions, services and charges earn no points."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cred-excl-wallet",
+      "category_id": "wallet_load",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6540,
+          6538,
+          8999,
+          6541
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Wallet loads and prepaid instruments earn no points."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cred-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513,
+          6012,
+          6051
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Rent payments earn no points."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cred-excl-gold",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5412
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Digital gold earns no points (Section Z 3.1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cred-excl-tolls",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          9399,
+          4784
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "FASTag, tolls, road and bridge fees earn no points (Section Z 3.1, read in full 2026-11-07)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cred-excl-cbdc",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          7411
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "CBDC earns no points (Section Z 3.1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cred-excl-jewellery",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5944,
+          5094,
+          5051
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Jewellery purchases earn no points (Section Z 3.1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cred-excl-cash-forex",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6010,
+          6011,
+          6012,
+          6051
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Forex retail and quasi-cash transactions earn no points (Section Z 3.1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cred-excl-emi",
+      "category_id": "emi",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Transactions converted to EMI (at the time of transaction or later), cash advances and withdrawals, loan payments, balance transfers and bank fees and charges earn no points (Section Z 3.1 c)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cred-5pct-online",
+      "category_id": "online",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "online",
+      "channel_type": "all",
+      "conditions": {
+        "minimum_transaction_inr": 100,
+        "includes": [
+          "online spends (e-commerce)",
+          "CRED Flights and Hotels",
+          "CRED Store",
+          "select CRED Pay",
+          "gift cards on the CRED app",
+          "online UPI through the CRED app"
+        ]
+      },
+      "action": {
+        "multiplier": 5,
+        "points_per_block": 5,
+        "cashback_percent": "N/A",
+        "cap_reference": "cred-5pct-cap",
+        "reason": "5% rewards = 5 CRED points per ₹100 on online spends and listed in-app transactions; capped at 5,000 points per billing cycle."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cred-upi-scan-1pct",
+      "category_id": "upi",
+      "priority": 15,
+      "evaluation_type": "accelerator",
+      "rail": "upi_qr",
+      "channel_type": "cred_app",
+      "conditions": {
+        "minimum_transaction_inr": 100,
+        "platform": "CRED app Scan and Pay"
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": "cred-scan-pay-cap",
+        "reason": "1% = 1 CRED point per ₹100 on Scan and Pay UPI through the CRED app; capped at 500 points per billing cycle."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cred-1pct-other",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "minimum_transaction_inr": 100,
+        "includes": [
+          "insurance and utility payments via the CRED app",
+          "travel outside the CRED app",
+          "gift cards outside the CRED app",
+          "international transactions",
+          "all other eligible spends"
+        ]
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "1% = 1 CRED point per ₹100 on everything else not excluded."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "cred-5pct-cap",
+      "category_id": "online",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": 5000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "downgrade_to_base_rate",
+        "points_per_block": 1
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cred-scan-pay-cap",
+      "category_id": "upi",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": 500,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.95,
+      "annual_interest_rate_percent": 47.4
+    },
+    "forex_markup": {
+      "markup_percent": 3.5,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 2,
+      "gst_applicable": true,
+      "trigger_condition": "Effective 15 June 2026: 2% + GST on INR transactions made at an international location or at merchants in India registered overseas (1% until 14 June 2026); CRED IndusInd Bank RuPay Credit Card is named in the 2% list (MITC, DCC row)."
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": null,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 300,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [
+      {
+        "category_id": "fuel",
+        "mcc_list": [],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Effective 15 June 2026: 1% + GST on cumulative fuel transactions above ₹30,000 in a statement cycle; CRED IndusInd Bank RuPay is in the ₹30,000 group (MITC, Fuel Transactions)",
+        "threshold_spend_inr": 30000,
+        "effective_from": "2026-06-15",
+        "effective_to": null
+      },
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% + GST on each rent payment through third-party merchants; the exemption list does not name this card (MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "bills",
+        "mcc_list": [],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% + GST on cumulative utility payments above ₹25,000 in a statement cycle (MITC)",
+        "threshold_spend_inr": 25000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "wallet",
+        "mcc_list": [
+          6540
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% + GST on cumulative wallet loading above ₹20,000 in a statement cycle (MITC)",
+        "threshold_spend_inr": 20000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education",
+        "mcc_list": [],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% + GST on cumulative education payments through third-party websites and apps above ₹45,000 in a statement cycle (MITC)",
+        "threshold_spend_inr": 45000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "travel",
+        "mcc_list": [
+          4111,
+          4112,
+          4784,
+          4131
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Effective 15 June 2026: 1% + GST on cumulative transport spends (MCCs 4111, 4112, 4784, 4131) above ₹40,000 in a statement cycle (MITC, Transaction fees on Transport)",
+        "threshold_spend_inr": 40000,
+        "effective_from": "2026-06-15",
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 500,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 0,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 100,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 101,
+        "max_balance_inr": 500,
+        "fee_inr": 100
+      },
+      {
+        "min_balance_inr": 501,
+        "max_balance_inr": 1000,
+        "fee_inr": 500
+      },
+      {
+        "min_balance_inr": 1001,
+        "max_balance_inr": 5000,
+        "fee_inr": 600
+      },
+      {
+        "min_balance_inr": 5001,
+        "max_balance_inr": 10000,
+        "fee_inr": 750
+      },
+      {
+        "min_balance_inr": 10001,
+        "max_balance_inr": 25000,
+        "fee_inr": 900
+      },
+      {
+        "min_balance_inr": 25001,
+        "max_balance_inr": 50000,
+        "fee_inr": 1100
+      },
+      {
+        "min_balance_inr": 50001,
+        "max_balance_inr": null,
+        "fee_inr": 1300
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "IndusInd MITC fee table (file \"MITC-Premium Card Consolidated_13.10.2026\"): joining fee NIL, annual fee ₹499 with waiver condition \"NA\", add-on card fee NIL. Footnote: the annual fee is not applicable for targeted \"Lifetime Free\" limited-time promotions. The MITC header says actual fees are conveyed at the time of application.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": null,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": 18
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "CRED app: flight bookings",
+        "redemption_type": "flight_hotel_booking",
+        "inr_value_per_point": 1,
+        "max_bill_percentage_payable_via_points": 70,
+        "min_points_per_txn": 1,
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": 0,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "channel": "CRED app: hotel bookings",
+        "redemption_type": "flight_hotel_booking",
+        "inr_value_per_point": 1,
+        "max_bill_percentage_payable_via_points": 70,
+        "min_points_per_txn": 1,
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": 0,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "channel": "CRED Store purchases and select CRED Pay partner merchants",
+        "redemption_type": "partner_catalogue",
+        "inr_value_per_point": 1,
+        "max_bill_percentage_payable_via_points": 70,
+        "min_points_per_txn": 1,
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": 0,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "channel": "Utility and credit card bill payments made within the CRED app",
+        "redemption_type": "other",
+        "inr_value_per_point": 0.5,
+        "max_bill_percentage_payable_via_points": 100,
+        "min_points_per_txn": 1,
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": 0,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "superseded_research_provenance",
+        "value": {
+          "research_method": "direct review of official issuer/partner pages and published terms; no browser automation response assumed",
+          "verified_at": "2026-10-17T16:48:32.669Z",
+          "source_urls": [
+            "https://cred.club/terms"
+          ],
+          "effective_date_caveats": "CRED terms are primary for the app/reward program but are not the issuer’s MITC. No joining fee, annual fee, APR or network-specific issuer charges asserted here.",
+          "fact_claims": [
+            "Card is issued by IndusInd Bank; CRED facilitates application and operates the reward program. Official CRED Section Z terms last updated 30 Sep 2026.",
+            "Rewards: 5 points per ₹100 for eligible online/CRED-app spends; 1 point per ₹100 for listed other qualifying spends. Minimum ₹100 transaction. 5,000-point billing-cycle cap applies to the 5% category.",
+            "Redemption value is conditional: 1 point = ₹1 for CRED travel/store/select CRED Pay; 1 point = ₹0.50 for utility and credit-card bill payments. Other redemptions limited to 70% of balance per transaction; utility/card bill payment may use up to 100%. Points expire after 2 years.",
+            "Fuel, education and specified government MCCs are excluded from rewards; exact full exclusion set and bank MITC/fees still need issuer confirmation."
+          ],
+          "aliases": [],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://cred.club/terms",
+              "kind": "CRED terms, Section Z Part II Rewards (earn rates, cap, exclusions, redemption values, 70% limit, 2-year expiry), page \"Last updated on 28 October 2026\", read in full 2026-11-07",
+              "date": "2026-10-28",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://www.indusind.bank.in/content/dam/indusind-corporate/credit-cards/MITC_Premium.pdf",
+              "kind": "IndusInd Bank Credit Card MITC, consolidated premium-card file \"MITC-Premium Card Consolidated_13.10.2026\" (14 pages; fees, interest, forex, DCC, late fee, fuel and other surcharges for CRED IndusInd Bank RuPay)",
+              "date": "2026-10-13",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.indusind.bank.in/iblogs/press-release/launch-of-cred-indusind-bank-rupay-credit-card/",
+              "kind": "IndusInd Bank launch press release, 15 Sep 2025: zero joining fee, 5% online and 1% offline, every point equivalent to a rupee on main redemption routes, NPCI RuPay quote",
+              "date": "2025-09-15",
+              "read": "page text"
+            }
+          ],
+          "open_questions": [
+            "Annual fee: the IndusInd MITC fee table shows joining NIL and annual ₹499 for this card, with a footnote that the annual fee does not apply to targeted \"Lifetime Free\" limited-time promotions, and the header says actual fees are conveyed at application. Which cohort a new applicant gets is not stated. The launch press release says only \"zero joining fees\". annual_fee_inr keeps 499.",
+            "Foreign currency mark-up 3.5% + GST is taken from the MITC clause \"All other Credit Cards (not specified above) 3.5%\": the CRED card is not named in that row, so the general rate applies by exclusion. No CRED-specific forex figure was found; confirm with IndusInd. The DCC fee row (2% + GST from 15 June 2026) does name the card.",
+            "Interest rate 3.95% a month (47.40% a year) for revolving credit and cash advances is stated for this card in the MITC; the MITC also says the Bank can change the rate by customer profile.",
+            "Fuel: the MITC says a 1% fuel surcharge waiver exists but points to the bank website for per-product waiver details, so fuel_surcharge waiver_percent, minimum and cap are null. The card pays 1% + GST on cumulative fuel above ₹30,000 a statement cycle from 15 June 2026.",
+            "EMI processing and foreclosure charges, returned-payment fee and lounge access for this card are not in the MITC rows read; left null / not modelled.",
+            "Redemption values (₹1 / ₹0.50), the 70% limit (100% for utility and credit-card bill payments) and the 2-year expiry were re-read on 2026-11-07 from CRED Section Z, which is a CRED programme document, not an IndusInd Bank document; CRED can change them with notice.",
+            "Section Z exclusions are now read in full (including FASTag and tolls, CBDC, jewellery, forex and quasi-cash); channel-based exclusions (UPI outside CRED UPI, insurance and utility paid outside the CRED app) are not modelled as MCC rules.",
+            "CRED is a facilitator and runs the rewards programme; IndusInd is the issuer.",
+            "Rounding: points are rounded per transaction (₹101 at 5% gives 5; ₹195 gives 10), so rounding_mode \"round\" is an approximation."
+          ],
+          "notes": [
+            "Minimum ₹100 per transaction to earn.",
+            "Points earning stops if the CRED membership lapses."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

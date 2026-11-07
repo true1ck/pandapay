@@ -1,0 +1,475 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "sbm-bank-india-onecard-metal",
+    "name": "OneCard Metal Credit Card (SBM Bank India variant)",
+    "issuer_slug": "sbm-bank-india",
+    "network": "visa",
+    "network_tier": null,
+    "card_tier": "N/A",
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": null,
+    "application_mode": "open",
+    "form_factors": [
+      "virtual_card",
+      "physical_plastic",
+      "physical_metal"
+    ],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": "No SBM document states what one OneCard reward point is worth: the Cardholder Agreement says points repay earlier purchases (\"Pay with points\") or are redeemed for offers in the OneCard app, and the bank may change the conversion rate. Points do not expire unless the card is unused for 365 days.",
+    "point_expiry_months": 0,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "SBM MITC (29 Oct 2026): secured card against a fixed deposit of at least ₹5,000 (or as decided by the Bank) opened in the OneCard app in a single name; the FD is liened and auto-renews. A metal card is issued for a cumulative FD above ₹50,000 or as decided by the Bank; the FD can be topped up 9 times in the app.",
+    "rules": [
+      {
+        "parameter": "fd_amount_inr",
+        "operator": ">=",
+        "threshold_value": 5000,
+        "allowed_values": []
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 50,
+    "rounding_mode": "N/A",
+    "base_points_per_block": 1,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "onecard-excl-transfers",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Money transfers earn no reward points (Cardholder Agreement clause 20, Earn Reward Points b)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "onecard-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Rent payments earn no reward points (clause 20 I.b)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "onecard-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5541,
+          5542
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel purchases earn no reward points (clauses 8.7 and 20 I.b; MCCs assumed, the text names fuel without codes)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "onecard-excl-cash",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6010,
+          6011
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Cash withdrawals earn no reward points (clause 20 I.b)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "onecard-excl-wallet",
+      "category_id": "wallet_load",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Digital wallet loading and top-up earn no reward points (clause 20 I.b)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "onecard-excl-bills-utilities",
+      "category_id": "utility",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Effective 30 Jul 2026 reward points no longer accrue for bills and utilities, and these are ineligible for 5X (clause 20 I.b)."
+      },
+      "effective_from": "2026-07-30",
+      "effective_to": null
+    },
+    {
+      "id": "onecard-5x-top-2-categories",
+      "category_id": "all_retail",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "top_categories_in_month": 2,
+        "minimum_categories_in_month": 3,
+        "minimum_spend_per_category_inr": 750,
+        "bonus_credited": "10th of the following month"
+      },
+      "action": {
+        "multiplier": 5,
+        "points_per_block": 5,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "5X rewards (5 points per ₹50) on the top 2 spend categories of the month, only when the month has purchases in at least 3 categories with at least ₹750 in each of the 3 (clause 20 I.e). Bonus points are credited on the 10th of the next month."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "onecard-base-1-per-50",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 50,
+        "fractional_points_below_block": true
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "1 reward point on every ₹50 of regular purchases across any category; below ₹50 fractional points are credited (₹25 earns 0.5 point) (clause 20 I.c-d; SBM reward details)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 45
+    },
+    "forex_markup": {
+      "markup_percent": 1,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": 400
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": null,
+      "atm_transaction_fee_min_inr": null,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 2,
+        "gst_applicable": true,
+        "trigger_condition": "2% on rent paid at third-party apps and merchants, over and above their convenience fee (SBM MITC 29 Oct 2026; the KFS w.e.f. 29 Jun 2026 and the Cardholder Agreement of 30 Jun 2026 say 1%)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "wallet_load",
+        "mcc_list": [
+          6540
+        ],
+        "fee_percent": 2,
+        "gst_applicable": true,
+        "trigger_condition": "2% on the full amount of fund transfers to wallets or bank accounts once monthly transfers exceed ₹10,000 (SBM MITC 29 Oct 2026; the KFS and Cardholder Agreement say 1%)",
+        "threshold_spend_inr": 10000,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 0,
+        "min_fee_inr": 0,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 0,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 48,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 250,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 251,
+        "max_balance_inr": 1000,
+        "fee_inr": 250
+      },
+      {
+        "min_balance_inr": 1001,
+        "max_balance_inr": 5000,
+        "fee_inr": 500
+      },
+      {
+        "min_balance_inr": 5001,
+        "max_balance_inr": 25000,
+        "fee_inr": 1000
+      },
+      {
+        "min_balance_inr": 25001,
+        "max_balance_inr": null,
+        "fee_inr": 1250
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "Joining, annual and primary issuance fees are Nil. The metal card costs ₹3,000 as an add-on issuance and ₹3,000 if cancelled within 6 months of virtual card activation (MITC).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 3000,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "superseded_research_provenance",
+        "value": {
+          "research_method": "direct review of official issuer/partner pages and published terms; no browser automation response assumed",
+          "verified_at": "2026-10-17T16:48:32.669Z",
+          "source_urls": [
+            "https://www.getonecard.app/metal-credit-card/",
+            "https://assets.getonecard.app/assets/legal/SBM_MITC_English_Sep2025.pdf"
+          ],
+          "effective_date_caveats": "Bank PDF located is the SBM MITC published Sep 2025; verify with current SBM/OneCard issuer documents. Metal path and FD-backed path are distinct eligibility routes; exact unsecured metal product terms remain unresolved.",
+          "fact_claims": [
+            "OneCard markets a metal product issued by multiple partner banks including SBM Bank India; issuer-specific variant must not be merged with other issuing banks.",
+            "SBM MITC covers SBM One co-branded card and has a separate metal-card issuance fee of ₹3,000; cancellation within six months of virtual-card activation incurs ₹3,000 for metal card.",
+            "SBM secured route requires a linked FD of at least ₹5,000; metal issuance is described for cumulative FD above ₹50,000 (or bank-determined threshold). The same MITC says the virtual card may be Visa/RuPay; physical network is not established by the public source.",
+            "The OneCard marketing page says lifetime free, but the SBM MITC includes the above metal issuance/cancellation charges. Do not collapse those into a blanket no-fee statement."
+          ],
+          "aliases": [],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+              "kind": "SBM secured credit card page (read 7 Nov 2026): lists \"SBM OneCard Credit Card\" with KFS, T&C, Cardholder Agreement and Reward Points links, so the card is still sold; card image consumer-onecard.webp shows a Visa Signature card",
+              "read": "page text; card image viewed"
+            },
+            {
+              "url": "https://www.sbm.bank.in/pdf/notice-board/SBM-one-card-MITC.pdf",
+              "kind": "SBM OneCard MITC, 32 pages (SBM file dated 29 Oct 2026): fees (rent 2%, fund transfer 2%), FD minimum ₹5,000, metal card for cumulative FD above ₹50,000, RuPay floater card earns no rewards",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/pdf/kfs/One-Card-KFS.pdf",
+              "kind": "SBM One co-branded Credit Card KFS, w.e.f. 29 Jun 2026 (SBM file dated 12 Oct 2026): fees, interest, late fee, metal card fees",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/pdf/notice-board/Card-Holder-Agreement-SBM-One-Credit-Card.pdf",
+              "kind": "SBM One co-branded Credit Card Cardholder Agreement, 28 pages (SBM file dated 30 Jun 2026): clause 20 reward earn rules and exclusions, clause 8.7 fuel waiver, Visa acceptance and Visa exchange rate wording",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/pdf/notice-board/RP-details.pdf",
+              "kind": "SBM OneCard reward point details, 1 page (PDF created 20 Feb 2024, SBM file dated 12 May 2026): 1 point per ₹50, 5X on top 2 categories",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://assets.getonecard.app/assets/legal/SBM_MITC_English_Sep2025.pdf",
+              "kind": "Earlier read: SBM One co-branded credit card MITC on the partner site (file dated Sep 2025); superseded by the SBM-hosted documents above",
+              "read": "pdftotext"
+            }
+          ],
+          "open_questions": [
+            "Point value: no SBM document states what one OneCard reward point is worth, so point_value_inr_baseline is null and the earn rate (1 point per ₹50, 5X on the top 2 categories) cannot be turned into a percentage return.",
+            "Reward clause conflict: clause 20 I.b says bills and utilities earn nothing from 30 Jul 2026 and are ineligible for 5X, while clause 20 III.i still talks about 5X on Education, Bills & Utilities and Insurance with incremental rewards capped at 25,000 points. The cap period is not stated, so no cap rule is written and the bills exclusion is modelled.",
+            "The 5X rule depends on the cardholder's monthly mix of categories, which a ranking engine cannot see; modelled as stated with the ₹750 per-category minimum.",
+            "Network: Visa for the physical card (the Cardholder Agreement says it is acceptable where Visa is accepted and converts foreign spends at Visa rates; the page card image shows Visa Signature). The virtual card is \"VISA/RuPay powered\" and a RuPay floater card exists but earns no rewards. SBM does not publish a separate metal card image or state that the metal card uses a different network.",
+            "Fee conflict: the KFS (w.e.f. 29 Jun 2026) and Cardholder Agreement (30 Jun 2026) say rent and wallet/fund-transfer fees are 1%; the MITC (29 Oct 2026, later) says 2%. 2% is used. The over limit fee is 0 in the KFS and MITC; the older partner-hosted MITC had a 2.5% fee.",
+            "OneCard has several issuing banks; this record is the SBM variant only. Do not merge another issuer's terms.",
+            "The OneCard marketing page says \"lifetime free\"; the SBM KFS adds metal-card charges (₹3,000 add-on issuance, replacement and 6-month cancellation), so a blanket no-fee statement is wrong.",
+            "Is the metal card sold: yes as a tier of the SBM secured OneCard. SBM's MITC says a metal card is issued to cardholders with a cumulative FD above ₹50,000 or as decided by the Bank; there is no separate application or product page for it on SBM's site."
+          ],
+          "notes": [
+            "Interest-free period up to 48 days; finance charge 3.75% a month (45% a year). Forex mark-up 1%. Fuel waiver 1% capped at ₹400 a month.",
+            "Card replacement: first plastic card nil, second ₹145, third onward ₹500, metal ₹3,000."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

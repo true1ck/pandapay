@@ -1,0 +1,1088 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "rbl-bank-world-safari-plus",
+    "name": "RBL Bank World Safari Plus Credit Card",
+    "issuer_slug": "rbl",
+    "network": "mastercard",
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 6000,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": false,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 0.1,
+    "point_value_baseline_basis": "Product page: 1 Reward Point = ₹1 on flight and hotel bookings and ₹0.10 on all other redemptions, on the RBL Bank Rewards Portal. The baseline is the ₹0.10 value that applies to every redemption; ₹1 applies to flights and hotels only. A ₹99 + GST fee applies per redemption day.",
+    "point_expiry_months": 24,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/world-safari-plus-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": null,
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": 1,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": 0.1,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": "proportional_deduction",
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "rbl-wsp-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          32,
+          2541,
+          4001,
+          5542,
+          5541,
+          5172
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel and auto earns no reward points (World Safari Plus T&C 3.4)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-wsp-excl-utilities",
+      "category_id": "utility",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4900
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Utilities earns no reward points (World Safari Plus T&C 3.4)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-wsp-excl-wallets",
+      "category_id": "wallet_load",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Wallets and service providers earns no reward points (World Safari Plus T&C 3.4)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-wsp-excl-insurance",
+      "category_id": "insurance",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6300,
+          6310
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Insurance earns no reward points (World Safari Plus T&C 3.4)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-wsp-excl-railways",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          66,
+          4011,
+          4112
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Railways earns no reward points (World Safari Plus T&C 3.4)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-wsp-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Real estate and rental earns no reward points (World Safari Plus T&C 3.4)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-wsp-excl-miscellaneous",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5960
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Miscellaneous earns no reward points (World Safari Plus T&C 3.4)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-wsp-excl-emi",
+      "category_id": "emi",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "EMI conversion of retail transactions (Split-N-Pay and EMI requested at POS/web/app) earns no points (MITC; MITC: base points are not accrued on EMI conversion for any RBL card)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-wsp-portal-travel-5",
+      "category_id": "travel",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "smartbuy_or_equivalent_portal",
+      "channel_type": "rbl_rewards_portal",
+      "conditions": {
+        "platform": "rblrewards.rbl.bank.in",
+        "purchases": [
+          "airlines",
+          "hotels and motels",
+          "transportation"
+        ],
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 5,
+        "points_per_block": 5,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "5 reward points per ₹100 on Airlines, Hotels & Motels and Transportation purchases made on the RBL rewards portal (T&C 3.4; page: up to 5% at ₹1 per point)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-wsp-domestic-travel-2",
+      "category_id": "travel",
+      "priority": 20,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "transaction_type": "domestic",
+        "per_inr_block": 100,
+        "travel_mccs": "Airlines 3000-3350, Hotels and Motels 3501-3999 and 7011, Transportation 4111, 4119, 4121, 4131, 4214, 4215, 4225, 4411, 4457, 4468, 4511, 4582, 4722, 4723, 4784, 4789"
+      },
+      "action": {
+        "multiplier": 2,
+        "points_per_block": 2,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "2 reward points per ₹100 on every other eligible domestic travel transaction (T&C 3.4; page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "rbl-wsp-base",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100,
+        "not_eligible_for_base": "Airlines, Hotels and Motels and Transportation (these earn the travel rates above instead)"
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "1 reward point per ₹100 on all other eligible spends (T&C 3.4; page: \"domestic spends\"). Airline, hotel and transport merchant categories are excluded from this base rate."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.99,
+      "annual_interest_rate_percent": 47.88
+    },
+    "forex_markup": {
+      "markup_percent": 0,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 0,
+      "gst_applicable": true,
+      "trigger_condition": "SOC and MITC list one markup for \"Foreign Currency Transaction / Dynamic & Static Conversion Transactions\"; it also applies to INR transactions at an overseas location and at overseas-registered merchants located in India"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": null,
+      "waiver_percent": null,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on the transaction amount for all rental transactions (SOC; MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          32,
+          2541,
+          4001,
+          5542,
+          5541,
+          5172
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on each fuel and auto transaction above ₹10,000, at most ₹3,000 per transaction; the amount includes surcharge and purchase (SOC; MITC)",
+        "threshold_spend_inr": 10000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "utility",
+        "mcc_list": [
+          4900
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee when utility spends on the card exceed ₹50,000 in a month (SOC: \"per month per card\"; MITC: \"aggregate utility spends\")",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education",
+        "mcc_list": [
+          8220,
+          8244,
+          8249,
+          8211,
+          8241,
+          8299
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on education payments made through third-party apps (Cred, PhonePe, Cheqedu, Paytm, Mobikwik, Nobroker, Housing.com and others, \"not limited to\" the list); no fee when paid on the school or college website or its POS (SOC; MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "toll",
+        "mcc_list": [
+          4784,
+          4111,
+          4131
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on FASTag loading and toll payments above ₹10,000 per transaction per card (SOC; MITC)",
+        "threshold_spend_inr": 10000,
+        "effective_from": "2026-01-07",
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 0,
+        "min_fee_inr": 0,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": 500,
+      "cheque_bounce_charge_inr": 500
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 99,
+      "gst_applicable": true,
+      "exempted_channels": [],
+      "notes": "INR 99 + GST per redemption day (SOC; MITC; RWD 4.3)."
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 50,
+    "grace_period_void_on_revolving_balance": true,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "max",
+      "components": [
+        "Total GST + current-month EMI debits + [the higher of (100% of fees and charges + 5% of retail spends, cash advance and interest) or ₹200] + any unpaid earlier minimum due + over-limit utilisation (MITC section D-b)",
+        "If that amount exceeds the total amount due, the minimum due equals the total amount due"
+      ]
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "SOC and MITC show ₹6,000 for the first and later years with no spend-linked waiver.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "first_eligible_transaction_within_30_days_and_fee_paid",
+      "benefit_points": 6000,
+      "effective_value_inr": null,
+      "condition": "6,000 reward points on an eligible retail transaction within 30 days of issue and payment of the annual fee shown in the first statement by its due date; credited within 60 days of issue (T&C 3.2). The page says the points are \"worth INR 6,000\", which holds only at ₹1 per point on flights and hotels; at the general ₹0.10 value they are worth ₹600, so no rupee value is stored."
+    },
+    "spend_milestones": [
+      {
+        "id": "rbl-wsp-annual-7-5l",
+        "label": "Club Marriott membership on eligible spends of ₹7.5 lakh in a membership year",
+        "threshold_spend_inr": 750000,
+        "reward_value_inr": null,
+        "period": "card_anniversary_year",
+        "is_repeatable": false,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "id": "rbl-wsp-annual-15l",
+        "label": "Marriott or Taj Experiences voucher worth ₹20,000 on eligible spends of ₹15 lakh in a membership year",
+        "threshold_spend_inr": 1500000,
+        "reward_value_inr": 20000,
+        "period": "card_anniversary_year",
+        "is_repeatable": false,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ]
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "rbl-wsp-lounge-india",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "RBL Bank",
+      "label": "2 complimentary domestic airport lounge visits per calendar quarter; primary cardholder only, not on add-on cards",
+      "evaluation_engine": {
+        "conditions": {
+          "primary_cardholder_only": true,
+          "authorisation_up_to_inr": 25
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 2,
+      "quota_period": "quarter",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "rbl-wsp-lounge-intl",
+      "category_id": "lounge",
+      "network_program": "priority_pass",
+      "sponsor": "RBL Bank",
+      "label": "4 complimentary international airport lounge visits a year through Priority Pass; later visits are charged up to USD 35",
+      "evaluation_engine": {
+        "conditions": {
+          "visits_per_year": 4,
+          "extra_visit_charge_usd_up_to": 35,
+          "international_transactions_must_be_enabled": true
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 4,
+      "quota_period": "annual",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "rbl-wsp-golf",
+      "category_id": "golf",
+      "network_program": "mastercard_golf",
+      "sponsor": "Mastercard",
+      "label": "4 complimentary golf green-fee rounds a year and one golf lesson each month, with preferential green-fee rates beyond that; Mastercard network only; 7 days' advance notice",
+      "evaluation_engine": {
+        "conditions": {
+          "rounds_per_year": 4,
+          "lessons_per_month": 1,
+          "mastercard_network_only": true
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 4,
+      "quota_period": "annual",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "rbl-wsp-concierge",
+      "category_id": "concierge",
+      "network_program": null,
+      "sponsor": "Aspire Lifestyles India Pvt. Ltd.",
+      "label": "24x7 concierge (dining, hotels, wellness, car rental and cruises, gifts, sports and events, overseas education assistance); +91 22 6115 6300",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [
+    {
+      "cover_type": "other",
+      "coverage_inr": "N/A",
+      "coverage_usd": 100000,
+      "claim_condition": "Complimentary multi-trip travel insurance, sum insured USD 100,000, worldwide including USA and Canada, 3 trips a year of up to 10 days each, ages 18-60; policy link emailed within 30 days of issue, valid one year, void if the card is cancelled (T&C 3.8; travel insurance policy schedule by Care Health Insurance).",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "cover_type": "medical_emergency_overseas",
+      "coverage_inr": "N/A",
+      "coverage_usd": 50000,
+      "claim_condition": "Emergency medical expenses, in-patient only, USD 100 deductible; medical evacuation included in the medical expense cover.",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "cover_type": "other",
+      "coverage_inr": "N/A",
+      "coverage_usd": 7500,
+      "claim_condition": "Repatriation of mortal remains, part of the medical expense cover, no deductible.",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "cover_type": "baggage_loss_delay",
+      "coverage_inr": "N/A",
+      "coverage_usd": 200,
+      "claim_condition": "Loss of checked-in baggage, USD 25 deductible.",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "cover_type": "baggage_loss_delay",
+      "coverage_inr": "N/A",
+      "coverage_usd": 250,
+      "claim_condition": "Trip delay, after a 12-hour delay.",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "cover_type": "other",
+      "coverage_inr": "N/A",
+      "coverage_usd": 300,
+      "claim_condition": "Loss of passport, USD 30 deductible.",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "cover_type": "other",
+      "coverage_inr": "N/A",
+      "coverage_usd": 10000,
+      "claim_condition": "Personal liability, no deductible.",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "cover_type": "other",
+      "coverage_inr": "N/A",
+      "coverage_usd": 250,
+      "claim_condition": "Dental treatment, USD 100 deductible.",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 200,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": false,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "RBL Bank Rewards Portal: flight and hotel bookings",
+        "redemption_type": "flight_hotel_booking",
+        "inr_value_per_point": 1,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": "N/A",
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": 99,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "channel": "RBL Bank Rewards Portal: all other redemptions",
+        "redemption_type": "other",
+        "inr_value_per_point": 0.1,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": "N/A",
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": 99,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": [
+      {
+        "partner_code": "air-india-maharaja-club",
+        "program_name": "Air India Maharaja Club",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 3,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 3,
+        "yearly_cap_points": null,
+        "turnaround_days": 10,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "indigo-bluchip",
+        "program_name": "IndiGo BluChip",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 3,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 3,
+        "yearly_cap_points": null,
+        "turnaround_days": 1,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "airasia-rewards",
+        "program_name": "AirAsia Rewards",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 3,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 3,
+        "yearly_cap_points": null,
+        "turnaround_days": 10,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "ethiopian-shebamiles",
+        "program_name": "Ethiopian Airlines ShebaMiles",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 3,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 3,
+        "yearly_cap_points": null,
+        "turnaround_days": 1,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "spicejet-spiceclub",
+        "program_name": "SpiceJet SpiceClub",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 3,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 3,
+        "yearly_cap_points": null,
+        "turnaround_days": 1,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "air-arabia-air-rewards",
+        "program_name": "Air Arabia Air Rewards",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 3,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 3,
+        "yearly_cap_points": null,
+        "turnaround_days": 1,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "itc-club-itc",
+        "program_name": "ITC Hotels Club ITC",
+        "network_program": null,
+        "type": "hotel",
+        "conversion_ratio": {
+          "card_points": 3,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 3,
+        "yearly_cap_points": null,
+        "turnaround_days": 10,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "orchid-rewards",
+        "program_name": "Orchid Hotels Orchid Rewards",
+        "network_program": null,
+        "type": "hotel",
+        "conversion_ratio": {
+          "card_points": 3,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 3,
+        "yearly_cap_points": null,
+        "turnaround_days": 1,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "radisson-rewards",
+        "program_name": "Radisson Hotel Group Radisson Rewards",
+        "network_program": null,
+        "type": "hotel",
+        "conversion_ratio": {
+          "card_points": 3,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 3,
+        "yearly_cap_points": null,
+        "turnaround_days": 1,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "vietnam-lotusmiles",
+        "program_name": "Vietnam Airlines Lotusmiles",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 3,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 3,
+        "yearly_cap_points": null,
+        "turnaround_days": 1,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "philippine-mabuhay-miles",
+        "program_name": "Philippine Airlines Mabuhay Miles",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 3,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 3,
+        "yearly_cap_points": null,
+        "turnaround_days": 10,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "partner_code": "qatar-privilege-club",
+        "program_name": "Qatar Airways Privilege Club",
+        "network_program": null,
+        "type": "airline",
+        "conversion_ratio": {
+          "card_points": 3,
+          "partner_miles": 1
+        },
+        "min_transfer_points": 0,
+        "transfer_multiple": 3,
+        "yearly_cap_points": null,
+        "turnaround_days": 1,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ]
+  },
+  "dynamic_promotions_registry": [
+    {
+      "promo_id": "rbl-wsp-mmt-intl-hotels",
+      "category_id": "travel",
+      "network_program": "N/A",
+      "sponsor": "MakeMyTrip",
+      "platform": "MakeMyTrip website and apps, code MMTRBLWS",
+      "offer_type": "instant_discount",
+      "discount_percent": 15,
+      "max_discount_inr": 10000,
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": true,
+      "is_permanent_card_feature": false,
+      "valid_from": null,
+      "valid_to": null
+    },
+    {
+      "promo_id": "rbl-wsp-mmt-intl-flights",
+      "category_id": "travel",
+      "network_program": "N/A",
+      "sponsor": "MakeMyTrip",
+      "platform": "MakeMyTrip website and apps, code MMTRBLWS",
+      "offer_type": "instant_discount",
+      "discount_percent": 10,
+      "max_discount_inr": 7500,
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": true,
+      "is_permanent_card_feature": false,
+      "valid_from": null,
+      "valid_to": null
+    },
+    {
+      "promo_id": "rbl-wsp-postcard-hotels",
+      "category_id": "travel",
+      "network_program": "N/A",
+      "sponsor": "The Postcard Hotel",
+      "platform": "postcardresorts.com, code RBL5000",
+      "offer_type": "instant_discount",
+      "discount_percent": 10,
+      "max_discount_inr": 5000,
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": true,
+      "is_permanent_card_feature": false,
+      "valid_from": "2026-08-13",
+      "valid_to": "2027-08-13"
+    },
+    {
+      "promo_id": "rbl-wsp-avis-airport-transfer",
+      "category_id": "travel",
+      "network_program": "N/A",
+      "sponsor": "Avis India",
+      "platform": "avis.co.in/partner/rbl, code AVISRBLSAFARI",
+      "offer_type": "instant_discount",
+      "discount_percent": 35,
+      "max_discount_inr": "N/A",
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": false,
+      "is_permanent_card_feature": false,
+      "valid_from": null,
+      "valid_to": "2028-10-15"
+    },
+    {
+      "promo_id": "rbl-wsp-avis-intl-self-drive",
+      "category_id": "travel",
+      "network_program": "N/A",
+      "sponsor": "Avis India",
+      "platform": "email globalselfdrive@avis.co.in, code AVISRBLSD",
+      "offer_type": "instant_discount",
+      "discount_percent": 5,
+      "max_discount_inr": 5000,
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": false,
+      "is_permanent_card_feature": false,
+      "valid_from": null,
+      "valid_to": "2028-10-15"
+    }
+  ],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "merchant_emi_processing_fee_rule",
+        "value": {
+          "rule": "1.5% of the amount or ₹150, whichever is higher, on every EMI conversion made at the merchant at the time of the transaction (SOC; MITC). GST at 18% applies.",
+          "note": "The universal field holds a flat rupee amount only, so merchant_instant_emi_processing_fee_inr is left null."
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "12.5% of the outstanding amount (statement total amount due less net payments), minimum ₹5, maximum ₹1,300; GST at 18% on top",
+          "source": "SOC; MITC section v, applicable from 17 Oct 2025",
+          "grace": "The fee is levied only when the account stays past due for more than three days after the payment due date (MITC section v-d).",
+          "note": "A percentage fee cannot be written as fixed slabs, so late_payment_slabs is empty."
+        }
+      },
+      {
+        "key": "miles_transfer_limits",
+        "value": {
+          "source": "Miles Transfer Programme T&C (PDF created 2026-08-18)",
+          "rule": "No minimum, points must be a multiple of the ratio; up to 50,000 points per request and at most 2 requests per cardholder per month; primary cardholder only; transfers are final; credited usually in 3 business days and up to 10; turnaround_days holds the per-partner maximum (1 or 10 working days).",
+          "not_modelled": "The universal partner_transfers row has no cap per month, so the 2 x 50,000 monthly limit is kept here."
+        }
+      },
+      {
+        "key": "addon_card_fee_rule",
+        "value": {
+          "rule": "MITC: ₹200 annual fee per add-on cardholder. The lounge benefit does not apply to add-on cards (T&C 3.3).",
+          "source": "MITC section iii"
+        }
+      },
+      {
+        "key": "miles_transfer_fee",
+        "value": {
+          "rule": "A redemption fee of ₹99 + tax is levied on a World Safari Plus miles transfer request; the Miles Transfer T&C says this is the only card it applies to there.",
+          "source": "Miles Transfer Programme T&C section 4"
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://webassets.rbl.bank.in/document/credit-cards/tnc-world-safari-plus.pdf",
+              "kind": "World Safari Plus T&C (forex, welcome, lounges, rewards, milestones, concierge, golf, insurance, Avis, MakeMyTrip and Postcard offers)",
+              "date": "PDF created 2026-09-16; Last-Modified 2026-09-16",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/credit-cards/travel-insurance-world-safari-plus.pdf",
+              "kind": "Travel insurance policy schedule (covers and limits)",
+              "date": "PDF created 2026-09-16",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/credit-cards/world-safari-lite-and-plus-travel-mcc-list.pdf",
+              "kind": "Travel category MCC list",
+              "date": "PDF created 2025-12-10; Last-Modified 2026-01-01",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/world-safari-plus-credit-card",
+              "kind": "issuer product page (point values, offers, milestones)",
+              "read": "page text"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/Credit%20Cards/CardsScheduleCharges.pdf",
+              "kind": "Schedule of Charges: annual fee row, finance charge, cash advance, late fee, forex, fuel/rent/utility/education/FASTag fees",
+              "date": "code RBL-CC-SOC-V2-04-06-2026 (4 Jun 2026); PDF created 2026-06-04; Last-Modified 2026-08-29",
+              "read": "pdftotext + page image"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/Credit%20Cards/RBL-MITC-final.pdf",
+              "kind": "MITC cum KFS: joining fee, annual fee table, add-on fees, interest bands, grace period, MAD, late fee, forex, EMI rule",
+              "date": "code RBL-CC-MITC-V2-29-10-2026 (29 Oct 2026); Last-Modified 2026-10-30",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/credit-cards/rbl-cc-cardmember-agreement.pdf",
+              "kind": "Cardmember Agreement: table that links each card to its product T&C",
+              "date": "code RBL-CC-CMA-27-10-2026 (27 Oct 2026)",
+              "read": "pdftotext + embedded links"
+            },
+            {
+              "url": "https://rblrewards.rbl.bank.in/tnc",
+              "kind": "Credit Cards Rewards Programme T&C: redemption fee, 24-month expiry, minimum redemption, reversal rule",
+              "date": "no date printed; read 2026-11-07",
+              "read": "page text"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/credit-cards/rbl-miles-transfer-programme.pdf",
+              "kind": "Miles Transfer Programme T&C: product-wise conversion ratios, 12 partners, limits",
+              "date": "PDF created 2026-08-18",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/category",
+              "kind": "Current credit card list (64 cards): sold-status check",
+              "date": "read 2026-11-07",
+              "read": "page text"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/credit-cards/mastercard-visa-india-lounge-program-lounge-list.pdf",
+              "kind": "RBL Bank India Lounge Program list (not itemised here)",
+              "date": "PDF created 2026-10-15",
+              "read": "pdftotext (first page)"
+            }
+          ],
+          "open_questions": [
+            "Network: the card art shows no logo. \"Mastercard\" rests on the product page (\"your World Safari Plus Mastercard Credit Card\") and T&C 3.7 (golf \"complimentary to cardmembers on Mastercard network only\"); a non-Mastercard variant is not excluded by the wording.",
+            "The ₹0.10 baseline makes the 1-point base rate a 0.1% return; the ₹1 flights-and-hotels value makes the portal 5X a 5% return only if points are redeemed on flights or hotels.",
+            "International travel: Airlines, Hotels and Transportation are excluded from the base rate and only \"domestic travel\" earns 2 points; whether international travel spend earns anything outside the portal is not stated.",
+            "MakeMyTrip offers: the T&C prints the offer period as \"1 March 2028 to 31 March 2028\" (and says \"once per customer in a year\"), which looks like a typo; the product page states no window. valid_from and valid_to are left null for those two offers. Other windows are as printed: Postcard Hotel 13 Aug 2026 to 13 Aug 2027, Avis to 15 Oct 2028.",
+            "The T&C and the page list \"Priority Pass & Lounge Key\" in the lounge heading but describe only Priority Pass for the 4 international visits.",
+            "Reward point expiry is the Rewards Programme T&C rule (24 months, RWD 5.1); the product T&C is silent.",
+            "The miles ratio is 3 points : 1 mile per the Miles Transfer T&C; the product page says only \"exchange your reward points for airline miles and hotel loyalty points\".",
+            "Milestones are \"annual spends in one membership year\"; the Club Marriott membership has no stated rupee value.",
+            "Finance charge: MITC says \"up to 3.99% per month (47.88% a year)\" for these cards and then lists bureau-score bands (above 775: 3.35% a month; 725-775: 3.85%; below 725: 3.99%). The draft stores the 3.99% maximum."
+          ],
+          "notes": [
+            "Zero forex markup: 0% on World Safari Plus (SOC; MITC; T&C 3.1).",
+            "Excluded from earning: Fuel & Auto, Utilities, Wallet, Insurance, Railways, Rental and Miscellaneous (5960); Airlines, Hotels and Transportation are excluded only from the base rate (T&C 3.4).",
+            "Travel insurance cover figures are from the policy schedule (USD 100,000 sum insured; sub-limits as listed); the full policy exclusions were not read.",
+            "No fuel surcharge waiver is stated for this card.",
+            "Joining fee is NIL (MITC); the first-year fee is stored as the annual fee."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

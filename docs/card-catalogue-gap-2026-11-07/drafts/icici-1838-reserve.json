@@ -1,0 +1,605 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "icici-1838-reserve",
+    "name": "1838 Reserve ICICI Bank Credit Card",
+    "issuer_slug": "icici",
+    "network": "visa",
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 175000,
+    "annual_fee_inr": 175000,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": false,
+    "application_mode": "invite_only",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": "Not stated by ICICI for this card. Checked 2026-11-07: the 1838 Reserve issuer page, the ICICI MITC (last updated 6 Nov 2026), the ICICI general credit card T&C (tnc_english.pdf, file dated 28 Sep 2026, linked from the card page) and the ICICI Rewards pages give no rupee value for one reward point; the Times Black terms state ₹0.40 per point for that card only and must not be reused. effective_base_return_percent is left null.",
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.icici.bank.in/personal-banking/cards/credit-card/1838-reserve-icici-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "By invitation only; interest can be registered and ICICI verifies eligibility. Relationship-based product: ICICI can downgrade or withdraw it if the cardholder does not keep the minimum relationship value (MITC).",
+    "rules": [
+      {
+        "parameter": "age_years",
+        "operator": ">=",
+        "threshold_value": 21,
+        "allowed_values": []
+      },
+      {
+        "parameter": "citizenship",
+        "operator": "in",
+        "threshold_value": null,
+        "allowed_values": [
+          "indian_citizen"
+        ]
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [
+      "proof of identity",
+      "proof of address",
+      "proof of income"
+    ],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": 3,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": 100000,
+    "capping_period_basis": "statement_cycle",
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "r1838-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          1361,
+          3851,
+          5172,
+          5541,
+          5542,
+          5983,
+          9752,
+          5555
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on fuel (MITC)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "r1838-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          7014,
+          7407,
+          5271,
+          6513
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on rent payments (MITC)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "r1838-excl-wallet",
+      "category_id": "wallet_load",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on e-wallet loads (MITC)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "r1838-excl-emi",
+      "category_id": "emi",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on EMI transactions (MITC)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "r1838-domestic-3",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "transaction_type": "domestic",
+        "unit_note": "issuer says \"3% on domestic spends\"; 3 points per ₹100 is inferred from percent-of-spend wording"
+      },
+      "action": {
+        "multiplier": 3,
+        "points_per_block": 3,
+        "cashback_percent": "N/A",
+        "cap_reference": "r1838-total-cap",
+        "reason": "3% reward points on domestic spends (issuer page). Unit inferred, see open questions."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "r1838-international-2",
+      "category_id": "international_spend",
+      "priority": 25,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "transaction_type": "international"
+      },
+      "action": {
+        "multiplier": 2,
+        "points_per_block": 2,
+        "cashback_percent": "N/A",
+        "cap_reference": "r1838-total-cap",
+        "reason": "2% reward points on international spends (issuer page). Unit inferred."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "r1838-total-cap",
+      "category_id": "all_retail",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": 100000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "r1838-bills-cap",
+      "category_id": "utility",
+      "metric": "total_reward_points",
+      "mcc_target_list": [
+        4899,
+        4900,
+        4901,
+        3887,
+        4897,
+        5416,
+        5417,
+        4812,
+        4813,
+        4814,
+        4815,
+        4821,
+        4896,
+        4902,
+        3886,
+        5960,
+        6300,
+        6381,
+        6399,
+        8211,
+        8220,
+        8241,
+        8244,
+        8249,
+        8299,
+        8493,
+        8494,
+        7911,
+        6760,
+        9222,
+        9311,
+        9313,
+        9211,
+        9399,
+        9402,
+        9405
+      ],
+      "period": "statement_cycle",
+      "limit_value": 10000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": "r1838-total-cap",
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "r1838-other-cap",
+      "category_id": "all_retail",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": 90000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": "r1838-total-cap",
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 1.67,
+      "annual_interest_rate_percent": 20
+    },
+    "forex_markup": {
+      "markup_percent": 0,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 0,
+      "gst_applicable": true,
+      "trigger_condition": "MITC: no mark-up and no dynamic currency conversion mark-up on 1838 Reserve"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": null,
+      "waiver_percent": 1,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": null,
+      "atm_transaction_fee_min_inr": null,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": null,
+        "min_fee_inr": null,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": null,
+        "fee_inr": 0
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "Annual fee waiver is not applicable (issuer page, MITC).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 0
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "joining_fee_paid",
+      "benefit_points": "N/A",
+      "effective_value_inr": 82500,
+      "condition": "Luxury stay at Lohono Platinum Villas (worth ₹50,000), welcome gift on Tata CliQ Luxury or Good Earth (worth ₹25,000) and a Klook museum experience (worth ₹7,500); delivered by e-mail or the 1838 app after the joining fee is paid and the first billing cycle completes."
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "r1838-quorum",
+      "category_id": "other",
+      "network_program": null,
+      "sponsor": "Quorum Club",
+      "label": "Quorum Club full-access membership",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": 300000,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "r1838-crib-life",
+      "category_id": "concierge",
+      "network_program": null,
+      "sponsor": "Crib Life",
+      "label": "Dedicated concierge, unlimited requests",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": 100000,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "r1838-truefitt",
+      "category_id": "other",
+      "network_program": null,
+      "sponsor": "Truefitt & Hill",
+      "label": "Four Royal Signature Services, one per quarter",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 4,
+      "quota_period": "annual",
+      "value_estimate_inr": 49600,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "r1838-business-class",
+      "category_id": "other",
+      "network_program": null,
+      "sponsor": "ICICI Bank",
+      "label": "Business-class ticket with 50% off for a companion, once per quarter (up to ₹50,000 off)",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 1,
+      "quota_period": "quarter",
+      "value_estimate_inr": 50000,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "r1838-airport-transfer",
+      "category_id": "other",
+      "network_program": null,
+      "sponsor": "ICICI Bank",
+      "label": "International airport transfers, once per quarter",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 1,
+      "quota_period": "quarter",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "r1838-harrods",
+      "category_id": "other",
+      "network_program": null,
+      "sponsor": "Harrods",
+      "label": "Harrods Gold tier",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": 100000,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "r1838-accor",
+      "category_id": "other",
+      "network_program": null,
+      "sponsor": "Accor",
+      "label": "Accor+ Explorer membership",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": 20000,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "r1838-itc",
+      "category_id": "other",
+      "network_program": null,
+      "sponsor": "ITC Hotels",
+      "label": "Stay 3 nights, pay for 2",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": 15500,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": 0,
+    "fee_per_card_inr": "N/A",
+    "separate_priority_pass": "N/A",
+    "lounge_quota_shared": "N/A",
+    "reward_points_pooled": "N/A",
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": "Source-supported data that cannot be represented faithfully by any existing universal schema field. Do not duplicate data already represented elsewhere. Do not use this section for unknown values, assumptions, or inferred data.",
+    "items": [
+      {
+        "key": "official_research",
+        "value": {
+          "checked_on": "2026-11-05",
+          "source_urls": [
+            "https://www.icici.bank.in/personal-banking/cards/credit-card/1838-reserve-icici-credit-card"
+          ],
+          "facts": [
+            "Invitation-only; no annual-fee waiver; add-on cards are currently unavailable.",
+            "Domestic 3%/international 2% are advertised as rewards, not cash. Overall cap 100000 points per month; combined specified bills/government/education/insurance cap 10000.",
+            "Fuel, rent, wallet and EMI are excluded."
+          ],
+          "advertised_domestic_reward_percent": 3,
+          "advertised_international_reward_percent": 2
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.icici.bank.in/personal-banking/cards/credit-card/1838-reserve-icici-credit-card",
+              "kind": "issuer page (verbatim read)",
+              "read": "fetch tool"
+            },
+            {
+              "url": "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf",
+              "kind": "MITC, last updated 6 Nov 2026 (fees, forex, reward caps, exclusions, lounge)",
+              "read": "pdftotext"
+            }
+          ],
+          "open_questions": [
+            "Reward unit: the page says \"3% on domestic\" and \"2% on international\" with no points per ₹100; 3 and 2 points per ₹100 are inferred. The value of one reward point is NOT stated in any ICICI document read (card page, MITC of 6 Nov 2026, general credit card T&C dated 28 Sep 2026, Rewards pages), so point_value_inr_baseline stays null and the percent return cannot be turned into rupees. Do not reuse the Times Black ₹0.40.",
+            "Reward cap period: the MITC says the 1,00,000-point and 10,000-point caps are per statement cycle; the card page FAQ says \"per month\". The MITC is used.",
+            "No spend trigger is stated for the joining-benefit vouchers beyond paying the joining fee.",
+            "Interest (settled 2026-11-07, W6): MITC Section I, 2. Finance Charges (2) states for the 1838 Reserve ICICI Bank Credit Card 1.67% per month i.e. 20% per annum on retail transactions and cash advances, and says the APR is the same for retail purchases, balance transfer, cash advances, non-payment of minimum due and late payment. The card page also says 1.67% a month.",
+            "Network: the page says issued with Times Internet and Visa; the MITC fee table does not name a network.",
+            "GST: assumed 18% as for other ICICI fees; the page says \"+ GST\" only."
+          ],
+          "notes": [
+            "Lounge: the MITC states domestic and international lounge access is not available on the 1838 Reserve card.",
+            "Add-on cards are not issued. Late bill payment and ATM withdrawal fees are Nil (issuer page).",
+            "Caps (MITC): 1,00,000 points per statement cycle overall; 10,000 across utilities, insurance, education and government/tax; 90,000 for everything else.",
+            "The 1838 Reserve fee table in the MITC lists joining ₹1,75,000, first-year annual fee Nil, annual fee from the second year ₹1,75,000. joining_fee_inr and annual_fee_inr use those."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

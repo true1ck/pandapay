@@ -1,0 +1,622 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "google-pay-flex-axis-bank",
+    "name": "Google Pay Flex Axis Bank Credit Card",
+    "issuer_slug": "axis",
+    "network": "rupay",
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 1,
+    "point_value_baseline_basis": "T&C: each Star has a fixed value of ₹1, redeemable only inside Google Pay; Stars expire after 1 year.",
+    "point_expiry_months": 12,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.axis.bank.in/cards/credit-card/google-pay-flex-axis-bank-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": null,
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 500,
+    "rounding_mode": null,
+    "base_points_per_block": 2,
+    "base_cashback_percent": 0.4,
+    "effective_base_return_percent": 0.4,
+    "cycle_accrual_ceiling_points": 1500,
+    "capping_period_basis": "statement_cycle",
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "flex-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Rental payments earn no Stars (T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "flex-excl-cash",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Cash withdrawals earn no Stars (T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "flex-excl-fi",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Financial institution payments, card fees and charges, gift cards, bridge/road fees and tolls earn no Stars (T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "flex-excl-insurance",
+      "category_id": "insurance",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Insurance premiums earn no Stars (T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "flex-excl-education",
+      "category_id": "education",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Educational institutions and services earn no Stars (T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "flex-excl-government",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Government payments and fees earn no Stars (T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "flex-excl-wallet",
+      "category_id": "wallet",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Wallet spends earn no Stars (T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "flex-excl-jewellery",
+      "category_id": "jewellery",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Clock, jewellery, watch and silverware stores earn no Stars (T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "flex-base-floor",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "rule": "2 Stars per ₹500 of cumulative cycle spend (account level)",
+        "applies_when": "first reward cycle, or previous reward cycle net spend below ₹100 for a non-Google One member",
+        "reward_cycle": "16th to 15th"
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 0.4,
+        "cap_reference": "flex-cycle-cap",
+        "reason": "Floor rate: 0.4% (2 Stars per ₹500, each Star ₹1). Applies in the joining cycle and when the previous cycle was not spend-active."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "flex-0-8pct",
+      "category_id": "all_retail",
+      "priority": 25,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "effective_from_cycle": "2026-10-16",
+        "previous_cycle_net_spend_ge_inr": 100,
+        "google_one_member": false,
+        "cycle_spend_le_inr": 15000
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 0.8,
+        "cap_reference": "flex-cycle-cap",
+        "reason": "0.8% on all spends in the cycle for a Flex user who spent at least ₹100 in the previous cycle and is not a Google One member, while cycle spend is up to ₹15,000 (T&C milestone table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "flex-1-6pct",
+      "category_id": "all_retail",
+      "priority": 24,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "effective_from_cycle": "2026-10-16",
+        "previous_cycle_net_spend_ge_inr": 100,
+        "google_one_member": false,
+        "cycle_spend_gt_inr": 15000,
+        "applies_to": "all spends in the cycle, not only the excess"
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 1.6,
+        "cap_reference": "flex-cycle-cap",
+        "reason": "1.6% on all cycle spends once cycle spend crosses ₹15,000, for a non-Google One member (T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "flex-google-one-1-6pct",
+      "category_id": "all_retail",
+      "priority": 23,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "effective_from_cycle": "2026-10-16",
+        "previous_cycle_net_spend_ge_inr": 100,
+        "google_one_member": true,
+        "cycle_spend_le_inr": 15000
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 1.6,
+        "cap_reference": "flex-cycle-cap",
+        "reason": "1.6% for a Google One member with previous-cycle spend of at least ₹100, while cycle spend is up to ₹15,000 (T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "flex-google-one-3-2pct",
+      "category_id": "all_retail",
+      "priority": 22,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "effective_from_cycle": "2026-10-16",
+        "previous_cycle_net_spend_ge_inr": 100,
+        "google_one_member": true,
+        "cycle_spend_gt_inr": 15000,
+        "applies_to": "all spends in the cycle, not only the excess"
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 3.2,
+        "cap_reference": "flex-cycle-cap",
+        "reason": "3.2% on all cycle spends once cycle spend crosses ₹15,000, for a Google One member (T&C). Swipe and tap payments qualify as well."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "flex-cycle-cap",
+      "category_id": "all_retail",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": 1500,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 55.55
+    },
+    "forex_markup": {
+      "markup_percent": 3.5,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 3.5,
+      "gst_applicable": true,
+      "trigger_condition": "MITC: same markup on international transactions in Indian currency and on INR transactions with foreign-registered merchants"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": null,
+      "waiver_percent": null,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": null,
+      "atm_transaction_fee_min_inr": null,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on each rental transaction",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "wallet_load",
+        "mcc_list": [
+          6540
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% once cumulative wallet loads reach ₹10,000 in a statement cycle (from 20 Dec 2024)",
+        "threshold_spend_inr": 10000,
+        "effective_from": "2024-12-20",
+        "effective_to": null
+      },
+      {
+        "category_id": "fuel",
+        "mcc_list": [],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% once cumulative fuel spend reaches ₹50,000 in a statement cycle (from 20 Dec 2024)",
+        "threshold_spend_inr": 50000,
+        "effective_from": "2024-12-20",
+        "effective_to": null
+      },
+      {
+        "category_id": "utility",
+        "mcc_list": [
+          4814,
+          4899,
+          4900
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% once cumulative utility payments reach ₹25,000 in a statement cycle",
+        "threshold_spend_inr": 25000,
+        "effective_from": "2024-12-20",
+        "effective_to": null
+      },
+      {
+        "category_id": "gaming",
+        "mcc_list": [
+          5816
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% once online skill-gaming spend reaches ₹10,000 in a statement cycle",
+        "threshold_spend_inr": 10000,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 500,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 500,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 501,
+        "max_balance_inr": 5000,
+        "fee_inr": 500
+      },
+      {
+        "min_balance_inr": 5001,
+        "max_balance_inr": 10000,
+        "fee_inr": 750
+      },
+      {
+        "min_balance_inr": 10001,
+        "max_balance_inr": 50000,
+        "fee_inr": 1200
+      },
+      {
+        "min_balance_inr": 50001,
+        "max_balance_inr": null,
+        "fee_inr": 1300
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "No joining or annual fee (MITC).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": null,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [
+    {
+      "promo_id": "flex-google-one-bills",
+      "category_id": "utility",
+      "network_program": "N/A",
+      "sponsor": "Google Pay",
+      "platform": "Google Pay bills and recharges (Google One members only)",
+      "offer_type": "extra_stars_15pct_up_to_450_on_3000_monthly_spend",
+      "discount_percent": 15,
+      "max_discount_inr": 450,
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": true,
+      "is_permanent_card_feature": false,
+      "valid_from": "2026-10-16",
+      "valid_to": "2027-10-15"
+    },
+    {
+      "promo_id": "flex-google-one-food-grocery",
+      "category_id": "groceries",
+      "network_program": "N/A",
+      "sponsor": "Google Pay",
+      "platform": "UPI on Swiggy, Zomato, Zepto, Blinkit, BigBasket, Milkbasket, Jiomart, Instamart, DMart, FK Minutes, Amazon Now, District (Google One members only)",
+      "offer_type": "extra_stars_5pct_up_to_250_on_5000_monthly_spend",
+      "discount_percent": 5,
+      "max_discount_inr": 250,
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": true,
+      "is_permanent_card_feature": false,
+      "valid_from": "2026-10-16",
+      "valid_to": "2027-10-15"
+    }
+  ],
+  "additional_data": {
+    "_notes": "Source-supported data that cannot be represented faithfully by any existing universal schema field. Do not duplicate data already represented elsewhere. Do not use this section for unknown values, assumptions, or inferred data.",
+    "items": [
+      {
+        "key": "official_research",
+        "value": {
+          "checked_on": "2026-11-05",
+          "source_urls": [
+            "https://www.axis.bank.in/cards/credit-card/google-pay-flex-axis-bank-credit-card",
+            "https://support.google.com/pay/india/answer/16547967?hl=en"
+          ],
+          "facts": [
+            "Issuer product page describes older 1/2/4/8 stars per cumulative INR 500 model.",
+            "Google rewards rules change from 2026-10-16; Google One membership, preceding-cycle spend and current cumulative spend change rewards.",
+            "Overall INR 1500 stars limit per reward cycle includes category benefits. One star redeems as INR 1 inside Google Pay."
+          ],
+          "promotion_effective_from": "2026-10-16",
+          "google_one_offer_end": "2027-10-15"
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/terms-and-conditions-for-google-pay-flex-axis-bank-credit-card.pdf",
+              "kind": "Flex Axis member T&C (PDF metadata dated 2026-10-15)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://support.google.com/pay/india/answer/16547967?hl=en",
+              "kind": "Google Pay support page (agrees with the T&C table)",
+              "read": "earlier fetch, matches T&C"
+            },
+            {
+              "url": "https://www.axis.bank.in/docs/default-source/default-document-library/mitc-credit-cards.pdf",
+              "kind": "MITC (fees, interest, forex, penalties)",
+              "read": "pdftotext + page images for the interest table"
+            }
+          ],
+          "open_questions": [
+            "Network: RuPay, read from the card art on the issuer page banner (https://www.axis.bank.in/images/default-source/l4-banner/credit-card/google-pay-flex-credit-card-1366x400-w1.webp, RuPay logo beside the Axis Bank mark). The T&C and page text never name the network, so a human should confirm it against the issued card. Card variant name is not stated in the T&C.",
+            "Welcome benefit: the earlier read of the issuer page and the Google support page disagree (₹1,750 + ₹250 gift card versus ₹750 + bonuses); not modelled until the issuer page is read verbatim.",
+            "The promotional structure runs 16 Oct 2026 to 15 Oct 2027 and can be extended or changed by Google Pay and Axis.",
+            "Fuel surcharge waiver: not stated in the T&C or MITC for this card.",
+            "Of the 1,500-Star cycle cap, at most 750 Stars are awarded by Axis Bank (T&C); the rest come from Google Pay.",
+            "The old \"1/2/4/8 stars per ₹500\" model in the Nov 5 research notes is not in any document read and is dropped."
+          ],
+          "notes": [
+            "Every rate above depends on user attributes (Google One membership, previous-cycle spend of at least ₹100, cycle spend above ₹15,000), so the ranking engine cannot choose one without user state. The floor is 0.4%.",
+            "Reward cycle is 16th to 15th. Stars expire after 1 year.",
+            "Stars earned on transactions converted to EMI are reversed."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,737 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "sbm-kredit-pe",
+    "name": "SBM Kredit.Pe Credit Card",
+    "issuer_slug": "sbm-bank-india",
+    "network": "rupay",
+    "network_tier": "N/A",
+    "card_tier": "N/A",
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 199,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": "N/A",
+    "point_value_baseline_basis": "Cashback card, but the reward document says cashback is redeemed \"for additional discounts on popular brands\" and does not say it can be withdrawn as cash or what a rupee of cashback is worth when redeemed. Face value is assumed.",
+    "point_expiry_months": "N/A",
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "FD-backed secured card: the credit limit is 90% of the fixed deposit (KFS). The minimum deposit is not stated in the SBM documents read.",
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": "N/A",
+    "base_points_per_block": "N/A",
+    "base_cashback_percent": 3,
+    "effective_base_return_percent": 3,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "sbm-kredit-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513,
+          7349
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Rentals and property management earn nothing (Kredit.Pe rewards construct, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-kredit-excl-cash",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6010,
+          6011,
+          6051
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Cash withdrawal at merchants and ATMs and quasi-cash earn nothing (Kredit.Pe rewards construct, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-kredit-excl-wire",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4829
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Wire transfers and money orders earn nothing (Kredit.Pe rewards construct, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-kredit-excl-finance",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6012,
+          7322,
+          6211
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Financial institutions, debt collection and securities brokers earn nothing (Kredit.Pe rewards construct, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-kredit-excl-wallet",
+      "category_id": "wallet_load",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Debit card to wallet credit earn nothing (Kredit.Pe rewards construct, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-kredit-excl-education",
+      "category_id": "education",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Education earn nothing (Kredit.Pe rewards construct, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-kredit-excl-insurance",
+      "category_id": "insurance",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5960,
+          6300,
+          6381
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Insurance earn nothing (Kredit.Pe rewards construct, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-kredit-excl-govt",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          9211,
+          9222,
+          9311,
+          9399,
+          9402,
+          9405
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Government services, court costs, fines, tax and postal services earn nothing (Kredit.Pe rewards construct, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-kredit-excl-gambling",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          7800,
+          7802,
+          7995
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Government lotteries, racing and gambling earn nothing (Kredit.Pe rewards construct, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-kredit-excl-agri",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          763,
+          780,
+          820,
+          821,
+          822,
+          823,
+          824,
+          825,
+          5261
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Agriculture, horticulture and lawn and garden supply earn nothing (Kredit.Pe rewards construct, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-kredit-excl-utilities",
+      "category_id": "utility",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4900
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Utilities earn nothing (Kredit.Pe rewards construct, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-kredit-excl-contractors",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          1520,
+          1711,
+          1731,
+          1740,
+          1750,
+          1761,
+          1771,
+          1799
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Contractor services earn nothing (Kredit.Pe rewards construct, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-kredit-excl-toll",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4784
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Toll and bridge fees earn nothing (Kredit.Pe rewards construct, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-kredit-excl-advertising",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          7311
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Advertising services earn nothing (Kredit.Pe rewards construct, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-kredit-excl-commuter-rail",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4111
+        ],
+        "transaction_amount_gt_inr": 2000
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Local commuter rail, ferries and local water transport above ₹2,000 earn nothing (Kredit.Pe rewards construct, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-kredit-excl-passenger-rail",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4112
+        ],
+        "transaction_amount_gt_inr": 10000
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Passenger railways above ₹10,000 earn nothing (Kredit.Pe rewards construct, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-kredit-excl-other-upi-apps",
+      "category_id": "upi",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "rail": "credit_card_on_upi",
+        "platform": "any UPI app other than Kredit.Pe"
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "UPI payments with the card on any other UPI app earn no cashback (rewards construct: \"Users will not earn any cashback when they use any other UPI App\")."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-kredit-pos-3pct",
+      "category_id": "all_retail",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "pos_terminal",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 3,
+        "points_per_block": "N/A",
+        "cashback_percent": 3,
+        "cap_reference": null,
+        "reason": "3% cashback on every ₹100 spent on offline (PoS) merchant card payments (rewards construct)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-kredit-online-3pct",
+      "category_id": "online",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "online",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 3,
+        "points_per_block": "N/A",
+        "cashback_percent": 3,
+        "cap_reference": null,
+        "reason": "3% cashback on every ₹100 spent on online (e-commerce) merchant card payments (rewards construct)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-kredit-upi-app-3pct",
+      "category_id": "upi",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "credit_card_on_upi",
+      "channel_type": "kredit_pe_app",
+      "conditions": {
+        "platform": "Kredit.Pe app",
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 3,
+        "points_per_block": "N/A",
+        "cashback_percent": 3,
+        "cap_reference": null,
+        "reason": "3% cashback on every ₹100 spent on the card via UPI on Kredit.Pe (rewards construct)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.5,
+      "annual_interest_rate_percent": 42
+    },
+    "forex_markup": {
+      "markup_percent": 3.5,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": null,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 100,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": 50
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% processing fee on rental payments (KFS: Rental Payment Fee 1%; MITC Table 07)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education",
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% processing fee on education payments (MCCs 8211, 8220, 8241, 8244, 8249, 8299), over and above any merchant convenience fee (MITC Table 07; page FAQ 8)",
+        "threshold_spend_inr": null,
+        "effective_from": "2026-07-15",
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": null,
+        "min_fee_inr": null,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 45,
+    "grace_period_void_on_revolving_balance": true,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "5% of the outstanding amount for POS/ECOM",
+        "10% of cash transactions (MITC Table 11; the KFS says 5%)",
+        "100% of interest",
+        "100% of fees"
+      ]
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": null,
+      "period": null,
+      "evaluation_condition": "Annual fee ₹199 + GST (KFS: \"applicable for credit limit under ₹4,500\"). MITC Table 01 waives it when the minimum FD balance maintained is ₹5,000 or more. The waiver is deposit-based, not spend-based. Joining fee nil. Card cancellation ₹499 + GST in the first six months.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 199
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": "N/A",
+    "separate_priority_pass": "N/A",
+    "lounge_quota_shared": "N/A",
+    "reward_points_pooled": "N/A",
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "Kredit.Pe app: additional discounts on popular brands (5% or 10% on certain brands)",
+        "redemption_type": "partner_catalogue",
+        "inr_value_per_point": "N/A",
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": "N/A",
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.sbm.bank.in/pdf/kfs/Kredit-Pe-KFS.pdf",
+              "kind": "SBM Kredit.Pe Credit Card KFS (SBM file dated 12 Oct 2026): fees, interest, late fee, forex, cash limit",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/pdf/notice-board/kredit-pe-RP.pdf",
+              "kind": "SBM Bank Kredit.Pe Rewards Construct, 2 pages (PDF created 15 Oct 2026; no revision date on the document): 3% cashback, excluded MCCs",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/pdf/terms-conditions/SBM-Secured-Credit-Card-T&C.pdf",
+              "kind": "SBM Secured Credit Card MITC and Cardholder Member Agreement, 52 pages (SBM file dated 29 Oct 2026): Tables 01-11 give fees, interest, late fee, forex, surcharge, rent and education fees, cash limits and minimum due for every variant",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+              "kind": "SBM secured credit card page (read 7 Nov 2026): lists the card with its KFS, MITC and reward links; card image https://www.sbm.bank.in/images/cards/kredit-pe-card.webp shows the network",
+              "read": "page text; card image viewed"
+            }
+          ],
+          "open_questions": [
+            "No cap, period limit or minimum transaction is stated for the 3% cashback.",
+            "Redemption: the construct says cashback can be redeemed \"for additional discounts on popular brands\" (5% on certain brands, 10% on certain brands). It does not say that cashback can be withdrawn as cash or what a rupee of cashback is worth when redeemed. 3% is modelled at face value, which may overstate the real return.",
+            "The wording is \"3% cashback on every ₹100 spent\". Whether cashback is paid only on whole ₹100 blocks or pro rata is not stated; per_inr_block 100 is recorded in the rule conditions.",
+            "Network: no SBM document names it. RuPay is read from the card image on the SBM page (kredit-pe-card.webp); the construct also pays cashback for UPI on the Kredit.Pe app.",
+            "The excluded list shows MCC 4111 \"for transactions above INR 2,000 only\" and 4112 \"for transactions above INR 10000 only\"; modelled as transaction_amount_gt_inr conditions.",
+            "Minimum due on cash: the KFS says 5%, MITC Table 11 (later) says 10%; the table is used.",
+            "Fuel surcharge: the KFS says \"Surcharge Fee 1%\"; MITC clause 8.7 ties it to fuel. No waiver is stated."
+          ],
+          "notes": [
+            "Annual fee ₹199 + GST applies only below the ₹5,000 FD level; the KFS expresses the same condition as a credit limit under ₹4,500 (90% of ₹5,000).",
+            "Cash interest 3.5% a month from day one; cash limit 50% of the credit limit.",
+            "Rent 1% (KFS and Table 07); education 1% from 15 Jul 2026 (MITC note to Table 07)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "5% of the outstanding, minimum ₹50 and maximum ₹1,000, + GST",
+          "source": "Kredit.Pe KFS (12 Oct 2026) and MITC Table 08"
+        }
+      }
+    ]
+  }
+}

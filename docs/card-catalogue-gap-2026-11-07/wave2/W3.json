@@ -1,0 +1,219 @@
+{
+  "agent": "W3",
+  "candidates": [
+    {
+      "name": "SBM MobiKwik First",
+      "slug": "sbm-mobikwik-first",
+      "status": "drafted",
+      "reason": "Still sold: listed on SBM's secured credit card page on 7 Nov 2026 with KFS (12 Oct 2026), MITC (29 Oct 2026) and reward T&C (cashback programme effective 1 Feb 2026). Distinct from suryoday-mobikwik-first-rupay-platinum: issuer is SBM Bank (India) Ltd with its own KFS (forex 3%, interest 3.5% a month, late fee 2.5% or Rs 200) and its own reward T&C. Earn: 1% cashback on online e-commerce and offline POS (no minimum), 1% on UPI through the MobiKwik app with Rs 2,000 minimum, nil on UPI through other apps; 7 MCC exclusions plus EMI; no cap stated. Network RuPay from the card image only.",
+      "sources": [
+        "https://www.sbm.bank.in/pdf/kfs/MobiKwik-First-Card-KFS.pdf",
+        "https://www.sbm.bank.in/pdf/notice-board/Mobikwik-RP.pdf",
+        "https://www.sbm.bank.in/pdf/terms-conditions/SBM-Secured-Credit-Card-T&C.pdf",
+        "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+        "https://www.sbm.bank.in/images/cards/mobikwik-card.webp"
+      ]
+    },
+    {
+      "name": "SBM ZET",
+      "slug": "sbm-zet",
+      "status": "held",
+      "reason": "Still sold (listed 7 Nov 2026; KFS late fee and cancellation fee with effect from 23 Oct 2026; in the 29 Oct 2026 MITC). SBM publishes no reward document for ZET: the page links only a KFS and an MITC. Fees, interest, late fee, forex 2.49%, cash fee and rent/education 1% drafted; no reward rules. RuPay named on the page text and card image. Partner pages advertise subscription-gated UPI cashback, not used as fact.",
+      "sources": [
+        "https://www.sbm.bank.in/pdf/kfs/SBM-Bank-ZET-Credit-Card-KFS.pdf",
+        "https://www.sbm.bank.in/pdf/terms-conditions/SBM-Secured-Credit-Card-T&C.pdf",
+        "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+        "https://www.sbm.bank.in/images/cards/sbm-zet-card.webp"
+      ]
+    },
+    {
+      "name": "SBM Kredit.Pe",
+      "slug": "sbm-kredit-pe",
+      "status": "drafted",
+      "reason": "Still sold (listed 7 Nov 2026; KFS 12 Oct 2026; reward construct file 15 Oct 2026). Earn: 3% cashback on offline POS, online, and UPI on the Kredit.Pe app; 16 exclusion groups from the construct's MCC table; no cap or minimum stated. Annual fee Rs 199 + GST waived at FD Rs 5,000 or more. Cashback redeems for brand discounts, so face value may overstate the return. RuPay from the card image.",
+      "sources": [
+        "https://www.sbm.bank.in/pdf/kfs/Kredit-Pe-KFS.pdf",
+        "https://www.sbm.bank.in/pdf/notice-board/kredit-pe-RP.pdf",
+        "https://www.sbm.bank.in/pdf/terms-conditions/SBM-Secured-Credit-Card-T&C.pdf",
+        "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+        "https://www.sbm.bank.in/images/cards/kredit-pe-card.webp"
+      ]
+    },
+    {
+      "name": "SBM novio",
+      "slug": "sbm-novio",
+      "status": "drafted",
+      "reason": "Still sold (listed 7 Nov 2026; KFS 29 Oct 2026; in the 29 Oct 2026 MITC). Visa and RuPay variants (KFS), stored with dualNetwork; SBM publishes a reward T&C only for the RuPay variant: 5 novio coins per Rs 100 on UPI/POS/online (min Rs 100), fuel UPI 10 per Rs 100 (max 400 a month), fuel POS 1 per Rs 100 (max 40 a month), ATM 0, 16 exclusion groups. Coin value is not published so effective return is null. Annual fee Rs 299 from year 2, waived at FD Rs 10,000 or prior-year spend Rs 50,000; late fee flat Rs 499; forex 2.49%.",
+      "sources": [
+        "https://www.sbm.bank.in/pdf/kfs/SBM-Credilio-Key-Fact-Statement.pdf",
+        "https://www.sbm.bank.in/pdf/notice-board/RP-SBM-Credilio-Rupay.pdf",
+        "https://www.sbm.bank.in/pdf/terms-conditions/SBM-Secured-Credit-Card-T&C.pdf",
+        "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+        "https://www.sbm.bank.in/images/cards/credilio-credit-card.webp"
+      ]
+    },
+    {
+      "name": "SBM Magnet",
+      "slug": "sbm-magnet",
+      "status": "held",
+      "reason": "Still listed (7 Nov 2026; in the 29 Oct 2026 MITC) but its KFS is the older one (9 Jun 2026). SBM page says 'unlimited magnet coins' and links no reward document, so no earn rate, cap, exclusions or coin value is published. Fees drafted: nil joining and annual, forex 2.49%, interest 2.5% a month on purchases, late fee Rs 299. Network Visa Platinum from the card image, which is labelled 'Gild'; a person should confirm Magnet and Gild are one live product.",
+      "sources": [
+        "https://www.sbm.bank.in/pdf/kfs/SBM-Magnet-CC-Key-Fact-Statement.pdf",
+        "https://www.sbm.bank.in/pdf/terms-conditions/SBM-Secured-Credit-Card-T&C.pdf",
+        "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+        "https://www.sbm.bank.in/images/cards/SBM-Magnet-Gild-Card.webp"
+      ]
+    },
+    {
+      "name": "SBM Niyo Global",
+      "slug": "sbm-niyo-global",
+      "status": "drafted",
+      "reason": "Still sold (listed 7 Nov 2026 as 'Niyo SBM Global credit card'; KFS 12 Oct 2026; reward T&C dated 26 Feb 2026). Visa (KFS and card image Visa Platinum). Zero forex. Coins at Rs 0.10: domestic e-commerce 20% coins (2%), international e-commerce 10% (1%), travel booking on the Niyo app 30% (3%); no rewards on POS, tap-and-pay or ATM; minimum Rs 100; 5,00,000 coins a year; coins expire in 12 months. Joining/annual fee Rs 500 'waived off' in the KFS and 0 in the MITC: modelled as 0.",
+      "sources": [
+        "https://www.sbm.bank.in/pdf/kfs/Niyo-KFS.pdf",
+        "https://www.sbm.bank.in/pdf/terms-conditions/Niyo-Reward-TC_26-Feb-2026.pdf",
+        "https://www.sbm.bank.in/pdf/terms-conditions/SBM-Secured-Credit-Card-T&C.pdf",
+        "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+        "https://www.sbm.bank.in/images/cards/consumer-niyo.webp"
+      ]
+    },
+    {
+      "name": "SBM Paisabazaar Step Up",
+      "slug": "sbm-paisabazaar-step-up",
+      "status": "drafted",
+      "reason": "Still sold (listed 7 Nov 2026; KFS 12 Oct 2026; in the 29 Oct 2026 MITC). Card image shows both Mastercard Platinum and RuPay Select, stored with dualNetwork. Earn: 1 reward point per Rs 100 at Rs 0.25 a point (0.25%), 7 exclusion groups; reward structure PDF is old (created 14 Feb 2025) and states no cap. Interest 3% a month, forex 3.5%, fuel surcharge 2%, late fee slabs Rs 250/500/750. Joining fee conflict (KFS tiers Rs 500/250/nil versus MITC 0).",
+      "sources": [
+        "https://www.sbm.bank.in/pdf/kfs/PB_KFS.pdf",
+        "https://www.sbm.bank.in/pdf/notice-board/Stepup-Reward-Structure.pdf",
+        "https://www.sbm.bank.in/pdf/terms-conditions/SBM-Secured-Credit-Card-T&C.pdf",
+        "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+        "https://www.sbm.bank.in/images/cards/paisa-bazaar.webp"
+      ]
+    }
+  ],
+  "fixes": [
+    {
+      "slug": "sbm-paisabazaar-paisa-plus",
+      "field": "card_product.network",
+      "before": null,
+      "after": "rupay",
+      "evidence": "Card image PB_paisaplus_Rupay_CC.webp on the SBM secured credit card page shows the RuPay credit logo. No KFS, SOP or MITC names the network; MITC clause 4.2 is generic ('RuPay / Visa powered, as per the issued network')."
+    },
+    {
+      "slug": "sbm-paisabazaar-paisa-plus",
+      "field": "card_product.annual_fee_inr and fee_waiver_and_milestones.annual_fee_waiver",
+      "before": "499, conflict unresolved (KFS 499 versus SOP 0)",
+      "after": "499 + GST confirmed, waived at Rs 50,000 spend in the preceding year",
+      "evidence": "KFS (SBM file 12 Oct 2026) and MITC/CMA Table 01 (29 Oct 2026) both say Rs 499 + GST with that waiver. The rewards SOP (PDF created 30 Apr 2026, SBM file 4 May 2026) shows 0 in its FD tier table; it is the older document. Renewal fee Rs 499 (MITC Table 06)."
+    },
+    {
+      "slug": "sbm-paisabazaar-paisa-plus",
+      "field": "fees_and_surcharges.forex_markup.markup_percent",
+      "before": null,
+      "after": 0,
+      "evidence": "MITC/CMA Table 07 (29 Oct 2026): Paisabazaar Paisa+ forex 0%. The KFS says N/A, so the card's international acceptance should be confirmed."
+    },
+    {
+      "slug": "sbm-paisabazaar-paisa-plus",
+      "field": "fees_and_surcharges.fuel_surcharge.surcharge_percent",
+      "before": null,
+      "after": 1,
+      "evidence": "MITC/CMA Table 07 'Surcharge Fee' 1% and clause 8.7 (fuel); KFS Surcharge Fee 1%. No waiver stated."
+    },
+    {
+      "slug": "sbm-paisabazaar-paisa-plus",
+      "field": "card_product.is_upi_linkable and form_factors",
+      "before": "null, []",
+      "after": "true, [virtual_card, physical_plastic]",
+      "evidence": "Rewards SOP has a rule for UPI spends below Rs 2,000 on this card; MITC Table 06 shows virtual cards below Rs 10,000 FD and physical cards at Rs 10,000 or more."
+    },
+    {
+      "slug": "sbm-paisabazaar-paisa-plus",
+      "field": "reward_rules (exclusions)",
+      "before": "13 exclusion rows: agriculture limited to MCC 820-822; no utilities, contractor, transport or fuel rows",
+      "after": "agriculture 763, 780, 820-825, 5261; utilities 4900; contractors 1520-1799 (8 MCCs); toll and transport 4784, 4789; fuel 5541, 5542 (MCC assumed)",
+      "evidence": "Paisa Plus Rewards SOP excluded-category MCC table and 'Users will not earn any points' list (Fuel Spends, EMI, Wallets, ATM, Jewellery, Rent, Utilities, Education, Govt, Gambling, Games, Lottery). Fuel MCCs are an assumption; jewellery and games not modelled."
+    },
+    {
+      "slug": "sbm-bank-india-onecard-metal",
+      "field": "card_product.network",
+      "before": null,
+      "after": "visa",
+      "evidence": "SBM OneCard Cardholder Agreement (30 Jun 2026) clause 5.1: acceptable where Visa is accepted, clause 14.6: Visa conversion rate; card image consumer-onecard.webp on SBM's page shows Visa Signature. Virtual card is 'VISA/RuPay powered' and a RuPay floater earns no rewards (MITC 29 Oct 2026). Metal card network is not shown separately."
+    },
+    {
+      "slug": "sbm-bank-india-onecard-metal",
+      "field": "reward_rules",
+      "before": "[] (held: no published reward rate)",
+      "after": "8 rules: base 1 point per Rs 50 (fractional below Rs 50), 5X on top 2 categories (needs 3 categories with Rs 750 each), exclusions for transfers, rent, fuel, cash, wallet load, and bills and utilities from 30 Jul 2026",
+      "evidence": "Cardholder Agreement clause 20 Earn Reward Points (SBM file 30 Jun 2026); SBM reward details RP-details.pdf. Point value is not published by SBM, so point_value_inr_baseline stays null."
+    },
+    {
+      "slug": "sbm-bank-india-onecard-metal",
+      "field": "fees_and_surcharges.category_surcharges rent and wallet_load fee_percent",
+      "before": "1, 1",
+      "after": "2, 2",
+      "evidence": "SBM OneCard MITC (29 Oct 2026) Schedule of Charges: rent 2% over and above convenience fee; fund transfers to wallets or bank accounts 2% on the full amount once monthly transfers exceed Rs 10,000. The KFS (w.e.f. 29 Jun 2026) and Cardholder Agreement (30 Jun 2026) say 1%; the MITC is later."
+    },
+    {
+      "slug": "sbm-bank-india-onecard-metal",
+      "field": "fees_and_surcharges.banking_penalties.overlimit_charge",
+      "before": "2.5% min Rs 500",
+      "after": "0",
+      "evidence": "KFS (w.e.f. 29 Jun 2026) and MITC (29 Oct 2026): Over Limit Fee 0. The 2.5% figure came from the older partner-hosted MITC (Sep 2025)."
+    },
+    {
+      "slug": "sbm-bank-india-onecard-metal",
+      "field": "card_product.point_expiry_months and eligibility_engine",
+      "before": "null; 'not re-read'",
+      "after": "0 (points do not expire, but are nullified if the card is unused for 365 days); minimum FD Rs 5,000, metal card for cumulative FD above Rs 50,000",
+      "evidence": "Cardholder Agreement clause 20 III.d; MITC 29 Oct 2026 FD clauses (minimum Rs 5,000 'or as decided by Bank'; metal card above Rs 50,000)."
+    }
+  ],
+  "unresolved": [
+    {
+      "slug": "sbm-bank-india-onecard-metal",
+      "question": "Is the metal card really sold? Yes as a tier of the SBM secured OneCard: SBM's MITC (29 Oct 2026) issues a metal card to a cumulative FD above Rs 50,000 or as decided by the Bank, and the KFS prices metal issuance, replacement and cancellation at Rs 3,000. SBM has no separate metal card page, application or card image. Not held for rate any more, but the value of one reward point is not published, so no percentage return can be computed; point_value is null."
+    },
+    {
+      "slug": "sbm-bank-india-onecard-metal",
+      "question": "Reward clause conflict: clause 20 I.b stops points on bills and utilities from 30 Jul 2026 while clause 20 III.i still caps incremental 5X rewards on Education, Bills & Utilities and Insurance at 25,000 points with no period. Which applies?"
+    },
+    {
+      "slug": "sbm-paisabazaar-paisa-plus",
+      "question": "MITC Table 07 says forex 0% while the KFS says N/A on a RuPay card. Confirm international use. Also whether earlier cohorts under the SOP's zero-fee table still pay no annual fee."
+    },
+    {
+      "slug": "sbm-mobikwik-first",
+      "question": "Network is not named in any SBM document; RuPay comes from the card image. No cap is stated in the cashback T&C; MobiKwik app and wallet terms were not read. The funding-transaction exclusion is MCC 5406 in one table and 6540 in another (both excluded)."
+    },
+    {
+      "slug": "sbm-zet",
+      "question": "Held: SBM publishes no ZET reward rate. A person should ask SBM or ZET whether any reward programme is covered by an SBM document; partner pages advertise 2% UPI cashback only with a paid ZET Plus subscription."
+    },
+    {
+      "slug": "sbm-kredit-pe",
+      "question": "Is Kredit.Pe cashback withdrawable as cash or only redeemable for brand discounts (reward construct says 'additional discounts on popular brands')? No cap or minimum is stated. Is the 3% paid on whole Rs 100 blocks only?"
+    },
+    {
+      "slug": "sbm-novio",
+      "question": "Visa variant rewards are unpublished (SBM page links only the RuPay variant T&C). Value of a novio coin is unknown. Does a fuel transaction above Rs 4,000 earn nothing or earn on Rs 4,000, and is the monthly fuel cap a calendar month?"
+    },
+    {
+      "slug": "sbm-magnet",
+      "question": "Held: no Magnet reward document. Card image and partner KFS copy say 'Gild' while SBM's KFS says Magnet: confirm one live product. Network Visa Platinum is from the card image only; an aggregator lists a RuPay variant that no SBM document confirms."
+    },
+    {
+      "slug": "sbm-niyo-global",
+      "question": "KFS says joining and annual fee Rs 500 'waived off'; MITC shows 0. Is the waiver permanent? Is the 5,00,000-coin annual limit per calendar year or card year? Is UPI or bill payment covered by the rewards T&C (silent)?"
+    },
+    {
+      "slug": "sbm-paisabazaar-step-up",
+      "question": "Joining fee: KFS (12 Oct 2026) charges Rs 500/250/nil by FD size, MITC (29 Oct 2026) shows 0. The reward structure is the oldest SBM document in the set (created 14 Feb 2025) and states no cap or expiry. Which network (Mastercard Platinum or RuPay Select) does an applicant get?"
+    },
+    {
+      "slug": "suryoday-mobikwik-first-rupay-platinum",
+      "question": "Not edited here (owned elsewhere): SBM's MobiKwik reward T&C applies only to the SBM card. The Suryoday card still has no reward document read, so it stays held unless one is found on Suryoday's site."
+    }
+  ]
+}

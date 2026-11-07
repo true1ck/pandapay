@@ -1,0 +1,763 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "sbm-niyo-global",
+    "name": "SBM Niyo Global Credit Card",
+    "issuer_slug": "sbm-bank-india",
+    "network": "visa",
+    "network_tier": "visa_platinum",
+    "card_tier": "N/A",
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": null,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 0.1,
+    "point_value_baseline_basis": "SBM Niyo rewards T&C: \"Value of Niyo Coins: 1 Coin = ₹0.10\". Coins expire 12 months after issue. Redeemable on Niyo products and services at offers that Niyo can change.",
+    "point_expiry_months": 12,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "FD-backed Global Credit Card; minimum fixed deposit ₹5,000 for issuance (KFS item 3). Credit limit is 90% of the FD (MITC Table 09). Niyo app registration is required to earn coins (rewards T&C).",
+    "rules": [
+      {
+        "parameter": "fd_amount_inr",
+        "operator": ">=",
+        "threshold_value": 5000,
+        "allowed_values": []
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": "N/A",
+    "base_points_per_block": 0,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": 0,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "sbm-niyo-excl-pos-tap",
+      "category_id": "all_retail",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "rail": "pos_terminal"
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "POS and tap-and-pay transactions earn no coins (rewards T&C: \"no rewards for ATM, POS & Tap and pay\")."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-niyo-excl-atm",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "rail": "atm"
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "ATM withdrawals earn no coins (rewards T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-niyo-excl-cash",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6010,
+          6011,
+          6012
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Financial institutions and manual cash disbursements earn nothing (Niyo rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-niyo-excl-quasi-cash",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6051
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Foreign currency, money orders and travellers cheques earn nothing (Niyo rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-niyo-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513,
+          7349
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Real estate agents and managers, rentals and property management earn nothing (Niyo rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-niyo-excl-wallet",
+      "category_id": "wallet_load",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6540,
+          6541
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Stored-value card purchase and load, wallets earn nothing (Niyo rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-niyo-excl-gambling",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          7800,
+          7801,
+          7995
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Government lotteries, online casinos and betting earn nothing (Niyo rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-niyo-excl-political",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          8651
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Political organisations earn nothing (Niyo rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-niyo-excl-securities",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6211
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Security brokers and dealers earn nothing (Niyo rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-niyo-excl-fuel-dealers",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5172,
+          5983
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel dealers and distributors (petrol pumps, MCC 5541 and 5542, are not in this list) earn nothing (Niyo rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-niyo-excl-education",
+      "category_id": "education",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          8220,
+          8241,
+          8244,
+          8249,
+          8299,
+          8351
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Educational institutions earn nothing (Niyo rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-niyo-excl-legal-accounting",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          8111,
+          8931
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Legal and accounting services earn nothing (Niyo rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-niyo-excl-utility",
+      "category_id": "utility",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4900,
+          4812,
+          4814,
+          4816,
+          4899
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Utilities and telecom earn nothing (Niyo rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-niyo-excl-insurance",
+      "category_id": "insurance",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5960,
+          6300,
+          6381
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Insurance earn nothing (Niyo rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-niyo-excl-novelty",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5947
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Card, gift, novelty and souvenir shops earn nothing (Niyo rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-niyo-excl-railways",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4011,
+          4112
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Railways earn nothing (Niyo rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-niyo-excl-agri",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          763,
+          820,
+          821,
+          822,
+          823,
+          824,
+          825,
+          742,
+          743,
+          744,
+          780
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Agricultural services, cooperatives, horticulture, landscaping and veterinary services earn nothing (Niyo rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-niyo-excl-government",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          9211,
+          9222,
+          9223,
+          9311,
+          9399,
+          9400,
+          9402,
+          9405
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Tax payments, court costs, postal services, fines and government services earn nothing (Niyo rewards T&C, excluded-MCC table)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-niyo-travel-30pct",
+      "category_id": "travel",
+      "priority": 5,
+      "evaluation_type": "accelerator",
+      "rail": "online",
+      "channel_type": "niyo_app",
+      "conditions": {
+        "platform": "Niyo app travel VAS booking",
+        "minimum_transaction_inr": 100,
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 30,
+        "points_per_block": 30,
+        "cashback_percent": "N/A",
+        "cap_reference": "sbm-niyo-annual-cap",
+        "reason": "30% coins on travel VAS bookings made through the Niyo app: 30 coins per ₹100, worth 3% at ₹0.10 a coin (rewards T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-niyo-domestic-ecom-20pct",
+      "category_id": "online",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "online",
+      "channel_type": "all",
+      "conditions": {
+        "geography": "domestic",
+        "minimum_transaction_inr": 100,
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 20,
+        "points_per_block": 20,
+        "cashback_percent": "N/A",
+        "cap_reference": "sbm-niyo-annual-cap",
+        "reason": "20% coins on domestic e-commerce: 20 coins per ₹100, worth 2% at ₹0.10 a coin (rewards T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sbm-niyo-intl-ecom-10pct",
+      "category_id": "online",
+      "priority": 11,
+      "evaluation_type": "accelerator",
+      "rail": "online",
+      "channel_type": "all",
+      "conditions": {
+        "geography": "international",
+        "minimum_transaction_inr": 100,
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 10,
+        "points_per_block": 10,
+        "cashback_percent": "N/A",
+        "cap_reference": "sbm-niyo-annual-cap",
+        "reason": "10% coins on international e-commerce: 10 coins per ₹100, worth 1% at ₹0.10 a coin (rewards T&C)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "sbm-niyo-annual-cap",
+      "category_id": "all_retail",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "annual",
+      "limit_value": 500000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3,
+      "annual_interest_rate_percent": 36
+    },
+    "forex_markup": {
+      "markup_percent": 0,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 0,
+      "waiver_percent": "N/A",
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 423,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": 100
+    },
+    "category_surcharges": [],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": null,
+        "min_fee_inr": 150,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 45,
+    "grace_period_void_on_revolving_balance": true,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "max",
+      "components": [
+        "5% of the total amount due or ₹100, whichever is greater",
+        "5% of cash withdrawals (MITC Table 11)",
+        "100% of interest",
+        "100% of fees",
+        "plus unpaid earlier minimum dues and any amount over the credit limit"
+      ]
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": null,
+        "fee_inr": 150
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "KFS: joining fee ₹500 \"waived off\" and annual membership fee ₹500 \"waived off\" for primary and add-on cards; MITC Table 01 shows both as 0. Modelled as 0. Card re-issuance ₹249.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": "N/A",
+    "separate_priority_pass": "N/A",
+    "lounge_quota_shared": "N/A",
+    "reward_points_pooled": "N/A",
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "Niyo products and services at offers and discounts set by Niyo",
+        "redemption_type": "partner_catalogue",
+        "inr_value_per_point": 0.1,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": "N/A",
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.sbm.bank.in/pdf/kfs/Niyo-KFS.pdf",
+              "kind": "Niyo Global SBM Credit Card KFS (SBM file dated 12 Oct 2026; illustrations use 2020-2022 dates): fees, interest, zero forex, Visa exchange rate wording",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/pdf/terms-conditions/Niyo-Reward-TC_26-Feb-2026.pdf",
+              "kind": "SBM Niyo Credit Card - Rewards Terms and Conditions (file name dated 26 Feb 2026, PDF created 2 Mar 2026): coin rates, value, cap, excluded MCCs",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/pdf/terms-conditions/SBM-Secured-Credit-Card-T&C.pdf",
+              "kind": "SBM Secured Credit Card MITC and Cardholder Member Agreement, 52 pages (SBM file dated 29 Oct 2026): Tables 01-11 give fees, interest, late fee, forex, surcharge, rent and education fees, cash limits and minimum due for every variant",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/personal-banking/cards/secured-credit-card",
+              "kind": "SBM secured credit card page (read 7 Nov 2026): lists the card with its KFS, MITC and reward links; card image https://www.sbm.bank.in/images/cards/consumer-niyo.webp shows the network",
+              "read": "page text; card image viewed"
+            }
+          ],
+          "open_questions": [
+            "Fees: the KFS shows joining and annual fee ₹500 \"waived off\"; MITC Table 01 (29 Oct 2026, later) shows 0. Modelled as 0. Neither document says whether the waiver is permanent or promotional.",
+            "The annual limit of 5,00,000 coins does not say whether the year is the calendar year or the card year. Recorded as period annual.",
+            "\"Travel VAS booking through the Niyo App\" and \"International ECOM\" are not defined in the rewards T&C. International e-commerce is modelled as stated; whether a foreign-currency or foreign-merchant test applies is not given.",
+            "The rewards T&C does not mention UPI or bill payments, so they are not modelled as earning; the card image shows Visa Platinum, which is not UPI-linkable, so is_upi_linkable is left null.",
+            "The excluded-MCC section is headed \"Users will not earn any cashback\"; treated as an exclusion of coins.",
+            "Network: Visa from the KFS (\"VISA exchange rates\", Visa ATM compatibility) and the card image (Visa Platinum)."
+          ],
+          "notes": [
+            "Coins = % of transaction value: 20% coins on a ₹100 domestic e-commerce purchase is 20 coins = ₹2. Minimum transaction ₹100.",
+            "Interest 3% a month (36% a year) on purchases and cash; cash fee 2.5% or ₹423 + GST; cash limit 100% of the credit limit (MITC Table 10). Over-limit fee ₹150.",
+            "Zero forex mark-up: Niyo and SBM add no mark-up; Visa exchange rates only (KFS, MITC Table 07). Surcharge, rent and education fees 0%."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "flat ₹150 + GST if the minimum amount due is not paid by the due date plus 3 days",
+          "source": "Niyo KFS (12 Oct 2026) and MITC Table 08"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,665 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "bobcard-scapia-credit-card",
+    "name": "BOBCARD Scapia Credit Card",
+    "issuer_slug": "bobcard",
+    "network": null,
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 0.2,
+    "point_value_baseline_basis": "BOBCARD Scapia T&C: 5 Scapia Coins = ₹1 for flights, hotels, buses and other services on the Scapia app; value can change on one month's notice. Coins last 36 months and are nullified if the card is unused for more than 365 days.",
+    "point_expiry_months": 36,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.bobcard.co.in/credit-card-types/bobcard-scapia-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "Product page: Indian resident, age 21-60, salaried or self-employed; PAN mandatory; Aadhaar-based digital verification. Indicative.",
+    "rules": [
+      {
+        "parameter": "age_years",
+        "operator": ">=",
+        "threshold_value": 21,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years",
+        "operator": "<=",
+        "threshold_value": 60,
+        "allowed_values": []
+      },
+      {
+        "parameter": "residency",
+        "operator": "in",
+        "threshold_value": null,
+        "allowed_values": [
+          "resident_indian"
+        ]
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [
+      "PAN"
+    ],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": 10,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": 2,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "bobscapia-excl-transfer",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Money transfers, gift cards, card repayments and crypto earn nothing (T&C Earn Rewards b)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "bobscapia-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Rent earns nothing."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "bobscapia-excl-cash",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Cash withdrawals earn nothing."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "bobscapia-excl-emi",
+      "category_id": "emi",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "EMI transactions earn nothing."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "bobscapia-excl-education",
+      "category_id": "education",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Education and school fees earn nothing."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "bobscapia-excl-utility",
+      "category_id": "utility",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Utility payments earn nothing."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "bobscapia-excl-insurance",
+      "category_id": "insurance",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Insurance earns nothing."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "bobscapia-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel and fuel surcharge earn nothing."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "bobscapia-excl-wallet",
+      "category_id": "wallet_load",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Digital wallet loading and top-up earn nothing."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "bobscapia-excl-forex",
+      "category_id": "international_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Forex transactions earn nothing (T&C Earn Rewards b)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "bobscapia-travel-20pct",
+      "category_id": "travel",
+      "priority": 5,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "scapia_app",
+      "conditions": {
+        "platform": "Scapia app",
+        "purchases": "travel"
+      },
+      "action": {
+        "multiplier": 20,
+        "points_per_block": 20,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "20% rewards on travel purchases made on the Scapia app (T&C f). At 5 coins = ₹1 that is 4% in value."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "bobscapia-visa-10pct",
+      "category_id": "all_retail",
+      "priority": 20,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "variant": "Visa",
+        "minimum_transaction_inr": 20
+      },
+      "action": {
+        "multiplier": 10,
+        "points_per_block": 10,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "10% rewards on every purchase of ₹20 and above on the Visa card, in all eligible categories (T&C e). 1 reward = 1 Scapia Coin, so about 2% in value."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "bobscapia-rupay-5pct",
+      "category_id": "all_retail",
+      "priority": 21,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "variant": "RuPay",
+        "minimum_transaction_inr": 500
+      },
+      "action": {
+        "multiplier": 5,
+        "points_per_block": 5,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "5% rewards on eligible spends above ₹500 on the RuPay card (T&C e). About 1% in value."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 45
+    },
+    "forex_markup": {
+      "markup_percent": 0,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": null,
+      "max_txn_inr": 5000,
+      "monthly_waiver_cap_inr": 500
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": 10
+    },
+    "category_surcharges": [
+      {
+        "category_id": "fuel",
+        "mcc_list": [],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Fuel spends above ₹50,000 in a month attract a 1% + GST convenience fee, capped at ₹3,000 per transaction",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "utility",
+        "mcc_list": [],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Utility transactions above ₹50,000 in a month attract 1% + GST, capped at ₹3,000 per transaction",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Rent spends attract 1% + GST, capped at ₹3,000 per transaction",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "wallet_load",
+        "mcc_list": [
+          6540
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Wallet load attracts 1% + GST, capped at ₹3,000 per transaction",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": 99,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 500,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": 450,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 50,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "2% of retail spends and cash advance",
+        "100% of all fees, finance charges, GST and EMI"
+      ]
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 99,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 100,
+        "max_balance_inr": 500,
+        "fee_inr": 100
+      },
+      {
+        "min_balance_inr": 501,
+        "max_balance_inr": 1000,
+        "fee_inr": 400
+      },
+      {
+        "min_balance_inr": 1001,
+        "max_balance_inr": 10000,
+        "fee_inr": 750
+      },
+      {
+        "min_balance_inr": 10001,
+        "max_balance_inr": 25000,
+        "fee_inr": 950
+      },
+      {
+        "min_balance_inr": 25001,
+        "max_balance_inr": 50000,
+        "fee_inr": 1100
+      },
+      {
+        "min_balance_inr": 50001,
+        "max_balance_inr": null,
+        "fee_inr": 1300
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "Joining and annual fees are nil (KFS).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "bobscapia-domestic-lounge",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "BOBCARD / Scapia",
+      "label": "Unlimited complimentary domestic lounge access",
+      "evaluation_engine": {
+        "conditions": {
+          "min_spend_inr_per_billing_cycle": 20000,
+          "must_be_active_monthly": true,
+          "enabled_after_billing_date_working_days": "3-5"
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "bobscapia-airport-privilege",
+      "category_id": "other",
+      "network_program": null,
+      "sponsor": "BOBCARD / Scapia",
+      "label": "Scapia Coins equal to spend at eligible airport eat and shop outlets",
+      "evaluation_engine": {
+        "conditions": {
+          "max_coins_top_6_cities": 5000,
+          "max_coins_other_cities": 2500
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": 0,
+    "fee_per_card_inr": "N/A",
+    "separate_priority_pass": "N/A",
+    "lounge_quota_shared": "N/A",
+    "reward_points_pooled": "N/A",
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "Scapia app: flights, hotels, buses and other services",
+        "redemption_type": "flight_hotel_booking",
+        "inr_value_per_point": 0.2,
+        "max_bill_percentage_payable_via_points": 100,
+        "min_points_per_txn": "N/A",
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": "N/A",
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": "Source-supported data that cannot be represented faithfully by any existing universal schema field. Do not duplicate data already represented elsewhere. Do not use this section for unknown values, assumptions, or inferred data.",
+    "items": [
+      {
+        "key": "official_research",
+        "value": {
+          "checked_on": "2026-11-05",
+          "source_urls": [
+            "https://www.bobcard.co.in/credit-card-types/bobcard-scapia-credit-card",
+            "https://www.scapia.cards/product/blog/the-scapia-bobcard-credit-card-everything-you-need-to-know"
+          ],
+          "facts": [
+            "Issuer listing describes linked Visa/RuPay products, with distinct reward thresholds.",
+            "Visa: 10% coin rewards on eligible spends of at least INR 20; RuPay: 5% coin rewards on eligible spends of at least INR 500.",
+            "Scapia-app bookings advertise 20% coin rewards; airport privileges unlock on INR 20000 monthly spend."
+          ]
+        }
+      },
+      {
+        "key": "linked_networks_from_issuer",
+        "value": {
+          "networks": [
+            "visa",
+            "rupay"
+          ],
+          "shared_credit_account": true,
+          "source_url": "https://www.bobcard.co.in/credit-card-types/bobcard-scapia-credit-card"
+        }
+      },
+      {
+        "key": "verified_network_research",
+        "value": {
+          "product_status": "active",
+          "source_url": "https://media.bobcard.co.in//media/atehw542/bobcard-scapia-tc.pdf",
+          "evidence": "BOBCARD Scapia T&C Earn Rewards (e) describes a Visa card and a RuPay card with different earn rates.",
+          "candidates": [
+            {
+              "network": "visa",
+              "network_tier": "N/A",
+              "label": "BOBCARD Scapia Credit Card (Visa)",
+              "source_url": "https://media.bobcard.co.in//media/atehw542/bobcard-scapia-tc.pdf",
+              "evidence": "T&C e: 10% rewards on purchases of ₹20 and above."
+            },
+            {
+              "network": "rupay",
+              "network_tier": "N/A",
+              "label": "BOBCARD Scapia Credit Card (RuPay)",
+              "source_url": "https://media.bobcard.co.in//media/atehw542/bobcard-scapia-tc.pdf",
+              "evidence": "T&C e: 5% rewards on eligible spends above ₹500."
+            }
+          ]
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://media.bobcard.co.in//media/gj3mfwnu/bobcard-scapia-kfs-1.pdf",
+              "kind": "BOBCARD Scapia Key Fact Sheet (fees, interest, late fee, fuel, convenience fees)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://media.bobcard.co.in//media/atehw542/bobcard-scapia-tc.pdf",
+              "kind": "General Terms and Conditions, 37 pages (rewards, coin value, lounge, forex)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://media.bobcard.co.in//media/wldj0y5t/bobcard-scapia-mitc-1.pdf",
+              "kind": "MITC",
+              "read": "extracted, not read in detail"
+            },
+            {
+              "url": "https://www.bobcard.co.in/credit-card-types/bobcard-scapia-credit-card",
+              "kind": "issuer page",
+              "read": "rendered page text"
+            }
+          ],
+          "open_questions": [
+            "None of the three PDFs carries a revision date in the extracted text.",
+            "The MITC was extracted but not read line by line; fees were taken from the KFS and the T&C.",
+            "The \"above ₹500\" RuPay threshold is stated as \"more than Rs. 500\" in the T&C and \"minimum Rs. 500\" on the product page.",
+            "EMI is listed as coming soon in the KFS; the EMI processing fee is shown as stated."
+          ],
+          "notes": [
+            "The headline \"10% / 5% / 20% rewards\" are Scapia-coin percentages. At 5 coins = ₹1, the real value is about 2% (Visa), 1% (RuPay) and 4% on Scapia-app travel.",
+            "Zero forex mark-up (T&C Benefits 2).",
+            "Fuel surcharge waiver for transactions up to ₹5,000, maximum ₹500 per month (KFS).",
+            "Card re-issue/replacement fee ₹200 + GST (KFS)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

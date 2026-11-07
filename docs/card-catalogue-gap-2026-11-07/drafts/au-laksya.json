@@ -1,0 +1,729 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "au-laksya",
+    "name": "AU Laksya Credit Card",
+    "issuer_slug": "au",
+    "network": null,
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 1000,
+    "annual_fee_inr": 1000,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": null,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": "Value of one AU Reward Point is not stated on the Laksya page, its FAQ or the welcome T&C (the welcome choice of 4,000 points or a ₹1,000 voucher is a choice, not a stated conversion). AU Rewardz FAQ: value depends on card variant and redemption category.",
+    "point_expiry_months": 24,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.au.bank.in/personal-banking/credit-cards/laksya-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "AU states these criteria are only indicative and reserves the right to approve or decline.",
+    "rules": [
+      {
+        "parameter": "age_years_salaried",
+        "operator": ">=",
+        "threshold_value": 21,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years_salaried",
+        "operator": "<=",
+        "threshold_value": 60,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years_self_employed",
+        "operator": ">=",
+        "threshold_value": 25,
+        "allowed_values": []
+      },
+      {
+        "parameter": "age_years_self_employed",
+        "operator": "<=",
+        "threshold_value": 65,
+        "allowed_values": []
+      },
+      {
+        "parameter": "residency",
+        "operator": "in",
+        "threshold_value": null,
+        "allowed_values": [
+          "resident_indian"
+        ]
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": "floor",
+    "base_points_per_block": 2,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": 25000,
+    "capping_period_basis": "statement_cycle",
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "laksya-grocery-5rp",
+      "category_id": "grocery",
+      "priority": 20,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 5,
+        "points_per_block": 5,
+        "cashback_percent": "N/A",
+        "cap_reference": "laksya-grocery-dept-cycle-cap",
+        "reason": "FAQ: 5 Reward Points per ₹100 on grocery purchases; shared 1,000-point statement-cycle cap with departmental stores."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "laksya-departmental-5rp",
+      "category_id": "departmental_stores",
+      "priority": 20,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 5,
+        "points_per_block": 5,
+        "cashback_percent": "N/A",
+        "cap_reference": "laksya-grocery-dept-cycle-cap",
+        "reason": "FAQ: 5 Reward Points per ₹100 on department stores; shared cap with grocery."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "laksya-contactless-5rp",
+      "category_id": "all_retail",
+      "priority": 20,
+      "evaluation_type": "accelerator",
+      "rail": "contactless",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 5,
+        "points_per_block": 5,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "FAQ: 5 Reward Points per ₹100 on contactless (Tap & Pay); no maximum cap on contactless."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "laksya-base-2rp",
+      "category_id": "all_retail",
+      "priority": 35,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 2,
+        "points_per_block": 2,
+        "cashback_percent": "N/A",
+        "cap_reference": "laksya-total-cycle-cap",
+        "reason": "Page FAQ: 2 Reward Points per ₹100 on all other retail spends."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "laksya-bills-1rp",
+      "category_id": "bills",
+      "priority": 25,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "includes": [
+          "utility",
+          "telecom"
+        ],
+        "max_points_per_transaction": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": "laksya-total-cycle-cap",
+        "reason": "Page FAQ: 1 Reward Point per ₹100 on insurance, utility and telecom; at most 100 points per utility/telecom transaction."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "laksya-insurance-1rp",
+      "category_id": "insurance",
+      "priority": 25,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": "laksya-total-cycle-cap",
+        "reason": "Page FAQ: 1 Reward Point per ₹100 on insurance."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "laksya-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Rent earns no Reward Points (page FAQ: Cash, Rent, Education & Govt, EMI, Fuel, BBPS, Transportation, Quasi Cash). MCC lists not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "laksya-excl-cash",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Cash and quasi-cash earns no Reward Points (page FAQ: Cash, Rent, Education & Govt, EMI, Fuel, BBPS, Transportation, Quasi Cash). MCC lists not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "laksya-excl-education",
+      "category_id": "education",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Education earns no Reward Points (page FAQ: Cash, Rent, Education & Govt, EMI, Fuel, BBPS, Transportation, Quasi Cash). MCC lists not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "laksya-excl-govt",
+      "category_id": "government",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Government earns no Reward Points (page FAQ: Cash, Rent, Education & Govt, EMI, Fuel, BBPS, Transportation, Quasi Cash). MCC lists not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "laksya-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel earns no Reward Points (page FAQ: Cash, Rent, Education & Govt, EMI, Fuel, BBPS, Transportation, Quasi Cash). MCC lists not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "laksya-excl-emi",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "EMI earns no Reward Points (page FAQ: Cash, Rent, Education & Govt, EMI, Fuel, BBPS, Transportation, Quasi Cash). MCC lists not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "laksya-excl-bbps",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "BBPS earns no Reward Points (page FAQ: Cash, Rent, Education & Govt, EMI, Fuel, BBPS, Transportation, Quasi Cash). MCC lists not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "laksya-excl-transport",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Transportation earns no Reward Points (page FAQ: Cash, Rent, Education & Govt, EMI, Fuel, BBPS, Transportation, Quasi Cash). MCC lists not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "laksya-grocery-dept-cycle-cap",
+      "category_id": "grocery",
+      "metric": "bonus_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": 1000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "downgrade_to_base_rate",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "laksya-total-cycle-cap",
+      "category_id": "all_retail",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": 25000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 45
+    },
+    "forex_markup": {
+      "markup_percent": 3.49,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 3.49,
+      "gst_applicable": true,
+      "trigger_condition": "KFS lists one cross-currency markup for foreign-currency, dynamic and static conversion transactions"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 400,
+      "max_txn_inr": 5000,
+      "monthly_waiver_cap_inr": 150
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": 20
+    },
+    "category_surcharges": [
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          5172,
+          5541,
+          5542,
+          5552,
+          5983
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "From 1 Jul 2026: 1% on the whole month's fuel spend when one transaction exceeds ₹10,000 or the calendar-month total exceeds ₹25,000",
+        "threshold_spend_inr": 25000,
+        "effective_from": "2026-07-01",
+        "effective_to": null
+      },
+      {
+        "category_id": "utility",
+        "mcc_list": [
+          4900
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% on utility spend above ₹50,000 in a calendar month",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education_third_party",
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Education paid through third-party apps (CRED, PhonePe, Paytm, MobiKwik, Freecharge etc.), minimum ₹99 per transaction; direct school/college site or POS exempt",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Domestic rental payments, minimum ₹99 per transaction; international rental has no charge",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "transportation",
+        "mcc_list": [
+          4111,
+          4112,
+          4784
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "From 14 Jun 2026: 1% on the whole month's transportation spend once it exceeds the lower of 50% of credit limit or ₹25,000; IRCTC and marquee travel partners excluded",
+        "threshold_spend_inr": 25000,
+        "effective_from": "2026-06-14",
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": 199,
+      "post_purchase_emi_processing_fee_inr": 0,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 500,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 99,
+      "gst_applicable": true,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 50,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "If previous Total Amount Due was paid on time: 5% of principal outstanding + 100% of fees/charges + 100% of interest + due EMIs + 100% annual fee (if applicable) + 100% GST",
+        "If previous Total Amount Due was not paid on time: 2% of principal outstanding + the same 100% components"
+      ]
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 200000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "From the 2nd year: ₹2,00,000 retail spends in the previous card anniversary year. No joining fee waiver.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 1000
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "activation_and_first_transaction_within_30_days_of_issue",
+      "benefit_points": 4000,
+      "effective_value_inr": 1000,
+      "condition": "Choose 4,000 bonus Reward Points OR brand vouchers worth ₹1,000; claim within 2 months of activation; choice cannot be changed; primary cardholder who paid the joining fee (Welcome Benefit T&C, 1 Mar 2026)."
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "laksya-domestic-lounge",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "AU Small Finance Bank",
+      "label": "Domestic airport lounge access (spend-based)",
+      "evaluation_engine": {
+        "conditions": {
+          "rule": "Spend at least ₹50,000 in a calendar quarter to unlock access in the next calendar quarter",
+          "primary_cardholder_only": true,
+          "validation_swipe_inr": 2,
+          "max_per_quarter": 2,
+          "source": "Page FAQ: 8 visits per calendar year, max 2 per quarter, on spending ₹50,000 in the previous quarter"
+        },
+        "benefit_calculation": {
+          "page_headline_total": 8
+        },
+        "perks": []
+      },
+      "quota_count": 8,
+      "quota_period": "annual",
+      "value_estimate_inr": "N/A",
+      "effective_from": "2025-11-28",
+      "effective_to": null
+    },
+    {
+      "benefit_id": "laksya-bogo-movie",
+      "category_id": "movie",
+      "network_program": null,
+      "sponsor": "AU Small Finance Bank",
+      "label": "Buy-one-get-one movie tickets every month",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "calendar_month",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 0,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": 18
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [
+    {
+      "promo_id": "laksya-partner-15pct",
+      "category_id": "other",
+      "network_program": "N/A",
+      "sponsor": "AU partner merchants (Amazon FreshNow, Zomato, District by Zomato listed)",
+      "platform": "partner merchants",
+      "offer_type": "instant_discount",
+      "discount_percent": 15,
+      "max_discount_inr": "N/A",
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": false,
+      "is_permanent_card_feature": true,
+      "valid_from": null,
+      "valid_to": null
+    }
+  ],
+  "additional_data": {
+    "_notes": "Source-supported data that cannot be represented faithfully by any existing universal schema field. Do not duplicate data already represented elsewhere. Do not use this section for unknown values, assumptions, or inferred data.",
+    "items": [
+      {
+        "key": "official_research",
+        "value": {
+          "checked_on": "2026-11-05",
+          "source_urls": [
+            "https://www.au.bank.in/personal-banking/credit-cards/laksya-credit-card"
+          ],
+          "facts": [
+            "5 points per INR 100 grocery/departmental/contactless; grocery and departmental combined cap 1000 points per statement; contactless uncapped."
+          ]
+        }
+      },
+      {
+        "key": "verified_network_research",
+        "value": {
+          "finding_status": "partial",
+          "product_status": "active",
+          "source_url": "https://www.au.bank.in/personal-banking/credit-cards/laksya-credit-card",
+          "evidence": "Page (hidden popup, read from the DOM): a \"Visa Cardholders\" popup lists MakeMyTrip, Times Prime and Alaya Stays offers. Checked and NOT confirmed elsewhere: the Laksya lounge T&C (28 Nov 2025) says only \"Visa/RuPay Network\" for all eligible AU cards; the card art shows no network logo; the same popup also sits on the Paytm AU page, whose card art is RuPay Platinum, so the popup is a shared block, not proof for Laksya.",
+          "candidates": [
+            {
+              "network": "visa",
+              "network_tier": "N/A",
+              "label": "AU Laksya Credit Card (Visa offers popup)",
+              "source_url": "https://www.au.bank.in/personal-banking/credit-cards/laksya-credit-card",
+              "evidence": "Popup heading \"Visa Cardholders\" on the product page. Not stated as the issued network."
+            }
+          ]
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.au.bank.in/personal-banking/credit-cards/laksya-credit-card",
+              "kind": "issuer_page + FAQ + popups",
+              "read": "rendered page text including hidden accordions and popups, re-read 2026-11-07 (base rates, exclusions, lounge split are in the FAQ)"
+            },
+            {
+              "url": "https://www.au.bank.in/pdf/credit-card/Schedule-of-Charges-CC.pdf",
+              "kind": "KFS",
+              "date": "Key Fact Statement v1.9, 2 Nov 2026"
+            },
+            {
+              "url": "https://www.au.bank.in/credit-cards/mitc(with-schedule-of-charges).pdf",
+              "kind": "MITC: points terms are by reference to the Cardmember Agreement",
+              "date": "MITC v2.23, 2 Nov 2026",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.au.bank.in/credit-cards/credit-card-member-agreement.pdf",
+              "kind": "Cardmember Agreement 23.5 (25,000 point cap; 1,000 grocery and departmental cap), 23.6, 23.8, 23.22",
+              "date": "undated",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.au.bank.in/pdf/TnC_Laksya_Lounge.pdf",
+              "kind": "lounge T&C (\"Visa/RuPay Network\")",
+              "date": "2025-11-28",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.au.bank.in/pdf/TnC-Laksya_Welcome-Benefit.pdf",
+              "kind": "welcome T&C",
+              "date": "2026-03-01"
+            }
+          ],
+          "open_questions": [
+            "Network: UNRESOLVED. The lounge T&C says \"Visa/RuPay Network\" generically; a \"Visa Cardholders\" popup on the page is the only Laksya-specific hint. card_product.network left null.",
+            "Reward Point value in rupees: not stated for Laksya. AU Rewardz FAQ says it depends on card variant and redemption category. effective_base_return_percent left null.",
+            "Exclusion MCC lists are not published for Laksya (categories only).",
+            "The 25,000-point per-cycle cap on all MCCs is from the CMA 23.5 table, which lists Laksya."
+          ],
+          "notes": [
+            "Xpress EMI processing fee is zero on Laksya per KFS section 12.",
+            "Lounge quota resolved from the page FAQ: 8 domestic visits per calendar year, at most 2 per quarter, after ₹50,000 spent in the previous quarter (the lounge T&C states the ₹50,000 rule).",
+            "Reward Points are earned in multiples of ₹100 (CMA 23.22), modelled as floor; points expire after 2 years (CMA 23.8)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "15% of Total Amount Due, minimum ₹10, maximum ₹1,300",
+          "source": "Key Fact Statement v1.9, 2 Nov 2026, section 5",
+          "note": "Percentage fee cannot be expressed as fixed slabs, so late_payment_slabs is empty."
+        }
+      },
+      {
+        "key": "payment_return_charge",
+        "value": {
+          "rule": "2% of Total Amount Due or ₹500, whichever is higher, on return/failure of card payment (cheque, ECS/NACH, autopay)",
+          "source": "Key Fact Statement v1.9, 2 Nov 2026, section 10"
+        }
+      }
+    ]
+  }
+}

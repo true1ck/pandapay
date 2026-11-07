@@ -1,0 +1,474 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "icici-times-black",
+    "name": "Times Black ICICI Bank Credit Card",
+    "issuer_slug": "icici",
+    "network": "visa",
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 20000,
+    "annual_fee_inr": 20000,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": false,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 0.4,
+    "point_value_baseline_basis": "Times Black terms: redemption against statement is ₹0.40 per ICICI reward point; the value is up to ₹1 per point on other redemption options.",
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.icici.bank.in/personal-banking/cards/credit-card/times-black-icici-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "Issuer page: Indian citizen over 21 with a salaried monthly income of ₹2,00,000 or a self-employed annual income of ₹24,00,000.",
+    "rules": [
+      {
+        "parameter": "age_years",
+        "operator": ">=",
+        "threshold_value": 21,
+        "allowed_values": []
+      },
+      {
+        "parameter": "net_monthly_salary_inr",
+        "operator": ">=",
+        "threshold_value": 200000,
+        "allowed_values": []
+      },
+      {
+        "parameter": "annual_income_self_employed_inr",
+        "operator": ">=",
+        "threshold_value": 2400000,
+        "allowed_values": []
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [
+      "proof of identity",
+      "proof of address",
+      "proof of income"
+    ],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": 2,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": 0.8,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": "statement_cycle",
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "tb-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on fuel (Times Black terms)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "tb-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on rent (Times Black terms)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "tb-excl-emi",
+      "category_id": "emi",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Points on transactions converted into EMIs are reversed (Times Black terms)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "tb-domestic-2",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "transaction_type": "domestic",
+        "unit_note": "\"2% reward points\" read as 2 points per ₹100"
+      },
+      "action": {
+        "multiplier": 2,
+        "points_per_block": 2,
+        "cashback_percent": "N/A",
+        "cap_reference": "tb-bills-cap",
+        "reason": "2% ICICI reward points on eligible domestic transactions. At ₹0.40 per point for statement credit that is 0.8% in value; up to ₹1 per point gives 2% on other redemptions."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "tb-international-2-5",
+      "category_id": "international_spend",
+      "priority": 25,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "transaction_type": "international"
+      },
+      "action": {
+        "multiplier": 2.5,
+        "points_per_block": 2.5,
+        "cashback_percent": "N/A",
+        "cap_reference": "tb-bills-cap",
+        "reason": "2.5% ICICI reward points on eligible international transactions."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "tb-bills-cap",
+      "category_id": "utility",
+      "metric": "total_reward_points",
+      "mcc_target_list": [
+        4899,
+        4900,
+        4901,
+        3887,
+        5960,
+        6300,
+        6381,
+        6399,
+        8211,
+        8220,
+        8241,
+        8244,
+        8249,
+        8299,
+        8493,
+        8494,
+        7911,
+        6760,
+        9222,
+        9311,
+        9313,
+        9211,
+        9399,
+        9402,
+        9405
+      ],
+      "period": "statement_cycle",
+      "limit_value": 5000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 45
+    },
+    "forex_markup": {
+      "markup_percent": 1.49,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 1.49,
+      "gst_applicable": true,
+      "trigger_condition": "MITC: 1.49% dynamic currency conversion mark-up on Times Black"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": null,
+      "waiver_percent": 1,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": null,
+      "atm_transaction_fee_min_inr": null,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": null,
+        "min_fee_inr": null,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 2500000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "MITC: minimum spends of ₹25,00,000 for annual fee reversal; the page says spending over ₹25 lakh waives the fee for the next year.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 20000
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "joining",
+      "benefit_points": "N/A",
+      "effective_value_inr": null,
+      "condition": "Luxury stay gift card (EaseMyTrip ₹10,000 or Lohono ₹12,000), travel visa benefits worth ₹10,000 (Atlys, OneVasco), lifestyle gift cards (Toni and Guy ₹3,000, Interflora ₹1,000) and a Zomato Gold annual membership. No spend trigger is stated for these."
+    },
+    "spend_milestones": [
+      {
+        "id": "tb-klook-2l",
+        "label": "Klook experiences worth ₹10,000",
+        "threshold_spend_inr": 200000,
+        "reward_value_inr": 10000,
+        "period": "annual",
+        "is_repeatable": false,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "id": "tb-wework-5l",
+        "label": "WeWork day passes or airport transfers worth ₹10,000",
+        "threshold_spend_inr": 500000,
+        "reward_value_inr": 10000,
+        "period": "annual",
+        "is_repeatable": false,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "id": "tb-tata-cliq-10l",
+        "label": "Tata CLiQ Luxury gift card worth ₹10,000",
+        "threshold_spend_inr": 1000000,
+        "reward_value_inr": 10000,
+        "period": "annual",
+        "is_repeatable": false,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "id": "tb-stay-20l",
+        "label": "One-night luxury stay at Ayatana or Lohono worth ₹20,000",
+        "threshold_spend_inr": 2000000,
+        "reward_value_inr": 20000,
+        "period": "annual",
+        "is_repeatable": false,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ]
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "tb-intl-lounge",
+      "category_id": "lounge",
+      "network_program": "priority_pass",
+      "sponsor": "ICICI Bank / Priority Pass",
+      "label": "Unlimited international lounge access via Priority Pass membership (primary and Plus cardholders)",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "tb-domestic-lounge",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "ICICI Bank",
+      "label": "Unlimited complimentary domestic lounge access (primary and add-on cardholders)",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "tb-concierge",
+      "category_id": "concierge",
+      "network_program": null,
+      "sponsor": "ICICI Bank",
+      "label": "24x7 concierge services",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 3500,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": "Source-supported data that cannot be represented faithfully by any existing universal schema field. Do not duplicate data already represented elsewhere. Do not use this section for unknown values, assumptions, or inferred data.",
+    "items": [
+      {
+        "key": "official_research",
+        "value": {
+          "checked_on": "2026-11-05",
+          "source_urls": [
+            "https://www.icici.bank.in/personal-banking/cards/credit-card/times-black-icici-credit-card"
+          ],
+          "facts": [
+            "Domestic reward headline 2%, international 2.5%; statement-credit redemption INR 0.40 per point, other catalogue options up to INR 1.",
+            "Specified bill/insurance/education/government categories have a 5000-point cycle cap.",
+            "Fuel, rent and EMI are excluded."
+          ]
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.icici.bank.in/personal-banking/cards/credit-card/times-black-icici-credit-card",
+              "kind": "issuer page (verbatim read of fees, rewards, benefits, eligibility)",
+              "read": "fetch tool"
+            },
+            {
+              "url": "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf",
+              "kind": "MITC, last updated 6 Nov 2026 (fees, forex, reward caps, exclusions, lounge)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/times-black-icici-credit-card-terms-conditions.pdf",
+              "kind": "Times Black additional T&C, v3, 2 May 2025 (reward points, value, lounge)",
+              "read": "pdftotext"
+            }
+          ],
+          "open_questions": [
+            "Reward unit: the terms say \"2% / 2.5% ICICI Bank reward points\"; 2 and 2.5 points per ₹100 is inferred, matching ICICI convention.",
+            "Spend-milestone period: the page lists ₹2 lakh, ₹5 lakh, ₹10 lakh and ₹20 lakh triggers without saying per year, so period \"annual\" is an assumption.",
+            "The Times Black terms are version 3 dated 2 May 2025; the MITC is dated 6 Nov 2026. Where they differ, the MITC wins. No difference was found on the points read.",
+            "Network: the terms refer to Visa concierge and lounge services; the MITC fee table does not name a network.",
+            "Interest (settled 2026-11-07, W6): MITC Section I, 2. Finance Charges (1) states 3.75% per month i.e. 45% per annum for revolving credit on retail transactions and cash advances, with the same APR for retail purchases, balance transfer, cash advances, non-payment of minimum due and late payment. Item (2) carves out only the 1838 Reserve card (1.67% a month), so Times Black takes the general rate by exclusion; the MITC does not name Times Black in the finance-charge clause, so confirm with ICICI. The MITC Section II also says ICICI can change the rate (as low as 1.25% a month for some customers) at its discretion."
+          ],
+          "notes": [
+            "Fee row in the MITC: joining ₹20,000, first-year annual fee Nil, annual fee from year two ₹20,000, Plus/add-on card fee ₹3,500, spends for annual fee reversal ₹25,00,000.",
+            "Reward caps (MITC): 5,000 points per statement cycle cumulatively on utilities, insurance, education and government/tax payments, domestic and international together."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

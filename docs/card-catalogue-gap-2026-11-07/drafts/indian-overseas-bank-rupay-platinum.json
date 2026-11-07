@@ -1,0 +1,334 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "indian-overseas-bank-rupay-platinum",
+    "name": "IOB RuPay Platinum Credit Card",
+    "issuer_slug": "indian-overseas-bank",
+    "network": "rupay",
+    "network_tier": null,
+    "card_tier": "N/A",
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 250,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [
+      "virtual_card"
+    ],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 0.25,
+    "point_value_baseline_basis": "IOB credit card page (last updated 5 Nov 2026), Features of Rupay Credit Card, and IOB RuPay credit card FAQ Q27 (last updated 7 Oct 2026): each reward point has a value of ₹0.25; redeemable for merchandise, gift card, travel, entertainment, recharge and DTH; minimum 750 points to redeem. The page says redeem \"before the expiry of reward point\" but gives no expiry period.",
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_page",
+    "source_url": "https://www.iob.bank.in/en/credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "IOB RuPay FAQ (7 Oct 2026): all IOB customers can apply; NRIs holding an Indian passport are eligible; for a CIBIL score below 650 a limit against a deposit with 10% margin is offered; no third-party guarantee; documents are the application form, income proof (ITR, salary slip or Form 16) and KYC. IOB page credit limits for RuPay Platinum: minimum ₹60,000, maximum under ₹2,00,000 for the public (under ₹1,50,000 for staff).",
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": 1,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": 0.25,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "iob-rupay-platinum-base-1rp-per-100",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100,
+        "minimum_transaction_inr": 100,
+        "channels": [
+          "POS",
+          "e-commerce"
+        ]
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "One reward point for every ₹100 spent on RuPay Platinum, each point worth ₹0.25 (0.25% back). Points are given for transactions of ₹100 and above made at POS or e-commerce (IOB RuPay FAQ Q27; IOB credit card page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 2.5,
+      "annual_interest_rate_percent": 30
+    },
+    "forex_markup": {
+      "markup_percent": 2.5,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 400,
+      "max_txn_inr": 5000,
+      "monthly_waiver_cap_inr": 250
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.25,
+      "atm_transaction_fee_min_inr": null,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": 40
+    },
+    "category_surcharges": [],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": null,
+        "min_fee_inr": 100,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": true,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "5% of the billed transactions (purchases and cash advances) plus interest and charges applied plus applicable GST, minimum ₹100 (MITC)"
+      ]
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": null,
+        "fee_inr": 100
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 100000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "IOB MITC (PDF created 20 Aug 2026), fee table: RuPay Platinum joining fee NIL, annual fee ₹250 + GST, minimum spends for annual fee reversal ₹1,00,000. The MITC does not say which period the spend is counted over or which categories are excluded; card_anniversary_year is assumed.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 250
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "iob-rupay-platinum-domestic-lounge",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "Indian Overseas Bank",
+      "label": "Complimentary domestic airport lounge access",
+      "evaluation_engine": {
+        "conditions": {
+          "source": "IOB credit card page",
+          "eligible_card": "RuPay Platinum",
+          "spend_criteria": "not stated",
+          "lounge_list": "not stated"
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 1,
+      "quota_period": "quarter",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "iob-rupay-platinum-international-lounge",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "Indian Overseas Bank",
+      "label": "Complimentary international airport lounge access (per calendar year)",
+      "evaluation_engine": {
+        "conditions": {
+          "source": "IOB credit card page",
+          "eligible_card": "RuPay Platinum",
+          "period": "calendar year",
+          "spend_criteria": "not stated",
+          "lounge_list": "not stated"
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 1,
+      "quota_period": "annual",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [
+    {
+      "cover_type": "other",
+      "coverage_inr": 200000,
+      "coverage_usd": "N/A",
+      "claim_condition": "Personal accident cover provided free by NPCI under the RuPay insurance programme (FY 2025-26 documents linked on the IOB page); the amount changes with NPCI terms.",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "addon_card_rules": {
+    "max_addon_cards": 4,
+    "fee_per_card_inr": 0,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "IOB credit card rewards (merchandise, gift card, travel, entertainment, recharge, DTH)",
+        "redemption_type": "partner_catalogue",
+        "inr_value_per_point": 0.25,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": 750,
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "superseded_research_provenance",
+        "value": {
+          "research_method": "direct review of official issuer/partner pages and published terms; no browser automation response assumed",
+          "verified_at": "2026-10-17T16:48:32.669Z",
+          "source_urls": [
+            "https://www.iob.bank.in/en/credit-card",
+            "https://www.iob.bank.in/documents/d/guest/iobCredit_Card_Schedule_of_Charges",
+            "https://www.iob.bank.in/en/faq-on-credit-card"
+          ],
+          "effective_date_caveats": "Official product page and bank schedule are not a current card-specific MITC/KFS bundle; verify current fee schedule, reward exclusions and insurance certificate before publication.",
+          "fact_claims": [
+            "IOB identifies RuPay Platinum as its premium RuPay credit-card variant. Issuer lists one reward point per ₹100 spent; each point value ₹0.25; minimum redemption 750 points.",
+            "Official schedule lists joining fee nil and annual maintenance charge ₹250 from second year; AMC waiver when annual card spend exceeds ₹1,00,000. Other account-specific/salary concessions may vary.",
+            "IOB FAQ associates the Platinum RuPay card with ₹2 lakh NPCI personal accident cover, subject to NPCI terms and transaction eligibility; do not treat as unconditional insurance coverage.",
+            "IOB states staff/public credit limits differ; public stated range begins ₹60,000 and is below ₹2,00,000. Credit underwriting and assigned limit remain bank-discretionary."
+          ],
+          "aliases": [],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.iob.bank.in/documents/d/guest/mitc-iob-credit-cards",
+              "kind": "IOB credit card MITC (2 pages, PDF created 20 Aug 2026, footer 5298_06/26): fee table lists RuPay Platinum and RuPay Select with no \"proposed\" marker; interest, forex, fuel waiver, late fee, MAD, add-on cards",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.iob.bank.in/en/credit-card",
+              "kind": "IOB credit card page, last updated 5 Nov 2026: Features of Rupay Credit Card (earn rate, point value, minimum redemption, lounge, fuel waiver, NPCI personal accident cover)",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://www.iob.bank.in/en/Frequently-Asked-Questions-Rupay-Credit-Cards",
+              "kind": "IOB RuPay credit card FAQ, last updated 7 Oct 2026: \"At present the following types of cards are issued by IOB: RuPay Classic, RuPay Platinum, RuPay Select\"; reward Q27; eligibility",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://www.iob.bank.in/documents/d/guest/iobCredit_Card_Schedule_of_Charges",
+              "kind": "IOB credit card Schedule of Charges (PDF created 21 Oct 2023; one page): marks the RuPay variants \"proposed to be launched\", which the 2026 FAQ and MITC supersede",
+              "read": "pdftotext"
+            }
+          ],
+          "open_questions": [
+            "AVAILABILITY resolved to on sale: the 7 Oct 2026 FAQ says RuPay Classic, Platinum and Select \"are issued\" at present, the Aug 2026 MITC lists them without the \"proposed\" asterisk, and the 5 Nov 2026 page describes them. The \"proposed to be launched\" note is on a 2023-dated Schedule of Charges. The FAQ says \"all IOB customers can apply\"; whether non-customers can apply is not stated, so application_mode \"open\" needs a person to confirm.",
+            "Reward rate is 1 point per ₹100 at ₹0.25 a point (0.25%), from the FAQ and the page. The page text under the Select column is headed \"RuPay Platinum Credit Cards\" (copy slip); the Select minimum redemption (1,000 points) and the FAQ (\"Platinum, Signature and Select\" earn 1 per ₹100) show it is the Select rule. The ₹100 minimum per transaction applies to POS and e-commerce spends; MCC exclusions and the points expiry period are not stated.",
+            "Annual fee reversal: ₹1,00,000 minimum spend for both RuPay Platinum and Select in the MITC fee table; the counting period and spend exclusions are not stated.",
+            "Lounge access: 1 domestic per quarter and 1 international per calendar year (Platinum), 2 and 2 (Select), from the page; no spend criteria, lounge list or network programme is stated.",
+            "Personal accident cover ₹2 lakh (Platinum) and ₹10 lakh (Select) is NPCI-provided and \"changing time to time\"; the FY 2025-26 NPCI documents linked from the page were not read.",
+            "The page lists a \"Proposed Terms of EMI Option\" (processing fee nil, 3% pre-closure, ₹3,000 minimum) that is marked proposed, so it is not modelled.",
+            "The IOB page also lists a \"RuPay EKAA Super Premium Credit Card\" (separate page), a card that is not in the catalogue or the research lists."
+          ],
+          "notes": [
+            "Forex 2.5%; cash advance 2.25% (₹22.50 per ₹1,000) plus finance charge from the date of withdrawal, limit 40% of the card limit; interest 2.5% a month (30% a year), interest-free period 20 to 50 days; fuel surcharge 1%, waived for ₹400 to ₹5,000 transactions up to ₹250 per billing cycle; card replacement ₹100 + GST; over-limit fee ₹100; late fee ₹100 after 3 days past due; up to 4 add-on cards, no fee. The earlier ₹22.50 minimum cash fee was a restatement of 2.25% per ₹1,000 and is removed."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,511 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "eternal-sbi-card",
+    "name": "Eternal SBI Card",
+    "issuer_slug": "sbi-card",
+    "network": null,
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 499,
+    "annual_fee_inr": 499,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": "Cashback card: discounts and statement credit, no points.",
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.sbicard.com/en/personal/credit-cards/eternal-sbi-card.html",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": null,
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": "N/A",
+    "base_cashback_percent": 1,
+    "effective_base_return_percent": 1,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "eternal-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No cashback on fuel spends (Eternal FAQ, cashback Q8)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "eternal-10pct-zomato-district-blinkit",
+      "category_id": "dining",
+      "priority": 5,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "partner_instant_discount",
+      "conditions": {
+        "merchants": [
+          "Zomato",
+          "District",
+          "Blinkit (Beauty and Electronics categories)"
+        ],
+        "reward_type": "instant_discount",
+        "minimum_transaction_inr": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 10,
+        "cap_reference": "eternal-instant-discount-cap",
+        "reason": "10% instant discount (not statement cashback) on Zomato, District and Blinkit Beauty and Electronics, within one shared ₹2,000 monthly cap."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "eternal-5pct-blinkit-other",
+      "category_id": "groceries",
+      "priority": 6,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "partner_instant_discount",
+      "conditions": {
+        "merchants": [
+          "Blinkit (all other categories)"
+        ],
+        "reward_type": "instant_discount",
+        "minimum_transaction_inr": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 5,
+        "cap_reference": "eternal-instant-discount-cap",
+        "reason": "5% instant discount on Blinkit in all other categories, counted in the same ₹2,000 monthly cap."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "eternal-5pct-preferred-partners",
+      "category_id": "all_retail",
+      "priority": 7,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "preferred_partner",
+      "conditions": {
+        "merchants": [
+          "Uber",
+          "Urban Company",
+          "Apollo"
+        ],
+        "minimum_transaction_inr": 100,
+        "merchant_id_based": true
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 5,
+        "cap_reference": "eternal-preferred-partner-cap",
+        "reason": "Up to 5% cashback on Uber, Urban Company and Apollo; credit depends on merchant IDs the partner supplies to SBI Card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "eternal-ixigo",
+      "category_id": "travel",
+      "priority": 8,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "ixigo",
+      "conditions": {
+        "merchants": [
+          "ixigo"
+        ],
+        "coupon_code": "IXIGOSBI",
+        "split": "4% instant discount on flight and hotel booking + 1% statement-credit cashback",
+        "minimum_transaction_inr": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 5,
+        "cap_reference": "eternal-preferred-partner-cap",
+        "reason": "ixigo: 4% instant discount with coupon IXIGOSBI plus 1% as statement credit. Inside the preferred-partner cap."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "eternal-upi-1pct",
+      "category_id": "upi",
+      "priority": 20,
+      "evaluation_type": "accelerator",
+      "rail": "upi_qr",
+      "channel_type": "all",
+      "conditions": {
+        "variant": "RuPay",
+        "minimum_transaction_inr": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 1,
+        "cap_reference": null,
+        "reason": "RuPay credit card on UPI: 1% cashback on all eligible spends."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "eternal-base-1pct",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "minimum_transaction_inr": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 1,
+        "cap_reference": null,
+        "reason": "1% cashback on all other eligible spends (issuer page); no card cashback below ₹100 (Preferred Partners document)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "eternal-instant-discount-cap",
+      "category_id": "dining",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "calendar_month",
+      "limit_value": "N/A",
+      "limit_value_inr": 2000,
+      "post_limit_behavior": {
+        "action": "downgrade_to_base_rate",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "eternal-preferred-partner-cap",
+      "category_id": "all_retail",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": "N/A",
+      "limit_value_inr": 1000,
+      "post_limit_behavior": {
+        "action": "downgrade_to_base_rate",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 45
+    },
+    "forex_markup": {
+      "markup_percent": 3.5,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 3.5,
+      "gst_applicable": true,
+      "trigger_condition": "On transactions of ₹1,000 or more made in Indian currency at an international location or at merchants in India registered overseas (SBI Card MITC, Other Charges)"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 500,
+      "max_txn_inr": 4000,
+      "monthly_waiver_cap_inr": 200
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 600,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 100,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 101,
+        "max_balance_inr": 500,
+        "fee_inr": 100
+      },
+      {
+        "min_balance_inr": 501,
+        "max_balance_inr": 1000,
+        "fee_inr": 500
+      },
+      {
+        "min_balance_inr": 1001,
+        "max_balance_inr": 10000,
+        "fee_inr": 750
+      },
+      {
+        "min_balance_inr": 10001,
+        "max_balance_inr": 25000,
+        "fee_inr": 950
+      },
+      {
+        "min_balance_inr": 25001,
+        "max_balance_inr": 50000,
+        "fee_inr": 1100
+      },
+      {
+        "min_balance_inr": 50001,
+        "max_balance_inr": null,
+        "fee_inr": 1300
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 200000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "Renewal fee reversed on annual spends of ₹2,00,000 (issuer page). Annual fee ₹499 + GST; renewal ₹499 + GST from the second year.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 499
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "card_activation",
+      "benefit_points": "N/A",
+      "effective_value_inr": null,
+      "condition": "Complimentary Zomato Gold membership for 6 months on card activation."
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "eternal-district-bogo",
+      "category_id": "movie",
+      "network_program": null,
+      "sponsor": "District",
+      "label": "Buy 1 Get 1 movie ticket on the District app, up to ₹200 off the second ticket",
+      "evaluation_engine": {
+        "conditions": {
+          "platform": "District app",
+          "tickets_per_transaction": 2
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 1,
+      "quota_period": "calendar_month",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 0,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": "Source-supported data that cannot be represented faithfully by any existing universal schema field. Do not duplicate data already represented elsewhere. Do not use this section for unknown values, assumptions, or inferred data.",
+    "items": [
+      {
+        "key": "official_research",
+        "value": {
+          "checked_on": "2026-11-05",
+          "source_urls": [
+            "https://www.sbicard.com/en/personal/credit-cards/eternal-sbi-card.html",
+            "https://www.sbicard.com/en/most-important-terms-and-conditions.page"
+          ],
+          "facts": [
+            "Zomato, District and Blinkit beauty/electronics: 10% instant discount; other Blinkit categories: 5%; shared INR 2000 calendar-month limit.",
+            "Preferred partners advertise up to 5% with INR 1000 monthly cap; ixigo splits this into 4% instant discount and 1% statement cashback.",
+            "Other eligible purchases earn 1% cashback; 6-month Zomato Gold activation benefit."
+          ]
+        }
+      },
+      {
+        "key": "verified_network_research",
+        "value": {
+          "product_status": "active",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/eternal-sbi-card/Eternal-SBI-Card-T-and-C-Booklet.pdf",
+          "evidence": "Eternal T&C booklet FAQ 1: \"co-branded credit card issued by SBI Card, available on both Mastercard and RuPay networks.\"",
+          "candidates": [
+            {
+              "network": "mastercard",
+              "network_tier": "N/A",
+              "label": "Eternal SBI Card (Mastercard)",
+              "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/eternal-sbi-card/Eternal-SBI-Card-T-and-C-Booklet.pdf",
+              "evidence": "FAQ 1: available on both Mastercard and RuPay networks."
+            },
+            {
+              "network": "rupay",
+              "network_tier": "N/A",
+              "label": "Eternal SBI Card (RuPay)",
+              "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/eternal-sbi-card/Eternal-SBI-Card-T-and-C-Booklet.pdf",
+              "evidence": "Cashback Q13: RuPay credit card transactions on UPI earn 1% cashback on eligible spends."
+            }
+          ]
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-07",
+          "sources": [
+            {
+              "url": "https://www.sbicard.com/en/personal/credit-cards/eternal-sbi-card.html",
+              "kind": "issuer page",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/eternal-sbi-card/Eternal-SBI-Card-T-and-C-Booklet.pdf",
+              "kind": "Eternal SBI Card T&C booklet (FAQ, cashback tiers, caps, movie offer)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/eternal-sbi-card/Eternal-Card-Cashback-Preferred-Partners.pdf",
+              "kind": "Preferred Partners one-pager",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/kfs/key-fact-statement.pdf",
+              "kind": "SBI Card Key Fact Statement, 9 pages, file title \"SBI Card_Key fact Statement for 14OCT2026\" (annual and renewal fee row for Eternal SBI Card; finance charges; late payment slabs; forex)",
+              "date": "2026-10-14",
+              "read": "pdftotext and page images"
+            },
+            {
+              "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/most-important-terms-and-conditions/mitc-english.pdf",
+              "kind": "SBI Cards Most Important Terms & Conditions, common to all cards, 60 pages, file title \"MITC- Common-30OCT26\" (finance charges, foreign currency fee, DCC fee, other charges)",
+              "date": "2026-10-30",
+              "read": "pdftotext"
+            }
+          ],
+          "open_questions": [
+            "Preferred-partner cap period: the FAQ says \"₹1,000 per month\" and the Preferred Partners document says \"in a statement cycle\". Modelled as statement_cycle.",
+            "The 1% base cashback figure is from the issuer page; the booklet FAQ says only \"base cashback\". The excluded MCC list for base cashback is not in the common SBI MITC.",
+            "Interest 3.75% a month (45% a year) and forex 3.5% are SBI Card general rates: the KFS says 3.75% a month for unsecured cards, and the common MITC and KFS give 3.5% foreign currency fee for all cards except a named list (AURUM, Elite, Prime NRI secured, Tata Neu Infinity, SBI Card Miles variants) that does not include Eternal. Neither document names Eternal for these two charges, so they apply by exclusion; confirm with SBI Card that no Eternal-specific rate exists. The common MITC says \"up to 3.75% per month\" and that SBI Card can change it.",
+            "Annual fee waiver conflict: the SBI Card KFS dated 14 Oct 2026 shows \"Eternal SBI Card 499 / 499 (Waived off on annual spends of Rs. 1 Lakh or more in the preceding year)\", while the Eternal issuer page (badge, Fees tab and FAQ) says the renewal fee is reversed on annual spends of ₹2,00,000. The draft keeps ₹2,00,000 (issuer product page); a person must confirm which is in force.",
+            "Fee on fuel transactions (1% of total fuel spend when it exceeds ₹50,000 in a billing cycle) and on transportation (1% over ₹30,000 per transaction) apply from 1 Dec 2026 in the common MITC; not modelled. Rent processing fee ₹199, utility 1% over ₹50,000 a cycle, education 1% via third-party apps and wallet load 1% over ₹1,000 are also in the common MITC and not modelled.",
+            "Neither the Eternal T&C booklet nor the Preferred Partners one-pager carries a revision date.",
+            "The page says fuel surcharge waiver applies to transactions ₹500-₹4,000; the page text and the earlier note differ on ₹400 versus ₹500, the page figure is used."
+          ],
+          "notes": [
+            "The 10% and 5% on Zomato, District and Blinkit are INSTANT DISCOUNTS at checkout, not statement cashback; the 5% on Uber, Urban Company and Apollo is statement cashback.",
+            "Cashback does not expire; it is adjusted automatically in the next statement. Cashback earned on this card expires if the card is flipped to another co-brand card.",
+            "Fuel surcharge waiver up to ₹200 per statement cycle per card account."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}
