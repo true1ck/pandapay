@@ -69,8 +69,7 @@ test('old per-message AI worker settings are gone, and the Gemini key reaches on
     assert.doesNotMatch(read(file), stale, file);
   }
   // Not delivered anywhere else.
-  for (const file of ['docker-compose.staging.yml', '.github/workflows/deploy-pushed-branch.yml',
-    'deploy/tests/test_deploy_security_order.py']) {
+  for (const file of ['docker-compose.staging.yml', 'docker-compose.yml', '.github/workflows/deploy-pushed-branch.yml']) {
     assert.doesNotMatch(read(file), /GEMINI_API_KEY/, file);
   }
   // In docker-compose.prod.yml the key and the worker's database login sit in
