@@ -150,8 +150,21 @@ class _InboxState extends State<SharedInviteInbox> with WidgetsBindingObserver {
                     style: BambooFonts.ui(14, weight: FontWeight.w600),
                   ),
                   const SizedBox(height: 4),
+                  if (request.signedInAs != null) ...[
+                    Text(
+                      request.signedInAs!,
+                      key: const Key('join-signed-in-as'),
+                      style: BambooFonts.ui(
+                        12.5,
+                        weight: FontWeight.w600,
+                        color: BambooInk.ink700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                  ],
                   Text(
-                    '${request.whoOpened}. Only approve if you recognise them. Approving only adds them; they cannot approve expenses for anyone else.',
+                    // Older servers send no profile name: keep the old wording.
+                    '${request.signedInAs == null ? '${request.whoOpened}. ' : ''}Only approve if you recognise them. Approving only adds them; they cannot approve expenses for anyone else.',
                     style: BambooFonts.ui(12, color: BambooInk.ink700),
                   ),
                   Row(

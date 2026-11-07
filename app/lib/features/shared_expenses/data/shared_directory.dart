@@ -4,6 +4,57 @@ import 'shared_transport.dart';
 String? _suffix(Object? v) =>
     v is String && RegExp(r'^[0-9]{4}$').hasMatch(v) ? v : null;
 
+String? _text(Object? v) =>
+    v is String && v.trim().isNotEmpty && v.length <= 200 ? v : null;
+
+/// Second line under a person's label that says which PandaPay account they
+/// really are. Null when the profile name matches the label and no number
+/// ending is known.
+String? sharedSignedInAs({
+  required String? label,
+  required String? profileName,
+  required String? phoneSuffix,
+}) {
+  final profile = profileName?.trim();
+  final differs =
+      profile != null &&
+      profile.isNotEmpty &&
+      profile.toLowerCase() != (label ?? '').trim().toLowerCase();
+  final tail = phoneSuffix == null ? null : '\u2022\u2022$phoneSuffix';
+  if (differs) return 'Signed in as $profile${tail == null ? '' : ' \u00b7 $tail'}';
+  return tail == null ? null : 'Number $tail';
+}
+
+/// For people in one split who share the same visible label, the extra line
+/// that tells them apart (a number ending). Only members whose label is shared
+/// and whose ending is known get an entry.
+Map<String, String> sharedSameNameHints(
+  Iterable<({String id, String label, String? suffix})> people,
+) {
+  final counts = <String, int>{};
+  for (final p in people) {
+    final key = p.label.trim().toLowerCase();
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return {
+    for (final p in people)
+      if ((counts[p.label.trim().toLowerCase()] ?? 0) > 1 && p.suffix != null)
+        p.id: '\u2022\u2022${p.suffix}',
+  };
+}
+
+/// Cleans a typed member name the way the server does: control characters and
+/// repeated spaces collapse. Returns null when nothing usable remains.
+String? sharedCleanMemberName(String raw) {
+  final text = raw
+      .replaceAll(RegExp(r'[\x00-\x1f\x7f-\x9f]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  return text.isEmpty ? null : text;
+}
+
+const sharedMemberNameMax = 40;
+
 /// Turns a typed or contact-picker phone value into the form the server
 /// accepts, or null when it cannot be a mobile number. The server re-validates;
 /// this only avoids pointless lookups and removes common contact formatting
@@ -113,6 +164,10 @@ final class SharedInboxInvite {
 final class SharedJoinRequest {
   final String invitationId, contextId, contextName;
   final String? memberName, claimantName, phoneSuffix;
+
+  /// The person's live PandaPay profile name and verified number ending.
+  /// Both are absent when talking to an older server.
+  final String? claimantProfileName, claimantPhoneSuffix;
   const SharedJoinRequest({
     required this.invitationId,
     required this.contextId,
@@ -120,6 +175,8 @@ final class SharedJoinRequest {
     this.memberName,
     this.claimantName,
     this.phoneSuffix,
+    this.claimantProfileName,
+    this.claimantPhoneSuffix,
   });
   factory SharedJoinRequest.fromJson(Map<String, Object?> value) {
     final id = value['invitationId'], ctx = value['contextId'];
@@ -139,10 +196,29 @@ final class SharedJoinRequest {
       contextId: ctx,
       contextName: name,
       memberName: member as String?,
-      claimantName: value['claimantName'] as String?,
+      claimantName: _text(value['claimantName']),
       phoneSuffix: _suffix(value['verifiedPhoneSuffix']),
+      claimantProfileName: _text(value['claimantProfileName']),
+      claimantPhoneSuffix: _suffix(value['claimantPhoneSuffix']),
     );
   }
+
+  /// The name the owner will recognise: what they typed for this person, else
+  /// the person's own PandaPay name.
+  String? get label {
+    for (final v in [memberName, claimantName, claimantProfileName]) {
+      if (v != null && v.trim().isNotEmpty) return v.trim();
+    }
+    return null;
+  }
+
+  /// "Signed in as Asha R. \u00b7 \u2022\u20224821", or null when there is nothing to add.
+  /// The name is left out when it is the same as [label].
+  String? get signedInAs => sharedSignedInAs(
+    label: label,
+    profileName: claimantProfileName ?? claimantName,
+    phoneSuffix: claimantPhoneSuffix ?? phoneSuffix,
+  );
 
   /// Who actually opened the link: PandaPay name and verified number ending.
   /// The owner's typed name is only a label; this is the real identity check.
@@ -155,9 +231,7 @@ final class SharedJoinRequest {
         : '$name opened the link (number ending $phoneSuffix)';
   }
 
-  String get headline =>
-      '${(memberName == null || memberName!.isEmpty) ? 'Someone' : memberName!} '
-      'wants to join "$contextName"';
+  String get headline => '${label ?? 'Someone'} wants to join "$contextName"';
 }
 
 /// Owner's view of a group's shared link.
@@ -280,7 +354,9 @@ final class SharedOwnerInvitation {
       status: status,
       phoneBound: bound,
       claimantName: value['claimantName'] as String?,
-      phoneSuffix: _suffix(value['verifiedPhoneSuffix']),
+      phoneSuffix:
+          _suffix(value['claimantPhoneSuffix']) ??
+          _suffix(value['verifiedPhoneSuffix']),
       createdAt: DateTime.tryParse(value['createdAt'] as String? ?? ''),
     );
   }

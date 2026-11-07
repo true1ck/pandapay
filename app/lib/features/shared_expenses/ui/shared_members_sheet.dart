@@ -14,6 +14,7 @@ import '../data/shared_directory.dart';
 import 'shared_add_friend_sheet.dart';
 import 'shared_components.dart';
 import 'shared_context_guard.dart';
+import 'shared_rename_member_dialog.dart';
 
 /// Existing context's membership. A name records a shadow member; it neither
 /// sends an invitation nor verifies identity or accepts debt.
@@ -123,6 +124,113 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
       await _loadInvitations();
     } catch (error) {
       if (mounted) setState(() => _notice = sharedInviteIssueMessage(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  String _stateLine(SharedEditorMember member) => switch (member.state) {
+    'active' =>
+      member.profileId == null
+          ? 'Account no longer active · history kept'
+          : member.role == 'owner'
+          ? 'Owner'
+          : 'Active member',
+    'invited' =>
+      member.profileId == null ? _statusLine(member) : 'Invitation pending',
+    'removed' => 'Removed · history retained',
+    'left' => 'Left · history retained',
+    _ => 'Membership needs review',
+  };
+
+  /// Number endings for people who would otherwise look identical.
+  Map<String, String> _sameNameHints(SharedRoster roster) => sharedSameNameHints([
+    for (final m in roster.members)
+      (
+        id: m.id,
+        label: m.id == roster.ownMemberId ? 'You' : _displayName(m),
+        suffix: m.phoneSuffix ?? _inv[m.id]?.phoneSuffix,
+      ),
+  ]);
+
+  Widget _subtitle(
+    SharedRoster roster,
+    SharedEditorMember member,
+    Map<String, String> hints,
+  ) {
+    final style = BambooFonts.ui(12, color: BambooInk.ink700);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(_stateLine(member), style: style),
+        if (hints[member.id] != null)
+          Text(
+            hints[member.id]!,
+            key: ValueKey('member-hint-${member.id}'),
+            style: style,
+          ),
+        if (_canRename(roster, member))
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              key: ValueKey('edit-name-${member.id}'),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(48, 32),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                alignment: Alignment.centerLeft,
+              ),
+              onPressed: _busy ? null : () => _rename(roster, member),
+              child: Text('Edit name', style: BambooFonts.ui(12.5)),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// The server lets the owner rename anyone who is still around and everyone
+  /// rename themselves; it refuses people who left or were removed.
+  bool _canRename(SharedRoster roster, SharedEditorMember member) {
+    if (!widget.runtime.proposalsEnabled) return false;
+    final self = member.id == roster.ownMemberId;
+    final owner = roster.members.any(
+      (m) => m.id == roster.ownMemberId && m.role == 'owner',
+    );
+    final live =
+        (member.state == 'active' && member.profileId != null) ||
+        (member.state == 'invited' && owner);
+    return live && (owner || self);
+  }
+
+  Future<void> _rename(SharedRoster roster, SharedEditorMember member) async {
+    if (_busy || !_authorized) return;
+    final self = member.id == roster.ownMemberId;
+    final name = await showSharedRenameMemberDialog(
+      context,
+      title: self ? 'Edit your name' : 'Edit name',
+      initialName: member.rawName ?? (self ? '' : _displayName(member)),
+    );
+    if (name == null || !mounted || !_authorized) return;
+    setState(() => _busy = true);
+    try {
+      final opId = await widget.runtime.renameMember(
+        contextId: widget.contextId,
+        memberId: member.id,
+        name: name,
+      );
+      if (!mounted) return;
+      setState(() {
+        _notice = widget.runtime.operationStatus(opId);
+        _roster = widget.runtime.contextRoster(widget.contextId);
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _notice = error is FormatException
+              ? 'Enter a name up to $sharedMemberNameMax characters.'
+              : 'Could not save the name yet. Try again.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -358,8 +466,7 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
       'open' when inv!.phoneBound => 'Invite sent · waiting for them to join',
       'open' => 'Link shared · waiting for them to join',
       'awaiting_owner' =>
-        '${inv!.claimantName ?? 'A PandaPay user'} wants to join'
-            '${inv.phoneSuffix == null ? '' : ' · number ending ${inv.phoneSuffix}'}',
+        'Wants to join · ${sharedSignedInAs(label: member.name, profileName: inv!.claimantName, phoneSuffix: inv.phoneSuffix) ?? 'PandaPay user'}',
       'declined' => 'Declined the invite',
       'expired' => 'Invite expired',
       'rejected' => 'Not invited right now',
@@ -679,6 +786,7 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
                               );
                             }
                             final roster = snapshot.data!;
+                            final hints = _sameNameHints(roster);
                             return ListView(
                               padding: const EdgeInsets.all(16),
                               children: [
@@ -692,6 +800,7 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
                                   _groupLinkCard(),
                                 for (final member in roster.members)
                                   ListTile(
+                                    key: ValueKey('member-${member.id}'),
                                     title: Text(
                                       member.id == roster.ownMemberId
                                           ? 'You'
@@ -701,28 +810,7 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
                                         weight: FontWeight.w600,
                                       ),
                                     ),
-                                    subtitle: Text(
-                                      switch (member.state) {
-                                        'active' =>
-                                          member.profileId == null
-                                              ? 'Account no longer active · history kept'
-                                              : member.role == 'owner'
-                                              ? 'Owner'
-                                              : 'Active member',
-                                        'invited' =>
-                                          member.profileId == null
-                                              ? _statusLine(member)
-                                              : 'Invitation pending',
-                                        'removed' =>
-                                          'Removed · history retained',
-                                        'left' => 'Left · history retained',
-                                        _ => 'Membership needs review',
-                                      },
-                                      style: BambooFonts.ui(
-                                        12,
-                                        color: BambooInk.ink700,
-                                      ),
-                                    ),
+                                    subtitle: _subtitle(roster, member, hints),
                                     // TextButton, not FilledButton: the app theme
                                     // forces filled buttons full width in a trailing.
                                     trailing:

@@ -8,6 +8,7 @@ final _uuid = RegExp(
 const sharedCommandKinds = {
   'context.create',
   'member.invite',
+  'member.rename',
   'membership.respond',
   'expense.propose',
   'expense.respond',

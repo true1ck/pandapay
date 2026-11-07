@@ -594,8 +594,76 @@ class SharedExpensesRuntime extends ChangeNotifier {
     return status;
   }
 
+  final _renameOverlay = <String, String>{};
+
+  /// Renames still on their way to the server, newest typed name winning.
+  Map<String, String> _pendingRenames(String contextId) {
+    final out = <String, String>{};
+    try {
+      final page = store.readPendingOperations(
+        contextId: contextId,
+        limit: 100,
+      );
+      for (final op in page.items) {
+        if (op.command.kind != 'member.rename' ||
+            op.state == SharedCommandState.rejected ||
+            op.state == SharedCommandState.conflict) {
+          continue;
+        }
+        final payload = op.command.toJson()['payload'] as Map;
+        out[payload['memberId'] as String] = payload['displayName'] as String;
+      }
+    } catch (_) {}
+    out.addAll({
+      for (final e in _renameOverlay.entries)
+        if (e.key.startsWith('$contextId:'))
+          e.key.substring(contextId.length + 1): e.value,
+    });
+    return out;
+  }
+
+  /// Sets the name other people see for a member. Saved on this phone first
+  /// (works offline), shown immediately, and synced when online. Throws
+  /// [FormatException] for an empty or over-long name.
+  Future<String> renameMember({
+    required String contextId,
+    required String memberId,
+    required String name,
+  }) async {
+    _current();
+    final clean = sharedCleanMemberName(name);
+    if (clean == null || clean.length > sharedMemberNameMax) {
+      throw const FormatException('Invalid member name');
+    }
+    if (!proposalsEnabled || store.isContextRevoked(contextId)) {
+      throw const SharedRuntimeUnavailable();
+    }
+    final command = SharedCommand(
+      operationId: const Uuid().v4(),
+      kind: 'member.rename',
+      payload: {
+        'contextId': contextId,
+        'memberId': memberId,
+        'displayName': clean,
+      },
+    );
+    await store.enqueue(command);
+    _current();
+    _renameOverlay['$contextId:$memberId'] = clean;
+    syncLag = true;
+    _notify();
+    await refresh();
+    // Once the server has it, its roster is the truth again.
+    if (store.operation(command.operationId)?.state ==
+        SharedCommandState.committed) {
+      _renameOverlay.remove('$contextId:$memberId');
+    }
+    return command.operationId;
+  }
+
   Future<SharedRoster> contextRoster(String id) async {
     final before = await context(id);
+    final pendingRenames = _pendingRenames(id);
     final roster = <SharedEditorMember>[];
     String? after, own;
     for (var page = 0; page < 4; page++) {
@@ -607,18 +675,27 @@ class SharedExpensesRuntime extends ChangeNotifier {
         if (row['profileId'] == accountId && row['state'] == 'active') {
           own = row['memberId'] as String;
         }
+        final memberId = row['memberId'] as String;
+        // A rename waiting to sync shows straight away.
+        final typed = pendingRenames[memberId] ?? row['displayName'] as String?;
+        final suffix = row['phoneSuffix'];
         roster.add(
           SharedEditorMember(
-            row['memberId'] as String,
+            memberId,
             row['profileId'] == accountId
                 ? 'You'
-                : row['displayName'] as String? ??
+                : typed ??
                       (before['kind'] == 'direct' && row['role'] == 'owner'
                           ? before['name'] as String? ?? 'Member'
                           : 'Member'),
             state: row['state'] as String,
             role: row['role'] as String? ?? 'member',
             profileId: row['profileId'] as String?,
+            phoneSuffix:
+                suffix is String && RegExp(r'^[0-9]{4}$').hasMatch(suffix)
+                ? suffix
+                : null,
+            rawName: typed,
           ),
         );
       }
@@ -781,6 +858,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     final queued = store.operation(id), result = store.receipt(id)?.result;
     if (result is Map) {
       return switch (result['status']) {
+        'renamed' => 'Name updated.',
         'confirmed' => 'Payment confirmed by receiver',
         'rejected' => 'Payment report rejected',
         'invited' => 'Person added. Tap Invite to send them a link.',
@@ -1069,6 +1147,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     'context.created' => 'Group created',
     'membership.invited' => 'Member invited',
     'membership.responded' => 'Membership updated',
+    'member.renamed' => 'Name changed',
     'expense.proposed' => 'Expense submitted for review',
     'expense.responded' => 'Expense review updated',
     'settlement.reported' => 'Payment reported Â· awaiting confirmation',
