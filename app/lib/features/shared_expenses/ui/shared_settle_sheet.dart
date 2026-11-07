@@ -449,8 +449,27 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
                         ('bank', 'Bank'),
                       ])
                         ChoiceChip(
-                          label: Text(method.$2, style: BambooFonts.ui(13)),
+                          label: Text(
+                            method.$2,
+                            style: BambooFonts.ui(
+                              13,
+                              weight: FontWeight.w600,
+                              color: _method == method.$1
+                                  ? BambooInk.onSlate
+                                  : BambooInk.ink900,
+                            ),
+                          ),
                           selected: _method == method.$1,
+                          selectedColor: BambooInk.slate,
+                          checkmarkColor: BambooInk.lime,
+                          side: BorderSide(
+                            color: _method == method.$1
+                                ? BambooInk.slate
+                                : BambooInk.hairlineOnPaper,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                           onSelected: _sealed || _saving
                               ? null
                               : (_) => setState(() => _method = method.$1),
@@ -473,7 +492,8 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
                         hintText: 'name@bank',
                       ),
                     ),
-                    TextButton.icon(
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
                       onPressed: _upiBusy || _sealed || _saving
                           ? null
                           : _openUpi,
@@ -484,7 +504,19 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
                             : _upiOpened
                             ? 'Open UPI app again'
                             : 'Pay with UPI app',
-                        style: BambooFonts.ui(13),
+                        style: BambooFonts.ui(
+                          14,
+                          weight: FontWeight.w600,
+                          color: BambooInk.ink900,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: BambooInk.ink900,
+                        side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        minimumSize: const Size.fromHeight(48),
                       ),
                     ),
                     if (_upiConfirmAgain) ...[
@@ -548,8 +580,9 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
                       labelText: 'Payment reference (optional)',
                     ),
                   ),
-                  TextButton(
-                    onPressed: _sealed || _saving
+                  const SizedBox(height: 12),
+                  InkWell(
+                    onTap: _sealed || _saving
                         ? null
                         : () async {
                             final date = await showDatePicker(
@@ -562,14 +595,22 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
                               setState(() => _paidOn = date);
                             }
                           },
-                    child: Text(
-                      'Paid on ${DateFormat.yMMMd().format(_paidOn)}',
-                      style: BambooFonts.ui(13),
+                    borderRadius: BorderRadius.circular(12),
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Payment date',
+                        suffixIcon: Icon(Icons.calendar_today_rounded, size: 18),
+                      ),
+                      child: Text(
+                        'Paid on ${DateFormat.yMMMd().format(_paidOn)}',
+                        style: BambooFonts.ui(14),
+                      ),
                     ),
                   ),
                   if (_sealed)
                     SharedNotice(widget.runtime.operationStatus(_operationId)),
                   const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   FilledButton(
                     style: sharedPrimaryButtonStyle(),
                     onPressed: !enabled || _saving ? null : _save,
@@ -579,7 +620,13 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
                           : _sealed
                           ? 'Check status'
                           : 'Record payment',
-                      style: BambooFonts.ui(14, weight: FontWeight.w600),
+                      style: BambooFonts.ui(
+                        15,
+                        weight: FontWeight.w600,
+                        color: (!enabled || _saving)
+                            ? BambooInk.lime.withValues(alpha: 0.5)
+                            : BambooInk.lime,
+                      ),
                     ),
                   ),
                 ],
