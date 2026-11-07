@@ -10,9 +10,9 @@ test('review deterministically describes current locks and preserves unknown lic
   const a = summarize(), b = summarize();
   assert.deepEqual(a, b);
   assert.equal(a.network, 'none');
-  // 104 since the SMS v2 contracts (ajv, ajv-formats and their dependencies,
+  // 105 since libphonenumber-js, the SMS v2 contracts (ajv, ajv-formats and their dependencies,
   // all MIT or BSD-3-Clause) and body-parser 2.4.0; none has unknown evidence.
-  assert.equal(a.locks.find(x => x.path === 'api/package-lock.json').license_evidence.known, 104);
+  assert.equal(a.locks.find(x => x.path === 'api/package-lock.json').license_evidence.known, 105);
   assert.equal(a.locks.find(x => x.path === 'auth/package-lock.json').license_evidence.known, 210);
   assert.ok(a.locks.find(x => x.ecosystem === 'pod').license_evidence.unknown > 0);
   assert.equal(a.locks.find(x => x.ecosystem === 'swift').license_evidence.unknown, 1);
