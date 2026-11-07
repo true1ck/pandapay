@@ -1,0 +1,932 @@
+{
+  "agent": "S3",
+  "issuers": [
+    {
+      "issuer": "American Express India",
+      "listing_url": "https://www.americanexpress.com/in/credit-cards/all-cards/ (personal); https://www.americanexpress.com/en-in/business/payments/ (corporate)",
+      "read_on": "2026-11-07",
+      "offered_count": 9,
+      "matched_live": [
+        "american-express-platinum-charge-card-india",
+        "american-express-platinum-reserve-credit-card-india",
+        "american-express-platinum-travel-credit-card-india",
+        "american-express-gold-charge-card-india",
+        "american-express-membership-rewards-credit-card-india",
+        "american-express-smartearn-credit-card-india",
+        "american-express-corporate-platinum-card-india",
+        "american-express-gold-corporate-card-india"
+      ],
+      "matched_drafts": [],
+      "missing": [
+        {
+          "name": "American Express Green Corporate Card",
+          "product_url": "https://www.americanexpress.com/en-in/business/corporate-card/green-corporate-card/",
+          "status": "closed_to_new_applications",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Corporate cards page ('All Cards (3)') lists Corporate Platinum, Corporate Gold and Corporate Green. Banner on that page says new Corporate/Legal Entity applications in India are temporarily paused during platform updates. Green card page describes it as 'best for core employees and occasional travelers' with Membership Rewards. Not a variant of another card."
+        }
+      ],
+      "stale_live": [],
+      "notes": "Personal cards: the all-cards page shows 6 cards (Platinum Card, Platinum Reserve, Platinum Travel, Gold Card, Membership Rewards, SmartEarn), all matched. A banner above them says acceptance of new card applications in India is temporarily paused during planned platform updates, so every Amex India card is currently closed to new applications (issuer says temporary). 'American Express Gold Card' on the page = live slug american-express-gold-charge-card-india. Schedule of Fees (https://www.americanexpress.com/content/dam/amex/in/legal-disclosures/Schedule-of-Fee-and-Charges.pdf, dated 31 Aug 2025) lists Platinum Reserve under two fee options (lifetime foundation fee vs annual fee) and corporate cards with company-specific annual fees; the current page shows only the annual-fee version. Plain fetch of the site worked."
+    },
+    {
+      "issuer": "Standard Chartered Bank (India)",
+      "listing_url": "https://www.sc.bank.in/credit-cards/ (sc.com/in/credit-cards/ redirects here)",
+      "read_on": "2026-11-07",
+      "offered_count": 10,
+      "matched_live": [
+        "standard-chartered-beyond",
+        "standard-chartered-rewards",
+        "standard-chartered-smart",
+        "standard-chartered-ultimate",
+        "standard-chartered-easemytrip",
+        "standard-chartered-platinum-rewards",
+        "standard-chartered-super-value-titanium",
+        "standard-chartered-manhattan-platinum",
+        "standard-chartered-priority-visa-infinite",
+        "standard-chartered-digismart"
+      ],
+      "matched_drafts": [],
+      "missing": [],
+      "stale_live": [
+        {
+          "slug": "standard-chartered-emirates-world",
+          "evidence": "Not among the 10 cards on https://www.sc.bank.in/credit-cards/ (Beyond, Rewards, Smart, Ultimate, EaseMyTrip, Platinum Rewards, Super Value Titanium, Manhattan, Priority Visa Infinite, DigiSmart) and no product link exists for it. Its only mention on the issuer site found is one generic APR sentence on the Priority Visa Infinite page ('all Standard Chartered Credit Cards including Visa Infinite and Emirates World credit cards')."
+        }
+      ],
+      "notes": "Hub page also describes the Beyond card as 'exclusively for Priority Banking' clients and the Priority Visa Infinite as reserved for Priority Banking customers. Manhattan Platinum is titled 'Manhattan Credit Card' on its page. Employee-banking page https://www.sc.bank.in/employee-banking/visa-infinite/ repeats the Priority Visa Infinite content (not a separate card)."
+    },
+    {
+      "issuer": "HSBC India",
+      "listing_url": "https://www.hsbc.bank.in/credit-cards/ (hsbc.co.in redirects here)",
+      "read_on": "2026-11-07",
+      "offered_count": 7,
+      "matched_live": [
+        "hsbc-premier-metal-credit-card",
+        "hsbc-live-plus-credit-card",
+        "hsbc-taj-credit-card",
+        "hsbc-travelone-credit-card",
+        "hsbc-visa-platinum-credit-card",
+        "hsbc-rupay-platinum-credit-card",
+        "hsbc-rupay-cashback-credit-card"
+      ],
+      "matched_drafts": [],
+      "missing": [],
+      "stale_live": [],
+      "notes": "Issuer lists exactly 7 cards (Premier, Live+, Taj, TravelOne, Visa Platinum, RuPay Platinum, RuPay Cashback). Premier page says the card is only for HSBC Premier banking customers. Live+ page mentions a 'Live+ Reserve' benefits programme and Visa Infinite; read as the same card, not a separate product."
+    },
+    {
+      "issuer": "DBS Bank India",
+      "listing_url": "https://www.dbs.bank.in/in/credit-cards/default.html; consolidated MITC https://www.dbs.bank.in/in/credit-cards/credit-card-consolidated-mitc.pdf (PDF created 9 Oct 2026)",
+      "read_on": "2026-11-07",
+      "offered_count": 8,
+      "matched_live": [
+        "dbs-vantage-credit-card",
+        "dbs-spark5-credit-card",
+        "dbs-spark10-credit-card",
+        "dbs-spark20",
+        "dbs-superx",
+        "dbs-superx-plus"
+      ],
+      "matched_drafts": [],
+      "missing": [
+        {
+          "name": "DBS Altitude Credit Card",
+          "product_url": "https://www.dbs.bank.in/digibank/in/credit-cards/altitude",
+          "status": "invite_only",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Own product page and a line in the consolidated MITC (joining/annual fee row). Page FAQ says the Altitude card is invite-only, although the page also carries an 'Apply Now' button. Listed in the issuer's card menu next to Spark, SuperX and Vantage."
+        },
+        {
+          "name": "Bajaj Finserv DBS Bank SuperCard",
+          "product_url": "https://www.dbs.bank.in/in/credit-cards/supercard.html",
+          "status": "closed_to_new_applications",
+          "variant_of": null,
+          "partner": "Bajaj Finance Limited",
+          "evidence": "SuperCard page says new issuance stopped on 23 Nov 2024 and the card is being discontinued, with holders migrated to DBS SuperX / SuperX Plus. Consolidated MITC (Oct 2026) still lists six fee-tier variants of it: 5X Rewards, 5X Plus Rewards, 7X Rewards, 7X Plus Rewards, 10X Signature, 10X Plus Signature. Co-brand with Bajaj Finance. Listed once here; the six tiers are variants of it."
+        }
+      ],
+      "stale_live": [],
+      "notes": "Spark 5 / 10 / 20 are fee-tier variants on one Spark page and each is in the live catalogue. Vantage is described as invite-only on the DBS card hub. SuperX and SuperX Plus appear in the MITC with joining fee 'NA' and are the cards SuperCard holders are migrated to; the SuperX page is the SuperCard page, so they may not be sold fresh (not judged, reported). Conflict on SuperCard end date: the SuperCard page says effective 1 Aug 2026, the MITC says 15 Dec 2026. dbs.com/in redirects to dbs.bank.in; /in/credit-cards.html is a JS shell that redirects, the hub is /in/credit-cards/default.html."
+    },
+    {
+      "issuer": "BOBCARD (Bank of Baroda)",
+      "listing_url": "https://www.bobcard.co.in/credit-card-types ; Bank of Baroda listing https://www.bankofbaroda.in/digital-products/cards/credit-cards (redirects to bankofbaroda.bank.in) ; BOBCARD consolidated MITC https://media.bobcard.co.in//media/4wnez0dz/bobcard-consolidated-mitc.pdf (PDF created 7 Oct 2026)",
+      "read_on": "2026-11-07",
+      "offered_count": 33,
+      "matched_live": [
+        "bobcard-eterna",
+        "bobcard-premier",
+        "bobcard-easy",
+        "bobcard-select",
+        "bobcard-snapdeal",
+        "hpcl-energie-bobcard",
+        "bobcard-irctc",
+        "bobcard-scapia-credit-card",
+        "bobcard-corporate",
+        "bobcard-icai-exclusive",
+        "bobcard-icsi-diamond",
+        "bobcard-cma-one",
+        "bobcard-vikram",
+        "ujjivan-sfb-elite",
+        "ujjivan-sfb-platinum"
+      ],
+      "matched_drafts": [
+        "bobcard-scapia-credit-card"
+      ],
+      "missing": [
+        {
+          "name": "BOBCARD Etihad Guest Premium",
+          "product_url": "https://www.bobcard.co.in/credit-card-types/bobcard-etihad-guest-premium",
+          "status": "sold",
+          "variant_of": "BOBCARD Etihad Guest",
+          "partner": "Etihad Airways (Etihad Guest)",
+          "evidence": "Listed on the BOBCARD card hub and on Bank of Baroda's card page; product page carries Apply Now (etihadguest.bobcard.in). MITC has separate fee rows and a section for it. Separate fee tier from Etihad Guest."
+        },
+        {
+          "name": "BOBCARD Etihad Guest",
+          "product_url": "https://www.bobcard.co.in/credit-card-types/bobcard-etihad-guest",
+          "status": "sold",
+          "variant_of": null,
+          "partner": "Etihad Airways (Etihad Guest)",
+          "evidence": "Listed on the hub and on Bank of Baroda's page; product page carries Apply Now. MITC and KFS PDFs for it are linked from the MITC page."
+        },
+        {
+          "name": "BOBCARD TIARA",
+          "product_url": "https://www.bobcard.co.in/credit-card-types/tiara",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed on the hub, the compare page and Bank of Baroda's page; product page carries Apply Now. Women's credit card, premium category."
+        },
+        {
+          "name": "BOBCARD Cashback",
+          "product_url": "https://www.bobcard.co.in/credit-card-types/bobcard-cashback",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed on hub and compare page and on Bank of Baroda's page; product page carries Apply Now."
+        },
+        {
+          "name": "BOBCARD Micro Enterprise",
+          "product_url": "https://www.bobcard.co.in/credit-card-types/micro-enterprise-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed on hub. Product page has no apply button; page says the application must start from the Government of India Jan Samarth portal. Eligibility limited to registered micro enterprises."
+        },
+        {
+          "name": "BOBCARD EMPOWER (Empower Business)",
+          "product_url": "https://www.bobcard.co.in/credit-card-types/empower",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed on hub and Bank of Baroda's page; product page carries Apply Now. For proprietors and self-employed (business card)."
+        },
+        {
+          "name": "BOBCARD Uni GoldX",
+          "product_url": "https://www.bobcard.co.in/credit-card-types/bobcard-uni-goldx",
+          "status": "sold",
+          "variant_of": null,
+          "partner": "Uni (Uni Coins)",
+          "evidence": "Listed on hub; product page carries Apply Now; MITC, KFS and T&C PDFs for it are linked from the MITC page."
+        },
+        {
+          "name": "BOBCARD One (metal card)",
+          "product_url": "https://www.bobcard.co.in/credit-card-types/bobcard-one",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": "One Consumer Services Private Limited (OneCard)",
+          "evidence": "Listed on hub as 'BOBCARD One', metal co-brand run through the OneCard app. Page and hub show only 'Manage One BOBCARD', no apply link; BOBCARD One MITC/KFS are on the MITC page. Different issuer from the live SBM OneCard Metal draft."
+        },
+        {
+          "name": "BOBCARD UPGB/GGB/BRKGB PRAGATI",
+          "product_url": "https://www.bobcard.co.in/credit-card-types/upgb-ggb-brkgb-pragati",
+          "status": "sold",
+          "variant_of": null,
+          "partner": "UPGB / GGB / BRKGB (regional rural banks)",
+          "evidence": "Listed on hub; product page carries Apply Now. Page says it is for customers of the regional rural banks UPGB, GGB and BRKGB (UP, Gujarat, Rajasthan). MITC also names Pragati BGGB / BRKGB / BUPB."
+        },
+        {
+          "name": "Nainital Bank RENAISSANCE BOBCARD",
+          "product_url": "https://www.bobcard.co.in/credit-card-types/nainital-bank-renaissance",
+          "status": "sold",
+          "variant_of": null,
+          "partner": "The Nainital Bank",
+          "evidence": "Listed on hub and on Bank of Baroda's page; product page carries Apply Now. Page says it is made for Nainital Bank customers."
+        },
+        {
+          "name": "BOBCARD PRIME",
+          "product_url": "https://www.bobcard.co.in/credit-card-types/prime",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed on hub and Bank of Baroda's page. Product page describes a guaranteed-issuance card against a fixed deposit of Rs 30,000 or more and a 3-step digital application, but has no apply button; hub tile shows 'Know More' only."
+        },
+        {
+          "name": "Indian Army YODDHA BOBCARD",
+          "product_url": "https://www.bobcard.co.in/credit-card-types/indian-army-yoddha",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed on hub and Bank of Baroda's page; product page carries Apply Now. Exclusively for Indian Army personnel."
+        },
+        {
+          "name": "Indian Navy VARUNAH BOBCARD",
+          "product_url": "https://www.bobcard.co.in/credit-card-types/indian-navy-varunah",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed on hub and Bank of Baroda's page; product page carries Apply Now. Exclusively for Indian Navy personnel. Page shows 'Varunah Premium'; MITC has fee rows for both Varunah Premium and Varunah Plus (fee-tier variants)."
+        },
+        {
+          "name": "Indian Coast Guard RAKSHAMAH BOBCARD",
+          "product_url": "https://www.bobcard.co.in/credit-card-types/indian-coast-guard-rakshamah",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed on hub and Bank of Baroda's page; product page carries Apply Now. Exclusively for Indian Coast Guard personnel."
+        },
+        {
+          "name": "Assam Rifles The SENTINEL BOBCARD",
+          "product_url": "https://www.bobcard.co.in/credit-card-types/assam-rifles-the-sentinel",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed on hub and Bank of Baroda's page; product page carries Apply Now. Exclusively for Assam Rifles personnel."
+        },
+        {
+          "name": "PM SVANidhi BOBCARD",
+          "product_url": "https://www.bobcard.co.in/credit-card-types/pm-svanidhi",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed on hub and compare page; page gives a 'Click Here' apply link and says applications start on the PM SVANidhi portal. Only for street vendors who repaid PM SVANidhi loans; MITC/KFS linked on MITC page."
+        },
+        {
+          "name": "Instant RuPay BOBCARD",
+          "product_url": "https://bankofbaroda.bank.in/digital-products/cards/credit-cards",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Appears only on Bank of Baroda's own credit-card page (lifetime-free RuPay BOBCARD applied for in the bob ePay app: 'Apply on iOS / Apply on Android'). No tile on bobcard.co.in. May be a channel offer of an existing BOBCARD rather than its own product; the page does not say which."
+        },
+        {
+          "name": "BOBCARD Swavlamban",
+          "product_url": null,
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Named only in the BOBCARD consolidated MITC (Oct 2026): joining fee row (Rs 250, waived on Rs 2,500 spend in first 60 days), annual fee row (Rs 250) and a reward-rate row. No product page or hub tile found on bobcard.co.in."
+        }
+      ],
+      "stale_live": [],
+      "notes": "bobcard.co.in lists 31 cards; Bank of Baroda's page lists a subset plus the Instant RuPay BOBCARD; MITC adds Swavlamban. Two of the 31, UJJIVAN SFB Elite and UJJIVAN SFB Platinum, are already live under the Ujjivan issuer slugs (ujjivan-small-finance-bank / ujjivan-sfb); the Elite page title reads 'USFB Basic Credit Card'. MITC also shows FD-backed variants of Easy, Select, Premier and Eterna (no joining fee) and legacy names in its insurance footnote (Platinum Select, Signature, Assure, Pragati BUPB) with no page; these are not listed as missing. Bank of Baroda's site gives no credit card of its own beyond BOBCARD products. Plain fetches worked."
+    },
+    {
+      "issuer": "Punjab National Bank",
+      "listing_url": "https://creditcard.pnb.bank.in/types.html (Card Types menu, linked from pnb.bank.in); Key Fact Statement https://creditcard.pnb.bank.in/Documents/KeyFactStatement.pdf (PDF created 2 Nov 2026); revised charges https://creditcard.pnb.bank.in/Documents/revised-charges.pdf (30 Sep 2026)",
+      "read_on": "2026-11-07",
+      "offered_count": 29,
+      "matched_live": [
+        "pnb-rupay-platinum",
+        "pnb-rupay-select",
+        "pnb-rupay-millennial",
+        "pnb-rakshak-rupay-select",
+        "pnb-salary-rupay-select",
+        "pnb-luxura-rupay-metal",
+        "pnb-patanjali-rupay-select",
+        "pnb-emt-rupay-platinum",
+        "pnb-kiwi-credit-card"
+      ],
+      "matched_drafts": [],
+      "missing": [
+        {
+          "name": "PNB Rakshak RuPay Platinum Card",
+          "product_url": "https://creditcard.pnb.bank.in/types7.html",
+          "status": "unknown",
+          "variant_of": "PNB Rakshak RuPay Select Card",
+          "partner": null,
+          "evidence": "In the Card Types menu with its own page (benefit list); page gives no apply or closed statement. Charges notice of 30 Sep 2026 names 'PNB Rakshak Platinum'."
+        },
+        {
+          "name": "PNB Visa Classic Card",
+          "product_url": "https://creditcard.pnb.bank.in/types2.html",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "In the Card Types menu with own page (fees, eligibility, features); no apply or closed statement. Named in the Nov 2026 KFS and the 30 Sep 2026 charges notice."
+        },
+        {
+          "name": "PNB Visa Gold Card",
+          "product_url": "https://creditcard.pnb.bank.in/types1.html",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "In the Card Types menu; page titled 'PNB Global Gold Card' (older name). No apply or closed statement. Named in the Nov 2026 KFS."
+        },
+        {
+          "name": "PNB Visa Platinum Card",
+          "product_url": "https://creditcard.pnb.bank.in/types3.html",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "In the Card Types menu with own page; no apply or closed statement. Named in the Nov 2026 KFS."
+        },
+        {
+          "name": "PNB Visa Signature Card",
+          "product_url": "https://creditcard.pnb.bank.in/types9.html",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "In the Card Types menu with own page; no apply or closed statement. Named in the Nov 2026 KFS."
+        },
+        {
+          "name": "PNB Wave & Pay Credit Card",
+          "product_url": "https://creditcard.pnb.bank.in/types4.html",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "In the Card Types menu; page is a contactless-card FAQ on the Visa network, no fee/apply statement. Not named in the Nov 2026 KFS or the charges notice, so it may be a legacy page."
+        },
+        {
+          "name": "PNB BLISS Card (RuPay Platinum)",
+          "product_url": "https://creditcard.pnb.bank.in/types13.html",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "In the Card Types menu with own page (Nykaa / Uber-Ola vouchers); no apply or closed statement. KFS and charges notice name 'PNB Bliss RuPay Platinum'."
+        },
+        {
+          "name": "PNB SALARY RuPay Platinum Card",
+          "product_url": "https://creditcard.pnb.bank.in/types14.html",
+          "status": "existing_customers_only",
+          "variant_of": "PNB SALARY RuPay Select Card",
+          "partner": null,
+          "evidence": "In the Card Types menu; page says eligibility is 'For PNB Salary Account Holders under EXCEL Scheme'."
+        },
+        {
+          "name": "PNB Metal Credit Card LUXURA on Visa",
+          "product_url": "https://creditcard.pnb.bank.in/types17.html",
+          "status": "unknown",
+          "variant_of": "PNB Metal Credit Card LUXURA on RuPay",
+          "partner": null,
+          "evidence": "In the Card Types menu with own page (eligibility, fees noted w.e.f. 05.07.2026); no apply or closed statement. Visa Infinite version; the RuPay (Ekaa) version is already live."
+        },
+        {
+          "name": "PNB Platinum for Indian Army Card (RuPay/Visa)",
+          "product_url": "https://creditcard.pnb.bank.in/types20.html",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "In the Card Types menu; for Indian Army personnel; offered on both Visa Platinum and RuPay Platinum. Earlier schedule (29 Oct 2026) called it 'PNB Parakram'. Page has no apply or closed statement."
+        },
+        {
+          "name": "PNB Metal Card LUXURA for Indian Army",
+          "product_url": "https://creditcard.pnb.bank.in/types21.html",
+          "status": "unknown",
+          "variant_of": "PNB Metal Credit Card LUXURA",
+          "partner": null,
+          "evidence": "In the Card Types menu; for Indian Army officer rank (Visa/RuPay). No apply or closed statement."
+        },
+        {
+          "name": "PNB General Credit Card (GCC)",
+          "product_url": "https://creditcard.pnb.bank.in/types22.html",
+          "status": "existing_customers_only",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "In the Card Types menu; page says eligibility is existing customers with an active working-capital facility under the PNB GCC scheme."
+        },
+        {
+          "name": "PNB Merchant Credit Card (MCC)",
+          "product_url": "https://creditcard.pnb.bank.in/types23.html",
+          "status": "existing_customers_only",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "In the Card Types menu; page says eligibility is existing customers with a working-capital facility up to Rs 50 lakh from the bank."
+        },
+        {
+          "name": "PNB RRB Co-branded RuPay Select Card",
+          "product_url": "https://creditcard.pnb.bank.in/types24.html",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": "Regional Rural Banks (RRBs)",
+          "evidence": "In the Card Types menu under co-brands (for all regional rural banks). No apply or closed statement. Named in the Nov 2026 KFS."
+        },
+        {
+          "name": "PNB Patanjali RuPay Platinum Card",
+          "product_url": "https://creditcard.pnb.bank.in/types12.html",
+          "status": "unknown",
+          "variant_of": "PNB Patanjali RuPay Select Card",
+          "partner": "Patanjali",
+          "evidence": "In the Co-Branded menu with own page. No apply or closed statement. Named in the 30 Sep 2026 charges notice."
+        },
+        {
+          "name": "PNB Zaggle Co-Branded Twin Credit Card (Visa Platinum + RuPay Select)",
+          "product_url": "https://creditcard.pnb.bank.in/types19.html",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": "Zaggle",
+          "evidence": "In the Co-Branded menu; issued as a twin card (Visa and RuPay) under one limit. Named in the Nov 2026 KFS ('PNB Zaggle Co Brand Twin Credit Card')."
+        },
+        {
+          "name": "PNB Braille Credit Card (RuPay)",
+          "product_url": null,
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Named only in the Nov 2026 KFS and charges notice ('Select/Braille' joining fee row, 'Braille: add-on not allowed'). No product page in the Card Types menu."
+        },
+        {
+          "name": "PNB PM SVANidhi Credit Card",
+          "product_url": null,
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Named only in the Nov 2026 KFS (nil joining and annual fee, limit Rs 10,000 to 30,000) and the charges notice ('PNB Svanidhi Credit card - no cash withdrawal'). No product page in the menu."
+        },
+        {
+          "name": "PNB Credit Card for Micro-Enterprises",
+          "product_url": null,
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Named only in the Nov 2026 KFS ('PNB Credit Card for Micro-Enterprises') and the charges notice. No product page in the menu."
+        },
+        {
+          "name": "PNB Corporate Credit Card (Visa Classic / Gold / Platinum, corporate or individual liability)",
+          "product_url": null,
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Named only in the Nov 2026 KFS (joining/annual fee rows 'Corporate Credit Card') and the charges notice. No product page in the menu."
+        }
+      ],
+      "stale_live": [],
+      "notes": "The Card Types menu has 25 entries; 9 match live, 16 are missing. The KFS and charges notice add 4 more names with no page. The page is old in style: types.html still describes 'PNB Global Platinum/Gold/Classic' cards. The pnb.bank.in credit-card links I tried (credit-card.html, Credit-Cards.html) return a not-found page; the working portal is creditcard.pnb.bank.in. Charges notice says service charges were revised w.e.f. 1 Nov 2026."
+    },
+    {
+      "issuer": "Canara Bank",
+      "listing_url": "https://www.canarabank.bank.in/credit-cards ; variants document https://www.canarabank.bank.in/documents/d/guest/credit-20card-20variants-20and-20features (PDF created 10 Feb 2026)",
+      "read_on": "2026-11-07",
+      "offered_count": 17,
+      "matched_live": [
+        "canara-mastercard-standard-global",
+        "canara-mastercard-world",
+        "canara-rupay-platinum",
+        "canara-rupay-select-credit-card",
+        "canara-visa-classic",
+        "canara-visa-platinum",
+        "canara-visa-signature-business"
+      ],
+      "matched_drafts": [],
+      "missing": [
+        {
+          "name": "Canara RuPay Classic Credit Card",
+          "product_url": "https://www.canarabank.bank.in/rupay-classic-credit-card",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "On the Credit Cards page and in the Feb 2026 variants PDF (Classic/Standard tier). Page lists benefits, eligibility (minimum Rs 2 lakh gross income) and fees; no apply or closed statement."
+        },
+        {
+          "name": "Canara Mastercard Platinum Credit Card",
+          "product_url": "https://www.canarabank.bank.in/mastercard-platinum-credit-card",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "On the Credit Cards page and in the variants PDF (Platinum tier). No apply or closed statement."
+        },
+        {
+          "name": "Canara Mastercard Gold Credit Card",
+          "product_url": "https://www.canarabank.bank.in/mastercard-gold-credit-card",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "On the Credit Cards page and in the variants PDF (Gold tier). No apply or closed statement."
+        },
+        {
+          "name": "Canara Visa Gold Credit Card",
+          "product_url": "https://www.canarabank.bank.in/visa-gold-credit-card",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "On the Credit Cards page and in the variants PDF (Gold tier). No apply or closed statement."
+        },
+        {
+          "name": "Canara RuPay Select Secured Credit Card",
+          "product_url": "https://www.canarabank.bank.in/rupay-select-secured-credit-card",
+          "status": "sold",
+          "variant_of": "Canara RuPay Select Credit Card",
+          "partner": null,
+          "evidence": "On the Credit Cards page (fixed-deposit-backed). The page offers an 'Apply now for Pre-approved / Secured Credit Card' link. Variants PDF lists it in the Select/World/Signature tier."
+        },
+        {
+          "name": "Canara RuPay Platinum Secured Credit Card",
+          "product_url": "https://www.canarabank.bank.in/rupay-platinum-secured-credit-card",
+          "status": "sold",
+          "variant_of": "Canara RuPay Platinum Credit Card",
+          "partner": null,
+          "evidence": "On the Credit Cards page (fixed-deposit-backed) with the same 'Apply now for Pre-approved / Secured Credit Card' link."
+        },
+        {
+          "name": "Canara Mastercard Gold Secured Credit Card",
+          "product_url": "https://www.canarabank.bank.in/mastercard-gold-secured-credit-card",
+          "status": "sold",
+          "variant_of": "Canara Mastercard Gold Credit Card",
+          "partner": null,
+          "evidence": "On the Credit Cards page (fixed-deposit-backed) with the 'Apply now for Pre-approved / Secured' link."
+        },
+        {
+          "name": "Canara Visa Gold Secured Credit Card",
+          "product_url": "https://www.canarabank.bank.in/visa-gold-secured-credit-card",
+          "status": "sold",
+          "variant_of": "Canara Visa Gold Credit Card",
+          "partner": null,
+          "evidence": "On the Credit Cards page (fixed-deposit-backed) with the 'Apply now for Pre-approved / Secured' link."
+        },
+        {
+          "name": "Canara Visa Corporate Credit Card",
+          "product_url": "https://www.canarabank.bank.in/visa-corporate-credit-card",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "On the Credit Cards page and in the variants PDF (Corporate tier, limits up to Rs 25 crore). Page mentions secured corporate cards against company deposits. No apply or closed statement."
+        },
+        {
+          "name": "Canara RuPay Corporate Credit Card",
+          "product_url": "https://www.canarabank.bank.in/pages/rupay-corporate-credit-card",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "On the Credit Cards page (Corporate). Not in the Feb 2026 variants PDF, which lists only Visa Corporate. No apply or closed statement."
+        }
+      ],
+      "stale_live": [
+        {
+          "slug": "canara-bank-international-travel-prepaid-card",
+          "evidence": "A prepaid card, not a credit card. Absent from the 17-card credit list at /credit-cards; Canara has a separate Prepaid Cards page (https://www.canarabank.bank.in/prepaid-cards), which I did not read."
+        },
+        {
+          "slug": "canara-select-platinum",
+          "evidence": "No card of this name on the 17-card credit list or in the Feb 2026 variants PDF (which names RuPay Select, RuPay Select Secured, Mastercard World, Visa Signature in the top tier, and RuPay Platinum, RuPay Platinum Secured, Mastercard Platinum, Visa Platinum in the Platinum tier)."
+        },
+        {
+          "slug": "canara-visa-signature-travel",
+          "evidence": "Issuer lists one 'Visa Signature Credit Card' (variants PDF: one Visa Signature, no Business or Travel variants). Live has two Visa Signature slugs; canara-visa-signature-business was matched to the issuer's card by name, this one has no counterpart."
+        }
+      ],
+      "notes": "The issuer's 17 cards = 4 tiers (Classic/Standard, Gold, Platinum, Select/World/Signature) across RuPay, Mastercard and Visa, plus secured versions and corporate. canara-mastercard-standard-global was matched to the issuer's 'Mastercard Standard Credit Card' by tier; the live name carries 'Global', which the issuer does not use. Credit Card page also links 'Apply Pre-Approved Credit card' (jns.canarabank.bank.in), so unsecured cards are offered through pre-approved offers; no card page says 'existing customers only', hence unknown. canarabank.com redirects to canarabank.bank.in."
+    },
+    {
+      "issuer": "Union Bank of India",
+      "listing_url": "https://www.unionbankofindia.bank.in/en/listing/credit-cards (loads 13 cards; 'Load More' revealed no more) ; Key Fact Statement https://www.unionbankofindia.bank.in/pdf/Key-Fact-Statement.pdf (PDF created 22 Apr 2026)",
+      "read_on": "2026-11-07",
+      "offered_count": 15,
+      "matched_live": [],
+      "matched_drafts": [],
+      "missing": [
+        {
+          "name": "Union NEXTERIA Credit Card",
+          "product_url": "https://www.unionbankofindia.bank.in/en/Details/nexteria-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "On the listing; RuPay 'Ekaa' metal card, the bank's first metal credit card. Page has the generic Apply Now enquiry form."
+        },
+        {
+          "name": "Union Unicorn RuPay Credit Card",
+          "product_url": "https://www.unionbankofindia.bank.in/en/Details/union-unicorn-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "On the listing; premium RuPay card; Apply Now enquiry form on page. KFS name 'UNICORN'."
+        },
+        {
+          "name": "Union DIVAA ICON Credit Card",
+          "product_url": "https://www.unionbankofindia.bank.in/en/Details/divaa-icon-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "On the listing; women-only RuPay Platinum (KFS: 'Divaa Icon Credit Card (Female Only - RuPay Platinum)'); page says it upgrades the bank's earlier women-centric card. Apply Now form on page."
+        },
+        {
+          "name": "Union PM SVANidhi Credit Card",
+          "product_url": "https://www.unionbankofindia.bank.in/en/Details/pm-svanidhi-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "On the listing; RuPay credit card for PM SVANidhi beneficiaries (street vendors). Apply Now form on page; eligibility restricted to scheme beneficiaries."
+        },
+        {
+          "name": "Union JCB Wellness Credit Card",
+          "product_url": "https://www.unionbankofindia.bank.in/en/Details/union-jcb-wellness-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "On the listing; premium wellness card (annual benefits stated by the issuer). Apply Now form on page."
+        },
+        {
+          "name": "Union RuPay Select Credit Card",
+          "product_url": "https://www.unionbankofindia.bank.in/en/Details/rupay-select-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "On the listing; Apply Now form on page. KFS fee row 'RuPay Select'."
+        },
+        {
+          "name": "Union JCB Health Credit Card",
+          "product_url": "https://www.unionbankofindia.bank.in/en/Details/union-jcb-health-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "On the listing; Apply Now form on page. KFS fee row 'Union JCB Health'."
+        },
+        {
+          "name": "Union UNI-CARBON Credit Card",
+          "product_url": "https://www.unionbankofindia.bank.in/en/Details/union-uni-carbon-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": "HPCL",
+          "evidence": "On the listing; co-brand with HPCL on RuPay for fuel savings. Apply Now form on page."
+        },
+        {
+          "name": "Union RuPay Platinum Credit Card",
+          "product_url": "https://www.unionbankofindia.bank.in/en/Details/rupay-platinum-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "On the listing; Apply Now form on page. KFS fee row 'RuPay Platinum'."
+        },
+        {
+          "name": "Union VISA Signature Credit Card",
+          "product_url": "https://www.unionbankofindia.bank.in/en/Details/visa-signature-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "On the listing; Apply Now form on page. KFS fee row 'VISA Signature'."
+        },
+        {
+          "name": "Union VISA Platinum Credit Card",
+          "product_url": "https://www.unionbankofindia.bank.in/en/Details/visa-platinum-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "On the listing; Apply Now form on page. KFS fee row 'VISA Platinum'."
+        },
+        {
+          "name": "Union VISA Gold Credit Card",
+          "product_url": "https://www.unionbankofindia.bank.in/en/Details/visa-gold-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "On the listing; Apply Now form on page. KFS fee row 'VISA Gold'."
+        },
+        {
+          "name": "Union Sparsh Credit Card",
+          "product_url": "https://www.unionbankofindia.bank.in/en/Details/union-sparsh-credit-card",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "On the listing; accessible RuPay card for visually impaired customers, with a tactile notch (also a 'sparsh-braille-card' page). Apply Now form on page; eligibility restricted to visually impaired customers."
+        },
+        {
+          "name": "Union MSME Credit Card",
+          "product_url": null,
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Named only in the Apr 2026 KFS (fee row 'Union MSME', nil joining and annual fee). No product page on the listing."
+        },
+        {
+          "name": "Union VISA Business Platinum Corporate Card",
+          "product_url": null,
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Named only in the Apr 2026 KFS ('VISA Business Platinum Corporate Cards', Rs 1,500 joining and Rs 2,000 annual). No product page on the listing."
+        }
+      ],
+      "stale_live": [],
+      "notes": "No Union Bank cards are live in the catalogue, so all 15 are missing. The Apply Now element on each page is a shared enquiry form, not a per-card online application; restricted-eligibility cards are noted above. Union moved from unionbankofindia.co.in (connection refused) to unionbankofindia.bank.in. The KFS also lists a combined 'Micro Enterprise credit card / PM SVANidhi' row, treated as the PM SVANidhi card."
+    },
+    {
+      "issuer": "Bank of India",
+      "listing_url": "https://bankofindia.bank.in/credit-card (not readable)",
+      "read_on": "2026-11-07",
+      "offered_count": null,
+      "matched_live": [],
+      "matched_drafts": [],
+      "missing": [],
+      "stale_live": [],
+      "notes": "COULD NOT READ. bankofindia.co.in and bankofindia.bank.in answer plain fetches (curl and the fetch tool) with HTTP 403, and my own browser-pane tab got a Cloudflare 'Just a moment' challenge that did not clear; I did not try to get past it. Unverified hints only, not facts: web-search results show pages on the issuer's own domain titled for RuPay Platinum (https://bankofindia.bank.in/credit-card/rupay-platinum-credit-card) and RuPay Select (a brochure PDF), a Key Fact Statement PDF (https://bankofindia.bank.in/documents/20121/27694131/KFS__MITC.pdf) that mentions a 'Swadhan' variant, and a Star Rewards page that mentions RuPay Select and Visa Platinum. Someone with a normal browser should open https://bankofindia.bank.in/credit-card and the KFS PDF."
+    },
+    {
+      "issuer": "Indian Bank",
+      "listing_url": "https://indianbank.bank.in/en/credit-cards (indianbank.in redirects here)",
+      "read_on": "2026-11-07",
+      "offered_count": 10,
+      "matched_live": [],
+      "matched_drafts": [],
+      "missing": [
+        {
+          "name": "IB-VISA-Platinum Credit Card",
+          "product_url": "https://indianbank.bank.in/en/credit-cards",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed on the Credit Cards page ('From golf, to dining, shopping...'); page carries 'Apply Online' and a customer portal link. No separate product page."
+        },
+        {
+          "name": "IB-VISA-Business Credit Card",
+          "product_url": "https://indianbank.bank.in/en/credit-cards",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed on the Credit Cards page for corporate / business entities; same 'Apply Online' link."
+        },
+        {
+          "name": "Indian Bank Secured Credit Card (VISA / RuPay)",
+          "product_url": "https://indianbank.bank.in/en/credit-cards",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed on the Credit Cards page as 'Secured cards (VISA/ RuPay)': limit from Rs 25,000 or 90% of term deposit face value, with a lien on the deposit. Counted as one entry; it is offered on two networks."
+        },
+        {
+          "name": "IB-RuPay-Select Credit Card",
+          "product_url": "https://indianbank.bank.in/en/credit-cards",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed on the Credit Cards page ('A high end product...'); same 'Apply Online' link."
+        },
+        {
+          "name": "IB-RuPay-Platinum Credit Card",
+          "product_url": "https://indianbank.bank.in/en/credit-cards",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed on the Credit Cards page; same 'Apply Online' link."
+        },
+        {
+          "name": "IB-RuPay-Classic Credit Card",
+          "product_url": "https://indianbank.bank.in/en/credit-cards",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed on the Credit Cards page; same 'Apply Online' link."
+        },
+        {
+          "name": "IND Youth Credit Card",
+          "product_url": "https://indianbank.bank.in/en/credit-cards",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Listed on the Credit Cards page as designed for ages 18-29. Its MITC (https://indianbank.bank.in/documents/d/guest/mitc-youth-credit-card, created 30 Oct 2026) describes a Visa Platinum product with no joining fee."
+        },
+        {
+          "name": "IB-Rupeek Gold Backed Credit Card",
+          "product_url": "https://indianbank.bank.in/documents/d/guest/IB-Rupeek-Co-Branded-Credit-Card",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": "Rupeek",
+          "evidence": "Linked from the Credit Cards page as 'IB-Rupeek Co-Branded Credit Card'; a one-page fact sheet (created Aug 2025) says any holder of gold can get it, limit set by the gold pledged. No apply link on the listing."
+        },
+        {
+          "name": "Indian Bank One Co-Branded Credit Card",
+          "product_url": "https://indianbank.bank.in/en/indian-bank-one-co-branded-credit-card",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": "One Consumer Services Private Limited (OneCard)",
+          "evidence": "Own page (last modified 28 Aug 2026): mobile-first metal card run through the OneCard app, lifetime free, MITC and KFS linked. No apply link on the page."
+        },
+        {
+          "name": "Indian Bank PM SVANidhi Credit Card",
+          "product_url": "https://indianbank.bank.in/pm-svanidhi-credit-card",
+          "status": "unknown",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Linked from the Credit Cards page as 'PM SVANidhi Credit Card'. That link answered my plain fetch with a 'Request Rejected' firewall page, so I did not read it; I did not try to get around it."
+        }
+      ],
+      "stale_live": [],
+      "notes": "No Indian Bank cards are live in the catalogue. The page's daily-limit table also mentions 'Bharat / Classic' and 'Gold' card rows, and an older features PDF (Dec 2023) lists VISA Bharat and VISA Gold cards; neither appears in the current product list, so they are not counted. Secured card is a single entry for two networks."
+    },
+    {
+      "issuer": "Central Bank of India",
+      "listing_url": "https://centralbank.bank.in/en (no credit-card listing page found); co-brand offers PDF https://centralbank.bank.in/sites/default/files/2023-10/Central-Bank-of-India-Offers%20(1).pdf",
+      "read_on": "2026-11-07",
+      "offered_count": 3,
+      "matched_live": [
+        "central-bank-of-india-sbi-card-elite"
+      ],
+      "matched_drafts": [],
+      "missing": [
+        {
+          "name": "Central Bank of India SBI Card PRIME",
+          "product_url": null,
+          "status": "unknown",
+          "variant_of": null,
+          "partner": "SBI Card",
+          "evidence": "Named on the cover of the bank's co-branded cardholder offers PDF (file path dated 2023-10): 'Central Bank of India SBI Card Elite | Prime | SimplySAVE'. The bank's site has no credit-card page; its footer 'Credit Card' link goes to the SBI Card login. An SBI Card partner page for this card now answers not-found."
+        },
+        {
+          "name": "Central Bank of India SimplySAVE SBI Card",
+          "product_url": null,
+          "status": "unknown",
+          "variant_of": null,
+          "partner": "SBI Card",
+          "evidence": "Named on the same offers PDF cover. No current product page found."
+        }
+      ],
+      "stale_live": [],
+      "notes": "Central Bank's credit cards are SBI Card co-brands issued by SBI Card; the bank has no card of its own. centralbank.bank.in 'Business Card', 'CBI Visa Platinum Card' and 'Rupay Select Wellness Card' pages sit in its debit-card menu and were not counted. 'Central Kisan Credit Card' is an agricultural loan product, not counted. The centralbankofindia.co.in domain fails with an expired certificate; I did not bypass it and used centralbank.bank.in instead. The evidence for Prime and SimplySAVE is ~3 years old, so treat as weak and check with the SBI Card sweep."
+    },
+    {
+      "issuer": "UCO Bank",
+      "listing_url": "https://uco.bank.in/en/web/guest/credit-card1",
+      "read_on": "2026-11-07",
+      "offered_count": 3,
+      "matched_live": [
+        "uco-bank-sbi-card-elite",
+        "uco-bank-sbi-card-prime",
+        "uco-bank-simplysave-sbi-card"
+      ],
+      "matched_drafts": [],
+      "missing": [],
+      "stale_live": [],
+      "notes": "UCO Bank's credit card page offers only the three SBI Card co-brands (UCO Bank SBI Card Elite, Prime, SimplySAVE SBI Card), all already live under the sbi issuer slug; page carries a 'Click here to apply online' link. No UCO-issued card. ucobank.com has a certificate/hostname error, so I used uco.bank.in."
+    },
+    {
+      "issuer": "IDBI Bank",
+      "listing_url": "https://www.idbi.bank.in/credit-card.aspx (idbibank.in redirects here)",
+      "read_on": "2026-11-07",
+      "offered_count": 7,
+      "matched_live": [],
+      "matched_drafts": [],
+      "missing": [
+        {
+          "name": "IDBI Bank Royale Signature Credit Card",
+          "product_url": "https://www.idbi.bank.in/royal-credit-card.aspx",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Overview page shows 'Apply Now' beside it; FAQ names it as a Visa variant."
+        },
+        {
+          "name": "IDBI Bank Euphoria World Credit Card",
+          "product_url": "https://www.idbi.bank.in/Euphoria-credit-card.aspx",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Overview page shows 'Apply Now'; FAQ names it as a Mastercard variant."
+        },
+        {
+          "name": "IDBI Bank Aspire Platinum Credit Card",
+          "product_url": "https://www.idbi.bank.in/aspire-credit-card.aspx",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Overview page shows 'Apply Now'; FAQ names it as a Visa variant."
+        },
+        {
+          "name": "IDBI Bank Imperium Platinum Credit Card",
+          "product_url": "https://www.idbi.bank.in/Imperium-credit-card.aspx",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Overview page shows 'Apply Now'; FAQ names it as a Visa variant."
+        },
+        {
+          "name": "IDBI Bank Winnings Credit Card (Winnings Select)",
+          "product_url": "https://www.idbi.bank.in/Winnings-credit-card.aspx",
+          "status": "sold",
+          "variant_of": null,
+          "partner": null,
+          "evidence": "Overview page shows 'Apply Now'; FAQ names it 'Winnings Select (RuPay)'."
+        },
+        {
+          "name": "IDBI Bank - LIC CSL Lumine Platinum Credit Card",
+          "product_url": "https://www.idbi.bank.in/Lumine-credit-card.aspx",
+          "status": "sold",
+          "variant_of": null,
+          "partner": "LIC CSL (LIC Cards Services Ltd)",
+          "evidence": "Overview tile has 'Know More' only. Product page ('LIC Co-Branded Credit Cards') says to call phone banking or visit an LIC branch; no joining fee. FAQ names it a RuPay variant."
+        },
+        {
+          "name": "IDBI Bank - LIC CSL Eclat Select Credit Card",
+          "product_url": "https://www.idbi.bank.in/Eclat-credit-card.aspx",
+          "status": "sold",
+          "variant_of": null,
+          "partner": "LIC CSL (LIC Cards Services Ltd)",
+          "evidence": "Overview tile has 'Know More' only; the nav spells it 'Elat'. Product page says to call phone banking or visit an LIC branch; no joining fee. FAQ names it a RuPay variant."
+        }
+      ],
+      "stale_live": [],
+      "notes": "No IDBI cards are live in the catalogue, so all 7 are missing. The site footer still reads copyright 2021 and one banner is dated Sept 2024, so the static pages may lag the real product set; the card list is stable across the overview page, its FAQ and the nav menu. Add-on rules differ between cards (Aspire/Imperium 1, Royale/Euphoria 2)."
+    }
+  ]
+}

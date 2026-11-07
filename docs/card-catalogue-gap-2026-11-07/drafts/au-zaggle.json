@@ -313,9 +313,10 @@
       {
         "key": "verified_network_research",
         "value": {
+          "finding_status": "resolved",
           "product_status": "active",
           "source_url": "https://www.au.bank.in/personal-banking/credit-cards/au-zaggle-credit-card",
-          "evidence": "AU product page: reward blocks for \"AU Zaggle Visa Credit Card\" and \"AU Zaggle RuPay Credit Card\"; FAQ: \"you can apply for only one network variant of the card\". Cardmember Agreement section 23.33 has separate earning structures \"A. AU Zaggle RuPay Credit Card\" and \"B. AU Zaggle Visa Credit Card\".",
+          "evidence": "AU press release of 9 Jul 2026 (AU's own document, newer than the Cardmember Agreement copy): the AU Zaggle Co-Branded Retail Credit Card is \"Available on both Visa and RuPay networks\", \"offers customers the flexibility to choose their preferred payment network\". AU product page: reward blocks for \"AU Zaggle Visa Credit Card\" and \"AU Zaggle RuPay Credit Card\"; FAQ: \"you can apply for only one network variant of the card\". Cardmember Agreement section 23.33 has separate earning structures \"A. AU Zaggle RuPay Credit Card\" and \"B. AU Zaggle Visa Credit Card\".",
           "candidates": [
             {
               "network": "visa",
@@ -351,6 +352,11 @@
               "date": "Cardmember Agreement, undated copy (the copy under /pdf/credit-card/ is dated 16 May 2026 and has no Zaggle section)"
             },
             {
+              "url": "https://www.au.bank.in/pdfs/press-release/2026/Press-Release-AU--Bank-and-zaggle-Launch-Co-Branded-Credit-Car-9th-July-2026.pdf",
+              "kind": "AU press release: AU Zaggle co-branded card \"Available on both Visa and RuPay networks\"; \"Zagg Coins can be converted into cashback through the zagg.money app\"; gives no coins-per-₹100 definition",
+              "date": "2026-07-09"
+            },
+            {
               "url": "https://www.au.bank.in/pdf/credit-card/Schedule-of-Charges-CC.pdf",
               "kind": "KFS (lifetime free, 3.49% forex, ₹100 fuel waiver, 20% cash limit)",
               "date": "Key Fact Statement v1.9, 2 Nov 2026"
@@ -367,7 +373,7 @@
             }
           ],
           "open_questions": [
-            "HELD: AU states rates as \"X% Zagg Coins\" and gives the value of a coin (₹0.25) but never says how many coins one percent means per ₹100 spent. If 8% meant 8 coins per ₹100 the value is 2%; if it meant 8% of spend the value is 8%. No reward rule written so the importer does not guess; the structure is kept in notes below.",
+            "HELD (wave 3 re-check 2026-11-07): AU states rates as \"X% Zagg Coins\" and gives the value of a coin (₹0.25) but never says how many coins one percent means per ₹100 spent. Searched and read: the AU product page and FAQ (re-read), Cardmember Agreement 23.33, the AU press releases of 22 Sep 2025 and 9 Jul 2026, the KFS and MITC. None defines the unit. CMA 23.22 says only that Reward Points \"as may be applicable on the credit card variant\" are earned \"for transaction amounts in multiples of ₹100\", which does not map a percentage to coins. Leads for a person (NOT used as facts): Zaggle's own rewards policy (zagg.money/rewards-policy) says \"3% of the transaction amount will be credited as Zagg Coins\" for the YES Bank Zagg card, but it states it does not cover the AU card; and the 2,000-coin cycle cap fits a per-₹100 reading far better than a percent-of-value reading. Ask AU or Zaggle for the AU Zaggle rewards terms, or check a live statement, before writing rules. If 8% meant 8 coins per ₹100 the value is 2%; if it meant 8% of spend the value is 8%. No reward rule written so the importer does not guess; the structure is kept in notes below.",
             "Network: both variants are issued and named by AU, so this is resolved as dual; the importer reads verified_network_research.",
             "Whether the ₹99 + GST redemption fee in the KFS applies to Zagg Coin redemption through the zagg.money app: not stated for this program.",
             "The CMA copy carrying the Zaggle clause is undated; the dated copy under /pdf/credit-card/ (16 May 2026) lacks it.",

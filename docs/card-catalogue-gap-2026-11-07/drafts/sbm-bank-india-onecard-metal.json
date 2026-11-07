@@ -451,10 +451,20 @@
               "url": "https://assets.getonecard.app/assets/legal/SBM_MITC_English_Sep2025.pdf",
               "kind": "Earlier read: SBM One co-branded credit card MITC on the partner site (file dated Sep 2025); superseded by the SBM-hosted documents above",
               "read": "pdftotext"
+            },
+            {
+              "url": "https://www.sbm.bank.in/pdf/notice-board/one-credit-CMA.pdf",
+              "kind": "Older SBM-hosted OneCard Cardmember Agreement, 38 pp (PDF created 6 Mar 2025, SBM file dated 12 May 2026): same reward clauses, no point value; read only to confirm the value is absent",
+              "read": "pdftotext (W11)"
+            },
+            {
+              "url": "https://www.sbm.bank.in/pdf/notice-board/one-card-MITC.pdf",
+              "kind": "Older SBM-hosted OneCard MITC, 34 pp (PDF created 5 Dec 2024, SBM file dated 12 May 2026): same reward clauses, no point value; read only to confirm the value is absent",
+              "read": "pdftotext (W11)"
             }
           ],
           "open_questions": [
-            "Point value: no SBM document states what one OneCard reward point is worth, so point_value_inr_baseline is null and the earn rate (1 point per ₹50, 5X on the top 2 categories) cannot be turned into a percentage return.",
+            "Point value (re-checked 7 Nov 2026, W11): no SBM document states what one OneCard reward point is worth, so point_value_inr_baseline is null and the earn rate (1 point per ₹50, 5X on the top 2 categories) cannot be turned into a percentage return. Searched for a rupee value in the OneCard MITC (29 Oct 2026), KFS, Cardholder Agreement (30 Jun 2026), RP-details, the secured-card MITC (its clause I only points back to the SBM page) and the older SBM-hosted OneCard MITC and Cardmember Agreement (files of Dec 2024 and Mar 2025). They say points repay purchases under \"Pay with points\" or buy offers in the OneCard app, the bank \"reserves the right to change the reward point conversion rate\", and a recovered redemption is charged at \"the equivalent rupee value of used reward points\", without ever giving the rate.",
             "Reward clause conflict: clause 20 I.b says bills and utilities earn nothing from 30 Jul 2026 and are ineligible for 5X, while clause 20 III.i still talks about 5X on Education, Bills & Utilities and Insurance with incremental rewards capped at 25,000 points. The cap period is not stated, so no cap rule is written and the bills exclusion is modelled.",
             "The 5X rule depends on the cardholder's monthly mix of categories, which a ranking engine cannot see; modelled as stated with the ₹750 per-category minimum.",
             "Network: Visa for the physical card (the Cardholder Agreement says it is acceptable where Visa is accepted and converts foreign spends at Visa rates; the page card image shows Visa Signature). The virtual card is \"VISA/RuPay powered\" and a RuPay floater card exists but earns no rewards. SBM does not publish a separate metal card image or state that the metal card uses a different network.",

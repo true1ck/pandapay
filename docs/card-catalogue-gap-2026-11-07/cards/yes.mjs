@@ -91,7 +91,7 @@ export const cards = {
   'yes-bank-finbooster': {
     card_product: {
       ...GST, slug: 'yes-bank-finbooster', name: 'YES BANK FinBooster Credit Card', issuer_slug: 'yes', card_type: 'credit',
-      network: null, application_mode: 'open', joining_fee_inr: 0, annual_fee_inr: 0, is_upi_linkable: null,
+      network: 'visa', network_tier: 'visa_platinum', form_factors: ['physical_plastic'], application_mode: 'open', joining_fee_inr: 0, annual_fee_inr: 0, is_upi_linkable: null,
       data_source_tier: 'issuer_mitc_plus_manual_audit', source_url: PAGE('finbooster-card'), status: 'draft', verified_at: null,
       point_value_inr_baseline: 0.1,
       point_value_baseline_basis: 'YES BANK Credit Card Redemption Rules, "Other Credit Cards": 1 YES Reward Point = ₹0.10 as statement credit, e-gift voucher or merchandise, and ₹0.25 on flight and hotel bookings (capped at 70% of the invoice); minimum 2,000 points per redemption; ₹100 + GST per redemption request. Listing FAQ: "value of 1 YES CC Rewardz is up to 0.25p". Baseline uses the ₹0.10 statement-credit rate.',
@@ -137,12 +137,16 @@ export const cards = {
           { url: MITC, kind: `MITC: fees, interest, forex, fuel waiver, late fee, redemption; ${MITC_DATE}`, read: 'pdf.js text' },
           { url: KFS, kind: `Key Fact Statement; ${KFS_DATE}`, read: 'pdf.js text' },
           { url: REDEMPTION, kind: 'YES BANK Credit Card Redemption Rules (undated)', read: 'pdf.js text' },
+          { url: 'https://www.yes.bank.in/pdf?name=experience_guide_finbooster_credit_card_pdf.pdf', kind: 'YES BANK FinBooster Credit Card Experience Guide, 11 pp (undated and older than the current MITC: it shows a fuel waiver cap of ₹125 and "interest up to 3.5% p.m."). Page 1 shows the FinBooster card art with "YES BANK" and "VISA Platinum". Page 3 says "Never expiring Reward Points with no capping on accrual". Pages 4 to 7 describe a chip-and-PIN contactless card used at POS and ATMs.', read: 'pdf.js text; page 1 rendered and viewed (W11, 2026-11-07)' },
+          { url: 'https://www.yes.bank.in/credit-card-services/rewards-subscription-plan', kind: 'YES BANK Rewards Subscription Plan page (read 2026-11-07, undated; fees "revised effective 27 Aug 2026" for other cards): lists "YES Prosperity Rewards / FinBooster Credit Card" for both plans', read: 'browser page text (W11)' },
         ],
         unverified: [
-          'Network: the page never says Visa, Mastercard or RuPay outright. Visa is inferred because the earn footnotes define the dining, grocery and apparel MCCs "as defined by VISA". Confirm from card art or an application page.',
-          'Physical or virtual: the MITC groups FinBooster in the lifetime-free "RuPay Virtual / Klick / Zagg / Finbooster ..." fee row but the page never says virtual only. Cash-advance fee is written for a physical card (2.5% or ₹650); the MITC says it does not apply to virtual cards.',
-          'No cap on the 10-point and 6-point tiers is stated on the page; the MITC and KFS were searched and also state none.',
-          'Page glossary d is printed twice with different exclusions (before and from 15 Jun 2026); the newer list is stored with effective_from 2026-06-15. The "Rewards Subscription Plan" link (choose which reward points you want) was not read.',
+          'Network (settled 2026-11-07, W11): Visa, from card art in YES BANK\'s own FinBooster Experience Guide (page 1: "YES BANK ... VISA Platinum"). The tiny listing image (cc-finbooster-card-img.png) shows no network mark, and the current product page, MITC and KFS never name the network; the "as defined by VISA" MCC footnotes agree but are not used as evidence. The older co-brand MITC mentions a "FinBooster RuPay" variant that the current MITC, KFS, listing and menus do not carry.',
+          'Physical or virtual (W11): the Experience Guide describes a physical chip-and-PIN, contactless card with ATM withdrawals, so form_factors is physical_plastic. The guide is undated and older than the current MITC; the MITC fee row that groups FinBooster with RuPay virtual cards is only a fee grouping. UPI linking is not stated for this card and is left null.',
+          'No cap on the 10-point and 6-point tiers is stated on the current page, MITC or KFS; the older Experience Guide says "no capping on accrual of Reward Points". The only cap YES states is on the optional Rewards Subscription Plan (75,000 additional points per calendar month).',
+          'Reward expiry conflict: the Experience Guide says "Never expiring Reward Points", while MITC 3(l) (5 Oct 2026) and the Redemption Rules say points expire 36 months after earning. The MITC is later; 36 months is stored.',
+          'Rewards Subscription Plan (read 2026-11-07, W11): an optional paid plan lists FinBooster. Plan 1 (₹1,000 for 1 year) gives 3 times the regular points on all eligible categories; Plan 2 (₹2,000 for 1 year) gives 5 times on travel, dining, fashion and healthcare MCCs. Extra points are counted per calendar month, credited by the 10th of the next month, and capped at 75,000 per customer per calendar month. Stored in additional_data (rewards_subscription_plan), NOT as reward rules, because the app cannot see whether a holder has subscribed. The plan page is undated.',
+          'Page glossary d is printed twice with different exclusions (before and from 15 Jun 2026); the newer list is stored with effective_from 2026-06-15. The "Rewards Subscription Plan" link was read in wave 3 (see the plan item above).',
           'Fuel surcharge waiver: from 15 Jun 2026 ₹500 to ₹3,000 and ₹100 per statement cycle (MITC, KFS); the page glossary says the cap is ₹100 and the earlier range was ₹400 to ₹5,000. No waiver on UPI fuel transactions (MITC 4).',
           'Whether the card can be linked to UPI, and its add-on card rules, are not stated for the current card.',
         ],
@@ -153,6 +157,15 @@ export const cards = {
         ],
       }),
       lateFee, otherFees,
+      { key: 'rewards_subscription_plan', value: {
+        source: 'https://www.yes.bank.in/credit-card-services/rewards-subscription-plan (read 2026-11-07, undated page; row "YES Prosperity Rewards / FinBooster Credit Card")',
+        status: 'optional paid add-on; not modelled as reward rules because a holder\'s subscription is not visible to the app',
+        plans: [
+          { plan: 'Plan 1', fee_inr_per_year: 1000, benefit: '3 times the regular Reward points for the respective categories, on all spends that earn regular points', validity: '1 year' },
+          { plan: 'Plan 2', fee_inr_per_year: 2000, benefit: '5 times the regular Reward points on travel, dining, fashion and healthcare spends (eligible MCCs: healthcare 8011, 8021, 8031, 8041, 8042, 8043, 8044, 8049, 8050, 8062, 8071, 8099, 5912, 5047; travel 4511, 3012, 4582, 4131, 4722, 7011, 3020; dining 5812, 5814; apparel 5611, 5621, 5631, 5641, 5651, 5655, 5661, 5681, 5691, 5697, 5698, 5699)', validity: '1 year' },
+        ],
+        terms: ['Categories not eligible for regular points are excluded', 'The fee is charged to the card and the plan activates in 1-2 working days', 'Additional points are calculated on spends in a calendar month and credited by the 10th of the next month', 'Additional points are capped at 75,000 per customer per calendar month; a transaction that exceeds the cap earns no points that month'],
+      } },
     ] },
   },
 
@@ -160,7 +173,7 @@ export const cards = {
   'yes-bank-uni': {
     card_product: {
       ...GST, slug: 'yes-bank-uni', name: 'YES BANK Uni Credit Card', issuer_slug: 'yes', card_type: 'credit',
-      network: null, application_mode: 'open', joining_fee_inr: 0, annual_fee_inr: 499, is_upi_linkable: null,
+      network: 'mastercard', application_mode: 'open', joining_fee_inr: 0, annual_fee_inr: 499, is_upi_linkable: null,
       data_source_tier: 'issuer_mitc_plus_manual_audit', source_url: PAGE('uni-credit-card'), status: 'draft', verified_at: null,
       point_value_inr_baseline: null,
       point_value_baseline_basis: 'Rewards are issued as Uni coins. The listing calls the reward "1% cashback in uni coins" and the product page "1% Reward points (issued as Uni coins)"; no YES BANK page or document states what one Uni coin is worth in rupees.',
@@ -197,12 +210,14 @@ export const cards = {
           { url: LISTING, kind: 'issuer card listing (1% cashback in uni coins; renewal ₹499)', date: 'read 2026-11-07' },
           { url: MITC, kind: `MITC: fees, interest, forex, fuel waiver, late fee; ${MITC_DATE}`, read: 'pdf.js text' },
           { url: KFS, kind: `Key Fact Statement; ${KFS_DATE}`, read: 'pdf.js text' },
+          { url: 'https://www.yes.bank.in/sites/web/content/published/api/v1.1/assets/CONTE31749D516FF442DB73D463B9277341A/native?siteId=yesbank', kind: 'Card art (uni-card-icon.png, 293x139 px) attached to the "UNI Credit Card" tile on the YES BANK credit card listing, whose Know More link is the uni-credit-card page: teal card with "uni" and "YES BANK" and the Mastercard logo (viewed, W11 2026-11-07)', read: 'image opened in a browser tab' },
+          { url: 'https://www.yes.bank.in/sites/web/content/published/api/v1.1/items?q=(type eq "ybl-sa-get-familiar" AND fields.group_name eq "unicreditcardsalider")', kind: 'The Uni page\'s own "Top Benefits" slider data (the page text omits it): one slide reads "Secure online transactions with MasterCard Secure Code". Card-specific slider group, but a generic security line, so corroboration only.', read: 'page content API, read in the browser (W11)' },
         ],
         unverified: [
-          'Value of one Uni coin in rupees is not stated by YES BANK, so point_value_inr_baseline and effective_base_return_percent are null. The 1% is the advertised rate; the listing calls it cashback, the product page calls it reward points.',
-          'Network: not stated on the page, MITC or KFS. The MITC lists a separate "Uni RuPay Virtual" variant, which implies this "Uni Credit Card" is not RuPay, but that is not stated.',
-          'Physical or virtual, and UPI linking, are not stated. The cash-advance fee (2.5% or ₹650) is written for a physical card.',
-          'The "Top Benefits" and "More from this card" sections of the page are images; their wording was not readable.',
+          'Value of one Uni coin in rupees is not stated by YES BANK (re-checked in wave 3: product page, the page\'s Top Benefits and More-from items, its FAQs, the listing, MITC V18, the Cardmember Agreement and the Redemption Rules say nothing), so point_value_inr_baseline and effective_base_return_percent are null. The 1% is the advertised rate; the listing calls it "1% cashback in uni coins", the product page "Unlimited 1% Reward points (rewards issued as Uni coins)". Whether a partner-side coin conversion differs from the 1% is not stated by YES.',
+          'Network (settled 2026-11-07, W11): Mastercard, from card art on the YES BANK listing tile for "UNI Credit Card" (Mastercard logo). The product page, MITC and KFS do not name it; the MITC lists a separate "Uni RuPay Virtual" and the listing a separate "UNI Rupay Credit Card" page (lifetime free), which is a different product and not covered by this record.',
+          'Physical or virtual, and UPI linking, are not stated. The cash-advance fee (2.5% or ₹650) is written for a physical card. The listing compare-record for this card carries "unlimited international lounge access, 6 domestic" text that the product page and MITC do not state and that also appears on the virtual-only Klick record; it looks like template filler and is not stored.',
+          'The page "Top Benefits" slider and "More from this card" items were read in wave 3 from the page\'s content API: shop and earn Uni coins, zero forex mark-up, 1% fuel surcharge waiver up to ₹500, annual fee waiver on ₹50,000 spend within 12 months of the card anniversary, contactless, MasterCard Secure Code. They add no rate, cap or coin value.',
           'The page footnote says no coins on "international transactions"; the MITC does not repeat this. Reward expiry for Uni coins is not stated (MITC refers co-brand currencies to the product page).',
           'The MITC fee table shows ₹5,000 in the joining-fee-waiver column for Uni although the joining fee is NIL; ignored as a table artefact.',
         ],
@@ -290,7 +305,7 @@ export const cards = {
   'yes-bank-zagg': {
     card_product: {
       ...GST, slug: 'yes-bank-zagg', name: 'YES BANK Zagg Credit Card', issuer_slug: 'yes', card_type: 'credit',
-      network: null, application_mode: 'open', joining_fee_inr: 0, annual_fee_inr: 0, is_upi_linkable: true,
+      network: 'rupay', application_mode: 'open', joining_fee_inr: 0, annual_fee_inr: 0, is_upi_linkable: true,
       data_source_tier: 'issuer_mitc_plus_manual_audit', source_url: PAGE('zagg-credit-card'), status: 'draft', verified_at: null,
       point_value_inr_baseline: null,
       point_value_baseline_basis: 'The product page, MITC and KFS publish no reward rate for the current Zagg card. Cards issued before 10 Jan 2025 earned Rio coins; the value of a Rio coin is not stated.',
@@ -319,10 +334,12 @@ export const cards = {
           { url: MITC, kind: `MITC: fees, interest, forex, fuel waiver, lounge threshold; ${MITC_DATE}`, read: 'pdf.js text' },
           { url: KFS, kind: `Key Fact Statement; ${KFS_DATE}`, read: 'pdf.js text' },
           { url: LOUNGE, kind: 'YES BANK Domestic Lounge Program terms (undated; threshold text effective 1 Apr 2025)', read: 'pdf.js text' },
+          { url: 'https://www.yes.bank.in/pdf?name=zagg_one_pager_usage_guide.pdf', kind: 'YES BANK "Zagg credit card User guide", 1-page image PDF (undated): title "Power of Credit, Ease of UPI with YES BANK Zagg Credit Card"; the card shown carries "YES BANK" and the RuPay logo. Text: "Bringing together the cashbacks on credit cards with the convenience of UPI" (no rate)', read: 'PDF page rendered and viewed in a browser tab (W11, 2026-11-07)' },
+          { url: 'https://www.yes.bank.in/sites/web/content/management/api/v1.1/assets/CONTC0C27676083547F6A5FFD83A5B248A9C/native/zag-credit-card-px-web-banner-3.jpeg', kind: 'Hero banner on the YES BANK Zagg product page (6002x1584 px): the card in the model\'s hand reads "zagg.money", "YES BANK" and the RuPay logo (cropped and enlarged, viewed). The page\'s "Top Benefits" slide "Power Up Your Credit Card On UPI and credit card spends" (rio-credit-card-features-earn-cashbacks.png) shows the same card with RuPay and states no rate', read: 'images opened in a browser tab (W11)' },
         ],
         unverified: [
-          'HELD: no reward rate for the current card is published. The page lists only a footnote for cards issued before 10 Jan 2025 (0.5 Rio coins per ₹50 on non-UPI and 1.5 Rio coins per ₹50 on UPI, outside exclusion categories) and the "earn cashbacks" benefit is an image whose text was not readable. The Zagg app programme is administered by the partner (page note). The value of a Rio coin is not stated. No reward rules are written.',
-          'Network: not stated. The card is linked to UPI apps, which suggests RuPay, and the MITC fee row groups Zagg with the RuPay virtual cards, but neither says RuPay. Left null.',
+          'HELD: no reward rate for the current card is published. Re-read in wave 3 (W11, 2026-11-07): the product page, its Top Benefits slider (earn cashbacks, works everywhere, 1-click controls on the app, scan and pay for UPI: all images with headline text only), the What-comes-with-the-card items (lifetime free, works everywhere, 1% fuel surcharge waiver, lounge), the 7 FAQs, the usage guide, MITC V18 (the "English" MITC link on the page resolves to it; no Zagg or Rio coin terms in it) and the Cardmember Agreement state no cashback or coin rate. The only rate is the footnote for cards issued before 10 Jan 2025 (0.5 Rio coins per ₹50 on non-UPI and 1.5 Rio coins per ₹50 on UPI, outside exclusion categories). The page says any programme run by the Zagg app is the app provider\'s sole responsibility, so the current cashback programme sits outside YES documents. The value of a Rio coin is not stated. No reward rules are written. To unblock: ask YES BANK or Zagg for the Zagg card rewards terms.',
+          'Network (settled 2026-11-07, W11): RuPay, from card art on YES BANK\'s own Zagg pages (the usage guide PDF, the hero banner and the Top Benefits slide all show "YES BANK" and the RuPay logo). The product FAQ also says the card links to UPI apps ("NPCI recognised TPAPs"). The MITC and KFS do not name the network.',
           'RIO and Zagg: the issuer lists one product. The page assets are named "rio_*" and the pre-10-Jan-2025 footnote speaks of Rio coins, so Rio is the earlier name of the same card; the old co-brand MITC (undated Mizo translation) lists "Rio" and the current MITC lists "Zagg". Treated as one card.',
           'Lounge: two domestic visits a calendar quarter (page, listing) with a ₹50,000 prior-quarter spend condition (MITC 3(r), Lounge Program). Whether any international lounge access exists is not stated.',
           'Fuel surcharge waiver: from 15 Jun 2026 ₹400 to ₹5,000 and ₹250 per statement cycle (MITC 4, KFS); the page glossary says the cap is ₹250 and states no range. No waiver on UPI fuel transactions.',

@@ -49,3 +49,19 @@ Run: dry run (29 would publish, 0 failed), then the real run (29 published, 0 fa
 | Axis Bank super.money RuPay Credit Card | in-force T&C version uncertain (effective dates conflict) |
 
 To take a published card down, set its status back to draft through the admin card status endpoint; each change is audited.
+
+## Second publish (5 cards, after wave 3)
+
+Wave 3 closed facts on 39 unfinished cards (15 complete, 24 still blocked). Five of the complete cards had every fact including a stated point value or a cashback rate, so they were published (dry run first, 0 failed). Feed 405 to 410; 28 drafts remain hidden.
+
+| Card | Slug |
+|---|---|
+| Axis Bank Shoppers Stop Credit Card | `axis-bank-shoppers-stop` |
+| Axis Bank super.money RuPay Credit Card | `axis-bank-supermoney-rupay` |
+| RBL Bank Nova Credit Card | `rbl-bank-nova` |
+| YES BANK FinBooster Credit Card | `yes-bank-finbooster` |
+| YES BANK Uni Credit Card | `yes-bank-uni` |
+
+Complete but not published because no issuer states a rupee value per point (9): AU Xcite Ultra, IndiGo Axis, IndiGo Axis Premium, Axis Kwik, RBL SaveMax, RBL iGlobe, RBL Movies & More, SBM OneCard Metal, YES POP-CLUB. In the app these would show zero reward value, so they wait for a decision.
+
+Complete but held for a conflicting document (1): CSB Jupiter Edge+ (Jupiter-hosted T&C of 15 Oct 2026 differs from CSB's PDF of 7 Sep 2026 on the travel cap and effective date).

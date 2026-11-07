@@ -1,0 +1,145 @@
+{
+  "agent": "W11",
+  "cards": [
+    {
+      "slug": "yes-bank-finbooster",
+      "status": "complete",
+      "network": "visa",
+      "network_evidence": "Card art on page 1 of YES BANK's own FinBooster Credit Card Experience Guide (https://www.yes.bank.in/pdf?name=experience_guide_finbooster_credit_card_pdf.pdf, undated, older than the current MITC): the FinBooster card with 'bankbazaar', 'YES BANK' and 'VISA Platinum', rendered and viewed. The small listing image shows no network mark, and the current page, MITC and KFS do not name it. The earlier inference from the 'as defined by VISA' MCC footnotes is not used as evidence.",
+      "changes": [
+        "card_product.network: null -> visa; evidence: Experience Guide page 1 card art (see network_evidence)",
+        "card_product.network_tier: null -> visa_platinum; evidence: same card art reads 'VISA Platinum'",
+        "card_product.form_factors: [] -> ['physical_plastic']; evidence: Experience Guide pages 4 to 7 describe a chip-and-PIN contactless card with POS and ATM use (guide undated)",
+        "card_product.point_value_inr_baseline: 0.1 -> 0.1 (confirmed); evidence: YES Credit Card Redemption Rules, 'Other Credit Cards (Except Private, Marquee, Reserv)': 1 point = Rs 0.10 statement credit, e-voucher or merchandise, Rs 0.25 flights and hotels; the FinBooster page links these rules, and MITC V18 3(l) has a row 'Other credit cards (with YES CC Rewardz point feature)'. The rules do not name FinBooster itself.",
+        "additional_data.rewards_subscription_plan: absent -> added; evidence: YES Rewards Subscription Plan page (https://www.yes.bank.in/credit-card-services/rewards-subscription-plan) lists 'YES Prosperity Rewards / FinBooster Credit Card': Plan 1 Rs 1,000 a year gives 3x regular points on all eligible categories, Plan 2 Rs 2,000 a year gives 5x on travel, dining, fashion and healthcare MCCs; extra points counted per calendar month, credited by the 10th of the next month, capped at 75,000 per customer per calendar month. Kept as data, not as reward rules, because the app cannot see who has subscribed.",
+        "open_questions: 'No cap on the 10-point and 6-point tiers' -> still none stated in the current page, MITC or KFS; the older Experience Guide says 'no capping on accrual of Reward Points'",
+        "open_questions: added reward expiry conflict; the Experience Guide says 'Never expiring Reward Points' while MITC V18 3(l) and the Redemption Rules say 36 months. The MITC (5 Oct 2026) is later; point_expiry_months stays 36"
+      ],
+      "still_missing": [
+        "Non-blocking: UPI linking and add-on card rules are not stated for the current card (is_upi_linkable stays null).",
+        "Non-blocking: the Rewards Subscription Plan page and the Experience Guide are undated."
+      ]
+    },
+    {
+      "slug": "yes-bank-uni",
+      "status": "complete",
+      "network": "mastercard",
+      "network_evidence": "Card art on YES BANK's own credit card listing: the tile 'UNI Credit Card' (Know More goes to the uni-credit-card page) carries uni-card-icon.png, a teal card with 'uni', 'YES BANK' and the Mastercard logo (https://www.yes.bank.in/sites/web/content/published/api/v1.1/assets/CONTE31749D516FF442DB73D463B9277341A/native?siteId=yesbank, opened and enlarged). Corroboration only: the Uni page's own Top Benefits slider reads 'Secure online transactions with MasterCard Secure Code'. This is a different product from the listing's 'UNI Rupay Credit Card' page.",
+      "changes": [
+        "card_product.network: null -> mastercard; evidence: listing card art for 'UNI Credit Card' (see network_evidence)",
+        "card_product.point_value_inr_baseline: null -> null (re-checked); evidence: the product page, its Top Benefits slider and More-from items (read from the page's content API), its FAQs, the listing, MITC V18, the Cardmember Agreement V08_28072026 and the Redemption Rules state no rupee value for a Uni coin. YES calls the reward '1% cashback in uni coins' (listing) and 'Unlimited 1% Reward points (rewards issued as Uni coins)' (page), so 1% is the stated rate.",
+        "open_questions: 'Top Benefits and More from this card are images' -> read in wave 3: shop and earn Uni coins, zero forex mark-up, 1% fuel surcharge waiver up to Rs 500, annual fee waiver on Rs 50,000 spend within 12 months, contactless, MasterCard Secure Code; they add no rate, cap or coin value",
+        "open_questions: added that the listing compare-record for this card carries 'unlimited international lounge access, 6 domestic' text that the page and MITC do not state and that also sits on the virtual-only Klick record; it looks like template filler and was not stored"
+      ],
+      "still_missing": [
+        "Non-blocking: rupee value of one Uni coin is not stated by YES BANK (left null; the 1% cashback figure is the stated return).",
+        "Non-blocking: physical or virtual form and UPI linking are not stated; reward expiry for Uni coins is not stated (MITC sends co-brand currencies to the product page, which is silent)."
+      ]
+    },
+    {
+      "slug": "yes-bank-zagg",
+      "status": "still_blocked",
+      "network": "rupay",
+      "network_evidence": "Card art on three YES BANK pages or documents, all showing 'YES BANK' and the RuPay logo: the 'Zagg credit card User guide' PDF (https://www.yes.bank.in/pdf?name=zagg_one_pager_usage_guide.pdf, page rendered), the hero banner on the Zagg product page (zag-credit-card-px-web-banner-3.jpeg, card cropped and enlarged) and the page's Top Benefits slide 'Power Up Your Credit Card On UPI and credit card spends'. The product FAQ also says the card links to all 'NPCI recognised TPAPs'.",
+      "changes": [
+        "card_product.network: null -> rupay; evidence: card art in the YES usage guide, hero banner and Top Benefits slide (see network_evidence)",
+        "open_questions: 'benefit image unreadable' -> read in wave 3: the Top Benefits slider (earn cashbacks, works everywhere, 1-click controls, scan and pay for UPI) is images with headline text only and states no rate; the What-comes-with items, 7 FAQs, usage guide, MITC V18 (the page's English MITC link resolves to it), KFS and Cardmember Agreement have no Zagg or Rio cashback or coin terms. Only the footnote for cards issued before 10 Jan 2025 gives a rate (0.5 Rio coins per Rs 50 non-UPI, 1.5 per Rs 50 UPI)",
+        "reward_rules: [] -> [] (still none written); no reward rate is published for the current card, so the card stays held"
+      ],
+      "still_missing": [
+        "Blocker: YES BANK publishes no cashback or coin rate for the Zagg card issued after 10 Jan 2025. The page says any programme run by the Zagg app is the app provider's sole responsibility, so the rewards terms sit outside YES documents. A person should ask YES BANK or Zagg for the current Zagg card rewards terms (rate, unit, value, caps, exclusions).",
+        "Value of a Rio or Zagg coin is not stated."
+      ]
+    },
+    {
+      "slug": "yes-bank-pop-club-rupay",
+      "status": "complete",
+      "network": "rupay",
+      "network_evidence": "YES BANK's POP-CLUB product page says 'Credit on UPI with RuPay'; card art on the YES credit card listing tile for POP-CLUB (pop-club-cc-icon-image.png) shows 'pop', 'YES BANK' and 'RuPay PLATINUM' (opened and enlarged).",
+      "changes": [
+        "card_product.point_value_inr_baseline: null -> null (re-checked); evidence: all eight FAQs on the YES page (including the 'View More' ones), MITC V18, KFS, Cardmember Agreement and Redemption Rules (YES Rewardz only) contain no POPcoin redemption terms. The FAQ 'What are the ways to use POPcoins?' lists discounts in the POPclub app, 'minis' sample packs, exclusive deals and discounts on 100+ D2C brands with no rupee value; the fee FAQ calls the 400 POPcoins credited when the Rs 399 fee is paid 'a cashback' without a per-coin value. Partner pages (mypop.in) conflict and are not used.",
+        "additional_data.research_provenance sources: added the listing card art as network evidence",
+        "open_questions: POPcoin value entry extended with the wave 3 search result; fee cohort, physical or virtual and repeatability questions unchanged"
+      ],
+      "still_missing": [
+        "Non-blocking: rupee value of a POPcoin is not stated by YES BANK (left null).",
+        "Non-blocking: whether a new applicant gets the lifetime-free cohort or the Rs 399 card (the page calls lifetime free a limited-time offer); whether the 1,500-coin milestone and the 400-coin fee credit repeat every year; physical or virtual form.",
+        "Non-blocking: MITC and KFS cap tables still print POP-CLUB fuel cap Rs 300 while the page and the MITC bullet say Rs 100 from 1 Jun 2026; Rs 100 is stored."
+      ]
+    },
+    {
+      "slug": "sbm-bank-india-onecard-metal",
+      "status": "complete",
+      "network": "visa",
+      "network_evidence": "Card art on SBM's secured credit card page (consumer-onecard.webp) shows 'SBM bank', 'one' and 'VISA Signature'; the SBM Cardholder Agreement (30 Jun 2026) clauses 5.1 and 14.6 refer to Visa acceptance and Visa conversion rates. The virtual card is 'VISA/RuPay powered' and the RuPay floater card earns no rewards (OneCard MITC, 29 Oct 2026). SBM shows no separate metal card network.",
+      "changes": [
+        "card_product.point_value_inr_baseline: null -> null (re-checked); evidence: no rupee value for a OneCard point in the OneCard MITC (29 Oct 2026), KFS, Cardholder Agreement clause 20 (it only says the bank may change 'the reward point conversion rate' and refers to 'the equivalent rupee value of used reward points'), RP-details, the secured-card MITC (clause I points back to the SBM page) or the older SBM-hosted OneCard MITC and Cardmember Agreement (Dec 2024, Mar 2025)",
+        "additional_data.research_provenance sources: added the two older SBM-hosted OneCard documents as read-to-confirm-absence"
+      ],
+      "still_missing": [
+        "Non-blocking: SBM states no rupee value per reward point, so no percentage return can be computed (left null).",
+        "Non-blocking: clause 20 III.i caps incremental 5X rewards on education, bills and utilities and insurance at 25,000 points with no period, while clause 20 I.b says bills and utilities stopped earning from 30 Jul 2026; no cap rule is written.",
+        "Non-blocking: fuel exclusion MCCs 5541 and 5542 are assumed because the text names fuel without codes."
+      ]
+    },
+    {
+      "slug": "sbm-novio",
+      "status": "still_blocked",
+      "network": null,
+      "network_evidence": "Two networks issued, stored with dualNetwork (visa and rupay): the novio KFS (SBM file 29 Oct 2026) says its fee table 'is applicable for both VISA and Rupay'; the SBM page card image (credilio-credit-card.webp) shows 'novio', 'SBM bank' and 'RuPay SELECT'; the only reward document is titled 'SBM novio Credit Card - Rupay Variant: Rewards Program'.",
+      "changes": [
+        "card_product.point_value_inr_baseline: null -> null (re-read); evidence: RuPay variant rewards T&C 3.4 says points 'have no monetary value, except in respect of the value assigned by the Bank', are not convertible and cannot be redeemed for cash or credit; 2.2 says vouchers are 'at discounted rates, which may vary for each brand'. No document gives a rupee value per coin.",
+        "open_questions: Visa variant rewards -> searched again: the SBM page links exactly one Reward Points document for novio (the RuPay variant); none is linked for a Visa variant on that page, the Notice Board or the Policies page; the MITC only says a virtual card is 'RuPay / Visa powered (as per the issued network)'"
+      ],
+      "still_missing": [
+        "Blocker: SBM publishes no reward terms for the Visa variant of novio, although its KFS says the card exists on both networks. A person should ask SBM or Credilio whether a Visa variant is still issued and which rewards document applies to it. If it is not issued, the card can be published as RuPay-only from the existing RuPay rules.",
+        "Value of a novio coin is not stated (left null).",
+        "Non-blocking: it is not stated whether a fuel transaction above Rs 4,000 earns nothing or earns on Rs 4,000, or whether the monthly fuel caps (400 UPI, 40 POS coins) follow the calendar month."
+      ]
+    },
+    {
+      "slug": "sbm-zet",
+      "status": "still_blocked",
+      "network": "rupay",
+      "network_evidence": "SBM's secured credit card page describes ZET as 'an FD-backed RuPay credit card' and the card image (sbm-zet-card.webp) shows 'SBM bank', 'ZET' and the RuPay logo (re-viewed).",
+      "changes": [
+        "open_questions: HELD no reward rate -> re-checked 7 Nov 2026: the page links a Reward Points document for MobiKwik First, Kredit.Pe, novio, Niyo, OneCard, Step-Up and Paisa Plus but none for ZET; the 29 Oct 2026 MITC clause I says rewards constructs are on the respective card program on SBM's website; the older SBM-hosted ZET MITC (25 pp, Jan 2025) and Cardmember Agreement (17 pp) only say cash transactions earn no reward points; the ZET KFS (12 Oct 2026) has no reward terms",
+        "reward_rules: [] -> [] (none written; no rates invented)"
+      ],
+      "still_missing": [
+        "Blocker: SBM publishes no ZET reward document (rate, unit, value, caps, exclusions). A person should ask SBM or ZET for it. Partner pages advertise subscription-gated UPI cashback; those are partner marketing and are not used."
+      ]
+    },
+    {
+      "slug": "sbm-magnet",
+      "status": "still_blocked",
+      "network": "visa",
+      "network_evidence": "Card art on SBM's secured credit card page (SBM-Magnet-Gild-Card.webp), re-viewed: the card reads 'Gild', 'SBM bank' and 'VISA Platinum'. The older SBM-hosted Magnet MITC (PDF created 5 Mar 2025) says only that the card 'is available on Rupay / Visa, or any other network as chosen by the Bank'; no document confirms a RuPay Magnet.",
+      "changes": [
+        "open_questions: HELD no reward rate -> re-checked 7 Nov 2026: the page text says 'unlimited magnet coins as rewards' but links no Reward Points document; the 29 Oct 2026 MITC clause I points back to the page; the Magnet KFS (9 Jun 2026) and the SBM-hosted Magnet MITC (SBM-MAGNET-Credit-Card-MITC.pdf) only say EMI and cash transactions earn no reward points and list a rewards redemption fee of Nil",
+        "open_questions: Magnet vs Gild -> the page's own card image for the Magnet tile is labelled 'Gild'; the KFS and MITC call the product SBM Magnet; unchanged, needs a person",
+        "reward_rules: [] -> [] (none written; no rates invented)"
+      ],
+      "still_missing": [
+        "Blocker: SBM publishes no Magnet reward document (rate, coin unit, value, caps, exclusions). A person should ask SBM or ZET (the app partner) for it.",
+        "A person should confirm that Magnet and Gild are one live product (the KFS is dated 9 Jun 2026, older than the other SBM secured-card documents)."
+      ]
+    },
+    {
+      "slug": "suryoday-mobikwik-first-rupay-platinum",
+      "status": "still_blocked",
+      "network": "rupay",
+      "network_evidence": "Suryoday's MobiKwik KFS (https://suryoday.bank.in/assets/pdf/KFS_SSFB_RuPay_Platinum_Credit_MBK.pdf, PDF created 24 Jun 2026) lists 'Card Association: Rupay'; the listing names the card 'MobiKwik First Suryoday SFB Rupay Platinum Credit Card'.",
+      "changes": [
+        "open_questions: MobiKwik MITC link returned 404 -> on 7 Nov 2026 (curl) https://suryoday.bank.in/assets/pdf/MITC_SSFB_RuPay_Platinum_Credit_MBK.pdf returns a 30-page PDF (PDF created 24 Jun 2026, server file 25 Jun 2026) whose clause l) CASH BACK PROGRAM is word for word the generic MITC clause: no rate, cap, period, exclusions or minimum transaction",
+        "open_questions: added that the 5 Oct 2026 Suryoday MITC (Stable Money cards) says 'Cashback eligibility, rates, caps, and exclusions shall be as specified in the KFS of the respective card variant', and the MobiKwik KFS has no cashback terms",
+        "open_questions: added that the listing FAQ 'How can I get information about cashback' links to stablemoney-suryoday-sfb-credit-card-cashback.pdf (server file 2 Jul 2025): 0.5% per eligible transaction, Rs 3,000 per billing cycle cap, 15 excluded MCC groups, written for the Stable Money cards. Not applied to the 1% MobiKwik card; a person could decide whether the shared FAQ and the listing footnote '#With the capping of Rs 3,000' extend to it",
+        "open_questions: MobiKwik's own product page links no cashback terms (site-wide policies only) and its testimonials name the 'SBM MobiKwik First Credit Card'",
+        "reward_rules: [] -> [] (none written)"
+      ],
+      "still_missing": [
+        "Blocker: no Suryoday or MobiKwik document states the cap, period, exclusions or minimum transaction for the advertised 1% cashback on this card. A person should ask Suryoday SFB or MobiKwik for the cashback terms of the MobiKwik First card (the 5 Oct 2026 MITC says they belong in the card's KFS, which has none)."
+      ]
+    }
+  ]
+}

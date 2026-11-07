@@ -21,7 +21,7 @@
     "tokenization_support": [],
     "contactless_pin_free_limit_inr": null,
     "point_value_inr_baseline": null,
-    "point_value_baseline_basis": "Value of one AU Reward Point is not stated on the Prathama page or its FAQ. AU Rewardz FAQ: value depends on card variant and redemption category.",
+    "point_value_baseline_basis": "Value of one AU Reward Point is not stated for Prathama: the page and FAQ (hidden accordions included, re-read 2026-11-07) say only \"Redeem your Reward Points for a range of amazing benefits\", there is no Prathama welcome, lounge or milestone T&C, and AU Rewardz FAQ and Cardmember Agreement clause 22.11 say the rate depends on the card variant and redemption category and defer to the variant page. Left null on purpose.",
     "point_expiry_months": 24,
     "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
     "display_assets": {
@@ -574,8 +574,8 @@
             }
           ],
           "open_questions": [
-            "Network: UNRESOLVED. The Prathama page has no popup naming a network, the card art shows no network logo, and no Prathama-specific PDF exists. card_product.network left null.",
-            "Reward Point value in rupees: not stated for Prathama. AU Rewardz FAQ says it depends on card variant and redemption category. effective_base_return_percent left null.",
+            "Network: UNRESOLVED after a second sweep on 2026-11-07 (wave 3, W7). The Prathama page carries no network text at all (not even the shared Visa popup), the Prathama card art (listing tile and product-page art) shows no network mark on the front, and AU publishes no Prathama-specific PDF. Also silent: AU's 6 May 2026 portfolio press release and the Q1 FY27 results note, KFS v1.9 and MITC v2.23 (they name a network only for the CheQ Visa), and the Cardmember Agreement of 16 May 2026 (clauses 3.14 to 3.16 allow a network change at renewal and use \"VISA/RuPay\" for every card). visa.co.in, mastercard.co.in, npci.org.in and rupay.co.in carry no AU card list. Needs a physical card, the AU 0101 app card view, or a written answer from AU (1800 1200 1500; creditcard.support@aubank.in). card_product.network left null.",
+            "Reward Point value in rupees: not stated for Prathama (see point_value_baseline_basis). Ask AU, or read the value from a Prathama redemption screen in AU Rewardz, before filling it. effective_base_return_percent left null.",
             "CMA 23.5.2 says Prathama holders can earn \"a maximum of 1000 Reward Points per statement cycle\" after the ₹5,000 threshold: modelled as a cap on the incremental 2-point rate only; whether it caps all points is not stated.",
             "Exclusion MCC lists are not published for Prathama (categories only)."
           ],

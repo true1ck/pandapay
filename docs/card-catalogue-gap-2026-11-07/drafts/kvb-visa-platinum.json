@@ -21,7 +21,7 @@
     "tokenization_support": [],
     "contactless_pin_free_limit_inr": null,
     "point_value_inr_baseline": null,
-    "point_value_baseline_basis": "No KVB document read gives the rupee value of one reward point: the MITC says the construct is on the card variant page, the page states points only, the redemption page lists IVR, net or mobile banking and \"redemption by cash back\" through the Credit Card Cell without a rate, and the Card Member Agreement has no rewards section. Redemption costs ₹99 per request; minimum 2,000 points for the first redemption; unclaimed points lapse once in 3 years or if the minimum amount due is unpaid for more than 60 days (MITC).",
+    "point_value_baseline_basis": "No KVB document read gives the rupee value of one reward point for Platinum or Honour (re-checked 2026-11-07, W9): the 2026 KFS cum MITC says the Reward Points construct is on the card variant webpage and governed by the Card Member Agreement, the Platinum and Honour pages state points and \"x rewards\" only, the redemption page lists IVR, net or mobile banking and \"redemption by cash back\" through the Credit Card Cell without a rate, the Card Member Agreement has no rewards section, the Board-approved Combined Credit Card Policy (Nov 2024) has none, the KCPC FAQs have none, and the \"Reward Points\" page under Accounts is the debit card Anmol Rewardz programme. KVB's 29 May 2026 press release gives values for Eternis (1 point = ₹1), Samara (₹0.5) and Aura (₹0.25) only; they belong to other cards and must not be reused. Redemption costs ₹99 per request; minimum 2,000 points for the first redemption; unclaimed points lapse once in 3 years or if the minimum amount due is unpaid for more than 60 days (MITC).",
     "point_expiry_months": null,
     "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
     "display_assets": {
@@ -75,7 +75,7 @@
       "conditions": {
         "wording": "2x rewards",
         "applies_to": "domestic and international travel, hotels and air tickets",
-        "multiplier_basis": "multiple of the base rate (assumed; the page does not say what the multiplier applies to)",
+        "multiplier_basis": "NOT STATED by KVB: the page gives the multiplier without saying what it applies to (base points, a rate per rupee, or something else)",
         "per_inr_block": 150
       },
       "action": {
@@ -98,7 +98,7 @@
       "conditions": {
         "wording": "1.5x rewards",
         "applies_to": "restaurants",
-        "multiplier_basis": "multiple of the base rate (assumed)",
+        "multiplier_basis": "NOT STATED by KVB (see travel rule)",
         "per_inr_block": 150
       },
       "action": {
@@ -121,7 +121,7 @@
       "conditions": {
         "wording": "1.5x rewards",
         "applies_to": "medical",
-        "multiplier_basis": "multiple of the base rate (assumed)",
+        "multiplier_basis": "NOT STATED by KVB (see travel rule)",
         "per_inr_block": 150
       },
       "action": {
@@ -144,7 +144,7 @@
       "conditions": {
         "wording": "1.5x rewards",
         "applies_to": "insurance",
-        "multiplier_basis": "multiple of the base rate (assumed)",
+        "multiplier_basis": "NOT STATED by KVB (see travel rule)",
         "per_inr_block": 150
       },
       "action": {
@@ -167,7 +167,7 @@
       "conditions": {
         "wording": "1.5x rewards",
         "applies_to": "movie tickets",
-        "multiplier_basis": "multiple of the base rate (assumed)",
+        "multiplier_basis": "NOT STATED by KVB (see travel rule)",
         "per_inr_block": 150
       },
       "action": {
@@ -190,7 +190,7 @@
       "conditions": {
         "wording": "1.5x rewards",
         "applies_to": "books",
-        "multiplier_basis": "multiple of the base rate (assumed)",
+        "multiplier_basis": "NOT STATED by KVB (see travel rule)",
         "per_inr_block": 150
       },
       "action": {
@@ -213,7 +213,7 @@
       "conditions": {
         "wording": "1.5x rewards",
         "applies_to": "rail tickets and car rentals",
-        "multiplier_basis": "multiple of the base rate (assumed)",
+        "multiplier_basis": "NOT STATED by KVB (see travel rule)",
         "per_inr_block": 150
       },
       "action": {
@@ -479,6 +479,18 @@
               "read": "rendered page text"
             },
             {
+              "url": "https://www.kvb.bank.in/docs/credit-card-policy-corporate.pdf",
+              "kind": "Combined Credit Card Policy, Board approved (26 pages; searched for reward terms: none)",
+              "date": "PDF created 2024-11-02",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.kvb.bank.in/docs/press-release-kvb-elevates-premium-banking-experience-with-visa-credit-card-portfolio.pdf",
+              "kind": "KVB press release to the exchanges, 29 May 2026: premium Visa portfolio (Aura, Samara, Altura, Eternis) with a rupee value per point for those four cards only; Platinum and Honour are not covered, so no value is taken from it",
+              "date": "dated 2026-05-29",
+              "read": "pdftotext"
+            },
+            {
               "url": "https://www.kvb.bank.in/docs/retail-credit-card-mitc.pdf",
               "kind": "Earlier MITC Version 2.0 (superseded): annual fee \"Waived for 1st year\" and add-on card joining fee ₹200 for retail cards; the 2026 KFS cum MITC drops both columns",
               "date": "Version 2.0 dated 2025-03-04",
@@ -487,8 +499,8 @@
           ],
           "open_questions": [
             "NAMING: the work queue names \"KVB Visa Platinum\" and \"KVB Visa Signature\" from the March 2025 MITC. KVB now sells these as \"KVB Platinum Credit Card\" (Visa Platinum variant, MITC card name \"Platinum\") and \"KVB Honour Credit Card\" (Visa Signature variant, MITC card name \"Honor\"); the retail offers page confirms \"Visa Platinum, Visa Signature (Honour)\". The slugs keep the queue names. The queue file is superseded by the 2026 KFS cum MITC.",
-            "Value of one reward point in rupees: not stated in any KVB document read, so point_value_inr_baseline and effective_base_return_percent are null and the accelerator rules carry a multiplier but no points per block.",
-            "Reward multipliers: the page says \"1.5x rewards\" on restaurants, medical, books, insurance, rail tickets, movie tickets and car rentals and \"2x rewards\" on travel, hotels and air tickets without saying what the multiplier applies to; it is read as a multiple of the base 2 points per ₹150, which would give 3 and 4 points per ₹150, but the issuer does not state those numbers.",
+            "Value of one reward point in rupees (re-checked 2026-11-07, W9, NOT FOUND): not stated in any current KVB document for this card, so point_value_inr_baseline and effective_base_return_percent are null and the accelerator rules carry a multiplier but no points per block. Read: the Aug 2026 KFS cum MITC (says the construct is on the card variant webpage and bound by the Card Member Agreement), the card page, the Card Member Agreement (no rewards section), the Board-approved Combined Credit Card Policy, the redemption page, the KCPC FAQs and the Anmol Rewardz page (debit cards). The 29 May 2026 press release values Eternis, Samara and Aura points only. To fill it, KVB must state the Platinum and Honour rate (credit card cell 1800 419 6500 per the redemption page) or a redemption screen on an issued card must be read.",
+            "Reward multipliers (re-checked 2026-11-07, W9, NOT FOUND): the page says \"1.5x rewards\" on restaurants, medical, books, insurance, rail tickets, movie tickets and car rentals and \"2x rewards\" on travel, hotels and air tickets without saying what the multiplier applies to, and no current KVB T&C defines it (the Aug 2026 KFS cum MITC and the Card Member Agreement are silent; the March 2025 MITC is superseded and silent too). The earlier reading as a multiple of the base 2 points per ₹150 (which would give 3 and 4 points per ₹150) is NOT recorded as a fact: the rules keep only the stated multiplier and an empty points-per-block. KVB's wording for its premium cards (\"Earn 2 Reward Points for every Rs 100 spent, plus 3X points on flights...\") shows the multiplier can be read as extra points on top of the base, so the reading is genuinely ambiguous.",
             "Categories that earn no points, any monthly or annual points cap, rounding and the minimum transaction are not stated.",
             "First-year annual fee: the March 2025 MITC said \"Waived for 1st year\"; the August 2026 KFS cum MITC and the card page list joining fee nil and annual fee ₹599 with a waiver from the 2nd year on spend. Whether the first-year fee is billed needs a person to confirm; the 2026 documents are followed.",
             "Cash withdrawal fee conflict: the KFS cum MITC says ₹300 per transaction or 1% of the amount, whichever is higher; the card page says 2% of the cash withdrawn or ₹300, whichever is higher. The MITC value (1%) is used.",

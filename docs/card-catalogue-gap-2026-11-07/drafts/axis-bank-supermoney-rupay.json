@@ -570,9 +570,27 @@
           "fetched_on": "2026-11-07",
           "sources": [
             {
-              "url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-axis-bank-supermoney-rupay-credit-card.pdf",
-              "kind": "Cashback T&C (earn rates, cap, exclusions, examples)",
+              "url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/axis-bank-supermoney-rupay-credit-card.pdf?sfvrsn=b2de24db_4",
+              "kind": "Cashback T&C, newest file (PDF created 29 Sep 2026), linked from the issuer page under \"Cashback structure\" and \"Lifetime Free Credit Card\" (earn rates, cap, exclusions, examples, fuel waiver by UPI or non-UPI)",
+              "date": "PDF created 2026-09-29",
               "read": "pdftotext"
+            },
+            {
+              "url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-axis-bank-supermoney-rupay-credit-card.pdf",
+              "kind": "Cashback T&C, earlier file (PDF created 24 Aug 2026), linked from the issuer page \"Terms and Conditions\" section whose sentence says \"updated w.e.f. 1st January, 2026\"",
+              "date": "PDF created 2026-08-24",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://campaign.axis.bank.in/generic/terms-and-conditions-generic-all.pdf",
+              "kind": "Axis revision notice \"Effective 28-08-2026\" linked from the issuer page banner (DCC markup 3.5%, late fee above ₹50,000, payment allocation, gift card category, no cashback on bridge fees, road fees and tolls)",
+              "date": "PDF created 2026-07-27",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.axis.bank.in/cards/credit-card/supermoney-credit-card",
+              "kind": "issuer page: card named \"AXIS BANK SUPERMONEY RuPay Credit Card\" (network evidence), fees table, links to the three documents above",
+              "read": "rendered page text and link targets"
             },
             {
               "url": "https://www.axis.bank.in/docs/default-source/default-document-library/mitc-credit-cards.pdf",
@@ -581,13 +599,14 @@
             }
           ],
           "open_questions": [
-            "The T&C carries no revision date; the issuer page banner and T&C section give conflicting effective dates (28 Aug 2026 versus 1 Jan 2026), so the in-force version needs a human check.",
+            "In-force version (checked 2026-11-07, W9): partly settled. The issuer page has three pointers: a banner saying the T&C \"will be updated w.e.f 28th August'26\" (links the 28-08-2026 revision notice above), a Terms and Conditions section saying \"updated w.e.f. 1st January, 2026\" (links the 24 Aug 2026 file), and Cashback structure / Lifetime Free links to a newer file (29 Sep 2026). The two Cashback T&C files are word for word the same on every earn rate, the 3% dependent cap, the ₹100 minimum, the exclusion list and the examples; the only substantive difference is the fuel waiver (see notes). The 24 Aug file already lists Gift Card and \"Bridge Fees, Road Fees & Tolls\" as exclusions, which is what the 28 Aug notice introduces, so it cannot be a 1 Jan 2026 text. No document anywhere carries the date 1 January 2026, so that sentence on the page is unsupported and was not used. Neither PDF prints a revision date (the dates above are the PDF file-creation dates), so Axis does not state in words which file governs; the newest file (29 Sep 2026, linked from the cashback section) was used for the fuel waiver. A person may still want Axis to confirm the in-force date, but no modelled earn field depends on it.",
             "The MCC numbers behind each exclusion category were not extractable; exclusions are category-level.",
             "Cashback is credited in the next billing cycle, 3 days before the statement date."
           ],
           "notes": [
             "The 3% cap is dynamic: cashback on super.money UPI spends is capped at the larger of ₹100 and the cashback earned on other eligible spends in the same cycle. The T&C examples: other cashback ₹90 gives a ₹100 cap; other cashback ₹300 gives a ₹300 cap. The cap_rules row records only the ₹100 floor, so the engine must not project the 3% rate until the dependent cap is implemented.",
-            "Fuel surcharge waiver is 1% for ₹400-₹4,000, maximum ₹400 per statement cycle (T&C); the waiver actually posted is 0.989% of the fuel amount."
+            "Fuel surcharge waiver, ₹400-₹4,000, maximum ₹400 per statement cycle (MITC 8 Oct 2026 lists the card in the refunded group). Newest Cashback T&C (29 Sep 2026): 1% on eligible fuel transactions made using UPI and 0.989% on non-UPI/offline transactions; the 24 Aug 2026 file said 1% with \"the waiver calculated and posted is 0.989%\" of the fuel amount. waiver_percent keeps 1 (the UPI rate).",
+            "Network: RuPay is named in the card name on the issuer page, in both Cashback T&C titles and in the MITC fee table (\"SUPERMONEY RuPay Credit Card\"). The thumbnail the Axis all-credit-cards listing shows for this card is an unrelated Flipkart Mastercard image file and was not used."
           ],
           "publication_gate": "pending_human_review_of_official_documents"
         }

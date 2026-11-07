@@ -18,6 +18,10 @@ const RAIL = 'https://www.au.bank.in/pdf/xcite-credit-card/railway-lounges.pdf';
 const RAIL_DATE = 'Railway Lounge Access Program, 4 Oct 2024';
 const LIST = 'https://www.au.bank.in/personal-banking/credit-cards';
 const PAGE_NOTE = 'rendered page text including hidden accordions and popups';
+// Wave 3 (W8): AU press releases used as network evidence.
+const KOSMO_PR = 'https://www.au.bank.in/pdfs/press-release/2025/au-small-finance-bank-partners-with-kiwi-for-credit-on-upi-launches-au-kosmo-credit-card---18th-september-2025.pdf';
+const ZAGGLE_PR = 'https://www.au.bank.in/pdfs/press-release/2026/Press-Release-AU--Bank-and-zaggle-Launch-Co-Branded-Credit-Car-9th-July-2026.pdf';
+const NET_TRIED = 'Routes tried on 2026-11-07, none states the network: card front art on the AU credit card list tile and on the product page (images opened and read, no network mark on the front); the product page text and popups; AU KFS v1.9, MITC v2.23 and Cardmember Agreement (only the generic "VISA/RuPay"); the AU domestic lounge, Priority Pass and railway lounge T&Cs ("Visa/RuPay" generic, so the lounge programme covers Visa and RuPay cards only); the card liability insurance and welcome-benefit T&Cs; AU press releases and blogs; the AU offers site (card-level offers need a login); visa.co.in card-finder and offers pages (generic, no AU card named); npci.org.in RuPay pages (no issuer or card list); rupay.co.in offers (bot-protected, not opened). The "Visa Exclusive Offers" block is template text shared across AU pages (it also sits on the RuPay-only Kosmo page) and was not used. Needs a person: ask AU, or read the card back or a statement.';
 
 // Fees shared by every AU retail card in the KFS (per-card values passed in).
 const auFees = ({ fuelCap, forex = 3.49, cashLimit = 20, atmFee = 2.5, fuelMin = 400, emiPost = 99, apr = { m: 3.75, a: 45 } }) => ({
@@ -155,8 +159,8 @@ export const cards = {
             { url: LIST, kind: 'AU current credit card list (card is listed)', date: '2026-11-07' },
           ],
           unverified: [
-            'Network: no AU page, PDF or card art read states it. The lounge T&Cs say only "Visa/RuPay".',
-            'Cash advance limit: KFS shows 70% and then "50% of the card limit (w.e.f. 7th Nov\'2025)"; MITC v2.23 still shows 70%. 50% is used.',
+            'Network: UNRESOLVED after a second sweep on 2026-11-07 (wave 3, W7). The NOMO page, KFS v1.9, MITC v2.23, the Cardmember Agreement of 16 May 2026 (secured card section 23 included) and the NOMO card art (listing tile and the page\'s nomo_card art: purple and black card with the NOMO wordmark, chip and contactless mark, no network mark) state none. The 10 Apr 2026 usage terms (NOMO is in the domestic lounge table) and the railway lounge T&C say only "Visa/RuPay" or "VISA/RuPay Credit Card", which covers every AU card. Clauses 3.14 to 3.16 of the Cardmember Agreement allow a network change at renewal ("network selection, if applicable"). visa.co.in, mastercard.co.in, npci.org.in and rupay.co.in carry no AU card list. Needs a physical NOMO card, the AU 0101 app card view, or a written answer from AU (1800 1200 1500; creditcard.support@aubank.in is the KFS grievance contact for NOMO). card_product.network left null.',
+            'Cash advance limit (SETTLED, small residual): KFS v1.9 (2 Nov 2026, Credit Limit table on page 4) lists NOMO at "70% of the card limit" and directly under it "50% of the card limit (w.e.f., 7th Nov\'2025)", i.e. a dated revision that supersedes the 70% row. MITC v2.23 (also dated 2 Nov 2026, PDF built about 20 minutes before the KFS) still lists NOMO at 70% with no revision row. 50% is used because only the KFS carries the effective date and it was produced last; the MITC table looks stale. AU has not been asked to confirm; the card statement states the limit that applies to a given card.',
             'Domestic lounge: the page FAQ says 2 visits on ₹20,000 spent in the previous quarter; the page feature text and the 10 Apr 2026 T&C say ₹50,000. The T&C is used.',
             'The ₹50,000 quarterly milestone says "Double it": not stated whether the bonus becomes 1,000 points or 500 more. reward_value_inr left null.',
             'Rewardz FAQ says a point\'s value depends on card variant and redemption category; the NOMO page states ₹0.25 only.',
@@ -187,6 +191,7 @@ export const cards = {
       accrual_engine: A({ base_points_per_block: 3, effective_base_return_percent: null, cycle_accrual_ceiling_points: 25000 }),
       reward_rules: [
         ...auExcl('xcite', 'Xcite page note, CMA 23.5.1 and 23.6', { wallet: true }),
+        X('xcite-excl-transport', 'excluded_spend', [], 'Reward Points accrual on Transportation Merchant Category Codes discontinued with effect from 1 Apr 2026 (Xcite page, rewards note). MCC list not published.', { effective_from: '2026-04-01', mcc_group: 'transportation' }),
         R({ id: 'xcite-dining-15rp', cat: 'dining', pri: 10, ppb: 15, mult: 5, cap: 'xcite-total-cycle-cap', reason: 'Page ("Check where to spend"): 15 Reward Points per ₹100 on Dining, Movies, Grocery & Departmental Stores.' }),
         R({ id: 'xcite-movies-15rp', cat: 'entertainment', pri: 10, ppb: 15, mult: 5, cap: 'xcite-total-cycle-cap', reason: 'Page: 15 Reward Points per ₹100 on Movies.' }),
         R({ id: 'xcite-grocery-15rp', cat: 'groceries', pri: 10, ppb: 15, mult: 5, cap: 'xcite-total-cycle-cap', reason: 'Page: 15 Reward Points per ₹100 on Grocery.' }),
@@ -218,8 +223,8 @@ export const cards = {
             { url: LIST, kind: 'AU current credit card list (card is listed)', date: '2026-11-07' },
           ],
           unverified: [
-            'Network: no AU page, PDF or card art read states it.',
-            'Value of one Reward Point: not stated for Xcite. effective_base_return_percent left null.',
+            'Network (wave 3): STILL UNRESOLVED. The Xcite page text has no mention of Visa, RuPay or Mastercard at all (page and popups searched). ' + NET_TRIED + ' Only the sister card Xcite Ultra is named RuPay on its own page; no AU document says the Xcite series shares one network, so that is not carried over.',
+            'Value of one Reward Point: not stated for Xcite (card page, KFS, MITC, CMA and the Rewardz FAQ read 2026-11-07; the FAQ says it depends on card variant and redemption category). effective_base_return_percent left null on purpose. AU\'s 2 Jun 2023 notice gives Rs 0.20 per point only for gift card/voucher redemption on all variants; not used as a card value.',
             'Whether the card is open to new applications: it is on AU\'s card list and in the KFS, but the product page shows no card-specific Apply button, only the generic Apply links.',
             'Merchant categories for the 15-point rate (dining, movies, grocery, departmental stores) are not defined by MCC.',
             'The page note "Applicable on base Reward Points only (3 Reward Points per ₹100)" sits under the earn list; read as qualifying the 2X first-five-days bonus. Confirm.',
@@ -273,18 +278,18 @@ export const cards = {
             { url: LIST, kind: 'AU current credit card list (card is listed)', date: '2026-11-07' },
           ],
           unverified: [
-            'HELD: the page publishes only three monthly-spend cashback tiers ("1% on monthly spends of ₹7,500", "2% on ₹12,500", "3% on ₹20,000", headline "up to 3%"). It does not say whether the percentage applies to the whole month\'s spend or only the part above each tier, which spends are eligible, any cap, or when and how cashback is paid. No terms PDF is linked. Written as no reward rule so the importer skips it.',
-            'Network: no AU page, PDF or card art read states it.',
+            'HELD (wave 3 re-check 2026-11-07): the page publishes three monthly-spend cashback tiers ("Earn 1% Cashback on monthly spends of ₹7,500. Earn 2% Cashback on monthly spends of ₹12,500. Earn 3% Cashback on monthly spends of ₹20,000"). The page text read on 2026-11-07 now also states: "Maximum Cashback per statement cycle is ₹600"; "Statement cycle spends will be considered for product feature cashback calculation"; and that "Wallet reloads/spends, Cash, Rent, Education & Govt, EMI, Fuel, BBPS and Quasi Cash transactions will not be considered for milestone benefit". Still not stated anywhere: whether the percentage applies to the whole statement-cycle spend once a tier is reached, or only to the tier amount (₹75, ₹250, ₹600); whether tiers stack; when and how the cashback is credited. The ₹600 cap equals 3% of ₹20,000, which fits either reading, so the rate cannot be written without guessing. No terms PDF is linked from the page, and the KFS, MITC and Cardmember Agreement have no Xcite ACE cashback clause (searched for "cashback"). Written as no reward rule so the importer skips it. Needs a person: ask AU for the written Xcite ACE cashback terms, or check one statement.',
+            'Network: ' + NET_TRIED,
             'Air accident cover is ₹50 lacs on the page popup; the Ultra page headline says ₹20 lacs. Not modelled.',
             'Whether the card is open to new applications: on AU\'s card list and in the KFS, but the product page shows no card-specific Apply button.',
             'No separate joining fee is stated: the KFS gives one fee table under both headings; both set to ₹749.',
           ],
           notes: [
-            'Exact page tiers kept here because they are not modelled: 1% cashback on monthly spends of ₹7,500; 2% on monthly spends of ₹12,500; 3% on monthly spends of ₹20,000.',
+            'Exact page tiers kept here because they are not modelled: 1% cashback on monthly spends of ₹7,500; 2% on monthly spends of ₹12,500; 3% on monthly spends of ₹20,000. Page cap: ₹600 maximum cashback per statement cycle. Excluded from the milestone: wallet reloads/spends, cash, rent, education and government, EMI, fuel, BBPS, quasi cash. Period: statement cycle (page: "Statement cycle spends will be considered").',
             'Comprehensive protection: air accident cover ₹50 lacs; card liability cover; credit shield up to ₹2 lacs; purchase protection up to ₹25,000; baggage loss and delay, flight delay, loss of passport, plane hijack (page popup). Claims on 1800 1200 1500.',
             'Fuel surcharge waiver up to ₹100 per statement cycle on ₹400 to ₹5,000 (page, KFS). Cash limit 40% (KFS). Forex 3.49%. Xpress EMI on ₹500+ transactions, ₹2,000 minimum total.',
           ],
-          extra: { held: true, held_reason: 'Cashback tier mechanics are not published (basis, cap, eligible spends, payout).' },
+          extra: { held: true, held_reason: 'Cashback basis is not published: the page gives tiers, a ₹600 per-cycle cap and an exclusion list, but not whether the percentage applies to the whole cycle spend or to the tier amount, nor whether tiers stack or when cashback is paid. Network also unresolved.' },
         }),
         lateFee, returnFee,
       ] },
@@ -297,11 +302,12 @@ export const cards = {
     const o = common(url, 100, { fees: { cashLimit: 40 } });
     return {
       ...o,
-      card_product: { ...o.card_product, name: 'AU Xcite Ultra Credit Card', joining_fee_inr: 749, annual_fee_inr: 749, application_mode: 'open', is_upi_linkable: null, form_factors: ['nfc_contactless'], contactless_pin_free_limit_inr: 5000, point_value_inr_baseline: null, point_value_baseline_basis: 'Value of one AU Reward Point is not stated for Xcite Ultra. The AU Rewardz FAQ says it depends on card variant and redemption category.' },
+      card_product: { ...o.card_product, name: 'AU Xcite Ultra Credit Card', network: 'rupay', joining_fee_inr: 749, annual_fee_inr: 749, application_mode: 'open', is_upi_linkable: null, form_factors: ['nfc_contactless'], contactless_pin_free_limit_inr: 5000, point_value_inr_baseline: null, point_value_baseline_basis: 'Value of one AU Reward Point is not stated for Xcite Ultra: not on the card page, the KFS, the MITC or the Cardmember Agreement. The AU Rewardz FAQ (rewardz.au.bank.in/faqs, read 2026-11-07) says the value depends on the card variant and the redemption category and points to the card product page. AU\'s 2 Jun 2023 notice sets Rs 0.20 per point for gift card/voucher redemption on all variants, but that is one redemption channel for every card, not an Ultra value, so it is not used.' },
       eligibility_engine: auEligibility(),
       accrual_engine: A({ base_points_per_block: 4, effective_base_return_percent: null, cycle_accrual_ceiling_points: 25000 }),
       reward_rules: [
         ...auExcl('ultra', 'Xcite Ultra page note, CMA 23.5.1 and 23.6', { wallet: true }),
+        X('ultra-excl-transport', 'excluded_spend', [], 'Reward Points accrual on Transportation Merchant Category Codes discontinued with effect from 10 Apr 2026 (Ultra page, rewards note). MCC list not published.', { effective_from: '2026-04-10', mcc_group: 'transportation' }),
         R({ id: 'ultra-international-12rp', cat: 'international_spend', pri: 5, ppb: 12, mult: 3, cap: 'ultra-total-cycle-cap', cond: { transaction_type: 'international' }, reason: 'Page: 12 Reward Points per ₹100 on international spends.' }),
         R({ id: 'ultra-online-8rp', cat: 'all_retail', rail: 'online', pri: 10, ppb: 8, mult: 2, cap: 'ultra-total-cycle-cap', cond: { nature: 'online' }, reason: 'Page: 8 Reward Points per ₹100 on online spends.' }),
         R({ id: 'ultra-bills-1rp', cat: 'bills', pri: 25, ppb: 1, mult: 0.25, cap: 'ultra-total-cycle-cap', cond: { includes: ['utility', 'telecom'], max_points_per_transaction: 100 }, reason: 'Page: 1 Reward Point per ₹100 on utility & telecom; CMA 23.5.1: at most 100 points per transaction.' }),
@@ -314,6 +320,7 @@ export const cards = {
         welcome_and_renewal_gift: { trigger: null, benefit_points: null, effective_value_inr: null, condition: null },
         spend_milestones: [
           { id: 'ultra-m1', label: '5,000 Reward Points on ₹2.5 lakh retail spend in a card anniversary year (choose vouchers from a bouquet of brands)', threshold_spend_inr: 250000, reward_value_inr: null, period: 'card_anniversary_year', is_repeatable: false, effective_from: null, effective_to: null },
+          { id: 'ultra-m-monthly', label: 'Additional 500 Reward Points on retail spends of ₹5,000 done between the 1st and the 5th of every calendar month (page "Additional Rewards Every Month"; rent, wallet and fuel excluded). The 1st-to-5th window cannot be expressed in this field; reward value left null because AU states no point value.', threshold_spend_inr: 5000, reward_value_inr: null, period: 'calendar_month', is_repeatable: true, effective_from: null, effective_to: null },
         ],
       },
       lifestyle_and_network_benefits: [
@@ -324,8 +331,8 @@ export const cards = {
       ],
       dynamic_promotions_registry: visaOffers('ultra').filter((p) => !p.promo_id.endsWith('-mmt')),
       additional_data: { items: [
-        { key: 'verified_network_research', value: { finding_status: 'partial', product_status: 'active', source_url: url, evidence: 'Page "Curated Offers" popup: "Enjoy now amazing offers available on your Xcite Ultra RuPay Credit Card" (RuPay variant named outright). The same popup lists Times Prime and Alaya Stays offers through Visa-branded partner links, which hints at a Visa variant but never names one.', candidates: [
-          netCandidate({ network: 'rupay', label: 'Xcite Ultra RuPay Credit Card', sourceUrl: url, evidence: 'Page popup: "your Xcite Ultra RuPay Credit Card".' }),
+        { key: 'verified_network_research', value: { finding_status: 'resolved', product_status: 'active', source_url: url, evidence: 'AU Xcite Ultra product page (re-read 2026-11-07), "Curated Offers" block: "RuPay Offer: Enjoy now amazing offers available on your Xcite Ultra RuPay Credit Card" (link to rupay.co.in/domestic-offers). The card name is written into that sentence, whereas the same block on the Kosmo page still carries the template name "ABC Pro RuPay Credit Card", so the Ultra text was edited for this card. This page has no "Visa Exclusive Offers" heading (the CA and CS pages do). The Times Prime and Alaya Stays links on this page are Visa-programme links, but the Kosmo page, which AU\'s own 18 Sep 2025 press release says is "Built on the RuPay network", carries the same Visa-programme block, so those links do not point to a Visa variant. Network set to rupay on the strength of AU\'s own page text naming the card.', candidates: [
+          netCandidate({ network: 'rupay', label: 'Xcite Ultra RuPay Credit Card', sourceUrl: url, evidence: 'Page text: "your Xcite Ultra RuPay Credit Card".' }),
         ] } },
         ...prov({
           sources: [
@@ -334,14 +341,17 @@ export const cards = {
             { url: MITC, kind: 'MITC (fee waiver, cash limit)', date: MITC_DATE },
             { url: CMA, kind: 'Cardmember Agreement (25,000 point cap 23.5, exclusions 23.6)', date: CMA_DATE },
             { url: DOM_LOUNGE, kind: 'domestic lounge T&C (Xcite Ultra listed, 2 per quarter)', date: DOM_LOUNGE_DATE },
+            { url: 'https://rewardz.au.bank.in/faqs', kind: 'AU Rewardz FAQ ("value of Reward Points depends on the Credit Card variant and the category"), read for the point-value check', date: '2026-11-07' },
+            { url: 'https://www.au.bank.in/ausfb-reward-points-ausfb-credit-card-reward-points-usage-tnc_2ndjune23.pdf', kind: 'AU Reward Points usage notice, Rs 0.20 per point for vouchers on all variants (not a card value)', date: '2023-06-02, effective 2023-07-05' },
+            { url: 'https://www.au.bank.in/pdfs/press-release/2025/au-small-finance-bank-partners-with-kiwi-for-credit-on-upi-launches-au-kosmo-credit-card---18th-september-2025.pdf', kind: 'AU press release on the Kosmo card ("Built on the RuPay network"); shows the Visa-programme offer block on AU pages is template text', date: '2025-09-18' },
             { url: RAIL, kind: 'railway lounge T&C', date: RAIL_DATE },
             { url: LIST, kind: 'AU current credit card list (card is listed)', date: '2026-11-07' },
           ],
           unverified: [
-            'Network: RuPay variant is named on the page ("Xcite Ultra RuPay Credit Card"); a Visa variant is only hinted by Visa-branded partner links. card_product.network is left null; one candidate is recorded in verified_network_research.',
-            'Value of one Reward Point: not stated. effective_base_return_percent left null.',
+            'Network (wave 3): RESOLVED as rupay from AU\'s own page text "your Xcite Ultra RuPay Credit Card". Residual risk: no AU document says Ultra is issued only on RuPay; the card front art (list tile and product page) carries no network mark, and the KFS, MITC, CMA, lounge and railway T&Cs say only "Visa/RuPay". If AU ever shows a Visa Ultra, switch to dualNetwork.',
+            'Value of one Reward Point: not stated by AU for Xcite Ultra (card page, KFS, MITC, CMA, Rewardz FAQ read 2026-11-07). point_value_inr_baseline and effective_base_return_percent left null on purpose. AU\'s 2 Jun 2023 notice gives Rs 0.20 per point only for gift card/voucher redemption on all variants; not used as a card value.',
             'Welcome benefit: the page headline mentions "Exclusive Welcome and Milestone Benefits" but lists only the milestone and a monthly bonus. No welcome benefit recorded.',
-            'Monthly bonus "additional 500 Reward Points on retail spends of ₹5,000 done between 1st to 5th of every calendar month" is not modelled: the milestone schema has no monthly period.',
+            'Monthly bonus "additional 500 Reward Points on retail spends of ₹5,000 done between 1st to 5th of every calendar month" is recorded as a calendar_month milestone (the importer accepts that period) with reward value null. The 1st-to-5th window cannot be expressed, so an engine would test the whole month against the ₹5,000 threshold; keep the value null.',
             'Air accident cover: ₹20 lacs on the page headline, ₹50 lacs in the popup. Not modelled.',
             'Whether international online spend earns 12 or 8 per ₹100: the page lists them separately; international is given priority.',
             'Page note excludes only Rent, Wallet and Fuel; CMA 23.5.1 and 23.6 also exclude education, government, BBPS, EMI and cash. The wider list is used.',
@@ -367,7 +377,7 @@ export const cards = {
     const o = common(url, 100);
     return {
       ...o,
-      card_product: { ...o.card_product, name: 'AU Kosmo Credit Card', joining_fee_inr: 0, annual_fee_inr: 0, application_mode: 'open', is_upi_linkable: true, form_factors: ['virtual_card', 'nfc_contactless'], contactless_pin_free_limit_inr: 5000, point_value_inr_baseline: null, point_value_baseline_basis: 'AU publishes no rate or value for Kiwi rewards.' },
+      card_product: { ...o.card_product, name: 'AU Kosmo Credit Card', network: 'rupay', joining_fee_inr: 0, annual_fee_inr: 0, application_mode: 'open', is_upi_linkable: true, form_factors: ['virtual_card', 'nfc_contactless'], contactless_pin_free_limit_inr: 5000, point_value_inr_baseline: null, point_value_baseline_basis: 'AU publishes no rate or value for Kiwi rewards.' },
       eligibility_engine: auEligibility(),
       accrual_engine: A({ base_block_inr: null, rounding_mode: null, base_points_per_block: null, effective_base_return_percent: null, cycle_accrual_ceiling_points: null, capping_period_basis: null }),
       reward_rules: [],
@@ -380,20 +390,21 @@ export const cards = {
       lifestyle_and_network_benefits: [],
       dynamic_promotions_registry: [],
       additional_data: { items: [
-        { key: 'verified_network_research', value: { finding_status: 'partial', product_status: 'active', source_url: url, evidence: 'Page FAQ: to authenticate UPI transactions a separate UPI PIN is created "when linking your RuPay Credit Card to any UPI app", in an answer about the Kosmo card. The page never prints "RuPay" next to the card name, and a template popup lists Visa offers.', candidates: [
-          netCandidate({ network: 'rupay', label: 'AU Kosmo Credit Card (UPI-linked)', sourceUrl: url, evidence: 'Page FAQ on UPI PIN for the Kosmo card names the RuPay Credit Card; InstaPay FAQ on the AU site says only RuPay credit cards can be linked to UPI.' }),
+        { key: 'verified_network_research', value: { finding_status: 'resolved', product_status: 'active', source_url: KOSMO_PR, evidence: 'AU Small Finance Bank press release dated 18 Sep 2025 (AU\'s own document): headline "New RuPay-powered credit card", body "Built on the RuPay network, this card offers a fully digital onboarding journey, seamless UPI integration"; the AU Executive Director says the AU KOSMO Credit Card "complements the existing RuPay Card portfolio". Supported by the AU product page FAQ, which tells Kosmo holders to create a UPI PIN "when linking your RuPay Credit Card to any UPI app". The Visa-offer block on the Kosmo page is template text (the RuPay block beside it still names "ABC Pro").', candidates: [
+          netCandidate({ network: 'rupay', label: 'AU Kosmo Credit Card', sourceUrl: KOSMO_PR, evidence: 'AU press release 18 Sep 2025: "Built on the RuPay network".' }),
         ] } },
         ...prov({
           sources: [
             { url, kind: 'issuer_page + FAQ', read: PAGE_NOTE },
             { url: KFS, kind: 'KFS (lifetime free, 3.49% forex, ₹100 fuel waiver, 20% cash limit)', date: KFS_DATE },
             { url: MITC, kind: 'MITC', date: MITC_DATE },
-            { url: CMA, kind: 'Cardmember Agreement (no Kosmo or Kiwi reward section found)', date: CMA_DATE },
+            { url: CMA, kind: 'Cardmember Agreement (no Kosmo or Kiwi reward section found; re-searched in wave 3 for "Kosmo", "Kiwi")', date: CMA_DATE },
+            { url: KOSMO_PR, kind: 'AU press release: AU partners with Kiwi, launches AU KOSMO Credit Card ("Built on the RuPay network"; "Earn rewards on every spend ... via the Kiwi app"; no rate)', date: '2025-09-18' },
             { url: LIST, kind: 'AU current credit card list (card is listed)', date: '2026-11-07' },
           ],
           unverified: [
-            'HELD: AU publishes no reward rate. The page says only "Earn Kiwi rewards on every UPI Scan & Pay" and "Kiwi rewards on eCom, POS & contactless transactions". The Cardmember Agreement has no Kosmo or Kiwi section. The Kiwi app terms are a partner document and were not used. No reward rule written so the importer skips it.',
-            'Network: not named on the page. UPI linking points to RuPay, but a template popup also lists Visa offers. Left null.',
+            'HELD (wave 3 re-check 2026-11-07): AU still publishes no reward rate. The page says only "Earn Kiwi rewards on every UPI Scan & Pay" and "Kiwi rewards on eCom, POS & contactless transactions"; the AU press release says only "Earn rewards on every spend - UPI, retail, or online ... via the Kiwi app"; the Cardmember Agreement, KFS, MITC and the AU Rewardz site have no Kosmo or Kiwi rewards clause. No Kiwi or Kosmo rewards T&C is hosted or linked on au.bank.in. No reward rule written so the importer skips it. For a person to decide: Kiwi (the co-brand partner, gokiwi.in/cards/aubank/) prints "1.5% Cashback on UPI scan & pay" and "0.5% Cashback on online spends" for this card, with no cap, exclusion list, rupee value or POS/contactless rate and no linked rewards policy. That is a partner statement, not an AU document, so it was NOT used. Ask AU or Kiwi for the written Kiwi Rewards Policy for the KOSMO card if the partner source is to be accepted.',
+            'Network (wave 3): RESOLVED as rupay from AU\'s own press release of 18 Sep 2025 ("Built on the RuPay network"). The earlier doubt came from a template Visa-offer popup on the page, which is shared template text.',
             'Fuel surcharge waiver cap: the product page and KFS say ₹100 per statement cycle; a template popup on the same page says ₹250. KFS used.',
             'The "RuPay Offer" popup on this page names the "ABC Pro RuPay Credit Card", so it is copied template text, not Kosmo terms.',
           ],
@@ -429,7 +440,7 @@ export const cards = {
       dynamic_promotions_registry: [],
       redemption_matrix: { direct_options: [{ channel: 'zagg.money app: statement credit / cashback, minimum 1,000 Reward Points, posted about 30 days after the request', redemption_type: 'statement_credit', inr_value_per_point: 0.25, max_bill_percentage_payable_via_points: 'N/A', min_points_per_txn: 1000, cycle_points_burn_cap: 'N/A', redemption_fee_inr: 'N/A', effective_from: null, effective_to: null }], partner_transfers: [] },
       additional_data: { items: [
-        { key: 'verified_network_research', value: { product_status: 'active', source_url: url, evidence: 'AU product page: reward blocks for "AU Zaggle Visa Credit Card" and "AU Zaggle RuPay Credit Card"; FAQ: "you can apply for only one network variant of the card". Cardmember Agreement section 23.33 has separate earning structures "A. AU Zaggle RuPay Credit Card" and "B. AU Zaggle Visa Credit Card".', candidates: [
+        { key: 'verified_network_research', value: { finding_status: 'resolved', product_status: 'active', source_url: url, evidence: 'AU press release of 9 Jul 2026 (AU\'s own document, newer than the Cardmember Agreement copy): the AU Zaggle Co-Branded Retail Credit Card is "Available on both Visa and RuPay networks", "offers customers the flexibility to choose their preferred payment network". AU product page: reward blocks for "AU Zaggle Visa Credit Card" and "AU Zaggle RuPay Credit Card"; FAQ: "you can apply for only one network variant of the card". Cardmember Agreement section 23.33 has separate earning structures "A. AU Zaggle RuPay Credit Card" and "B. AU Zaggle Visa Credit Card".', candidates: [
           netCandidate({ network: 'visa', label: 'AU Zaggle Visa Credit Card', sourceUrl: CMA, evidence: 'CMA 23.33 B: Visa variant earns 8% Zagg Coins on contactless up to ₹5,000, 4% on e-commerce, 2% on other retail. Page shows the same variant.' }),
           netCandidate({ network: 'rupay', label: 'AU Zaggle RuPay Credit Card', sourceUrl: CMA, evidence: 'CMA 23.33 A: RuPay variant earns 4%/8% on zagg.money UPI, 2% on other UPI apps and 2% on other retail. Page shows the same variant.' }),
         ] } },
@@ -437,12 +448,13 @@ export const cards = {
           sources: [
             { url, kind: 'issuer_page + FAQ', read: PAGE_NOTE },
             { url: CMA, kind: 'Cardmember Agreement section 23.33 (Zaggle reward structure, cap, minimum, value, redemption)', date: CMA_DATE },
+            { url: ZAGGLE_PR, kind: 'AU press release: AU Zaggle co-branded card "Available on both Visa and RuPay networks"; "Zagg Coins can be converted into cashback through the zagg.money app"; gives no coins-per-₹100 definition', date: '2026-07-09' },
             { url: KFS, kind: 'KFS (lifetime free, 3.49% forex, ₹100 fuel waiver, 20% cash limit)', date: KFS_DATE },
             { url: MITC, kind: 'MITC', date: MITC_DATE },
             { url: LIST, kind: 'AU current credit card list (card is listed)', date: '2026-11-07' },
           ],
           unverified: [
-            'HELD: AU states rates as "X% Zagg Coins" and gives the value of a coin (₹0.25) but never says how many coins one percent means per ₹100 spent. If 8% meant 8 coins per ₹100 the value is 2%; if it meant 8% of spend the value is 8%. No reward rule written so the importer does not guess; the structure is kept in notes below.',
+            'HELD (wave 3 re-check 2026-11-07): AU states rates as "X% Zagg Coins" and gives the value of a coin (₹0.25) but never says how many coins one percent means per ₹100 spent. Searched and read: the AU product page and FAQ (re-read), Cardmember Agreement 23.33, the AU press releases of 22 Sep 2025 and 9 Jul 2026, the KFS and MITC. None defines the unit. CMA 23.22 says only that Reward Points "as may be applicable on the credit card variant" are earned "for transaction amounts in multiples of ₹100", which does not map a percentage to coins. Leads for a person (NOT used as facts): Zaggle\'s own rewards policy (zagg.money/rewards-policy) says "3% of the transaction amount will be credited as Zagg Coins" for the YES Bank Zagg card, but it states it does not cover the AU card; and the 2,000-coin cycle cap fits a per-₹100 reading far better than a percent-of-value reading. Ask AU or Zaggle for the AU Zaggle rewards terms, or check a live statement, before writing rules. If 8% meant 8 coins per ₹100 the value is 2%; if it meant 8% of spend the value is 8%. No reward rule written so the importer does not guess; the structure is kept in notes below.',
             'Network: both variants are issued and named by AU, so this is resolved as dual; the importer reads verified_network_research.',
             'Whether the ₹99 + GST redemption fee in the KFS applies to Zagg Coin redemption through the zagg.money app: not stated for this program.',
             'The CMA copy carrying the Zaggle clause is undated; the dated copy under /pdf/credit-card/ (16 May 2026) lacks it.',
@@ -525,8 +537,8 @@ export const cards = {
             { url: LIST, kind: 'AU current credit card list (card is listed)', date: '2026-11-07' },
           ],
           unverified: [
-            'Network: the page popup says "Visa Exclusive Offers"; no AU document or card art states the network outright. card_product.network left null; one candidate recorded.',
-            'Value of one AU Reward Point: not stated for this card.',
+            'Network (wave 3): STILL UNRESOLVED; card_product.network left null, one Visa candidate kept as a hint only. The CA page carries a "Visa Exclusive Offers" block (MakeMyTrip Visa Signature offer, Times Prime and Alaya Stays Visa-programme links) and no RuPay block, which points to Visa, but the same block is template text on AU pages (it also sits on the RuPay-only Kosmo page), so it is not accepted as evidence. The card art on the list tile and the product page ("CA_Credit_Card_new-version-without-name") shows no network mark. ' + NET_TRIED,
+            'Value of one AU Reward Point: not stated for this card (CA reward T&C of 6 Mar 2026, welcome and ICAI T&Cs, KFS, MITC, CMA and the Rewardz FAQ read; the FAQ says it depends on card variant and redemption category). Left null on purpose. AU\'s 2 Jun 2023 notice gives Rs 0.20 per point only for gift card/voucher redemption on all variants; not used as a card value.',
             'MCC 9311 appears in both the 8-point Tax Payments list and the Education & Govt exclusion list; modelled as excluded.',
             'Cap after the 5,000-point cycle limit on the 8-point categories: the T&C and CMA only say the maximum is 5,000 per cycle, not whether spend then earns 2 points. Modelled as zero accrual for those categories.',
             'Lounge: the page says access needs the card to stay "purchase-active"; the lounge T&C says ₹50,000 retail spend in the previous calendar quarter, effective for CA and CS from 1 Oct 2026. T&C used.',
@@ -610,8 +622,8 @@ export const cards = {
             { url: LIST, kind: 'AU current credit card list (card is listed)', date: '2026-11-07' },
           ],
           unverified: [
-            'Network: popup "Visa Exclusive Offers" and the "without-VISA" art file name point to Visa, but no AU document states it outright. card_product.network left null; one candidate recorded.',
-            'Value of one AU Reward Point: not stated for this card.',
+            'Network (wave 3): STILL UNRESOLVED; card_product.network left null, one Visa candidate kept as a hint only. The CS page carries the "Visa Exclusive Offers" block and no RuPay block, and the card image asset is named "CS_Credit_Card Op3_without-VISA" (a Visa logo was edited out of that art file), which points to Visa, but the offers block is template text shared across AU pages and a file name is not a network mark. The card art as displayed (list tile and product page) shows no network mark. ' + NET_TRIED,
+            'Value of one AU Reward Point: not stated for this card (CS reward T&C, welcome and ICSI T&Cs, KFS, MITC, CMA and the Rewardz FAQ read; the FAQ says it depends on card variant and redemption category). Left null on purpose. AU\'s 2 Jun 2023 notice gives Rs 0.20 per point only for gift card/voucher redemption on all variants; not used as a card value.',
             'MCC 9311 appears in both the 8-point Tax Payments list and the Education & Govt exclusion list; modelled as excluded.',
             'Cap after the 5,000-point cycle limit on the 8-point categories: not stated. Modelled as zero accrual for those categories.',
             'Lounge: the page says access needs the card to stay "purchase-active"; the lounge T&C says ₹50,000 retail spend in the previous quarter, effective for CA and CS from 1 Oct 2026. T&C used.',

@@ -133,7 +133,7 @@ export const cards = {
   'rbl-bank-nova': (() => {
     const E = ['fuel', 'utilities', 'insurance', 'quasi', 'rent', 'wallet', 'education', 'govt', 'contracted', 'cash', 'railways', 'misc'];
     return {
-      card_product: { ...GST, name: 'RBL Bank Nova Credit Card', issuer_slug: 'rbl', card_type: 'credit', network: null, application_mode: 'open', joining_fee_inr: 0, annual_fee_inr: 12500, is_upi_linkable: null, data_source_tier: 'issuer_mitc_plus_manual_audit', source_url: page('nova-credit-card'), status: 'draft', verified_at: null, point_value_inr_baseline: 1, point_value_baseline_basis: 'Nova T&C (Rewards Program): 1 Reward Point = ₹1, redeemable at nova.rbl.bank.in on flights, hotels, e-gift cards, miles transfer, experiences, events, gifting, merchandise and philanthropy. Only one value is stated, no lower fallback.', point_expiry_months: 36, confirmed_flat_base_outside_smartbuy_or_equivalent_portal: true },
+      card_product: { ...GST, name: 'RBL Bank Nova Credit Card', issuer_slug: 'rbl', card_type: 'credit', network: null, application_mode: null, joining_fee_inr: 0, annual_fee_inr: 12500, is_upi_linkable: null, data_source_tier: 'issuer_mitc_plus_manual_audit', source_url: page('nova-credit-card'), status: 'draft', verified_at: null, point_value_inr_baseline: 1, point_value_baseline_basis: 'Nova T&C (Rewards Program): 1 Reward Point = ₹1, redeemable at nova.rbl.bank.in on flights, hotels, e-gift cards, miles transfer, experiences, events, gifting, merchandise and philanthropy. Only one value is stated, no lower fallback.', point_expiry_months: 36, confirmed_flat_base_outside_smartbuy_or_equivalent_portal: true },
       eligibility_engine: { evaluation_mode: 'guideline_only', notes: null, rules: [], required_documents: [] },
       accrual_engine: { base_block_inr: 200, rounding_mode: null, base_points_per_block: 4, base_cashback_percent: 'N/A', effective_base_return_percent: 2, cycle_accrual_ceiling_points: null, capping_period_basis: 'calendar_month', reversal_policy: { mode: null, negative_balance_allowed: null, negative_balance_settlement: null } },
       reward_rules: [
@@ -176,17 +176,26 @@ export const cards = {
       additional_data: { items: [
         emiRule, lateRule, milesNote,
         { key: 'addon_card_fee_rule', value: { rule: 'Two add-on cards are free; ₹3,000 one-time fee per card beyond two (MITC section iii).', source: 'MITC' } },
+        dualNetwork({
+          sourceUrl: 'https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide',
+          evidence: 'RBL "Your RBL Bank Credit Card Network Availability Guide" (issuer page, undated, read 2026-11-07): the row "Nova Credit Card" is ticked for MasterCard and Visa and not for RuPay. The Nova card art (nova_card.webp and nova_card_0.webp on the product page) shows no network mark. A cardholder gets one network or the other; which one a new customer is issued is not stated.',
+          variants: [
+            { network: 'mastercard', network_tier: 'N/A', label: 'RBL Bank Nova Credit Card (Mastercard)', source_url: 'https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide', evidence: 'Network guide row "Nova Credit Card": MasterCard ticked.' },
+            { network: 'visa', network_tier: 'N/A', label: 'RBL Bank Nova Credit Card (Visa)', source_url: 'https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide', evidence: 'Network guide row "Nova Credit Card": Visa ticked.' },
+          ],
+        }),
         ...prov({
           sources: [
+            { url: 'https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide', kind: 'RBL credit card network availability guide (issuer page, undated): Nova ticked for MasterCard and Visa, RuPay not ticked', read: 'rendered page and table cells, 2026-11-07' },
             { url: 'https://drws17a9qx558.cloudfront.net/document/credit-cards/tnc-nova-credit-card.pdf', kind: 'Nova T&C (fee waiver, welcome and renewal gift, rewards, cap, milestone, lounge, golf, fuel, forex, Table 1 exclusions); link taken from the Cardmember Agreement table', date: 'PDF created 2026-07-07; Last-Modified 2026-08-05', read: 'pdftotext' },
             { url: page('nova-credit-card'), kind: 'issuer product page', read: 'page text and DOM; no card network stated' },
             srcSOC, srcMITC, srcCMA, srcMILES, srcLIST,
             { url: 'https://www.rbl.bank.in/nova-form', kind: 'the "Express your interest" page the product page links to (viewed only, nothing entered)', read: 'page text' },
           ],
           unverified: [
-            'Network: no issuer document or card art read states Visa, Mastercard or RuPay (the T&C only says "MasterCard/RuPay/VISA" generically). Left null.',
-            'Application route: the product page and the current card list offer only an "Express your interest" form, not "Apply Now". Unlike Lumiere, the list does not label Nova "By invite only". Whether a customer can apply directly is not stated; application_mode "open" is an assumption.',
-            'Cap period and fallback: the 30,000-point cap is on accelerated points "in a calendar month"; what the 12-per-₹200 spend earns after the cap is not stated. Modelled as falling back to 4 per ₹200.',
+            'Network (resolved 2026-11-07): RBL\'s own network availability guide ticks Nova for MasterCard and Visa and not RuPay, so it is recorded as a dual-network card with card_product.network left null. The guide is undated. The card art shows no network mark and the Nova T&C only says "MasterCard/RuPay/VISA" generically. Which network a new customer is issued is not stated.',
+            'Application route (checked 2026-11-07): the product page and the current card list (64 cards) show "Know more" and "Express Your Interest" (link https://www.rbl.bank.in/nova-form) and no "Apply Now"; the Lumiere row says "By invite only" but the Nova row does not. The Nova T&C, MITC and Cardmember Agreement say nothing about invitation. RBL does not say whether an interest form leads to an application, so application_mode is null (the earlier "open" was an assumption).',
+            'Cap period and fallback: the T&C caps accelerated points at 30,000 "in a calendar month", while a separate bullet says "One month is defined as one billing cycle assigned to the Card" (the cap sentence itself says calendar month, so calendar_month is used). What the 12-per-₹200 spend earns after the cap is not stated; modelled as falling back to 4 per ₹200 (the schema allows only a downgrade to base or zero accrual).',
             'Nova T&C refers to "the above-mentioned program partners" for miles transfer but prints no partner list, and the product page shows a KrisFlyer logo that the Miles Transfer T&C (12 partners) does not list. All 12 partners from the Miles Transfer T&C are used; confirm which apply to Nova.',
             'Lounge visits: the T&C says "a calendar year" for both the 12 domestic and 12 international visits; the product page does not give a period. Modelled as annual.',
             'Milestone repeat: the T&C says the e-gift card is earned on ₹3 lakh "in a calendar quarter"; is_repeatable true assumes it repeats each quarter.',
@@ -221,7 +230,7 @@ export const cards = {
     ],
     cap_rules: [],
     brand_specific_voucher_caps: [],
-    fees_and_surcharges: baseFees({ forex: 1.5, fuel: { surcharge: 1, waiver: 1, min: 500, max: 4000, cap: 250 }, redemption: { fee_inr: 0, gst_applicable: null, exempted_channels: ['all redemptions'], notes: 'The iGlobe page and T&C do not mention the redemption fee; SOC, MITC and RWD 4.3.1(b)(ii) list iGlobe as exempt from the INR 99 + GST fee.' } }),
+    fees_and_surcharges: baseFees({ forex: 1.5, fuel: { surcharge: 1, waiver: 1, min: 500, max: 4000, cap: 250 }, redemption: { fee_inr: 0, gst_applicable: null, exempted_channels: ['all redemptions'], notes: 'The iGlobe page and T&C do not mention the redemption fee. Only the Rewards Programme T&C (RWD 4.3.1(b)(ii), undated) names iGlobe as exempt from the INR 99 + GST fee; the exempt lists in the SOC (4 Jun 2026) and MITC (29 Oct 2026) do not name iGlobe, so the exemption rests on RWD alone (see open questions).' } }),
     statement_and_late_fees: baseStatement,
     fee_waiver_and_milestones: {
       annual_fee_waiver: { threshold_spend_inr: 'N/A', period: 'N/A', evaluation_condition: 'SOC and MITC show ₹3,000 for the first and later years with no spend-linked waiver. The fee is NIL for an Insignia Preferred Banking customer.', excluded_category_ids: [], excluded_mcc_list: [], waives_fee_inr: 'N/A' },
@@ -250,17 +259,19 @@ export const cards = {
         sources: [
           { url: 'https://webassets.rbl.bank.in/document/credit-cards/terms-conditions-iglobe-credit-card.pdf', kind: 'iGlobe T&C (welcome, forex, rewards, milestones, fuel waiver, concierge, golf, lounges, payment method)', date: 'PDF created 2026-07-23; Last-Modified 2026-08-05', read: 'pdftotext' },
           { url: page('iglobe-credit-card'), kind: 'issuer product page', read: 'page text' },
+          { url: 'https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide', kind: 'RBL credit card network availability guide (issuer page, undated): iGlobe ticked for MasterCard only', read: 'rendered page and table cells, 2026-11-07' },
           srcSOC, srcMITC, srcCMA, srcRWD, srcMILES, srcLIST,
           { url: LOUNGES, kind: 'RBL Bank India Lounge Program list (not itemised here)', date: 'PDF created 2026-10-15', read: 'pdftotext (first page)' },
         ],
         unverified: [
-          'Value of a reward point is not published in any document read, so effective_base_return_percent and the milestone rupee values are null. Only the miles ratio (4 points = 1 mile) is stated.',
-          'Network: the card art shows no network logo. "Mastercard" rests on T&C 3.7 and 3.8 (the golf programme is "offered by Mastercard", lounges are "via MasterCard service providers"), while the product page says the lounge programme is "offered by MasterCard/Visa". Confirm against the card itself.',
+          'Value of one reward point (checked again 2026-11-07): no RBL document states it for iGlobe. Not on the iGlobe product page (all three tabs), the iGlobe T&C (3.3 and 3.4), the SOC, the MITC, the Cardmember Agreement, the Miles Transfer T&C (only 4 points = 1 mile), the Rewards Programme T&C (RWD 4.1 refers to "the value applicable to the product specific value proposition" without a number, and RWD 3.1 says accrual varies by card) or the public part of rblrewards.rbl.bank.in (FAQs). The redemption screens sit behind the rewards login, which was not opened. point_value_inr_baseline, effective_base_return_percent and the milestone rupee values are therefore null, as the brief requires. A person with an iGlobe login can read the per-point value off the portal.',
+          'Network (resolved 2026-11-07): RBL\'s own network availability guide (issuer page, undated) ticks "iGlobe Credit Card" for MasterCard only, not Visa or RuPay. That agrees with the iGlobe T&C, whose milestone clause names "MasterCard" as the association (T&C 3.3 and 3.4) and whose golf and lounge clauses name Mastercard. The card art shows no network mark and the product page says the lounge programme is "offered by MasterCard/Visa"; the guide is preferred because it is the issuer\'s card-by-card statement.',
+          'Redemption fee: the Rewards Programme T&C (RWD 4.3.1(b)(ii), undated page) lists iGlobe among the cards exempt from the INR 99 + GST redemption fee, but the exempt lists in the SOC (4 Jun 2026) and MITC (29 Oct 2026) name Lumiere, Nova, Insignia, Insignia Prime, World Xclusive, Apex, Aspire, Signature, IRCTC and IOCL and not iGlobe. The RWD exemption is stored (redemption_fee_inr 0) because it is the only document that names the card; RWD cannot be dated, so it cannot be said which is newer.',
           'Reward point expiry: the iGlobe T&C is silent. 24 months is the Rewards Programme T&C rule (RWD 5.1), which exempts only the Insignia Preferred card.',
           'Lounge count: the T&C says Priority Pass access to "1700+" lounges, the product page says "1,400+".',
           'Milestone credit time: the T&C says within 30 days of crossing the threshold in one clause and "within days" in another; the page says 45 days.',
           'The additional 10,000 points at ₹8 lakh reads as in addition to the 10,000 at ₹5 lakh; the T&C wording ("additional") does not say whether the two tiers are cumulative.',
-          'Application route is "visit your nearest branch or reach out to your Relationship Manager" and the card list shows only "Know more", not "Apply Now"; modelled as open.',
+          'Application route: the iGlobe product page says "To apply for RBL Bank iGlobe Credit Card, visit your nearest branch or reach out to your Relationship Manager" and the card list shows only "Know more", not "Apply Now". That is an offline application route for NRIs, so application_mode stays open.',
           'Insignia Preferred Banking customers pay NIL; the draft stores the standard ₹3,000.',
           aprNote,
         ],
@@ -312,8 +323,19 @@ export const cards = {
       additional_data: { items: [
         emiRule, lateRule,
         { key: 'addon_card_fee_rule', value: { rule: 'MITC: ₹200 annual fee per add-on cardholder. The lounge benefit does not apply to add-on cards (T&C 3.3.2(b)).', source: 'MITC section iii' } },
+        dualNetwork({
+          sourceUrl: 'https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide',
+          evidence: 'RBL "Your RBL Bank Credit Card Network Availability Guide" (issuer page, undated, read 2026-11-07): the row "World Safari Lite Credit Card" is ticked for MasterCard, RuPay and Visa (the only card in the guide ticked on all three). The product page carries no card art or network mark. A cardholder gets one network; which one a new customer is issued is not stated.',
+          variants: [
+            { network: 'mastercard', network_tier: 'N/A', label: 'RBL Bank World Safari Lite Credit Card (Mastercard)', source_url: 'https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide', evidence: 'Network guide row "World Safari Lite Credit Card": MasterCard ticked.' },
+            { network: 'rupay', network_tier: 'N/A', label: 'RBL Bank World Safari Lite Credit Card (RuPay)', source_url: 'https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide', evidence: 'Network guide row "World Safari Lite Credit Card": RuPay ticked. Rewards Programme T&C 5.4: offline UPI transactions under INR 2,000 at small merchants on a RuPay credit card earn no base points, voucher or milestone benefits.' },
+            { network: 'visa', network_tier: 'N/A', label: 'RBL Bank World Safari Lite Credit Card (Visa)', source_url: 'https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide', evidence: 'Network guide row "World Safari Lite Credit Card": Visa ticked.' },
+          ],
+        }),
         ...prov({
           sources: [
+            { url: 'https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide', kind: 'RBL credit card network availability guide (issuer page, undated): World Safari Lite ticked for MasterCard, RuPay and Visa', read: 'rendered page and table cells, 2026-11-07' },
+            { url: 'https://webassets.rbl.bank.in/document/credit-cards/kfs-1000.pdf', kind: 'Key Fact Statement linked from the World Safari Lite application form (a generic INR 1,000 annual-fee KFS, footer RBL_KFS/16/06/2026, not specific to this card): fees and finance charges only, no reward rates and no network', date: 'footer 16 Jun 2026', read: 'pdftotext' },
             { url: 'https://webassets.rbl.bank.in/document/credit-cards/tnc-world-safari-lite.pdf', kind: 'World Safari Lite T&C (forex, welcome, lounges, rewards, exclusion table, milestones)', date: 'PDF created 2026-03-30; Last-Modified 2026-05-19', read: 'pdftotext + page images for the exclusion table' },
             { url: 'https://webassets.rbl.bank.in/document/credit-cards/world-safari-lite-and-plus-travel-mcc-list.pdf', kind: 'Travel category MCC list (Airlines, Hotels and Motels, Transportation)', date: 'PDF created 2025-12-10; Last-Modified 2026-01-01', read: 'pdftotext' },
             { url: 'https://webassets.rbl.bank.in/document/credit-cards/welcome-benefit-world-safari-lite-credit-card.pdf', kind: 'Welcome benefit T&C (Ixigo voucher, Swiggy One)', date: 'PDF created 2026-09-02', read: 'pdftotext' },
@@ -322,8 +344,8 @@ export const cards = {
             { url: LOUNGES, kind: 'RBL Bank India Lounge Program list (not itemised here)', date: 'PDF created 2026-10-15', read: 'pdftotext (first page)' },
           ],
           unverified: [
-            'Base rate: the T&C and page state earn rates only for domestic travel (1 point per ₹100) and portal flights and hotels (5 per ₹100). No rate is stated for any other eligible spend, although the exclusion table implies other categories may earn. base_points_per_block and the return percent are left null; a person must confirm whether non-travel spend earns anything.',
-            'Network: no issuer document or card art read names Visa, Mastercard or RuPay (T&C: "MasterCard/RuPay/VISA"). Left null.',
+            'Base rate (re-checked 2026-11-07, still open): the issuer states earn only for domestic travel (1 point per ₹100, T&C 3.4(a), MCC list) and for flight and hotel bookings on the RBL rewards portal (5 per ₹100, T&C 3.4(b)); the product page ("Reward Points that Power Your Next Adventure"), the application-form KFS, the MITC, the Rewards Programme T&C (3.1 "accrual varies for each Credit Card", 5.4 "as defined in respective product terms") and the card list say nothing about any other eligible spend. T&C 3.4(d) lists categories that are "not eligible to earn", which implies other spend might earn, but no rate is printed. base_points_per_block and the return percent are left null and no non-travel earn rule is drafted. Action: ask RBL in writing (cardservices@rbl.bank.in, toll free 1800 102 6222) whether everyday non-travel spend earns points and at what rate, or have the product owner decide to publish the card as travel-only earn.',
+            'Network (resolved 2026-11-07): RBL\'s own network availability guide (issuer page, undated) ticks World Safari Lite for MasterCard, RuPay and Visa, so it is recorded as a multi-network card with card_product.network left null. Which network a new customer is issued is not stated; the T&C only says "MasterCard/RuPay/VISA" generically. On the RuPay variant, the Rewards Programme T&C (5.4) says offline UPI transactions under ₹2,000 at small merchants earn no base points, voucher or milestone benefits.',
             'International travel: only "domestic travel" earns 1 point per ₹100; whether international airline, hotel or transport spend earns anything is not stated.',
             'Welcome benefit: T&C 3.2(c) conditions the voucher on paying the "first month membership fees", while the page says the annual fee; the card carries an annual fee. Ixigo offer valid to 31 Dec 2026 per the welcome T&C.',
             'Milestone tiers: T&C 3.5(b) says "additional 10,000" points at ₹5 lakh; it is not stated whether this adds to the 5,000 at ₹2.5 lakh. Rupee values use the ₹0.05 baseline (₹0.25 would be 5x).',

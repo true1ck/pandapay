@@ -20,8 +20,8 @@
     "form_factors": [],
     "tokenization_support": [],
     "contactless_pin_free_limit_inr": null,
-    "point_value_inr_baseline": null,
-    "point_value_baseline_basis": "First Citizen point value is not stated in the card T&C. The issuer page was reported (from a summarised read) as ₹0.50 per point; verify before use.",
+    "point_value_inr_baseline": 0.5,
+    "point_value_baseline_basis": "Axis product page (read 2026-11-07), Value Chart footnote: \"The Redemption Value of Each FC Point = Rs. 0.50\". The Value Chart rows agree with it (₹1,50,000 of other spend at 2 FC per ₹200 = 1,500 FC shown as ₹750; ₹50,000 on exclusive brands at 20 FC per ₹200 = 5,000 FC shown as ₹2,500; welcome FC \"worth Rs. 300\"). The member T&C does not state a per-point value. FC points redeem only at Shoppers Stop, Homestop, Arcelia, MAC, Clinique, Estee Lauder, Bobbi Brown, Jo Malone and Smashbox (T&C 6); Shoppers Stop can change its programme terms.",
     "point_expiry_months": null,
     "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
     "display_assets": {
@@ -38,7 +38,7 @@
   },
   "eligibility_engine": {
     "evaluation_mode": "guideline_only",
-    "notes": "Issuer page (summarised read): primary cardholder 18-70, resident Indian; indicative only.",
+    "notes": "Issuer page (read 2026-11-07): primary cardholder 18-70, resident of India; indicative only. Documents: PAN copy, proof of income (latest payslip, Form 16 or IT return), residence proof (driving licence, electricity bill or landline bill).",
     "rules": [],
     "community_benchmarks": {
       "min_net_monthly_salary_inr": null,
@@ -55,7 +55,7 @@
     "rounding_mode": null,
     "base_points_per_block": 2,
     "base_cashback_percent": "N/A",
-    "effective_base_return_percent": null,
+    "effective_base_return_percent": 0.5,
     "cycle_accrual_ceiling_points": null,
     "capping_period_basis": null,
     "reversal_policy": {
@@ -96,7 +96,7 @@
         "points_per_block": "N/A",
         "cashback_percent": "N/A",
         "cap_reference": null,
-        "reason": "Utilities earn no points."
+        "reason": "Utilities earn no points (T&C 5; the 20 Jun 2025 notice words it \"Utility & Telecom\")."
       },
       "effective_from": null,
       "effective_to": null
@@ -223,6 +223,42 @@
         "cashback_percent": "N/A",
         "cap_reference": null,
         "reason": "Gift cards earn no points."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "shoppers-excl-cash",
+      "category_id": "cash_withdrawal",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Cash advances earn no points (Axis revision notice effective 20 Jun 2025, linked from the issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "shoppers-excl-repay",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Repayments earn no points (Axis revision notice effective 20 Jun 2025, linked from the issuer page)."
       },
       "effective_from": null,
       "effective_to": null
@@ -449,7 +485,7 @@
     "annual_fee_waiver": {
       "threshold_spend_inr": 100000,
       "period": "card_anniversary_year",
-      "evaluation_condition": "Annual fee waived at ₹1 lakh spend in the anniversary year; rent and wallet MCCs excluded from the spend (T&C 3; MITC says waived on spends of ₹1,00,000 in the preceding year).",
+      "evaluation_condition": "Annual fee waived at ₹1 lakh spend in the anniversary year; rent and wallet MCCs excluded from the spend (T&C 3; MITC says waived on spends of ₹1,00,000 in the preceding year; the issuer page says \"Waived for cumulative spend of Rs. 1 L and above\"). The T&C ties the waiver to cardholders issued on or after 1 May 2024 and onboarded through the Axis platform.",
       "excluded_category_ids": [
         "rent",
         "wallet"
@@ -460,8 +496,8 @@
     "welcome_and_renewal_gift": {
       "trigger": "first_transaction",
       "benefit_points": null,
-      "effective_value_inr": 2300,
-      "condition": "First Citizen points worth ₹300 after the first transaction, plus 3 Shoppers Stop vouchers of ₹500 (each needs a ₹5,000 purchase) and 1 voucher of ₹500 (needs ₹2,500 on exclusive brands, apparel). Vouchers expire 2 months after issue; not for customers swapped or migrated (T&C 4 and Annexure 1)."
+      "effective_value_inr": 2550,
+      "condition": "First Citizen points worth ₹300 after the first transaction within 30 days of issue (issuer page: points worth ₹300; vouchers worth ₹2,250), plus 3 Shoppers Stop vouchers of ₹500 (each needs a ₹5,000 purchase), 1 voucher of ₹500 (needs ₹2,500 on exclusive brands, apparel) and a Shoppers Stop online voucher saving ₹250 on shoppersstop.com (₹1,500 + ₹500 + ₹250 = ₹2,250), plus a complimentary Golden Glow membership. In-store vouchers expire 2 months after issue and are not valid on shoppersstop.com; welcome benefits are for cardholders issued on or after 1 May 2024 through the Axis platform and not for customers swapped or migrated before 31 Jul 2024 (T&C 4 and Annexure 1)."
     },
     "spend_milestones": []
   },
@@ -479,7 +515,24 @@
     "direct_options": [],
     "partner_transfers": []
   },
-  "dynamic_promotions_registry": [],
+  "dynamic_promotions_registry": [
+    {
+      "promo_id": "shoppers-eazydiner-15",
+      "category_id": "dining",
+      "network_program": "N/A",
+      "sponsor": "EazyDiner (Axis Bank Dining Delights programme)",
+      "platform": "EazyDiner website and app",
+      "offer_type": "instant_discount_percent",
+      "discount_percent": 15,
+      "max_discount_inr": 500,
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": false,
+      "is_permanent_card_feature": true,
+      "valid_from": null,
+      "valid_to": null
+    }
+  ],
   "additional_data": {
     "_notes": "Source-supported data that cannot be represented faithfully by any existing universal schema field. Do not duplicate data already represented elsewhere. Do not use this section for unknown values, assumptions, or inferred data.",
     "items": [
@@ -503,9 +556,32 @@
           "fetched_on": "2026-11-07",
           "sources": [
             {
+              "url": "https://www.axis.bank.in/cards/credit-card/axis-bank-shoppers-stop-credit-card",
+              "kind": "issuer page read 2026-11-07 (Features, Fees & Charges, Value Chart): fees, earn rates, fuel waiver, EazyDiner offer, and the Value Chart footnote \"The Redemption Value of Each FC Point = Rs. 0.50\"",
+              "read": "rendered page text"
+            },
+            {
               "url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-axis-bank-shoppers-stop-credit-card.pdf",
               "kind": "Shoppers Stop Axis member T&C (fees, welcome, earn, exclusions)",
+              "date": "PDF created 2026-08-07",
               "read": "pdftotext"
+            },
+            {
+              "url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-shoppers-stop.pdf",
+              "kind": "Axis revision notice effective 20 Jun 2025 linked from the page \"Terms and Conditions\" section: excluded spend categories for reward earn (adds cash advances and repayments; utilities worded \"Utility & Telecom\")",
+              "date": "PDF created 2025-05-30",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://campaign.axis.bank.in/generic/terms-and-conditions-generic-all.pdf",
+              "kind": "Axis revision notice effective 28-08-2026 linked from the page banner (DCC markup, late fee above ₹50,000, payment allocation, gift card category)",
+              "date": "PDF created 2026-07-27",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.axis.bank.in/images/default-source/l4-banner/credit-card/shopper-stop-credit-card-desktop-1366x400-v1.webp",
+              "kind": "card art on the issuer page banner (desktop; the tablet and mobile banners are served from the same page): Visa logo with \"Platinum\" under it",
+              "read": "image opened and read"
             },
             {
               "url": "https://www.axis.bank.in/docs/default-source/default-document-library/mitc-credit-cards.pdf",
@@ -514,15 +590,17 @@
             }
           ],
           "open_questions": [
-            "Network: Visa Platinum, read from the card art on the issuer page banner (https://www.axis.bank.in/images/default-source/l4-banner/credit-card/shopper-stop-credit-card-desktop-1366x400-v1.webp, Visa logo with \"Platinum\" under it, Shoppers Stop mark). The T&C only mentions MCCs allotted by Mastercard and Visa without saying which is issued, and the page text never names the network, so a human should confirm it against the issued card.",
-            "First Citizen point value (₹0.50 per the issuer page in an earlier summarised read) is not in the T&C.",
+            "Network: Visa Platinum, read from the card art on the issuer page banner (Visa logo with \"Platinum\" under it, Shoppers Stop mark; the banner is the live one on the page, 7 Nov 2026). Second source looked for and not found: the Axis all-credit-cards listing thumbnail for this card carries no network mark; the member T&C only says \"Merchant Category Codes (MCC) as allotted by Mastercard & Visa\"; the page text and the Axis Citi-migration page do not name a network; Axis's Citi-Axis migration FAQ PDF (axisbank.com .../download-faq/faq_credit_card.pdf) was refused with 403 and was not pursued. Card art on the issuer's own product page is accepted network evidence, so network is set to Visa with tier Visa Platinum; a person holding an issued card can confirm.",
             "Renewal fee: the MITC row shows ₹500 with a ₹1,00,000 waiver; the T&C bills the annual fee at the first statement date after the anniversary year. Both agree on ₹500.",
-            "The issuer page also mentions EazyDiner and Golden Glow membership benefits; not found in the T&C and not modelled.",
+            "First Citizen point value is ₹0.50 per the issuer page Value Chart footnote only; the member T&C states no per-point value, and the points are governed by the Shoppers Stop First Citizen programme, which can change its terms.",
+            "EazyDiner offer (issuer page): 15% instant discount, maximum ₹500 per month, minimum order ₹2,500. The \"terms and conditions\" link points to Axis's generic Dining Delights T&C (PDF created 30 Jun 2023), so this card's offer wording is the page only; whether the offer is limited to a number of uses is not stated.",
+            "The page \"Terms and Conditions\" section still says \"updated w.e.f. 20th June 2025\" while the banner says the terms \"have been updated w.e.f. 28th August '26\"; the member T&C PDF (created 7 Aug 2026) carries no revision date. Fees, earn rates and exclusions in the page, the PDF and the MITC agree, so nothing modelled depends on it.",
             "The T&C notes the First Citizen points are shared between Shoppers Stop and Axis (e.g. 12 + 8), credited at different times."
           ],
           "notes": [
             "Points have lifetime validity while the card is open and expire 365 days after closure (T&C).",
-            "Fuel surcharge waiver: 1% for ₹400-₹5,000, maximum ₹400 per statement month (T&C 8)."
+            "Fuel surcharge waiver: 1% for ₹400-₹5,000, maximum ₹400 per statement month (T&C 8; page and MITC agree).",
+            "Interest 3.75% per month (55.55% a year), forex 3.5%, cash advance 2.5% (minimum ₹500), late fee slabs ₹500 to ₹1,300 (page and MITC)."
           ],
           "publication_gate": "pending_human_review_of_official_documents"
         }

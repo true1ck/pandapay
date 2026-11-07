@@ -6,7 +6,7 @@
     "slug": "axis-bank-indigo",
     "name": "IndiGo Axis Bank Credit Card",
     "issuer_slug": "axis",
-    "network": "visa",
+    "network": null,
     "network_tier": null,
     "card_tier": null,
     "card_type": "credit",
@@ -15,13 +15,13 @@
     "annual_fee_inr": 799,
     "fee_gst_applicable": true,
     "gst_rate_percent": 18,
-    "is_upi_linkable": null,
+    "is_upi_linkable": true,
     "application_mode": "open",
     "form_factors": [],
     "tokenization_support": [],
     "contactless_pin_free_limit_inr": null,
     "point_value_inr_baseline": null,
-    "point_value_baseline_basis": "IndiGo BluChips have no stated rupee value. Axis T&C (IndiGo BluChip Program Specific Terms 1): \"loyalty points and do not hold any monetary value\", not legal tender, cannot be exchanged for cash. IndiGo FAQ: no monetary value, usable only to book IndiGo flights; redemption value per BluChip is not published and the Cash + BluChips conversion varies by route, date, fare and cabin. BluChips stay valid while the member is programme-active in the last 24 months (IndiGo FAQ); BluChip Vouchers last 6 months from issue.",
+    "point_value_baseline_basis": "IndiGo BluChips have no stated rupee value (re-checked 2026-11-07, W9). Axis T&C (IndiGo BluChip Program Specific Terms 1): \"loyalty points and do not hold any monetary value\", not legal tender, cannot be exchanged for cash; Axis T&C earn clause: \"The bank has no role in determining the validity or the redemption value of the IndiGo BluChips\". IndiGo membership terms: \"IndiGo BluChips have no monetary refund value\" and \"The conversion rate for Cash + IndiGo BluChips may vary based on the origin, destination, flight schedule, flight number, date, season, fare, cabin, tier, sales channel\". IndiGo FAQ: no monetary value, usable only to book IndiGo flights; the How to Burn page states no rate either. Redemption value per BluChip is not published and the Cash + BluChips conversion varies by route, date, fare and cabin. BluChips stay valid while the member is programme-active in the last 24 months (IndiGo FAQ); BluChip Vouchers last 6 months from issue.",
     "point_expiry_months": null,
     "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
     "display_assets": {
@@ -767,6 +767,30 @@
     "_notes": null,
     "items": [
       {
+        "key": "verified_network_research",
+        "value": {
+          "product_status": "active",
+          "source_url": "https://www.axis.bank.in/docs/default-source/press-releases/unlock-more-with-every-swipe-axis-bank-18-02-26.pdf",
+          "evidence": "Axis press release of 18 Feb 2026: \"The cards will be launched on RuPay and Visa networks\" (NPCI quote: \"the IndiGo Axis Bank credit card on the RuPay network\"; Visa quote: \"IndiGo–Axis Bank Visa co-branded cards\"; the base card bullets include \"UPI Advantage\"). The Axis all-credit-cards listing shows the base card art with the RuPay Platinum mark, and the base product page caption and banner say \"IndiGo VISA Axis Bank Credit Card\" with a VISA Signature mark on art flagged as AI generated. The base T&C caps credit-card-on-UPI earns, and the MITC says credit card on UPI is for Axis RuPay cards. Whether a customer chooses the network or is issued one is not stated.",
+          "candidates": [
+            {
+              "network": "rupay",
+              "network_tier": "rupay_platinum",
+              "label": "IndiGo Axis Bank Credit Card (RuPay Platinum)",
+              "source_url": "https://www.axis.bank.in/cards/credit-card",
+              "evidence": "Card art on the Axis all-credit-cards listing (https://www.axis.bank.in/images/default-source/creditcard/webp/indigo-credit-card-blue.webp): IndiGo and Axis Bank marks with the RuPay Platinum logo; press release 18 Feb 2026 and the base T&C UPI cap fit the RuPay variant."
+            },
+            {
+              "network": "visa",
+              "network_tier": "N/A",
+              "label": "IndiGo Axis Bank Credit Card (Visa)",
+              "source_url": "https://www.axis.bank.in/cards/credit-card/indigo-axis-bank-credit-card",
+              "evidence": "Product page caption \"IndiGo VISA Axis Bank Credit Card\"; page banner art (https://www.axis.bank.in/images/default-source/l4-banner/indigo-axis-bank-credit-card-1366x400.jpg) shows a VISA Signature mark but carries \"This is AI generated visual and for representation purposes only\", so the tier is not taken from it."
+            }
+          ]
+        }
+      },
+      {
         "key": "late_payment_fee_rule",
         "value": {
           "rule": "Slabs by total payment due: nil up to ₹500; ₹500 for ₹501 to ₹5,000; ₹750 for ₹5,001 to ₹10,000; ₹1,200 for ₹10,001 to ₹50,000; ₹1,300 above ₹50,000. An extra ₹100 applies when the Minimum Amount Due is missed in two consecutive cycles, until it is cleared. Charged on the outstanding balance (total due less payments).",
@@ -809,6 +833,17 @@
               "read": "pdftotext"
             },
             {
+              "url": "https://www.axis.bank.in/docs/default-source/press-releases/unlock-more-with-every-swipe-axis-bank-18-02-26.pdf",
+              "kind": "Axis press release 18 Feb 2026: both cards \"launched on RuPay and Visa networks\"; NPCI quote about \"the IndiGo Axis Bank credit card on the RuPay network\"; Visa quote about \"IndiGo–Axis Bank Visa co-branded cards\"; the UPI advantage bullet sits under the base card only; Premium earn \"3 BluChips per ₹100 on hotels and groceries\"",
+              "date": "dated 2026-02-18",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.axis.bank.in/cards/credit-card",
+              "kind": "Axis all-credit-cards page: card thumbnails served from the page (base card art with the RuPay Platinum mark: https://www.axis.bank.in/images/default-source/creditcard/webp/indigo-credit-card-blue.webp)",
+              "read": "rendered page, image opened and read"
+            },
+            {
               "url": "https://www.goindigo.in/loyalty/faq.html",
               "kind": "IndiGo BluChip FAQ: \"IndiGo BluChips do not have any monetary value and cannot be exchanged for cash\"; usable only to book IndiGo flights",
               "read": "rendered page text"
@@ -825,9 +860,9 @@
             }
           ],
           "open_questions": [
-            "Value of one IndiGo BluChip in rupees: not stated by Axis or IndiGo (both say BluChips have no monetary value; the Cash + BluChips rate varies). point_value_inr_baseline and effective_base_return_percent are null.",
-            "Network: Visa, read from the page caption \"IndiGo VISA Axis Bank Credit Card\" and the card art. The art carries the disclaimer \"This is AI generated visual and for representation purposes only\" and appears to show \"Visa Signature\", so network_tier is left null. A human should confirm the network and tier against an issued card.",
-            "Whether the card can be linked to UPI is unclear: the base T&C caps earns from \"CC on UPI\" at 750 BluChips per statement month, but the page caption and card art show Visa, and the MITC \"Credit Card on UPI\" section lists only RuPay cards. is_upi_linkable is left null.",
+            "Value of one IndiGo BluChip in rupees: not stated by Axis or IndiGo (re-checked 2026-11-07, W9): Axis T&C say BluChips \"do not hold any monetary value\" and that \"the bank has no role in determining the validity or the redemption value\"; IndiGo's FAQ and membership terms say BluChips have no monetary value or refund value and the Cash + BluChips conversion varies by route, date, fare, cabin, tier and channel; the IndiGo How to Burn page gives no rate. point_value_inr_baseline and effective_base_return_percent are null.",
+            "Network (re-checked 2026-11-07, W9): resolved as two networks. The Axis press release of 18 Feb 2026 says the cards launch on RuPay and Visa; the Axis all-credit-cards listing shows base-card art with a RuPay Platinum mark; the product page caption and banner say Visa (banner art flagged \"AI generated visual\", VISA Signature mark, so the Visa tier is left N/A). Recorded as a dual-network card (RuPay Platinum and Visa); the base T&C UPI cap and the MITC credit-card-on-UPI clauses fit the RuPay variant. Not stated: whether the customer picks the network or gets one by default.",
+            "UPI: is_upi_linkable is true for the RuPay variant only (press release \"UPI Advantage\" on the base card, T&C UPI cap, MITC credit-card-on-UPI clauses cover Axis RuPay cards only, so the Visa variant is not modelled as UPI-linkable).",
             "Fuel surcharge waiver: not stated. The MITC fuel row is 1% of the transaction amount; neither IndiGo card is named in the refunded list (₹400 to ₹4,000 and similar) or in the \"refund not applicable\" list, and the product page and T&C are silent.",
             "MCC numbers behind the excluded categories (government, insurance, utility including telecom, rent, wallet, fuel, jewellery, tolls, gift cards) are not published; exclusions are category-level. Rounding mode and minimum transaction amount are not stated.",
             "The 3 / 2 / 1 BluChips per ₹100 are card spend only. The headline \"up to 19 IndiGo BluChips per ₹100\" on the page banner is not a card rate: IndiGo's partner page splits the equivalent premium \"up to 23\" as 7 on card spends, 12 on IndiGo flights booked on IndiGo channels and 4 as a Blu 1 tier bonus, and the last two come from the BluChip programme, not from the card.",

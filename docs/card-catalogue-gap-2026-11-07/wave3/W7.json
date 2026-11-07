@@ -1,0 +1,105 @@
+{
+  "agent": "W7",
+  "cards": [
+    {
+      "slug": "au-ananta",
+      "status": "still_blocked",
+      "network": null,
+      "network_evidence": "None found. The only card-specific hints are on AU's own page: 'Special offers basis your selected network variant' (also in AU's credit card comparison blog) and a 'Visa Cardholders' popup that is a block shared with other AU cards. Card art (listing tile Card-faces-500x250-Ananta and product-page art Ananta, 750x1190, whole card viewed in a browser tab) has no network mark. Silent: Ananta lounge, welcome and milestone T&Cs, Amazon Fashion and District partner T&Cs, both Ananta blogs, AU press release of 6 May 2026, Q1 FY27 results note, KFS v1.9, MITC v2.23, Cardmember Agreement 16 May 2026 (3.14 to 3.16: network change at renewal, 'network selection, if applicable'; 'VISA/RuPay' everywhere). visa.co.in PSU offers page lists AU Small Finance Bank as a Visa issuer with no card names; visa.co.in card finder, mastercard.co.in, npci.org.in and rupay.co.in have no AU card list.",
+      "changes": [
+        "additional_data.research_provenance.open_questions[0]: 'Network: UNRESOLVED. Only a Visa popup...' -> same conclusion, now listing every document and image checked on 2026-11-07 and who to ask (no value change; card_product.network stays null)",
+        "additional_data.research_provenance.open_questions[1]: 'Redemption options by category...' -> 'Point value: the page states 0.25 per point only through its milestone table; AU Rewardz FAQ and Cardmember Agreement 22.11 (16 May 2026 copy; 23.11 undated copy) say the rate differs by variant and defer to the variant page; no other Ananta document states one' (point_value_inr_baseline stays 0.25, page milestone table is the stated source)"
+      ],
+      "still_missing": [
+        "NETWORK (blocker): AU publishes no per-card network for Ananta. Someone must read the mark on a physical Ananta card or the AU 0101 app card view, or get a written answer from AU (1800 1200 1500; creditcard.priority@aubank.in is the KFS contact for Ananta). The page's 'selected network variant' wording suggests more than one variant exists; if AU confirms two networks, use dualNetwork.",
+        "Cap behaviour after the 5,000-point shopping/dining/travel cycle limit, and whether that cap counts all points or only the bonus above base",
+        "Exclusion MCC lists (AU gives categories only); 'Shopping' is not defined by MCC",
+        "Welcome benefit rupee value is not stated (8,000 points; derived 2,000 at 0.25 not written in)"
+      ]
+    },
+    {
+      "slug": "au-laksya",
+      "status": "still_blocked",
+      "network": null,
+      "network_evidence": "None found. Laksya lounge T&C (28 Nov 2025) says an eligible card is one 'issued by AU Bank on Visa/RuPay Network', which covers every AU card and does not choose one. Shared 'Visa Cardholders' popup only. Card art (Card-faces-500x250-Lakshya tile and product-page art Laksya, 750x1190) has no network mark. Silent: welcome T&C, Amazon FreshNow, Zomato and District partner T&Cs, press release of 6 May 2026, KFS v1.9, MITC v2.23, Cardmember Agreement 16 May 2026. No AU card list on visa.co.in, mastercard.co.in, npci.org.in, rupay.co.in.",
+      "changes": [
+        "additional_data.research_provenance.open_questions[0]: 'Network: UNRESOLVED. lounge T&C generic...' -> same conclusion with the full list of documents and card art checked and who to ask (card_product.network stays null)",
+        "additional_data.research_provenance.open_questions[1]: 'Reward Point value in rupees: not stated' -> adds evidence: Rewardz FAQ and Cardmember Agreement 22.11 defer to the variant page, and the Laksya page, FAQ and welcome T&C state none (point_value_inr_baseline stays null)"
+      ],
+      "still_missing": [
+        "NETWORK (blocker): read the mark on a physical Laksya card or the AU 0101 app card view, or get a written answer from AU (1800 1200 1500; creditcard.support@aubank.in)",
+        "Rupee value of one Laksya point: no AU document states it; ask AU or read a Laksya redemption screen in AU Rewardz",
+        "Exclusion MCC lists (categories only)",
+        "Whether the 1,000-point grocery/departmental cycle cap counts all points or only the bonus above base"
+      ]
+    },
+    {
+      "slug": "au-prathama",
+      "status": "still_blocked",
+      "network": null,
+      "network_evidence": "None found. The Prathama page has no network text at all (not even the shared Visa popup; searched the whole DOM including hidden accordions). Card art (Card-faces-500x250-Prathama tile and product-page art Prathama, 750x1190) has no network mark. AU publishes no Prathama-specific PDF. Silent: press release of 6 May 2026, KFS v1.9, MITC v2.23, Cardmember Agreement 16 May 2026 (22.5.2 covers Prathama reward rule only). No AU card list on visa.co.in, mastercard.co.in, npci.org.in, rupay.co.in.",
+      "changes": [
+        "additional_data.research_provenance.open_questions[0]: 'Network: UNRESOLVED. no popup, card art shows no logo, no PDF' -> same conclusion, now with the full list checked on 2026-11-07 and who to ask (card_product.network stays null)",
+        "card_product.point_value_baseline_basis: 'not stated on the Prathama page or its FAQ' -> expanded: page and FAQ say only 'Redeem your Reward Points for a range of amazing benefits'; no welcome, lounge or milestone T&C exists; Rewardz FAQ and Cardmember Agreement 22.11 defer to the variant page which states no value (point_value_inr_baseline stays null)",
+        "additional_data.research_provenance.open_questions[1]: point value -> 'ask AU or read a Prathama redemption screen' action added"
+      ],
+      "still_missing": [
+        "NETWORK (blocker): read the mark on a physical Prathama card or the AU 0101 app card view, or get a written answer from AU (1800 1200 1500; creditcard.support@aubank.in)",
+        "Rupee value of one Prathama point: no AU page or document states it (null on purpose)",
+        "Whether the 1,000-point cycle cap (Cardmember Agreement 22.5.2) covers only the incremental 2-point rate or all points",
+        "Exclusion MCC lists (categories only)"
+      ]
+    },
+    {
+      "slug": "au-tejas",
+      "status": "still_blocked",
+      "network": null,
+      "network_evidence": "None found. Shared 'Visa Cardholders' popup only (the same block sits on AU pages for other cards, including a RuPay card). Card art (Card-faces-500x250-Tejas tile and product-page art Tejas, 750x1190) has no network mark. Tejas has no lounge benefit, so no lounge T&C. Silent: welcome T&C, District, Amazon FreshNow, Zomato, cab and bill-payment partner T&Cs, press release of 6 May 2026, KFS v1.9, MITC v2.23, Cardmember Agreement 16 May 2026. No AU card list on visa.co.in, mastercard.co.in, npci.org.in, rupay.co.in.",
+      "changes": [
+        "additional_data.research_provenance.open_questions[0]: 'Network: UNRESOLVED. Only a Visa popup' -> same conclusion with the full list of documents and card art checked on 2026-11-07 and who to ask (card_product.network stays null)",
+        "additional_data.research_provenance.open_questions[1]: 'Reward Point value in rupees: not stated' -> adds evidence: Rewardz FAQ and Cardmember Agreement 22.11 defer to the variant page, and the Tejas page, FAQ and welcome T&C state none (point_value_inr_baseline stays null)"
+      ],
+      "still_missing": [
+        "NETWORK (blocker): read the mark on a physical Tejas card or the AU 0101 app card view, or get a written answer from AU (1800 1200 1500; creditcard.support@aubank.in)",
+        "Rupee value of one Tejas point: no AU document states it",
+        "Exclusion MCC lists (categories only); no separate cap is stated for the 5-point AU Rewardz portal rate beyond the 25,000-point cycle cap",
+        "The 500-bonus-points rule (5 transactions of 500 or more in a cycle) is not modelled because the milestone schema is spend-based"
+      ]
+    },
+    {
+      "slug": "au-traverse-nri",
+      "status": "still_blocked",
+      "network": null,
+      "network_evidence": "None found. Traverse page, NRI and premium listing pages, welcome, milestone and Meet & Assist T&Cs and the Priority Pass usage T&C name no network. Card art (Travserse tile 1280x640 and product-page art layer_image, 638x1011: navy card, chip, no contactless mark, no network mark) has none. AU lounge programme T&C names 'Visa/RuPay' for every eligible AU card and excludes Traverse from the domestic programme. KFS v1.9 and MITC v2.23 list Traverse (NRI) only for fees, the 0.99% markup and the Priority Pass charge. No AU card list on visa.co.in, mastercard.co.in, npci.org.in, rupay.co.in.",
+      "changes": [
+        "additional_data.research_provenance.open_questions[1] (Network): 'Network: UNRESOLVED. Neither the page, lounge or Priority Pass T&Cs, nor any card art' -> same conclusion with the full list checked on 2026-11-07 and who to ask (card_product.network stays null)",
+        "card_product.point_value_baseline_basis: 'not stated on the Traverse page' -> expanded: page has no redemption text; the MakeMyTrip welcome voucher and Taj milestone voucher T&Cs are voucher terms with no point conversion; Rewardz FAQ and Cardmember Agreement 22.11 defer to the variant page (point_value_inr_baseline stays null)",
+        "additional_data.research_provenance.open_questions[2]: point value -> 'ask AU or read a Traverse redemption screen' action added",
+        "Re-read for the lounge question (no field change): Priority Pass usage T&C lists Traverse at 2 international accesses per calendar quarter and charges USD 35 + GST in India; the 10 Apr 2026 domestic lounge T&C and its table exclude Traverse; the page says '2 complimentary domestic and international accesses per quarter'. Overlay still records 2 per quarter, Priority Pass, with the conflict in open_questions."
+      ],
+      "still_missing": [
+        "NETWORK (blocker): read the mark on a physical Traverse card or the AU 0101 app card view, or get a written answer from AU (1800 1200 1500; creditcard.support@aubank.in; Traverse concierge 1800 210 0298)",
+        "Rupee value of one Traverse point: no AU document states it (null on purpose)",
+        "Are the 2 lounge visits a quarter international only (Priority Pass T&C) or domestic and international (page)? Priority Pass T&C is undated, so which is newer cannot be told",
+        "Whether international spend is defined by merchant location or currency; exclusion MCC lists (categories only); KFS shows one fee row for Zenith+ and Traverse so joining fee is set equal to the annual fee"
+      ]
+    },
+    {
+      "slug": "au-nomo",
+      "status": "still_blocked",
+      "network": null,
+      "network_evidence": "None found. NOMO page (hidden accordions included), KFS v1.9, MITC v2.23, Cardmember Agreement 16 May 2026 (secured card section 23 included) and the card art (Card-faces-500x250-Nomo tile and page art nomo_card, 469x744: purple and black, NOMO wordmark, chip and contactless mark, no network mark) state none. 10 Apr 2026 usage terms (NOMO is in the domestic lounge table) and the NOMO railway lounge T&C say only 'Visa/RuPay' / 'VISA/RuPay Credit Card', which covers every AU card.",
+      "changes": [
+        "additional_data.research_provenance.open_questions[0]: 'Network: no AU page, PDF or card art read states it' -> same conclusion, now with the full list checked on 2026-11-07 and who to ask (card_product.network stays null)",
+        "additional_data.research_provenance.open_questions[1] and fees_and_surcharges.cash_advance.max_limit_percent: 'KFS shows 70% and then 50%... MITC still shows 70%. 50% is used' -> SETTLED at 50 (value unchanged): KFS v1.9 (2 Nov 2026, Credit Limit table, page 4) lists NOMO 70% with a second row '50% of the card limit (w.e.f., 7th Nov 2025)', a dated revision that supersedes the 70% row; MITC v2.23 (also 2 Nov 2026; PDF metadata shows it built 17:34 to 17:44 versus KFS 17:59) still shows 70% with no revision row, so it looks stale. KFS used. Small residual: AU not asked to confirm.",
+        "Checked, no change: domestic lounge spend conflict stays resolved at 50,000 (page feature text and the 10 Apr 2026 usage terms say 50,000; only the page FAQ still says 20,000)."
+      ],
+      "still_missing": [
+        "NETWORK (blocker): read the mark on a physical NOMO card or the AU 0101 app card view, or get a written answer from AU (1800 1200 1500; creditcard.support@aubank.in)",
+        "The 50,000 quarterly milestone says 'Double it': AU does not say whether the bonus becomes 1,000 points in total or 500 more (nomo-m2 reward_value_inr left null)",
+        "Exclusion MCC lists (categories only)",
+        "Minor: MITC v2.23 should be re-checked for the 70% cash limit row when AU next revises it"
+      ]
+    }
+  ]
+}

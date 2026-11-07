@@ -21,7 +21,7 @@
     "tokenization_support": [],
     "contactless_pin_free_limit_inr": null,
     "point_value_inr_baseline": null,
-    "point_value_baseline_basis": "No YES BANK page or document states the rupee value of a POPcoin. The partner (POPtech) home page says \"1 POPcoin = ₹1\" but its Terms (mypop.in/tnc) say coins are redeemed as a discount up to a maximum per purchase set by the company, or converted to cashback \"at a rate the Company sets\". The earlier partner-app read (₹0.10 per coin on cash conversion) conflicts. Left null.",
+    "point_value_baseline_basis": "No YES BANK page or document states the rupee value of a POPcoin. The partner (POPtech) home page says \"1 POPcoin = ₹1\" but its Terms (mypop.in/tnc) say coins are redeemed as a discount up to a maximum per purchase set by the company, or converted to cashback \"at a rate the Company sets\". The earlier partner-app read (₹0.10 per coin on cash conversion) conflicts. Wave 3 (W11, 7 Nov 2026) re-read all eight FAQs on the YES page (the \"View More\" ones too): \"What are the ways to use POPcoins?\" lists discounts in the POPclub app, \"minis\" sample packs, exclusive deals and discounts on 100+ D2C brands, with no rupee value, and the fee FAQ calls the 400 POPcoins credited when the ₹399 fee is paid \"a cashback\" without a per-coin value. MITC V18, the KFS, the Cardmember Agreement and the Redemption Rules (YES Rewardz only) have no POPcoin redemption terms. Left null.",
     "point_expiry_months": 12,
     "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
     "display_assets": {
@@ -694,10 +694,15 @@
               "url": "https://mypop.in/tnc",
               "kind": "Partner Terms and Conditions (undated): coin redemption as a capped discount, cashback conversion at a company-set rate",
               "read": "browser"
+            },
+            {
+              "url": "https://www.yes.bank.in/sites/web/content/published/api/v1.1/assets/CONTD9B3F02021314F189FE294CDF4734FD4/native?siteId=yesbank",
+              "kind": "Card art (pop-club-cc-icon-image.png, 141x161 px) on the YES BANK credit card listing tile for POP-CLUB: \"pop\", \"YES BANK\" and \"RuPay PLATINUM\" with a contactless mark (viewed, W11 7 Nov 2026). Together with the page line \"Credit on UPI with RuPay\" this settles the network.",
+              "read": "image opened in a browser tab"
             }
           ],
           "open_questions": [
-            "POPcoin rupee value: still not stated in any YES BANK page or document. The partner home page says 1 POPcoin = ₹1 but the partner Terms say coins redeem as a discount up to a per-purchase maximum or convert to cashback at a rate the company sets, and an earlier partner-app read gave 10 coins per ₹1 for cash conversion. point_value_inr_baseline stays null until a person decides which, if any, to rely on.",
+            "POPcoin rupee value (W11, 7 Nov 2026: YES BANK documents searched again for POPcoin redemption terms, none found; see point_value_baseline_basis): still not stated in any YES BANK page or document. The partner home page says 1 POPcoin = ₹1 but the partner Terms say coins redeem as a discount up to a per-purchase maximum or convert to cashback at a rate the company sets, and an earlier partner-app read gave 10 coins per ₹1 for cash conversion. point_value_inr_baseline stays null until a person decides which, if any, to rely on.",
             "Fee cohort: the page calls \"Lifetime Free\" a limited-time offer. A new applicant may get a lifetime-free card (no renewal fee) or the ₹399 card; the page does not say which cohort is open. annual_fee_inr 399 is the standard fee (page, MITC, KFS).",
             "Fuel surcharge waiver cap: the page footnote and the MITC/KFS bullet say ₹100 per statement cycle on ₹1,000 to ₹3,500 from 1 Jun 2026, but the MITC and KFS cap tables still list \"POP-CLUB INR 300\" (the pre-1-Jun figure). ₹100 is stored.",
             "Whether the card is physical or virtual is not stated; the cash-advance fee (2.5% or ₹650, MITC) is written for a physical card.",

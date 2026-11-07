@@ -16,7 +16,7 @@
     "fee_gst_applicable": true,
     "gst_rate_percent": 18,
     "is_upi_linkable": null,
-    "application_mode": "open",
+    "application_mode": null,
     "form_factors": [],
     "tokenization_support": [],
     "contactless_pin_free_limit_inr": null,
@@ -1092,11 +1092,40 @@
         }
       },
       {
+        "key": "verified_network_research",
+        "value": {
+          "product_status": "active",
+          "source_url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide",
+          "evidence": "RBL \"Your RBL Bank Credit Card Network Availability Guide\" (issuer page, undated, read 2026-11-07): the row \"Nova Credit Card\" is ticked for MasterCard and Visa and not for RuPay. The Nova card art (nova_card.webp and nova_card_0.webp on the product page) shows no network mark. A cardholder gets one network or the other; which one a new customer is issued is not stated.",
+          "candidates": [
+            {
+              "network": "mastercard",
+              "network_tier": "N/A",
+              "label": "RBL Bank Nova Credit Card (Mastercard)",
+              "source_url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide",
+              "evidence": "Network guide row \"Nova Credit Card\": MasterCard ticked."
+            },
+            {
+              "network": "visa",
+              "network_tier": "N/A",
+              "label": "RBL Bank Nova Credit Card (Visa)",
+              "source_url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide",
+              "evidence": "Network guide row \"Nova Credit Card\": Visa ticked."
+            }
+          ]
+        }
+      },
+      {
         "key": "research_provenance",
         "value": {
           "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
           "fetched_on": "2026-11-07",
           "sources": [
+            {
+              "url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide",
+              "kind": "RBL credit card network availability guide (issuer page, undated): Nova ticked for MasterCard and Visa, RuPay not ticked",
+              "read": "rendered page and table cells, 2026-11-07"
+            },
             {
               "url": "https://drws17a9qx558.cloudfront.net/document/credit-cards/tnc-nova-credit-card.pdf",
               "kind": "Nova T&C (fee waiver, welcome and renewal gift, rewards, cap, milestone, lounge, golf, fuel, forex, Table 1 exclusions); link taken from the Cardmember Agreement table",
@@ -1145,9 +1174,9 @@
             }
           ],
           "open_questions": [
-            "Network: no issuer document or card art read states Visa, Mastercard or RuPay (the T&C only says \"MasterCard/RuPay/VISA\" generically). Left null.",
-            "Application route: the product page and the current card list offer only an \"Express your interest\" form, not \"Apply Now\". Unlike Lumiere, the list does not label Nova \"By invite only\". Whether a customer can apply directly is not stated; application_mode \"open\" is an assumption.",
-            "Cap period and fallback: the 30,000-point cap is on accelerated points \"in a calendar month\"; what the 12-per-₹200 spend earns after the cap is not stated. Modelled as falling back to 4 per ₹200.",
+            "Network (resolved 2026-11-07): RBL's own network availability guide ticks Nova for MasterCard and Visa and not RuPay, so it is recorded as a dual-network card with card_product.network left null. The guide is undated. The card art shows no network mark and the Nova T&C only says \"MasterCard/RuPay/VISA\" generically. Which network a new customer is issued is not stated.",
+            "Application route (checked 2026-11-07): the product page and the current card list (64 cards) show \"Know more\" and \"Express Your Interest\" (link https://www.rbl.bank.in/nova-form) and no \"Apply Now\"; the Lumiere row says \"By invite only\" but the Nova row does not. The Nova T&C, MITC and Cardmember Agreement say nothing about invitation. RBL does not say whether an interest form leads to an application, so application_mode is null (the earlier \"open\" was an assumption).",
+            "Cap period and fallback: the T&C caps accelerated points at 30,000 \"in a calendar month\", while a separate bullet says \"One month is defined as one billing cycle assigned to the Card\" (the cap sentence itself says calendar month, so calendar_month is used). What the 12-per-₹200 spend earns after the cap is not stated; modelled as falling back to 4 per ₹200 (the schema allows only a downgrade to base or zero accrual).",
             "Nova T&C refers to \"the above-mentioned program partners\" for miles transfer but prints no partner list, and the product page shows a KrisFlyer logo that the Miles Transfer T&C (12 partners) does not list. All 12 partners from the Miles Transfer T&C are used; confirm which apply to Nova.",
             "Lounge visits: the T&C says \"a calendar year\" for both the 12 domestic and 12 international visits; the product page does not give a period. Modelled as annual.",
             "Milestone repeat: the T&C says the e-gift card is earned on ₹3 lakh \"in a calendar quarter\"; is_repeatable true assumes it repeats each quarter.",

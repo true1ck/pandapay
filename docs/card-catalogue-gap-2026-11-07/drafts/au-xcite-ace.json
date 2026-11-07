@@ -391,20 +391,20 @@
             }
           ],
           "open_questions": [
-            "HELD: the page publishes only three monthly-spend cashback tiers (\"1% on monthly spends of ₹7,500\", \"2% on ₹12,500\", \"3% on ₹20,000\", headline \"up to 3%\"). It does not say whether the percentage applies to the whole month's spend or only the part above each tier, which spends are eligible, any cap, or when and how cashback is paid. No terms PDF is linked. Written as no reward rule so the importer skips it.",
-            "Network: no AU page, PDF or card art read states it.",
+            "HELD (wave 3 re-check 2026-11-07): the page publishes three monthly-spend cashback tiers (\"Earn 1% Cashback on monthly spends of ₹7,500. Earn 2% Cashback on monthly spends of ₹12,500. Earn 3% Cashback on monthly spends of ₹20,000\"). The page text read on 2026-11-07 now also states: \"Maximum Cashback per statement cycle is ₹600\"; \"Statement cycle spends will be considered for product feature cashback calculation\"; and that \"Wallet reloads/spends, Cash, Rent, Education & Govt, EMI, Fuel, BBPS and Quasi Cash transactions will not be considered for milestone benefit\". Still not stated anywhere: whether the percentage applies to the whole statement-cycle spend once a tier is reached, or only to the tier amount (₹75, ₹250, ₹600); whether tiers stack; when and how the cashback is credited. The ₹600 cap equals 3% of ₹20,000, which fits either reading, so the rate cannot be written without guessing. No terms PDF is linked from the page, and the KFS, MITC and Cardmember Agreement have no Xcite ACE cashback clause (searched for \"cashback\"). Written as no reward rule so the importer skips it. Needs a person: ask AU for the written Xcite ACE cashback terms, or check one statement.",
+            "Network: Routes tried on 2026-11-07, none states the network: card front art on the AU credit card list tile and on the product page (images opened and read, no network mark on the front); the product page text and popups; AU KFS v1.9, MITC v2.23 and Cardmember Agreement (only the generic \"VISA/RuPay\"); the AU domestic lounge, Priority Pass and railway lounge T&Cs (\"Visa/RuPay\" generic, so the lounge programme covers Visa and RuPay cards only); the card liability insurance and welcome-benefit T&Cs; AU press releases and blogs; the AU offers site (card-level offers need a login); visa.co.in card-finder and offers pages (generic, no AU card named); npci.org.in RuPay pages (no issuer or card list); rupay.co.in offers (bot-protected, not opened). The \"Visa Exclusive Offers\" block is template text shared across AU pages (it also sits on the RuPay-only Kosmo page) and was not used. Needs a person: ask AU, or read the card back or a statement.",
             "Air accident cover is ₹50 lacs on the page popup; the Ultra page headline says ₹20 lacs. Not modelled.",
             "Whether the card is open to new applications: on AU's card list and in the KFS, but the product page shows no card-specific Apply button.",
             "No separate joining fee is stated: the KFS gives one fee table under both headings; both set to ₹749."
           ],
           "notes": [
-            "Exact page tiers kept here because they are not modelled: 1% cashback on monthly spends of ₹7,500; 2% on monthly spends of ₹12,500; 3% on monthly spends of ₹20,000.",
+            "Exact page tiers kept here because they are not modelled: 1% cashback on monthly spends of ₹7,500; 2% on monthly spends of ₹12,500; 3% on monthly spends of ₹20,000. Page cap: ₹600 maximum cashback per statement cycle. Excluded from the milestone: wallet reloads/spends, cash, rent, education and government, EMI, fuel, BBPS, quasi cash. Period: statement cycle (page: \"Statement cycle spends will be considered\").",
             "Comprehensive protection: air accident cover ₹50 lacs; card liability cover; credit shield up to ₹2 lacs; purchase protection up to ₹25,000; baggage loss and delay, flight delay, loss of passport, plane hijack (page popup). Claims on 1800 1200 1500.",
             "Fuel surcharge waiver up to ₹100 per statement cycle on ₹400 to ₹5,000 (page, KFS). Cash limit 40% (KFS). Forex 3.49%. Xpress EMI on ₹500+ transactions, ₹2,000 minimum total."
           ],
           "publication_gate": "pending_human_review_of_official_documents",
           "held": true,
-          "held_reason": "Cashback tier mechanics are not published (basis, cap, eligible spends, payout)."
+          "held_reason": "Cashback basis is not published: the page gives tiers, a ₹600 per-cycle cap and an exclusion list, but not whether the percentage applies to the whole cycle spend or to the tier amount, nor whether tiers stack or when cashback is paid. Network also unresolved."
         }
       },
       {

@@ -21,7 +21,7 @@
     "tokenization_support": [],
     "contactless_pin_free_limit_inr": null,
     "point_value_inr_baseline": null,
-    "point_value_baseline_basis": "IndiGo BluChips have no stated rupee value. Axis T&C (IndiGo BluChip Program Specific Terms 1): \"loyalty points and do not hold any monetary value\", not legal tender, cannot be exchanged for cash. IndiGo FAQ: no monetary value, usable only to book IndiGo flights; redemption value per BluChip is not published and the Cash + BluChips conversion varies by route, date, fare and cabin. BluChips stay valid while the member is programme-active in the last 24 months (IndiGo FAQ); BluChip Vouchers last 6 months from issue.",
+    "point_value_baseline_basis": "IndiGo BluChips have no stated rupee value (re-checked 2026-11-07, W9). Axis T&C (IndiGo BluChip Program Specific Terms 1): \"loyalty points and do not hold any monetary value\", not legal tender, cannot be exchanged for cash; Axis T&C earn clause: \"The bank has no role in determining the validity or the redemption value of the IndiGo BluChips\". IndiGo membership terms: \"IndiGo BluChips have no monetary refund value\" and \"The conversion rate for Cash + IndiGo BluChips may vary based on the origin, destination, flight schedule, flight number, date, season, fare, cabin, tier, sales channel\". IndiGo FAQ: no monetary value, usable only to book IndiGo flights; the How to Burn page states no rate either. Redemption value per BluChip is not published and the Cash + BluChips conversion varies by route, date, fare and cabin. BluChips stay valid while the member is programme-active in the last 24 months (IndiGo FAQ); BluChip Vouchers last 6 months from issue.",
     "point_expiry_months": null,
     "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
     "display_assets": {
@@ -391,7 +391,7 @@
         "points_per_block": 3,
         "cashback_percent": "N/A",
         "cap_reference": null,
-        "reason": "3 IndiGo BluChips per ₹100 on hotel MCCs 3501 to 3838 and 7011 (T&C table \"Grocery and Hotel\"; the Axis page says \"groceries and hotel\"). The T&C sentence and the IndiGo partner page say \"Grocery and Dining\" instead; see open questions."
+        "reason": "3 IndiGo BluChips per ₹100 on hotel MCCs 3501 to 3838 and 7011: T&C earn clause ii \"Grocery & Hotel categories\", the MCC table in clause v (only Grocery MCCs and Hotel MCCs, no dining MCC), the Axis product page (\"groceries and hotel\") and the Axis press release of 18 Feb 2026 (\"hotels and groceries\") agree. Only the heading of T&C clause v and IndiGo's partner page say \"Grocery & Dining\"; dining is not given the 3x rate (see open questions)."
       },
       "effective_from": null,
       "effective_to": null
@@ -803,6 +803,17 @@
               "read": "rendered page text"
             },
             {
+              "url": "https://www.axis.bank.in/docs/default-source/press-releases/unlock-more-with-every-swipe-axis-bank-18-02-26.pdf",
+              "kind": "Axis press release 18 Feb 2026: both cards \"launched on RuPay and Visa networks\"; NPCI quote about \"the IndiGo Axis Bank credit card on the RuPay network\"; Visa quote about \"IndiGo–Axis Bank Visa co-branded cards\"; the UPI advantage bullet sits under the base card only; Premium earn \"3 BluChips per ₹100 on hotels and groceries\"",
+              "date": "dated 2026-02-18",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.axis.bank.in/cards/credit-card",
+              "kind": "Axis all-credit-cards page: card thumbnails served from the page (Premium card art with the VISA Signature mark: https://www.axis.bank.in/images/default-source/creditcard/webp/indigo-credit-card-red.webp)",
+              "read": "rendered page, image opened and read"
+            },
+            {
               "url": "https://www.goindigo.in/loyalty/faq.html",
               "kind": "IndiGo BluChip FAQ: \"IndiGo BluChips do not have any monetary value and cannot be exchanged for cash\"; usable only to book IndiGo flights",
               "read": "rendered page text"
@@ -819,12 +830,12 @@
             }
           ],
           "open_questions": [
-            "Value of one IndiGo BluChip in rupees: not stated by Axis or IndiGo (both say BluChips have no monetary value; the Cash + BluChips rate varies). point_value_inr_baseline and effective_base_return_percent are null.",
-            "Network: Visa Signature, read from the card art on the page banner (VISA Signature logo beside the Axis Bank and IndiGo marks). The page text and T&C never name the network, so a human should confirm it against an issued card.",
-            "Accelerated category conflict: the T&C earn table and MCC list say \"Grocery and Hotel\" (hotel MCCs 3501 to 3838 and 7011), the Axis page says \"groceries and hotel\", but T&C item v and IndiGo's partner page say \"grocery and dining\". The rule is written for hotels, as the MCC table and the page agree; dining is not given the 3x rate. A person must confirm.",
+            "Value of one IndiGo BluChip in rupees: not stated by Axis or IndiGo (re-checked 2026-11-07, W9): Axis T&C say BluChips \"do not hold any monetary value\" and that \"the bank has no role in determining the validity or the redemption value\"; IndiGo's FAQ and membership terms say BluChips have no monetary value or refund value and the Cash + BluChips conversion varies by route, date, fare, cabin, tier and channel; the IndiGo How to Burn page gives no rate. point_value_inr_baseline and effective_base_return_percent are null.",
+            "Network (re-checked 2026-11-07, W9): Visa Signature, from card art on the issuer's own pages: the Axis all-credit-cards thumbnail (https://www.axis.bank.in/images/default-source/creditcard/webp/indigo-credit-card-red.webp) and the Premium page banner (https://www.axis.bank.in/images/default-source/l4-banner/credit-card/indigo-premium-credit-card-ns-1366x400.jpg) both show the VISA Signature mark. The Axis press release of 18 Feb 2026 says the cards launch \"on RuPay and Visa networks\" without saying which card is on which network; the RuPay quote and the \"UPI Advantage\" bullet belong to the base card, and no Premium RuPay art, T&C clause or MITC row exists, so no RuPay Premium is recorded. If Axis issues a RuPay Premium, it would have to be added as a second network.",
+            "Accelerated category (settled 2026-11-07, W9): Axis's own documents say hotel, not dining. T&C earn clause ii: \"3 IndiGo BluChips for every Rs.100 spent on all Grocery & Hotel categories\"; the MCC table in clause v lists only Grocery MCCs and Hotel MCCs (3501 to 3838 and 7011), no dining MCC; the Axis page says \"groceries and hotel\"; the Axis press release of 18 Feb 2026 says \"3 BluChips per ₹100 on hotels and groceries\". Only the heading of T&C clause v (\"Grocery & Dining\") and IndiGo's partner page (\"3 IndiGo BluChips on grocery and dining\") say dining, and the partner page is not an Axis document and Axis computes the earn (\"Earnings made on spends will be calculated by the Bank\", IndiGo partner FAQ). The rule is written for hotels; dining is not given the 3x rate. Residual risk: if Axis intends dining, the T&C heading and IndiGo are right.",
             "Fuel surcharge waiver: not stated. Neither IndiGo card is named in the MITC refunded list or in the \"refund not applicable\" list, and the product page and T&C are silent.",
             "MCC numbers behind the excluded categories are not published; exclusions are category-level. Rounding mode and minimum transaction amount are not stated. Unlike the base card, the Premium T&C has no UPI earn cap.",
-            "Whether the card can be linked to UPI is not stated: the Premium T&C has no UPI cap, the card art shows Visa, and the MITC \"Credit Card on UPI\" section lists only RuPay cards. is_upi_linkable is left null.",
+            "Whether the card can be linked to UPI is not stated: the Premium T&C has no UPI cap, the card art shows Visa, and the MITC \"Credit Card on UPI\" section covers Axis RuPay cards only. is_upi_linkable is left null.",
             "BookMyShow offer: buy one get one on tickets, once a month, maximum discount ₹250 per month, only after ₹25,000 spend in the previous 3 months (₹25,000 criterion effective 1 Nov 2026; waived for the issuance month and following 3 months). The Axis page says \"once every month\".",
             "Dining Delights is an Axis programme with EazyDiner (\"₹1,000* off & more\"); the asterisked terms were not read, so ₹1,000 is only the headline maximum and the card-specific amount is unknown.",
             "The page headline \"Earn up to 8 FREE domestic flights annually\" is marketing arithmetic on vouchers, not a rate; vouchers have no stated rupee value.",

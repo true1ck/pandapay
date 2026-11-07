@@ -578,11 +578,53 @@
         }
       },
       {
+        "key": "verified_network_research",
+        "value": {
+          "product_status": "active",
+          "source_url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide",
+          "evidence": "RBL \"Your RBL Bank Credit Card Network Availability Guide\" (issuer page, undated, read 2026-11-07): the row \"World Safari Lite Credit Card\" is ticked for MasterCard, RuPay and Visa (the only card in the guide ticked on all three). The product page carries no card art or network mark. A cardholder gets one network; which one a new customer is issued is not stated.",
+          "candidates": [
+            {
+              "network": "mastercard",
+              "network_tier": "N/A",
+              "label": "RBL Bank World Safari Lite Credit Card (Mastercard)",
+              "source_url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide",
+              "evidence": "Network guide row \"World Safari Lite Credit Card\": MasterCard ticked."
+            },
+            {
+              "network": "rupay",
+              "network_tier": "N/A",
+              "label": "RBL Bank World Safari Lite Credit Card (RuPay)",
+              "source_url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide",
+              "evidence": "Network guide row \"World Safari Lite Credit Card\": RuPay ticked. Rewards Programme T&C 5.4: offline UPI transactions under INR 2,000 at small merchants on a RuPay credit card earn no base points, voucher or milestone benefits."
+            },
+            {
+              "network": "visa",
+              "network_tier": "N/A",
+              "label": "RBL Bank World Safari Lite Credit Card (Visa)",
+              "source_url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide",
+              "evidence": "Network guide row \"World Safari Lite Credit Card\": Visa ticked."
+            }
+          ]
+        }
+      },
+      {
         "key": "research_provenance",
         "value": {
           "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
           "fetched_on": "2026-11-07",
           "sources": [
+            {
+              "url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide",
+              "kind": "RBL credit card network availability guide (issuer page, undated): World Safari Lite ticked for MasterCard, RuPay and Visa",
+              "read": "rendered page and table cells, 2026-11-07"
+            },
+            {
+              "url": "https://webassets.rbl.bank.in/document/credit-cards/kfs-1000.pdf",
+              "kind": "Key Fact Statement linked from the World Safari Lite application form (a generic INR 1,000 annual-fee KFS, footer RBL_KFS/16/06/2026, not specific to this card): fees and finance charges only, no reward rates and no network",
+              "date": "footer 16 Jun 2026",
+              "read": "pdftotext"
+            },
             {
               "url": "https://webassets.rbl.bank.in/document/credit-cards/tnc-world-safari-lite.pdf",
               "kind": "World Safari Lite T&C (forex, welcome, lounges, rewards, exclusion table, milestones)",
@@ -644,8 +686,8 @@
             }
           ],
           "open_questions": [
-            "Base rate: the T&C and page state earn rates only for domestic travel (1 point per ₹100) and portal flights and hotels (5 per ₹100). No rate is stated for any other eligible spend, although the exclusion table implies other categories may earn. base_points_per_block and the return percent are left null; a person must confirm whether non-travel spend earns anything.",
-            "Network: no issuer document or card art read names Visa, Mastercard or RuPay (T&C: \"MasterCard/RuPay/VISA\"). Left null.",
+            "Base rate (re-checked 2026-11-07, still open): the issuer states earn only for domestic travel (1 point per ₹100, T&C 3.4(a), MCC list) and for flight and hotel bookings on the RBL rewards portal (5 per ₹100, T&C 3.4(b)); the product page (\"Reward Points that Power Your Next Adventure\"), the application-form KFS, the MITC, the Rewards Programme T&C (3.1 \"accrual varies for each Credit Card\", 5.4 \"as defined in respective product terms\") and the card list say nothing about any other eligible spend. T&C 3.4(d) lists categories that are \"not eligible to earn\", which implies other spend might earn, but no rate is printed. base_points_per_block and the return percent are left null and no non-travel earn rule is drafted. Action: ask RBL in writing (cardservices@rbl.bank.in, toll free 1800 102 6222) whether everyday non-travel spend earns points and at what rate, or have the product owner decide to publish the card as travel-only earn.",
+            "Network (resolved 2026-11-07): RBL's own network availability guide (issuer page, undated) ticks World Safari Lite for MasterCard, RuPay and Visa, so it is recorded as a multi-network card with card_product.network left null. Which network a new customer is issued is not stated; the T&C only says \"MasterCard/RuPay/VISA\" generically. On the RuPay variant, the Rewards Programme T&C (5.4) says offline UPI transactions under ₹2,000 at small merchants earn no base points, voucher or milestone benefits.",
             "International travel: only \"domestic travel\" earns 1 point per ₹100; whether international airline, hotel or transport spend earns anything is not stated.",
             "Welcome benefit: T&C 3.2(c) conditions the voucher on paying the \"first month membership fees\", while the page says the annual fee; the card carries an annual fee. Ixigo offer valid to 31 Dec 2026 per the welcome T&C.",
             "Milestone tiers: T&C 3.5(b) says \"additional 10,000\" points at ₹5 lakh; it is not stated whether this adds to the 5,000 at ₹2.5 lakh. Rupee values use the ₹0.05 baseline (₹0.25 would be 5x).",

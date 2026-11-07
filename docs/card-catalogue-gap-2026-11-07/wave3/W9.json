@@ -1,0 +1,155 @@
+{
+  "agent": "W9",
+  "checked_on": "2026-11-07",
+  "cards": [
+    {
+      "slug": "axis-bank-indigo",
+      "status": "complete",
+      "network": "dual: rupay (rupay_platinum) + visa (tier not stated)",
+      "network_evidence": "Axis press release 18 Feb 2026 (axis.bank.in/docs/default-source/press-releases/unlock-more-with-every-swipe-axis-bank-18-02-26.pdf): 'The cards will be launched on RuPay and Visa networks'; NPCI quote names 'the IndiGo Axis Bank credit card on the RuPay network'; the 'UPI Advantage' bullet is under the base card. Card art on the Axis all-credit-cards page thumbnail (creditcard/webp/indigo-credit-card-blue.webp) shows the RuPay Platinum mark. Product page caption 'IndiGo VISA Axis Bank Credit Card' and banner with a VISA Signature mark flagged 'AI generated visual', so the Visa tier is left N/A. Base T&C UPI cap and MITC credit-card-on-UPI (Axis RuPay cards) fit the RuPay variant.",
+      "changes": [
+        "card_product.network: visa -> null, with a verified_network_research dual-network record (rupay_platinum + visa); evidence as above (previously Visa from page caption only, and the banner art is flagged AI generated)",
+        "card_product.is_upi_linkable: null -> true (RuPay variant: press release 'UPI Advantage', base T&C UPI cap 750 BluChips per statement month, MITC credit-card-on-UPI clauses)",
+        "point_value_inr_baseline: stays null; re-read 2026-11-07: Axis T&C item 1 'loyalty points and do not hold any monetary value' and 'The bank has no role in determining the validity or the redemption value of the IndiGo BluChips'; IndiGo FAQ 'IndiGo BluChips do not have any monetary value'; IndiGo membership terms 'IndiGo BluChips have no monetary refund value' and 'conversion rate for Cash + IndiGo BluChips may vary based on the origin, destination, flight schedule...'; How to Burn page gives no rate",
+        "open questions rewritten: BluChip value (re-checked, none stated), network (resolved as dual), UPI; sources added: press release, all-cards listing art"
+      ],
+      "still_missing": [
+        "Not blocking: whether the customer chooses RuPay or Visa or is issued one is not stated; Visa tier not stated",
+        "Not blocking: fuel surcharge waiver not stated; MCC numbers behind excluded categories not published; max add-on cards not stated"
+      ]
+    },
+    {
+      "slug": "axis-bank-indigo-premium",
+      "status": "complete",
+      "network": "visa (visa_signature)",
+      "network_evidence": "Card art on the issuer's own pages: Axis all-credit-cards thumbnail (creditcard/webp/indigo-credit-card-red.webp) and the Premium product page banner (l4-banner/credit-card/indigo-premium-credit-card-ns-1366x400.jpg) both show the VISA Signature mark (opened and read; no AI-generated disclaimer on this banner). Axis press release 18 Feb 2026 says the cards launch on RuPay and Visa without assigning variants; the RuPay quote and UPI bullet belong to the base card; no RuPay Premium art, T&C or MITC row exists.",
+      "changes": [
+        "Grocery-and-hotel versus grocery-and-dining: settled as hotel. Evidence: Premium T&C (PDF created 23 Oct 2026) earn clause ii 'Grocery & Hotel categories'; the MCC table in clause v lists only Grocery MCCs and Hotel MCCs (3501-3838, 7011), no dining MCC; Axis page 'groceries and hotel'; Axis press release 18 Feb 2026 '3 BluChips per Rs100 on hotels and groceries'. Only the heading of clause v ('Grocery & Dining') and IndiGo's partner page (not an Axis document) say dining. Rule indigop-hotel-3 kept; reason text rewritten",
+        "point_value_inr_baseline: stays null; BluChip value re-checked on Axis T&C (clause xv 'The bank has no role in determining ... the redemption value'), IndiGo FAQ, IndiGo membership terms, How to Burn page: none states a rupee value",
+        "network evidence strengthened (listing thumbnail added to the product banner); open question rewritten with the press-release caveat",
+        "sources added: Axis press release, all-cards listing art"
+      ],
+      "still_missing": [
+        "Not blocking: residual risk that Axis intends dining (T&C clause v heading and IndiGo partner page) rather than hotel; Axis documents say hotel three ways",
+        "Not blocking: is_upi_linkable left null (Premium T&C has no UPI clause; MITC credit-card-on-UPI covers RuPay only); fuel surcharge waiver not stated; Dining Delights card-specific amount (page headline Rs 1,000) not stated; max add-on cards not stated"
+      ]
+    },
+    {
+      "slug": "axis-bank-shoppers-stop",
+      "status": "complete",
+      "network": "visa (visa_platinum)",
+      "network_evidence": "Card art on the issuer's own product page: banner shopper-stop-credit-card-desktop-1366x400-v1.webp (live on the page 7 Nov 2026) shows 'VISA Platinum' on the Axis Bank and Shoppers Stop card; opened and read. No second source exists on Axis documents: the all-credit-cards thumbnail has no network mark, the member T&C says only 'MCC as allotted by Mastercard & Visa', the Citi-migration page names none, and Axis's Citi-Axis migration FAQ PDF (axisbank.com .../faq_credit_card.pdf) was refused with HTTP 403 and was not pursued.",
+      "changes": [
+        "card_product.point_value_inr_baseline: null -> 0.5; Axis product page Value Chart footnote: 'The Redemption Value of Each FC Point = Rs. 0.50' (read directly, no longer a summarised read); the chart rows agree (1,50,000 other spend at 2 FC per Rs200 = 1,500 FC shown as Rs750; 50,000 exclusive brands at 20 FC per Rs200 = 5,000 FC shown as Rs2,500). The member T&C itself states no per-point value; redeemable only at Shoppers Stop group stores (T&C 6)",
+        "accrual_engine.effective_base_return_percent: null -> 0.5 (2 FC per Rs200 x Rs0.50)",
+        "reward_rules: added exclusions for cash advances and repayments (Axis revision notice effective 20 Jun 2025 linked from the page); utilities exclusion noted as 'Utility & Telecom' in that notice",
+        "welcome_and_renewal_gift.effective_value_inr: 2300 -> 2550: page 'FC points worth Rs300' + 'vouchers worth Rs2,250' (3x500 + 500 + online voucher Rs250 per T&C 4)",
+        "dynamic_promotions_registry: added EazyDiner 15% instant discount, max Rs500 a month, min order Rs2,500 (issuer page); its T&C link is the generic 2023 Dining Delights T&C",
+        "fee waiver condition: added that the T&C ties the Rs1 lakh waiver to cardholders issued on or after 1 May 2024 through the Axis platform; eligibility notes now from a direct page read",
+        "open questions rewritten (network second-source search, FC value basis, stale 20 Jun 2025 sentence on page versus 28 Aug 2026 banner)"
+      ],
+      "still_missing": [
+        "Not blocking: FC point value is stated on the page footnote only (not in the member T&C) and Shoppers Stop controls the programme",
+        "Not blocking: network rests on card art on the issuer's page; a person holding an issued card can confirm Visa Platinum"
+      ]
+    },
+    {
+      "slug": "axis-bank-kwik",
+      "status": "complete",
+      "network": "rupay",
+      "network_evidence": "Axis Kwik product page subtitle 'Experience the convenience of UPI with your KWIK Rupay Credit Card' and Credit Card on UPI sections (issuer page); MITC lists the card with the RuPay credit-card-on-UPI card family. The all-cards listing thumbnail carries no network mark.",
+      "changes": [
+        "card_product.point_value_inr_baseline: 0.2 -> null. The 0.20 came from the MITC (8 Oct 2026) negative-balance example, which says the value 'may vary for different card variants'. The EDGE REWARDS Terms and Conditions (edgerewards.axis.bank.in/lms/terms-and-conditions; the Kwik page links the 404 path '.../lms/terms-conditions') list a 'Cashback Value per Point / Mile' table for nine named cards only (REWARDS, IndianOil Premium, Olympus, Horizon, Atlas, Magnus, Magnus for Burgundy, Reserve, Burgundy Private) and an SMS-redemption grid for four cards; Kwik is named nowhere on that page. The Kwik page states no value",
+        "accrual_engine.effective_base_return_percent: 0.2 -> null (was derived from the 0.20)",
+        "open questions rewritten: EDGE point value not stated for Kwik (how to fill it); fuel waiver Rs150 'per month' on the page versus 'per Statement Cycle' clause in the MITC; page interest '3.7%' versus MITC 3.75% a month; the 28 Aug 2026 notice read (does not touch Kwik earn)",
+        "sources added: EDGE REWARDS terms page, 28-08-2026 revision notice"
+      ],
+      "still_missing": [
+        "Not blocking: EDGE REWARD point value for Kwik is not stated by Axis; null by rule. To fill it, Axis customer care must state the Kwik rate or a redemption screen on an issued Kwik card must be read"
+      ]
+    },
+    {
+      "slug": "axis-bank-supermoney-rupay",
+      "status": "complete",
+      "network": "rupay",
+      "network_evidence": "Card is named 'AXIS BANK SUPERMONEY RuPay Credit Card' on the issuer page, in the title of both Cashback T&C files and in the MITC fee table. The all-cards listing thumbnail for this card is a stale Flipkart Mastercard image file and was not used.",
+      "changes": [
+        "In-force version question: partly settled, no earn field depends on it. Issuer page has three pointers: banner 'updated w.e.f 28th August'26' (links the 28-08-2026 generic revision notice, PDF created 27 Jul 2026: DCC 3.5%, late fee above Rs50,000, payment allocation, gift card category, no cashback on bridge fees/road fees/tolls); Terms and Conditions section 'updated w.e.f. 1st January, 2026' (links the Cashback T&C PDF created 24 Aug 2026); Cashback structure and Lifetime Free links to a newer Cashback T&C PDF created 29 Sep 2026. The two Cashback T&C files are identical on earn rates, the 3% dependent cap, Rs100 minimum, exclusions and examples. The 24 Aug file already lists Gift Card and Bridge/Road fees/Tolls exclusions that the 28 Aug notice introduces, so it cannot be a 1 Jan 2026 text; no document anywhere carries the date 1 January 2026, so that sentence is unsupported. Neither PDF prints a revision date (dates are file-creation dates), so Axis does not say in words which governs",
+        "Only substantive difference: fuel surcharge waiver. 24 Aug file: 1% (posted 0.989%). 29 Sep file: 1% on eligible UPI fuel transactions, 0.989% on non-UPI/offline; Rs400-4,000, max Rs400 per statement cycle. MITC (8 Oct 2026) lists the card in the Rs400-4,000 / Rs400-a-cycle group. waiver_percent kept at 1 (UPI rate); the newest file is used",
+        "sources: added the 29 Sep and 24 Aug Cashback T&C files, the 28-08-2026 notice and the issuer page; network note about the stale listing thumbnail added"
+      ],
+      "still_missing": [
+        "Not blocking: Axis does not print which Cashback T&C file is in force or its revision date; a person may ask Axis, but all earn fields are identical across versions",
+        "Not blocking: MCC numbers behind exclusion categories not extractable (category-level); 3% dependent cap is modelled with its Rs100 floor only (existing engine limitation noted in the draft)"
+      ]
+    },
+    {
+      "slug": "icici-1838-reserve",
+      "status": "still_blocked",
+      "network": "visa",
+      "network_evidence": "ICICI 1838 Reserve page FAQ: 'issued by ICICI Bank in association with Times Internet Ltd. and Visa'; the page's Network Benefits tile lists 'Access to Visa Services: Unlimited access to Visa Services for Primary Cardholders'. MITC fee table names no network (no conflict).",
+      "changes": [
+        "reward_rules r1838-domestic-3 and r1838-international-2: points_per_block 3 / 2 -> empty. ICICI words the earn only as '3% On Domestic Spends' and '2% On International Spends'; no ICICI document says points per Rs100. Looked at: card page and FAQ, MITC 6 Nov 2026 (caps table and 'Terms and Conditions pertinent to ICICI Bank Rewards'), general credit card T&C (tnc_english.pdf, created 28 Sep 2026), ICICI Rewards page and Rewards FAQ page (defers to the card page). The rules now carry only the stated percent",
+        "accrual_engine.base_block_inr 100 -> null and base_points_per_block 3 -> null (inferred values removed)",
+        "point_value_inr_baseline: stays null; no ICICI document gives a rupee value per point for this card (page, FAQ, MITC, general terms, Rewards pages); do not reuse Times Black Rs0.40",
+        "card_product.point_expiry_months: null -> 36 (MITC: 'Reward points have expiry of 36 months from the date of issuance'; Rewards page: valid 3 years)",
+        "network open question resolved (Visa, page FAQ); GST open question reworded (page says '+ GST'; ICICI states 18% only for EMI items); new open question: page says late bill payment Nil but the MITC late-fee table excludes only Emeralde Private Metal"
+      ],
+      "still_missing": [
+        "Reward unit: ICICI (or the 1838 Reserve programme/app terms) must state reward points per Rs100 for the 3% domestic and 2% international earn; or read a statement of an issued card (points credited against a known spend). If 3 and 2 points per Rs100 are confirmed, set points_per_block 3 and 2, base_block_inr 100, base_points_per_block 3",
+        "Rupee value of one reward point for 1838 Reserve: not stated anywhere in ICICI documents; ask the Relationship Manager or read it from the 1838 app / ICICI Rewards redemption screen",
+        "Late payment fee conflict: card page 'Late Bill Payment: Nil' versus MITC table that does not exempt 1838 Reserve; draft keeps the page's Nil"
+      ]
+    },
+    {
+      "slug": "icici-times-black",
+      "status": "still_blocked",
+      "network": "visa",
+      "network_evidence": "ICICI Times Black page FAQ: 'issued by ICICI Bank in association with Times Internet Ltd. and Visa' (worded as an association; the page card art, times-black-banner.webp, has no network mark; the T&C v3 uses 'Visa' only for travel visa services, not the network; the earlier note about Visa concierge in the T&C was a misreading).",
+      "changes": [
+        "Milestone period: 'annual' (assumed) -> card_anniversary_year. Times Black T&C v3 (updated 2 May 2025): 'Anniversary Year means 12 months from the date of issue ... and each 12-month period thereafter' and 'Milestone Benefits: Benefits are offered ... on achieving the threshold spends in an Anniversary Year'. Page and co-brand site only say 'annual spending levels'",
+        "Reward unit: not found. T&C v3 'Get <2>% ICICI Bank reward points on all eligible domestic transactions' / '<2.5>%' international; page FAQ 'You can earn 2% ICICI Bank reward points'; co-brand site timesblack.com FAQ '2% Reward points'. None gives points per Rs100. reward_rules points_per_block 2 / 2.5 -> empty; accrual_engine base_block_inr/base_points_per_block -> null; effective_base_return_percent 0.8 -> null (derived from the inference)",
+        "point_value_inr_baseline stays 0.4; basis now cites the page FAQ 'when redeeming ICICI Bank reward points against your statement, the redemption rate is 1 Reward Point (RP) = Rs0.40' and 'value of 1 reward point can be up to Rs 1' (the T&C wording '1 Rupee = Rs 0.4' is garbled)",
+        "statement_and_late_fees.late_payment_slabs: [] -> eight slabs from the MITC late-payment table (below Rs100 nil; 100-500 Rs100; 501-1,000 Rs500; 1,001-5,000 Rs600; 5,001-10,000 Rs750; 10,001-25,000 Rs900; 25,001-50,000 Rs1,100; above 50,000 Rs1,300); page says 'Rs100 to Rs1300'",
+        "card_product.point_expiry_months: null -> 36 (MITC)",
+        "cap period confirmed per statement cycle (MITC and T&C; the co-brand site says monthly, not used); network note corrected"
+      ],
+      "still_missing": [
+        "Reward unit: ICICI must state reward points per Rs100 for the 2% domestic and 2.5% international earn (or a statement of an issued Times Black card must show points credited for a known spend). If 2 and 2.5 points per Rs100 are confirmed, set points_per_block 2 and 2.5, base_block_inr 100, base_points_per_block 2 and effective_base_return_percent 0.8",
+        "Not blocking: whether each milestone repeats every anniversary year is not stated beyond 'until the next periodic cycle'; is_repeatable stays false"
+      ]
+    },
+    {
+      "slug": "kvb-visa-platinum",
+      "status": "still_blocked",
+      "network": "visa (visa_platinum)",
+      "network_evidence": "KVB KFS cum MITC (kvb.bank.in/docs/mitc-english.pdf, PDF created 20 Aug 2026): card name 'Platinum (Visa Platinum)' in the retail cards list and 'Visa Platinum (Platinum) and Visa Signature (Honor)' in the finance-charge clause; KVB retail offers page card type 'Visa Platinum, Visa Signature (Honour)'.",
+      "changes": [
+        "Rupee value of a point: still not stated (re-checked 2026-11-07). Read: Aug 2026 KFS cum MITC (says the Reward Points construct is on the card variant webpage, governed by the Card Member Agreement), Platinum card page, Card Member Agreement (no rewards section), Board-approved Combined Credit Card Policy (26 pages, no reward terms), reward redemption page, KCPC FAQs, the Anmol Rewardz page (debit cards), the superseded Mar 2025 MITC. KVB's 29 May 2026 press release gives values only for Eternis (Rs1), Samara (Rs0.5) and Aura (Rs0.25), which are other cards and were not used. point_value_inr_baseline stays null",
+        "'x rewards' multipliers: still not defined by any current KVB T&C (page says '1.5x rewards' on restaurants, medical, books, insurance, rail, movies, car rental and '2x rewards' on travel, hotels, air tickets). The 'multiple of the base rate (assumed)' wording was removed from every rule; the rules now say 'NOT STATED by KVB' and keep only the stated multiplier with empty points-per-block. KVB's own premium-card wording ('Earn 2 Reward Points for every Rs 100 spent, plus 3X points on flights...') shows the multiplier can also be read as extra points on top of the base, so the reading is ambiguous",
+        "sources added: Combined Credit Card Policy, 29 May 2026 press release (not used for values)"
+      ],
+      "still_missing": [
+        "Rupee value of one reward point for the KVB Platinum card: KVB must state it (credit card cell / IVR 1800 419 6500) or a redemption screen on an issued card must show it",
+        "Basis of the '1.5x' and '2x' rewards multipliers: KVB must say whether it multiplies the base 2 points per Rs150, adds to it, or is a different rate",
+        "Not blocking: first-year annual fee waiver (Mar 2025 MITC said waived for 1st year, Aug 2026 documents do not), redemption minimum (800 in MITC vs 250 on page), cash withdrawal fee wording conflict"
+      ]
+    },
+    {
+      "slug": "kvb-visa-signature",
+      "status": "still_blocked",
+      "network": "visa (visa_signature)",
+      "network_evidence": "KVB KFS cum MITC (PDF created 20 Aug 2026): card name 'Honor (Visa Signature)' and finance-charge clause 'Visa Signature (Honor)'; KVB retail offers page card type 'Visa Platinum, Visa Signature (Honour)'.",
+      "changes": [
+        "Rupee value of a point: still not stated (same documents and result as the Platinum card; Honour page states '3 reward points for every Rs 150 spent', '2x rewards' and '4x rewards' with no value). point_value_inr_baseline stays null; the premium-card values in the 29 May 2026 press release were not used",
+        "'x rewards' multipliers ('2x rewards' on restaurants, medical, books, insurance, rail, movies, car rental; '4x rewards' on travel, hotels, air tickets): no current KVB T&C defines the basis; 'assumed' wording removed, rules keep only the stated multiplier",
+        "sources added: Combined Credit Card Policy, 29 May 2026 press release (not used for values)"
+      ],
+      "still_missing": [
+        "Rupee value of one reward point for the KVB Honour card: KVB must state it or an issued card's redemption screen must show it",
+        "Basis of the '2x' and '4x' rewards multipliers (multiple of the base 3 points per Rs150, additional points, or other)",
+        "Not blocking: lounge access ('4 complimentary airport lounge accesses within India') has no stated period, spend criteria or lounge list; first-year fee, redemption minimum and cash withdrawal fee wording conflicts as for Platinum"
+      ]
+    }
+  ]
+}

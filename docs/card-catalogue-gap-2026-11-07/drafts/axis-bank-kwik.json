@@ -22,8 +22,8 @@
     ],
     "tokenization_support": [],
     "contactless_pin_free_limit_inr": null,
-    "point_value_inr_baseline": 0.2,
-    "point_value_baseline_basis": "Axis Bank MITC (file dated 8 Oct 2026, 62 pages), card termination clause example: a negative balance of 1000 Reward Points converts to a statement debit of INR 200, i.e. INR 0.20 per Reward Point; the MITC fee table lists KWIK Credit Card. This is a conversion value Axis states for EDGE REWARD Points, not a published redemption rate for the Kwik card; the Kwik-specific EDGE REWARDS terms page did not load. The MITC says only the miles conversion \"may vary for different card variants\".",
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": "Not stated by Axis for the Kwik card. Checked 2026-11-07: the EDGE REWARDS Terms and Conditions (https://edgerewards.axis.bank.in/lms/terms-and-conditions, undated) give a \"Cashback Value per Point / Mile\" table that lists only nine cards (REWARDS, IndianOil Premium, Olympus, Horizon, Atlas, Magnus, Magnus for Burgundy, Reserve, Burgundy Private) and an SMS-redemption value grid for four cards; Kwik is named nowhere on that page. The only other rupee figure, INR 0.20 per point in the MITC (8 Oct 2026) negative-balance example, is a general conversion example that says the value \"may vary for different card variants\", so it is not used. The Kwik page gives no value.",
     "point_expiry_months": null,
     "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
     "display_assets": {
@@ -57,7 +57,7 @@
     "rounding_mode": null,
     "base_points_per_block": 2,
     "base_cashback_percent": "N/A",
-    "effective_base_return_percent": 0.2,
+    "effective_base_return_percent": null,
     "cycle_accrual_ceiling_points": null,
     "capping_period_basis": null,
     "reversal_policy": {
@@ -477,8 +477,19 @@
           "sources": [
             {
               "url": "https://www.axis.bank.in/cards/credit-card/axis-bank-kwik-credit-card",
-              "kind": "issuer page (Features and Benefits expanded)",
+              "kind": "issuer page (Features and Benefits expanded; page subtitle \"KWIK Rupay Credit Card\" is the network evidence)",
               "read": "rendered page text"
+            },
+            {
+              "url": "https://edgerewards.axis.bank.in/lms/terms-and-conditions",
+              "kind": "EDGE REWARDS Terms and Conditions (undated; the Kwik page links it as \".../lms/terms-conditions\", which returns 404, the page loads at \".../lms/terms-and-conditions\"): cashback value per point for nine named cards, Kwik not among them",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://campaign.axis.bank.in/generic/terms-and-conditions-generic-all.pdf",
+              "kind": "Axis revision notice effective 28-08-2026 linked from the Kwik page banner (DCC markup 3.5%, late fee above ₹50,000, payment allocation, gift card category; nothing on Kwik earn)",
+              "date": "PDF created 2026-07-27",
+              "read": "pdftotext"
             },
             {
               "url": "https://www.axis.bank.in/docs/default-source/default-document-library/mitc-credit-cards.pdf",
@@ -487,14 +498,16 @@
             }
           ],
           "open_questions": [
-            "Value of one EDGE REWARD point (checked 2026-11-07, W6): the only rupee value Axis states is INR 0.20 per Reward Point in the MITC (file dated 8 Oct 2026) termination example, used as point_value_inr_baseline 0.2 and a 0.2% base return (2 points per ₹200 x INR 0.20 = INR 0.40 per ₹200). Redemption rules and any Kwik-specific rate sit in the EDGE REWARDS terms (https://edgerewards.axis.bank.in/lms/terms-and-conditions), which linked from the Kwik page as \".../lms/terms-conditions\" (404) and the corrected path renders a blank page in the browser, so they were not read. The EDGE store page (read without login) priced gift cards at roughly 4,650 points for INR 1,000, about INR 0.21 per point before the INR 99 redemption fee, which is consistent with 0.20 but is a store price, not a stated rate. A person should confirm the rate for this card.",
-            "Page says the card terms will be updated from 28 Aug 2026; the updated terms were not located.",
-            "No card-specific T&C PDF was linked on the page."
+            "Value of one EDGE REWARD point: NOT stated by Axis for the Kwik card, so point_value_inr_baseline and effective_base_return_percent are null (re-checked 2026-11-07, W9; the earlier 0.20 was dropped). The EDGE REWARDS Terms and Conditions list a rupee value per point for nine other cards only (0.20 for REWARDS, Magnus, Magnus for Burgundy, Reserve and Burgundy Private; 1 for the EDGE Miles cards), the Kwik page gives none, and the MITC INR 0.20 is a general negative-balance example that \"may vary for different card variants\". To fill it, Axis must state the Kwik rate (customer care 1860 419 5555) or a redemption screen on an issued Kwik card must be read.",
+            "Fuel waiver period: the page says \"maximum waiver of up to ₹150 per month\"; the MITC (8 Oct 2026) says \"up to INR 150 for AXIS BANK KWIK Credit Card\" inside a clause that is per statement cycle. Modelled as ₹150 per month (page).",
+            "Interest: the Kwik page prints \"3.7% per month (55.55% per annum)\"; the MITC says 3.75% per month i.e. 55.55% per annum (the page figure looks truncated). The MITC rate is used."
           ],
           "notes": [
+            "Network: RuPay, stated by the issuer page (\"your KWIK Rupay Credit Card\", Credit Card on UPI). The listing thumbnail of the card carries no network mark.",
             "RuPay credit card on UPI with an instant virtual card; linked to any UPI app (issuer page).",
             "Fuel surcharge waiver: 1% on ₹400-₹4,000, maximum ₹150 per month. On some fuel transactions the surcharge is ₹10 + GST instead of 1% (issuer page).",
-            "Points are credited to the EDGE REWARDS account by 7 working days of the following week."
+            "Points are credited to the EDGE REWARDS account by 7 working days of the following week.",
+            "The page banner says the card terms \"will be updated w.e.f 28th August'26\" and links the generic revision notice (read; it changes DCC, late fee above ₹50,000, payment allocation and the gift card category, not Kwik earn). No card-specific T&C PDF is linked; the earn terms are on the page itself, which sends readers to the EDGE REWARDS terms."
           ],
           "publication_gate": "pending_human_review_of_official_documents"
         }

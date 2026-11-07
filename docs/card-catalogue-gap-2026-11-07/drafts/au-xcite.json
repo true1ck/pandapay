@@ -269,6 +269,27 @@
       "effective_to": null
     },
     {
+      "id": "xcite-excl-transport",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "effective_from": "2026-04-01",
+        "mcc_group": "transportation"
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Reward Points accrual on Transportation Merchant Category Codes discontinued with effect from 1 Apr 2026 (Xcite page, rewards note). MCC list not published."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
       "id": "xcite-dining-15rp",
       "category_id": "dining",
       "priority": 10,
@@ -692,8 +713,8 @@
             }
           ],
           "open_questions": [
-            "Network: no AU page, PDF or card art read states it.",
-            "Value of one Reward Point: not stated for Xcite. effective_base_return_percent left null.",
+            "Network (wave 3): STILL UNRESOLVED. The Xcite page text has no mention of Visa, RuPay or Mastercard at all (page and popups searched). Routes tried on 2026-11-07, none states the network: card front art on the AU credit card list tile and on the product page (images opened and read, no network mark on the front); the product page text and popups; AU KFS v1.9, MITC v2.23 and Cardmember Agreement (only the generic \"VISA/RuPay\"); the AU domestic lounge, Priority Pass and railway lounge T&Cs (\"Visa/RuPay\" generic, so the lounge programme covers Visa and RuPay cards only); the card liability insurance and welcome-benefit T&Cs; AU press releases and blogs; the AU offers site (card-level offers need a login); visa.co.in card-finder and offers pages (generic, no AU card named); npci.org.in RuPay pages (no issuer or card list); rupay.co.in offers (bot-protected, not opened). The \"Visa Exclusive Offers\" block is template text shared across AU pages (it also sits on the RuPay-only Kosmo page) and was not used. Needs a person: ask AU, or read the card back or a statement. Only the sister card Xcite Ultra is named RuPay on its own page; no AU document says the Xcite series shares one network, so that is not carried over.",
+            "Value of one Reward Point: not stated for Xcite (card page, KFS, MITC, CMA and the Rewardz FAQ read 2026-11-07; the FAQ says it depends on card variant and redemption category). effective_base_return_percent left null on purpose. AU's 2 Jun 2023 notice gives Rs 0.20 per point only for gift card/voucher redemption on all variants; not used as a card value.",
             "Whether the card is open to new applications: it is on AU's card list and in the KFS, but the product page shows no card-specific Apply button, only the generic Apply links.",
             "Merchant categories for the 15-point rate (dining, movies, grocery, departmental stores) are not defined by MCC.",
             "The page note \"Applicable on base Reward Points only (3 Reward Points per ₹100)\" sits under the earn list; read as qualifying the 2X first-five-days bonus. Confirm.",

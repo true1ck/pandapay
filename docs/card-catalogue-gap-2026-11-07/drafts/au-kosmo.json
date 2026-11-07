@@ -6,7 +6,7 @@
     "slug": "au-kosmo",
     "name": "AU Kosmo Credit Card",
     "issuer_slug": "au",
-    "network": null,
+    "network": "rupay",
     "network_tier": null,
     "card_tier": null,
     "card_type": "credit",
@@ -277,17 +277,17 @@
       {
         "key": "verified_network_research",
         "value": {
-          "finding_status": "partial",
+          "finding_status": "resolved",
           "product_status": "active",
-          "source_url": "https://www.au.bank.in/personal-banking/credit-cards/kosmo-credit-card",
-          "evidence": "Page FAQ: to authenticate UPI transactions a separate UPI PIN is created \"when linking your RuPay Credit Card to any UPI app\", in an answer about the Kosmo card. The page never prints \"RuPay\" next to the card name, and a template popup lists Visa offers.",
+          "source_url": "https://www.au.bank.in/pdfs/press-release/2025/au-small-finance-bank-partners-with-kiwi-for-credit-on-upi-launches-au-kosmo-credit-card---18th-september-2025.pdf",
+          "evidence": "AU Small Finance Bank press release dated 18 Sep 2025 (AU's own document): headline \"New RuPay-powered credit card\", body \"Built on the RuPay network, this card offers a fully digital onboarding journey, seamless UPI integration\"; the AU Executive Director says the AU KOSMO Credit Card \"complements the existing RuPay Card portfolio\". Supported by the AU product page FAQ, which tells Kosmo holders to create a UPI PIN \"when linking your RuPay Credit Card to any UPI app\". The Visa-offer block on the Kosmo page is template text (the RuPay block beside it still names \"ABC Pro\").",
           "candidates": [
             {
               "network": "rupay",
               "network_tier": "N/A",
-              "label": "AU Kosmo Credit Card (UPI-linked)",
-              "source_url": "https://www.au.bank.in/personal-banking/credit-cards/kosmo-credit-card",
-              "evidence": "Page FAQ on UPI PIN for the Kosmo card names the RuPay Credit Card; InstaPay FAQ on the AU site says only RuPay credit cards can be linked to UPI."
+              "label": "AU Kosmo Credit Card",
+              "source_url": "https://www.au.bank.in/pdfs/press-release/2025/au-small-finance-bank-partners-with-kiwi-for-credit-on-upi-launches-au-kosmo-credit-card---18th-september-2025.pdf",
+              "evidence": "AU press release 18 Sep 2025: \"Built on the RuPay network\"."
             }
           ]
         }
@@ -315,8 +315,13 @@
             },
             {
               "url": "https://www.au.bank.in/credit-cards/credit-card-member-agreement.pdf",
-              "kind": "Cardmember Agreement (no Kosmo or Kiwi reward section found)",
+              "kind": "Cardmember Agreement (no Kosmo or Kiwi reward section found; re-searched in wave 3 for \"Kosmo\", \"Kiwi\")",
               "date": "Cardmember Agreement, undated copy (the copy under /pdf/credit-card/ is dated 16 May 2026 and has no Zaggle section)"
+            },
+            {
+              "url": "https://www.au.bank.in/pdfs/press-release/2025/au-small-finance-bank-partners-with-kiwi-for-credit-on-upi-launches-au-kosmo-credit-card---18th-september-2025.pdf",
+              "kind": "AU press release: AU partners with Kiwi, launches AU KOSMO Credit Card (\"Built on the RuPay network\"; \"Earn rewards on every spend ... via the Kiwi app\"; no rate)",
+              "date": "2025-09-18"
             },
             {
               "url": "https://www.au.bank.in/personal-banking/credit-cards",
@@ -325,8 +330,8 @@
             }
           ],
           "open_questions": [
-            "HELD: AU publishes no reward rate. The page says only \"Earn Kiwi rewards on every UPI Scan & Pay\" and \"Kiwi rewards on eCom, POS & contactless transactions\". The Cardmember Agreement has no Kosmo or Kiwi section. The Kiwi app terms are a partner document and were not used. No reward rule written so the importer skips it.",
-            "Network: not named on the page. UPI linking points to RuPay, but a template popup also lists Visa offers. Left null.",
+            "HELD (wave 3 re-check 2026-11-07): AU still publishes no reward rate. The page says only \"Earn Kiwi rewards on every UPI Scan & Pay\" and \"Kiwi rewards on eCom, POS & contactless transactions\"; the AU press release says only \"Earn rewards on every spend - UPI, retail, or online ... via the Kiwi app\"; the Cardmember Agreement, KFS, MITC and the AU Rewardz site have no Kosmo or Kiwi rewards clause. No Kiwi or Kosmo rewards T&C is hosted or linked on au.bank.in. No reward rule written so the importer skips it. For a person to decide: Kiwi (the co-brand partner, gokiwi.in/cards/aubank/) prints \"1.5% Cashback on UPI scan & pay\" and \"0.5% Cashback on online spends\" for this card, with no cap, exclusion list, rupee value or POS/contactless rate and no linked rewards policy. That is a partner statement, not an AU document, so it was NOT used. Ask AU or Kiwi for the written Kiwi Rewards Policy for the KOSMO card if the partner source is to be accepted.",
+            "Network (wave 3): RESOLVED as rupay from AU's own press release of 18 Sep 2025 (\"Built on the RuPay network\"). The earlier doubt came from a template Visa-offer popup on the page, which is shared template text.",
             "Fuel surcharge waiver cap: the product page and KFS say ₹100 per statement cycle; a template popup on the same page says ₹250. KFS used.",
             "The \"RuPay Offer\" popup on this page names the \"ABC Pro RuPay Credit Card\", so it is copied template text, not Kosmo terms."
           ],

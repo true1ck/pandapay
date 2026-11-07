@@ -1,0 +1,1416 @@
+{
+ "agent": "S1",
+ "issuers": [
+  {
+   "issuer": "HDFC Bank",
+   "listing_url": "https://www.hdfc.bank.in/credit-cards",
+   "read_on": "2026-11-07",
+   "offered_count": 94,
+   "matched_live": [
+    "hdfc-millennia",
+    "hdfc-moneyback-plus",
+    "hdfc-freedom",
+    "hdfc-phonepe-uno",
+    "phonepe-hdfc-bank-ultimo",
+    "hdfc-infinia-metal",
+    "hdfc-diners-club-black-metal",
+    "hdfc-pixel-play",
+    "hdfc-pixel-go",
+    "hdfc-upi-rupay-credit-card",
+    "hdfc-regalia-gold",
+    "hdfc-diners-club-privilege",
+    "tata-neu-infinity-hdfc-bank",
+    "tata-neu-plus-hdfc-bank",
+    "swiggy-hdfc-bank-credit-card",
+    "swiggy-ornge-hdfc-bank-credit-card",
+    "swiggy-blck-hdfc-bank",
+    "marriott-bonvoy-hdfc-bank-credit-card",
+    "indianoil-hdfc-bank-credit-card",
+    "irctc-hdfc-bank-credit-card",
+    "shoppers-stop-hdfc-bank-credit-card",
+    "hdfc-shoppers-stop-black",
+    "hdfc-regalia-first",
+    "hdfc-bharat-cashback",
+    "hdfc-visa-signature",
+    "hdfc-diners-club-miles",
+    "hdfc-bizblack-metal-edition",
+    "hdfc-bizfirst",
+    "hdfc-bizgrow",
+    "hdfc-bizpower",
+    "hdfc-giga-business",
+    "flipkart-wholesale",
+    "paytm-business-hdfc",
+    "hdfc-best-price-save-max-walmart",
+    "hdfc-corporate-premium",
+    "hdfc-purchase-premium",
+    "hdfc-central-travel-account"
+   ],
+   "matched_drafts": [],
+   "missing": [
+    {
+     "name": "All Miles Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/all-miles-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'; page says 'We are currently not accepting new applications for the HDFC Bank All Miles Credit Card'"
+    },
+    {
+     "name": "Diners Club Black Credit Card (non-metal)",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/diners-club-black-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": "Diners Club Black Metal Edition Credit Card",
+     "partner": null,
+     "evidence": "page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'; page says 'We are currently not accepting new applications for the HDFC Bank Diners Club Black Credit Card'. Separate page and separate MITC row from the Metal Edition"
+    },
+    {
+     "name": "Diners Club Premium Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/diners-club-premium-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'"
+    },
+    {
+     "name": "Diners Club Rewardz Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/diners-club-rewardz-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'; page says 'We are currently not accepting new applications for the HDFC Bank Diners Club Rewardz Credit Card'"
+    },
+    {
+     "name": "Doctor's Regalia Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/doctors-regalia-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'"
+    },
+    {
+     "name": "Doctors Superia Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/doctors-superia-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'"
+    },
+    {
+     "name": "InterMiles HDFC Bank Diners Club Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/intermiles-diners-club-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": "InterMiles",
+     "evidence": "page says 'Intermiles card is phased out and we have migrated the existing cardholders to other HDFC bank credit card'; no Apply Now on page"
+    },
+    {
+     "name": "InterMiles HDFC Bank Platinum Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/intermiles-platinum-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": "InterMiles",
+     "evidence": "page says 'Intermiles card is phased out and we have migrated the existing cardholders to other HDFC bank credit card'"
+    },
+    {
+     "name": "InterMiles HDFC Bank Signature Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/intermiles-signature-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": "InterMiles",
+     "evidence": "page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'; page says 'Intermiles card is phased out and we have migrated the existing cardholders to other HDFC bank credit card'"
+    },
+    {
+     "name": "JetPrivilege HDFC Bank Select / Titanium Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/jetprivilege-titanium-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": "JetPrivilege",
+     "evidence": "page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'; page says 'Intermiles card is phased out and we have migrated the existing cardholders to other HDFC bank credit card'"
+    },
+    {
+     "name": "MoneyBack Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/money-back-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": "MoneyBack+ Credit Card",
+     "partner": null,
+     "evidence": "page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'; page says 'We are currently not accepting new applications for the HDFC Bank MoneyBack Credit Card'"
+    },
+    {
+     "name": "Pine Labs HDFC Bank Pro Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/pine-labs-pro-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": "Pine Labs",
+     "evidence": "page says 'This Credit Card has been discontinued and is no longer open for new applications'"
+    },
+    {
+     "name": "Platinum Edge Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/platinum-edge-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'; page says 'We are currently not accepting new applications for the HDFC Bank Platinum Edge Credit Card'"
+    },
+    {
+     "name": "Platinum Plus Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/platinum-plus-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'"
+    },
+    {
+     "name": "Regalia Activ Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/regalia-activ-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'"
+    },
+    {
+     "name": "Regalia Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/regalia-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'; 'The sourcing of this card has been discontinued.'"
+    },
+    {
+     "name": "Solitaire Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/solitaire-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'; page says 'We are currently not accepting new applications for the HDFC Bank Solitaire Credit Card'"
+    },
+    {
+     "name": "Superia Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/superia-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'; page says 'We are currently not accepting new applications for the HDFC Bank Superia Airline Credit Card'"
+    },
+    {
+     "name": "Teacher's Platinum Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/teachers-platinum-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'; page says 'We are currently not accepting new applications for the HDFC Bank Teachers Platinum Credit Card'"
+    },
+    {
+     "name": "Titanium Edge Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/titanium-edge-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'; page says 'We are currently not accepting new applications for the HDFC Bank Titanium Edge Credit Card'"
+    },
+    {
+     "name": "World MasterCard Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/world-mastercard-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'; page says 'We are currently not accepting new applications for the HDFC Bank World MasterCard Credit Card'"
+    },
+    {
+     "name": "HDFC Bank UPI RuPay Biz Credit Card",
+     "product_url": "https://www.hdfc.bank.in/business-credit-cards/hdfc-bank-upi-rupay-biz-credit-card",
+     "status": "sold",
+     "variant_of": "HDFC Bank UPI RuPay Credit Card",
+     "partner": null,
+     "evidence": "[business] in business menu, Apply Now on page; MITC groups it with the personal UPI RuPay card (same fee row)"
+    },
+    {
+     "name": "Paytm HDFC Bank Select Business Credit Card",
+     "product_url": "https://www.hdfc.bank.in/business-credit-cards/paytm-select-business-credit-card",
+     "status": "sold",
+     "variant_of": null,
+     "partner": "Paytm",
+     "evidence": "[business] in business menu, Apply Now on page, joining fee Rs 1,000. POSSIBLE DUPLICATE of live paytm-hdfc-bank-select (same Rs 1,000 fee, name lacks 'Business'); MITC has separate rows for 'Paytm HDFC Bank Select' and 'Paytm Select Business'"
+    },
+    {
+     "name": "Best Price Save Smart Credit Card",
+     "product_url": "https://www.hdfc.bank.in/business-credit-cards/best-price-save-smart-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": "Best Price Save Max Credit Card",
+     "partner": "Best Price (Walmart)",
+     "evidence": "[business] page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'; page says 'We are currently not accepting new applications for the HDFC Bank Best Price Save Smart Credit Card'"
+    },
+    {
+     "name": "Business Regalia Credit Card",
+     "product_url": "https://www.hdfc.bank.in/business-credit-cards/business-regalia-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[business] page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'; page says 'We are currently not accepting new applications for the HDFC Bank Business Regalia Credit Card'"
+    },
+    {
+     "name": "CSC Small Business MoneyBack Credit Card",
+     "product_url": "https://www.hdfc.bank.in/business-credit-cards/csc-small-business-moneyback-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": "CSC",
+     "evidence": "[business] page says 'The sourcing of this card has been discontinued. Existing customers of this card will continue to enjoy the benefits.'"
+    },
+    {
+     "name": "Corporate Platinum Credit Card",
+     "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/corporate-platinum-credit-card",
+     "status": "sold",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[commercial] in Commercial Credit Cards menu; page CTA 'Enquire Now'"
+    },
+    {
+     "name": "Purchase MoneyBack Credit Card",
+     "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/purchase-moneyback-credit-card",
+     "status": "sold",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[commercial] in Commercial Credit Cards menu; enquiry-led"
+    },
+    {
+     "name": "AP: Accounts Payable Program",
+     "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/accounts-payable-program",
+     "status": "sold",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[commercial] in Commercial Credit Cards menu; this is a payables programme rather than a named card; CTA 'Enquire Now'"
+    },
+    {
+     "name": "Fleet Credit Card (Fleet Program)",
+     "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/fleet-credit-card",
+     "status": "sold",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[commercial] in Commercial Credit Cards menu as 'Fleet Program'; CTA 'Enquire Now'"
+    },
+    {
+     "name": "Purchase Credit Card",
+     "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/purchase-credit-card",
+     "status": "sold",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[commercial] in Commercial Credit Cards menu; enquiry-led"
+    },
+    {
+     "name": "AR: Accounts Receivables Solution",
+     "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/accounts-receivables-solution",
+     "status": "sold",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[commercial] in Commercial Credit Cards menu; a receivables solution rather than a named card; CTA 'Enquire Now'"
+    },
+    {
+     "name": "TMC Credit Card",
+     "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/tmc-credit-card",
+     "status": "sold",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[commercial] in Commercial Credit Cards menu; CTA 'Enquire Now' (travel management company card)"
+    },
+    {
+     "name": "Dealer Credit Card",
+     "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/dealer-credit-card",
+     "status": "sold",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[commercial] in Commercial Credit Cards menu, Apply Now on page"
+    },
+    {
+     "name": "Purchase Reward Credit Card",
+     "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/purchase-reward-credit-card",
+     "status": "sold",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[commercial] in Commercial Credit Cards menu; enquiry-led"
+    },
+    {
+     "name": "Business Corporate MoneyBack Credit Card",
+     "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/business-corporate-moneyback-credit-card",
+     "status": "sold",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[commercial] page live with Apply Now, but not in the Commercial Credit Cards menu"
+    },
+    {
+     "name": "Business Corporate Regalia Credit Card",
+     "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/business-corporate-regalia-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[commercial] page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'"
+    },
+    {
+     "name": "Business Freedom Credit Card",
+     "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/business-freedom-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[commercial] page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'; page says 'We are currently not accepting new applications for the HDFC Bank Business Freedom Credit Card'"
+    },
+    {
+     "name": "Business Gold Credit Card",
+     "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/business-gold-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[commercial] page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'"
+    },
+    {
+     "name": "Business MoneyBack Credit Card",
+     "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/business-money-back-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[commercial] page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'"
+    },
+    {
+     "name": "Business Platinum Credit Card",
+     "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/business-platinum-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[commercial] page says 'New applications for the HDFC Bank Business Platinum Credit Card are currently closed.'; page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'"
+    },
+    {
+     "name": "Business Regalia First Credit Card",
+     "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/business-regalia-first-credit-card",
+     "status": "closed_to_new_applications",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[commercial] page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'"
+    },
+    {
+     "name": "Corporate Visa Signature Credit Card",
+     "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/corporate-visa-signature-credit-card",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[commercial] appears only as a left-menu link; the URL redirects to the Commercial Credit Cards landing page, so no product page exists"
+    },
+    {
+     "name": "Corporate World Master Card",
+     "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/corporate-world-master-credit-card",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[commercial] appears only as a left-menu link; the URL redirects to the Commercial Credit Cards landing page, so no product page exists"
+    },
+    {
+     "name": "Infinia Credit Card (non-metal)",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/services/personal-mitc",
+     "status": "unknown",
+     "variant_of": "INFINIA Metal Edition",
+     "partner": null,
+     "evidence": "MITC fee table has a separate row 'Infinia' at Rs 10,000 next to 'Infinia (Metal Edition)' at Rs 12,500; the only product page is the Metal Edition. named only in the personal MITC fee table (Version 4.18, updated 31 Oct 2026); no product page found in the credit-card listing or its Know More tiles"
+    },
+    {
+     "name": "Easy EMI Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/services/personal-mitc",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "named only in the personal MITC fee table (Version 4.18, updated 31 Oct 2026); no product page found in the credit-card listing or its Know More tiles"
+    },
+    {
+     "name": "Times Platinum / Times Card Credit Platinum",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/services/personal-mitc",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": "Times",
+     "evidence": "named only in the personal MITC fee table (Version 4.18, updated 31 Oct 2026); no product page found in the credit-card listing or its Know More tiles"
+    },
+    {
+     "name": "Times Titanium / Times Card Credit",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/services/personal-mitc",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": "Times",
+     "evidence": "named only in the personal MITC fee table (Version 4.18, updated 31 Oct 2026); no product page found in the credit-card listing or its Know More tiles; MITC footnote refers to Times Titanium forex change from 10 Feb 2024"
+    },
+    {
+     "name": "Equitas Elegance Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/services/personal-mitc",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": "Equitas",
+     "evidence": "named only in the personal MITC fee table (Version 4.18, updated 31 Oct 2026); no product page found in the credit-card listing or its Know More tiles"
+    },
+    {
+     "name": "Equitas Excite Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/services/personal-mitc",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": "Equitas",
+     "evidence": "named only in the personal MITC fee table (Version 4.18, updated 31 Oct 2026); no product page found in the credit-card listing or its Know More tiles"
+    },
+    {
+     "name": "Micro Enterprise Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/services/personal-mitc",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "named only in the personal MITC fee table (Version 4.18, updated 31 Oct 2026); no product page found in the credit-card listing or its Know More tiles"
+    },
+    {
+     "name": "Retailio HDFC Bank Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/services/personal-mitc",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": "Retailio",
+     "evidence": "named only in the personal MITC fee table (Version 4.18, updated 31 Oct 2026); no product page found in the credit-card listing or its Know More tiles"
+    },
+    {
+     "name": "Pharmeasy HDFC Bank Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/services/personal-mitc",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": "PharmEasy",
+     "evidence": "named only in the personal MITC fee table (Version 4.18, updated 31 Oct 2026); no product page found in the credit-card listing or its Know More tiles"
+    },
+    {
+     "name": "Pine Labs HDFC Bank Credit Card (Rs 499 variant)",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/services/personal-mitc",
+     "status": "unknown",
+     "variant_of": "Pine Labs HDFC Bank Pro Credit Card",
+     "partner": "Pine Labs",
+     "evidence": "named only in the personal MITC fee table (Version 4.18, updated 31 Oct 2026); no product page found in the credit-card listing or its Know More tiles; separate row from 'Pine Labs HDFC Bank Pro'"
+    },
+    {
+     "name": "HDFC Bank UPI RuPay Mega Saver Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/services/personal-mitc",
+     "status": "unknown",
+     "variant_of": "HDFC Bank UPI RuPay Credit Card",
+     "partner": null,
+     "evidence": "named only in the personal MITC fee table (Version 4.18, updated 31 Oct 2026); no product page found in the credit-card listing or its Know More tiles; grouped with UPI RuPay / UPI RuPay Biz (wef 4 Oct 2023)"
+    },
+    {
+     "name": "Small Business MoneyBack Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/services/personal-mitc",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "named only in the personal MITC fee table (Version 4.18, updated 31 Oct 2026); no product page found in the credit-card listing or its Know More tiles; Rs 250 fee row"
+    },
+    {
+     "name": "Business Program Credit Card",
+     "product_url": "https://www.hdfc.bank.in/credit-cards/services/personal-mitc",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "named only in the personal MITC fee table (Version 4.18, updated 31 Oct 2026); no product page found in the credit-card listing or its Know More tiles; row named 'Business Program', fee Rs 500"
+    }
+   ],
+   "stale_live": [
+    {
+     "slug": "snapdeal-hdfc-bank-credit-card",
+     "evidence": "No Snapdeal card in the credit-card listing or Know More tiles, and /credit-cards/snapdeal-hdfc-bank-credit-card returns 404. The personal MITC (v4.18, 31 Oct 2026) still has a 'Snapdeal HDFC Bank' fee row, so it is serviced but not listed."
+    },
+    {
+     "slug": "paytm-hdfc-bank-credit-card",
+     "evidence": "Listing has only Paytm HDFC Bank Business and Select Business cards (Business menu). No consumer Paytm card page; /credit-cards/paytm-hdfc-bank-credit-card returns 404. MITC v4.18 still has a 'Paytm HDFC Bank' Rs 500 row, and a 1 Apr 2023 notice on the Paytm Business page names 'Paytm HDFC Bank Credit Card'."
+    },
+    {
+     "slug": "paytm-hdfc-bank-mobile-credit-card",
+     "evidence": "No consumer Paytm card page. MITC v4.18 has 'Paytm HDFC Bank Digital Credit Card' at Rs 149 (matches live fee); the 2023 notice on the Paytm Business page names 'Paytm HDFC Mobile Credit Card'. Serviced but not listed."
+    },
+    {
+     "slug": "paytm-hdfc-bank-select",
+     "evidence": "No consumer 'Paytm HDFC Bank Select' page or menu entry. MITC v4.18 has a 'Paytm HDFC Bank Select' row, and the 2023 Paytm notice names 'Paytm HDFC Bank Select Credit Card'. The only listed Select card is 'Paytm HDFC Bank Select Business' (same Rs 1,000 fee), which may be what this live record means."
+    },
+    {
+     "slug": "indigo-hdfc-6e-rewards",
+     "evidence": "HDFC page /credit-cards/6e-rewards-indigo-credit-card and MITC footnote say the Indigo 6E Rewards / 6E Rewards XL cards are discontinued, no new applications; existing cards migrated to another HDFC card (SMS Aug/Sep 2025, Feb 2026); 6E Rewards programme phased out 1 Nov 2025; all product features and benefits discontinued from 1 Dec 2025."
+    },
+    {
+     "slug": "indigo-hdfc-6e-rewards-xl",
+     "evidence": "Same notice as indigo-hdfc-6e-rewards: '6E Rewards XL' discontinued, no new applications, cardholders migrated, features discontinued 1 Dec 2025 (MITC v4.18 footnote)."
+    }
+   ],
+   "live_status_flags": {
+    "hdfc-infinia-metal": {
+     "status": "invite_only",
+     "evidence": "menu tag 'By Invite Only'; page says usually available by invite only"
+    },
+    "hdfc-regalia-first": {
+     "status": "closed_to_new_applications",
+     "evidence": "page says 'New applications for the Regalia First Credit Card are currently unavailable. Existing cardholders will continue to enjoy its features and benefits.'"
+    },
+    "hdfc-bharat-cashback": {
+     "status": "closed_to_new_applications",
+     "evidence": "page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'; page says 'We are currently not accepting new applications for the HDFC Bank Bharat Credit Card'"
+    },
+    "hdfc-visa-signature": {
+     "status": "closed_to_new_applications",
+     "evidence": "page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'; page says 'We are currently not accepting new applications for the HDFC Bank Visa Signature Credit Card'"
+    },
+    "hdfc-diners-club-miles": {
+     "status": "closed_to_new_applications",
+     "evidence": "page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'; page says 'We are currently not accepting new applications for the HDFC Bank Diners Club Miles Credit Card'"
+    },
+    "hdfc-best-price-save-max-walmart": {
+     "status": "closed_to_new_applications",
+     "evidence": "[business] page says 'Sourcing of this Credit Card has been stopped. Existing customers of this card will continue to enjoy the benefits.'"
+    }
+   },
+   "notes": "Read with plain GET (no block): https://www.hdfc.bank.in/credit-cards (redirect from hdfcbank.com) plus each linked product page and the personal MITC PDF (Version 4.18 Oct 2026, 'Updated on 31st October'26'). Menu = 20 personal + 9 business + 12 commercial; these are the cards on sale. Every other card page in the site's Know More tiles or left menus carries its own sourcing-stopped / not-accepting notice, or is MITC-only. offered_count = all distinct cards found on pages, menus and the MITC fee table (all statuses). Missing items are tagged [business] / [commercial] in evidence; personal cards are untagged. 'AP: Accounts Payable Program', 'AR: Accounts Receivables Solution' and 'Fleet Program' are programmes rather than named cards. Cards that matched live but are not on sale are in live_status_flags. Live slug tata-neu-infinity-sbi-credit-card is filed under the hdfc group in live_by_issuer but is an SBI Card product (counted under SBI)."
+  },
+  {
+   "issuer": "SBI Card",
+   "listing_url": "https://www.sbicard.com/en/personal/credit-cards.html",
+   "read_on": "2026-11-07",
+   "offered_count": 99,
+   "matched_live": [
+    "cashback-sbi-card",
+    "sbi-card-elite",
+    "sbi-simplyclick",
+    "sbi-card-prime",
+    "sbi-card-miles-elite",
+    "simplysave-sbi-credit-card",
+    "sbi-card-pulse",
+    "sbi-aurum",
+    "indigo-sbi-card-elite",
+    "krisflyer-sbi-card",
+    "krisflyer-sbi-card-apex",
+    "sbi-miles-prime",
+    "titan-sbi-card",
+    "reliance-sbi-card-prime",
+    "landmark-rewards-sbi-prime",
+    "air-india-sbi-signature",
+    "tata-neu-plus-sbi-credit-card",
+    "tata-neu-infinity-sbi-credit-card",
+    "doctors-ima-sbi-card",
+    "doctors-sbi-card-ima",
+    "google-pay-flex-sbi-card",
+    "phonepe-sbi-card-purple",
+    "phonepe-sbi-select-black",
+    "apollo-sbi-card-select",
+    "paytm-sbi-card-select",
+    "paytm-sbi-card",
+    "sbi-shaurya-select",
+    "sbi-shaurya-credit-card",
+    "apollo-sbi-card",
+    "flipkart-sbi-card",
+    "eternal-sbi-card",
+    "reliance-sbi-card",
+    "landmark-rewards-sbi-card",
+    "landmark-rewards-sbi-card-select",
+    "indigo-sbi-credit-card",
+    "irctc-sbi-card-premier",
+    "sbi-card-miles",
+    "bpcl-sbi-card",
+    "bpcl-sbi-card-octane",
+    "irctc-sbi-platinum-card",
+    "club-vistara-sbi-card",
+    "bank-of-maharashtra-simplysave-sbi-card",
+    "bank-of-maharashtra-sbi-card-elite",
+    "uco-bank-sbi-card-elite",
+    "punjab-sind-bank-simplysave-sbi-card",
+    "punjab-sind-bank-sbi-card-elite",
+    "uco-bank-sbi-card-prime",
+    "city-union-bank-sbi-card-prime",
+    "karnataka-bank-sbi-card-prime",
+    "karnataka-bank-simplysave-sbi-card",
+    "south-indian-bank-simplysave-sbi-card",
+    "south-indian-bank-sbi-card-prime",
+    "city-union-bank-simplysave-sbi-card",
+    "uco-bank-simplysave-sbi-card",
+    "karur-vysya-bank-sbi-card-simplysave",
+    "karur-vysya-bank-sbi-card-prime",
+    "karur-vysya-bank-sbi-card-elite",
+    "sbi-card-elite-advantage",
+    "sbi-card-prime-advantage",
+    "simplyclick-advantage-sbi-card",
+    "simplysave-advantage-sbi-card",
+    "sbi-simplysave-upi-rupay",
+    "irctc-rupay-sbi-card",
+    "aditya-birla-sbi-card",
+    "aditya-birla-sbi-card-select",
+    "fabindia-sbi-card",
+    "fabindia-sbi-card-select",
+    "fbb-sbi-styleup-card",
+    "yatra-sbi-card",
+    "central-sbi-select",
+    "natures-basket-sbi-card",
+    "natures-basket-sbi-card-elite",
+    "central-bank-of-india-sbi-card-elite"
+   ],
+   "matched_drafts": [
+    "eternal-sbi-card"
+   ],
+   "missing": [
+    {
+     "name": "Club Vistara SBI Card PRIME",
+     "product_url": "https://www.sbicard.com/en/personal/credit-cards/club-vistara-sbi-card-prime.html",
+     "status": "unknown",
+     "variant_of": "Club Vistara SBI Card",
+     "partner": "Club Vistara (Vistara)",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now); also in KFS (14 Oct 2026); card page has no discontinuation notice"
+    },
+    {
+     "name": "Tata Card SELECT",
+     "product_url": "https://www.tatacard.com",
+     "status": "unknown",
+     "variant_of": "Tata Card",
+     "partner": "Tata",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now); See Benefits links to tatacard.com (Rs 2,999 fee); also in KFS and MITC"
+    },
+    {
+     "name": "Tata Card",
+     "product_url": "https://www.tatacard.com",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": "Tata",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now); See Benefits links to tatacard.com (Rs 499 fee); also in KFS and MITC"
+    },
+    {
+     "name": "SBI Card Unnati",
+     "product_url": "https://www.sbicard.com/html/en/personal/credit-cards/sbi-card-unnati.html",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now); free for first 4 years per page; launched 29 Mar 2017; also in KFS and MITC"
+    },
+    {
+     "name": "Air India SBI Platinum Card",
+     "product_url": "https://www.sbicard.com/en/personal/credit-cards/air-india-sbi-platinum-card.html",
+     "status": "closed_to_new_applications",
+     "variant_of": "Air India SBI Signature Card",
+     "partner": "Air India",
+     "evidence": "card page: 'Important update: W.e.f. 10 Oct 2024 the issuance of Air India SBI Platinum Credit Cards has been discontinued'"
+    },
+    {
+     "name": "Bank of Maharashtra SBI Card PRIME",
+     "product_url": "https://www.sbicard.com/en/personal/credit-cards/bom-sbi-card-prime.html",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": "Bank of Maharashtra",
+     "evidence": "catalogue entry, See Benefits only (isOnline=no); card page FAQ says to apply at the nearest partner-bank branch; page FAQ: 'visit the nearest Bank of Maharashtra Branch'; also in KFS and MITC"
+    },
+    {
+     "name": "PSB SBI Card PRIME",
+     "product_url": "https://www.sbicard.com/en/personal/credit-cards/psb-sbi-card-prime.html",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": "Punjab & Sind Bank",
+     "evidence": "catalogue entry, See Benefits only (isOnline=no); card page FAQ says to apply at the nearest partner-bank branch; page FAQ: 'visit the nearest PSB Bank Branch'; also in KFS and MITC"
+    },
+    {
+     "name": "South Indian Bank SBI Platinum Credit Card",
+     "product_url": "https://www.sbicard.com/en/personal/credit-cards/south-indian-bank-sbi-platinum-credit-card.html",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": "South Indian Bank",
+     "evidence": "catalogue entry, See Benefits only (isOnline=no); card page FAQ says to apply at the nearest partner-bank branch; page FAQ: 'visit the nearest South Indian Bank Branch'; also in KFS and MITC"
+    },
+    {
+     "name": "Karur Vysya Bank - SBI Platinum Credit Card",
+     "product_url": "https://www.sbicard.com/en/personal/credit-cards/karur-vysya-bank-sbi-platinum-credit-card.html",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": "Karur Vysya Bank",
+     "evidence": "catalogue entry, See Benefits only (isOnline=no); card page FAQ says to apply at the nearest partner-bank branch; page FAQ: 'visit the nearest Karur Vysya Bank Branch'; also in KFS and MITC"
+    },
+    {
+     "name": "KVB SBI Signature Card",
+     "product_url": "https://www.sbicard.com/en/personal/credit-cards/karur-vysya-bank-sbi-signature-credit-card.html",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": "Karur Vysya Bank",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now) (partner-bank card, Rs 4,999); also in KFS and MITC"
+    },
+    {
+     "name": "Karur Vysya Bank - SBI Card",
+     "product_url": "https://www.sbicard.com/en/personal/credit-cards/karur-vysya-bank-sbi-card-gold.html",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": "Karur Vysya Bank",
+     "evidence": "catalogue entry, See Benefits only (isOnline=no); card page FAQ says to apply at the nearest partner-bank branch; Rs 499; also in KFS and MITC"
+    },
+    {
+     "name": "SBI Card PRIME NRI Secured",
+     "product_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/kfs/key-fact-statement.pdf",
+     "status": "unknown",
+     "variant_of": "SBI Card PRIME",
+     "partner": null,
+     "evidence": "named in both the KFS (14 Oct 2026) and MITC (30 Oct 2026) fee tables; not in the current card catalogue; Rs 1,500 fee row"
+    },
+    {
+     "name": "Krishak Unnati SBI Card",
+     "product_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/kfs/key-fact-statement.pdf",
+     "status": "unknown",
+     "variant_of": "SBI Card Unnati",
+     "partner": null,
+     "evidence": "named in both the KFS (14 Oct 2026) and MITC (30 Oct 2026) fee tables; not in the current card catalogue; free first year, Rs 499 renewal row"
+    },
+    {
+     "name": "SBI Card Vyapaar Unnati",
+     "product_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/most-important-terms-and-conditions/mitc-english.pdf",
+     "status": "unknown",
+     "variant_of": "SBI Card Unnati",
+     "partner": null,
+     "evidence": "named in the SBI Card MITC (file dated 30 Oct 2026) fee table; not in the current card catalogue"
+    },
+    {
+     "name": "SimplySAVE Merchant SBI Card",
+     "product_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/most-important-terms-and-conditions/mitc-english.pdf",
+     "status": "unknown",
+     "variant_of": "SimplySAVE SBI Card",
+     "partner": null,
+     "evidence": "named in the SBI Card MITC (file dated 30 Oct 2026) fee table; not in the current card catalogue; NIL fee row"
+    },
+    {
+     "name": "Delhi Metro SBI Card",
+     "product_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/kfs/key-fact-statement.pdf",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": "Delhi Metro",
+     "evidence": "named in both the KFS (14 Oct 2026) and MITC (30 Oct 2026) fee tables; not in the current card catalogue"
+    },
+    {
+     "name": "Etihad Guest SBI Card",
+     "product_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/kfs/key-fact-statement.pdf",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": "Etihad Guest",
+     "evidence": "named in both the KFS (14 Oct 2026) and MITC (30 Oct 2026) fee tables; not in the current card catalogue"
+    },
+    {
+     "name": "Etihad Guest SBI Premier Card",
+     "product_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/kfs/key-fact-statement.pdf",
+     "status": "unknown",
+     "variant_of": "Etihad Guest SBI Card",
+     "partner": "Etihad Guest",
+     "evidence": "named in both the KFS (14 Oct 2026) and MITC (30 Oct 2026) fee tables; not in the current card catalogue"
+    },
+    {
+     "name": "Central SBI Select+ Card",
+     "product_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/kfs/key-fact-statement.pdf",
+     "status": "unknown",
+     "variant_of": "Central SBI Select Card",
+     "partner": "Central Bank of India",
+     "evidence": "named in both the KFS (14 Oct 2026) and MITC (30 Oct 2026) fee tables; not in the current card catalogue; Rs 2,999 row"
+    },
+    {
+     "name": "OLA Money SBI Card",
+     "product_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/kfs/key-fact-statement.pdf",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": "Ola Money",
+     "evidence": "named in both the KFS (14 Oct 2026) and MITC (30 Oct 2026) fee tables; not in the current card catalogue"
+    },
+    {
+     "name": "Tata Croma Card",
+     "product_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/kfs/key-fact-statement.pdf",
+     "status": "unknown",
+     "variant_of": "Tata Card",
+     "partner": "Tata Croma",
+     "evidence": "named in both the KFS (14 Oct 2026) and MITC (30 Oct 2026) fee tables; not in the current card catalogue"
+    },
+    {
+     "name": "Tata Croma Card SELECT",
+     "product_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/kfs/key-fact-statement.pdf",
+     "status": "unknown",
+     "variant_of": "Tata Card SELECT",
+     "partner": "Tata Croma",
+     "evidence": "named in both the KFS (14 Oct 2026) and MITC (30 Oct 2026) fee tables; not in the current card catalogue"
+    },
+    {
+     "name": "Tata Star Card",
+     "product_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/kfs/key-fact-statement.pdf",
+     "status": "unknown",
+     "variant_of": "Tata Card",
+     "partner": "Tata Star",
+     "evidence": "named in both the KFS (14 Oct 2026) and MITC (30 Oct 2026) fee tables; not in the current card catalogue"
+    },
+    {
+     "name": "Tata Star Card SELECT",
+     "product_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/kfs/key-fact-statement.pdf",
+     "status": "unknown",
+     "variant_of": "Tata Card SELECT",
+     "partner": "Tata Star",
+     "evidence": "named in both the KFS (14 Oct 2026) and MITC (30 Oct 2026) fee tables; not in the current card catalogue"
+    },
+    {
+     "name": "Central Bank of India SBI Card PRIME",
+     "product_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/kfs/key-fact-statement.pdf",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": "Central Bank of India",
+     "evidence": "named in the SBI Card Key Fact Statement dated 14 Oct 2026 fee table; not in the current card catalogue; absent from the MITC dated 30 Oct 2026"
+    },
+    {
+     "name": "Central Bank of India SimplySAVE SBI Card",
+     "product_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/kfs/key-fact-statement.pdf",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": "Central Bank of India",
+     "evidence": "named in the SBI Card Key Fact Statement dated 14 Oct 2026 fee table; not in the current card catalogue; absent from the MITC dated 30 Oct 2026"
+    }
+   ],
+   "stale_live": [
+    {
+     "slug": "lifestyle-home-centre-sbi-card",
+     "evidence": "Not in the current catalogue (68 cards), the KFS (14 Oct 2026) or the MITC (30 Oct 2026) fee tables."
+    },
+    {
+     "slug": "lifestyle-home-centre-sbi-card-prime",
+     "evidence": "Not in the current catalogue (68 cards), the KFS (14 Oct 2026) or the MITC (30 Oct 2026) fee tables."
+    },
+    {
+     "slug": "spar-sbi-card",
+     "evidence": "Not in the current catalogue (68 cards), the KFS (14 Oct 2026) or the MITC (30 Oct 2026) fee tables."
+    },
+    {
+     "slug": "spar-sbi-card-prime",
+     "evidence": "Not in the current catalogue (68 cards), the KFS (14 Oct 2026) or the MITC (30 Oct 2026) fee tables."
+    },
+    {
+     "slug": "max-sbi-card-select",
+     "evidence": "Not in the current catalogue (68 cards), the KFS (14 Oct 2026) or the MITC (30 Oct 2026) fee tables."
+    },
+    {
+     "slug": "central-sbi-card",
+     "evidence": "Not in the catalogue, KFS or MITC. The tables have only 'Central SBI Select Card' (Rs 750) and 'Central SBI Select+ Card' (Rs 2,999) for the Central Bank of India co-brand."
+    },
+    {
+     "slug": "city-union-bank-sbi-card-elite",
+     "evidence": "Not in the catalogue, KFS or MITC. For City Union Bank the tables have only 'City Union Bank SBI Card PRIME' and 'City Union Bank SimplySAVE SBI Card'."
+    },
+    {
+     "slug": "natures-basket-sbi-card",
+     "evidence": "WEAK: in the KFS (14 Oct 2026) but not in the catalogue and not in the MITC (30 Oct 2026)."
+    },
+    {
+     "slug": "natures-basket-sbi-card-elite",
+     "evidence": "WEAK: in the KFS (14 Oct 2026) but not in the catalogue and not in the MITC (30 Oct 2026)."
+    },
+    {
+     "slug": "central-bank-of-india-sbi-card-elite",
+     "evidence": "WEAK: in the KFS (14 Oct 2026) but not in the catalogue and not in the MITC (30 Oct 2026), which has no Central Bank of India rows at all."
+    }
+   ],
+   "live_status_flags": {
+    "air-india-sbi-signature": {
+     "status": "closed_to_new_applications",
+     "evidence": "card page: 'Important update: W.e.f. 10 Oct 2024 the issuance of Air India SBI Signature Credit Cards has been discontinued'"
+    },
+    "doctors-ima-sbi-card": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now)"
+    },
+    "doctors-sbi-card-ima": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now); catalogue has two Doctor's pages (plain and IMA); live has two Doctor's records both labelled IMA, so this match is uncertain"
+    },
+    "google-pay-flex-sbi-card": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now); launched 29 Jul 2026 per page data"
+    },
+    "phonepe-sbi-card-purple": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now)"
+    },
+    "phonepe-sbi-select-black": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now)"
+    },
+    "paytm-sbi-card-select": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now)"
+    },
+    "paytm-sbi-card": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now)"
+    },
+    "sbi-shaurya-select": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now)"
+    },
+    "sbi-shaurya-credit-card": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now)"
+    },
+    "apollo-sbi-card": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now)"
+    },
+    "eternal-sbi-card": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now); launched 22 Mar 2025 per page data"
+    },
+    "club-vistara-sbi-card": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now)"
+    },
+    "bank-of-maharashtra-simplysave-sbi-card": {
+     "status": "unknown",
+     "evidence": "catalogue entry, See Benefits only (isOnline=no); card page FAQ says to apply at the nearest partner-bank branch; live record sits under issuer slug state-bank-of-india"
+    },
+    "bank-of-maharashtra-sbi-card-elite": {
+     "status": "unknown",
+     "evidence": "catalogue entry, See Benefits only (isOnline=no); card page FAQ says to apply at the nearest partner-bank branch"
+    },
+    "uco-bank-sbi-card-elite": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now) (partner-bank card)"
+    },
+    "punjab-sind-bank-simplysave-sbi-card": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now) (partner-bank card)"
+    },
+    "punjab-sind-bank-sbi-card-elite": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now) (partner-bank card)"
+    },
+    "uco-bank-sbi-card-prime": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now) (partner-bank card)"
+    },
+    "city-union-bank-sbi-card-prime": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now) (partner-bank card)"
+    },
+    "karnataka-bank-sbi-card-prime": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now) (partner-bank card)"
+    },
+    "karnataka-bank-simplysave-sbi-card": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now) (partner-bank card)"
+    },
+    "south-indian-bank-simplysave-sbi-card": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now) (partner-bank card)"
+    },
+    "south-indian-bank-sbi-card-prime": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now) (partner-bank card)"
+    },
+    "city-union-bank-simplysave-sbi-card": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now) (partner-bank card)"
+    },
+    "uco-bank-simplysave-sbi-card": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now) (partner-bank card)"
+    },
+    "karur-vysya-bank-sbi-card-simplysave": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now) (partner-bank card)"
+    },
+    "karur-vysya-bank-sbi-card-prime": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now) (partner-bank card)"
+    },
+    "karur-vysya-bank-sbi-card-elite": {
+     "status": "unknown",
+     "evidence": "catalogue entry with See Benefits only (isOnline=no, no Apply Now) (partner-bank card; catalogue link points at the BoM Elite page)"
+    },
+    "sbi-card-elite-advantage": {
+     "status": "unknown",
+     "evidence": "named in both the KFS (14 Oct 2026) and MITC (30 Oct 2026) fee tables; not in the current card catalogue"
+    },
+    "sbi-card-prime-advantage": {
+     "status": "unknown",
+     "evidence": "named in both the KFS (14 Oct 2026) and MITC (30 Oct 2026) fee tables; not in the current card catalogue"
+    },
+    "simplyclick-advantage-sbi-card": {
+     "status": "unknown",
+     "evidence": "named in both the KFS (14 Oct 2026) and MITC (30 Oct 2026) fee tables; not in the current card catalogue"
+    },
+    "simplysave-advantage-sbi-card": {
+     "status": "unknown",
+     "evidence": "named in both the KFS (14 Oct 2026) and MITC (30 Oct 2026) fee tables; not in the current card catalogue"
+    },
+    "sbi-simplysave-upi-rupay": {
+     "status": "unknown",
+     "evidence": "named in the SBI Card MITC (file dated 30 Oct 2026) fee table; not in the current card catalogue"
+    },
+    "irctc-rupay-sbi-card": {
+     "status": "unknown",
+     "evidence": "named in both the KFS (14 Oct 2026) and MITC (30 Oct 2026) fee tables; not in the current card catalogue (Rs 500, separate row from IRCTC SBI Platinum Card)"
+    },
+    "aditya-birla-sbi-card": {
+     "status": "unknown",
+     "evidence": "named in both the KFS (14 Oct 2026) and MITC (30 Oct 2026) fee tables; not in the current card catalogue"
+    },
+    "aditya-birla-sbi-card-select": {
+     "status": "unknown",
+     "evidence": "named in both the KFS (14 Oct 2026) and MITC (30 Oct 2026) fee tables; not in the current card catalogue"
+    },
+    "fabindia-sbi-card": {
+     "status": "unknown",
+     "evidence": "named in both the KFS (14 Oct 2026) and MITC (30 Oct 2026) fee tables; not in the current card catalogue"
+    },
+    "fabindia-sbi-card-select": {
+     "status": "unknown",
+     "evidence": "named in both the KFS (14 Oct 2026) and MITC (30 Oct 2026) fee tables; not in the current card catalogue"
+    },
+    "fbb-sbi-styleup-card": {
+     "status": "unknown",
+     "evidence": "named in both the KFS (14 Oct 2026) and MITC (30 Oct 2026) fee tables; not in the current card catalogue"
+    },
+    "yatra-sbi-card": {
+     "status": "unknown",
+     "evidence": "named in both the KFS (14 Oct 2026) and MITC (30 Oct 2026) fee tables; not in the current card catalogue"
+    },
+    "central-sbi-select": {
+     "status": "unknown",
+     "evidence": "named in both the KFS (14 Oct 2026) and MITC (30 Oct 2026) fee tables; not in the current card catalogue"
+    },
+    "natures-basket-sbi-card": {
+     "status": "unknown",
+     "evidence": "named in the SBI Card Key Fact Statement dated 14 Oct 2026 fee table; not in the current card catalogue; absent from the MITC dated 30 Oct 2026"
+    },
+    "natures-basket-sbi-card-elite": {
+     "status": "unknown",
+     "evidence": "named in the SBI Card Key Fact Statement dated 14 Oct 2026 fee table; not in the current card catalogue; absent from the MITC dated 30 Oct 2026"
+    },
+    "central-bank-of-india-sbi-card-elite": {
+     "status": "unknown",
+     "evidence": "named in the SBI Card Key Fact Statement dated 14 Oct 2026 fee table; not in the current card catalogue; absent from the MITC dated 30 Oct 2026"
+    }
+   },
+   "notes": "sbicard.com card listing is a JS app; the data it loads, https://www.sbicard.com/json/templatedata/cards-catalog-en.json (68 cards, the site's own data request seen in the page's network log), was read with plain GET, plus each card's product JSON, the KFS PDF (title 'SBI Card_Key fact Statement for 14OCT2026') and MITC PDF ('MITC- Common-30OCT26'). One probe of a guessed path under /en/templatedata returned HTTP 490 (firewall) and was not retried or worked around. Catalogue 'sold' = Apply Now / isOnline=yes. Cards with only See Benefits (isOnline=no) are marked unknown: the page FAQ says partner-bank cards are applied for at the partner bank branch; only the two Air India cards say discontinued (10 Oct 2024). KFS/MITC-only rows are cards serviced but not in the catalogue; status unknown. offered_count 99 = 68 catalogue entries + 31 cards found only in the KFS or MITC fee tables. Nature's Basket x2 and Central Bank of India ELITE appear in both matched_live (KFS rows) and stale_live (flagged WEAK because the 30 Oct 2026 MITC and the catalogue dropped them); count them once. Corporate/commercial SBI cards are not in the retail listing and were not read. Live slugs state-bank-of-india/bank-of-maharashtra-simplysave-sbi-card and the hdfc-filed tata-neu-infinity-sbi-credit-card are matched here. Catalogue links for PSB/UCO/KVB ELITE all point at the Bank of Maharashtra Elite page (site data quirk). Doctor's SBI Card plain vs IMA match is uncertain."
+  },
+  {
+   "issuer": "ICICI Bank",
+   "listing_url": "https://www.icici.bank.in/personal-banking/cards/credit-card",
+   "read_on": "2026-11-07",
+   "offered_count": 53,
+   "matched_live": [
+    "icici-emeralde-private-metal",
+    "icici-emeralde-credit-card",
+    "icici-sapphiro",
+    "icici-rubyx",
+    "icici-coral",
+    "icici-platinum-chip",
+    "emirates-skywards-icici-bank-emeralde",
+    "emirates-skywards-icici-bank-sapphiro",
+    "emirates-skywards-icici-bank-rubyx",
+    "amazon-pay-icici-bank-credit-card",
+    "icici-hpcl-super-saver-credit-card",
+    "icici-hpcl-coral-credit-card",
+    "makemytrip-icici-bank-signature-credit-card",
+    "makemytrip-icici-bank-platinum",
+    "chennai-super-kings-icici-bank-credit-card",
+    "icici-bank-parakram-select",
+    "icici-business-advantage-black",
+    "icici-business-advantage-blue",
+    "icici-manchester-united-signature",
+    "icici-manchester-united-platinum"
+   ],
+   "matched_drafts": [
+    "icici-1838-reserve",
+    "icici-times-black"
+   ],
+   "missing": [
+    {
+     "name": "Adani One Signature Credit Card",
+     "product_url": "https://www.icici.bank.in/personal-banking/cards/credit-card/adani-icici-credit-card/signature-credit-card",
+     "status": "sold",
+     "variant_of": null,
+     "partner": "Adani One",
+     "evidence": "listing tile Apply Now (adanione.com); co-branded; MITC fee Rs 5,000"
+    },
+    {
+     "name": "Adani One Platinum Credit Card",
+     "product_url": "https://www.icici.bank.in/personal-banking/cards/credit-card/adani-icici-credit-card/platinum-card",
+     "status": "sold",
+     "variant_of": null,
+     "partner": "Adani One",
+     "evidence": "listing tile Apply Now (adanione.com); co-branded; MITC fee Rs 750"
+    },
+    {
+     "name": "MakeMyTrip Credit Card",
+     "product_url": "https://www.icici.bank.in/personal-banking/cards/credit-card/makemytrip/makemytrip-icici-credit-card",
+     "status": "sold",
+     "variant_of": null,
+     "partner": "MakeMyTrip",
+     "evidence": "listing tile Apply Now (makemytrip.com link); MITC fee Rs 999; this is the current MakeMyTrip card, separate from the older Platinum and Signature"
+    },
+    {
+     "name": "Expressions Credit Card",
+     "product_url": "https://www.icici.bank.in/personal-banking/cards/credit-card/expressions-card",
+     "status": "sold",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "listing tile Apply Now; MITC fee Rs 499"
+    },
+    {
+     "name": "Parakram Credit Card",
+     "product_url": "https://www.icici.bank.in/personal-banking/cards/credit-card/parakram-cards/parakram",
+     "status": "unknown",
+     "variant_of": "Parakram Select Credit Card",
+     "partner": "Indian defence personnel",
+     "evidence": "listing tile has no apply button; defence and paramilitary card; MITC lists it at Nil fee"
+    },
+    {
+     "name": "Alumni Credit Card",
+     "product_url": "https://www.icici.bank.in/personal-banking/cards/credit-card/alumni-credit-card",
+     "status": "sold",
+     "variant_of": null,
+     "partner": "College alumni programme",
+     "evidence": "page has APPLY NOW and a college selector; no joining or annual fee; linked from the listing page but not in the grid; not in the MITC fee table"
+    },
+    {
+     "name": "Instant Platinum Credit Card (against Fixed Deposit)",
+     "product_url": "https://www.icici.bank.in/personal-banking/cards/credit-card/credit-card-against-fixed-deposit",
+     "status": "sold",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "Credit Card Against Fixed Deposit page offers 'ICICI Bank Instant Platinum Credit Card' and 'ICICI Bank Coral Credit Card' variants (APPLY NOW); MITC has 'Instant Platinum Credit Card' row"
+    },
+    {
+     "name": "Coral Credit Card against Fixed Deposit",
+     "product_url": "https://www.icici.bank.in/personal-banking/cards/credit-card/credit-card-against-fixed-deposit",
+     "status": "sold",
+     "variant_of": "Coral Credit Card",
+     "partner": null,
+     "evidence": "FD-secured variant offered on the Credit Card Against Fixed Deposit page; MITC has a separate row at the same Rs 500 fee"
+    },
+    {
+     "name": "Rubyx Credit Card against Fixed Deposit",
+     "product_url": "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf",
+     "status": "unknown",
+     "variant_of": "Rubyx Credit Card",
+     "partner": null,
+     "evidence": "named only in the credit-card MITC fee table (last updated 6 Nov 2026); no card in the listing grid or Know More tile for it; Rs 3,000 row"
+    },
+    {
+     "name": "NRI Coral Credit Card",
+     "product_url": "https://www.icici.bank.in/nri-banking/cards/credit-card",
+     "status": "unknown",
+     "variant_of": "Coral Credit Card",
+     "partner": null,
+     "evidence": "NRI page lists it with a 'Visit branch' button (no online apply); MITC row Rs 1,000 joining"
+    },
+    {
+     "name": "NRI Sapphiro Credit Card",
+     "product_url": "https://www.icici.bank.in/nri-banking/cards/credit-card",
+     "status": "unknown",
+     "variant_of": "Sapphiro Credit Card",
+     "partner": null,
+     "evidence": "NRI page lists it with a 'Visit branch' button; MITC row Rs 6,500 joining"
+    },
+    {
+     "name": "NRI Secured Coral Credit Card",
+     "product_url": "https://www.icici.bank.in/nri-banking/cards/credit-card",
+     "status": "sold",
+     "variant_of": "Coral Credit Card",
+     "partner": null,
+     "evidence": "NRI page lists it with an Apply button; not a separate row in the MITC"
+    },
+    {
+     "name": "Platinum Business Card",
+     "product_url": "https://www.icici.bank.in/business-banking/cards/business-credit-card/platinum-business-card",
+     "status": "sold",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[business] business-card page lists it with Apply"
+    },
+    {
+     "name": "Business Ascent Card (American Express)",
+     "product_url": "https://www.icici.bank.in/business-banking/cards/business-credit-card/ascent-business-advantage-card",
+     "status": "sold",
+     "variant_of": null,
+     "partner": "American Express",
+     "evidence": "[business] business-card page lists it with Apply; MITC row 'ICICI Bank Ascent American Express Credit Card' Rs 4,000"
+    },
+    {
+     "name": "Business Essential Credit Card",
+     "product_url": "https://www.icici.bank.in/business-banking/cards/business-credit-card/essential-business-advantage-card",
+     "status": "sold",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[business] listed on the business-card page"
+    },
+    {
+     "name": "Gold Business Credit Card",
+     "product_url": "https://www.icici.bank.in/business-banking/cards/business-credit-card/gold-business-card",
+     "status": "sold",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[business] business-card page lists it with a lead-form apply link"
+    },
+    {
+     "name": "Business Micro Credit Card",
+     "product_url": "https://www.icici.bank.in/business-banking/cards/business-credit-card/micro-business-credit-card",
+     "status": "sold",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[business] listed on the business-card page with a lead-form apply link"
+    },
+    {
+     "name": "Corporate Platinum Credit Card",
+     "product_url": "https://www.icici.bank.in/business-banking/cards/corporate-card",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[corporate] corporate-card page lists Platinum, Gold and Purchase corporate cards; also an option in the listing page's card-type list"
+    },
+    {
+     "name": "Corporate Gold Credit Card",
+     "product_url": "https://www.icici.bank.in/business-banking/cards/corporate-card",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[corporate] corporate-card page lists Platinum, Gold and Purchase corporate cards; also an option in the listing page's card-type list"
+    },
+    {
+     "name": "Purchase Card (ICICI Bank corporate)",
+     "product_url": "https://www.icici.bank.in/business-banking/cards/corporate-card",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[corporate] corporate-card page lists 'ICICI Bank Purchase Card'"
+    },
+    {
+     "name": "CTA Card (corporate travel agent card)",
+     "product_url": "https://www.icici.bank.in/personal-banking/cards/credit-card",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "[corporate] named only as an option 'ICICI Bank CTA Card' in the card-type list of the listing page; no product page seen"
+    },
+    {
+     "name": "Emeralde Private Credit Card",
+     "product_url": "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf",
+     "status": "unknown",
+     "variant_of": "Emeralde Credit Card",
+     "partner": null,
+     "evidence": "named only in the credit-card MITC fee table (last updated 6 Nov 2026); no card in the listing grid or Know More tile for it; Rs 12,000 row separate from 'Emeralde' and 'Emeralde Private Metal'; MITC says sourcing of Emeralde and Emeralde Private with the monthly membership plan was discontinued from 24 Jul 2025"
+    },
+    {
+     "name": "ICICI Bank Signature Credit Card",
+     "product_url": "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "named only in the credit-card MITC fee table (last updated 6 Nov 2026); no card in the listing grid or Know More tile for it; Rs 25,000 joining row"
+    },
+    {
+     "name": "Platinum Identity Credit Card",
+     "product_url": "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "named only in the credit-card MITC fee table (last updated 6 Nov 2026); no card in the listing grid or Know More tile for it; Rs 2,000 joining row"
+    },
+    {
+     "name": "HPCL Platinum Credit Card",
+     "product_url": "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf",
+     "status": "unknown",
+     "variant_of": "HPCL Coral Credit Card",
+     "partner": "HPCL",
+     "evidence": "named only in the credit-card MITC fee table (last updated 6 Nov 2026); no card in the listing grid or Know More tile for it; grouped with HPCL Titanium and HPCL Coral in one Rs 199 row"
+    },
+    {
+     "name": "HPCL Titanium Credit Card",
+     "product_url": "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf",
+     "status": "unknown",
+     "variant_of": "HPCL Coral Credit Card",
+     "partner": "HPCL",
+     "evidence": "named only in the credit-card MITC fee table (last updated 6 Nov 2026); no card in the listing grid or Know More tile for it; grouped with HPCL Platinum and HPCL Coral in one Rs 199 row"
+    },
+    {
+     "name": "Unifare Credit Card",
+     "product_url": "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "named only in the credit-card MITC fee table (last updated 6 Nov 2026); no card in the listing grid or Know More tile for it; Rs 299 row"
+    },
+    {
+     "name": "Accelero Credit Card",
+     "product_url": "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "named only in the credit-card MITC fee table (last updated 6 Nov 2026); no card in the listing grid or Know More tile for it; Rs 499 row"
+    },
+    {
+     "name": "Diamant World Mastercard Credit Card",
+     "product_url": "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "named only in the credit-card MITC fee table (last updated 6 Nov 2026); no card in the listing grid or Know More tile for it; Rs 1,25,000 joining; also an option in the listing page's card-type list"
+    },
+    {
+     "name": "PM SVANidhi Credit Card",
+     "product_url": "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": "PM SVANidhi scheme",
+     "evidence": "named only in the credit-card MITC fee table (last updated 6 Nov 2026); no card in the listing grid or Know More tile for it; Nil fee row, no supplementary card"
+    },
+    {
+     "name": "Mine Credit Card",
+     "product_url": "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf",
+     "status": "unknown",
+     "variant_of": null,
+     "partner": null,
+     "evidence": "named only in the credit-card MITC fee table (last updated 6 Nov 2026); no card in the listing grid or Know More tile for it; monthly-plan card (Starter Free, Pro 49, Premium 149) described in a separate MITC section"
+    }
+   ],
+   "stale_live": [
+    {
+     "slug": "intermiles-icici-bank-coral",
+     "evidence": "No InterMiles card anywhere in the listing grid, the MITC fee table (6 Nov 2026) or the other ICICI pages read; the word does not appear in them."
+    },
+    {
+     "slug": "intermiles-icici-bank-rubyx",
+     "evidence": "No InterMiles card anywhere in the listing grid, the MITC fee table (6 Nov 2026) or the other ICICI pages read."
+    },
+    {
+     "slug": "intermiles-icici-bank-sapphiro",
+     "evidence": "No InterMiles card anywhere in the listing grid, the MITC fee table (6 Nov 2026) or the other ICICI pages read."
+    }
+   ],
+   "live_status_flags": {
+    "icici-emeralde-private-metal": {
+     "status": "invite_only",
+     "evidence": "listing tile button 'Invite only'"
+    },
+    "emirates-skywards-icici-bank-rubyx": {
+     "status": "unknown",
+     "evidence": "listing tile has no apply button; page title 'Apply for Emirates Skywards Rubyx Credit Card'"
+    },
+    "amazon-pay-icici-bank-credit-card": {
+     "status": "invite_only",
+     "evidence": "listing tile Apply Now (amazon.in) but page says 'It is an Invite Only Program' and 'This is an invite-only programme'"
+    },
+    "makemytrip-icici-bank-signature-credit-card": {
+     "status": "closed_to_new_applications",
+     "evidence": "page says 'We are no longer accepting applications for MakeMyTrip ICICI Bank Signature Credit Card'; listing tile has no apply button"
+    },
+    "makemytrip-icici-bank-platinum": {
+     "status": "closed_to_new_applications",
+     "evidence": "page carries the note 'We are no longer accepting applications for MakeMyTrip ICICI Bank Signature Credit Card' (it names Signature, so it may be a copy slip); listing tile has no apply button"
+    },
+    "chennai-super-kings-icici-bank-credit-card": {
+     "status": "closed_to_new_applications",
+     "evidence": "page says 'We are no longer accepting applications for Chennai Super Kings ICICI Bank Credit Card'"
+    },
+    "icici-bank-parakram-select": {
+     "status": "unknown",
+     "evidence": "listing tile has no apply button; defence and paramilitary card"
+    },
+    "icici-manchester-united-signature": {
+     "status": "unknown",
+     "evidence": "not in the listing grid; MITC row (Rs 2,499) and a card page path in the site's card data; NRI page also shows the Manchester United Platinum card"
+    },
+    "icici-manchester-united-platinum": {
+     "status": "unknown",
+     "evidence": "not in the listing grid; MITC row (Rs 499); shown on the NRI card page"
+    }
+   },
+   "notes": "Read with plain GET: https://www.icici.bank.in/personal-banking/cards/credit-card (redirect from icicibank.com; 23 tiles parsed from the card grid with their button states), each linked card page, the business-card and corporate-card pages, the NRI card page, and the credit-card MITC PDF (title 'MITC', 'Last updated on Nov 6th, 2026'). 'Coral RuPay' (/coral-rupay-card) and 'RuPay Credit Card' share one 'RuPay UPI Credit Card' page; the MITC says cards have the same pricing irrespective of network variant, so they are treated as network variants of Coral, not separate cards. The listing page also has a card-type dropdown inside an enquiry form that names Diamant, Corporate Gold/Platinum, CTA, Business AMEX Ascent/Essential, Gold Business, Business Platinum, Business Blue/Black Advantage; read only, nothing was typed or submitted. Missing items tagged [business] / [corporate] in evidence. Manchester United cards are matched live: not in the grid, but in the MITC and on the site (NRI page, card data path). offered_count = distinct cards across grid, linked pages, business/corporate pages, NRI page and MITC."
+  }
+ ]
+}

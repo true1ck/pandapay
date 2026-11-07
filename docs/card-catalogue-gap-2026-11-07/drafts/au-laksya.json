@@ -696,8 +696,8 @@
             }
           ],
           "open_questions": [
-            "Network: UNRESOLVED. The lounge T&C says \"Visa/RuPay Network\" generically; a \"Visa Cardholders\" popup on the page is the only Laksya-specific hint. card_product.network left null.",
-            "Reward Point value in rupees: not stated for Laksya. AU Rewardz FAQ says it depends on card variant and redemption category. effective_base_return_percent left null.",
+            "Network: UNRESOLVED after a second sweep on 2026-11-07 (wave 3, W7). The Laksya lounge T&C defines an eligible card as one \"issued by AU Bank on Visa/RuPay Network\", which covers every AU card and does not pick one; a \"Visa Cardholders\" popup on the page is the only Laksya-specific hint and is a block shared with other AU cards. Checked and found silent: the Laksya card art (listing tile and product-page art, no network mark on the front), the Laksya welcome T&C and the Amazon FreshNow, Zomato and District partner T&Cs, AU's 6 May 2026 portfolio press release and the Q1 FY27 results note, KFS v1.9 and MITC v2.23 (they name a network only for the CheQ Visa), and the Cardmember Agreement of 16 May 2026 (clauses 3.14 to 3.16 allow a network change at renewal and use \"VISA/RuPay\" for every card). visa.co.in, mastercard.co.in, npci.org.in and rupay.co.in carry no AU card list. Needs a physical card, the AU 0101 app card view, or a written answer from AU (1800 1200 1500; creditcard.support@aubank.in). card_product.network left null.",
+            "Reward Point value in rupees: not stated for Laksya. AU Rewardz FAQ and Cardmember Agreement clause 22.11 (16 May 2026 copy; 23.11 in the undated copy) say the conversion rate differs by card variant and point to the variant page, and the Laksya page, FAQ and welcome T&C state none. effective_base_return_percent left null.",
             "Exclusion MCC lists are not published for Laksya (categories only).",
             "The 25,000-point per-cycle cap on all MCCs is from the CMA 23.5 table, which lists Laksya."
           ],

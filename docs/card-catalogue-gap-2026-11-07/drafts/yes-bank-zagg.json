@@ -6,7 +6,7 @@
     "slug": "yes-bank-zagg",
     "name": "YES BANK Zagg Credit Card",
     "issuer_slug": "yes",
-    "network": null,
+    "network": "rupay",
     "network_tier": null,
     "card_tier": null,
     "card_type": "credit",
@@ -369,11 +369,21 @@
               "url": "https://www.yes.bank.in/pdf?name=ybl_yes_bank_domestic_lounge_access.pdf",
               "kind": "YES BANK Domestic Lounge Program terms (undated; threshold text effective 1 Apr 2025)",
               "read": "pdf.js text"
+            },
+            {
+              "url": "https://www.yes.bank.in/pdf?name=zagg_one_pager_usage_guide.pdf",
+              "kind": "YES BANK \"Zagg credit card User guide\", 1-page image PDF (undated): title \"Power of Credit, Ease of UPI with YES BANK Zagg Credit Card\"; the card shown carries \"YES BANK\" and the RuPay logo. Text: \"Bringing together the cashbacks on credit cards with the convenience of UPI\" (no rate)",
+              "read": "PDF page rendered and viewed in a browser tab (W11, 2026-11-07)"
+            },
+            {
+              "url": "https://www.yes.bank.in/sites/web/content/management/api/v1.1/assets/CONTC0C27676083547F6A5FFD83A5B248A9C/native/zag-credit-card-px-web-banner-3.jpeg",
+              "kind": "Hero banner on the YES BANK Zagg product page (6002x1584 px): the card in the model's hand reads \"zagg.money\", \"YES BANK\" and the RuPay logo (cropped and enlarged, viewed). The page's \"Top Benefits\" slide \"Power Up Your Credit Card On UPI and credit card spends\" (rio-credit-card-features-earn-cashbacks.png) shows the same card with RuPay and states no rate",
+              "read": "images opened in a browser tab (W11)"
             }
           ],
           "open_questions": [
-            "HELD: no reward rate for the current card is published. The page lists only a footnote for cards issued before 10 Jan 2025 (0.5 Rio coins per ₹50 on non-UPI and 1.5 Rio coins per ₹50 on UPI, outside exclusion categories) and the \"earn cashbacks\" benefit is an image whose text was not readable. The Zagg app programme is administered by the partner (page note). The value of a Rio coin is not stated. No reward rules are written.",
-            "Network: not stated. The card is linked to UPI apps, which suggests RuPay, and the MITC fee row groups Zagg with the RuPay virtual cards, but neither says RuPay. Left null.",
+            "HELD: no reward rate for the current card is published. Re-read in wave 3 (W11, 2026-11-07): the product page, its Top Benefits slider (earn cashbacks, works everywhere, 1-click controls on the app, scan and pay for UPI: all images with headline text only), the What-comes-with-the-card items (lifetime free, works everywhere, 1% fuel surcharge waiver, lounge), the 7 FAQs, the usage guide, MITC V18 (the \"English\" MITC link on the page resolves to it; no Zagg or Rio coin terms in it) and the Cardmember Agreement state no cashback or coin rate. The only rate is the footnote for cards issued before 10 Jan 2025 (0.5 Rio coins per ₹50 on non-UPI and 1.5 Rio coins per ₹50 on UPI, outside exclusion categories). The page says any programme run by the Zagg app is the app provider's sole responsibility, so the current cashback programme sits outside YES documents. The value of a Rio coin is not stated. No reward rules are written. To unblock: ask YES BANK or Zagg for the Zagg card rewards terms.",
+            "Network (settled 2026-11-07, W11): RuPay, from card art on YES BANK's own Zagg pages (the usage guide PDF, the hero banner and the Top Benefits slide all show \"YES BANK\" and the RuPay logo). The product FAQ also says the card links to UPI apps (\"NPCI recognised TPAPs\"). The MITC and KFS do not name the network.",
             "RIO and Zagg: the issuer lists one product. The page assets are named \"rio_*\" and the pre-10-Jan-2025 footnote speaks of Rio coins, so Rio is the earlier name of the same card; the old co-brand MITC (undated Mizo translation) lists \"Rio\" and the current MITC lists \"Zagg\". Treated as one card.",
             "Lounge: two domestic visits a calendar quarter (page, listing) with a ₹50,000 prior-quarter spend condition (MITC 3(r), Lounge Program). Whether any international lounge access exists is not stated.",
             "Fuel surcharge waiver: from 15 Jun 2026 ₹400 to ₹5,000 and ₹250 per statement cycle (MITC 4, KFS); the page glossary says the cap is ₹250 and states no range. No waiver on UPI fuel transactions."

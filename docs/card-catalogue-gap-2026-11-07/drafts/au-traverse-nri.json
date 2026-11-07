@@ -21,7 +21,7 @@
     "tokenization_support": [],
     "contactless_pin_free_limit_inr": null,
     "point_value_inr_baseline": null,
-    "point_value_baseline_basis": "Value of one AU Reward Point is not stated on the Traverse page. AU Rewardz FAQ: value depends on card variant and redemption category.",
+    "point_value_baseline_basis": "Value of one AU Reward Point is not stated for Traverse: the page (hidden accordions included, re-read 2026-11-07) has no redemption or point-value text, the welcome gift (MakeMyTrip voucher) and milestone benefit (Taj voucher) T&Cs are voucher terms with no point conversion, and AU Rewardz FAQ and Cardmember Agreement clause 22.11 say the rate depends on the card variant and redemption category and defer to the variant page. Left null on purpose.",
     "point_expiry_months": 24,
     "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
     "display_assets": {
@@ -634,8 +634,8 @@
           ],
           "open_questions": [
             "RESOLVED on re-check 2026-11-07: the page now states the earn rates (4 Reward Points per ₹100 international, 2 domestic, 1 on insurance, utility and telecom, max 100 points per utility/telecom transaction). The card is no longer held for lack of a rate.",
-            "Network: UNRESOLVED. Neither the page, the lounge or Priority Pass T&Cs, nor any card art read states it. card_product.network left null.",
-            "Reward Point value in rupees: not stated. effective_base_return_percent left null.",
+            "Network: UNRESOLVED after a second sweep on 2026-11-07 (wave 3, W7). The Traverse page, its NRI and premium listing pages, the Traverse welcome, milestone and Meet & Assist T&Cs and the Priority Pass usage T&C name no network. The Traverse card art (listing tile and product-page art: navy card, chip, no contactless mark, no network mark on the front) shows none. The AU lounge programme T&C names \"Visa/RuPay\" for every eligible AU card and excludes Traverse from the domestic programme. Also silent: KFS v1.9 and MITC v2.23 (they name a network only for the CheQ Visa, and list Traverse (NRI) only for fees, the 0.99% markup and the Priority Pass charge), and the Cardmember Agreement of 16 May 2026 (clauses 3.14 to 3.16 allow a network change at renewal and use \"VISA/RuPay\" for every card). visa.co.in, mastercard.co.in, npci.org.in and rupay.co.in carry no AU card list. Needs a physical card or the AU 0101 app card view, or a written answer from AU (1800 1200 1500; creditcard.support@aubank.in; Traverse concierge 1800 210 0298). card_product.network left null.",
+            "Reward Point value in rupees: not stated for Traverse (see point_value_baseline_basis). Ask AU, or read the value from a Traverse redemption screen in AU Rewardz, before filling it. effective_base_return_percent left null.",
             "Lounge: the page says 2 complimentary domestic and international accesses per quarter; the Priority Pass T&C gives Traverse 2 international per quarter and says Priority Pass use in India is chargeable, and the spend-based domestic programme excludes Traverse. Whether the 2 per quarter are domestic or international or either is unclear. Recorded as 2 per quarter, Priority Pass.",
             "Exclusion MCC lists are not published for Traverse (categories only). Cash and fuel are also excluded from milestone spend.",
             "Whether international spend is defined by merchant location or currency is not stated."

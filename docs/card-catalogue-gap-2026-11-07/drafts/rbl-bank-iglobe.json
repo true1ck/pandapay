@@ -306,7 +306,7 @@
       "exempted_channels": [
         "all redemptions"
       ],
-      "notes": "The iGlobe page and T&C do not mention the redemption fee; SOC, MITC and RWD 4.3.1(b)(ii) list iGlobe as exempt from the INR 99 + GST fee."
+      "notes": "The iGlobe page and T&C do not mention the redemption fee. Only the Rewards Programme T&C (RWD 4.3.1(b)(ii), undated) names iGlobe as exempt from the INR 99 + GST fee; the exempt lists in the SOC (4 Jun 2026) and MITC (29 Oct 2026) do not name iGlobe, so the exemption rests on RWD alone (see open questions)."
     }
   },
   "statement_and_late_fees": {
@@ -710,6 +710,11 @@
               "read": "page text"
             },
             {
+              "url": "https://www.rbl.bank.in/personal-banking/cards/credit-cards/network-guide",
+              "kind": "RBL credit card network availability guide (issuer page, undated): iGlobe ticked for MasterCard only",
+              "read": "rendered page and table cells, 2026-11-07"
+            },
+            {
               "url": "https://webassets.rbl.bank.in/document/Credit%20Cards/CardsScheduleCharges.pdf",
               "kind": "Schedule of Charges: annual fee row, finance charge, cash advance, late fee, forex, fuel/rent/utility/education/FASTag fees",
               "date": "code RBL-CC-SOC-V2-04-06-2026 (4 Jun 2026); PDF created 2026-06-04; Last-Modified 2026-08-29",
@@ -753,13 +758,14 @@
             }
           ],
           "open_questions": [
-            "Value of a reward point is not published in any document read, so effective_base_return_percent and the milestone rupee values are null. Only the miles ratio (4 points = 1 mile) is stated.",
-            "Network: the card art shows no network logo. \"Mastercard\" rests on T&C 3.7 and 3.8 (the golf programme is \"offered by Mastercard\", lounges are \"via MasterCard service providers\"), while the product page says the lounge programme is \"offered by MasterCard/Visa\". Confirm against the card itself.",
+            "Value of one reward point (checked again 2026-11-07): no RBL document states it for iGlobe. Not on the iGlobe product page (all three tabs), the iGlobe T&C (3.3 and 3.4), the SOC, the MITC, the Cardmember Agreement, the Miles Transfer T&C (only 4 points = 1 mile), the Rewards Programme T&C (RWD 4.1 refers to \"the value applicable to the product specific value proposition\" without a number, and RWD 3.1 says accrual varies by card) or the public part of rblrewards.rbl.bank.in (FAQs). The redemption screens sit behind the rewards login, which was not opened. point_value_inr_baseline, effective_base_return_percent and the milestone rupee values are therefore null, as the brief requires. A person with an iGlobe login can read the per-point value off the portal.",
+            "Network (resolved 2026-11-07): RBL's own network availability guide (issuer page, undated) ticks \"iGlobe Credit Card\" for MasterCard only, not Visa or RuPay. That agrees with the iGlobe T&C, whose milestone clause names \"MasterCard\" as the association (T&C 3.3 and 3.4) and whose golf and lounge clauses name Mastercard. The card art shows no network mark and the product page says the lounge programme is \"offered by MasterCard/Visa\"; the guide is preferred because it is the issuer's card-by-card statement.",
+            "Redemption fee: the Rewards Programme T&C (RWD 4.3.1(b)(ii), undated page) lists iGlobe among the cards exempt from the INR 99 + GST redemption fee, but the exempt lists in the SOC (4 Jun 2026) and MITC (29 Oct 2026) name Lumiere, Nova, Insignia, Insignia Prime, World Xclusive, Apex, Aspire, Signature, IRCTC and IOCL and not iGlobe. The RWD exemption is stored (redemption_fee_inr 0) because it is the only document that names the card; RWD cannot be dated, so it cannot be said which is newer.",
             "Reward point expiry: the iGlobe T&C is silent. 24 months is the Rewards Programme T&C rule (RWD 5.1), which exempts only the Insignia Preferred card.",
             "Lounge count: the T&C says Priority Pass access to \"1700+\" lounges, the product page says \"1,400+\".",
             "Milestone credit time: the T&C says within 30 days of crossing the threshold in one clause and \"within days\" in another; the page says 45 days.",
             "The additional 10,000 points at ₹8 lakh reads as in addition to the 10,000 at ₹5 lakh; the T&C wording (\"additional\") does not say whether the two tiers are cumulative.",
-            "Application route is \"visit your nearest branch or reach out to your Relationship Manager\" and the card list shows only \"Know more\", not \"Apply Now\"; modelled as open.",
+            "Application route: the iGlobe product page says \"To apply for RBL Bank iGlobe Credit Card, visit your nearest branch or reach out to your Relationship Manager\" and the card list shows only \"Know more\", not \"Apply Now\". That is an offline application route for NRIs, so application_mode stays open.",
             "Insignia Preferred Banking customers pay NIL; the draft stores the standard ₹3,000.",
             "Finance charge: MITC says \"up to 3.99% per month (47.88% a year)\" for these cards and then lists bureau-score bands (above 775: 3.35% a month; 725-775: 3.85%; below 725: 3.99%). The draft stores the 3.99% maximum."
           ],

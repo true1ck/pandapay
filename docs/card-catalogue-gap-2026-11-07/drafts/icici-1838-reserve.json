@@ -21,8 +21,8 @@
     "tokenization_support": [],
     "contactless_pin_free_limit_inr": null,
     "point_value_inr_baseline": null,
-    "point_value_baseline_basis": "Not stated by ICICI for this card. Checked 2026-11-07: the 1838 Reserve issuer page, the ICICI MITC (last updated 6 Nov 2026), the ICICI general credit card T&C (tnc_english.pdf, file dated 28 Sep 2026, linked from the card page) and the ICICI Rewards pages give no rupee value for one reward point; the Times Black terms state ₹0.40 per point for that card only and must not be reused. effective_base_return_percent is left null.",
-    "point_expiry_months": null,
+    "point_value_baseline_basis": "Not stated by ICICI for this card. Checked 2026-11-07: the 1838 Reserve issuer page, the ICICI MITC (last updated 6 Nov 2026), the ICICI general credit card T&C (tnc_english.pdf, file dated 28 Sep 2026, linked from the card page) and the ICICI Rewards pages give no rupee value for one reward point; the Times Black terms state ₹0.40 per point for that card only and must not be reused. effective_base_return_percent is left null. Re-checked 2026-11-07 (W9): also the 1838 Reserve page FAQ, the ICICI Rewards FAQ page, the Rewards page and the ICICI benefits page; the redemption handling fee table in the MITC names 1838 Reserve (a Nil row shared with Emeralde Private Metal and Times Black, against ₹99 for catalogue redemptions on other cards, and ₹25 for online and in-store partner brand redemptions) but gives no rupee value per point.",
+    "point_expiry_months": 36,
     "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
     "display_assets": {
       "art_asset_key": null,
@@ -70,9 +70,9 @@
     "processing_time_days": null
   },
   "accrual_engine": {
-    "base_block_inr": 100,
+    "base_block_inr": null,
     "rounding_mode": null,
-    "base_points_per_block": 3,
+    "base_points_per_block": null,
     "base_cashback_percent": "N/A",
     "effective_base_return_percent": null,
     "cycle_accrual_ceiling_points": 100000,
@@ -187,14 +187,15 @@
       "channel_type": "all",
       "conditions": {
         "transaction_type": "domestic",
-        "unit_note": "issuer says \"3% on domestic spends\"; 3 points per ₹100 is inferred from percent-of-spend wording"
+        "stated_wording": "\"Rewards points earned on every transaction: 3% On Domestic Spends\" (issuer page)",
+        "unit_basis": "NOT STATED: ICICI gives a percent, not points per ₹100 or a rupee value per point for this card; points_per_block is left empty on purpose"
       },
       "action": {
         "multiplier": 3,
-        "points_per_block": 3,
+        "points_per_block": "N/A",
         "cashback_percent": "N/A",
         "cap_reference": "r1838-total-cap",
-        "reason": "3% reward points on domestic spends (issuer page). Unit inferred, see open questions."
+        "reason": "3% reward points on domestic spends, as ICICI words it. Points per ₹100 not stated (see open questions), so no points_per_block is recorded; mult carries the stated 3% only."
       },
       "effective_from": null,
       "effective_to": null
@@ -207,14 +208,16 @@
       "rail": "any",
       "channel_type": "all",
       "conditions": {
-        "transaction_type": "international"
+        "transaction_type": "international",
+        "stated_wording": "\"2% On International Spends\" (issuer page)",
+        "unit_basis": "NOT STATED: percent only, no points per ₹100"
       },
       "action": {
         "multiplier": 2,
-        "points_per_block": 2,
+        "points_per_block": "N/A",
         "cashback_percent": "N/A",
         "cap_reference": "r1838-total-cap",
-        "reason": "2% reward points on international spends (issuer page). Unit inferred."
+        "reason": "2% reward points on international spends, as ICICI words it. Points per ₹100 not stated, so no points_per_block is recorded."
       },
       "effective_from": null,
       "effective_to": null
@@ -574,25 +577,39 @@
           "sources": [
             {
               "url": "https://www.icici.bank.in/personal-banking/cards/credit-card/1838-reserve-icici-credit-card",
-              "kind": "issuer page (verbatim read)",
-              "read": "fetch tool"
+              "kind": "issuer page read 2026-11-07 in a browser (Network Benefits tile \"Access to Visa Services\", rewards tile \"3% On Domestic Spends 2% On International Spends\", fees, FAQ including reward capping)",
+              "read": "rendered page text and FAQ answers"
             },
             {
               "url": "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf",
               "kind": "MITC, last updated 6 Nov 2026 (fees, forex, reward caps, exclusions, lounge)",
               "read": "pdftotext"
+            },
+            {
+              "url": "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/tnc_english.pdf",
+              "kind": "ICICI general credit card terms and conditions linked from the card page (\"Click here for applicable Terms & Conditions\"); reward schemes described without rates or point values; 1838 not named",
+              "date": "PDF created 2026-09-28",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.icici.bank.in/personal-banking/cards/credit-card/credit-card-services/rewards",
+              "kind": "ICICI Bank Credit Card Rewards page and its FAQ page: \"To understand the exact earn rate on your Card, please refer to your Card page\"; no card-level unit or point value",
+              "read": "rendered page text"
             }
           ],
           "open_questions": [
-            "Reward unit: the page says \"3% on domestic\" and \"2% on international\" with no points per ₹100; 3 and 2 points per ₹100 are inferred. The value of one reward point is NOT stated in any ICICI document read (card page, MITC of 6 Nov 2026, general credit card T&C dated 28 Sep 2026, Rewards pages), so point_value_inr_baseline stays null and the percent return cannot be turned into rupees. Do not reuse the Times Black ₹0.40.",
-            "Reward cap period: the MITC says the 1,00,000-point and 10,000-point caps are per statement cycle; the card page FAQ says \"per month\". The MITC is used.",
+            "Reward unit (re-checked 2026-11-07, W9, NOT FOUND): ICICI words the earn only as \"3% On Domestic Spends\" and \"2% On International Spends\" on the card page; no ICICI document says how many reward points per ₹100 that is. Looked at: the card page and its FAQ, the MITC of 6 Nov 2026 (the reward-caps table and \"Terms and Conditions pertinent to ICICI Bank Rewards\"), the general credit card terms (28 Sep 2026), the Rewards page and Rewards FAQ page (which defers to the card page); the Times Black co-brand site does not cover this card. The earlier inference of 3 and 2 points per ₹100 was therefore removed: points_per_block and base_points_per_block are empty and the rules carry only the stated percent. If ICICI confirms 3 and 2 points per ₹100, set points_per_block 3 and 2, base_block_inr 100 and base_points_per_block 3.",
+            "Value of one reward point: NOT stated by ICICI for this card (card page, FAQ, MITC, general terms, Rewards pages), so point_value_inr_baseline stays null and the percent return cannot be turned into rupees. Do not reuse the Times Black ₹0.40.",
+            "Reward cap period: the MITC says the 1,00,000-point and 10,000-point caps are per statement cycle; the card page FAQ says \"per month\". The MITC is used (newer, dated 6 Nov 2026).",
             "No spend trigger is stated for the joining-benefit vouchers beyond paying the joining fee.",
+            "Late payment fee (found 2026-11-07, W9, NOT settled): the card page says \"Late Bill Payment: Nil\" and the draft carries a Nil slab; the MITC late-payment table (w.e.f. 15 Nov 2024; ₹100 to ₹1,300 by outstanding amount) says \"excluding ICICI Bank Emeralde Private Metal Credit Card\" and does not name 1838 Reserve, so on the MITC alone 1838 Reserve would pay late fees. The page is undated, the MITC is dated 6 Nov 2026; the page was kept. A person must confirm with ICICI.",
             "Interest (settled 2026-11-07, W6): MITC Section I, 2. Finance Charges (2) states for the 1838 Reserve ICICI Bank Credit Card 1.67% per month i.e. 20% per annum on retail transactions and cash advances, and says the APR is the same for retail purchases, balance transfer, cash advances, non-payment of minimum due and late payment. The card page also says 1.67% a month.",
-            "Network: the page says issued with Times Internet and Visa; the MITC fee table does not name a network.",
-            "GST: assumed 18% as for other ICICI fees; the page says \"+ GST\" only."
+            "Network (settled 2026-11-07, W9): Visa. The issuer card page FAQ says the card is \"issued by ICICI Bank in association with Times Internet Ltd. and Visa\" and its Network Benefits tile lists \"Access to Visa Services for Primary Cardholders\". The MITC fee table does not name a network, which does not conflict.",
+            "GST: the page says \"+ GST\" on the joining and annual fee; ICICI documents state \"18% GST\" only for EMI and loan items, not for these fees, so 18% is the statutory rate and not an ICICI statement for this card."
           ],
           "notes": [
             "Lounge: the MITC states domestic and international lounge access is not available on the 1838 Reserve card.",
+            "Reward points expire 36 months from issuance and lapse on card cancellation (MITC, \"Terms and Conditions pertinent to ICICI Bank Rewards\" items 2 and 3; ICICI Rewards page says valid for 3 years); credited within 5 working days of the statement date (MITC) or 7 (Rewards page).",
             "Add-on cards are not issued. Late bill payment and ATM withdrawal fees are Nil (issuer page).",
             "Caps (MITC): 1,00,000 points per statement cycle overall; 10,000 across utilities, insurance, education and government/tax; 90,000 for everything else.",
             "The 1838 Reserve fee table in the MITC lists joining ₹1,75,000, first-year annual fee Nil, annual fee from the second year ₹1,75,000. joining_fee_inr and annual_fee_inr use those."

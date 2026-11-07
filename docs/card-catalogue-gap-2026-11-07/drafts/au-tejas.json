@@ -647,8 +647,8 @@
             }
           ],
           "open_questions": [
-            "Network: UNRESOLVED. Only a \"Visa Cardholders\" popup on the page points to Visa. card_product.network left null.",
-            "Reward Point value in rupees: not stated for Tejas. AU Rewardz FAQ says it depends on card variant and redemption category. effective_base_return_percent left null.",
+            "Network: UNRESOLVED after a second sweep on 2026-11-07 (wave 3, W7). Only a \"Visa Cardholders\" popup on the page points to Visa, and that block is shared with other AU cards. Checked and found silent: the Tejas card art (listing tile and product-page art, no network mark on the front), the Tejas welcome T&C and the District, Amazon FreshNow, Zomato, cab and bill-payment partner T&Cs, AU's 6 May 2026 portfolio press release and the Q1 FY27 results note, KFS v1.9 and MITC v2.23 (they name a network only for the CheQ Visa), and the Cardmember Agreement of 16 May 2026 (clauses 3.14 to 3.16 allow a network change at renewal and use \"VISA/RuPay\" for every card). Tejas has no lounge benefit, so no lounge T&C exists to read. visa.co.in, mastercard.co.in, npci.org.in and rupay.co.in carry no AU card list. Needs a physical card, the AU 0101 app card view, or a written answer from AU (1800 1200 1500; creditcard.support@aubank.in). card_product.network left null.",
+            "Reward Point value in rupees: not stated for Tejas. AU Rewardz FAQ and Cardmember Agreement clause 22.11 (16 May 2026 copy; 23.11 in the undated copy) say the conversion rate differs by card variant and point to the variant page, and the Tejas page, FAQ and welcome T&C state none (the welcome choice of 2,000 points or a ₹500 voucher is a choice, not a conversion). effective_base_return_percent left null.",
             "Exclusion MCC lists are not published for Tejas (categories only).",
             "The 25,000-point per-cycle cap on all MCCs is from the CMA 23.5 table, which lists Tejas. No separate cap is stated for the 5-point portal rate."
           ],

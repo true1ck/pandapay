@@ -6,7 +6,7 @@
     "slug": "yes-bank-uni",
     "name": "YES BANK Uni Credit Card",
     "issuer_slug": "yes",
-    "network": null,
+    "network": "mastercard",
     "network_tier": null,
     "card_tier": null,
     "card_type": "credit",
@@ -592,13 +592,23 @@
               "url": "https://www.yes.bank.in/sites/web/content/published/api/v1.1/assets/CONT07A77C257C7A4BDD85DB97E51D2B5B8F/native/yesbank_key_fact_statement.pdf?download=false&channelToken=21f7ccfa2fc3401091938f541a6f8f2a",
               "kind": "Key Fact Statement; V_20_28092026 (28 Sep 2026)",
               "read": "pdf.js text"
+            },
+            {
+              "url": "https://www.yes.bank.in/sites/web/content/published/api/v1.1/assets/CONTE31749D516FF442DB73D463B9277341A/native?siteId=yesbank",
+              "kind": "Card art (uni-card-icon.png, 293x139 px) attached to the \"UNI Credit Card\" tile on the YES BANK credit card listing, whose Know More link is the uni-credit-card page: teal card with \"uni\" and \"YES BANK\" and the Mastercard logo (viewed, W11 2026-11-07)",
+              "read": "image opened in a browser tab"
+            },
+            {
+              "url": "https://www.yes.bank.in/sites/web/content/published/api/v1.1/items?q=(type eq \"ybl-sa-get-familiar\" AND fields.group_name eq \"unicreditcardsalider\")",
+              "kind": "The Uni page's own \"Top Benefits\" slider data (the page text omits it): one slide reads \"Secure online transactions with MasterCard Secure Code\". Card-specific slider group, but a generic security line, so corroboration only.",
+              "read": "page content API, read in the browser (W11)"
             }
           ],
           "open_questions": [
-            "Value of one Uni coin in rupees is not stated by YES BANK, so point_value_inr_baseline and effective_base_return_percent are null. The 1% is the advertised rate; the listing calls it cashback, the product page calls it reward points.",
-            "Network: not stated on the page, MITC or KFS. The MITC lists a separate \"Uni RuPay Virtual\" variant, which implies this \"Uni Credit Card\" is not RuPay, but that is not stated.",
-            "Physical or virtual, and UPI linking, are not stated. The cash-advance fee (2.5% or ₹650) is written for a physical card.",
-            "The \"Top Benefits\" and \"More from this card\" sections of the page are images; their wording was not readable.",
+            "Value of one Uni coin in rupees is not stated by YES BANK (re-checked in wave 3: product page, the page's Top Benefits and More-from items, its FAQs, the listing, MITC V18, the Cardmember Agreement and the Redemption Rules say nothing), so point_value_inr_baseline and effective_base_return_percent are null. The 1% is the advertised rate; the listing calls it \"1% cashback in uni coins\", the product page \"Unlimited 1% Reward points (rewards issued as Uni coins)\". Whether a partner-side coin conversion differs from the 1% is not stated by YES.",
+            "Network (settled 2026-11-07, W11): Mastercard, from card art on the YES BANK listing tile for \"UNI Credit Card\" (Mastercard logo). The product page, MITC and KFS do not name it; the MITC lists a separate \"Uni RuPay Virtual\" and the listing a separate \"UNI Rupay Credit Card\" page (lifetime free), which is a different product and not covered by this record.",
+            "Physical or virtual, and UPI linking, are not stated. The cash-advance fee (2.5% or ₹650) is written for a physical card. The listing compare-record for this card carries \"unlimited international lounge access, 6 domestic\" text that the product page and MITC do not state and that also appears on the virtual-only Klick record; it looks like template filler and is not stored.",
+            "The page \"Top Benefits\" slider and \"More from this card\" items were read in wave 3 from the page's content API: shop and earn Uni coins, zero forex mark-up, 1% fuel surcharge waiver up to ₹500, annual fee waiver on ₹50,000 spend within 12 months of the card anniversary, contactless, MasterCard Secure Code. They add no rate, cap or coin value.",
             "The page footnote says no coins on \"international transactions\"; the MITC does not repeat this. Reward expiry for Uni coins is not stated (MITC refers co-brand currencies to the product page).",
             "The MITC fee table shows ₹5,000 in the joining-fee-waiver column for Uni although the joining fee is NIL; ignored as a table artefact."
           ],

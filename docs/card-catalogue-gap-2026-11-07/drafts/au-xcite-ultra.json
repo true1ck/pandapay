@@ -6,7 +6,7 @@
     "slug": "au-xcite-ultra",
     "name": "AU Xcite Ultra Credit Card",
     "issuer_slug": "au",
-    "network": null,
+    "network": "rupay",
     "network_tier": null,
     "card_tier": null,
     "card_type": "credit",
@@ -23,7 +23,7 @@
     "tokenization_support": [],
     "contactless_pin_free_limit_inr": 5000,
     "point_value_inr_baseline": null,
-    "point_value_baseline_basis": "Value of one AU Reward Point is not stated for Xcite Ultra. The AU Rewardz FAQ says it depends on card variant and redemption category.",
+    "point_value_baseline_basis": "Value of one AU Reward Point is not stated for Xcite Ultra: not on the card page, the KFS, the MITC or the Cardmember Agreement. The AU Rewardz FAQ (rewardz.au.bank.in/faqs, read 2026-11-07) says the value depends on the card variant and the redemption category and points to the card product page. AU's 2 Jun 2023 notice sets Rs 0.20 per point for gift card/voucher redemption on all variants, but that is one redemption channel for every card, not an Ultra value, so it is not used.",
     "point_expiry_months": 24,
     "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
     "display_assets": {
@@ -264,6 +264,27 @@
         "cashback_percent": "N/A",
         "cap_reference": null,
         "reason": "Wallet loads earns no Reward Points (Xcite Ultra page note, CMA 23.5.1 and 23.6). MCC list not published for this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "ultra-excl-transport",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "effective_from": "2026-04-10",
+        "mcc_group": "transportation"
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Reward Points accrual on Transportation Merchant Category Codes discontinued with effect from 10 Apr 2026 (Ultra page, rewards note). MCC list not published."
       },
       "effective_from": null,
       "effective_to": null
@@ -552,6 +573,16 @@
         "is_repeatable": false,
         "effective_from": null,
         "effective_to": null
+      },
+      {
+        "id": "ultra-m-monthly",
+        "label": "Additional 500 Reward Points on retail spends of ₹5,000 done between the 1st and the 5th of every calendar month (page \"Additional Rewards Every Month\"; rent, wallet and fuel excluded). The 1st-to-5th window cannot be expressed in this field; reward value left null because AU states no point value.",
+        "threshold_spend_inr": 5000,
+        "reward_value_inr": null,
+        "period": "calendar_month",
+        "is_repeatable": true,
+        "effective_from": null,
+        "effective_to": null
       }
     ]
   },
@@ -686,17 +717,17 @@
       {
         "key": "verified_network_research",
         "value": {
-          "finding_status": "partial",
+          "finding_status": "resolved",
           "product_status": "active",
           "source_url": "https://www.au.bank.in/personal-banking/credit-cards/swipeup-program/xcite-ultra-credit-card",
-          "evidence": "Page \"Curated Offers\" popup: \"Enjoy now amazing offers available on your Xcite Ultra RuPay Credit Card\" (RuPay variant named outright). The same popup lists Times Prime and Alaya Stays offers through Visa-branded partner links, which hints at a Visa variant but never names one.",
+          "evidence": "AU Xcite Ultra product page (re-read 2026-11-07), \"Curated Offers\" block: \"RuPay Offer: Enjoy now amazing offers available on your Xcite Ultra RuPay Credit Card\" (link to rupay.co.in/domestic-offers). The card name is written into that sentence, whereas the same block on the Kosmo page still carries the template name \"ABC Pro RuPay Credit Card\", so the Ultra text was edited for this card. This page has no \"Visa Exclusive Offers\" heading (the CA and CS pages do). The Times Prime and Alaya Stays links on this page are Visa-programme links, but the Kosmo page, which AU's own 18 Sep 2025 press release says is \"Built on the RuPay network\", carries the same Visa-programme block, so those links do not point to a Visa variant. Network set to rupay on the strength of AU's own page text naming the card.",
           "candidates": [
             {
               "network": "rupay",
               "network_tier": "N/A",
               "label": "Xcite Ultra RuPay Credit Card",
               "source_url": "https://www.au.bank.in/personal-banking/credit-cards/swipeup-program/xcite-ultra-credit-card",
-              "evidence": "Page popup: \"your Xcite Ultra RuPay Credit Card\"."
+              "evidence": "Page text: \"your Xcite Ultra RuPay Credit Card\"."
             }
           ]
         }
@@ -733,6 +764,21 @@
               "date": "Revision of AU Credit Card Usage Terms & Conditions, w.e.f. 10 Apr 2026"
             },
             {
+              "url": "https://rewardz.au.bank.in/faqs",
+              "kind": "AU Rewardz FAQ (\"value of Reward Points depends on the Credit Card variant and the category\"), read for the point-value check",
+              "date": "2026-11-07"
+            },
+            {
+              "url": "https://www.au.bank.in/ausfb-reward-points-ausfb-credit-card-reward-points-usage-tnc_2ndjune23.pdf",
+              "kind": "AU Reward Points usage notice, Rs 0.20 per point for vouchers on all variants (not a card value)",
+              "date": "2023-06-02, effective 2023-07-05"
+            },
+            {
+              "url": "https://www.au.bank.in/pdfs/press-release/2025/au-small-finance-bank-partners-with-kiwi-for-credit-on-upi-launches-au-kosmo-credit-card---18th-september-2025.pdf",
+              "kind": "AU press release on the Kosmo card (\"Built on the RuPay network\"); shows the Visa-programme offer block on AU pages is template text",
+              "date": "2025-09-18"
+            },
+            {
               "url": "https://www.au.bank.in/pdf/xcite-credit-card/railway-lounges.pdf",
               "kind": "railway lounge T&C",
               "date": "Railway Lounge Access Program, 4 Oct 2024"
@@ -744,10 +790,10 @@
             }
           ],
           "open_questions": [
-            "Network: RuPay variant is named on the page (\"Xcite Ultra RuPay Credit Card\"); a Visa variant is only hinted by Visa-branded partner links. card_product.network is left null; one candidate is recorded in verified_network_research.",
-            "Value of one Reward Point: not stated. effective_base_return_percent left null.",
+            "Network (wave 3): RESOLVED as rupay from AU's own page text \"your Xcite Ultra RuPay Credit Card\". Residual risk: no AU document says Ultra is issued only on RuPay; the card front art (list tile and product page) carries no network mark, and the KFS, MITC, CMA, lounge and railway T&Cs say only \"Visa/RuPay\". If AU ever shows a Visa Ultra, switch to dualNetwork.",
+            "Value of one Reward Point: not stated by AU for Xcite Ultra (card page, KFS, MITC, CMA, Rewardz FAQ read 2026-11-07). point_value_inr_baseline and effective_base_return_percent left null on purpose. AU's 2 Jun 2023 notice gives Rs 0.20 per point only for gift card/voucher redemption on all variants; not used as a card value.",
             "Welcome benefit: the page headline mentions \"Exclusive Welcome and Milestone Benefits\" but lists only the milestone and a monthly bonus. No welcome benefit recorded.",
-            "Monthly bonus \"additional 500 Reward Points on retail spends of ₹5,000 done between 1st to 5th of every calendar month\" is not modelled: the milestone schema has no monthly period.",
+            "Monthly bonus \"additional 500 Reward Points on retail spends of ₹5,000 done between 1st to 5th of every calendar month\" is recorded as a calendar_month milestone (the importer accepts that period) with reward value null. The 1st-to-5th window cannot be expressed, so an engine would test the whole month against the ₹5,000 threshold; keep the value null.",
             "Air accident cover: ₹20 lacs on the page headline, ₹50 lacs in the popup. Not modelled.",
             "Whether international online spend earns 12 or 8 per ₹100: the page lists them separately; international is given priority.",
             "Page note excludes only Rent, Wallet and Fuel; CMA 23.5.1 and 23.6 also exclude education, government, BBPS, EMI and cash. The wider list is used.",
