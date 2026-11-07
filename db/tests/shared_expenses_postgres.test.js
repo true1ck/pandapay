@@ -766,5 +766,37 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     assert.equal(audience.claimantName,null);
     await assert.rejects(call(stranger,'invitation_audience($1)',[tokenHash]),/invitation_unavailable/,'only the claimant');
   });
+  await t.test('direct split title is the counterpart\'s live label for each viewer',async()=>{
+    const H=(ch)=>ch.repeat(64), uuid=()=>crypto.randomUUID();
+    const cr='70000000-0000-0000-0000-000000000001', fr='70000000-0000-0000-0000-000000000002';
+    await db.query("INSERT INTO public.profiles VALUES($1,'Creator Cee'),($2,'Friend Eff')",[cr,fr]);
+    const call=(who,fn,args)=>actor(who,()=>db.query(`SELECT shared_expenses.${fn} AS v`,args)).then(r=>r.rows[0].v);
+    const title=(who,id)=>actor(who,()=>db.query("SELECT shared_expenses._context_label(c.kind,c.name,c.created_by,$1::uuid,c.context_id) AS v FROM shared_expenses.contexts c WHERE c.context_id=$2",[who,id])).then(r=>r.rows[0].v);
+    const g=uuid(), friendMember=uuid(), inv=uuid();
+    const creatorMember=(await call(cr,"create_context($1,'direct','Rahul',$2,$3)",[g,uuid(),H('1')])).memberId;
+    await call(cr,'invite_member($1,$2,$3)',[{contextId:g,memberId:friendMember,displayName:'Rahul'},uuid(),H('2')]);
+    assert.equal(await title(cr,g),'Rahul','invited friend, typed name');
+    await call(cr,'create_invitation($1,$2)',[{invitationId:inv,contextId:g,memberId:friendMember,targetPhoneHash:H('e'),tokenHash:crypto.randomBytes(32).toString('hex')},H('3')]);
+    await call(fr,'claim_invitation_by_id($1,$2,$3,$4,$5)',[inv,H('e'),'3210',uuid(),H('4')]);
+    await call(cr,'rename_member($1,$2,$3)',[{contextId:g,memberId:friendMember,displayName:'Rahul Sharma'},uuid(),H('5')]);
+    assert.equal(await title(cr,g),'Rahul Sharma','creator sees the renamed counterpart');
+    assert.equal(await title(fr,g),'Creator Cee','the other person sees the creator\'s live profile name');
+    await db.query("UPDATE public.profiles SET display_name='Creator Renamed' WHERE id=$1",[cr]);
+    assert.equal(await title(fr,g),'Creator Renamed','profile rename is live');
+    await call(cr,'rename_member($1,$2,$3)',[{contextId:g,memberId:creatorMember,displayName:'Cee Typed'},uuid(),H('6')]);
+    assert.equal(await title(fr,g),'Cee Typed','a typed label for the creator wins');
+    // Fallbacks.
+    await db.query('UPDATE shared_expenses.members SET display_name=NULL WHERE member_id=$1',[friendMember]);
+    await db.query("UPDATE public.profiles SET display_name=NULL WHERE id=$1",[fr]);
+    assert.equal(await title(cr,g),'Rahul','no counterpart name: the split\'s own name');
+    await db.query('UPDATE shared_expenses.members SET display_name=NULL WHERE member_id=$1',[creatorMember]);
+    await db.query("UPDATE public.profiles SET display_name=NULL WHERE id=$1",[cr]);
+    assert.equal(await title(fr,g),'PandaPay friend');
+    // NULL context id keeps the old behaviour; groups are untouched.
+    assert.equal((await db.query("SELECT shared_expenses._context_label('direct','Typed',$1,$2,NULL) AS v",[cr,fr])).rows[0].v,'PandaPay friend');
+    const grp=uuid();
+    await call(cr,"create_context($1,'group','Goa',$2,$3)",[grp,uuid(),H('7')]);
+    assert.equal(await title(cr,grp),'Goa');
+  });
 
 });

@@ -58,7 +58,7 @@ async function listContexts(client,actorId,query={}) {
   const request=pageRequest({...(query.limit===undefined?{}:{limit:query.limit}),...(query.after===undefined?{}:{after:query.after})});
   const scope=scopeFor(actorId,kind!==null||filter!==''?`contexts:${kind??'all'}:${require('node:crypto').createHash('sha256').update(filter).digest('hex')}`:'contexts');
   const [beforeDate,beforeId]=dateCursor(request,scope);
-  const {rows}=await client.query(`SELECT c.context_id,c.kind,shared_expenses._context_label(c.kind,c.name,c.created_by,$1::uuid) AS name,c.currency,c.state,c.committed_sequence::text,c.created_at,
+  const {rows}=await client.query(`SELECT c.context_id,c.kind,shared_expenses._context_label(c.kind,c.name,c.created_by,$1::uuid,c.context_id) AS name,c.currency,c.state,c.committed_sequence::text,c.created_at,
       to_char(c.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at_key,me.state AS membership_state,me.member_id,
       coalesce(t.expense_count,0)::text expense_count,b.owed_minor,b.owing_minor,
       EXISTS(SELECT FROM shared_expenses.expenses p WHERE p.context_id=c.context_id AND p.accepted_revision_id IS NULL) AS has_unaccepted_expenses
@@ -68,14 +68,14 @@ async function listContexts(client,actorId,query={}) {
       coalesce(sum(greatest(CASE WHEN p.low_member_id=me.member_id THEN -p.balance_minor::numeric ELSE p.balance_minor::numeric END,0)),0)::text owing_minor
       FROM shared_expenses.pair_balances p WHERE p.context_id=c.context_id AND (p.low_member_id=me.member_id OR p.high_member_id=me.member_id)) b ON me.state='active'
     WHERE me.profile_id=$1::uuid AND me.state IN ('active','invited')
-      AND ($5::text IS NULL OR c.kind=$5::text) AND ($6::text='' OR position(lower($6::text) in lower(shared_expenses._context_label(c.kind,c.name,c.created_by,$1::uuid)))>0)
+      AND ($5::text IS NULL OR c.kind=$5::text) AND ($6::text='' OR position(lower($6::text) in lower(shared_expenses._context_label(c.kind,c.name,c.created_by,$1::uuid,c.context_id)))>0)
       AND ($2::timestamptz IS NULL OR (c.created_at,c.context_id)<($2::timestamptz,$3::uuid))
     ORDER BY c.created_at DESC,c.context_id DESC LIMIT $4::int`,[actorId,beforeDate,beforeId,request.limit+1,kind,filter]);
   return page(scope,request,rows,row=>[row.created_at_key??timestamp(row.created_at),row.context_id],row=>({contextId:row.context_id,kind:row.kind,name:row.name,currency:row.currency,state:row.state,membershipState:row.membership_state,committedSequence:row.committed_sequence,createdAt:row.created_at_key??timestamp(row.created_at),memberId:row.member_id??null,expenseCount:row.expense_count??'0',hasUnacceptedExpenses:row.has_unaccepted_expenses===true,owedMinor:row.owed_minor??null,owingMinor:row.owing_minor??null}));
 }
 async function readContext(client,actorId,contextId) {
   scopeFor(actorId,'context',contextId);
-  const {rows}=await client.query(`SELECT c.context_id,c.kind,shared_expenses._context_label(c.kind,c.name,c.created_by,$1::uuid) AS name,c.currency,c.state,c.committed_sequence::text,c.created_at,me.state AS membership_state
+  const {rows}=await client.query(`SELECT c.context_id,c.kind,shared_expenses._context_label(c.kind,c.name,c.created_by,$1::uuid,c.context_id) AS name,c.currency,c.state,c.committed_sequence::text,c.created_at,me.state AS membership_state
     FROM shared_expenses.members me JOIN shared_expenses.contexts c ON c.context_id=me.context_id
     WHERE me.profile_id=$1::uuid AND c.context_id=$2::uuid AND me.state IN ('active','invited')`,[actorId,contextId]);
   const row=rows[0];if(!row)v.fail('CONTEXT_NOT_FOUND','contextId');
@@ -206,7 +206,7 @@ const PROJECTION_FEED_SQL=`WITH selected_events AS MATERIALIZED (
   ORDER BY pe.sequence LIMIT 10
 ), visible AS MATERIALIZED (
   SELECT p.profile_sequence,p.context_id,p.context_sequence,p.event_id,p.kind,p.origin_id,p.actor_profile_id,p.event_payload,p.event_created_at,
-    c.context_id IS NOT NULL AS readable,c.kind AS context_kind,shared_expenses._context_label(c.kind,c.name,c.created_by,$1::uuid) AS name,c.currency,c.state,c.created_at AS context_created_at,
+    c.context_id IS NOT NULL AS readable,c.kind AS context_kind,shared_expenses._context_label(c.kind,c.name,c.created_by,$1::uuid,c.context_id) AS name,c.currency,c.state,c.created_at AS context_created_at,
     coalesce(c.committed_sequence,p.context_sequence)::text AS revision,me.state AS membership_state,me.member_id AS own_member_id,
     me.state='active' AND (p.kind='context.created' OR (p.kind='membership.responded' AND p.origin_id=me.member_id AND p.event_payload->>'accepted'='true')) AS full_grant
   FROM selected_events p LEFT JOIN shared_expenses.contexts c ON c.context_id=p.context_id
@@ -347,11 +347,11 @@ async function listPersonalActivity(client,actorId,query={}) {
   const scope=scopeFor(actorId,`personal_activity:${require('node:crypto').createHash('sha256').update(filter).digest('hex')}`);
   let before=null;
   if(request.after){const keys=decodeCursor(request.after,scope);if(keys.length!==1)v.fail('INVALID_CURSOR','after');before=sequence(keys[0],'after');}
-  const {rows}=await client.query(`SELECT pe.sequence::text,c.context_id,shared_expenses._context_label(c.kind,c.name,c.created_by,$1::uuid) AS name,ce.kind,ce.origin_id,ce.created_at
+  const {rows}=await client.query(`SELECT pe.sequence::text,c.context_id,shared_expenses._context_label(c.kind,c.name,c.created_by,$1::uuid,c.context_id) AS name,ce.kind,ce.origin_id,ce.created_at
     FROM shared_expenses.profile_events pe JOIN shared_expenses.contexts c ON c.context_id=pe.context_id
     JOIN shared_expenses.context_events ce ON ce.context_id=pe.context_id AND ce.sequence=pe.context_sequence
     WHERE pe.profile_id=$1::uuid AND ($2::bigint IS NULL OR pe.sequence<$2::bigint)
-      AND ($4::text='' OR position(lower($4::text) in lower(shared_expenses._context_label(c.kind,c.name,c.created_by,$1::uuid)||' '||ce.kind))>0)
+      AND ($4::text='' OR position(lower($4::text) in lower(shared_expenses._context_label(c.kind,c.name,c.created_by,$1::uuid,c.context_id)||' '||ce.kind))>0)
     ORDER BY pe.sequence DESC LIMIT $3::int`,[actorId,before,request.limit+1,filter]);
   return page(scope,request,rows,row=>[row.sequence],row=>({contextId:row.context_id,sequence:row.sequence,contextName:row.name,kind:row.kind,originId:row.origin_id,createdAt:timestamp(row.created_at)}));
 }

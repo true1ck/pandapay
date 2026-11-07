@@ -75,7 +75,7 @@ async function loadAudience(client, contextId, actorId) {
     [contextId],
   );
   const context = await client.query(
-    'SELECT shared_expenses._context_label(c.kind, c.name, c.created_by, $2::uuid) AS name FROM shared_expenses.contexts c WHERE c.context_id = $1',
+    'SELECT shared_expenses._context_label(c.kind, c.name, c.created_by, $2::uuid, c.context_id) AS name FROM shared_expenses.contexts c WHERE c.context_id = $1',
     [contextId, actorId],
   );
   return {

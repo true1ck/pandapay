@@ -70,6 +70,15 @@ plus `claimantProfileName` and `claimantPhoneSuffix`. The notifier never uses th
 `invitation.joined`: `<label> joined`, else `Invite accepted`. Label is sanitised (control chars stripped,
 whitespace collapsed, 40 chars). Expense / settlement pushes now use `_member_label` names too.
 
+## Direct split titles
+
+For `kind = 'direct'` the split's `name` (Friends list, overview, activity, invitation preview, join requests, push "where" text)
+is now the COUNTERPART's current label, per viewer: the creator sees the other member's typed name (so it changes after
+`member.rename`), else their live profile name; the invited person sees the creator's typed label, else the creator's live profile
+name. Fallback: the split's own typed name, then `PandaPay friend`. Group names are unchanged. Implemented by
+`shared_expenses._context_label(kind, name, created_by, viewer, context_id)` (the 4-argument form still exists and keeps the old behaviour).
+After `member.rename` the app should refetch the contexts list (the `member.renamed` event fires on the sync stream).
+
 ## Security note
 
 `shared_expenses_owner` (the definer role) gets a SELECT policy on `public.profiles`

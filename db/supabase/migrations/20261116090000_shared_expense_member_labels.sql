@@ -22,6 +22,28 @@ ALTER FUNCTION shared_expenses._member_label(text,uuid) OWNER TO shared_expenses
 REVOKE ALL ON FUNCTION shared_expenses._member_label(text,uuid) FROM PUBLIC,app_user;
 GRANT EXECUTE ON FUNCTION shared_expenses._member_label(text,uuid) TO app_user;
 
+-- A direct split is titled by the OTHER person's current label: the name the
+-- inviter typed for them if any, else their live PandaPay name. The creator sees
+-- the invited friend's row; anyone else sees the creator's row. Falls back to the
+-- old behaviour (typed split name / directory copy / 'PandaPay friend'). Groups
+-- are unchanged, and a NULL context id keeps the old behaviour.
+CREATE FUNCTION shared_expenses._context_label(p_kind text,p_name text,p_created_by uuid,p_viewer uuid,p_context uuid) RETURNS text LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path=pg_catalog,shared_expenses,pg_temp AS $$
+ SELECT coalesce(
+  CASE WHEN p_kind='direct' AND p_context IS NOT NULL THEN
+   (SELECT coalesce(NULLIF(btrim(m.display_name),''),(SELECT NULLIF(btrim(p.display_name),'') FROM public.profiles p WHERE p.id=m.profile_id))
+      FROM shared_expenses.members m
+     WHERE m.context_id=p_context AND m.state IN ('active','invited')
+       AND CASE WHEN p_viewer IS NOT DISTINCT FROM p_created_by THEN m.profile_id IS DISTINCT FROM p_viewer ELSE m.profile_id IS NOT DISTINCT FROM p_created_by END
+     ORDER BY m.created_at,m.member_id LIMIT 1)
+  END,
+  shared_expenses._context_label(p_kind,p_name,p_created_by,p_viewer))
+$$;
+ALTER FUNCTION shared_expenses._context_label(text,text,uuid,uuid,uuid) OWNER TO shared_expenses_owner;
+REVOKE ALL ON FUNCTION shared_expenses._context_label(text,text,uuid,uuid,uuid) FROM PUBLIC,app_user;
+GRANT EXECUTE ON FUNCTION shared_expenses._context_label(text,text,uuid,uuid,uuid) TO app_user;
+
+
 -- Audience for the join/accepted pushes. claimantName = typed name, else live
 -- profile name, else null. claimantProfileName and claimantPhoneSuffix are for
 -- the owner's join card only; the notifier must never put them in a push.
@@ -55,7 +77,7 @@ SET search_path=pg_catalog,shared_expenses,pg_temp AS $$ DECLARE a uuid:=shared_
  SELECT coalesce(jsonb_agg(jsonb_build_object('invitationId',q.invitation_id,'contextId',q.context_id,'contextKind',q.kind,
   'contextName',q.name,'memberName',q.display_name,'verifiedPhoneSuffix',q.verified_phone_suffix,'claimantName',q.claimant_name,
   'claimantProfileName',q.claimant_name,'claimantPhoneSuffix',q.verified_phone_suffix,'createdAt',q.created_at) ORDER BY q.created_at DESC),'[]'::jsonb) INTO rows
- FROM (SELECT i.invitation_id,i.context_id,c.kind,shared_expenses._context_label(c.kind,c.name,c.created_by,a) AS name,m.display_name,i.verified_phone_suffix,(SELECT NULLIF(btrim(p.display_name),'') FROM public.profiles p WHERE p.id=i.claimed_profile_id) AS claimant_name,i.created_at
+ FROM (SELECT i.invitation_id,i.context_id,c.kind,shared_expenses._context_label(c.kind,c.name,c.created_by,a,c.context_id) AS name,m.display_name,i.verified_phone_suffix,(SELECT NULLIF(btrim(p.display_name),'') FROM public.profiles p WHERE p.id=i.claimed_profile_id) AS claimant_name,i.created_at
   FROM shared_expenses.invitations i
   JOIN shared_expenses.contexts c ON c.context_id=i.context_id AND c.state='active'
   JOIN shared_expenses.members m ON m.context_id=i.context_id AND m.member_id=i.member_id
@@ -114,3 +136,24 @@ END $$;
 ALTER FUNCTION shared_expenses.rename_member(jsonb,uuid,text) OWNER TO shared_expenses_owner;
 REVOKE ALL ON FUNCTION shared_expenses.rename_member(jsonb,uuid,text) FROM PUBLIC,app_user;
 GRANT EXECUTE ON FUNCTION shared_expenses.rename_member(jsonb,uuid,text) TO app_user;
+
+-- Invitation preview shows the same live counterpart label.
+CREATE OR REPLACE FUNCTION shared_expenses.preview_invitation(p_token text) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
+SET search_path=pg_catalog,shared_expenses,pg_temp AS $$ DECLARE a uuid:=shared_expenses._actor(); i shared_expenses.invitations; gl shared_expenses.group_links; BEGIN
+ PERFORM shared_expenses._actor();PERFORM shared_expenses._require_proposals();
+ SELECT * INTO i FROM shared_expenses.invitations WHERE token_hash=p_token;
+ IF NOT FOUND THEN
+  SELECT g.* INTO gl FROM shared_expenses.group_links g JOIN shared_expenses.contexts c ON c.context_id=g.context_id AND c.state='active' AND c.kind='group'
+  WHERE g.token_hash=p_token AND g.expires_at>clock_timestamp();
+  IF NOT FOUND THEN RAISE EXCEPTION 'invitation_unavailable' USING ERRCODE='42501';END IF;
+  RETURN jsonb_build_object('kind','group_link','contextId',gl.context_id,'memberName','You','phoneBound',false,'status','open','expiresAt',gl.expires_at,
+   'contextName',(SELECT name FROM shared_expenses.contexts WHERE context_id=gl.context_id));
+ END IF;
+ IF i.state='rejected' OR i.expires_at<=clock_timestamp()
+ OR NOT EXISTS(SELECT FROM shared_expenses.contexts WHERE context_id=i.context_id AND state='active')
+ THEN RAISE EXCEPTION 'invitation_unavailable' USING ERRCODE='42501';END IF;
+ RETURN jsonb_build_object('invitationId',i.invitation_id,'contextId',i.context_id,'memberId',i.member_id,
+ 'contextName',(SELECT shared_expenses._context_label(c2.kind,c2.name,c2.created_by,a,c2.context_id) FROM shared_expenses.contexts c2 WHERE c2.context_id=i.context_id),
+ 'memberName',(SELECT display_name FROM shared_expenses.members WHERE context_id=i.context_id AND member_id=i.member_id),
+ 'kind','invitation','phoneBound',i.target_phone_hash IS NOT NULL,'status',i.state,'expiresAt',i.expires_at);
+END $$;
