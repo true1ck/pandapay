@@ -440,6 +440,17 @@ void main() {
         findsOneWidget,
       );
       expect(runtime.store.pendingCount, 0);
+
+      // Case 4: Entering a reserved name like 'You' or 'Me'
+      await tester.enterText(find.byType(TextField).first, 'You');
+      await tester.enterText(find.byType(TextField).at(1), '');
+      await tester.tap(find.widgetWithText(FilledButton, 'Add person'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('That name cannot be used. Please choose a different one.'),
+        findsOneWidget,
+      );
+      expect(runtime.store.pendingCount, 0);
     },
   );
   for (final kind in ['members', 'history', 'settle']) {

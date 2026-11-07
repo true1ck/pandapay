@@ -77,6 +77,20 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
     _roster = widget.runtime.contextRoster(widget.contextId);
     _loadInvitations();
     _loadGroupLink();
+    _loadPendingPhones();
+  }
+
+  Future<void> _loadPendingPhones() async {
+    try {
+      final roster = await _roster;
+      for (final m in roster.members) {
+        if (_phones.containsKey(m.id)) continue;
+        final phone = await widget.runtime.pendingPhones.phoneFor(m.id);
+        if (phone != null && mounted) {
+          _phones[m.id] = phone;
+        }
+      }
+    } catch (_) {}
   }
 
   /// A person without a saved name (no verified phone) still reads clearly.
@@ -550,6 +564,14 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
           );
           return;
         }
+        final lower = text.toLowerCase();
+        if (lower == "you" || lower == "me" || lower == "myself") {
+          setState(
+            () => _formError =
+                "That name cannot be used. Please choose a different one.",
+          );
+          return;
+        }
         final cleaned = phone.isEmpty ? null : sharedCleanPhone(phone);
         if (phone.isNotEmpty && cleaned == null) {
           setState(
@@ -655,10 +677,27 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
   Future<void> _fillFromContacts() async {
     final contact = await _pickContact();
     if (contact == null || !mounted) return;
+    final pickedName = contact.$1;
+    final pickedPhone = sharedCleanPhone(contact.$2);
+
+    String? error;
+    try {
+      final current = await _roster;
+      if (current.members.any((m) =>
+          m.state != "left" &&
+          m.name.trim().toLowerCase() == pickedName.trim().toLowerCase())) {
+        error =
+            "Someone in this split already has that name. Add a surname or initial.";
+      } else if (pickedPhone != null &&
+          _phones.values.any((p) => p == pickedPhone)) {
+        error = "Someone in this split is already invited with that number.";
+      }
+    } catch (_) {}
+
     setState(() {
-      _nameField.text = contact.$1;
-      _phoneField.text = sharedCleanPhone(contact.$2) ?? '';
-      _formError = null;
+      _nameField.text = pickedName;
+      _phoneField.text = pickedPhone ?? "";
+      _formError = error;
     });
   }
 
@@ -670,7 +709,7 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                'Contacts access was not granted. You can still type a name and number.',
+                "Contacts access was not granted. You can still type a name and number.",
               ),
             ),
           );
@@ -680,12 +719,35 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
       final picked = await FlutterContacts.native.showPicker(
         properties: {ContactProperty.name, ContactProperty.phone},
       );
-      final rawName = picked?.displayName?.trim() ?? '';
+      final rawName = picked?.displayName?.trim() ?? "";
       if (picked == null || rawName.isEmpty) return null;
       final name = rawName.length > 40 ? rawName.substring(0, 40).trim() : rawName;
-      final number = picked.phones.isEmpty ? '' : picked.phones.first.number;
-      final cleaned = number.replaceAll(RegExp(r'[^+0-9 ()-]'), '').trim();
-      return (name, cleaned.length > 20 ? '' : cleaned);
+      final numbers = [
+        for (final p in picked.phones)
+          if (sharedCleanPhone(p.number) != null) sharedCleanPhone(p.number)!,
+      ].toSet().toList();
+      if (numbers.length > 1 && mounted) {
+        final choice = await showDialog<String>(
+          context: context,
+          builder: (ctx) => SimpleDialog(
+            title: Text("Which number for $name?"),
+            children: [
+              for (final n in numbers)
+                SimpleDialogOption(
+                  onPressed: () => Navigator.pop(ctx, n),
+                  child: Text(n),
+                ),
+            ],
+          ),
+        );
+        if (choice == null) return null;
+        return (name, choice);
+      }
+      final number = numbers.isNotEmpty
+          ? numbers.first
+          : (picked.phones.isEmpty ? "" : picked.phones.first.number);
+      final cleaned = number.replaceAll(RegExp(r"[^+0-9 ()-]"), "").trim();
+      return (name, cleaned.length > 20 ? "" : cleaned);
     } catch (_) {
       return null;
     }

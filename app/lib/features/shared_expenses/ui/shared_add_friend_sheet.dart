@@ -160,8 +160,9 @@ Future<(String, String)?> sharedPickContact(BuildContext context) async {
     final picked = await FlutterContacts.native.showPicker(
       properties: {ContactProperty.name, ContactProperty.phone},
     );
-    final name = picked?.displayName?.trim() ?? '';
-    if (picked == null || name.isEmpty) return null;
+    final rawName = picked?.displayName?.trim() ?? '';
+    if (picked == null || rawName.isEmpty) return null;
+    final name = rawName.length > 40 ? rawName.substring(0, 40).trim() : rawName;
     final numbers = [
       for (final p in picked.phones)
         if (sharedCleanPhone(p.number) != null) sharedCleanPhone(p.number)!,
@@ -257,6 +258,18 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
       setState(() => _error = 'Enter a name.');
       return;
     }
+    if (name.length > 40) {
+      setState(() => _error = 'Use 40 characters or fewer.');
+      return;
+    }
+    final lower = name.toLowerCase();
+    if (lower == 'you' || lower == 'me' || lower == 'myself') {
+      setState(
+        () => _error =
+            'That name cannot be used. Please choose a different one.',
+      );
+      return;
+    }
     final phone = sharedCleanPhone(raw);
     if (raw.isNotEmpty && phone == null) {
       setState(
@@ -306,7 +319,7 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
         const SizedBox(height: 12),
         TextField(
           controller: _name,
-          maxLength: 120,
+          maxLength: 40,
           buildCounter:
               (_, {required currentLength, required isFocused, maxLength}) =>
                   null,
