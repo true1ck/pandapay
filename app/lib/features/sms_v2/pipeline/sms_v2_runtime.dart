@@ -4,6 +4,7 @@ import '../migration/legacy_replay.dart';
 import '../migration/history_update.dart';
 import '../migration/history_category_recheck.dart';
 import 'package:crypto/crypto.dart';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -37,6 +38,7 @@ import '../sync/requeue_for_upload.dart';
 import '../sync/facts_upload.dart';
 import '../sync/sync_pull.dart';
 import 'receipt_review.dart';
+import 'rules_refresh.dart';
 import 'sms_v2_pipeline.dart';
 
 /// One foreground account owner. Capture is available offline, and the
@@ -222,10 +224,16 @@ class SmsV2Runtime {
     }
   }
 
-  Future<void> _refreshRules() async {
+  /// The shared rules are asked for at most once every [_rulesCheckEvery]
+  /// unless the server says a newer set exists, or [force] is set (the person
+  /// pressed "Refresh rules").
+  static const _rulesCheckEvery = Duration(hours: 6);
+
+  Future<void> _refreshRules({bool force = false}) async {
     final previous = DateTime.tryParse(_state.get('rules:last-check') ?? '');
-    if (previous != null &&
-        clock().difference(previous) < const Duration(hours: 6)) {
+    if (!force &&
+        previous != null &&
+        clock().difference(previous) < _rulesCheckEvery) {
       return;
     }
     final current = await _loadBundle();
@@ -382,119 +390,175 @@ class SmsV2Runtime {
         // The next sync pass retries; a failed question never blocks sync.
       }
     }
+    Object? firstError;
+    StackTrace? firstStack;
+    // One step failing (a refused upload, no connection) must not stop the
+    // ones after it: fetching the rules and re-sorting are mostly local work.
+    // The first failure is still raised at the end, so it is counted and the
+    // next pass tries again.
+    Future<void> guarded(Future<void> Function() step) async {
+      try {
+        await step();
+      } catch (error, stack) {
+        if (!accountIsCurrent()) rethrow;
+        firstError ??= error;
+        firstStack ??= stack;
+      }
+    }
+
     await _applyCardState();
     _keyFacts();
-    await _upload.drain();
+    await guarded(() => _upload.drain());
     final senders = (await activeBundle()).senders;
     final correctionQueue = OutboxStore(
       financial.database.db,
       namespace: namespace,
     );
-    await CorrectionsSync(
-      queue: correctionQueue,
-      client: client,
-      baseUri: baseUri,
-      headers: headers,
-      accountIsCurrent: accountIsCurrent,
-      requeue: (sourceKey, eventId) => requeueForUpload(
+    await guarded(
+      () => CorrectionsSync(
         queue: correctionQueue,
+        client: client,
+        baseUri: baseUri,
+        headers: headers,
+        accountIsCurrent: accountIsCurrent,
+        requeue: (sourceKey, eventId) => requeueForUpload(
+          queue: correctionQueue,
+          intake: intake,
+          sourceKey: sourceKey,
+          eventId: eventId,
+          brandOf: (sender) => normalizeSenderBrand(sender, senders).brand,
+        ),
+        clock: clock,
+      ).drain(),
+    );
+    await guarded(
+      () => TemplateUpload(
         intake: intake,
-        sourceKey: sourceKey,
-        eventId: eventId,
-        brandOf: (sender) => normalizeSenderBrand(sender, senders).brand,
-      ),
-      clock: clock,
-    ).drain();
-    await TemplateUpload(
-      intake: intake,
-      queue: OutboxStore(financial.database.db, namespace: namespace),
-      client: client,
-      baseUri: baseUri,
-      headers: headers,
-      hasConsent: hasSharingConsent,
-      accountIsCurrent: accountIsCurrent,
-      clock: clock,
-    ).drain();
-    await LearningSignalUpload(
-      intake: intake,
-      queue: OutboxStore(financial.database.db, namespace: namespace),
-      client: client,
-      baseUri: baseUri,
-      headers: headers,
-      hasConsent: hasSharingConsent,
-      accountIsCurrent: accountIsCurrent,
-      taxonomyVersion: () => _bundle!.taxonomyVersion,
-      clock: clock,
-    ).drain();
-    await StatsUpload(
-      stats: StatsStore(financial.database.db, namespace: namespace),
-      state: _state,
-      client: client,
-      baseUri: baseUri,
-      headers: headers,
-      accountIsCurrent: accountIsCurrent,
-    ).send(
-      clock(),
-      appVersion: appVersion,
-      bundleVersion: _bundle!.bundleVersion,
+        queue: OutboxStore(financial.database.db, namespace: namespace),
+        client: client,
+        baseUri: baseUri,
+        headers: headers,
+        hasConsent: hasSharingConsent,
+        accountIsCurrent: accountIsCurrent,
+        clock: clock,
+      ).drain(),
+    );
+    await guarded(
+      () => LearningSignalUpload(
+        intake: intake,
+        queue: OutboxStore(financial.database.db, namespace: namespace),
+        client: client,
+        baseUri: baseUri,
+        headers: headers,
+        hasConsent: hasSharingConsent,
+        accountIsCurrent: accountIsCurrent,
+        taxonomyVersion: () => _bundle!.taxonomyVersion,
+        clock: clock,
+      ).drain(),
+    );
+    await guarded(
+      () =>
+          StatsUpload(
+            stats: StatsStore(financial.database.db, namespace: namespace),
+            state: _state,
+            client: client,
+            baseUri: baseUri,
+            headers: headers,
+            accountIsCurrent: accountIsCurrent,
+          ).send(
+            clock(),
+            appVersion: appVersion,
+            bundleVersion: _bundle!.bundleVersion,
+          ),
     );
     _checkAccount();
-    await SyncPull(
-      financial: financial,
-      namespace: namespace,
-      client: client,
-      baseUri: baseUri,
-      headers: headers,
-      bundle: _bundle!,
-      categoryIdBySlug: categoryIdBySlug,
-      accountIsCurrent: accountIsCurrent,
-    ).pull();
-    final available = int.tryParse(_state.get('rules:latest') ?? '') ?? 0;
-    if (available > _bundle!.bundleVersion) {
-      _state.put('rules:last-check', DateTime.utc(1970).toIso8601String());
-      await _refreshRules();
-    }
+    await guarded(
+      () => SyncPull(
+        financial: financial,
+        namespace: namespace,
+        client: client,
+        baseUri: baseUri,
+        headers: headers,
+        bundle: _bundle!,
+        categoryIdBySlug: categoryIdBySlug,
+        accountIsCurrent: accountIsCurrent,
+      ).pull(),
+    );
+    await guarded(() async {
+      final available = int.tryParse(_state.get('rules:latest') ?? '') ?? 0;
+      if (available > _bundle!.bundleVersion) {
+        _state.put('rules:last-check', DateTime.utc(1970).toIso8601String());
+        await _refreshRules();
+      }
+    });
     final active = ProvisionalStore(_state).overlay(_bundle!);
     final previousRevision = _state.get('pipeline:revision');
     if (previousRevision != _revision(active.revision)) {
-      final unknown = financial.database.db.select(
-        "SELECT source_key FROM sms_source_decisions WHERE namespace=? AND policy_version='v2' AND decision='unknown'",
-        [namespace],
-      );
-      for (var offset = 0; offset < unknown.length; offset += 200) {
-        _checkAccount();
-        final rows = unknown.skip(offset).take(200);
-        final messages = <QueuedSms>[
-          for (final row in rows)
-            if (intake.capturedById(namespace, row['source_key'] as String)
-                case final entry?)
-              entry.message,
-        ];
-        if (messages.isNotEmpty) await capture(messages, backfill: true);
-      }
-      _state.put('pipeline:revision', _revision(active.revision));
+      await guarded(() async {
+        await _rereadUnknown();
+        _state.put('pipeline:revision', _revision(active.revision));
+      });
     }
-    await _refreshAutomaticCategories();
+    await guarded(() => _refreshAutomaticCategories());
+    final failure = firstError;
+    if (failure != null) Error.throwWithStackTrace(failure, firstStack!);
+  }
+
+  /// Reads every message still marked "unknown" again with the rules now in
+  /// force, 200 at a time. Returns how many were read again.
+  Future<int> _rereadUnknown() async {
+    final intake = SmsIntakeRepository(financial.database);
+    final unknown = financial.database.db.select(
+      "SELECT source_key FROM sms_source_decisions WHERE namespace=? AND policy_version='v2' AND decision='unknown'",
+      [namespace],
+    );
+    var read = 0;
+    for (var offset = 0; offset < unknown.length; offset += 200) {
+      _checkAccount();
+      final rows = unknown.skip(offset).take(200);
+      final messages = <QueuedSms>[
+        for (final row in rows)
+          if (intake.capturedById(namespace, row['source_key'] as String)
+              case final entry?)
+            entry.message,
+      ];
+      if (messages.isNotEmpty) {
+        await capture(messages, backfill: true);
+        read += messages.length;
+      }
+    }
+    return read;
   }
 
   /// A new shared rule set can categorise shops that earlier sat in "Other".
   /// Once per rule-set revision, spends whose category the rules chose are
   /// worked out again; a category the person set or confirmed is never touched.
-  Future<void> _refreshAutomaticCategories() async {
+  /// [force] (the "Refresh rules" button) looks at every such spend again even
+  /// when this rule set was already applied. Returns null when there was
+  /// nothing to do.
+  Future<HistoryCategoryReport?> _refreshAutomaticCategories({
+    bool force = false,
+  }) async {
     final shared = _bundle;
-    if (shared == null || !accountIsCurrent()) return;
+    if (shared == null || !accountIsCurrent()) return null;
     final revision = sha256
         .convert(
           utf8.encode(
             canonicalJson({
-              'categoryRules': [for (final rule in shared.categoryRules) rule.toJson()],
-              'merchantAliases': [for (final alias in shared.merchantAliases) alias.toJson()],
+              'categoryRules': [
+                for (final rule in shared.categoryRules) rule.toJson(),
+              ],
+              'merchantAliases': [
+                for (final alias in shared.merchantAliases) alias.toJson(),
+              ],
               'taxonomy': shared.taxonomyVersion,
             }),
           ),
         )
         .toString();
-    if (_state.get('pipeline:category-revision') == revision) return;
+    if (!force && _state.get('pipeline:category-revision') == revision) {
+      return null;
+    }
     try {
       final report = await HistoryCategoryRecheck.automaticChoices(
         financial: financial,
@@ -503,13 +567,135 @@ class SmsV2Runtime {
         accountIsCurrent: accountIsCurrent,
         categoryIdBySlug: categoryIdBySlug,
         now: clock(),
-      ).run(chunkSize: 50, shouldContinue: accountIsCurrent);
+      ).run(chunkSize: 50, shouldContinue: accountIsCurrent, restart: force);
       // Money still waiting for the server is picked up on a later pass.
       if (report.complete && report.awaitingSync == 0) {
         _state.put('pipeline:category-revision', revision);
       }
-    } catch (_) {
+      return report;
+    } catch (error) {
+      if (force) rethrow;
       // A failed pass never blocks sync; the next sync tries again.
+      return null;
     }
+  }
+
+  /// The "Refresh rules" button: gets the newest shared rules now (ignoring
+  /// the six-hour wait), sends what is waiting, reads unrecognised messages
+  /// again and puts rule-chosen spends in their right category. It never stops
+  /// at the first problem, and says what happened in words.
+  Future<RulesRefreshReport> refreshRulesAndReanalyze() async {
+    final running = _running;
+    if (running != null) {
+      try {
+        await running;
+      } catch (_) {}
+    }
+    final done = Completer<void>();
+    final marker = done.future;
+    _running = marker;
+    try {
+      return await _refreshNow();
+    } finally {
+      done.complete();
+      if (identical(_running, marker)) _running = null;
+    }
+  }
+
+  Future<RulesRefreshReport> _refreshNow() async {
+    _checkAccount();
+    await _loadBundle();
+    final before = _bundle!.bundleVersion;
+    String? rulesProblem, sendProblem, rereadProblem, resortProblem;
+
+    // 1. The newest shared rules, right now.
+    try {
+      await _refreshRules(force: true);
+      final stale = _state.get('rules:stale') ?? '';
+      if (stale.isNotEmpty) {
+        rulesProblem = RulesRefreshReport.rulesProblemFor(stale);
+      }
+    } catch (_) {
+      _checkAccount();
+      rulesProblem = RulesRefreshReport.rulesProblemFor(null);
+    }
+    _checkAccount();
+
+    // 2. Send what is waiting, so nothing blocks the re-sort below.
+    Future<void> send() async {
+      try {
+        await _upload.drain();
+      } catch (_) {
+        _checkAccount();
+        sendProblem =
+            'Some of your spends could not be sent to your account just now. They are kept on this phone and sent later.';
+      }
+    }
+
+    await send();
+
+    // 3. Messages that were not recognised, with the rules now in force.
+    var reread = 0;
+    try {
+      final active = ProvisionalStore(_state).overlay(_bundle!);
+      reread = await _rereadUnknown();
+      _state.put('pipeline:revision', _revision(active.revision));
+    } catch (_) {
+      _checkAccount();
+      rereadProblem =
+          'Could not read the earlier messages again. They are unchanged.';
+    }
+    SmsIntakeRepository(financial.database); // makes sure its tables exist
+    final stillUnknown =
+        financial.database.db.select(
+              "SELECT count(*) AS n FROM sms_source_decisions WHERE namespace=? AND policy_version='v2' AND decision='unknown'",
+              [namespace],
+            ).first['n']
+            as int;
+
+    // 4. Rule-chosen categories, every one looked at again.
+    var report = const HistoryCategoryReport({
+      'changed': 0,
+      'preservedUser': 0,
+      'awaitingSync': 0,
+      'processed': 0,
+      'total': 0,
+    });
+    try {
+      report = await _refreshAutomaticCategories(force: true) ?? report;
+      if (report.awaitingSync > 0) {
+        await send();
+        final again = await _refreshAutomaticCategories(force: true);
+        if (again != null) {
+          report = HistoryCategoryReport({
+            ...again.data,
+            'changed': report.changed + again.changed,
+          });
+        }
+      }
+    } catch (_) {
+      _checkAccount();
+      resortProblem =
+          'Could not re-sort your spends just now. They are unchanged.';
+    }
+
+    // 5. Tell the account about the new categories.
+    await send();
+    _state.put('rules:last-refresh', clock().toUtc().toIso8601String());
+    return RulesRefreshReport(
+      versionBefore: before,
+      versionAfter: _bundle!.bundleVersion,
+      ruleCount: _bundle!.rules.length,
+      rulesProblem: rulesProblem,
+      sendProblem: sendProblem,
+      rereadMessages: reread,
+      stillUnrecognised: stillUnknown,
+      rereadProblem: rereadProblem,
+      resorted: report.changed,
+      keptYours: report.preservedUser,
+      waitingToSend: report.awaitingSync,
+      resortProblem: resortProblem,
+      finishedAt: clock(),
+    );
   }
 }
