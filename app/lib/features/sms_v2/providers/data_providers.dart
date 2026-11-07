@@ -57,9 +57,18 @@ final reviewItemsProvider = FutureProvider<List<LocalReviewItem>>((ref) async {
   final intake = SmsIntakeRepository(cache.financialStore.database);
   final factsStore = FactStore(db, namespace: namespace);
   final eventsStore = EventStore(db, namespace: namespace);
+  // The read model already holds every fact; look them up in memory instead
+  // of running SQLite queries per review item on the UI thread.
+  final model = await ref.watch(smsV2LedgerReadModelProvider.future);
+  final factsById = {for (final fact in model.facts) fact.factId: fact};
+  final factsBySource = <String, List<Fact>>{};
+  for (final fact in model.facts) {
+    (factsBySource[fact.sourceKey] ??= <Fact>[]).add(fact);
+  }
+  Fact? factFor(String id) => factsById[id] ?? factsStore.get(id);
   Map<String, Object?> enrich(Map<String, Object?> payload) {
     final fact = payload['factId'] is String
-        ? factsStore.get(payload['factId'] as String)
+        ? factFor(payload['factId'] as String)
         : null;
     final event = payload['eventId'] is String
         ? eventsStore.get(payload['eventId'] as String)
@@ -69,10 +78,10 @@ final reviewItemsProvider = FutureProvider<List<LocalReviewItem>>((ref) async {
         fact?.sourceKey ??
         (event == null
             ? null
-            : factsStore.get(event.legs.first.factId)?.sourceKey);
+            : factFor(event.legs.first.factId)?.sourceKey);
     final facts = source == null
         ? const <Fact>[]
-        : factsStore.forSource(source);
+        : (factsBySource[source] ?? factsStore.forSource(source));
     final movement = facts.whereType<MovementFact>().firstOrNull;
     return {
       ...payload,
@@ -84,7 +93,7 @@ final reviewItemsProvider = FutureProvider<List<LocalReviewItem>>((ref) async {
             for (final candidate in [(raw as Map).cast<String, Object?>()])
               for (final fact in [
                 candidate['factId'] is String
-                    ? factsStore.get(candidate['factId'] as String)
+                    ? factFor(candidate['factId'] as String)
                     : null,
               ])
                 {
@@ -100,8 +109,6 @@ final reviewItemsProvider = FutureProvider<List<LocalReviewItem>>((ref) async {
     };
   }
 
-  final model = await ref.watch(smsV2LedgerReadModelProvider.future);
-  final factsById = {for (final fact in model.facts) fact.factId: fact};
   final merchantEvents = <String, List<Event>>{};
   for (final event in model.snapshot().events) {
     final decision = model.ledger.categoryByEvent[event.eventId];

@@ -16,6 +16,13 @@ class BundleStore {
   String? _cachedHash;
   RuleBundle? _cached;
 
+  /// The SMS runtime is rebuilt whenever categories, the catalogue or the app
+  /// version resolve, and every new BundleStore used to re-parse, re-validate,
+  /// re-hash and re-verify the same large bundle on the UI thread (seconds on
+  /// a phone, repeated several times at startup). A bundle that already passed
+  /// verification for this exact stored JSON on this database is reused.
+  static final _verifiedByDb = Expando<(String, RuleBundle)>('verifiedBundle');
+
   Future<bool> install(String encoded) async {
     final bundle = await verify(encoded);
     if (bundle == null ||
@@ -63,6 +70,7 @@ WHERE v2_rule_bundle.expires_at < excluded.expires_at
     );
     _cached = null;
     _cachedHash = null;
+    _verifiedByDb[db] = null;
     return db.updatedRows != 0;
   }
 
@@ -74,6 +82,12 @@ WHERE v2_rule_bundle.expires_at < excluded.expires_at
       final hash = sha256.convert(utf8.encode(encoded)).toString();
       if (hash != row['sha256']) continue;
       if (_cachedHash == hash) return _cached;
+      final shared = _verifiedByDb[db];
+      if (shared != null && shared.$1 == hash) {
+        _cached = shared.$2;
+        _cachedHash = hash;
+        return shared.$2;
+      }
       final bundle = await verify(encoded);
       if (bundle == null) continue;
       try {
@@ -83,6 +97,7 @@ WHERE v2_rule_bundle.expires_at < excluded.expires_at
       }
       _cached = bundle;
       _cachedHash = hash;
+      _verifiedByDb[db] = (hash, bundle);
       return bundle;
     }
     return null;
