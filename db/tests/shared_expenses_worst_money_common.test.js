@@ -23,7 +23,7 @@ const MIGRATIONS = [
   '20261114000000_shared_expense_phone_directory.sql', '20261114010000_shared_expense_context_label.sql',
   '20261114020000_shared_expense_group_links.sql', '20261114030000_shared_expense_membership_exit.sql',
   '20261114040000_shared_expense_owner_and_former.sql', '20261116080000_shared_expense_invitation_audience.sql',
-  '20261116090000_shared_expense_member_labels.sql', '20261116100000_shared_expense_join_identity.sql',
+  '20261116090100_shared_expense_member_labels.sql', '20261116100100_shared_expense_join_identity.sql',
 ];
 
 function loopbackUrl() {

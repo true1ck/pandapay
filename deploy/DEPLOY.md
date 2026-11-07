@@ -199,15 +199,28 @@ The deploy workflow validates that it is present and sufficiently long, but
 does not read, replace, or transmit it through GitHub Actions. Changing this
 key changes phone-search hashes and requires an explicit reindex.
 
-### SMS AI drafts (private admin host only)
+### SMS AI drafts (opt-in, production backend host)
 
 The old per-message Gemini worker and its settings (`AI_WORKER_TOKEN`,
-`GEMINI_MODEL`, `GEMINI_REQUESTS_*` and others) are gone, and this public
-deploy never sends a Gemini key. The SMS v2 AI drafts worker and the hourly
-rule-signing job run only in the private admin profile
-(`deploy/admin/compose.private.yml`, services `sms-v2-template-worker` and
-`sms-v2-rule-jobs`); their settings, `GEMINI_API_KEY` included, live only on
-that host. See `deploy/admin/RUNBOOK.md`.
+`GEMINI_MODEL`, `GEMINI_REQUESTS_*` and others) are gone. The per-template
+drafts worker (`sms-v2-template-worker`) can run on this host, **off by
+default**. Gemini only ever receives redacted message layouts, never message
+text. Rule signing and publishing stay on the private admin host
+(`deploy/admin/compose.private.yml`, `sms-v2-rule-jobs`); the worker only
+drafts, and an admin approval publishes.
+
+It is built, fenced and started (last, non-fatally) only when ALL of these are
+present and non-empty in the host's `.env`: `GEMINI_API_KEY` (billing-enabled,
+paid tier), `SMS_AI_WORKER_DB_PASSWORD` (32+ characters, distinct),
+`SMS_AI_WORKER_DATABASE_URL` (login `sms_ai_worker`, same password),
+`SMS_V2_AI_MODEL`, `SMS_V2_AI_TPM`, `SMS_V2_AI_INPUT_USD_PER_MILLION`,
+`SMS_V2_AI_OUTPUT_USD_PER_MILLION`. The deploy workflow forwards each from the
+same-named GitHub secret when set. With any missing, the release is unchanged.
+`db-migrate` creates the `sms_ai_worker` login from its password; the login can
+only read the template queue, active rules and AI settings, update the worker's
+own columns on queued/working templates, and ask two aggregate functions
+(consent count, correction counts). The Gemini key and that login are given to
+this one service only (`api/test/release_guards.test.js` enforces it).
 
 ## 4. Run migrations
 

@@ -1,10 +1,10 @@
--- LOCAL ONLY. Undoes db/supabase/migrations/20261116100000_shared_expense_join_identity.sql so a corrected
+-- LOCAL ONLY. Undoes db/supabase/migrations/20261116100100_shared_expense_join_identity.sql so a corrected
 -- version of it can be applied again on a development database (no data of that migration survives: the
 -- columns, the audit table and every stored phone ciphertext are dropped).
 -- Never run on a database where the migration has shipped.
 --
 -- Apply:   psql "$LOCAL_DB_URL" -v ON_ERROR_STOP=1 -1 -f docs/implementation/shared-expenses/rollback_join_identity_local.sql
--- Then re-apply the migration file with psql -v ON_ERROR_STOP=1 -1 -f db/supabase/migrations/20261116100000_shared_expense_join_identity.sql
+-- Then re-apply the migration file with psql -v ON_ERROR_STOP=1 -1 -f db/supabase/migrations/20261116100100_shared_expense_join_identity.sql
 -- (The definitions restored below are the last ones from the earlier migrations; the migration test checks the schema is identical afterwards.)
 
 DROP TRIGGER IF EXISTS shared_scrub_profile_phone ON public.profiles;
@@ -20,13 +20,13 @@ END $$;
 DROP FUNCTION IF EXISTS shared_expenses.claim_invitation(text,text,text,uuid,text,text);
 DROP FUNCTION IF EXISTS shared_expenses._claim_group_link(text,text,uuid,text,text);
 
--- restored from 20261116090000_shared_expense_member_labels.sql
+-- restored from 20261116090100_shared_expense_member_labels.sql
 CREATE OR REPLACE FUNCTION shared_expenses._clean_label(p text) RETURNS text LANGUAGE sql IMMUTABLE
 SET search_path=pg_catalog,pg_temp AS $$
  SELECT btrim(left(btrim(regexp_replace(regexp_replace(p,'[\x01-\x1f\x7f-\x9f\u2028\u2029]+',' ','g'),'\s+',' ','g')),40))
 $$;
 
--- restored from 20261116090000_shared_expense_member_labels.sql
+-- restored from 20261116090100_shared_expense_member_labels.sql
 CREATE OR REPLACE FUNCTION shared_expenses._member_label(p_name text,p_profile uuid) RETURNS text LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path=pg_catalog,shared_expenses,pg_temp AS $$
  SELECT CASE WHEN NULLIF(btrim(p_name),'') IS NOT NULL THEN btrim(p_name)
@@ -34,7 +34,7 @@ SET search_path=pg_catalog,shared_expenses,pg_temp AS $$
   ELSE (SELECT NULLIF(btrim(p.display_name),'') FROM public.profiles p WHERE p.id=p_profile) END
 $$;
 
--- restored from 20261116090000_shared_expense_member_labels.sql
+-- restored from 20261116090100_shared_expense_member_labels.sql
 CREATE OR REPLACE FUNCTION shared_expenses._context_label(p_kind text,p_name text,p_created_by uuid,p_viewer uuid,p_context uuid) RETURNS text LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path=pg_catalog,shared_expenses,pg_temp AS $$
  SELECT coalesce(
@@ -97,7 +97,7 @@ BEGIN
  RETURN shared_expenses._finish(p_operation_id,jsonb_build_object('status','invited','memberId',mid,'sequence',seq::text));
 END $$;
 
--- restored from 20261116090000_shared_expense_member_labels.sql
+-- restored from 20261116090100_shared_expense_member_labels.sql
 CREATE OR REPLACE FUNCTION shared_expenses.rename_member(p_payload jsonb,p_operation_id uuid,p_request_hash text) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
 SET search_path=pg_catalog,shared_expenses,pg_temp AS $$
 DECLARE a uuid:=shared_expenses._actor(); ctx uuid; mid uuid; n text; r jsonb; t shared_expenses.members; is_owner boolean; seq bigint; required text[]:=ARRAY['contextId','memberId','displayName'];
@@ -123,7 +123,7 @@ BEGIN
  RETURN shared_expenses._finish(p_operation_id,jsonb_build_object('status','renamed','memberId',mid,'displayName',n,'sequence',seq::text));
 END $$;
 
--- restored from 20261116090000_shared_expense_member_labels.sql
+-- restored from 20261116090100_shared_expense_member_labels.sql
 CREATE OR REPLACE FUNCTION shared_expenses.list_join_requests() RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER
 SET search_path=pg_catalog,shared_expenses,pg_temp AS $$ DECLARE a uuid:=shared_expenses._actor(); rows jsonb; BEGIN
  PERFORM shared_expenses._require_proposals();
@@ -140,7 +140,7 @@ SET search_path=pg_catalog,shared_expenses,pg_temp AS $$ DECLARE a uuid:=shared_
  RETURN jsonb_build_object('items',rows);
 END $$;
 
--- restored from 20261116090000_shared_expense_member_labels.sql
+-- restored from 20261116090100_shared_expense_member_labels.sql
 CREATE OR REPLACE FUNCTION shared_expenses.list_invitations(p_context uuid,p_after uuid) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER
 SET search_path=pg_catalog,shared_expenses,pg_temp AS $$ DECLARE rows jsonb;BEGIN
  PERFORM shared_expenses._require_proposals();
@@ -153,7 +153,7 @@ SET search_path=pg_catalog,shared_expenses,pg_temp AS $$ DECLARE rows jsonb;BEGI
  RETURN jsonb_build_object('items',CASE WHEN jsonb_array_length(rows)>50 THEN rows-50 ELSE rows END,'hasMore',jsonb_array_length(rows)>50,'nextCursor',CASE WHEN jsonb_array_length(rows)>50 THEN rows->49->>'invitationId' ELSE NULL END);
 END $$;
 
--- restored from 20261116090000_shared_expense_member_labels.sql
+-- restored from 20261116090100_shared_expense_member_labels.sql
 CREATE OR REPLACE FUNCTION shared_expenses.invitation_audience(p_token_hash text) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,shared_expenses,pg_temp AS $$
 DECLARE a uuid:=shared_expenses._actor(); i shared_expenses.invitations; BEGIN
@@ -173,7 +173,7 @@ DECLARE a uuid:=shared_expenses._actor(); i shared_expenses.invitations; BEGIN
             WHERE m.context_id=i.context_id AND m.role='owner' AND m.state='active' AND m.profile_id IS NOT NULL AND m.profile_id<>a));
 END $$;
 
--- restored from 20261116090000_shared_expense_member_labels.sql
+-- restored from 20261116090100_shared_expense_member_labels.sql
 CREATE OR REPLACE FUNCTION shared_expenses.preview_invitation(p_token text) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
 SET search_path=pg_catalog,shared_expenses,pg_temp AS $$ DECLARE a uuid:=shared_expenses._actor(); i shared_expenses.invitations; gl shared_expenses.group_links; BEGIN
  PERFORM shared_expenses._actor();PERFORM shared_expenses._require_proposals();

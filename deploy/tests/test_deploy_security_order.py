@@ -10,6 +10,16 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "deploy" / "deploy.sh"
 WRITERS = {"auth", "api", "rewards-worker"}
+WORKER = "sms-v2-template-worker"
+AI_ENV = (
+    "GEMINI_API_KEY=synthetic-gemini-key\n"
+    "SMS_AI_WORKER_DB_PASSWORD=synthetic-sms-ai-worker-password-0123456789\n"
+    "SMS_AI_WORKER_DATABASE_URL=postgresql://sms_ai_worker@db.invalid/postgres\n"
+    "SMS_V2_AI_MODEL=synthetic-model\n"
+    "SMS_V2_AI_TPM=100000\n"
+    "SMS_V2_AI_INPUT_USD_PER_MILLION=0.10\n"
+    "SMS_V2_AI_OUTPUT_USD_PER_MILLION=0.40\n"
+)
 
 GIT_STUB = r'''#!/usr/bin/env python3
 import io, json, os, sys, tarfile
@@ -74,9 +84,11 @@ elif args[:1]==['compose']:
             pos += 2 if args[pos] == '--timeout' else 1
         running.difference_update(args[pos:])
     elif 'up' in args:
-        services=[item for item in args if item in {'db-migrate','auth','api','rewards-worker','backup'}]
+        services=[item for item in args if item in {'db-migrate','auth','api','rewards-worker','backup','sms-v2-template-worker'}]
         if 'db-migrate' in services and os.environ.get('FAIL_MIGRATION')=='1': sys.exit(22)
         running.update(services)
+    elif 'build' in args and 'sms-v2-template-worker' in args and os.environ.get('FAIL_WORKER_BUILD')=='1':
+        sys.exit(26)
     elif 'run' in args and 'backup' in args and os.environ.get('FAIL_BACKUP')=='1':
         sys.exit(23)
     elif 'run' in args and 'db-migrate' in args and os.environ.get('FAIL_PREFLIGHT')=='1':
@@ -152,6 +164,7 @@ class DeploySecurityOrderTest(unittest.TestCase):
             ))
             with env_file.open("a") as output:
                 output.write(settings.pop("HOST_BACKUP_CONFIG", ""))
+                output.write(settings.pop("EXTRA_ENV", ""))
             if settings.pop("OMIT_DESTINATIONS", "0") == "1":
                 env_file.write_text("".join(line for line in env_file.read_text().splitlines(True)
                                            if not line.startswith("BACKUP_DESTINATION_")))
@@ -168,6 +181,8 @@ class DeploySecurityOrderTest(unittest.TestCase):
             initial_services = set(WRITERS)
             if settings.get("REVIEWED_MAPS_SCRAPER") == "1":
                 initial_services.add("maps-scraper")
+            if settings.pop("WORKER_RUNNING", "0") == "1":
+                initial_services.add(WORKER)
             state.write_text("\n".join(initial_services))
             curl_count = base / "curl-count"
             env = dict(os.environ, PATH=str(bin_dir) + os.pathsep + os.environ["PATH"],
@@ -186,6 +201,45 @@ class DeploySecurityOrderTest(unittest.TestCase):
     @staticmethod
     def command_index(commands, predicate):
         return next(i for i, command in enumerate(commands) if predicate(command))
+
+    def test_ai_worker_is_not_built_without_every_setting(self):
+        partial = "".join(line for line in AI_ENV.splitlines(True) if not line.startswith("SMS_V2_AI_TPM="))
+        for extra in ("", partial):
+            result, commands, _ = self.run_deploy(EXTRA_ENV=extra)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            builds = [c[1] for c in commands if c[0] == "docker" and "build" in c[1]]
+            self.assertTrue(builds)
+            self.assertFalse(any(WORKER in args for args in builds), extra)
+
+    def test_ai_worker_is_built_and_fenced_with_the_writers_when_configured(self):
+        result, commands, _ = self.run_deploy(EXTRA_ENV=AI_ENV, WORKER_RUNNING="1")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(any(c[0] == "docker" and "build" in c[1] and WORKER in c[1] for c in commands))
+        stops = [c[1] for c in commands if c[0] == "docker" and "stop" in c[1] and "compose" in c[1]]
+        self.assertTrue(stops)
+        self.assertTrue(all(WORKER in args for args in stops), stops)
+        # The stop comes before the backup and before any migration.
+        stop = self.command_index(commands, lambda c: c[0] == "docker" and "stop" in c[1] and "compose" in c[1])
+        migrate = self.command_index(commands, lambda c: c[0] == "docker" and "up" in c[1] and "db-migrate" in c[1])
+        self.assertLess(stop, migrate)
+
+    def test_ai_worker_left_running_is_still_fenced_when_its_settings_are_gone(self):
+        result, commands, _ = self.run_deploy(WORKER_RUNNING="1")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse(any(c[0] == "docker" and "build" in c[1] and WORKER in c[1] for c in commands))
+        self.assertTrue(any(c[0] == "docker" and "stop" in c[1] and WORKER in c[1] for c in commands))
+
+    def test_ai_worker_build_failure_never_fails_the_release(self):
+        result, commands, _ = self.run_deploy(EXTRA_ENV=AI_ENV, FAIL_WORKER_BUILD="1")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("WARNING", result.stderr)
+
+    def test_ai_settings_from_the_workflow_reach_the_host_env_and_are_never_printed(self):
+        secret = "synthetic-gemini-secret-value"
+        result, commands, _ = self.run_deploy(GEMINI_API_KEY=secret)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn(secret, result.stdout + result.stderr)
+        self.assertNotIn(secret, json.dumps(commands))
 
     def test_default_offhost_requires_destinations_before_downtime(self):
         result, commands, _ = self.run_deploy(OMIT_DESTINATIONS="1")

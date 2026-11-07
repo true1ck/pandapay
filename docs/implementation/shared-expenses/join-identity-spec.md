@@ -12,7 +12,7 @@ Single source of truth for the backend and app work. Branch `split-labels`. Noth
 7. **Masking (adaptive)**: default view `+91 72••• •4821` = country code + first 2 national digits + last 4. For a number whose national part is shorter than 8 digits show cc + last 3 only. If two or more PENDING requests of the same owner (or a pending request and an existing member of the same context) have the same visible mask but DIFFERENT hashes, flag `lookalike=true` and return the FULL number for those items directly (no tap), and the app underlines the differing digits. If same hash => `duplicateOf` (same number, possibly two accounts).
 8. **Unique names**: see section 5.
 
-## 2. Storage (one additive migration `20261116100000_shared_expense_join_identity.sql`; keep the existing 20261116090000 untouched)
+## 2. Storage (one additive migration `20261116100100_shared_expense_join_identity.sql`; keep the existing 20261116090000 untouched)
 New columns on `shared_expenses.invitations`:
 - `claimant_phone_enc bytea NULL`, `claimant_phone_key_id text NULL` (AES-256-GCM done IN NODE; nonce+tag packed in the bytea; AAD = invitation_id bytes; key ring from env `SHARED_EXPENSE_PHONE_ENC_KEYS` = JSON `{"current":"k1","keys":{"k1":"<base64 32 bytes>"}}`; refuse to start capture (fail closed: store no number) when the env is missing; never reuse ENCRYPTION_KEY or SHARED_EXPENSE_INVITE_SECRET)
 - `claimant_phone_cc text NULL` (e.g. `+91`), `claimant_phone_hash text NULL` (same HMAC as the directory so it is comparable with `phone_directory.phone_hash` / `target_phone_hash`)

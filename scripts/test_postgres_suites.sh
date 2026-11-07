@@ -41,6 +41,7 @@ secret() { node -e "process.stdout.write(require('crypto').randomBytes(24).toStr
 app_user_password=$(secret)
 reward_worker_password=$(secret)
 admin_api_password=$(secret)
+sms_ai_worker_password=$(secret)
 export JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:-ci_only_not_a_real_secret_for_pg_suites}
 
 main_db=pandapay_pg_suites
@@ -70,7 +71,7 @@ done
 migrate() {
   ADMIN_DATABASE_URL="$admin_url/$1" DB_SSL=false NODE_ENV=test SEED_DEMO_DATA=false \
     APP_USER_PASSWORD="$app_user_password" REWARD_WORKER_DB_PASSWORD="$reward_worker_password" \
-    ADMIN_API_DB_PASSWORD="$admin_api_password" \
+    ADMIN_API_DB_PASSWORD="$admin_api_password" SMS_AI_WORKER_DB_PASSWORD="$sms_ai_worker_password" \
     node "$root/db/scripts/product_migrate.js" >/dev/null
 }
 echo '==> Applying product migrations and role setup'
@@ -115,7 +116,8 @@ main_url="$admin_url/$main_db"
 admin_runtime_url="postgresql://admin_api_runtime:$admin_api_password@${admin_url#*@}/$main_db"
 api_pg_suites() (
   export EMAIL_IMPORT_TEST_DATABASE_URL="$main_url" SMS_V2_TEST_DATABASE_URL="$main_url" \
-    SMS_V2_TEST_ADMIN_DATABASE_URL="$admin_runtime_url"
+    SMS_V2_TEST_ADMIN_DATABASE_URL="$admin_runtime_url" \
+    SMS_V2_TEST_AI_WORKER_DATABASE_URL="postgresql://sms_ai_worker:$sms_ai_worker_password@${admin_url#*@}/$main_db"
   node_suite api/test/email_import_pg.test.js api/test/sms_v2/*_pg.test.js
 )
 step 'api email import and SMS v2 *_pg suites' api_pg_suites

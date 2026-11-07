@@ -62,7 +62,7 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114020000_shared_expense_group_links.sql'),'utf8'));
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114030000_shared_expense_membership_exit.sql'),'utf8'));
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114040000_shared_expense_owner_and_former.sql'),'utf8'));
-  for (const file of ['20261116080000_shared_expense_invitation_audience.sql', '20261116090000_shared_expense_member_labels.sql', '20261116100000_shared_expense_join_identity.sql']) await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/'+file),'utf8'));
+  for (const file of ['20261116080000_shared_expense_invitation_audience.sql', '20261116090100_shared_expense_member_labels.sql', '20261116100100_shared_expense_join_identity.sql']) await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/'+file),'utf8'));
   // Replay the pre-existing role setup's broad grants. A new isolated schema
   // must retain its ACL even when public and pandapay grants are restored.
   await db.query('GRANT USAGE ON SCHEMA public,pandapay TO app_user; GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO app_user; GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pandapay TO app_user');

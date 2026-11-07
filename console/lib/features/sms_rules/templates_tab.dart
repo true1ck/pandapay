@@ -239,7 +239,8 @@ class _SmsTemplatesTabState extends State<SmsTemplatesTab> {
                         onPressed: ready ? () => _createDraft(row) : null,
                         child: const Text('Create draft'),
                       ),
-                      if (ready)
+                      // An approved layout is final: the server refuses a rejection.
+                      if (ready && row['admin_decision'] != 'approved')
                         TextButton(
                           key: Key('reject-${row['template_hash']}'),
                           onPressed: () => _reject(row),

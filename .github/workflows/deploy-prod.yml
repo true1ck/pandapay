@@ -198,6 +198,16 @@ jobs:
           NOTIFICATION_SERVICE_URL: ${{ secrets.NOTIFICATION_SERVICE_URL }}
           NOTIFICATION_SERVICE_API_KEY: ${{ secrets.NOTIFICATION_SERVICE_API_KEY }}
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+          # SMS AI drafts worker (opt-in, docker-compose.prod.yml). All optional:
+          # nothing is sent for an unset secret, and the worker is skipped unless
+          # every one of them is present in the host's .env.
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SMS_AI_WORKER_DB_PASSWORD: ${{ secrets.SMS_AI_WORKER_DB_PASSWORD }}
+          SMS_AI_WORKER_DATABASE_URL: ${{ secrets.SMS_AI_WORKER_DATABASE_URL }}
+          SMS_V2_AI_MODEL: ${{ secrets.SMS_V2_AI_MODEL }}
+          SMS_V2_AI_TPM: ${{ secrets.SMS_V2_AI_TPM }}
+          SMS_V2_AI_INPUT_USD_PER_MILLION: ${{ secrets.SMS_V2_AI_INPUT_USD_PER_MILLION }}
+          SMS_V2_AI_OUTPUT_USD_PER_MILLION: ${{ secrets.SMS_V2_AI_OUTPUT_USD_PER_MILLION }}
         run: |
           test -n "$NOTIFICATION_SERVICE_URL"
           test -n "$NOTIFICATION_SERVICE_API_KEY"
@@ -207,6 +217,11 @@ jobs:
             if [ -n "$GOOGLE_PLACES_API_KEY" ]; then
               printf 'export GOOGLE_PLACES_API_KEY=%q\n' "$GOOGLE_PLACES_API_KEY"
             fi
+            for name in GEMINI_API_KEY SMS_AI_WORKER_DB_PASSWORD SMS_AI_WORKER_DATABASE_URL SMS_V2_AI_MODEL SMS_V2_AI_TPM SMS_V2_AI_INPUT_USD_PER_MILLION SMS_V2_AI_OUTPUT_USD_PER_MILLION; do
+              if [ -n "${!name}" ]; then
+                printf 'export %s=%q\n' "$name" "${!name}"
+              fi
+            done
             cat deploy/deploy.sh
           } | bash deploy/ssh_script.sh "$DEPLOY_USER@$HOST" "$SHA" "$DEPLOY_BRANCH"
 

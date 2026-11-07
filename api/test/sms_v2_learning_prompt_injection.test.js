@@ -37,7 +37,10 @@ test('a layout that gives orders is carried as a quoted value and never joins th
     assert.equal(asked.expectedRuleId, benignPrompt.expectedRuleId);
     assert.equal(asked.templateHash, template.template_hash);
     assert.equal(asked.senderBrand, template.sender_brand);
-    assert.equal(prompt.split(JSON.stringify(body)).length, 2, 'the layout text appears once, as the redactedBody value');
+    // The layout text is only ever a quoted value: as redactedBody, and as the
+    // synthetic sample (the same text, since it has no placeholders to fill).
+    assert.equal(asked.syntheticSample, body);
+    assert.equal(prompt.split(JSON.stringify(body)).length, 3, 'the layout text appears only as the redactedBody and syntheticSample values');
   }
 });
 
@@ -166,7 +169,7 @@ const WRITES = /(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+(?:public\.)?sms_v2_(?:
 
 test('no code path of the AI workers writes a shared rule, a bundle part or a bundle', () => {
   // Only the rule store (used by the admin's publish and the hourly job) writes them.
-  const writers = walk(SRC).filter((file) => WRITES.test(fs.readFileSync(file, 'utf8'))).map((file) => path.relative(SRC, file));
+  const writers = walk(SRC).filter((file) => WRITES.test(fs.readFileSync(file, 'utf8'))).map((file) => path.relative(SRC, file).split(path.sep).join('/'));
   assert.deepEqual(writers, ['sms_v2/rules_store.js']);
   for (const file of ['sms_v2/template_worker.js', 'sms_v2/merchant_suggestions.js', 'sms_v2/jobs/template_worker_main.js']) {
     const text = fs.readFileSync(path.join(SRC, file), 'utf8');

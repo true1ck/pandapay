@@ -13,6 +13,17 @@ BACKUP_ENV = (
     "BACKUP_DESTINATION_A=/synthetic/offhost-a\n"
     "BACKUP_DESTINATION_B=/synthetic/offhost-b\n"
 )
+AI_ENV = (
+    "GEMINI_API_KEY=synthetic-gemini-key\n"
+    "SMS_AI_WORKER_DB_PASSWORD=synthetic-sms-ai-worker-password-0123456789\n"
+    "SMS_AI_WORKER_DATABASE_URL=postgresql://sms_ai_worker@db.invalid/postgres\n"
+    "SMS_V2_AI_MODEL=synthetic-model\n"
+    "SMS_V2_AI_TPM=100000\n"
+    "SMS_V2_AI_INPUT_USD_PER_MILLION=0.10\n"
+    "SMS_V2_AI_OUTPUT_USD_PER_MILLION=0.40\n"
+)
+WORKER = "sms-v2-template-worker"
+
 STUB = r'''#!/usr/bin/env python3
 import json,os,sys
 from pathlib import Path
@@ -69,6 +80,49 @@ class SequentialRolloutTest(unittest.TestCase):
                          if name == "docker" and "up" in args and args[-1] == service)
             self.assertTrue(any(name == "curl" and any(marker in arg for arg in args)
                                 for name, args, _ in commands[:start]))
+
+    def test_ai_worker_is_skipped_unless_every_setting_is_present(self):
+        partial = "".join(line for line in AI_ENV.splitlines(True)
+                          if not line.startswith("SMS_V2_AI_TPM="))
+        quoted_empty = AI_ENV.replace("GEMINI_API_KEY=synthetic-gemini-key", 'GEMINI_API_KEY=""')
+        for env_content in ("", partial, quoted_empty):
+            result, commands = self.rollout(ENV_CONTENT=env_content)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(any(WORKER in args for name, args, _ in commands if name == "docker"),
+                             env_content)
+
+    def test_ai_worker_is_built_and_started_last_when_configured(self):
+        result, commands = self.rollout(ENV_CONTENT=AI_ENV)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        builds = [args[-1] for name, args, _ in commands if name == "docker" and "build" in args]
+        starts = [args[-1] for name, args, _ in commands if name == "docker" and "up" in args]
+        self.assertEqual(builds, ["auth", "api", "rewards-worker", "backup", WORKER])
+        self.assertEqual(starts, builds)
+        # It is opt-in AND last: every core service is up before it starts.
+        worker_start = next(i for i, (name, args, _) in enumerate(commands)
+                            if name == "docker" and "up" in args and args[-1] == WORKER)
+        core_starts = [i for i, (name, args, _) in enumerate(commands)
+                       if name == "docker" and "up" in args and args[-1] != WORKER]
+        self.assertTrue(all(i < worker_start for i in core_starts))
+
+    def test_prebuilt_mode_does_not_rebuild_the_ai_worker(self):
+        result, commands = self.rollout(ENV_CONTENT=AI_ENV, DEPLOY_IMAGES_PREBUILT="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(any("build" in args for name, args, _ in commands if name == "docker"))
+        starts = [args[-1] for name, args, _ in commands if name == "docker" and "up" in args]
+        self.assertEqual(starts[-1], WORKER)
+
+    def test_ai_worker_failing_to_become_ready_is_stopped_and_never_fails_the_release(self):
+        result, commands = self.rollout(ENV_CONTENT=AI_ENV, FAIL_HEALTH=WORKER)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("WARNING", result.stderr)
+        self.assertTrue(any(name == "docker" and "stop" in args and args[-1] == WORKER
+                            for name, args, _ in commands))
+
+    def test_ai_worker_build_failure_does_not_fail_the_release(self):
+        result, commands = self.rollout(ENV_CONTENT=AI_ENV, FAIL_BUILD=WORKER)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("WARNING", result.stderr)
 
     def test_missing_backup_recipient_blocks_before_docker(self):
         result, commands = self.rollout(BACKUP_ENV_CONTENT="BACKUP_MODE=local\n")

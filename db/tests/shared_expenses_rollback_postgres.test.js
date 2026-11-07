@@ -12,7 +12,7 @@ const { transactionalSql } = require('../scripts/product_migrate');
 const requireApi = createRequire(path.resolve(__dirname, '../../api/package.json'));
 const raw = process.env.PANDAPAY_SHARED_EXPENSES_ROLLBACK_URL;
 const DB = 'shared_expenses_rollback_test';
-const MIGRATION = '20261116100000_shared_expense_join_identity.sql';
+const MIGRATION = '20261116100100_shared_expense_join_identity.sql';
 
 function target(value) {
   const url = new URL(value);

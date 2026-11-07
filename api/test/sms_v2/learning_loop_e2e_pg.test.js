@@ -164,10 +164,10 @@ test('the whole learning loop, from a shared layout to a published rule and back
   assert.equal((await secondResult()).status, 'ready');
   const rejected = await admin.post(`/admin/sms/v2/templates/${second.template_hash}/reject`, { reason: 'overmatches' });
   assert.equal(rejected.status, 200, JSON.stringify(rejected.body));
-  assert.equal((await secondResult()).status, 'failed', 'the next sync drops the private rule');
+  assert.equal((await secondResult()).status, 'rejected', 'the next sync drops the private rule');
   assert.deepEqual((await admin.get('/admin/sms/v2/templates?status=rejected')).body.templates.map((row) => row.template_hash), [second.template_hash]);
   assert.equal((await admin.post(`/admin/sms/v2/templates/${second.template_hash}/requeue`, { reason: 'Prompt improved' })).status, 200);
-  assert.equal((await secondResult()).status, 'queued');
+  assert.equal((await secondResult()).status, 'pending');
   assert.equal((await pool.query('SELECT ai_status FROM sms_v2_unknown_templates WHERE template_hash=$1', [second.template_hash])).rows[0].ai_status, 'queued');
 
   // ---- 9. The AI budget stops the worker; raising it lets the next run call the provider.

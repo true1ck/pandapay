@@ -15,6 +15,7 @@ import 'package:pandapay_domain/pandapay_domain.dart' show CardProduct;
 import '../../../data/local/financial_store.dart';
 import '../../../data/user_cards_repository.dart';
 import '../instruments/instrument_seeder.dart';
+import 'ai_withdrawal.dart';
 import '../storage/instrument_store.dart';
 import '../ledger/card_state_adapter.dart';
 import '../../../data/local/sms_intake_repository.dart';
@@ -516,6 +517,7 @@ class SmsV2Runtime {
         await _refreshRules();
       }
     });
+    await guarded(_withdrawRejectedAiReadings);
     final active = ProvisionalStore(_state).overlay(_bundle!);
     final previousRevision = _state.get('pipeline:revision');
     if (previousRevision != _revision(active.revision)) {
@@ -553,6 +555,32 @@ class SmsV2Runtime {
       }
     }
     return read;
+  }
+
+  /// Once the server says a layout's AI rule was rejected (or could not be
+  /// made), what that rule read leaves the ledger and the messages are read
+  /// again without it, so they return to a plain Needs review item.
+  Future<void> _withdrawRejectedAiReadings() async {
+    final withdrawal = AiWithdrawal(
+      financial: financial,
+      namespace: namespace,
+      bundle: _bundle!,
+      categoryIdBySlug: categoryIdBySlug,
+    );
+    final sources = <String>[
+      for (final hash in withdrawal.rejectedTemplates())
+        ...withdrawal.sourcesRead(hash),
+    ];
+    if (sources.isEmpty) return;
+    _checkAccount();
+    withdrawal.withdraw(sources);
+    final intake = SmsIntakeRepository(financial.database);
+    final messages = <QueuedSms>[
+      for (final source in sources)
+        if (intake.capturedById(namespace, source) case final entry?)
+          entry.message,
+    ];
+    if (messages.isNotEmpty) await capture(messages, backfill: true);
   }
 
   /// A new shared rule set can categorise shops that earlier sat in "Other".

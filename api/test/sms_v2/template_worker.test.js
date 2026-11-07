@@ -6,6 +6,7 @@ const {
   fillSynthetic,
   buildPrompt,
   validateDraft,
+  stampDraft,
   runTemplateWorkerOnce,
   createGeminiTemplateProvider,
 } = require("../../src/sms_v2/template_worker");
@@ -56,7 +57,7 @@ test("prompt carries the India SMS rules and the placeholder legend", () => {
       rule.includes("never the movement amount"),
     ),
   );
-  assert.equal(prompt.placeholders["<AMT>"], "an amount, with its currency marker");
+  assert.match(prompt.placeholders["<AMT>"], /^an amount, with its currency marker/);
   assert.equal(prompt.placeholders["#"], "one digit");
   // Every placeholder the phone or the synthetic filler can produce is explained.
   for (const key of ["AMT", "DATE", "MASK", "VPA", "REF", "PHONE", "EMAIL", "URL", "PARTY", "W"])
@@ -466,4 +467,31 @@ test("the worker hands the report counts, past mistakes and sibling layouts to t
   assert.deepEqual(prompt.userReports, { not_financial: 2 });
   assert.equal(prompt.previousMistakes[0].reason, "overmatches");
   assert.equal(siblings, 1);
+});
+
+test("the worker stamps the fields it owns, so a model slip there never fails a draft", () => {
+  const slipped = {
+    ...rule(),
+    id: "AI-wrong",
+    version: 7,
+    status: "active",
+    createdBy: "admin:someone",
+    senders: ["OTHERBK"],
+    match: { ...rule().match, templateHash: "f".repeat(64) },
+  };
+  assert.notDeepEqual(validateDraft(slipped, template, config.model), []);
+  assert.deepEqual(validateDraft(stampDraft(slipped, template, config.model), template, config.model), []);
+  // The model's own parts are kept and still validated.
+  const stamped = stampDraft({ ...rule(), match: { ...rule().match, pattern: "(" } }, template, config.model);
+  assert.equal(stamped.match.pattern, "(");
+  assert.notDeepEqual(validateDraft(stamped, template, config.model), []);
+  assert.equal(stampDraft(null, template, config.model), null);
+});
+
+test("a reference key outside the fact contract is refused here, because the phone would refuse the fact", () => {
+  const draft = rule();
+  draft.emit[0].references = { ref: "ref" };
+  assert.ok(validateDraft(draft, template, config.model).includes("reference_key_invalid"));
+  draft.emit[0].references = { upiRef: "ref" };
+  assert.ok(!validateDraft(draft, template, config.model).includes("reference_key_invalid"));
 });

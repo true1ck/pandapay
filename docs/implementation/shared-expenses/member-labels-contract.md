@@ -1,6 +1,6 @@
 # Shared-expense member labels: backend contract (for the app)
 
-Migration: `db/supabase/migrations/20261116090000_shared_expense_member_labels.sql`
+Migration: `db/supabase/migrations/20261116090100_shared_expense_member_labels.sql`
 
 ## Label rule (like phone contacts)
 
@@ -189,7 +189,7 @@ PANDAPAY_SHARED_EXPENSES_NAMES_RACE_URL=postgres://postgres@127.0.0.1:55440/shar
 
 # Join identity: security review fixes (supersede anything above that disagrees)
 
-Applied in place to `20261116100000_shared_expense_join_identity.sql` (unshipped). Local undo: see "Local rollback" below.
+Applied in place to `20261116100100_shared_expense_join_identity.sql` (unshipped). Local undo: see "Local rollback" below.
 
 - **Consent and replay.** `sharePhone` is part of the claim request hash, so a changed choice under the same `operationId` is `operation_conflict`.
   The SQL claim marks only a first (non-replayed) call with `fresh:true` (never stored in the ledger; the API strips it). The API attaches a number
@@ -227,7 +227,7 @@ Applied in place to `20261116100000_shared_expense_join_identity.sql` (unshipped
 `docs/implementation/shared-expenses/rollback_join_identity_local.sql` removes everything this migration created (including the trigger on `public.profiles`, the table, the columns and every stored ciphertext) and restores the earlier definition of every function the migration replaced.
 ```
 psql "$LOCAL_DB_URL" -v ON_ERROR_STOP=1 -1 -f docs/implementation/shared-expenses/rollback_join_identity_local.sql
-psql "$LOCAL_DB_URL" -v ON_ERROR_STOP=1 -1 -f db/supabase/migrations/20261116100000_shared_expense_join_identity.sql
+psql "$LOCAL_DB_URL" -v ON_ERROR_STOP=1 -1 -f db/supabase/migrations/20261116100100_shared_expense_join_identity.sql
 ```
 `db/tests/shared_expenses_rollback_postgres.test.js` (opt-in, `PANDAPAY_SHARED_EXPENSES_ROLLBACK_URL=postgres://.../shared_expenses_rollback_test`) proves the schema (functions with owners and grants, columns, indexes, triggers, constraints) is identical after rollback, that re-applying gives the same schema as the first application, and that it rolls back again.
 

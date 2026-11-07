@@ -55,9 +55,19 @@ class PrivateJobsTest(unittest.TestCase):
         self.assertIn('SMS_RULES_KEY_ID', body)
         self.assertNotIn('GEMINI_', body)
 
-    def test_public_compose_never_holds_the_signing_or_ai_keys(self):
-        for key in ('SMS_RULES_SIGNING_KEY', 'GEMINI_'):
-            self.assertNotIn(key, PUBLIC)
+    def test_public_compose_never_holds_the_signing_key(self):
+        self.assertNotIn('SMS_RULES_SIGNING_KEY', PUBLIC)
+
+    def test_public_compose_gives_the_ai_key_to_the_opt_in_drafts_worker_only(self):
+        worker = service(PUBLIC, 'sms-v2-template-worker')
+        self.assertIsNotNone(worker)
+        self.assertIn('GEMINI_API_KEY', worker)
+        self.assertIn('SMS_AI_WORKER_DATABASE_URL', worker)
+        self.assertIn('profiles: [sms-ai]', worker)
+        self.assertNotIn('SMS_RULES_SIGNING_KEY', worker)
+        rest = PUBLIC.replace(worker, '')
+        for key in ('GEMINI_', 'SMS_AI_WORKER_DATABASE_URL'):
+            self.assertNotIn(key, rest)
 
 
 if __name__ == '__main__':
