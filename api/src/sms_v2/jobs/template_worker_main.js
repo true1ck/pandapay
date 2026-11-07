@@ -1,16 +1,18 @@
 #!/usr/bin/env node
 "use strict";
 
-// SMS v2 AI template worker. Runs as the `sms-v2-template-worker` service on the
-// private admin host only (deploy/admin/compose.private.yml):
+// SMS v2 AI template worker. Runs as the `sms-v2-template-worker` service, on the
+// production backend host (docker-compose.prod.yml, opt-in) or the private admin
+// host (deploy/admin/compose.private.yml):
 //   node src/sms_v2/jobs/template_worker_main.js          (service, loops until SIGTERM)
 //   node src/sms_v2/jobs/template_worker_main.js --once   (one claim, then exit)
-// Needs ADMIN_API_DATABASE_URL, SMS_V2_JOB_ADMIN_ID, GEMINI_API_KEY (paid tier),
+// Needs SMS_AI_WORKER_DATABASE_URL (or ADMIN_API_DATABASE_URL + SMS_V2_JOB_ADMIN_ID), GEMINI_API_KEY (paid tier),
 // SMS_V2_AI_MODEL and SMS_V2_AI_TPM. Gemini sees only redacted layouts that pass
 // redactionError in ../ai_templates.js, never message text.
 
 const { setTimeout: delay } = require("node:timers/promises");
 const { openRuleAdminStore } = require("../admin_store");
+const { openAiWorkerStore } = require("../ai_worker_store");
 const { createAdminDbHelpers } = require("../../admin/server");
 const {
   workerConfig,
@@ -32,15 +34,31 @@ async function runWorkerCycle({ layoutStore, suggestionStore, provider, config }
   return shop.status === "disabled" ? layout : { ...shop, job: "shop" };
 }
 
-async function main() {
-  const adminId = process.env.SMS_V2_JOB_ADMIN_ID;
+// Two ways to reach the database, chosen by which URL the host provides:
+//  - SMS_AI_WORKER_DATABASE_URL: the least-privilege `sms_ai_worker` login. This
+//    is the production path; it has no admin identity and no shop suggestions.
+//  - ADMIN_API_DATABASE_URL + SMS_V2_JOB_ADMIN_ID: the private admin API login
+//    (local console and tests).
+async function openStores(env = process.env) {
+  if (env.SMS_AI_WORKER_DATABASE_URL) {
+    const { pool, transaction } = await openAiWorkerStore({ env });
+    return { pool, store: createPgWorkerStore({ transaction }), suggestionStore: null };
+  }
+  const adminId = env.SMS_V2_JOB_ADMIN_ID;
   if (!adminId) throw new Error("SMS_V2_JOB_ADMIN_ID_required");
+  const { pool } = await openRuleAdminStore({ env });
+  const helpers = createAdminDbHelpers(pool);
+  return {
+    pool,
+    store: createPgWorkerStore({ ...helpers, adminId }),
+    suggestionStore: createPgSuggestionStore({ ...helpers, adminId }),
+  };
+}
+
+async function main() {
   const config = workerConfig();
   const provider = createGeminiTemplateProvider();
-  const { pool } = await openRuleAdminStore();
-  const helpers = createAdminDbHelpers(pool);
-  const store = createPgWorkerStore({ ...helpers, adminId });
-  const suggestionStore = createPgSuggestionStore({ ...helpers, adminId });
+  const { pool, store, suggestionStore } = await openStores();
   let stopped = false;
   const stop = () => {
     stopped = true;
@@ -84,4 +102,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main, runWorkerCycle };
+module.exports = { main, runWorkerCycle, openStores };

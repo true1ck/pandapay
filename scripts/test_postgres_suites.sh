@@ -41,6 +41,7 @@ secret() { node -e "process.stdout.write(require('crypto').randomBytes(24).toStr
 app_user_password=$(secret)
 reward_worker_password=$(secret)
 admin_api_password=$(secret)
+sms_ai_worker_password=$(secret)
 export JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:-ci_only_not_a_real_secret_for_pg_suites}
 
 main_db=pandapay_pg_suites
@@ -70,7 +71,7 @@ done
 migrate() {
   ADMIN_DATABASE_URL="$admin_url/$1" DB_SSL=false NODE_ENV=test SEED_DEMO_DATA=false \
     APP_USER_PASSWORD="$app_user_password" REWARD_WORKER_DB_PASSWORD="$reward_worker_password" \
-    ADMIN_API_DB_PASSWORD="$admin_api_password" \
+    ADMIN_API_DB_PASSWORD="$admin_api_password" SMS_AI_WORKER_DB_PASSWORD="$sms_ai_worker_password" \
     node "$root/db/scripts/product_migrate.js" >/dev/null
 }
 echo '==> Applying product migrations and role setup'

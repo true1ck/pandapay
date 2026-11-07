@@ -98,6 +98,30 @@ create role sms_learning_worker login password :'sms_learning_worker_password'
 grant usage on schema public to sms_learning_worker;
 \endif
 
+-- SMS AI drafts worker (opt-in, like the learner above): created only when
+-- SMS_AI_WORKER_DB_PASSWORD is set. Its table grants are at the end of this file.
+\set sms_ai_worker_password `echo "${SMS_AI_WORKER_DB_PASSWORD:-}"`
+select exists (select 1 from pg_roles where rolname = 'sms_ai_worker') as sms_ai_worker_exists \gset
+select length(:'sms_ai_worker_password') > 0 as sms_ai_worker_password_set \gset
+\if :sms_ai_worker_password_set
+\if :sms_ai_worker_exists
+select set_config('pandapay.sms_ai_worker_password', :'sms_ai_worker_password', false);
+do $$
+begin
+  begin
+    execute format('alter role sms_ai_worker login password %L', current_setting('pandapay.sms_ai_worker_password'));
+  exception when insufficient_privilege then
+    raise notice 'sms_ai_worker exists; this admin role cannot rotate its password. Keeping the existing credential.';
+  end;
+end $$;
+\else
+create role sms_ai_worker login password :'sms_ai_worker_password'
+  nosuperuser nocreatedb nocreaterole noinherit noreplication nobypassrls;
+\endif
+\else
+\echo 'SMS_AI_WORKER_DB_PASSWORD not set; skipping sms_ai_worker bootstrap (AI drafts worker disabled)'
+\endif
+
 grant usage on schema public to app_user;
 grant select, insert, update, delete on all tables in schema public to app_user;
 grant usage, select on all sequences in schema public to app_user;
@@ -221,6 +245,47 @@ begin
   end if;
   if to_regclass('public.sms_learning_worker_runs') is not null then
     execute 'grant select, insert on table public.sms_learning_worker_runs to sms_learning_worker';
+  end if;
+end $$;
+
+-- sms_ai_worker: the least privilege the AI drafts worker needs. Row policies
+-- live in 20261116090000_sms_v2_ai_worker_role.sql; these are the matching
+-- privileges, column-limited where the worker only changes a few columns.
+do $$
+begin
+  if not exists (select 1 from pg_roles where rolname = 'sms_ai_worker') then
+    return;
+  end if;
+  grant usage on schema public to sms_ai_worker;
+  if exists (select 1 from pg_namespace where nspname = 'pandapay') then
+    grant usage on schema pandapay to sms_ai_worker;
+  end if;
+  if to_regclass('public.sms_v2_unknown_templates') is not null then
+    grant select on public.sms_v2_unknown_templates to sms_ai_worker;
+    grant update (ai_status, ai_draft, ai_model, failure_code, lease_id, lease_expires_at, result_revision, covered_by)
+      on public.sms_v2_unknown_templates to sms_ai_worker;
+  end if;
+  if to_regclass('public.sms_v2_template_attempts') is not null then
+    grant select, insert on public.sms_v2_template_attempts to sms_ai_worker;
+    grant update (input_tokens, output_tokens, total_tokens, latency_ms, cost_usd, outcome, prompt_version)
+      on public.sms_v2_template_attempts to sms_ai_worker;
+  end if;
+  if to_regclass('public.sms_v2_ai_capacity') is not null then
+    grant select, insert on public.sms_v2_ai_capacity to sms_ai_worker;
+    grant update (requests, reserved_tokens) on public.sms_v2_ai_capacity to sms_ai_worker;
+  end if;
+  if to_regclass('public.sms_v2_rules') is not null then
+    grant select (rule_id, version, status, senders, body) on public.sms_v2_rules to sms_ai_worker;
+  end if;
+  if to_regclass('public.sms_v2_settings') is not null then
+    grant select on public.sms_v2_settings to sms_ai_worker;
+  end if;
+  if to_regclass('public.sms_v2_template_revision') is not null then
+    grant usage on sequence public.sms_v2_template_revision to sms_ai_worker;
+  end if;
+  if to_regprocedure('pandapay.sms_v2_ai_consent_people(text)') is not null then
+    grant execute on function pandapay.sms_v2_ai_consent_people(text) to sms_ai_worker;
+    grant execute on function pandapay.sms_v2_ai_report_counts(text) to sms_ai_worker;
   end if;
 end $$;
 

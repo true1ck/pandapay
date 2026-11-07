@@ -487,11 +487,16 @@ async function recordUsage(client, { jobId, attempt, usage }) {
   }
 }
 
-function createPgWorkerStore({ withAdminClient, adminId }) {
-  const tx = (operation) =>
-    withAdminClient(adminId, "learning.publish", operation);
-  const currentConsent = `EXISTS(SELECT 1 FROM sms_v2_template_submitters s WHERE s.template_hash=t.template_hash AND s.eligible
-    AND pandapay.sms_v2_template_has_consent(s.profile_id))`;
+// `transaction` (the production worker login, see ai_worker_store.js) or
+// `withAdminClient` + `adminId` (the private admin API login, used locally).
+// Both run every operation in one transaction. Submitter and consent rows are
+// never read directly: pandapay.sms_v2_ai_consent_people answers how many
+// consenting people submitted a layout, in either mode.
+function createPgWorkerStore({ withAdminClient, adminId, transaction }) {
+  const tx = transaction
+    ? (operation) => transaction(operation)
+    : (operation) => withAdminClient(adminId, "learning.publish", operation);
+  const currentConsent = `pandapay.sms_v2_ai_consent_people(t.template_hash)>0`;
   return {
     // Admin-set values, read fresh at each loop (settings.js).
     settings() {
@@ -512,8 +517,7 @@ function createPgWorkerStore({ withAdminClient, adminId }) {
         );
         const row = (
           await client.query(`SELECT t.* FROM sms_v2_unknown_templates t WHERE t.ai_status='queued' AND ${currentConsent}
-          ORDER BY (SELECT count(*) FROM sms_v2_template_submitters s WHERE s.template_hash=t.template_hash AND s.eligible
-            AND pandapay.sms_v2_template_has_consent(s.profile_id)) DESC,
+          ORDER BY pandapay.sms_v2_ai_consent_people(t.template_hash) DESC,
           (t.live AND t.last_live_at>=clock_timestamp()-interval '24 hours') DESC,t.first_seen,t.template_hash
           LIMIT 1 FOR UPDATE OF t SKIP LOCKED`)
         ).rows[0];
@@ -567,8 +571,7 @@ function createPgWorkerStore({ withAdminClient, adminId }) {
         Object.fromEntries(
           (
             await client.query(
-              `SELECT correction_kind, count(DISTINCT profile_id) AS people FROM sms_v2_correction_cases
-                WHERE template_hash=$1 AND shared_learning_eligible GROUP BY correction_kind ORDER BY correction_kind`,
+              "SELECT correction_kind, people FROM pandapay.sms_v2_ai_report_counts($1)",
               [template.template_hash],
             )
           ).rows.map((row) => [row.correction_kind, Number(row.people)]),

@@ -451,6 +451,7 @@ jobs:
               -e APP_USER_PASSWORD=app_user_ci_pw \
               -e REWARD_WORKER_DB_PASSWORD=reward_worker_ci_pw \
               -e SMS_LEARNING_WORKER_DB_PASSWORD=sms_learning_worker_ci_pw \
+              -e SMS_AI_WORKER_DB_PASSWORD=sms_ai_worker_ci_pw \
               db psql -U deploy_admin_ci -d role_setup_ci -v ON_ERROR_STOP=1 \
               -f - < db/setup_app_role.sql
             echo "role setup pass $pass ok"
