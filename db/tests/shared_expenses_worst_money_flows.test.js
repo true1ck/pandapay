@@ -128,7 +128,7 @@ describe('worst-case money: settlements, exits, identities, concurrency', { skip
   });
 
   // ------------------------------------------------------------------ exit rules
-  it('M20 leaving with net-zero but non-zero pair debts strands money with a ghost', { todo: 'BUG B4 (S1/S2): leave_context checks only the net member balance. a owes c 100 and b owes a 100 -> a nets to 0, leaves, and b/c are left with pair debts to a person who can never be settled with (report_settlement needs both active)' }, async () => {
+  it('M20 leaving with net-zero but non-zero pair debts strands money with a ghost', async () => {
     const g = await F.group(3); // m0 owner/a? use m1 as the leaver (not owner)
     await debt(g, 1, 2, 100); // m2 owes m1
     await debt(g, 0, 1, 100); // m1 owes m0   => m1 nets 0
@@ -139,7 +139,7 @@ describe('worst-case money: settlements, exits, identities, concurrency', { skip
     assert.ok(!left || stranded.length === 0, 'either leaving is refused, or no pair debt may point at the departed member');
   });
 
-  it('M21 a rejected proposal blocks the rejecting member from leaving forever', { todo: 'BUG B2 (S2): leave_context refuses while any expense naming you has no accepted revision. After you REJECT a proposal it stays unaccepted, nobody can withdraw it (void needs an accepted head), so you can never leave unless the author re-proposes' }, async () => {
+  it('M21 a rejected proposal blocks the rejecting member from leaving forever', async () => {
     const g = await F.group(3);
     const r = await F.propose(g.p[0], g.ctx, { total: 100, paid: { [g.m[0]]: 100n }, shares: { [g.m[1]]: 50n, [g.m[0]]: 50n } });
     await F.respond(g.p[1], g.ctx, r.expenseId, r.revisionId, 'reject');
@@ -165,14 +165,14 @@ describe('worst-case money: settlements, exits, identities, concurrency', { skip
     assert.equal(await F.approveAll(g.ctx, v), true, 'remaining participants should be able to void');
   });
 
-  it('M23 a pending settlement report does not stop the payer leaving; confirming afterwards strands a balance on the left member', { todo: 'BUG B5 (S2): leave_context ignores pending settlement reports; respond_settlement only needs the receiver, so it posts a non-zero balance onto a member who has left and can never be settled with' }, async () => {
+  it('M23 pending settlement blocks exit until the receiver resolves it', async () => {
     const g = await F.group(2); await debt(g, 0, 1, 100);
-    const s0 = await F.report(g.p[1], g.ctx, g.m[1], g.m[0], 100); await F.settle(g.p[0], g.ctx, s0.settlementId); // b nets to zero
-    const s = await F.report(g.p[1], g.ctx, g.m[1], g.m[0], 50); // overpay report pending
-    await F.leave(g.p[1], g.ctx);
-    let confirmed = true; try { await F.settle(g.p[0], g.ctx, s.settlementId); } catch { confirmed = false; }
-    const bal = await F.balances(g.ctx);
-    assert.ok(!confirmed || (bal[g.m[1]] || 0n) === 0n, 'a left member must never end with a non-zero balance');
+    const paid = await F.report(g.p[1], g.ctx, g.m[1], g.m[0], 100);
+    await F.settle(g.p[0], g.ctx, paid.settlementId);
+    const pending = await F.report(g.p[1], g.ctx, g.m[1], g.m[0], 50);
+    await assert.rejects(F.leave(g.p[1], g.ctx), /settle_first/);
+    await F.settle(g.p[0], g.ctx, pending.settlementId, 'reject');
+    assert.equal((await F.leave(g.p[1], g.ctx)).status, 'left');
   });
 
   it('M24 account deleted (profile_id NULL): history intact, balances intact, nothing posts to them, new expenses/voids wait forever', async () => {

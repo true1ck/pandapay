@@ -91,7 +91,7 @@ test('flag off: a claim stores no consent and returns no invitation id (nothing 
   assert.equal(f.calls.filter((c) => c.sql.includes('attach_claimant_phone')).length, 0, 'no attach_claimant_phone call');
 });
 
-test('every parameter bound by an invitation route is referenced by its SQL (PostgreSQL rejects unreferenced $n with 42P18)', { todo: 'BUG B10: the decline route binds five parameters but its SQL references only $1,$2,$4,$5' }, async (t) => {
+test('every parameter bound by an invitation route is referenced by its SQL (PostgreSQL rejects unreferenced $n with 42P18)', async (t) => {
   const f = await fixture(t, { phoneOn: false, query: async () => ({ rows: [{ result: { status: 'ok' } }] }) });
   for (const p of ['accept', 'decline']) await f.post('/shared-expenses/invitations/' + p, { invitationId: inv, operationId: op });
   assert.equal(f.calls.length, 2);

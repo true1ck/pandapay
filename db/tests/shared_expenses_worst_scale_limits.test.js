@@ -42,7 +42,7 @@ describe('Z06 limits and hard caps at the boundary', { skip: SKIP, timeout: 3600
     record('Z06.1', res);
     assert.equal(res.member200.ok, true); assert.equal(res.member201.code, 'context_member_limit'); assert.equal(res.member201.http, 400);
   });
-  it('Z06.1b left / removed / declined rows must not block expenses: a split with 205 member ROWS (195 live) can still take an expense', { todo: 'submit_proposal counts every members row (declined, left, erased) against 200, while invite counts state<>declined: a split with more than 200 rows ever can never take an expense' }, async () => {
+  it('Z06.1b left / removed / declined rows must not block expenses: a split with 205 member ROWS (195 live) can still take an expense', async () => {
     const g = await S.buildGroup(F, 190, 'rows');
     // owner invites and removes 15 name-only people: 15 declined rows, 190 live members
     for (let i = 0; i < 15; i++) { const m = uuid(); await S.inviteMember(F, g.owner.p, g.ctx, m, 'Temp ' + i); await S.callFn(F, g.owner.p, `shared_expenses.remove_member(${S.lit(F, g.ctx)}::uuid,${S.lit(F, m)}::uuid,${S.op(F)})`); }
@@ -133,7 +133,7 @@ describe('Z06 limits and hard caps at the boundary', { skip: SKIP, timeout: 3600
     globalThis.__inv = { seen, total: 130 };
     record('Z06.7', { invitationRows: 130, pages, itemsReturned: seen.length, distinct: new Set(seen).size, missing: 130 - new Set(seen).size, duplicates: seen.length - new Set(seen).size, pageMs: stats(ms) });
   });
-  it('Z06.7b desired: the owner invitation list returns every invitation exactly once across pages', { todo: 'NEW: list_invitations orders by created_at DESC but pages with invitation_id > cursor (random uuid order): rows are skipped and repeated once a split has more than 50 invitation rows' }, () => {
+  it('Z06.7b desired: the owner invitation list returns every invitation exactly once across pages', () => {
     const { seen, total } = globalThis.__inv; assert.equal(new Set(seen).size, total); assert.equal(seen.length, total);
   });
   it('Z06.6 pagination caps at the API edge: limit 100 max (101 refused), cursor over 1024 chars refused', async () => {

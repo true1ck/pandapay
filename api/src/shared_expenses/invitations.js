@@ -294,10 +294,16 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
       if(!phone)return res.status(409).json({error:'phone_not_verified'});
       const rh=requestHash({invitationId:b.invitationId,action:path});
       const result=await withUserClient(req.userId,async client=>{
-        const sql=path==='accept'?'SELECT shared_expenses.claim_invitation_by_id($1::uuid,$2::text,$3::text,$4::uuid,$5::text) AS result':'SELECT shared_expenses.decline_invitation($1::uuid,$2::text,$4::uuid,$5::text) AS result';
-        return (await client.query(sql,[b.invitationId,phone,normalizePhone(req.verifiedSession.verifiedContacts.phone.value).slice(-4),b.operationId,rh])).rows[0].result;
+        const sql=path==='accept'?'SELECT shared_expenses.claim_invitation_by_id($1::uuid,$2::text,$3::text,$4::uuid,$5::text) AS result':'SELECT shared_expenses.decline_invitation($1::uuid,$2::text,$3::uuid,$4::text) AS result';
+        const params=path==='accept'?[b.invitationId,phone,normalizePhone(req.verifiedSession.verifiedContacts.phone.value).slice(-4),b.operationId,rh]:[b.invitationId,phone,b.operationId,rh];
+        return (await client.query(sql,params)).rows[0].result;
       });
-      res.json(result);
+      const {audienceKey,...publicResult}=result;
+      res.json(publicResult);
+      if(path==='accept'&&result.status==='awaiting_owner'&&audienceKey) {
+        void notify({actorId:req.userId,kind:'invitation.requested',payload:{},contextId:result.contextId,
+          operationId:b.operationId,tokenHash:audienceKey});
+      }
     });
   }
   app.get('/shared-expenses/contexts/:contextId/invitations',...protect(async(req,res)=>{

@@ -45,7 +45,7 @@ class Runtime extends SharedExpensesRuntime {
     required bool accept,
   }) async {
     answered.add('${invite.invitationId}:${accept ? 'accept' : 'decline'}');
-    return invite.contextId;
+    return accept ? 'awaiting_owner' : 'declined';
   }
 
   bool owner = true;
@@ -221,6 +221,33 @@ void main() {
     await tester.pumpAndSettle();
     expect(runtime.answered, ['$report:decline']);
     expect(find.text('Declined.'), findsOneWidget);
+  });
+
+  testWidgets('a phone invitation waits for the owner after a join request', (
+    tester,
+  ) async {
+    runtime.invites = [
+      SharedInboxInvite(
+        invitationId: report,
+        contextId: group,
+        contextKind: 'group',
+        contextName: 'Group split',
+        inviterName: 'Riya S.',
+      ),
+    ];
+    var joined = false;
+    await show(
+      tester,
+      SharedInviteInbox(runtime: runtime, onJoined: () => joined = true),
+    );
+    await tester.tap(find.text('Request to join'));
+    await tester.pumpAndSettle();
+    expect(runtime.answered, ['$report:accept']);
+    expect(
+      find.text('Request sent. The split owner will confirm.'),
+      findsOneWidget,
+    );
+    expect(joined, isFalse);
   });
 
   testWidgets('leaving closes the sheet and reports it to the screen below', (

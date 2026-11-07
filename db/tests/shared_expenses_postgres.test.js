@@ -62,7 +62,7 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114020000_shared_expense_group_links.sql'),'utf8'));
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114030000_shared_expense_membership_exit.sql'),'utf8'));
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114040000_shared_expense_owner_and_former.sql'),'utf8'));
-  for (const file of ['20261116080000_shared_expense_invitation_audience.sql', '20261116090100_shared_expense_member_labels.sql', '20261116100100_shared_expense_join_identity.sql']) await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/'+file),'utf8'));
+  for (const file of ['20261116080000_shared_expense_invitation_audience.sql', '20261116090100_shared_expense_member_labels.sql', '20261116100100_shared_expense_join_identity.sql', '20261117010000_shared_expense_command_safety.sql', '20261117020000_shared_expense_privacy_safety.sql']) await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/'+file),'utf8'));
   // Replay the pre-existing role setup's broad grants. A new isolated schema
   // must retain its ACL even when public and pandapay grants are restored.
   await db.query('GRANT USAGE ON SCHEMA public,pandapay TO app_user; GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO app_user; GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pandapay TO app_user');
@@ -71,6 +71,8 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
   await db.query('INSERT INTO public.profiles VALUES($1),($2)',[a,b]);
   await db.query("INSERT INTO public.transactions VALUES($1,$2,1200,now(),'active','spend','manual','cash',now(),1,null,null)",[tx,a]);
   async function actor(id, callback) { await db.query('SAVEPOINT request'); try { await db.query('SET LOCAL ROLE app_user'); await db.query("SELECT set_config('app.user_id',$1,true)",[id]); const result=await callback(); await db.query('RESET ROLE'); await db.query('RELEASE SAVEPOINT request'); return result; } catch(error) { await db.query('ROLLBACK TO SAVEPOINT request'); await db.query('RELEASE SAVEPOINT request'); throw error; } }
+  const approvePhone = (owner, invitationId) => actor(owner,()=>db.query(
+    'SELECT shared_expenses.respond_invitation($1,true,$2,$3)',[invitationId,crypto.randomUUID(),'a'.repeat(64)]));
   await actor(a,async()=> {
     const cap=(await db.query('SELECT shared_expenses.capabilities() AS v')).rows[0].v;
     assert.equal(cap.acceptedWrites,false); assert.equal(cap.proposals,false);
@@ -115,8 +117,9 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     await actor(a,()=>db.query('SELECT shared_expenses.create_invitation($1,$2)',[payload,'6'.repeat(64)]));
     await assert.rejects(actor(c,()=>db.query('SELECT shared_expenses.claim_invitation($1,$2,$3,$4,$5)',['5'.repeat(64),'0'.repeat(64),'0000',crypto.randomUUID(),'7'.repeat(64)])),/invitation_phone_mismatch/);
     const operation=crypto.randomUUID(),claim=()=>actor(b,()=>db.query('SELECT shared_expenses.claim_invitation($1,$2,$3,$4,$5) AS v',['5'.repeat(64),'4'.repeat(64),'3210',operation,'8'.repeat(64)]));
-    assert.equal((await claim()).rows[0].v.status,'joined');
-    assert.equal((await claim()).rows[0].v.status,'joined');
+    assert.equal((await claim()).rows[0].v.status,'awaiting_owner');
+    assert.equal((await claim()).rows[0].v.status,'awaiting_owner');
+    await approvePhone(a,invitation);
     assert.deepEqual((await db.query('SELECT approver_profile_id,paid_minor,share_minor FROM shared_expenses.revision_members WHERE context_id=$1 AND member_id=$2',[group,member])).rows,before);
     assert.equal((await db.query('SELECT count(*)::int n FROM shared_expenses.journal_entries WHERE context_id=$1',[group])).rows[0].n,0);
     const {listExpenseRevisions}=requireApi('./src/shared_expenses/queries');
@@ -199,8 +202,9 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     await assert.rejects(accept(c,H('c'),crypto.randomUUID()),/invitation_unavailable/);
     await assert.rejects(accept(a,H('b'),crypto.randomUUID()),/invitation_unavailable/,'the inviter cannot claim their own invitation');
     const op=crypto.randomUUID();
-    assert.equal((await accept(b,H('b'),op)).rows[0].v.status,'joined');
-    assert.equal((await accept(b,H('b'),op)).rows[0].v.status,'joined','replay');
+    assert.equal((await accept(b,H('b'),op)).rows[0].v.status,'awaiting_owner');
+    assert.equal((await accept(b,H('b'),op)).rows[0].v.status,'awaiting_owner','replay');
+    await approvePhone(a,inv);
     assert.equal((await db.query('SELECT profile_id FROM shared_expenses.members WHERE context_id=$1 AND member_id=$2',[ctxId,member])).rows[0].profile_id,b);
     assert.equal((await inbox(b,H('b'))).length,0);
     assert.equal((await db.query('SELECT count(*)::int n FROM shared_expenses.journal_entries WHERE context_id=$1',[ctxId])).rows[0].n,0,'joining posts no money');
@@ -221,6 +225,7 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     for(const [m,nm] of [[gm1,'Rahul'],[gm2,'Rahul Two']]) await actor(a,()=>db.query('SELECT shared_expenses.invite_member($1,$2,$3)',[{contextId:g,memberId:m,displayName:nm},crypto.randomUUID(),H('9')]));
     await create(a,{invitationId:gi,contextId:g,memberId:gm1,targetPhoneHash:H('b'),tokenHash:crypto.randomBytes(32).toString('hex')},H('5'));
     await actor(b,()=>db.query('SELECT shared_expenses.claim_invitation_by_id($1,$2,$3,$4,$5)',[gi,H('b'),'3210',crypto.randomUUID(),H('6')]));
+    await approvePhone(a,gi);
     await assert.rejects(create(a,{invitationId:crypto.randomUUID(),contextId:g,memberId:gm2,targetPhoneHash:H('b'),tokenHash:crypto.randomBytes(32).toString('hex')},H('7')),/invitation_already_member/,'a person already in the context cannot be invited again by number');
     // Decline: no money, owner sees a decline, re-inviting is paused for a week.
     const ctx2=crypto.randomUUID(), m2=crypto.randomUUID(), i2=crypto.randomUUID(), m3=crypto.randomUUID();
@@ -320,6 +325,7 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     await assert.rejects(xfer(a,q),/membership_conflict/,'target must be an active member');
     await actor(a,()=>db.query('SELECT shared_expenses.create_invitation($1,$2)',[{invitationId:i,contextId:g,memberId:q,targetPhoneHash:H('b'),tokenHash:crypto.randomBytes(32).toString('hex')},H('5')]));
     await actor(b,()=>db.query('SELECT shared_expenses.claim_invitation_by_id($1,$2,$3,$4,$5)',[i,H('b'),'3210',crypto.randomUUID(),H('6')]));
+    await approvePhone(a,i);
     await assert.rejects(xfer(b,q),/context_not_authorized/,'only the owner transfers');
     await assert.rejects(actor(b,()=>db.query('SELECT shared_expenses.take_over_ownership($1,$2,$3)',[g,crypto.randomUUID(),H('8')])),/owner_still_present/);
     assert.equal((await xfer(a,q)).rows[0].v.status,'owner');
@@ -351,6 +357,7 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     await actor(a,()=>db.query('SELECT shared_expenses.create_invitation($1,$2)',[{invitationId:crypto.randomUUID(),contextId:g,memberId:m2,targetPhoneHash:H('b'),tokenHash:tok()},H('5')]));
     const inv=(await db.query("SELECT invitation_id FROM shared_expenses.invitations WHERE member_id=$1 AND state='open'",[m2])).rows[0].invitation_id;
     await actor(b,()=>db.query('SELECT shared_expenses.claim_invitation_by_id($1,$2,$3,$4,$5)',[inv,H('b'),'3210',crypto.randomUUID(),H('6')]));
+    await approvePhone(a,inv);
     const leave=(who,op2=crypto.randomUUID())=>actor(who,()=>db.query('SELECT shared_expenses.leave_context($1,$2,$3) AS v',[g,op2,H('7')]));
     await assert.rejects(leave(a),/owner_cannot_leave/);
     await assert.rejects(leave(c),/membership_not_authorized/,'a stranger cannot leave');
@@ -361,6 +368,7 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     await actor(a,()=>db.query('SELECT shared_expenses.invite_member($1,$2,$3)',[{contextId:g2,memberId:q1,displayName:'Bee'},crypto.randomUUID(),H('2')]));
     await actor(a,()=>db.query('SELECT shared_expenses.create_invitation($1,$2)',[{invitationId:i2,contextId:g2,memberId:q1,targetPhoneHash:H('b'),tokenHash:tok()},H('5')]));
     await actor(b,()=>db.query('SELECT shared_expenses.claim_invitation_by_id($1,$2,$3,$4,$5)',[i2,H('b'),'3210',crypto.randomUUID(),H('6')]));
+    await approvePhone(a,i2);
     assert.equal((await actor(b,()=>db.query('SELECT * FROM shared_expenses.contexts WHERE context_id=$1',[g2]))).rowCount,1);
     const lop=crypto.randomUUID();
     const left=()=>actor(b,()=>db.query('SELECT shared_expenses.leave_context($1,$2,$3) AS v',[g2,lop,H('7')]));
@@ -679,6 +687,7 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     const inv=uuid();
     await call(own,'create_invitation($1,$2)',[{invitationId:inv,contextId:g,memberId:palMember,targetPhoneHash:H('c'),tokenHash:crypto.randomBytes(32).toString('hex')},H('3')]);
     await call(pal,'claim_invitation_by_id($1,$2,$3,$4,$5)',[inv,H('c'),'3210',uuid(),H('4')]);
+    await approvePhone(own,inv);
     assert.equal((await db.query('SELECT state FROM shared_expenses.members WHERE member_id=$1',[palMember])).rows[0].state,'active');
     assert.equal(await label(await memberName(g,palMember),pal),'Mom','typed beats profile');
     // No typed name: the live profile name, and a rename of the profile shows straight away.
@@ -763,7 +772,7 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     assert.equal(listed.claimantName,'Joiner Renamed');assert.equal(listed.memberName,'Bestie');
     // invitation_audience: typed name wins for the push label; profile name and phone suffix ride along separately.
     let audience=await call(joiner,'invitation_audience($1)',[tokenHash]);
-    assert.equal(audience.claimantName,'Bestie');assert.equal(audience.claimantProfileName,'Joiner Renamed');assert.ok('claimantPhoneSuffix' in audience);
+    assert.equal(audience.claimantName,'Joiner Renamed');assert.equal(audience.claimantProfileName,'Joiner Renamed');assert.ok('claimantPhoneSuffix' in audience);
     assert.deepEqual(audience.owners,[own]);
     await db.query('UPDATE shared_expenses.members SET display_name=NULL WHERE member_id=$1',[friend]);
     audience=await call(joiner,'invitation_audience($1)',[tokenHash]);
@@ -785,6 +794,7 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     assert.equal(await title(cr,g),'Rahul','invited friend, typed name');
     await call(cr,'create_invitation($1,$2)',[{invitationId:inv,contextId:g,memberId:friendMember,targetPhoneHash:H('e'),tokenHash:crypto.randomBytes(32).toString('hex')},H('3')]);
     await call(fr,'claim_invitation_by_id($1,$2,$3,$4,$5)',[inv,H('e'),'3210',uuid(),H('4')]);
+    await approvePhone(cr,inv);
     await call(cr,'rename_member($1,$2,$3)',[{contextId:g,memberId:friendMember,displayName:'Rahul Sharma'},uuid(),H('5')]);
     assert.equal(await title(cr,g),'Rahul Sharma','creator sees the renamed counterpart');
     assert.equal(await title(fr,g),'Creator Cee','the other person sees the creator\'s live profile name');
@@ -1183,16 +1193,20 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
       throw sentinel;
     }),/rollback-read-only/);
 
-    // (5) deletion: indexed, never blocked by a scrub problem, erases the owner id of audit rows
+    // (5) Erasure is atomic and anonymizes the phone-reveal audit owner.
     assert.equal((await db.query("SELECT count(*)::int n FROM pg_indexes WHERE schemaname='shared_expenses' AND indexname='shared_invitations_claimed_profile'")).rows[0].n,1);
     await db.query("INSERT INTO shared_expenses.phone_reveals(invitation_id,owner_profile_id,via) VALUES($1,$2,'tap')",[l4.invitationId,stray]);
     await db.query('DELETE FROM public.profiles WHERE id=$1',[stray]);
     assert.equal((await db.query('SELECT count(*)::int n FROM shared_expenses.phone_reveals WHERE owner_profile_id IS NULL')).rows[0].n,1);
     const broken=await claim(c4,null,'0003',uuid(),link);
     await db.query("ALTER TABLE shared_expenses.invitations ADD CONSTRAINT scrub_boom CHECK(phone_share<>'none') NOT VALID");
-    await db.query('DELETE FROM public.profiles WHERE id=$1',[c4]);
-    assert.equal((await db.query('SELECT count(*)::int n FROM public.profiles WHERE id=$1',[c4])).rows[0].n,0,'the account is gone even though the scrub could not finish');
+    await db.query('SAVEPOINT scrub_failure');
+    await assert.rejects(db.query('DELETE FROM public.profiles WHERE id=$1',[c4]), /scrub_boom/);
+    await db.query('ROLLBACK TO SAVEPOINT scrub_failure');
+    await db.query('RELEASE SAVEPOINT scrub_failure');
+    assert.equal((await db.query('SELECT count(*)::int n FROM public.profiles WHERE id=$1',[c4])).rows[0].n,1,'failed scrub cannot report account erasure complete');
     await db.query('ALTER TABLE shared_expenses.invitations DROP CONSTRAINT scrub_boom');
+    await db.query('DELETE FROM public.profiles WHERE id=$1',[c4]);
     assert.equal(broken.status,'awaiting_owner');
 
     // (3) + (8) friends: only the creator is checked against their own list, a gone friend never blocks

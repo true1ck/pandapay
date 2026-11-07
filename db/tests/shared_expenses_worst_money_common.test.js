@@ -24,6 +24,7 @@ const MIGRATIONS = [
   '20261114020000_shared_expense_group_links.sql', '20261114030000_shared_expense_membership_exit.sql',
   '20261114040000_shared_expense_owner_and_former.sql', '20261116080000_shared_expense_invitation_audience.sql',
   '20261116090100_shared_expense_member_labels.sql', '20261116100100_shared_expense_join_identity.sql',
+  '20261117010000_shared_expense_command_safety.sql', '20261117020000_shared_expense_privacy_safety.sql',
 ];
 
 function loopbackUrl() {
@@ -140,7 +141,9 @@ class Fixture {
   async bindLate(ownerProfile, ctx, member, joiner) {
     const phone = hex(), token = hex(), id = uuid();
     await this.asActor(ownerProfile, 'SELECT shared_expenses.create_invitation($1,$2)', [{ invitationId: id, contextId: ctx, memberId: member, targetPhoneHash: phone, tokenHash: token }, hex()]);
-    return (await this.asActor(joiner, 'SELECT shared_expenses.claim_invitation($1,$2,$3,$4,$5) AS v', [token, phone, '3210', uuid(), hex()])).rows[0].v;
+    const request = (await this.asActor(joiner, 'SELECT shared_expenses.claim_invitation($1,$2,$3,$4,$5) AS v', [token, phone, '3210', uuid(), hex()])).rows[0].v;
+    if (request.status !== 'awaiting_owner') throw new Error('late bind must first request owner confirmation');
+    return this.cmd(ownerProfile, 'respond_invitation', id, true);
   }
   // paid / shares: { memberId: minorString|number }
   snapshot(total, paid, shares, order) {

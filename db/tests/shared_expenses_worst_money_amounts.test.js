@@ -138,12 +138,12 @@ describe('worst-case money: amounts, rounding, caps', { skip: SKIP, timeout: 300
     await none(g.ctx);
   });
 
-  it('M05b snapshot "currency":null is rejected', { todo: 'BUG B8 (S3): "currency":null passes submit_proposal validation (NULL<>INR is NULL, so the IF never fires)' }, async () => {
+  it('M05b snapshot "currency":null is rejected', async () => {
     const g = await F.group(2);
     const s = F.snapshot(100, { [g.m[0]]: 100 }, { [g.m[1]]: 100 }); s.currency = null;
     await assert.rejects(F.propose(g.p[0], g.ctx, { snapshot: s }), /invalid_snapshot/);
   });
-  it('M05c settlement "currency":null is rejected', { todo: 'BUG B8 (S3): "currency":null passes report_settlement validation' }, async () => {
+  it('M05c settlement "currency":null is rejected', async () => {
     const g = await F.group(2);
     await assert.rejects(F.cmd(g.p[0], 'report_settlement', { contextId: g.ctx, settlementId: uuid(), payerMemberId: g.m[1], receiverMemberId: g.m[0], amountMinor: '5', currency: null, method: 'upi', paidOn: '2026-11-06' }), /invalid_settlement/);
   });

@@ -203,14 +203,8 @@ class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
                               ),
                               const SizedBox(height: 12),
                               Text(
-                                preview.isGroupLink
-                                    ? 'You are asking to join this group. Joining '
-                                          'does not accept any expense or debt — you '
-                                          'can review each one before it counts.'
-                                    : 'You were added as "${preview.memberName}". '
-                                          'Joining does not accept any expense or '
-                                          'debt — you can review each one before it '
-                                          'counts.',
+                                'The split owner will confirm your request. '
+                                'You approve your own share of each expense.',
                                 style: BambooFonts.ui(
                                   14,
                                   color: BambooInk.ink700,
@@ -222,16 +216,6 @@ class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
                                   'Owner: ${preview.ownerName}',
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: BambooFonts.ui(
-                                    13,
-                                    color: BambooInk.ink700,
-                                  ),
-                                ),
-                              ],
-                              if (!preview.phoneBound) ...[
-                                const SizedBox(height: 8),
-                                Text(
-                                  'The person who invited you will be asked to approve your request.',
                                   style: BambooFonts.ui(
                                     13,
                                     color: BambooInk.ink700,

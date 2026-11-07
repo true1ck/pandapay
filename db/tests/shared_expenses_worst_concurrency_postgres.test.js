@@ -362,7 +362,10 @@ test('worst-case concurrency, idempotency and flag transitions', { skip: !raw &&
     },
     run: (d) => call(d.c, 'claim_invitation_by_id(uuid,text,text,uuid,text)', [d.inv, d.phone, '1234', d.op, hashOf({ i: d.inv })]),
     events: 1,
-    effects: async (d) => assert.equal((await one('SELECT state FROM shared_expenses.members WHERE member_id=$1', [d.mid])).state, 'active'),
+    effects: async (d) => {
+      assert.equal((await one('SELECT state FROM shared_expenses.members WHERE member_id=$1', [d.mid])).state, 'invited');
+      assert.equal((await one('SELECT state FROM shared_expenses.invitations WHERE invitation_id=$1', [d.inv])).state, 'awaiting_owner');
+    },
   });
   await t.test('C15 leave x10 / transfer_owner x10 in parallel: one effect, every loser sees the stored result or a clean 403', async () => {
     const [a, b, c] = await users(3); const g = await group(a, [b, c]);
@@ -379,7 +382,7 @@ test('worst-case concurrency, idempotency and flag transitions', { skip: !raw &&
     assert.equal(await num("SELECT count(*) n FROM shared_expenses.members WHERE context_id=$1 AND role='owner'", [g.ctx]), 1);
     await invariants('C15');
   });
-  await t.test('B09 reply-lost retry of a COMMITTED leave / owner transfer is answered 403 instead of the stored result', { todo: 'BUG B09: leave_context and transfer_owner authorize (member active / caller owner) BEFORE the idempotency lookup, so the legitimate retry of an operation that already committed fails with membership_not_authorized / context_not_authorized' }, async () => {
+  await t.test('B09 reply-lost retry of a COMMITTED leave / owner transfer is answered 403 instead of the stored result', async () => {
     const [a, b, c] = await users(3); const g = await group(a, [b, c]);
     const opL = id(), opT = id();
     const l1 = must(await leave(b, [g.ctx], opL)); const t1 = must(await transfer(a, [g.ctx, g.members[c]], opT));
@@ -584,7 +587,7 @@ test('worst-case concurrency, idempotency and flag transitions', { skip: !raw &&
     const owners = await num("SELECT count(*) n FROM shared_expenses.members WHERE context_id=$1 AND role='owner' AND state='active'", [g.ctx]);
     assert.equal(owners, 1, `exactly one active owner after racing transfers: ${JSON.stringify(tally(rs))}`);
   });
-  await t.test('B01 stale authorization: a second transfer by the ex-owner (queued behind the first) must fail', { todo: 'BUG B01: owner check runs before the context lock, so an ex-owner command queued behind transfer_owner still executes (two transfers => two owners)' }, async () => {
+  await t.test('B01 stale authorization: a second transfer by the ex-owner (queued behind the first) must fail', async () => {
     const [a, b, c] = await users(3); const g = await group(a, [b, c]);
     const first = await open(a);
     must({ ok: true, v: await first.call('transfer_owner(uuid,uuid,uuid,text)', [g.ctx, g.members[b], id(), hashOf('x1')]) });
@@ -596,7 +599,7 @@ test('worst-case concurrency, idempotency and flag transitions', { skip: !raw &&
     assert.equal(r.ok, false, `a transfer by someone who is no longer owner must be refused (active owners afterwards: ${owners})`);
     assert.equal(owners, 1);
   });
-  await t.test('B02 stale authorization: ex-owner invite / member who left proposes, queued behind the lock', { todo: 'BUG B02: _can_read_context / owner checks happen before the context FOR UPDATE; a command that was already queued runs with revoked authority' }, async () => {
+  await t.test('B02 stale authorization: ex-owner invite / member who left proposes, queued behind the lock', async () => {
     const [a, b, c] = await users(3); const g = await group(a, [b, c]);
     const hold = await open(a); // transfer ownership a -> b and keep it open (holds the context lock)
     await hold.call('transfer_owner(uuid,uuid,uuid,text)', [g.ctx, g.members[b], id(), hashOf('t')]);
@@ -606,7 +609,7 @@ test('worst-case concurrency, idempotency and flag transitions', { skip: !raw &&
     const r = await inviteAsExOwner.p;
     assert.equal(r.ok, false, 'ex-owner invite succeeded after ownership moved');
   });
-  await t.test('B03 stale role: a member promoted to owner while their leave is queued can leave and orphan the split', { todo: 'BUG B03: leave_context reads the member row before locking the context; role/state are stale after the wait' }, async () => {
+  await t.test('B03 stale role: a member promoted to owner while their leave is queued can leave and orphan the split', async () => {
     const [a, b] = await users(2); const g = await group(a, [b]);
     const hold = await open(a);
     await hold.call('transfer_owner(uuid,uuid,uuid,text)', [g.ctx, g.members[b], id(), hashOf('t')]);
@@ -616,13 +619,13 @@ test('worst-case concurrency, idempotency and flag transitions', { skip: !raw &&
     const owners = await num("SELECT count(*) n FROM shared_expenses.members WHERE context_id=$1 AND role='owner' AND state='active'", [g.ctx]);
     assert.ok(!(r.ok && owners === 0), `owner b left right after being made owner; active owners=${owners}`);
   });
-  await t.test('B04 double leave with two operation ids emits membership.left twice', { todo: 'BUG B04: leave_context does not re-check m.state after the context lock (read-before-lock), so two leaves both pass' }, async () => {
+  await t.test('B04 double leave with two operation ids emits membership.left twice', async () => {
     const [a, b] = await users(2); const g = await group(a, [b]);
     const rs = await Promise.all([leave(b, [g.ctx]), leave(b, [g.ctx]), leave(b, [g.ctx])]);
     noInternal(rs);
     assert.equal(await num("SELECT count(*) n FROM shared_expenses.context_events WHERE context_id=$1 AND kind='membership.left'", [g.ctx]), 1, JSON.stringify(tally(rs)));
   });
-  await t.test('B05 a member who has left can still propose an expense queued behind the lock', { todo: 'BUG B05: submit_proposal authorizes with _can_read_context before the context lock' }, async () => {
+  await t.test('B05 a member who has left can still propose an expense queued behind the lock', async () => {
     const [a, b, c] = await users(3); const g = await group(a, [b, c]);
     const hold = await open(b); // b leaves, uncommitted
     await hold.call('leave_context(uuid,uuid,text)', [g.ctx, id(), hashOf('l')]);
@@ -673,7 +676,7 @@ test('worst-case concurrency, idempotency and flag transitions', { skip: !raw &&
     await invariants('C35');
   });
 
-  await t.test('C36 claimant cap of 10 group-link requests per hour holds when 16 claims into different groups are released at the same instant', { todo: 'BUG B06: the 10-per-hour group-link claim cap is counted without a per-claimant lock; claims into DIFFERENT groups race past it' }, async () => {
+  await t.test('C36 claimant cap of 10 group-link requests per hour holds when 16 claims into different groups are released at the same instant', async () => {
     const [c] = await users(1);
     const owners = await users(16); const toks = [], holds = [];
     for (const o of owners) { const g = await group(o); const tok = tokenOf(); must(await linkCreate(o, g.ctx, tok)); toks.push(tok); const h = await open(null, { role: false }); await h.c.query('SELECT 1 FROM shared_expenses.contexts WHERE context_id=$1 FOR UPDATE', [g.ctx]); holds.push(h); }
@@ -801,7 +804,7 @@ test('worst-case concurrency, idempotency and flag transitions', { skip: !raw &&
     assert.equal(rs.filter((x) => x.ok).length, 25, JSON.stringify(tally(rs)));
     assert.equal(rs.filter((x) => !x.ok).every((x) => x.message === 'lookup_rate_limited'), true);
   });
-  await t.test('C55 invitation-creation cap 50/hour per issuer holds across different splits in parallel', { todo: 'BUG B07: the 50/hour invitation cap is counted per issuer without an issuer-level lock; creations in different splits race past it' }, async () => {
+  await t.test('C55 invitation-creation cap 50/hour per issuer holds across different splits in parallel', async () => {
     const [a] = await users(1); const gs = [];
     for (let i = 0; i < 6; i++) gs.push(await group(a));
     const jobs = [];
@@ -819,19 +822,21 @@ test('worst-case concurrency, idempotency and flag transitions', { skip: !raw &&
     assert.deepEqual(tally(made), { ok: 10, invitation_rate_limited: 2 });
   });
 
-  await t.test('B11 a group-link claim that read the link before it was revoked still creates a request after the revoke committed', { todo: 'BUG B11: revoke_group_link takes no context lock and _claim_group_link reads the link before its context lock, so a claim queued behind any context-lock holder survives the revoke (and its number is not purged by it)' }, async () => {
+  await t.test('B11 a group-link claim that read the link before it was revoked still creates a request after the revoke committed', async () => {
     const [a, c] = await users(2); const g = await group(a); const tok = tokenOf(); must(await linkCreate(a, g.ctx, tok));
-    const hold = await open(null, { role: false });
-    await hold.c.query('SELECT 1 FROM shared_expenses.contexts WHERE context_id=$1 FOR UPDATE', [g.ctx]);
-    const cl = settled(claim(c, tok)); await sleep(400); assert.equal(cl.done, false, 'claim parked on the context lock');
-    must(await linkRevoke(a, g.ctx)); // does not need the context lock
-    assert.equal(await num('SELECT count(*) n FROM shared_expenses.group_links WHERE context_id=$1', [g.ctx]), 0);
+    const hold = await open(a);
+    await hold.call('revoke_group_link(uuid,uuid,text)', [g.ctx, id(), sha('revoke')]);
+    const claimant = await open(c);
+    const result = settled(claimant.call('claim_invitation(text,text,text,uuid,text,text)', [tok, null, null, id(), sha('claim'), null]));
+    await waitBlocked(claimant);
     await hold.commit();
-    const r = await cl.p;
+    const r = await result.p.then(() => ({ok: true}), error => ({ok: false, error}));
+    await claimant.rollback();
+    assert.equal(r.error?.message, 'invitation_unavailable');
     assert.equal(r.ok, false, 'a claim must not succeed after the link was revoked');
     assert.equal(await num("SELECT count(*) n FROM shared_expenses.invitations WHERE context_id=$1 AND via_group_link", [g.ctx]), 0);
   });
-  await t.test('B12 a member can leave while a pending edit still needs their approval, stranding that edit forever', { todo: 'BUG B12: leave_context only checks balances and never-accepted expenses; a pending EDIT of an accepted expense that requires the leaver can never be approved or withdrawn afterwards' }, async () => {
+  await t.test('B12 a member can leave while a pending edit still needs their approval, stranding that edit forever', async () => {
     const [a, b] = await users(2); const g = await group(a, [b]);
     const p = proposal(g.ctx, g.members[a], [[g.members[a], 500], [g.members[b], 500]]); must(await proposeP(a, p));
     must(await respondExpP(b, { contextId: g.ctx, expenseId: p.expenseId, revisionId: p.revisionId, decision: 'approve' }));
@@ -843,7 +848,7 @@ test('worst-case concurrency, idempotency and flag transitions', { skip: !raw &&
   });
 
   // ================================================================== F. lock ordering / deadlocks
-  await t.test('L01 reveal vs resolve: a stale read taken before the per-owner lock discloses a ciphertext that was already purged', { todo: 'BUG B08: reveal_claimant_phone reads the invitation BEFORE pg_advisory_xact_lock(reveal:owner) and never re-reads it, so it can return (and audit) a number for a request that was resolved + purged while it waited' }, async () => {
+  await t.test('L01 reveal vs resolve: a stale read taken before the per-owner lock discloses a ciphertext that was already purged', async () => {
     const [a] = await users(1); const g = await group(a); await q('INSERT INTO shared_expenses.phone_directory(profile_id,phone_hash) VALUES($1,$2)', [a, sha('owner-phone' + a)]);
     const [i1, i2] = await pendingRequests(a, g.ctx, 2);
     const holder = await open(a);
@@ -869,24 +874,24 @@ test('worst-case concurrency, idempotency and flag transitions', { skip: !raw &&
     const r = await chk.p; assert.equal(r.ok, true); assert.equal(r.v.error, 'phone_not_available');
     assert.equal(await num("SELECT count(*) n FROM shared_expenses.phone_reveals WHERE invitation_id=$1", [i1.inv]), 0);
   });
-  await t.test('L03 lock inversion claim_invitation (lazy purge row lock -> context lock) vs respond_invitation (context lock -> row lock) deadlocks cleanly', async () => {
+  await t.test('L03 claim and owner response to an expired invite finish without a lock inversion', async () => {
     const [a, c] = await users(2); const g = await group(a);
     const mid = id(); must(await inviteP(a, invitePayload(g.ctx, mid, 'Linkee')));
     const inv = id(), tokenHash = sha('tok' + inv); const p = { invitationId: inv, contextId: g.ctx, memberId: mid, targetPhoneHash: null, tokenHash }; must(await call(a, 'create_invitation(jsonb,text)', [p, hashOf(p)]));
     const op = id(); must(await claim(c, tokenHash, { op: id() }));
     // give it a stored number, then expire it so the claimant's re-claim triggers the lazy purge
     await q("UPDATE shared_expenses.invitations SET phone_share='shared',claimant_phone_enc=$2,claimant_phone_key_id='k1',claimant_phone_hash=$3,claimant_phone_mask='+91 •••••',expires_at=clock_timestamp()-interval '1 minute' WHERE invitation_id=$1", [inv, Buffer.alloc(40, 5), sha('z')]);
-    // a raw session pins the claimant's receipt slot so the claim stalls AFTER its purge (row lock held) and BEFORE the context lock
+    // Hold the receipt so the claimant waits before taking any invitation lock.
     const pin = await open(null, { role: false });
     await pin.c.query("INSERT INTO shared_expenses.operation_receipts(actor_profile_id,operation_id,command_kind,request_hash,input_hash,context_id) VALUES($1,$2,'invitation.claim',$3,$3,$4)", [c, op, sha('pin'), g.ctx]);
     const cl = settled(claim(c, tokenHash, { op })); await sleep(500); assert.equal(cl.done, false);
-    const rs = settled(respondInv(a, inv, true)); await sleep(500); // owner takes the context lock, then wants the invitation row
+    const rs = settled(respondInv(a, inv, true));
+    failsWith(await rs.p, 'invitation_conflict');
     await pin.rollback(); // claimant proceeds to the context lock
     const out = await Promise.all([cl.p, rs.p]);
     noInternal(out);
-    const dead = out.filter((x) => !x.ok && x.code === '40P01');
-    assert.equal(dead.length, 1, 'documented lock inversion: exactly one victim, surfaced as 40P01 (API 409 retryable_conflict): ' + JSON.stringify(out.map((x) => x.ok ? 'ok' : x.message)));
-    assert.equal(httpStatus(dead[0]), 409);
+    failsWith(out[0], 'invitation_unavailable');
+    assert.equal(out.filter((x) => !x.ok && x.code === '40P01').length, 0);
     await invariants('L03');
   });
   await t.test('L04 concurrent number swap in the phone directory deadlocks cleanly (40P01 -> 409), no 500', async () => {
@@ -1112,7 +1117,7 @@ test('worst-case concurrency, idempotency and flag transitions', { skip: !raw &&
     assert.equal(bad, 0, 'per-split events appear in order, consecutively, on every member stream');
     await invariants('E01');
   });
-  await t.test('E02 changes feed paged while writers are active: no event lost or skipped across page boundaries', { todo: 'BUG B15 (S1): pullProjectionChanges orders its final page by the TEXT alias profile_sequence ("10" < "2"), so once a profile stream passes sequence 9 a page can end past events 2..9 and the cursor skips them forever' }, async () => {
+  await t.test('E02 changes feed paged while writers are active: no event lost or skipped across page boundaries', async () => {
     const { pullProjectionChanges } = requireApi('./src/shared_expenses/queries');
     const [a, b, c] = await users(3); const g = await group(a, [b, c]);
     const readPage = async (u, after, limit) => {
@@ -1144,7 +1149,7 @@ test('worst-case concurrency, idempotency and flag transitions', { skip: !raw &&
     await invariants('E02');
   });
 
-  await t.test('E03 feed with mixed events (proposals, approvals, settlements) at page sizes 1, 2 and 7 loses nothing while a second group writes', { todo: 'BUG B15 (S1): pullProjectionChanges orders its final page by the TEXT alias profile_sequence ("10" < "2"), so once a profile stream passes sequence 9 a page can end past events 2..9 and the cursor skips them forever' }, async () => {
+  await t.test('E03 feed with mixed events (proposals, approvals, settlements) at page sizes 1, 2 and 7 loses nothing while a second group writes', async () => {
     const { pullProjectionChanges } = requireApi('./src/shared_expenses/queries');
     const [a, b, c] = await users(3); const g = await group(a, [b, c]); const other = await group(c, [a]);
     const page = async (u, after, limit) => {
@@ -1199,7 +1204,7 @@ test('worst-case concurrency, idempotency and flag transitions', { skip: !raw &&
     const expected = await streamEvents(b); assert.ok(expected.length < 10);
     for (const limit of [1, 2, 3, 50]) { const seen = await drainFeed(b, limit); assert.deepEqual(expected.filter((e) => !seen.has(e)), [], 'limit ' + limit); }
   });
-  await t.test('E05 deterministic repro (quiet database, one reader, page size 30): resuming at sequence 7 skips events 8 and 9 forever', { todo: 'BUG B15 (S1): pullProjectionChanges orders its final page by the TEXT alias profile_sequence ("10" < "2"), so once a profile stream passes sequence 9 a page can end past events 2..9 and the cursor skips them forever' }, async () => {
+  await t.test('E05 deterministic repro (quiet database, one reader, page size 30): resuming at sequence 7 skips events 8 and 9 forever', async () => {
     const { encodeCursor } = requireApi('./src/shared_expenses/queries');
     const [a, b] = await users(2); const g = await group(a, [b]);
     for (let i = 0; i < 12; i++) { const p = proposal(g.ctx, g.members[a], [[g.members[a], 100 + i], [g.members[b], 100 + i]]); must(await proposeP(a, p)); must(await respondExpP(b, { contextId: g.ctx, expenseId: p.expenseId, revisionId: p.revisionId, decision: 'approve' })); }
@@ -1231,14 +1236,19 @@ test('worst-case concurrency, idempotency and flag transitions', { skip: !raw &&
     assert.ok(await num("SELECT count(*) n FROM shared_expenses.phone_reveals WHERE owner_profile_id=$1 AND via='tap'", [a]) <= 5);
     await invariants('P01');
   });
-  await t.test('P02 the decline route SQL is accepted by PostgreSQL', { todo: 'BUG B10: POST /shared-expenses/invitations/decline runs decline_invitation($1,$2,$4,$5) with five bound parameters; the unreferenced $3 makes PostgreSQL reject the statement (42P18), so declining an invitation always returns 500' }, async () => {
-    // routes call: SELECT shared_expenses.decline_invitation($1::uuid,$2::text,$4::uuid,$5::text) with FIVE parameters ($3 unreferenced)
-    const [c] = await users(1);
-    let err = null;
-    try { await pool.query('SELECT shared_expenses.decline_invitation($1::uuid,$2::text,$4::uuid,$5::text) AS result', [id(), sha('p'), '1234', id(), sha('h')]); } catch (e) { err = e; }
-    t.diagnostic('decline route SQL with unreferenced $3: ' + (err ? `${err.code} ${err.message}` : 'accepted by the server'));
-    if (err && err.code === '42P18') assert.fail('route SQL is rejected by PostgreSQL: ' + err.message);
-    void c;
+  await t.test('P02 decline records a rejection and starts the re-invite cooldown', async () => {
+    const [a, c] = await users(2);
+    const g = await group(a);
+    const phone = sha('phone:' + c);
+    const mid = id(), invitationId = id();
+    must(await inviteP(a, invitePayload(g.ctx, mid, 'Declining contact')));
+    const payload = { invitationId, contextId: g.ctx, memberId: mid, targetPhoneHash: phone, tokenHash: sha(invitationId) };
+    must(await call(a, 'create_invitation(jsonb,text)', [payload, hashOf(payload)]));
+    const result = must(await call(c, 'decline_invitation(uuid,text,uuid,text)', [invitationId, phone, id(), sha('decline')]));
+    assert.equal(result.status, 'declined');
+    assert.equal((await one('SELECT declined_at IS NOT NULL AS paused FROM shared_expenses.invitations WHERE invitation_id=$1', [invitationId])).paused, true);
+    const next = id();
+    failsWith(await call(a, 'create_invitation(jsonb,text)', [{ ...payload, invitationId: next, tokenHash: sha(next) }, sha(next)]), 'invitation_declined_recently');
   });
 
   t.diagnostic(`client-visible retries: deadlocks=${stats.deadlocks} serialization=${stats.serialization}`);

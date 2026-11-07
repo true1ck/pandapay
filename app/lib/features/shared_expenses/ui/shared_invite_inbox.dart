@@ -85,16 +85,23 @@ class _InboxState extends State<SharedInviteInbox> with WidgetsBindingObserver {
     if (!_busy.add(invite.invitationId)) return;
     setState(() => _message = null);
     try {
-      await widget.runtime.respondToInboxInvite(invite, accept: accept);
+      final status = await widget.runtime.respondToInboxInvite(
+        invite,
+        accept: accept,
+      );
       if (!mounted) return;
       setState(() {
         _items = [
           for (final i in _items)
             if (i.invitationId != invite.invitationId) i,
         ];
-        _message = accept ? 'Joined. It is now in your splits.' : 'Declined.';
+        _message = switch (status) {
+          'joined' => 'Joined. It is now in your splits.',
+          'awaiting_owner' => 'Request sent. The split owner will confirm.',
+          _ => 'Declined.',
+        };
       });
-      if (accept) widget.onJoined?.call();
+      if (status == 'joined') widget.onJoined?.call();
     } catch (error) {
       if (mounted) {
         setState(() => _message = sharedInviteIssueMessage(error));
@@ -154,7 +161,7 @@ class _InboxState extends State<SharedInviteInbox> with WidgetsBindingObserver {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Joining only lets you see and add shared expenses. You approve every expense yourself.',
+                            'The split owner will confirm your request. You approve your own share of each expense.',
                             style: BambooFonts.ui(
                               12,
                               color: scheme.onSurfaceVariant,
@@ -179,7 +186,7 @@ class _InboxState extends State<SharedInviteInbox> with WidgetsBindingObserver {
                                 child: Text(
                                   _busy.contains(invite.invitationId)
                                       ? 'Please wait…'
-                                      : 'Join',
+                                      : 'Request to join',
                                   style: BambooFonts.ui(
                                     13,
                                     weight: FontWeight.w700,
