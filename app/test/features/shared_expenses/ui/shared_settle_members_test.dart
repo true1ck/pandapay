@@ -472,6 +472,22 @@ void main() {
       expect(find.textContaining('no longer available'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'settlement sheet renders with BambooSheet and validates max limit cleanly',
+    (tester) async {
+      await show(tester, SharedSettleSheet(runtime: runtime, contextId: group));
+      expect(find.byType(SharedSettleSheet), findsOneWidget);
+      expect(find.text('Settle up'), findsOneWidget);
+      await tester.enterText(
+        find.byKey(const ValueKey('settlement-amount')),
+        '120000000',
+      );
+      await tap(tester, 'Record payment');
+      expect(runtime.store.pendingCount, 0);
+      expect(find.textContaining('1,00,00,000'), findsOneWidget);
+    },
+  );
 }
 
 class _FakeUpi implements UpiPaymentService {
