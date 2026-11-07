@@ -83,7 +83,7 @@ $ADB logcat -c
 for _ in 1 2 3 4 5 6; do $ADB shell input swipe 540 1700 540 600 250; sleep 0.4; done
 for _ in 1 2 3 4 5 6; do $ADB shell input swipe 540 600 540 1700 250; sleep 0.4; done
 sleep 1
-p95s=($($ADB logcat -d | grep -o 'ui_p95_us=[0-9]*' | cut -d= -f2 | sort -n))
+p95s=($($ADB logcat -d | { grep -o "ui_p95_us=[0-9]*" || true; } | cut -d= -f2 | sort -n))
 if [ "${#p95s[@]}" -eq 0 ]; then
   echo "WARN: no frame summaries logged (needs a PROFILE build); skipping scroll check"
 else
