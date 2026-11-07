@@ -8,6 +8,7 @@ import '../../../data/authenticated_http_client.dart';
 import 'shared_commands.dart';
 import 'shared_directory.dart';
 import 'shared_invitations.dart';
+import 'shared_phone_display.dart';
 import 'shared_transport.dart';
 import 'package:pandapay_domain/shared_expenses.dart';
 
@@ -135,6 +136,9 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
               ? error
               : null,
           retryable: result['retryable'] == true,
+          existingContextId: sharedUuid(result['existingContextId'])
+              ? result['existingContextId'] as String
+              : null,
         );
       }
       return result;
@@ -351,12 +355,17 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
   Future<String> claimInvitation({
     required String token,
     required String operationId,
+    bool? sharePhone,
   }) async {
     if (!sharedUuid(operationId)) throw ArgumentError('Invalid operation ID');
     final value = (await _request(
       'POST',
       '/shared-expenses/invitations/claim',
-      body: jsonEncode({'token': token, 'operationId': operationId}),
+      body: jsonEncode({
+        'token': token,
+        'operationId': operationId,
+        'sharePhone': ?sharePhone,
+      }),
     ))!;
     final status = value['status'];
     if (status is! String || status.length > 32) {
@@ -586,6 +595,7 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
     final value = (await _request(
       'GET',
       '/shared-expenses/invitations/requests',
+      query: {'withLookalikeFull': '1'},
     ))!;
     final items = value['items'];
     if (items is! List || items.length > 50) {
@@ -599,6 +609,32 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
               : throw const SharedTransportException(code: 'invalid_response'),
         ),
     ];
+  }
+
+  /// Owner-only, audited and rate limited: the full number of one pending
+  /// request. The result must stay in memory only.
+  Future<SharedRevealedPhone> revealClaimantPhone({
+    required String invitationId,
+    required String operationId,
+  }) async {
+    if (!sharedUuid(invitationId) || !sharedUuid(operationId)) {
+      throw ArgumentError('Invalid identifier');
+    }
+    final value = (await _request(
+      'POST',
+      '/shared-expenses/invitations/reveal-phone',
+      body: jsonEncode({
+        'invitationId': invitationId,
+        'operationId': operationId,
+      }),
+    ))!;
+    final e164 = value['e164'];
+    if (value['invitationId'] != invitationId ||
+        e164 is! String ||
+        !RegExp(r'^\+[0-9]{7,15}$').hasMatch(e164)) {
+      throw const SharedTransportException(code: 'invalid_response');
+    }
+    return SharedRevealedPhone(e164);
   }
 
   /// Owner approves or declines someone who joined through a shared link.

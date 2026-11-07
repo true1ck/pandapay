@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../app/design/app_theme.dart';
 import '../data/shared_directory.dart';
+import 'shared_claimant_phone.dart';
 import '../runtime/shared_runtime.dart';
 
 /// Invitations waiting for this account's verified phone number. Loaded when
@@ -153,7 +154,7 @@ class _InboxState extends State<SharedInviteInbox> with WidgetsBindingObserver {
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: BambooInk.ink300),
             ),
@@ -181,9 +182,16 @@ class _InboxState extends State<SharedInviteInbox> with WidgetsBindingObserver {
                   ),
                   const SizedBox(height: 2),
                 ],
+                SharedClaimantPhoneView(
+                  key: ValueKey('phone-${request.invitationId}'),
+                  request: request,
+                  siblings: _requests,
+                  onReveal: () =>
+                      widget.runtime.revealClaimantPhone(request.invitationId),
+                ),
                 Text(
                   // Older servers send no profile name: keep the old wording.
-                  '${request.signedInAs == null ? '${request.whoOpened}. ' : ''}Only approve if you recognise them. Approving only adds them; they cannot approve expenses for anyone else.',
+                  '${request.signedInAs == null && request.claimantPhone == null ? '${request.whoOpened}. ' : ''}Only approve if you recognise them. Approving only adds them; they cannot approve expenses for anyone else.',
                   style: BambooFonts.ui(12, color: BambooInk.ink700),
                 ),
                 Wrap(
@@ -214,7 +222,7 @@ class _InboxState extends State<SharedInviteInbox> with WidgetsBindingObserver {
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: BambooInk.ink300),
             ),

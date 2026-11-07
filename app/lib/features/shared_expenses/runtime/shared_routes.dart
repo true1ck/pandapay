@@ -119,7 +119,9 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(sharedExpensesRuntimeProvider);
-    return state.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
+    return state.when(
+      skipLoadingOnReload: true,
+      skipLoadingOnRefresh: true,
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (_, _) => _Unavailable(
@@ -299,7 +301,9 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
   @override
   Widget build(BuildContext context) => ref
       .watch(sharedExpensesRuntimeProvider)
-      .when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
+      .when(
+        skipLoadingOnReload: true,
+        skipLoadingOnRefresh: true,
         loading: () =>
             const Scaffold(body: Center(child: CircularProgressIndicator())),
         error: (_, _) => _Unavailable(

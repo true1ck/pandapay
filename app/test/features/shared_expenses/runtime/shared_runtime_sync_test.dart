@@ -38,11 +38,27 @@ void main() {
   late AuthenticatedHttpClient client;
   late SharedExpensesRuntime runtime;
   var records = <Object?>[];
+  var refusal = 'member_name_taken';
+  String? existing;
   setUp(() {
     db = AppDatabase.forTesting(sqlite3.openInMemory());
     client = AuthenticatedHttpClient(
       refreshAccessToken: () async => null,
       inner: MockClient((request) async {
+        if (request.url.path.contains('/operations/')) {
+          return http.Response(
+            jsonEncode({'error': 'operation_not_found'}),
+            404,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        if (request.url.path.endsWith('/commands')) {
+          return http.Response(
+            jsonEncode({'error': refusal, 'existingContextId': ?existing}),
+            409,
+            headers: {'content-type': 'application/json'},
+          );
+        }
         final body = request.url.path.endsWith('/capabilities')
             ? {
                 'schemaVersion': 1,
@@ -107,5 +123,36 @@ void main() {
     expect(runtime.lastError, isA<SharedLocalException>());
     expect(runtime.syncLag, isTrue);
     expect(runtime.store.cursor, isNull);
+  });
+
+  const member = '44444444-4444-4444-8444-444444444444';
+
+  test('a refused rename rolls back and explains why', () async {
+    refusal = 'member_name_taken';
+    await runtime.refresh();
+    await expectLater(
+      runtime.renameMember(contextId: group, memberId: member, name: 'Asha'),
+      throwsA(
+        isA<SharedNameException>().having(
+          (e) => e.code,
+          'code',
+          'member_name_taken',
+        ),
+      ),
+    );
+  });
+
+  test('a refused friend carries the chat that already exists', () async {
+    refusal = 'friend_name_taken';
+    existing = group;
+    await runtime.refresh();
+    await expectLater(
+      runtime.addFriend(name: 'Rahul'),
+      throwsA(
+        isA<SharedNameException>()
+            .having((e) => e.code, 'code', 'friend_name_taken')
+            .having((e) => e.existingContextId, 'existing', group),
+      ),
+    );
   });
 }

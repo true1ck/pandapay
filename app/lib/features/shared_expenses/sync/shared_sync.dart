@@ -52,6 +52,10 @@ class SharedExpensesSync {
               claim,
               statusCode: status,
               retryable: error is SharedTransportException && error.retryable,
+              serverCode: error is SharedTransportException ? error.code : null,
+              existingContextId: error is SharedTransportException
+                  ? error.existingContextId
+                  : null,
               now: now(),
             );
             if (status == null ||

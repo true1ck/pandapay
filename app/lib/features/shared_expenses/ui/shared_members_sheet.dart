@@ -1,5 +1,6 @@
 import 'dart:async';
-import '../storage/shared_store.dart' show SharedCommandState;
+import '../storage/shared_store.dart'
+    show SharedCommandState, SharedNameException;
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -11,6 +12,7 @@ import '../composer/shared_editor.dart';
 import '../data/shared_invitations.dart';
 import '../runtime/shared_runtime.dart';
 import '../data/shared_directory.dart';
+import '../data/shared_transport.dart';
 import 'shared_add_friend_sheet.dart';
 import 'shared_components.dart';
 import 'shared_context_guard.dart';
@@ -144,14 +146,15 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
   };
 
   /// Number endings for people who would otherwise look identical.
-  Map<String, String> _sameNameHints(SharedRoster roster) => sharedSameNameHints([
-    for (final m in roster.members)
-      (
-        id: m.id,
-        label: m.id == roster.ownMemberId ? 'You' : _displayName(m),
-        suffix: m.phoneSuffix ?? _inv[m.id]?.phoneSuffix,
-      ),
-  ]);
+  Map<String, String> _sameNameHints(SharedRoster roster) =>
+      sharedSameNameHints([
+        for (final m in roster.members)
+          (
+            id: m.id,
+            label: m.id == roster.ownMemberId ? 'You' : _displayName(m),
+            suffix: m.phoneSuffix ?? _inv[m.id]?.phoneSuffix,
+          ),
+      ]);
 
   Widget _subtitle(
     SharedRoster roster,
@@ -212,36 +215,38 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
   Future<void> _rename(SharedRoster roster, SharedEditorMember member) async {
     if (_busy || !_authorized) return;
     final self = member.id == roster.ownMemberId;
+    String? opId;
     final name = await showSharedRenameMemberDialog(
       context,
       title: self ? 'Edit your name' : 'Edit name',
       initialName: member.rawName ?? (self ? '' : _displayName(member)),
+      onSave: (typed) async {
+        try {
+          opId = await widget.runtime.renameMember(
+            contextId: widget.contextId,
+            memberId: member.id,
+            name: typed,
+            directCounterpart: roster.direct && !self,
+          );
+          return null;
+        } on SharedNameException catch (error) {
+          return sharedInviteIssueMessage(
+            SharedTransportException(code: error.code),
+          );
+        } on FormatException {
+          return 'Enter a name up to $sharedMemberNameMax characters.';
+        } catch (error) {
+          return error is SharedTransportException
+              ? sharedInviteIssueMessage(error)
+              : 'Could not save the name yet. Try again.';
+        }
+      },
     );
-    if (name == null || !mounted || !_authorized) return;
-    setState(() => _busy = true);
-    try {
-      final opId = await widget.runtime.renameMember(
-        contextId: widget.contextId,
-        memberId: member.id,
-        name: name,
-        directCounterpart: roster.direct && !self,
-      );
-      if (!mounted) return;
-      setState(() {
-        _notice = widget.runtime.operationStatus(opId);
-        _roster = widget.runtime.contextRoster(widget.contextId);
-      });
-    } catch (error) {
-      if (mounted) {
-        setState(
-          () => _notice = error is FormatException
-              ? 'Enter a name up to $sharedMemberNameMax characters.'
-              : 'Could not save the name yet. Try again.',
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+    if (name == null || opId == null || !mounted || !_authorized) return;
+    setState(() {
+      _notice = widget.runtime.operationStatus(opId!);
+      _roster = widget.runtime.contextRoster(widget.contextId);
+    });
   }
 
   /// Rare on purpose: a split stays after everyone settles and can be used for
@@ -529,6 +534,21 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
       if (!_authorized || !widget.runtime.proposalsEnabled) return;
       await widget.runtime.store.enqueue(_pending!);
       await widget.runtime.flushEditor();
+      final refused = widget.runtime.nameFailure(_pending!.operationId);
+      if (refused != null) {
+        // Roll back: nothing was added, so let them change the name.
+        if (mounted) {
+          setState(() {
+            _formError = sharedInviteIssueMessage(
+              SharedTransportException(code: refused.code),
+            );
+            _pending = null;
+            _pendingMemberId = null;
+            _pendingPhone = null;
+          });
+        }
+        return;
+      }
       if (mounted && _authorized) {
         if (_pendingPhone != null && _pendingMemberId != null) {
           _phones[_pendingMemberId!] = _pendingPhone!;

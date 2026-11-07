@@ -8,6 +8,7 @@ import '../data/pending_split_invite.dart';
 import '../data/shared_directory.dart';
 import '../data/shared_invitations.dart';
 import '../data/shared_transport.dart';
+import '../ui/shared_phone_consent.dart';
 import 'shared_providers.dart';
 import 'shared_runtime.dart';
 
@@ -31,6 +32,10 @@ class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
   String? _result, _error;
   bool _busy = false;
 
+  /// The claimant's choice; null until they pick (neither is preselected).
+  bool? _sharePhone;
+  bool _wantsChoice = false;
+
   Future<SharedInvitePreview> _load(SharedExpensesRuntime runtime) async {
     await runtime.refresh(maxPullPages: 1);
     // A link that opens the app from cold can reach the server before the
@@ -53,12 +58,17 @@ class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
   Future<void> _join() async {
     final runtime = _runtime;
     if (runtime == null || _busy) return;
+    if (_wantsChoice && _sharePhone == null) return;
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final status = await runtime.claimInvite(widget.token, _operationId);
+      final status = await runtime.claimInvite(
+        widget.token,
+        _operationId,
+        sharePhone: _wantsChoice ? _sharePhone : null,
+      );
       await PendingSplitInviteStore().clear();
       if (mounted) setState(() => _result = status);
     } catch (error) {
@@ -71,6 +81,10 @@ class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
               'This invite has expired or was replaced. Ask the sender for a new link.',
             SharedTransportException(code: 'phone_not_verified') =>
               sharedInviteIssueMessage(error),
+            SharedTransportException(statusCode: 429) =>
+              'Too many tries for now. Please wait a while and try again.',
+            SharedTransportException(code: 'network_unavailable') =>
+              'No connection. Nothing was sent; try again when online.',
             SharedTransportException(:final code?)
                 when code.startsWith('join_') ||
                     code == 'membership_conflict' ||
@@ -94,7 +108,9 @@ class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
       backgroundColor: BambooInk.paper,
       appBar: AppBar(title: Text('Join', style: BambooFonts.heading(17))),
       body: AppBackground(
-        child: runtime.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
+        child: runtime.when(
+          skipLoadingOnReload: true,
+          skipLoadingOnRefresh: true,
           loading: () => const Center(
             child: CircularProgressIndicator(color: BambooInk.slate),
           ),
@@ -144,6 +160,10 @@ class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
                   );
                 }
                 final preview = snapshot.data!;
+                _wantsChoice =
+                    preview.phoneSharing &&
+                    !preview.phoneBound &&
+                    preview.ownPhoneMask != null;
                 if (_result != null) {
                   return _message(
                     _result == 'joined'
@@ -157,40 +177,93 @@ class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
-                        'Join ${preview.contextName}?',
-                        style: BambooFonts.heading(22),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        preview.isGroupLink
-                            ? 'You are asking to join this group. Joining '
-                                  'does not accept any expense or debt — you '
-                                  'can review each one before it counts.'
-                            : 'You were added as "${preview.memberName}". '
-                                  'Joining does not accept any expense or '
-                                  'debt — you can review each one before it '
-                                  'counts.',
-                        style: BambooFonts.ui(14, color: BambooInk.ink700),
-                      ),
-                      if (!preview.phoneBound) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'The person who invited you will be asked to approve your request.',
-                          style: BambooFonts.ui(13, color: BambooInk.ink700),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                'Join ${preview.contextName}?',
+                                style: BambooFonts.heading(22),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                preview.isGroupLink
+                                    ? 'You are asking to join this group. Joining '
+                                          'does not accept any expense or debt — you '
+                                          'can review each one before it counts.'
+                                    : 'You were added as "${preview.memberName}". '
+                                          'Joining does not accept any expense or '
+                                          'debt — you can review each one before it '
+                                          'counts.',
+                                style: BambooFonts.ui(
+                                  14,
+                                  color: BambooInk.ink700,
+                                ),
+                              ),
+                              if (preview.ownerName != null) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Owner: ${preview.ownerName}',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: BambooFonts.ui(
+                                    13,
+                                    color: BambooInk.ink700,
+                                  ),
+                                ),
+                              ],
+                              if (!preview.phoneBound) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  'The person who invited you will be asked to approve your request.',
+                                  style: BambooFonts.ui(
+                                    13,
+                                    color: BambooInk.ink700,
+                                  ),
+                                ),
+                              ],
+                              if (preview.phoneSharing && !preview.phoneBound)
+                                SharedPhoneConsent(
+                                  ownerName: preview.ownerName,
+                                  ownMask: preview.ownPhoneMask,
+                                  value: _sharePhone,
+                                  enabled: !_busy,
+                                  onChanged: (v) =>
+                                      setState(() => _sharePhone = v),
+                                ),
+                              if (_error != null) ...[
+                                const SizedBox(height: 12),
+                                Text(
+                                  _error!,
+                                  style: BambooFonts.ui(
+                                    13,
+                                    color: BambooInk.clayInk,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
-                      ],
-                      if (_error != null) ...[
-                        const SizedBox(height: 12),
-                        Text(
-                          _error!,
-                          style: BambooFonts.ui(13, color: BambooInk.clayInk),
+                      ),
+                      if (_wantsChoice && _sharePhone == null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text(
+                            'Choose one option above to continue.',
+                            textAlign: TextAlign.center,
+                            style: BambooFonts.ui(
+                              12.5,
+                              color: BambooInk.ink700,
+                            ),
+                          ),
                         ),
-                      ],
-                      const Spacer(),
                       FilledButton(
                         style: sharedPrimaryButtonStyle(),
-                        onPressed: _busy ? null : _join,
+                        onPressed:
+                            _busy || (_wantsChoice && _sharePhone == null)
+                            ? null
+                            : _join,
                         child: Text(
                           _busy ? 'Joining…' : 'Join',
                           style: BambooFonts.ui(

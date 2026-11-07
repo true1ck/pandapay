@@ -19,6 +19,36 @@ enum SharedCommandState {
   committed,
 }
 
+/// Server refusals about names, kept on the failed command so the screen that
+/// queued it can explain what to change.
+const sharedNameCodes = {
+  'member_name_taken',
+  'friend_name_taken',
+  'member_name_reserved',
+};
+
+/// A queued name command the server refused for good. [existingContextId] is
+/// the chat the person already has when the code is `friend_name_taken`.
+class SharedNameException implements Exception {
+  final String code;
+  final String? existingContextId;
+  const SharedNameException(this.code, [this.existingContextId]);
+
+  /// Parses `http_409:friend_name_taken:<uuid>` from a stored command.
+  static SharedNameException? fromStored(String? errorCode) {
+    if (errorCode == null) return null;
+    final parts = errorCode.split(':');
+    if (parts.length < 2 || !sharedNameCodes.contains(parts[1])) return null;
+    return SharedNameException(
+      parts[1],
+      parts.length > 2 && sharedUuid(parts[2]) ? parts[2] : null,
+    );
+  }
+
+  @override
+  String toString() => 'Shared name refused: $code';
+}
+
 class SharedLocalException implements Exception {
   final String code;
   const SharedLocalException(this.code);
@@ -479,6 +509,8 @@ ORDER BY c.created_at,c.operation_id LIMIT 1''',
     SharedCommandClaim claim, {
     int? statusCode,
     bool retryable = false,
+    String? serverCode,
+    String? existingContextId,
     required int now,
   }) => _write(() {
     if (!_owns(claim)) return;
@@ -503,7 +535,9 @@ ORDER BY c.created_at,c.operation_id LIMIT 1''',
         state.name,
         attempts,
         now + delay,
-        statusCode == null ? 'network_unavailable' : 'http_$statusCode',
+        statusCode == null
+            ? 'network_unavailable'
+            : 'http_$statusCode${sharedNameCodes.contains(serverCode) ? ':$serverCode${existingContextId != null && sharedUuid(existingContextId) ? ':$existingContextId' : ''}' : ''}',
         namespace,
         claim.command.operationId,
       ],

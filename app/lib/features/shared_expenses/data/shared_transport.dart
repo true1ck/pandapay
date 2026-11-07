@@ -25,10 +25,14 @@ class SharedTransportException implements Exception {
   final int? statusCode;
   final String? code;
   final bool retryable;
+
+  /// Set with `friend_name_taken`: the chat the person already has.
+  final String? existingContextId;
   const SharedTransportException({
     this.statusCode,
     this.code,
     this.retryable = false,
+    this.existingContextId,
   });
   @override
   String toString() => 'Shared request unavailable';

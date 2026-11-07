@@ -8,10 +8,19 @@ Future<String?> showSharedRenameMemberDialog(
   BuildContext context, {
   required String initialName,
   required String title,
+  SharedRenameSave? onSave,
 }) => showDialog<String>(
   context: context,
-  builder: (_) => SharedRenameMemberDialog(title: title, initial: initialName),
+  builder: (_) => SharedRenameMemberDialog(
+    title: title,
+    initial: initialName,
+    onSave: onSave,
+  ),
 );
+
+/// Tries to save [name]; returns a message to show under the field, or null
+/// when it worked (the dialog then closes).
+typedef SharedRenameSave = Future<String?> Function(String name);
 
 /// Validation shared by the dialog and tests: null means the name is fine.
 String? sharedMemberNameError(String raw) {
@@ -25,10 +34,12 @@ String? sharedMemberNameError(String raw) {
 
 class SharedRenameMemberDialog extends StatefulWidget {
   final String title, initial;
+  final SharedRenameSave? onSave;
   const SharedRenameMemberDialog({
     super.key,
     required this.title,
     required this.initial,
+    this.onSave,
   });
   @override
   State<SharedRenameMemberDialog> createState() => _RenameState();
@@ -37,6 +48,7 @@ class SharedRenameMemberDialog extends StatefulWidget {
 class _RenameState extends State<SharedRenameMemberDialog> {
   late final _field = TextEditingController(text: widget.initial);
   String? _error;
+  bool _saving = false;
 
   @override
   void dispose() {
@@ -44,13 +56,33 @@ class _RenameState extends State<SharedRenameMemberDialog> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
+    if (_saving) return;
     final error = sharedMemberNameError(_field.text);
     if (error != null) {
       setState(() => _error = error);
       return;
     }
-    Navigator.pop(context, sharedCleanMemberName(_field.text));
+    final name = sharedCleanMemberName(_field.text)!;
+    final save = widget.onSave;
+    if (save == null) {
+      Navigator.pop(context, name);
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    final problem = await save(name);
+    if (!mounted) return;
+    if (problem == null) {
+      Navigator.pop(context, name);
+    } else {
+      setState(() {
+        _saving = false;
+        _error = problem;
+      });
+    }
   }
 
   @override
@@ -67,7 +99,11 @@ class _RenameState extends State<SharedRenameMemberDialog> {
           textCapitalization: TextCapitalization.words,
           textInputAction: TextInputAction.done,
           style: BambooFonts.ui(15),
-          decoration: InputDecoration(labelText: 'Name', errorText: _error),
+          decoration: InputDecoration(
+            labelText: 'Name',
+            errorText: _error,
+            errorMaxLines: 3,
+          ),
           onChanged: (_) {
             if (_error != null) setState(() => _error = null);
           },
@@ -85,7 +121,10 @@ class _RenameState extends State<SharedRenameMemberDialog> {
         onPressed: () => Navigator.pop(context),
         child: const Text('Cancel'),
       ),
-      TextButton(onPressed: _save, child: const Text('Save')),
+      TextButton(
+        onPressed: _saving ? null : _save,
+        child: Text(_saving ? 'Saving…' : 'Save'),
+      ),
     ],
   );
 }
