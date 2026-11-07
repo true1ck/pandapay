@@ -132,20 +132,27 @@ meaningless.
 
 ## 4. Where heavy work still runs on the UI isolate (known debt)
 
-Measured on 7 Nov after the fixes; the UI thread now settles in about 20-25 s instead of
-never. This is the next work, in order of cost:
+Status after the 7 Nov work, measured on the reference phone (profile build, real history):
+longest saturated stretch 2 s, about 3-5 % busy once the app has been up 30 s, scroll UI p95
+about 0.55 ms. Done: sync pull is incremental (`projection:context`), the ledger read model
+caches decoded rows and does not rebuild downstream when content is unchanged, the needs-review
+count has its own provider, SMS capture runs in a worker isolate
+(`pipeline/capture_worker.dart`, design in `docs/sms-capture-isolate-design.md`).
 
-1. `SyncPull._rebuildDisplay` + `ProjectionWriter.write` (ledger projection after a pull).
-2. SMS v2 capture and pipeline (`SmsV2Runtime.capture`, 200-message chunks, synchronous
-   SQLCipher on the UI isolate). Move to a dedicated isolate with its own connection, as
-   the legacy pipeline did (`docs/sms-capture-and-sync-architecture.md`).
-3. Ledger read model rebuilds on every `observations`/`transactions`/`cards` bump
-   (`smsV2LedgerReadModelProvider`): all entries, events and transactions. Make it
-   incremental or compute it in the read worker.
-4. `HistoryCategoryRecheck` over the whole history on first sync after a rule update
-   (now one scan per chunk, still on the UI isolate).
-5. Rule-bundle and catalogue parse/validate (cached per database/hash; first load still
-   on the UI isolate).
+Still on the UI isolate, in order of cost:
+
+1. Per-bump cost of the read model: `FactStore.all()` (about 40 ms at 20,000 facts) and
+   `financialStore.entities()` (about 40 ms at 5,000 transactions).
+2. Instrument seeding and rule-bundle load/verify before each capture (cached per
+   database/hash; first load after launch still on the UI isolate).
+3. `HistoryCategoryRecheck` over the whole history after a rule update (one scan per chunk).
+4. Catalogue parse into model objects (the JSON decode is already in a `compute` isolate).
+5. Capture-worker contention: a UI write that lands while the worker commits waits up to 3 s
+   (busy_timeout) and then throws SQLITE_BUSY. Watch logcat for `database is locked`; if it
+   shows up, shorten worker transactions or queue UI writes behind the worker.
+
+Not yet verified on a phone: killing the app mid-import and relaunching (messages must be
+retried without duplicates); covered on the host by `capture_worker_test.dart`.
 
 ## 5. Finding the cause: CPU profile over the VM service
 
