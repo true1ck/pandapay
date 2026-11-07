@@ -458,7 +458,8 @@ async function validateDraftSafely(rule, template, model, otherLayouts = []) {
 // caller's transaction. Returns "capacity" when the minute is full, else null.
 // Layout drafts and shop suggestions share this, so they share one budget.
 async function reserveCapacity(client, { prompt, config, templateHash, attempt, jobId }) {
-  const estimate = Buffer.byteLength(prompt, "utf8") + config.maxOutputTokens;
+  // Gemini counts about one token per 3 to 4 bytes of this JSON prompt; 3 is the safe side.
+  const estimate = Math.ceil(Buffer.byteLength(prompt, "utf8") / 3) + config.maxOutputTokens;
   await client.query(
     "SELECT pg_advisory_xact_lock(hashtext('sms_v2_ai_capacity'))",
   );
