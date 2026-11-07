@@ -274,7 +274,7 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
     });
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     final name = _name.text.trim(), raw = _phone.text.trim();
     if (name.isEmpty || RegExp(r'[\x00-\x1f\x7f]').hasMatch(name)) {
       setState(() => _error = 'Enter a name.');
@@ -299,11 +299,18 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
       );
       return;
     }
-    if (_lookup.self) {
-      setState(() => _error = 'That is your own number.');
-      return;
+    var lookup = _lookup;
+    if (raw.isNotEmpty && phone != null) {
+      try {
+        lookup = await widget.runtime.lookupPhone(phone);
+      } catch (_) {}
+      if (lookup.self) {
+        if (mounted) setState(() => _error = 'That is your own number.');
+        return;
+      }
     }
-    Navigator.pop(context, SharedAddFriendInput(name, phone, _lookup));
+    if (!mounted) return;
+    Navigator.pop(context, SharedAddFriendInput(name, phone, lookup));
   }
 
   @override

@@ -76,11 +76,26 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
     if (widget.initialAmount != null) {
       _amount.text = sharedRupeesText(widget.initialAmount!);
     }
+    _amount.addListener(_onFieldChanged);
+    _reference.addListener(_onFieldChanged);
+    _vpa.addListener(_onFieldChanged);
     _load();
+  }
+
+  void _onFieldChanged() {
+    if (_error != null || _upiNotice != null) {
+      setState(() {
+        _error = null;
+        _upiNotice = null;
+      });
+    }
   }
 
   @override
   void dispose() {
+    _amount.removeListener(_onFieldChanged);
+    _reference.removeListener(_onFieldChanged);
+    _vpa.removeListener(_onFieldChanged);
     _amount.dispose();
     _reference.dispose();
     _vpa.dispose();
@@ -138,8 +153,12 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
   Future<void> _openUpi({bool confirmed = false}) async {
     final service = widget.upi;
     if (service == null || _upiBusy || _sealed || _saving) return;
+    final rawAmount = _amount.text
+        .replaceAll(',', '')
+        .replaceAll('₹', '')
+        .replaceAll(' ', '');
     final amount = SharedDecimalInput.parse(
-      _amount.text,
+      rawAmount,
       allowZero: false,
     ).units;
     final vpa = _vpa.text.trim();
@@ -257,8 +276,12 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
       }
       return;
     }
+    final rawAmount = _amount.text
+        .replaceAll(',', '')
+        .replaceAll('₹', '')
+        .replaceAll(' ', '');
     final amount = SharedDecimalInput.parse(
-      _amount.text,
+      rawAmount,
       allowZero: false,
     ).units;
     final reference = _reference.text.trim();

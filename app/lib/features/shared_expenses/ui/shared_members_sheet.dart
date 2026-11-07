@@ -558,6 +558,20 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
     super.dispose();
   }
 
+  static bool _phonesMatch(String? a, String? b) {
+    if (a == null || b == null) return false;
+    final da = a.replaceAll(RegExp(r'[^0-9]'), '');
+    final db = b.replaceAll(RegExp(r'[^0-9]'), '');
+    if (da == db && da.isNotEmpty) return true;
+    if (da.length >= 10 && db.length >= 10) {
+      return da.substring(da.length - 10) == db.substring(db.length - 10);
+    }
+    return false;
+  }
+
+  static String _normalizeName(String s) =>
+      s.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+
   Future<void> _add() async {
     if (_busy || !_authorized) return;
     setState(() => _busy = true);
@@ -590,18 +604,26 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
           );
           return;
         }
-        if (_lookup.self) {
-          setState(() => _formError = 'That is your own number.');
-          return;
+        var lookup = _lookup;
+        if (phone.isNotEmpty && cleaned != null) {
+          try {
+            lookup = await widget.runtime.lookupPhone(cleaned);
+          } catch (_) {}
+          if (lookup.self) {
+            setState(() => _formError = 'That is your own number.');
+            return;
+          }
         }
         final name = text;
         _pendingPhone = cleaned;
         final current = await widget.runtime.contextRoster(widget.contextId);
         if (!current.canInvite) throw const SharedRuntimeUnavailable();
+        final norm = _normalizeName(name);
         final duplicateName = current.members.any(
           (m) =>
               m.state != 'left' &&
-              m.name.trim().toLowerCase() == name.toLowerCase(),
+              (_normalizeName(m.name) == norm ||
+                  (m.rawName != null && _normalizeName(m.rawName!) == norm)),
         );
         if (duplicateName) {
           setState(
@@ -610,7 +632,8 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
           );
           return;
         }
-        if (cleaned != null && _phones.values.any((p) => p == cleaned)) {
+        if (cleaned != null &&
+            _phones.values.any((p) => _phonesMatch(p, cleaned))) {
           setState(
             () => _formError =
                 'Someone in this split is already invited with that number.',
@@ -697,14 +720,16 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
         error = "That name cannot be used. Please choose a different one.";
       } else {
         final current = await _roster;
+        final norm = _normalizeName(pickedName);
         if (current.members.any((m) =>
-            m.state != "left" &&
-            m.name.trim().toLowerCase() == lower)) {
+            m.state != 'left' &&
+            (_normalizeName(m.name) == norm ||
+                (m.rawName != null && _normalizeName(m.rawName!) == norm)))) {
           error =
-              "Someone in this split already has that name. Add a surname or initial.";
+              'Someone in this split already has that name. Add a surname or initial.';
         } else if (pickedPhone != null &&
-            _phones.values.any((p) => p == pickedPhone)) {
-          error = "Someone in this split is already invited with that number.";
+            _phones.values.any((p) => _phonesMatch(p, pickedPhone))) {
+          error = 'Someone in this split is already invited with that number.';
         }
       }
     } catch (_) {}

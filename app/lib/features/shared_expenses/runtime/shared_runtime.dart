@@ -292,14 +292,19 @@ class SharedExpensesRuntime extends ChangeNotifier {
   Future<String?> sameNameFriend(String name) async {
     try {
       _current();
-      final wanted = name.trim().toLowerCase();
+      final wanted =
+          name.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
       final page = await remote.fetchContexts(
         kind: 'direct',
         search: name.trim(),
       );
       for (final raw in (page['items'] as List? ?? const [])) {
         final row = raw as Map;
-        if ((row['name'] as String? ?? '').trim().toLowerCase() == wanted) {
+        final candidate = (row['name'] as String? ?? '')
+            .trim()
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .toLowerCase();
+        if (candidate == wanted) {
           return row['contextId'] as String?;
         }
       }

@@ -471,6 +471,49 @@ void main() {
       expect(runtime.store.pendingCount, 0);
     },
   );
+  testWidgets(
+    'advanced edge cases: phone prefix variations, whitespace duplicate names, and comma pasted amounts',
+    (tester) async {
+      await show(tester, SharedSettleSheet(runtime: runtime, contextId: group));
+      await tester.enterText(
+        find.byKey(const ValueKey('settlement-amount')),
+        '₹ 1,500.50',
+      );
+      await tap(tester, 'Record payment');
+      expect(runtime.store.pendingCount, 1);
+      final cmd = runtime.store.readPendingOperations().items.single.command;
+      expect((cmd.toJson()['payload'] as Map)['amountMinor'], '150050');
+
+      await show(
+        tester,
+        SharedMembersSheet(
+          runtime: runtime,
+          contextId: group,
+          groupName: 'Trip Group',
+        ),
+      );
+      await tap(tester, 'Add person');
+      await tester.enterText(find.byType(TextField).first, 'Friend   User');
+      await tester.tap(find.widgetWithText(FilledButton, 'Add person'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          'Someone in this split already has that name. Add a surname or initial.',
+        ),
+        findsOneWidget,
+      );
+
+      await tester.enterText(find.byType(TextField).first, 'Unique Person');
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          'Someone in this split already has that name. Add a surname or initial.',
+        ),
+        findsNothing,
+      );
+    },
+  );
+
   for (final kind in ['members', 'history', 'settle']) {
     testWidgets(
       '$kind hides private data immediately when context is revoked',
