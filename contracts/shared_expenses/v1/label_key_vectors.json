@@ -1,6 +1,6 @@
 {
-  "contractVersion": "1.0.0",
-  "note": "labelKey and cleanLabel must give identical results in SQL (shared_expenses._label_key/_clean_label) and Node (api/src/shared_expenses/label.js).",
+  "contractVersion": "1.1.0",
+  "note": "labelKey, cleanLabel and reserved must give identical results in SQL (shared_expenses._label_key/_clean_label/_label_reserved) and Node (api/src/shared_expenses/label.js).",
   "labelKey": [
     {
       "input": "Rahul",
@@ -51,6 +51,10 @@
       "key": "rahul"
     },
     {
+      "input": "Rаhul",
+      "key": "rahul"
+    },
+    {
       "input": "Раhul",
       "key": "pahul"
     },
@@ -92,7 +96,7 @@
     },
     {
       "input": "😀",
-      "key": "😀"
+      "key": ""
     },
     {
       "input": "Amit 2",
@@ -113,6 +117,126 @@
     {
       "input": "Renee",
       "key": "renee"
+    },
+    {
+      "input": "ѕam",
+      "key": "sam"
+    },
+    {
+      "input": "sam",
+      "key": "sam"
+    },
+    {
+      "input": "ԁev",
+      "key": "dev"
+    },
+    {
+      "input": "dev",
+      "key": "dev"
+    },
+    {
+      "input": "ԛay",
+      "key": "qay"
+    },
+    {
+      "input": "qay",
+      "key": "qay"
+    },
+    {
+      "input": "aһmed",
+      "key": "ahmed"
+    },
+    {
+      "input": "ahmed",
+      "key": "ahmed"
+    },
+    {
+      "input": "ιvan",
+      "key": "ivan"
+    },
+    {
+      "input": "ivan",
+      "key": "ivan"
+    },
+    {
+      "input": "εve",
+      "key": "eve"
+    },
+    {
+      "input": "eve",
+      "key": "eve"
+    },
+    {
+      "input": "κvin",
+      "key": "kvin"
+    },
+    {
+      "input": "kvin",
+      "key": "kvin"
+    },
+    {
+      "input": "υma",
+      "key": "uma"
+    },
+    {
+      "input": "uma",
+      "key": "uma"
+    },
+    {
+      "input": "τara",
+      "key": "tara"
+    },
+    {
+      "input": "tara",
+      "key": "tara"
+    },
+    {
+      "input": "Zo᪰e⃑",
+      "key": "zoe"
+    },
+    {
+      "input": "Zoe",
+      "key": "zoe"
+    },
+    {
+      "input": "Amy︠",
+      "key": "amy"
+    },
+    {
+      "input": "Amy",
+      "key": "amy"
+    },
+    {
+      "input": "R★ahul",
+      "key": "rahul"
+    },
+    {
+      "input": "Rahul ❤️",
+      "key": "rahul"
+    },
+    {
+      "input": "Rahul😀",
+      "key": "rahul"
+    },
+    {
+      "input": "Ⓡahul",
+      "key": "rahul"
+    },
+    {
+      "input": "𝓐nna",
+      "key": "anna"
+    },
+    {
+      "input": "Anna",
+      "key": "anna"
+    },
+    {
+      "input": "Rahül",
+      "key": "rahul"
+    },
+    {
+      "input": "Ạnna",
+      "key": "anna"
     }
   ],
   "cleanLabel": [
@@ -151,6 +275,120 @@
     {
       "input": "",
       "clean": ""
+    }
+  ],
+  "reserved": [
+    {
+      "input": "You",
+      "reserved": true
+    },
+    {
+      "input": "me",
+      "reserved": true
+    },
+    {
+      "input": "Me",
+      "reserved": true
+    },
+    {
+      "input": "Meera",
+      "reserved": false
+    },
+    {
+      "input": "Mehul",
+      "reserved": false
+    },
+    {
+      "input": "Youssef",
+      "reserved": false
+    },
+    {
+      "input": "Myself",
+      "reserved": true
+    },
+    {
+      "input": "Owner",
+      "reserved": true
+    },
+    {
+      "input": "Owner Bob",
+      "reserved": true
+    },
+    {
+      "input": "Admin",
+      "reserved": true
+    },
+    {
+      "input": "Administrator",
+      "reserved": true
+    },
+    {
+      "input": "Support",
+      "reserved": true
+    },
+    {
+      "input": "Support Team",
+      "reserved": true
+    },
+    {
+      "input": "Someone",
+      "reserved": true
+    },
+    {
+      "input": "Someone Else",
+      "reserved": true
+    },
+    {
+      "input": "Unknown",
+      "reserved": true
+    },
+    {
+      "input": "Deleted",
+      "reserved": true
+    },
+    {
+      "input": "Deleted User",
+      "reserved": true
+    },
+    {
+      "input": "PandaPay",
+      "reserved": true
+    },
+    {
+      "input": "The PandaPay Team",
+      "reserved": true
+    },
+    {
+      "input": "Pandа Pay",
+      "reserved": true
+    },
+    {
+      "input": "pandapay friend",
+      "reserved": true
+    },
+    {
+      "input": "Former member",
+      "reserved": true
+    },
+    {
+      "input": "Former Member 2",
+      "reserved": true
+    },
+    {
+      "input": "Panda",
+      "reserved": false
+    },
+    {
+      "input": "Pay",
+      "reserved": false
+    },
+    {
+      "input": "Rahul",
+      "reserved": false
+    },
+    {
+      "input": "Ownership",
+      "reserved": true
     }
   ]
 }

@@ -744,7 +744,7 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     const invite=(displayName)=>{const m=uuid();return call(own,'invite_member($1,$2,$3)',[{contextId:g,memberId:m,displayName},uuid(),H('f')]).then(()=>memberName(g,m));};
     assert.equal(await invite('z'.repeat(110)),'z'.repeat(40),'long invite name capped');
     assert.equal(await invite(' Ra\n\thul\u0085  K '),'Ra hul K','control chars incl. U+0085 become one space');
-    assert.equal(await invite('\u{1F600}'.repeat(60)),'\u{1F600}'.repeat(40),'cut on a code point, no half pair');
+    assert.equal(await invite('\u{1D4D0}'.repeat(60)),'\u{1D4D0}'.repeat(40),'cut on a code point, no half pair');
     for(const bad of ['\u0085','\u0085\u0009\u009f','\u0007'])await assert.rejects(call(own,'invite_member($1,$2,$3)',[{contextId:g,memberId:uuid(),displayName:bad},uuid(),H('f')]),/invalid_member_name/,JSON.stringify(bad));
     // Join request: the owner sees the claimant's LIVE name next to the typed label, plus the new keys.
     const g2=uuid(), friend=uuid(), inv2=uuid(), tokenHash=crypto.randomBytes(32).toString('hex');
@@ -823,8 +823,8 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     await call(own,'register_phone($1,NULL)',[phoneHash('+919000000001')]);
     await call(c1,'register_phone($1,NULL)',[phoneHash(E[c1])]);
     await call(own,'create_group_link($1,$2,$3,$4)',[g,link,uuid(),H('2')]);
-    const claim=(who,share,suffix='2345',op=uuid(),token=link)=>call(who,'claim_invitation($1,$2,$3,$4,$5,$6)',[token,E[who]?phoneHash(E[who]):null,suffix,op,H('3'),share]);
-    const attach=(who,invId,e164=E[who])=>{const sealed=encryptPhone(ring,invId,e164),shown=describePhone(e164);return call(who,'attach_claimant_phone($1,$2,$3,$4,$5,$6)',[invId,phoneHash(e164),shown.countryCode,shown.mask,sealed.enc,sealed.keyId]);};
+    const claim=(who,share,suffix='2345',op=uuid(),token=link)=>call(who,'claim_invitation($1,$2,$3,$4,$5,$6)',[token,E[who]?phoneHash(E[who]):null,suffix,op,H('3'),share]).then(r=>({...r,op}));
+    const attach=(who,claimed,e164=E[who])=>{const sealed=encryptPhone(ring,claimed.invitationId,e164),shown=describePhone(e164);return call(who,'attach_claimant_phone($1,$2,$3,$4,$5,$6,$7,$8)',[claimed.invitationId,claimed.op,phoneHash(e164),shown.countryCode,shown.mask,sealed.enc,sealed.keyId,e164.slice(-4)]);};
     const requests=async()=>(await call(own,'list_join_requests()',[])).items;
     const item=async(inv)=>(await requests()).find(i=>i.invitationId===inv);
     const row=(inv)=>db.query('SELECT * FROM shared_expenses.invitations WHERE invitation_id=$1',[inv]).then(r=>r.rows[0]);
@@ -839,7 +839,7 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     assert.equal(it.verifiedPhoneSuffix,'2671');assert.equal(it.claimantPhoneSuffix,'2671');assert.equal(it.claimantName,'Cee Three');
     // --- shared: claim then attach in the same transaction shape the API uses
     const r1=await claim(c1,null,'2345');
-    assert.equal((await attach(c1,r1.invitationId)).attached,true);
+    assert.equal((await attach(c1,r1)).attached,true);
     it=await item(r1.invitationId);
     assert.match(it.claimantPhone.capturedAt,/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
     assert.deepEqual({...it.claimantPhone,capturedAt:'T'},{v:1,source:'verified',consent:'shared',countryCode:'+91',last4:'2345',mask:'+91 72••• •2345',available:true,unavailableReason:null,lookalike:false,duplicateOf:[],numberStatus:'confirmed',matchesTyped:null,capturedAt:'T'});
@@ -848,8 +848,10 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     const r2=await claim(c2,'declined','2345');
     it=await item(r2.invitationId);
     assert.equal(it.memberName,'Rahul Sharma (2)','a second person with the same name gets a numeric suffix');
-    assert.deepEqual(it.claimantPhone,{v:1,source:'verified',consent:'declined',countryCode:null,last4:'2345',mask:null,available:false,unavailableReason:'claimant_declined',lookalike:false,duplicateOf:[],numberStatus:'unknown',matchesTyped:null,capturedAt:null});
+    assert.deepEqual(it.claimantPhone,{v:1,source:'verified',consent:'declined',countryCode:null,last4:null,mask:null,available:false,unavailableReason:'claimant_declined',lookalike:false,duplicateOf:[],numberStatus:'unknown',matchesTyped:null,capturedAt:null});
     assert.equal((await row(r2.invitationId)).claimant_phone_hash,null,'declined stores no hash');
+    assert.equal(it.verifiedPhoneSuffix,null,'asking without sharing shows the name only');assert.equal(it.claimantPhoneSuffix,null);
+    assert.equal((await row(r2.invitationId)).verified_phone_suffix,null);
     // --- none: email-only account
     const r5=await claim(c5,'none',null);
     it=await item(r5.invitationId);
@@ -867,18 +869,19 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     assert.equal((await row(r2.invitationId)).phone_share,'not_asked','a repeat claim without consent re-applies not_asked');
     assert.deepEqual((await row(r2.invitationId)).expires_at,before.expires_at);
     assert.equal((await db.query('SELECT count(*)::int n FROM shared_expenses.members WHERE context_id=$1',[g])).rows[0].n,membersBefore);
-    await claim(c2,null,'2345');
-    assert.equal((await attach(c2,r2.invitationId)).attached,true);
+    const r2b=await claim(c2,null,'2345');
+    assert.equal((await attach(c2,r2b)).attached,true);
+    assert.equal((await row(r2.invitationId)).verified_phone_suffix,'2345','sharing keeps the last four');
     assert.equal((await row(r2.invitationId)).phone_share,'shared');
     // flip to declined removes the stored number at once
     await claim(c2,'declined','2345');
     let r2row=await row(r2.invitationId);
-    assert.equal(r2row.claimant_phone_enc,null);assert.equal(r2row.claimant_phone_hash,null);assert.ok(r2row.phone_purged_at);assert.equal(r2row.phone_share,'declined');
-    await claim(c2,null,'2345');await attach(c2,r2.invitationId);
+    assert.equal(r2row.claimant_phone_enc,null);assert.equal(r2row.claimant_phone_hash,null);assert.ok(r2row.phone_purged_at);assert.equal(r2row.phone_share,'declined');assert.equal(r2row.verified_phone_suffix,null);
+    const r2c=await claim(c2,null,'2345');await attach(c2,r2c);
 
     // --- lookalikes (same mask, different number) and duplicates (same number, different account)
     const r4=await claim(c4,null,'2345');
-    await attach(c4,r4.invitationId);
+    await attach(c4,r4);
     const all=await requests();
     const byId=(id)=>all.find(i=>i.invitationId===id).claimantPhone;
     assert.equal(byId(r1.invitationId).lookalike,true,'c1 and c2 share a mask but not a number');
@@ -908,8 +911,8 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     assert.equal(decryptPhone(ring,r1.invitationId,sealed.claimant_phone_enc,sealed.claimant_phone_key_id),E[c1]);
     assert.equal(decryptPhone(ring,r2.invitationId,sealed.claimant_phone_enc,sealed.claimant_phone_key_id),null);
     // attach refuses another person's request, a wrong shape, and a non-pending request
-    assert.equal((await attach(c3,r1.invitationId,E[c3])).attached,false);
-    assert.equal((await call(c1,'attach_claimant_phone($1,$2,$3,$4,$5,$6)',[r1.invitationId,'zz','+91','+91 72',Buffer.from('short'),'k1'])).attached,false);
+    assert.equal((await attach(c3,r1,E[c3])).attached,false);
+    assert.equal((await call(c1,'attach_claimant_phone($1,$2,$3,$4,$5,$6,$7,$8)',[r1.invitationId,r1.op,'zz','+91','+91 72',Buffer.from('short'),'k1','2345'])).attached,false);
 
     // --- reveal permission matrix
     const mm=uuid();
@@ -925,7 +928,8 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     await db.query('DELETE FROM shared_expenses.phone_directory WHERE profile_id=$1',[own]);
     assert.equal((await reveal(own,r1.invitationId)).error,'owner_phone_required');
     await call(own,'register_phone($1,NULL)',[phoneHash('+919000000001')]);
-    // caps: 5 per hour, 30 per day
+    // caps: 5 per hour, 30 per day (look-alike disclosures share the same budget, so start clean)
+    await db.query("DELETE FROM shared_expenses.phone_reveals WHERE via='lookalike'");
     for(let n=0;n<4;n++)assert.ok((await reveal(own,r1.invitationId)).enc);
     assert.equal((await reveal(own,r1.invitationId)).error,'reveal_rate_limited','sixth in an hour');
     await db.query("UPDATE shared_expenses.phone_reveals SET at=clock_timestamp()-interval '2 hours'");
@@ -962,13 +966,13 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     await call(own,'remove_member($1,$2,$3,$4)',[g,r4.memberId,uuid(),H('8')]);
     a1=await row(r4.invitationId);assert.equal(a1.claimant_phone_enc,null);assert.equal(a1.state,'rejected');
     // link revoke drops numbers of requests that came through the link
-    const r6=await claim(c6,null,'0958');await attach(c6,r6.invitationId);
+    const r6=await claim(c6,null,'0958');await attach(c6,r6);
     assert.ok((await row(r6.invitationId)).claimant_phone_enc);
     await call(own,'revoke_group_link($1,$2,$3)',[g,uuid(),H('9')]);
     assert.equal((await row(r6.invitationId)).claimant_phone_enc,null);
     await call(own,'create_group_link($1,$2,$3,$4)',[g,link,uuid(),H('a')]);
     // lazy purge at expiry (a list is enough), and the hourly function
-    const r7=await claim(c7,null,'1122');await attach(c7,r7.invitationId);
+    const r7=await claim(c7,null,'1122');await attach(c7,r7);
     await db.query("UPDATE shared_expenses.invitations SET expires_at=clock_timestamp()-interval '1 minute' WHERE invitation_id IN ($1,$2)",[r7.invitationId,r6.invitationId]);
     assert.ok((await row(r7.invitationId)).claimant_phone_enc,'still stored until something looks');
     assert.equal((await requests()).some(i=>i.invitationId===r7.invitationId),false,'expired requests are not listed');
@@ -976,10 +980,11 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     assert.equal((await reveal(own,r7.invitationId)).error,'phone_not_available');
     // zombie: an expired pending request comes back to life on a new claim, with the same member
     const back=await claim(c7,null,'1122');
+    r7.op=back.op;
     assert.equal(back.invitationId,r7.invitationId);assert.equal(back.memberId,r7.memberId);
     assert.ok((await row(r7.invitationId)).expires_at>new Date(Date.now()+6*86400000),'expiry reset to a week');
     assert.equal((await requests()).some(i=>i.invitationId===r7.invitationId),true);
-    await attach(c7,r7.invitationId);
+    await attach(c7,r7);
     await db.query("UPDATE shared_expenses.invitations SET expires_at=clock_timestamp()-interval '1 minute' WHERE invitation_id=$1",[r7.invitationId]);
     assert.equal((await db.query('SELECT shared_expenses.purge_expired_claimant_phones() AS n')).rows[0].n>=1,true,'hourly purge');
     assert.equal((await row(r7.invitationId)).claimant_phone_enc,null);
@@ -989,7 +994,7 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     const r8=await claim(c8,null,'0099');
     assert.equal(r8.status,'awaiting_owner','20 expired zombies do not block a new request');
     // account deletion scrubs everything about the claimant
-    await attach(c8,r8.invitationId);
+    await attach(c8,r8);
     await db.query('DELETE FROM public.profiles WHERE id=$1',[c8]);
     const gone=await row(r8.invitationId);
     assert.equal(gone.claimed_profile_id,null);assert.equal(gone.verified_phone_suffix,null);assert.equal(gone.claimant_phone_enc,null);assert.equal(gone.claimant_phone_hash,null);assert.equal(gone.claimant_phone_cc,null);assert.equal(gone.claimant_phone_mask,null);assert.equal(gone.state,'rejected');
@@ -1070,5 +1075,171 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     for(const v of vectors.labelKey)assert.equal((await db.query('SELECT shared_expenses._label_key($1) AS v',[v.input])).rows[0].v,v.key,'label key '+JSON.stringify(v.input));
     for(const v of vectors.cleanLabel)assert.equal((await db.query('SELECT shared_expenses._clean_label($1) AS v',[v.input])).rows[0].v,v.clean,'clean '+JSON.stringify(v.input));
     for(const v of vectors.labelKey)assert.equal(labelLib.labelKey(v.input),v.key);
+    for(const v of vectors.reserved)assert.equal((await db.query('SELECT shared_expenses._label_reserved(shared_expenses._label_key($1)) AS v',[v.input])).rows[0].v,v.reserved,'reserved '+JSON.stringify(v.input));
+    for(const v of vectors.reserved)assert.equal(labelLib.isReservedLabel(v.input),v.reserved);
+  });
+  await t.test('join identity review fixes: replay, caps, scoping, friends, cleaning, group-link audience',async()=>{
+    const H=(ch)=>ch.repeat(64), uuid=()=>crypto.randomUUID(), tok=()=>crypto.randomBytes(32).toString('hex');
+    const o=pid(0x30), o2=pid(0x31), c1=pid(0x32), c2=pid(0x33), c3=pid(0x34), c4=pid(0x35), fr=pid(0x36), stray=pid(0x38);
+    await db.query("INSERT INTO public.profiles VALUES($1,'Pia Owner'),($2,'Quin Owner'),($3,'Rita Claim'),($4,'Sita Claim'),($5,'Tara Claim'),($6,'Uma Claim'),($7,'Vik Friend'),($8,'Xan Stray')",[o,o2,c1,c2,c3,c4,fr,stray]);
+    const E={[c1]:'+917234500001',[c2]:'+917299900001',[c3]:'+917234500003',[c4]:'+917288800003'};
+    const call=(who,fn,args)=>actor(who,()=>db.query(`SELECT shared_expenses.${fn} AS v`,args)).then(r=>r.rows[0].v);
+    const row=(inv)=>db.query('SELECT * FROM shared_expenses.invitations WHERE invitation_id=$1',[inv]).then(r=>r.rows[0]);
+    const g=uuid(), link=tok(), g2=uuid(), link2=tok();
+    await call(o,"create_context($1,'group','Review trip',$2,$3)",[g,uuid(),H('1')]);
+    await call(o2,"create_context($1,'group','Other trip',$2,$3)",[g2,uuid(),H('2')]);
+    await call(o,'register_phone($1,NULL)',[phoneHash('+919100000001')]);
+    await call(o2,'register_phone($1,NULL)',[phoneHash('+919100000002')]);
+    await call(o,'create_group_link($1,$2,$3,$4)',[g,link,uuid(),H('3')]);
+    await call(o2,'create_group_link($1,$2,$3,$4)',[g2,link2,uuid(),H('4')]);
+    const claim=(who,share,suffix='0001',op=uuid(),token=link,h=H('5'))=>call(who,'claim_invitation($1,$2,$3,$4,$5,$6)',[token,E[who]?phoneHash(E[who]):null,suffix,op,h,share]).then(r=>({...r,op}));
+    const attach=(who,c,e164=E[who],op=c.op)=>{const sealed=encryptPhone(ring,c.invitationId,e164),shown=describePhone(e164);return call(who,'attach_claimant_phone($1,$2,$3,$4,$5,$6,$7,$8)',[c.invitationId,op,phoneHash(e164),shown.countryCode,shown.mask,sealed.enc,sealed.keyId,e164.slice(-4)]);};
+
+    // (2) a replay is recognisable and can never re-share; a changed choice is a conflict
+    const first=await claim(c1,null,'0001');
+    assert.equal(first.fresh,true);
+    const replay=await call(c1,'claim_invitation($1,$2,$3,$4,$5,$6)',[link,phoneHash(E[c1]),'0001',first.op,H('5'),null]);
+    assert.equal(replay.fresh,undefined,'the stored reply has no fresh marker');assert.equal(replay.invitationId,first.invitationId);
+    await assert.rejects(call(c1,'claim_invitation($1,$2,$3,$4,$5,$6)',[link,phoneHash(E[c1]),'0001',first.op,H('6'),null]),/operation_conflict/,'same operation, different request hash');
+    assert.equal((await attach(c1,first)).attached,true);
+    assert.equal((await attach(c1,first)).attached,false,'a replayed claim cannot attach twice');
+    const declined=await claim(c1,'declined','0001');
+    assert.equal((await attach(c1,first)).attached,false,'a stale claim cannot re-share after "ask without sharing"');
+    assert.equal((await row(first.invitationId)).phone_share,'declined');
+    const third=await claim(c1,null,'0001');
+    assert.equal((await attach(c1,first)).attached,false,'nor after a newer claim with a different operation');
+    assert.equal((await attach(c1,declined)).attached,false);
+    assert.equal((await attach(c1,third)).attached,true);
+
+    // group-link claims reach the owner's notifier: the audience resolves the LINK token to the caller's own request
+    const aud=await call(c1,'invitation_audience($1)',[link]);
+    assert.deepEqual(aud.owners,[o]);assert.equal(aud.contextId,g);assert.equal(aud.claimantName,'Rita Claim');
+    assert.ok(!JSON.stringify(aud).includes('72345'));assert.ok(Object.keys(aud).every((k)=>!/phone/i.test(k)||k==='claimantPhoneSuffix'));
+    await assert.rejects(call(c2,'invitation_audience($1)',[link]),/invitation_unavailable/,'a person who never claimed gets nothing');
+    await assert.rejects(call(c1,'invitation_audience($1)',[link2]),/invitation_unavailable/);
+
+    // (10) the caps are checked before an expired request is revived
+    const z=await claim(c2,null,'0001');
+    await db.query("UPDATE shared_expenses.invitations SET expires_at=clock_timestamp()-interval '1 hour' WHERE invitation_id=$1",[z.invitationId]);
+    await db.query("INSERT INTO shared_expenses.members(context_id,member_id,role,state,display_name) SELECT $1,gen_random_uuid(),'member','invited','live '||n FROM generate_series(1,20) n",[g]);
+    await db.query("INSERT INTO shared_expenses.invitations(invitation_id,context_id,member_id,issuer_profile_id,token_hash,claimed_profile_id,state,via_group_link,expires_at) SELECT gen_random_uuid(),$1,m.member_id,$2,encode(sha256(convert_to(m.member_id::text,'UTF8')),'hex'),gen_random_uuid(),'awaiting_owner',true,clock_timestamp()+interval '2 days' FROM shared_expenses.members m WHERE m.context_id=$1 AND m.display_name LIKE 'live %'",[g,o]);
+    await assert.rejects(claim(c2,null,'0001'),/join_requests_full/,'a full list blocks the revival');
+    assert.ok((await row(z.invitationId)).expires_at<new Date(),'and the request stays expired');
+    await db.query("DELETE FROM shared_expenses.invitations WHERE invitation_id IN (SELECT i.invitation_id FROM shared_expenses.invitations i JOIN shared_expenses.members m USING(context_id,member_id) WHERE m.display_name LIKE 'live %')");
+    await db.query("DELETE FROM shared_expenses.members WHERE display_name LIKE 'live %'");
+    const revived=await claim(c2,null,'0001');
+    assert.equal(revived.invitationId,z.invitationId);assert.ok((await row(z.invitationId)).expires_at>new Date());
+
+    // (9) look-alike full numbers spend the reveal budget; when it is spent the item is left out
+    const l3=await claim(c3,null,'0003');await attach(c3,l3);
+    const l4=await claim(c4,null,'0003');await attach(c4,l4);
+    await attach(c2,revived);
+    const lookalike=(await call(o,'list_join_requests()',[])).items.filter((i)=>i.claimantPhone.lookalike);
+    assert.ok(lookalike.length>=4,'same mask, different numbers');
+    await db.query("DELETE FROM shared_expenses.phone_reveals");
+    await db.query("INSERT INTO shared_expenses.phone_reveals(invitation_id,owner_profile_id,via) SELECT gen_random_uuid(),$1,'tap' FROM generate_series(1,5)",[o]);
+    const ids=lookalike.map((i)=>i.invitationId);
+    assert.deepEqual(await call(o,'list_join_requests_enc($1)',[ids]),[],'budget spent => nothing in full, no failure');
+    assert.ok((await call(o,'list_join_requests()',[])).items.filter((i)=>i.claimantPhone.lookalike).length>=4,'still marked look-alike');
+    await db.query("DELETE FROM shared_expenses.phone_reveals");
+    assert.equal((await call(o,'list_join_requests_enc($1)',[ids])).length,ids.length);
+    assert.equal((await call(o,'list_join_requests_enc($1)',[ids])).length,ids.length,'same hour, same requests: no second charge');
+    assert.equal((await db.query("SELECT count(*)::int n FROM shared_expenses.phone_reveals WHERE via='lookalike'")).rows[0].n,ids.length);
+    await db.query("DELETE FROM shared_expenses.phone_directory WHERE profile_id=$1",[o]);
+    await db.query("DELETE FROM shared_expenses.phone_reveals");
+    assert.deepEqual(await call(o,'list_join_requests_enc($1)',[ids]),[],'the owner needs a verified number for this too');
+    assert.equal((await call(o,'reveal_claimant_phone($1)',[l3.invitationId])).error,'owner_phone_required');
+    assert.equal((await call(o,'check_claimant_phone($1,$2)',[l3.invitationId,H('a')])).error,'owner_phone_required');
+    await call(o,'register_phone($1,NULL)',[phoneHash('+919100000001')]);
+
+    // (16) check-phone is audited and capped per owner per day
+    assert.equal((await call(o,'check_claimant_phone($1,$2)',[l3.invitationId,H('a')])).matches,false);
+    assert.equal((await db.query("SELECT count(*)::int n FROM shared_expenses.phone_reveals WHERE via='check' AND owner_profile_id=$1",[o])).rows[0].n,1);
+    await db.query("INSERT INTO shared_expenses.phone_reveals(invitation_id,owner_profile_id,via) SELECT $1,$2,'check' FROM generate_series(1,20)",[l3.invitationId,o]);
+    assert.equal((await call(o,'check_claimant_phone($1,$2)',[l3.invitationId,H('b')])).error,'check_rate_limited');
+    await db.query("DELETE FROM shared_expenses.phone_reveals");
+
+    // (15) once a request is resolved nothing is guessed about its number any more
+    await call(o,'respond_invitation($1,true,$2,$3)',[l3.invitationId,uuid(),H('7')]);
+    const resolved=(await call(o,'list_invitations($1,NULL)',[g])).items.find((i)=>i.invitationId===l3.invitationId).claimantPhone;
+    assert.equal(resolved.numberStatus,'unknown');assert.equal(resolved.lookalike,false);assert.deepEqual(resolved.duplicateOf,[]);assert.equal(resolved.mask,null);assert.equal(resolved.available,false);
+
+    // (14) the lazy purge touches only the reader's own splits, and never breaks a read-only read
+    const other=await claim(c3,null,'0003',uuid(),link2);await attach(c3,other);
+    await db.query("UPDATE shared_expenses.invitations SET expires_at=clock_timestamp()-interval '1 minute' WHERE invitation_id=$1",[other.invitationId]);
+    await call(o,'list_join_requests()',[]);
+    assert.ok((await row(other.invitationId)).claimant_phone_enc,'another owner\'s expired row is left alone by this owner\'s read');
+    await call(o2,'list_join_requests()',[]);
+    assert.equal((await row(other.invitationId)).claimant_phone_enc,null,'its own owner\'s read purges it');
+    const other2=await claim(c4,null,'0003',uuid(),link2);await attach(c4,other2);
+    await db.query("UPDATE shared_expenses.invitations SET expires_at=clock_timestamp()-interval '1 minute' WHERE invitation_id=$1",[other2.invitationId]);
+    assert.ok((await db.query('SELECT shared_expenses.purge_expired_claimant_phones() AS n')).rows[0].n>=1);
+    assert.equal((await row(other2.invitationId)).claimant_phone_enc,null);
+    const sentinel=new Error('rollback-read-only');
+    await assert.rejects(actor(o,async()=>{
+      await db.query('SET LOCAL transaction_read_only=on');
+      const listed=(await db.query('SELECT shared_expenses.list_join_requests() AS v')).rows[0].v;
+      assert.ok(Array.isArray(listed.items),'a read-only transaction still lists');
+      throw sentinel;
+    }),/rollback-read-only/);
+
+    // (5) deletion: indexed, never blocked by a scrub problem, erases the owner id of audit rows
+    assert.equal((await db.query("SELECT count(*)::int n FROM pg_indexes WHERE schemaname='shared_expenses' AND indexname='shared_invitations_claimed_profile'")).rows[0].n,1);
+    await db.query("INSERT INTO shared_expenses.phone_reveals(invitation_id,owner_profile_id,via) VALUES($1,$2,'tap')",[l4.invitationId,stray]);
+    await db.query('DELETE FROM public.profiles WHERE id=$1',[stray]);
+    assert.equal((await db.query('SELECT count(*)::int n FROM shared_expenses.phone_reveals WHERE owner_profile_id IS NULL')).rows[0].n,1);
+    const broken=await claim(c4,null,'0003',uuid(),link);
+    await db.query("ALTER TABLE shared_expenses.invitations ADD CONSTRAINT scrub_boom CHECK(phone_share<>'none') NOT VALID");
+    await db.query('DELETE FROM public.profiles WHERE id=$1',[c4]);
+    assert.equal((await db.query('SELECT count(*)::int n FROM public.profiles WHERE id=$1',[c4])).rows[0].n,0,'the account is gone even though the scrub could not finish');
+    await db.query('ALTER TABLE shared_expenses.invitations DROP CONSTRAINT scrub_boom');
+    assert.equal(broken.status,'awaiting_owner');
+
+    // (3) + (8) friends: only the creator is checked against their own list, a gone friend never blocks
+    const d1=uuid(), d1m=uuid(), d2=uuid(), d2m=uuid();
+    await call(o2,"create_context($1,'direct','Kiran',$2,$3)",[d1,uuid(),H('8')]);
+    await call(o2,'invite_member($1,$2,$3)',[{contextId:d1,memberId:d1m,profileId:fr,displayName:'Kiran'},uuid(),H('9')]);
+    await call(fr,'respond_membership($1,$2,$3,$4,$5)',[d1,d1m,true,uuid(),H('a')]);
+    await call(o2,"create_context($1,'direct','Lena',$2,$3)",[d2,uuid(),H('b')]);
+    await call(o2,'invite_member($1,$2,$3)',[{contextId:d2,memberId:d2m,displayName:'Lena'},uuid(),H('c')]);
+    const e=await call(o2,'rename_member($1,$2,$3)',[{contextId:d2,memberId:d2m,displayName:'kiran'},uuid(),H('d')]).then(()=>null,(x)=>x);
+    assert.equal(e?.message,'friend_name_taken');assert.equal(e.detail,d1,'the creator is pointed at their own split');
+    // the counterpart renaming THEIR OWN row is never checked against the creator's friends list
+    const selfRename=await call(fr,'rename_member($1,$2,$3)',[{contextId:d1,memberId:d1m,displayName:'Lena'},uuid(),H('e')]);
+    assert.equal(selfRename.displayName,'Lena');
+    // the creator's friend who left or was removed does not dead-end the name
+    const gone=uuid(), goneM=uuid();
+    await call(o2,"create_context($1,'direct','Mira',$2,$3)",[gone,uuid(),H('2')]);
+    await call(o2,'invite_member($1,$2,$3)',[{contextId:gone,memberId:goneM,displayName:'Mira'},uuid(),H('3')]);
+    const again=await call(o2,"create_context($1,'direct','mira',$2,$3)",[uuid(),uuid(),H('4')]).then(()=>null,(x)=>x);
+    assert.equal(again?.message,'friend_name_taken','while Mira is invited');
+    await call(o2,'remove_member($1,$2,$3,$4)',[gone,goneM,uuid(),H('5')]);
+    assert.equal((await call(o2,"create_context($1,'direct','mira',$2,$3)",[uuid(),uuid(),H('6')])).status,'created','after removal the name is free again');
+    // an invitation that expired unanswered also frees the name
+    const exp=uuid(), expM=uuid();
+    await call(o2,"create_context($1,'direct','Noor',$2,$3)",[exp,uuid(),H('7')]);
+    await call(o2,'invite_member($1,$2,$3)',[{contextId:exp,memberId:expM,displayName:'Noor'},uuid(),H('8')]);
+    await call(o2,'create_invitation($1,$2)',[{invitationId:uuid(),contextId:exp,memberId:expM,targetPhoneHash:null,tokenHash:tok()},H('9')]);
+    await db.query("UPDATE shared_expenses.invitations SET expires_at=clock_timestamp()-interval '1 day' WHERE context_id=$1",[exp]);
+    assert.equal((await call(o2,"create_context($1,'direct','noor',$2,$3)",[uuid(),uuid(),H('a')])).status,'created');
+    // a declined friend does not use up the direct split's two seats
+    const seat=uuid(), seatM=uuid(), seatM2=uuid();
+    await call(o2,"create_context($1,'direct','Omar',$2,$3)",[seat,uuid(),H('b')]);
+    await call(o2,'invite_member($1,$2,$3)',[{contextId:seat,memberId:seatM,displayName:'Omar'},uuid(),H('c')]);
+    await call(o2,'remove_member($1,$2,$3,$4)',[seat,seatM,uuid(),H('d')]);
+    assert.equal((await call(o2,'invite_member($1,$2,$3)',[{contextId:seat,memberId:seatM2,displayName:'Omar B'},uuid(),H('e')])).status,'invited');
+
+    // (13) names that reach other people are cleaned wherever they come from
+    const dirty='Bad‮ ​Trip';
+    const named=uuid();
+    await call(o2,"create_context($1,'group',$2,$3,$4)",[named,dirty+'\n'+'y'.repeat(100),uuid(),H('f')]).catch((x)=>assert.fail(x.message));
+    const storedName=(await db.query('SELECT name FROM shared_expenses.contexts WHERE context_id=$1',[named])).rows[0].name;
+    assert.ok(!/[‮​\n]/.test(storedName));assert.ok(Array.from(storedName).length<=120);assert.match(storedName,/^Bad Trip y+/);
+    await db.query("UPDATE shared_expenses.contexts SET name=$2 WHERE context_id=$1",[named,'Legacy‮​ name']);
+    assert.equal((await db.query("SELECT shared_expenses._context_label('group','Legacy‮​ name',$1,$1,$2) AS v",[o2,named])).rows[0].v,'Legacy name','stored legacy names are cleaned on the way out');
+    assert.equal((await db.query("SELECT shared_expenses._member_label($1,NULL) AS v",['Eve‮l​'])).rows[0].v,'Evel');
+    await db.query("UPDATE public.profiles SET display_name=$2 WHERE id=$1",[o2,'Quin‮​ Owner']);
+    const pv=await call(c3,'preview_invitation($1)',[link2]);
+    assert.equal(pv.ownerName,'Quin Owner');
   });
 });
