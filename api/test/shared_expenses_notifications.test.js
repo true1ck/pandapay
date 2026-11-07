@@ -183,3 +183,14 @@ test('claimantProfileName and the phone suffix never reach the push text', async
   assert.equal(insert.params[2], 'Mom wants to join');
   assert.doesNotMatch(`${insert.params[2]} ${insert.params[3]}`, /Secret|4821/);
 });
+
+test('a direct split with only the generic fallback title omits "in <split>"', () => {
+  for (const contextName of ['PandaPay friend', '', null, '  ']) {
+    const [req] = plan({ ...base, kind: 'invitation.requested', payload: {}, contextName });
+    assert.equal(req.body, 'Asha asked to join your split. Approve or decline.', String(contextName));
+    const [joined] = plan({ ...base, kind: 'invitation.joined', payload: {}, contextName });
+    assert.equal(joined.body, 'Asha joined your split.');
+  }
+  const [named] = plan({ ...base, kind: 'invitation.requested', payload: {}, contextName: 'Goa trip' });
+  assert.match(named.body, /^Asha asked to join in Goa trip\./);
+});

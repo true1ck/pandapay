@@ -739,6 +739,12 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     await db.query("UPDATE shared_expenses.members SET state='left' WHERE member_id=$1",[shadow]);
     await assert.rejects(rename(own,shadow,'Again'),/member_not_renamable/);
 
+    // member.invite uses the same cleaner as rename (trigger on every stored name).
+    const invite=(displayName)=>{const m=uuid();return call(own,'invite_member($1,$2,$3)',[{contextId:g,memberId:m,displayName},uuid(),H('f')]).then(()=>memberName(g,m));};
+    assert.equal(await invite('z'.repeat(110)),'z'.repeat(40),'long invite name capped');
+    assert.equal(await invite(' Ra\n\thul\u0085  K '),'Ra hul K','control chars incl. U+0085 become one space');
+    assert.equal(await invite('\u{1F600}'.repeat(60)),'\u{1F600}'.repeat(40),'cut on a code point, no half pair');
+    for(const bad of ['\u0085','\u0085\u0009\u009f','\u0007'])await assert.rejects(call(own,'invite_member($1,$2,$3)',[{contextId:g,memberId:uuid(),displayName:bad},uuid(),H('f')]),/invalid_member_name/,JSON.stringify(bad));
     // Join request: the owner sees the claimant's LIVE name next to the typed label, plus the new keys.
     const g2=uuid(), friend=uuid(), inv2=uuid(), tokenHash=crypto.randomBytes(32).toString('hex');
     await call(own,"create_context($1,'direct','Join labels',$2,$3)",[g2,uuid(),H('a')]);

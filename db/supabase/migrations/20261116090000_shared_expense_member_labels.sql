@@ -109,6 +109,31 @@ GRANT EXECUTE ON FUNCTION shared_expenses.list_invitations(uuid,uuid) TO app_use
 -- member.rename: set the label other people see for a member. The context owner
 -- may rename any active or invited member; anyone may rename their own row.
 -- Text is trimmed, control characters stripped, whitespace collapsed, capped at 40.
+-- One cleaner for every stored member name: control characters (C0, DEL, C1 incl.
+-- U+0085) and line/paragraph separators become a space, whitespace collapses,
+-- trimmed, capped at 40 characters (left() counts code points, so no half pairs).
+CREATE FUNCTION shared_expenses._clean_label(p text) RETURNS text LANGUAGE sql IMMUTABLE
+SET search_path=pg_catalog,pg_temp AS $$
+ SELECT btrim(left(btrim(regexp_replace(regexp_replace(p,'[\x01-\x1f\x7f-\x9f\u2028\u2029]+',' ','g'),'\s+',' ','g')),40))
+$$;
+ALTER FUNCTION shared_expenses._clean_label(text) OWNER TO shared_expenses_owner;
+REVOKE ALL ON FUNCTION shared_expenses._clean_label(text) FROM PUBLIC,app_user;
+GRANT EXECUTE ON FUNCTION shared_expenses._clean_label(text) TO shared_expenses_owner;
+
+-- Every path that stores a member name (invite, rename, direct/group creation,
+-- link joins) goes through this trigger, so none can bypass the rules.
+CREATE FUNCTION shared_expenses._members_clean_name() RETURNS trigger LANGUAGE plpgsql
+SET search_path=pg_catalog,shared_expenses,pg_temp AS $$ BEGIN
+ IF NEW.display_name IS NOT NULL THEN
+  NEW.display_name:=shared_expenses._clean_label(NEW.display_name);
+  IF NEW.display_name IS NULL OR NEW.display_name='' THEN RAISE EXCEPTION 'invalid_member_name' USING ERRCODE='22023'; END IF;
+ END IF;
+ RETURN NEW;
+END $$;
+ALTER FUNCTION shared_expenses._members_clean_name() OWNER TO shared_expenses_owner;
+REVOKE ALL ON FUNCTION shared_expenses._members_clean_name() FROM PUBLIC,app_user;
+CREATE TRIGGER shared_members_clean_name BEFORE INSERT OR UPDATE OF display_name ON shared_expenses.members FOR EACH ROW EXECUTE FUNCTION shared_expenses._members_clean_name();
+
 CREATE FUNCTION shared_expenses.rename_member(p_payload jsonb,p_operation_id uuid,p_request_hash text) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
 SET search_path=pg_catalog,shared_expenses,pg_temp AS $$
 DECLARE a uuid:=shared_expenses._actor(); ctx uuid; mid uuid; n text; r jsonb; t shared_expenses.members; is_owner boolean; seq bigint; required text[]:=ARRAY['contextId','memberId','displayName'];
@@ -117,7 +142,7 @@ BEGIN
  IF jsonb_typeof(p_payload)<>'object' OR NOT(p_payload ?& required) OR EXISTS(SELECT FROM jsonb_object_keys(p_payload) x(k) WHERE NOT k=ANY(required))
   OR octet_length(p_payload::text)>2048 OR jsonb_typeof(p_payload->'displayName')<>'string' THEN RAISE EXCEPTION 'invalid_member_name' USING ERRCODE='22023'; END IF;
  ctx:=(p_payload->>'contextId')::uuid; mid:=(p_payload->>'memberId')::uuid;
- n:=btrim(left(btrim(regexp_replace(regexp_replace(p_payload->>'displayName','[\x01-\x1f\x7f-\x9f]+',' ','g'),'\s+',' ','g')),40));
+ n:=shared_expenses._clean_label(p_payload->>'displayName');
  IF ctx IS NULL OR mid IS NULL OR n IS NULL OR n='' THEN RAISE EXCEPTION 'invalid_member_name' USING ERRCODE='22023'; END IF;
  IF NOT shared_expenses._can_read_context(ctx) THEN RAISE EXCEPTION 'context_not_authorized' USING ERRCODE='42501'; END IF;
  r:=shared_expenses._operation(p_operation_id,p_request_hash,'member.rename',p_payload,ctx); IF r IS NOT NULL THEN RETURN r; END IF;

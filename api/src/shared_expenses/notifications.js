@@ -15,7 +15,11 @@ const config = require('../config');
 const notificationService = require('../notification_service');
 const { enqueueNotification } = require('../notification_outbox');
 
+const { cleanLabel: sharedCleanLabel } = require('./label');
+
 const CATEGORY = 'needs_review';
+/** The generic title a direct split gets when the other person has no name at all. */
+const GENERIC_CONTEXT_LABEL = 'PandaPay friend';
 
 /** Only these commands ever notify someone; every other kind must cost no query. */
 const NOTIFYING_KINDS = new Set(['expense.propose', 'settlement.report', 'invitation.requested', 'invitation.joined']);
@@ -29,16 +33,16 @@ function enabled(options = {}) {
  * whitespace collapsed, capped at 40 characters. Returns null when nothing is left.
  */
 function cleanLabel(value) {
-  if (typeof value !== 'string') return null;
-  const clean = value.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40).trim();
-  return clean || null;
+  return sharedCleanLabel(value) || null;
 }
 
 /** Who needs to hear about a committed command, and what to tell them. */
 function plan({ kind, payload, actorMemberName, contextName, members, actorId }) {
   const label = cleanLabel(actorMemberName);
   const who = label || 'Someone';
-  const where = contextName ? ` in ${contextName}` : '';
+  const cleanContext = cleanLabel(contextName);
+  // "in PandaPay friend" reads wrongly, so the generic fallback is left out like a missing name.
+  const where = cleanContext && cleanContext !== GENERIC_CONTEXT_LABEL ? ` in ${cleanContext}` : '';
   const others = members.filter((m) => m.profileId && m.profileId !== actorId);
   switch (kind) {
     case 'expense.propose':

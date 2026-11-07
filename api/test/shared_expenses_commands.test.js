@@ -59,3 +59,17 @@ test('member.rename validates its closed payload and the shared label rules', ()
   assert.throws(()=>validateCommand({...base,payload:{...ok,memberId:'nope'}}),{code:'INVALID_INPUT'});
   assert.equal(validateCommand({...base,payload:{...ok,displayName:'x'.repeat(200)}}).command.payload.displayName.length,200,'long text is accepted here and capped to 40 by the database');
 });
+
+test('member names share one cleaner: C1 and U+0085 stripped, empty rejected, cap on code points', () => {
+  const { cleanLabel } = require('../src/shared_expenses/label');
+  assert.equal(cleanLabel('\u0085'), '');
+  assert.equal(cleanLabel(' A\u0085\t\r\nB\u009f C '), 'A B C');
+  assert.equal(cleanLabel('x'.repeat(120)), 'x'.repeat(40));
+  const emoji = '\u{1F600}'.repeat(60);
+  assert.equal(Array.from(cleanLabel(emoji)).length, 40, 'no half surrogate pairs');
+  assert.doesNotMatch(cleanLabel(emoji), /[\ud800-\udbff](?![\udc00-\udfff])/);
+  const base = { schemaVersion: 1, operationId: op, kind: 'member.invite' };
+  assert.throws(() => validateCommand({ ...base, payload: { contextId: context, memberId: member, displayName: '\u0085' } }), { code: 'INVALID_INPUT' });
+  assert.throws(() => validateCommand({ ...base, payload: { contextId: context, memberId: member, displayName: ' \n\t ' } }), { code: 'INVALID_INPUT' });
+  assert.equal(validateCommand({ ...base, payload: { contextId: context, memberId: member, displayName: 'Ra\nhul' } }).command.kind, 'member.invite');
+});
