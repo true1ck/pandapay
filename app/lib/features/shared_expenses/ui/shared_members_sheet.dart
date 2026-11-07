@@ -162,11 +162,18 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(_stateLine(member), style: style),
+        Text(
+          _stateLine(member),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: style,
+        ),
         if (hints[member.id] != null)
           Text(
             hints[member.id]!,
             key: ValueKey('member-hint-${member.id}'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: style,
           ),
         if (_canRename(roster, member))
@@ -806,6 +813,8 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
                                       member.id == roster.ownMemberId
                                           ? 'You'
                                           : _displayName(member),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
                                       style: BambooFonts.ui(
                                         14,
                                         weight: FontWeight.w600,

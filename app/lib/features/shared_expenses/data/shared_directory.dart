@@ -163,7 +163,7 @@ final class SharedInboxInvite {
 /// Someone who joined through the owner's shared link and awaits approval.
 final class SharedJoinRequest {
   final String invitationId, contextId, contextName;
-  final String? memberName, claimantName, phoneSuffix;
+  final String? memberName, claimantName, phoneSuffix, contextKind;
 
   /// The person's live PandaPay profile name and verified number ending.
   /// Both are absent when talking to an older server.
@@ -177,6 +177,7 @@ final class SharedJoinRequest {
     this.phoneSuffix,
     this.claimantProfileName,
     this.claimantPhoneSuffix,
+    this.contextKind,
   });
   factory SharedJoinRequest.fromJson(Map<String, Object?> value) {
     final id = value['invitationId'], ctx = value['contextId'];
@@ -200,6 +201,9 @@ final class SharedJoinRequest {
       phoneSuffix: _suffix(value['verifiedPhoneSuffix']),
       claimantProfileName: _text(value['claimantProfileName']),
       claimantPhoneSuffix: _suffix(value['claimantPhoneSuffix']),
+      contextKind: value['contextKind'] is String
+          ? value['contextKind'] as String
+          : null,
     );
   }
 
@@ -231,7 +235,16 @@ final class SharedJoinRequest {
         : '$name opened the link (number ending $phoneSuffix)';
   }
 
-  String get headline => '${label ?? 'Someone'} wants to join "$contextName"';
+  /// A friend split is named after the person, so quoting it repeats them.
+  bool get isDirect =>
+      contextKind == 'direct' ||
+      contextName == 'PandaPay friend' ||
+      (label != null &&
+          contextName.trim().toLowerCase() == label!.toLowerCase());
+
+  String get headline => isDirect
+      ? '${label ?? 'Someone'} wants to join your split'
+      : '${label ?? 'Someone'} wants to join "$contextName"';
 }
 
 /// Owner's view of a group's shared link.

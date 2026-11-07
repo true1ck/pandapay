@@ -19,7 +19,7 @@ class _InboxState extends State<SharedInviteInbox> with WidgetsBindingObserver {
   List<SharedJoinRequest> _requests = const [];
   final _busy = <String>{};
   String? _message;
-  bool _loaded = false;
+  bool _loaded = false, _expanded = false;
 
   @override
   void initState() {
@@ -128,121 +128,150 @@ class _InboxState extends State<SharedInviteInbox> with WidgetsBindingObserver {
     if (_items.isEmpty && _requests.isEmpty && _message == null) {
       return const SizedBox.shrink();
     }
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (final request in _requests)
-            Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: BambooInk.ink300),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+    final shown = _expanded ? _requests : _requests.take(3).toList();
+    // The inbox sits above the tabs, so it scrolls inside a capped height
+    // rather than pushing the lists off screen.
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * .4,
+      ),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: _inboxColumn(shown),
+        ),
+      ),
+    );
+  }
+
+  Widget _inboxColumn(List<SharedJoinRequest> shown) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final request in shown)
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: BambooInk.ink300),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  request.headline,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: BambooFonts.ui(14, weight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                if (request.signedInAs != null) ...[
                   Text(
-                    request.headline,
-                    style: BambooFonts.ui(14, weight: FontWeight.w600),
+                    request.signedInAs!,
+                    key: const Key('join-signed-in-as'),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: BambooFonts.ui(
+                      12.5,
+                      weight: FontWeight.w600,
+                      color: BambooInk.ink700,
+                    ),
                   ),
-                  const SizedBox(height: 4),
-                  if (request.signedInAs != null) ...[
-                    Text(
-                      request.signedInAs!,
-                      key: const Key('join-signed-in-as'),
-                      style: BambooFonts.ui(
-                        12.5,
-                        weight: FontWeight.w600,
-                        color: BambooInk.ink700,
+                  const SizedBox(height: 2),
+                ],
+                Text(
+                  // Older servers send no profile name: keep the old wording.
+                  '${request.signedInAs == null ? '${request.whoOpened}. ' : ''}Only approve if you recognise them. Approving only adds them; they cannot approve expenses for anyone else.',
+                  style: BambooFonts.ui(12, color: BambooInk.ink700),
+                ),
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: _busy.contains(request.invitationId)
+                          ? null
+                          : () => _decide(request, false),
+                      child: Text('Decline', style: BambooFonts.ui(13)),
+                    ),
+                    TextButton(
+                      onPressed: _busy.contains(request.invitationId)
+                          ? null
+                          : () => _decide(request, true),
+                      child: Text(
+                        'Approve',
+                        style: BambooFonts.ui(13, weight: FontWeight.w700),
                       ),
                     ),
-                    const SizedBox(height: 2),
                   ],
-                  Text(
-                    // Older servers send no profile name: keep the old wording.
-                    '${request.signedInAs == null ? '${request.whoOpened}. ' : ''}Only approve if you recognise them. Approving only adds them; they cannot approve expenses for anyone else.',
-                    style: BambooFonts.ui(12, color: BambooInk.ink700),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: _busy.contains(request.invitationId)
-                            ? null
-                            : () => _decide(request, false),
-                        child: Text('Decline', style: BambooFonts.ui(13)),
+                ),
+              ],
+            ),
+          ),
+        for (final invite in _items)
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: BambooInk.ink300),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  invite.headline,
+                  style: BambooFonts.ui(14, weight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Joining only lets you see and add shared expenses. You approve every expense yourself.',
+                  style: BambooFonts.ui(12, color: BambooInk.ink700),
+                ),
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: _busy.contains(invite.invitationId)
+                          ? null
+                          : () => _respond(invite, false),
+                      child: Text('Decline', style: BambooFonts.ui(13)),
+                    ),
+                    TextButton(
+                      onPressed: _busy.contains(invite.invitationId)
+                          ? null
+                          : () => _respond(invite, true),
+                      child: Text(
+                        _busy.contains(invite.invitationId)
+                            ? 'Please wait…'
+                            : 'Join',
+                        style: BambooFonts.ui(13, weight: FontWeight.w700),
                       ),
-                      TextButton(
-                        onPressed: _busy.contains(request.invitationId)
-                            ? null
-                            : () => _decide(request, true),
-                        child: Text(
-                          'Approve',
-                          style: BambooFonts.ui(13, weight: FontWeight.w700),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        if (_requests.length > 3)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              key: const Key('join-requests-toggle'),
+              onPressed: () => setState(() => _expanded = !_expanded),
+              child: Text(
+                _expanded
+                    ? 'Show fewer requests'
+                    : '+${_requests.length - 3} more requests',
+                style: BambooFonts.ui(13),
               ),
             ),
-          for (final invite in _items)
-            Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: BambooInk.ink300),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    invite.headline,
-                    style: BambooFonts.ui(14, weight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Joining only lets you see and add shared expenses. You approve every expense yourself.',
-                    style: BambooFonts.ui(12, color: BambooInk.ink700),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: _busy.contains(invite.invitationId)
-                            ? null
-                            : () => _respond(invite, false),
-                        child: Text('Decline', style: BambooFonts.ui(13)),
-                      ),
-                      TextButton(
-                        onPressed: _busy.contains(invite.invitationId)
-                            ? null
-                            : () => _respond(invite, true),
-                        child: Text(
-                          _busy.contains(invite.invitationId)
-                              ? 'Please wait…'
-                              : 'Join',
-                          style: BambooFonts.ui(13, weight: FontWeight.w700),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          if (_message != null)
-            Text(
-              _message!,
-              style: BambooFonts.ui(12.5, color: BambooInk.ink700),
-            ),
-        ],
-      ),
+          ),
+        if (_message != null)
+          Text(_message!, style: BambooFonts.ui(12.5, color: BambooInk.ink700)),
+      ],
     );
   }
 }

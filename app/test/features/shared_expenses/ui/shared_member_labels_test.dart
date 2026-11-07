@@ -404,4 +404,193 @@ void main() {
       'Rahul Kumar',
     );
   });
+
+  testWidgets('120-char label at 2x font scale never overflows', (
+    tester,
+  ) async {
+    final long = 'Ramachandran ' * 9 + 'Iyer';
+    expect(long.length, greaterThan(115));
+    tester.view.physicalSize = const Size(430, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    runtime.requests = [
+      join({
+        'memberName': long,
+        'claimantProfileName': 'Different ${'Name ' * 25}',
+        'claimantPhoneSuffix': '4821',
+      }),
+    ];
+    runtime.people = [
+      const SharedEditorMember(me, 'You', profileId: account, role: 'owner'),
+      SharedEditorMember(friend, long, profileId: friend, rawName: long),
+    ];
+    Widget scaled(Widget child) => ProviderScope(
+      overrides: [
+        sharedExpensesRuntimeProvider.overrideWith((ref) async => runtime),
+        cacheNamespaceProvider.overrideWith(
+          (ref) => ref.watch(sessionNamespace),
+        ),
+      ],
+      child: MaterialApp(
+        theme: AppTheme.light(),
+        builder: (context, c) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: const TextScaler.linear(2.0)),
+          child: c!,
+        ),
+        home: Scaffold(body: SingleChildScrollView(child: child)),
+      ),
+    );
+    await tester.pumpWidget(scaled(SharedInviteInbox(runtime: runtime)));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Ramachandran'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(
+      scaled(
+        Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showSharedRenameMemberDialog(
+              context,
+              title: 'Edit name',
+              initialName: long,
+            ),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('rename-member-field')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('members sheet with a 120-char label at 2x does not overflow', (
+    tester,
+  ) async {
+    final long = 'Ramachandran ' * 9 + 'Iyer';
+    tester.view.physicalSize = const Size(430, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    runtime.people = [
+      const SharedEditorMember(me, 'You', profileId: account, role: 'owner'),
+      SharedEditorMember(friend, long, profileId: friend, rawName: long),
+      SharedEditorMember(other, long, profileId: other, phoneSuffix: '1190'),
+    ];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedExpensesRuntimeProvider.overrideWith((ref) async => runtime),
+          cacheNamespaceProvider.overrideWith(
+            (ref) => ref.watch(sessionNamespace),
+          ),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          builder: (context, c) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2.0)),
+            child: c!,
+          ),
+          home: Scaffold(
+            body: SharedMembersSheet(
+              runtime: runtime,
+              contextId: group,
+              groupName: 'Trip Group',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('7 requests at 2x scale: no overflow, friends list reachable', (
+    tester,
+  ) async {
+    final long = 'Ramachandran ' * 9 + 'Iyer';
+    tester.view.physicalSize = const Size(430, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    runtime.requests = [
+      for (var n = 0; n < 7; n++)
+        SharedJoinRequest.fromJson({
+          'invitationId': '66666666-6666-4666-8666-66666666666$n',
+          'contextId': group,
+          'contextName': 'Goa',
+          'memberName': n == 3 ? long : 'Person $n',
+          'claimantProfileName': 'Signed ${'Name ' * 10}$n',
+          'claimantPhoneSuffix': '4821',
+        }),
+    ];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedExpensesRuntimeProvider.overrideWith((ref) async => runtime),
+          cacheNamespaceProvider.overrideWith(
+            (ref) => ref.watch(sessionNamespace),
+          ),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          builder: (context, c) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2.0)),
+            child: c!,
+          ),
+          // Same shape as the Splits screen: inbox above a scrolling list.
+          home: Scaffold(
+            body: Column(
+              children: [
+                SharedInviteInbox(runtime: runtime),
+                Expanded(
+                  child: ListView(
+                    children: [
+                      for (var n = 0; n < 20; n++)
+                        ListTile(title: Text('Friend row $n')),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Friend row 0'), findsOneWidget);
+    expect(find.text('+4 more requests'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Friend row 19'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('Friend row 19'), findsOneWidget);
+    // Expanding keeps everything inside the capped, scrollable inbox.
+    await tester.tap(find.byKey(const Key('join-requests-toggle')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('direct join card drops the repeated split name', (tester) async {
+    await inbox(
+      tester,
+      join({
+        'memberName': 'Rahul Sharma',
+        'contextName': 'Rahul Sharma',
+        'contextKind': 'direct',
+      }),
+    );
+    expect(find.text('Rahul Sharma wants to join your split'), findsOneWidget);
+  });
 }

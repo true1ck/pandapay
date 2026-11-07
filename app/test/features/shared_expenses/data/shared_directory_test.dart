@@ -251,6 +251,22 @@ void main() {
       expect(nameOnly.signedInAs, isNull);
     });
 
+    test('friend splits do not repeat the name as the split', () {
+      for (final extra in [
+        {'contextKind': 'direct', 'contextName': 'PandaPay friend'},
+        {'contextName': 'Rahul Sharma'},
+      ]) {
+        final r = SharedJoinRequest.fromJson(
+          req({'memberName': 'Rahul Sharma', ...extra}),
+        );
+        expect(r.headline, 'Rahul Sharma wants to join your split');
+      }
+      final group = SharedJoinRequest.fromJson(
+        req({'memberName': 'Rahul', 'contextKind': 'group'}),
+      );
+      expect(group.headline, 'Rahul wants to join "Goa"');
+    });
+
     test('same visible name gets a number ending, others do not', () {
       final hints = sharedSameNameHints([
         (id: 'a', label: 'Rahul', suffix: '4821'),
