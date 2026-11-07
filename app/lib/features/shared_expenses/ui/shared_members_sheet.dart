@@ -78,6 +78,14 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
     _loadInvitations();
     _loadGroupLink();
     _loadPendingPhones();
+    _nameField.addListener(_onFieldChanged);
+    _phoneField.addListener(_onFieldChanged);
+  }
+
+  void _onFieldChanged() {
+    if (_formError != null) {
+      setState(() => _formError = null);
+    }
   }
 
   Future<void> _loadPendingPhones() async {
@@ -543,6 +551,8 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
 
   @override
   void dispose() {
+    _nameField.removeListener(_onFieldChanged);
+    _phoneField.removeListener(_onFieldChanged);
     _nameField.dispose();
     _phoneField.dispose();
     super.dispose();
@@ -682,15 +692,20 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
 
     String? error;
     try {
-      final current = await _roster;
-      if (current.members.any((m) =>
-          m.state != "left" &&
-          m.name.trim().toLowerCase() == pickedName.trim().toLowerCase())) {
-        error =
-            "Someone in this split already has that name. Add a surname or initial.";
-      } else if (pickedPhone != null &&
-          _phones.values.any((p) => p == pickedPhone)) {
-        error = "Someone in this split is already invited with that number.";
+      final lower = pickedName.trim().toLowerCase();
+      if (lower == "you" || lower == "me" || lower == "myself") {
+        error = "That name cannot be used. Please choose a different one.";
+      } else {
+        final current = await _roster;
+        if (current.members.any((m) =>
+            m.state != "left" &&
+            m.name.trim().toLowerCase() == lower)) {
+          error =
+              "Someone in this split already has that name. Add a surname or initial.";
+        } else if (pickedPhone != null &&
+            _phones.values.any((p) => p == pickedPhone)) {
+          error = "Someone in this split is already invited with that number.";
+        }
       }
     } catch (_) {}
 

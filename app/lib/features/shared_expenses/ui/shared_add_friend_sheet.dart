@@ -236,7 +236,22 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
   late String? _error = widget.initialError;
 
   @override
+  void initState() {
+    super.initState();
+    _name.addListener(_onFieldChanged);
+    _phone.addListener(_onFieldChanged);
+  }
+
+  void _onFieldChanged() {
+    if (_error != null) {
+      setState(() => _error = null);
+    }
+  }
+
+  @override
   void dispose() {
+    _name.removeListener(_onFieldChanged);
+    _phone.removeListener(_onFieldChanged);
     _name.dispose();
     _phone.dispose();
     super.dispose();
@@ -245,10 +260,17 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
   Future<void> _pick() async {
     final contact = await sharedPickContact(context);
     if (contact == null || !mounted) return;
+    final pickedName = contact.$1;
+    final pickedPhone = sharedCleanPhone(contact.$2);
+    String? error;
+    final lower = pickedName.trim().toLowerCase();
+    if (lower == 'you' || lower == 'me' || lower == 'myself') {
+      error = 'That name cannot be used. Please choose a different one.';
+    }
     setState(() {
-      _name.text = contact.$1;
-      _phone.text = contact.$2;
-      _error = null;
+      _name.text = pickedName;
+      _phone.text = pickedPhone ?? '';
+      _error = error;
     });
   }
 

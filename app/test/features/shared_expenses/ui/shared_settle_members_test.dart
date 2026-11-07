@@ -441,9 +441,27 @@ void main() {
       );
       expect(runtime.store.pendingCount, 0);
 
-      // Case 4: Entering a reserved name like 'You' or 'Me'
+      // Case 4: Entering a reserved name like 'You', 'Me', or 'Myself'
       await tester.enterText(find.byType(TextField).first, 'You');
       await tester.enterText(find.byType(TextField).at(1), '');
+      await tester.tap(find.widgetWithText(FilledButton, 'Add person'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('That name cannot be used. Please choose a different one.'),
+        findsOneWidget,
+      );
+      expect(runtime.store.pendingCount, 0);
+
+      // Case 5: Typing a new character clears the error immediately
+      await tester.enterText(find.byType(TextField).first, 'Yo');
+      await tester.pumpAndSettle();
+      expect(
+        find.text('That name cannot be used. Please choose a different one.'),
+        findsNothing,
+      );
+
+      // Case 6: Entering 'Myself' is also blocked
+      await tester.enterText(find.byType(TextField).first, 'Myself');
       await tester.tap(find.widgetWithText(FilledButton, 'Add person'));
       await tester.pumpAndSettle();
       expect(
