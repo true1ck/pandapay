@@ -17,6 +17,8 @@ import 'shared_add_friend_sheet.dart';
 import 'shared_components.dart';
 import 'shared_context_guard.dart';
 import 'shared_rename_member_dialog.dart';
+import '../../../app/design/bamboo_components.dart';
+import 'shared_settle_sheet.dart';
 
 /// Existing context's membership. A name records a shadow member; it neither
 /// sends an invitation nor verifies identity or accepts debt.
@@ -267,12 +269,50 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
       if (mounted) Navigator.pop(context, true);
     } catch (error) {
       if (mounted) {
-        setState(() {
-          _notice = sharedInviteIssueMessage(error);
-          _busy = false;
-        });
+        final isSettleFirst =
+            (error is SharedTransportException && error.code == 'settle_first') ||
+            error.toString().contains('settle_first');
+        if (isSettleFirst) {
+          setState(() => _busy = false);
+          _showCannotLeaveSheet();
+        } else {
+          setState(() {
+            _notice = sharedInviteIssueMessage(error);
+            _busy = false;
+          });
+        }
       }
     }
+  }
+
+  void _showCannotLeaveSheet() {
+    showBambooSheet(
+      context: context,
+      builder: (ctx) => BambooSheet(
+        title: 'Settle up before leaving',
+        subtitle:
+            'You have unsettled balances in "${widget.groupName}". Clear your balances first, then you can leave cleanly.',
+        actions: [
+          FilledButton.icon(
+            icon: const Icon(Icons.payments_outlined, size: 18),
+            label: const Text('Settle up'),
+            onPressed: () {
+              Navigator.pop(ctx);
+              SharedSettleSheet.show(
+                context,
+                runtime: widget.runtime,
+                contextId: widget.contextId,
+              );
+            },
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Stay in split'),
+          ),
+        ],
+        children: const [],
+      ),
+    );
   }
 
   Future<void> _makeOwner(SharedEditorMember member) async {

@@ -13,7 +13,7 @@ import 'shared_runtime.dart';
 final sharedExpensesEnabledProvider = Provider<bool>(
   (ref) => const bool.fromEnvironment(
     'PANDAPAY_SHARED_EXPENSES_ENABLED',
-    defaultValue: false,
+    defaultValue: true,
   ),
 );
 

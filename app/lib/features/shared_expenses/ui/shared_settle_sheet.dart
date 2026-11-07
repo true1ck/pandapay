@@ -4,6 +4,7 @@ import 'package:pandapay_domain/pandapay_domain.dart'
     show Money, buildUpiPayUri;
 import 'package:uuid/uuid.dart';
 import '../../../app/design/app_theme.dart';
+import '../../../app/design/bamboo_components.dart';
 import '../../../data/upi_payment_service.dart';
 import '../composer/shared_amount_input.dart';
 import '../composer/shared_editor.dart';
@@ -37,10 +38,8 @@ class SharedSettleSheet extends StatefulWidget {
     String? initialReceiverId,
     Money? initialAmount,
     UpiPaymentService? upi,
-  }) => showModalBottomSheet<void>(
+  }) => showBambooSheet<void>(
     context: context,
-    isScrollControlled: true,
-    backgroundColor: BambooInk.paper,
     builder: (_) => SharedSettleSheet(
       runtime: runtime,
       contextId: contextId,
