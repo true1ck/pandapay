@@ -624,7 +624,7 @@ class SmsV2Runtime {
     // 2. Send what is waiting, so nothing blocks the re-sort below.
     Future<void> send() async {
       try {
-        await _upload.drain();
+        await _upload.drain(settleRefused: true);
       } catch (_) {
         _checkAccount();
         sendProblem =
@@ -694,6 +694,8 @@ class SmsV2Runtime {
       resorted: report.changed,
       keptYours: report.preservedUser,
       waitingToSend: report.awaitingSync,
+      refusedForGood:
+          int.tryParse(_state.get(FactsUpload.refusedKey) ?? '') ?? 0,
       resortProblem: resortProblem,
       finishedAt: clock(),
     );

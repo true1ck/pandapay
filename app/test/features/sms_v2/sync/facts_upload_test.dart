@@ -193,4 +193,71 @@ void main() {
       expect(calls, greaterThanOrEqualTo(1));
     },
   );
+
+  // The server refuses the event for good (it already holds a different
+  // version) and accepts everything else.
+  http.Client refusingEvents() => MockClient((request) async {
+    final body = decode(request);
+    return http.Response(
+      jsonEncode({
+        'results': [
+          for (final result in accepted(body))
+            if (result['kind'] == 'event')
+              {
+                'kind': 'event',
+                'id': result['id'],
+                'status': 'rejected',
+                'errors': [
+                  {'code': 'event_leg_role_conflict', 'path': ''},
+                ],
+              }
+            else
+              result,
+        ],
+      }),
+      200,
+    );
+  });
+
+  test(
+    'the button sets aside a record the server refuses for good and still sends the rest',
+    () async {
+      final upload = uploader(refusingEvents());
+      await upload.drain(settleRefused: true);
+      // Nothing is left stuck in the queue, whatever the backoff says.
+      expect(queue.due(now.add(const Duration(days: 1))), isEmpty);
+      expect(
+        database.db
+            .select(
+              "SELECT value FROM v2_sync_state WHERE key='upload:refused-total'",
+            )
+            .single['value'],
+        '1',
+      );
+      // The rest was accepted and marked clean.
+      expect(
+        database.db.select('SELECT * FROM v2_facts WHERE uploaded_at IS NULL'),
+        isEmpty,
+      );
+    },
+  );
+
+  test(
+    'an ordinary pass keeps retrying a refused record twice, then sets it aside',
+    () async {
+      final upload = uploader(refusingEvents());
+      await upload.drain();
+      expect(
+        queue
+            .due(now.add(const Duration(days: 1)))
+            .where((r) => r.kind == 'event'),
+        hasLength(1),
+      );
+      for (var i = 0; i < 2; i++) {
+        now = now.add(const Duration(hours: 2));
+        await upload.drain();
+      }
+      expect(queue.due(now.add(const Duration(days: 1))), isEmpty);
+    },
+  );
 }

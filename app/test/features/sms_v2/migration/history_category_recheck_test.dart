@@ -332,6 +332,58 @@ void main() {
       );
     },
   );
+  test('a spend linked to one still waiting to be sent is held back, not allowed to stop the pass', () async {
+    final pipeline = SmsV2Pipeline(
+      financial: financial,
+      namespace: namespace,
+      bundle: original,
+      appVersion: '2.0.0',
+    );
+    pipeline.processBatch([
+      SmsMessage(
+        sourceKey: 'a' * 64,
+        sender: 'VM-HDFCBK-S',
+        body:
+            'Rs.499.00 spent on HDFC Bank Card x5678 at SWIGGY on 2026-11-01:12:30:11. Avl Lmt: Rs.45,000.00.',
+        observedAt: DateTime.utc(2026, 11, 1, 12, 31),
+      ),
+      SmsMessage(
+        sourceKey: 'b' * 64,
+        sender: 'VM-HDFCBK-S',
+        body:
+            'Refund of Rs.499.00 from SWIGGY credited to your HDFC Bank Credit Card XX5678 on 03-11-26.',
+        observedAt: DateTime.utc(2026, 11, 3, 10),
+      ),
+    ], backfill: true);
+    database.db.execute('DELETE FROM v2_outbox');
+    final refund = ledger()
+        .list(from: DateTime.utc(2026, 11, 1), to: DateTime.utc(2026, 11, 4))
+        .singleWhere((entry) => !entry.isSpend);
+    // The refund is stuck in the queue (for example the server refuses it).
+    OutboxStore(database.db, namespace: namespace).enqueue(
+      'ledger',
+      'stuck-refund',
+      {'eventId': refund.eventId},
+    );
+    HistoryCategoryRecheck job() => HistoryCategoryRecheck(
+      financial: financial,
+      namespace: namespace,
+      bundle: revised,
+      from: DateTime.utc(2026, 11, 1),
+      to: DateTime.utc(2026, 11, 2),
+      accountIsCurrent: () => true,
+    );
+    // Before: this threw "Sync pending money changes" and stopped everything.
+    final held = await job().run();
+    expect(held.changed, 0);
+    expect(held.awaitingSync, 1);
+    // Once the queue is clear the same job is looked at again, not skipped.
+    database.db.execute('DELETE FROM v2_outbox');
+    final later = await job().run();
+    expect(later.data['alreadyApplied'], isNot(true));
+    expect(later.changed, 2);
+  });
+
   test('purchase categories follow refunds outside the selected period', () async {
     final pipeline = SmsV2Pipeline(
       financial: financial,

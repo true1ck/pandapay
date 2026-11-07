@@ -14,6 +14,7 @@ class RulesRefreshReport {
     this.resorted = 0,
     this.keptYours = 0,
     this.waitingToSend = 0,
+    this.refusedForGood = 0,
     this.resortProblem,
     this.finishedAt,
   });
@@ -31,6 +32,10 @@ class RulesRefreshReport {
   /// Spends whose category the rules changed, spends left as the person set
   /// them, and spends not looked at yet because they are still waiting to be sent.
   final int resorted, keptYours, waitingToSend;
+
+  /// Records the server refused for good (it already holds a different
+  /// version); they stay as they are on this phone and are no longer sent.
+  final int refusedForGood;
   final DateTime? finishedAt;
 
   bool get gotNewRules => versionAfter != versionBefore;
@@ -62,6 +67,9 @@ class RulesRefreshReport {
           : 'Moved $resorted ${resorted == 1 ? 'spend' : 'spends'} to a better category.',
     if (keptYours > 0)
       '$keptYours you set yourself ${keptYours == 1 ? 'was' : 'were'} left as you chose.',
+    if (refusedForGood > 0)
+      'The server refused $refusedForGood ${refusedForGood == 1 ? 'record' : 'records'} for good, because it already holds a different version. '
+          '${refusedForGood == 1 ? 'It stays' : 'They stay'} as it is on this phone and is no longer sent.',
     if (waitingToSend > 0)
       '$waitingToSend ${waitingToSend == 1 ? 'spend is' : 'spends are'} still waiting to be sent to your account, so '
           '${waitingToSend == 1 ? 'it was' : 'they were'} skipped. Try again with a connection.',

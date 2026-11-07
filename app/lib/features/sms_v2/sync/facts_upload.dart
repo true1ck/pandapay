@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../storage/outbox_store.dart';
+import '../storage/sync_state_store.dart';
 
 class UploadBatch {
   const UploadBatch(this.records, this.body, this.gzipBytes, this.backfill);
@@ -40,8 +41,18 @@ class FactsUpload {
   final DateTime Function() clock;
   Future<int>? _running;
 
-  UploadBatch? nextBatch() {
-    final pending = queue.due(clock(), limit: 2500);
+  /// The server answered "rejected" for a record this many times: it will say
+  /// the same every time, so the phone stops sending it.
+  static const _settleAfterAttempts = 2;
+
+  /// How many records the server refused for good since this phone was set up.
+  static const refusedKey = 'upload:refused-total';
+
+  UploadBatch? nextBatch({bool ignoreBackoff = false}) {
+    final pending = queue.due(
+      ignoreBackoff ? clock().add(const Duration(days: 3650)) : clock(),
+      limit: 2500,
+    );
     final position = {
       for (final (index, row) in pending.indexed) row.id: index,
     };
@@ -118,13 +129,18 @@ class FactsUpload {
 
   /// Coalesces start/resume/import triggers. The caller schedules subsequent
   /// foreground ticks. A failing request leaves every sent item durable.
-  Future<int> drain({bool backfill = false}) {
+  ///
+  /// [settleRefused] (the "Refresh rules" button) sends every waiting record
+  /// now, ignoring the wait between tries, and sets aside at once any record
+  /// the server refuses, so nothing stays stuck behind it.
+  Future<int> drain({bool backfill = false, bool settleRefused = false}) {
     final running = _running;
     if (running != null) return running;
     late final Future<int> operation;
-    operation = _drain(backfill: backfill).whenComplete(() {
-      if (identical(_running, operation)) _running = null;
-    });
+    operation = _drain(backfill: backfill, settleRefused: settleRefused)
+        .whenComplete(() {
+          if (identical(_running, operation)) _running = null;
+        });
     _running = operation;
     return operation;
   }
@@ -151,10 +167,13 @@ class FactsUpload {
     );
   }
 
-  Future<int> _drain({required bool backfill}) async {
+  Future<int> _drain({
+    required bool backfill,
+    bool settleRefused = false,
+  }) async {
     var acknowledged = 0;
     while (accountIsCurrent()) {
-      final batch = nextBatch();
+      final batch = nextBatch(ignoreBackoff: settleRefused);
       if (batch == null) return acknowledged;
       try {
         final response = await client
@@ -190,6 +209,11 @@ class FactsUpload {
                 result['status'] == 'duplicate')
               '${result['kind']}:${result['id']}',
         };
+        final refused = <String>{
+          for (final result in json['results'] as List)
+            if (result['status'] == 'rejected')
+              '${result['kind']}:${result['id']}',
+        };
         var progressed = false;
         queue.db.execute('SAVEPOINT sms_v2_upload_ack');
         try {
@@ -204,6 +228,23 @@ class FactsUpload {
               if (queue.acknowledge(record)) {
                 _markClean(record);
                 acknowledged++;
+              }
+              progressed = true;
+            } else if (ids.any(refused.contains) &&
+                (settleRefused || record.attempts >= _settleAfterAttempts)) {
+              // Refused for good (for example the server already holds a
+              // different version of this event): keep the phone's own copy,
+              // stop sending, and count it so the person can be told.
+              if (queue.acknowledge(record)) {
+                if (record.kind != 'source') _markClean(record);
+                final state = SyncStateStore(
+                  queue.db,
+                  namespace: queue.namespace,
+                );
+                state.put(
+                  refusedKey,
+                  '${(int.tryParse(state.get(refusedKey) ?? '') ?? 0) + 1}',
+                );
               }
               progressed = true;
             } else {

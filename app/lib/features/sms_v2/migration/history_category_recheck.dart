@@ -224,10 +224,18 @@ class HistoryCategoryRecheck {
           .skip(progress['processed'] as int)
           .take(chunkSize)
           .toSet();
+      // A spend linked to one that is still waiting to be sent is held back
+      // for a later pass; it must not stop the rest of the history.
+      final pending = _pendingMoneyEvents();
+      final ready = pending.isEmpty
+          ? ids
+          : ids.where((id) => !_linkedToPending(id, pending)).toSet();
+      progress['held'] =
+          (progress['held'] as int? ?? 0) + (ids.length - ready.length);
       financial.batch(() {
         db.execute('SAVEPOINT history_categories');
         try {
-          final counts = _apply(ids);
+          final counts = _apply(ready);
           progress['processed'] = (progress['processed'] as int) + ids.length;
           progress['changed'] = (progress['changed'] as int) + counts.$1;
           progress['preservedUser'] =
@@ -244,9 +252,32 @@ class HistoryCategoryRecheck {
       await Future<void>.delayed(const Duration(milliseconds: 1));
     }
     _check();
+    final held = progress['held'] as int? ?? 0;
+    progress['awaitingSync'] = _awaiting.length + held;
     progress['complete'] = progress['processed'] == targets.length;
-    _state.put(key, jsonEncode(progress));
+    if (held > 0) {
+      // Held spends were skipped: forget this job so the next pass looks at
+      // every spend again once what they wait for has been sent.
+      db.execute('DELETE FROM v2_sync_state WHERE namespace=? AND key=?', [
+        namespace,
+        key,
+      ]);
+    } else {
+      _state.put(key, jsonEncode(progress));
+    }
     return HistoryCategoryReport(Map.of(progress));
+  }
+
+  /// True when this event, or one linked to it through a shared fact (a
+  /// purchase and its refund), is still waiting to be sent to the account.
+  bool _linkedToPending(String id, Set<String> pending) {
+    if (pending.contains(id)) return true;
+    final event = _events.get(id);
+    if (event == null) return false;
+    final legIds = event.legs.map((leg) => leg.factId).toSet();
+    return _events
+        .findByFactIds(legIds)
+        .any((e) => pending.contains(e.eventId));
   }
 
   (int, int) _apply(Set<String> targetIds) {
