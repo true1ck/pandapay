@@ -56,22 +56,38 @@ test('compose files and env examples carry no account recovery settings', () => 
   assert.deepEqual(hits, []);
 });
 
-// Decision D9: the old per-message Gemini worker stays deleted. GEMINI_API_KEY
-// lives only on the private admin host (deploy/admin/compose.private.yml).
-test('old per-message AI worker settings are gone, and the public deploy sends no Gemini key', () => {
+// Decision D9: the old per-message Gemini worker stays deleted. The Gemini key
+// is for ONE service, the opt-in per-template drafts worker (`sms-v2-template-
+// worker` in docker-compose.prod.yml, or the private admin overlay). api, auth,
+// rewards-worker and every other service must never receive it.
+test('old per-message AI worker settings are gone, and the Gemini key reaches only the drafts worker', () => {
   const read = (file) => fs.readFileSync(path.join(repo, file), 'utf8');
   const stale = /\b(AI_WORKER_[A-Z_]+|AI_PROVIDER_TIMEOUT_MS|GEMINI_FALLBACK_[A-Z_]+|GEMINI_API_KEYS|GEMINI_MODEL|GEMINI_REQUESTS_PER_[A-Z]+|GEMINI_TOKENS_PER_MINUTE)\b/;
   for (const file of ['.env.prod.example', 'api/example.env', 'docker-compose.yml', 'docker-compose.prod.yml',
-    'docker-compose.staging.yml', 'deploy/deploy.sh', '.github/workflows/deploy-prod.yml',
+    'docker-compose.staging.yml', 'deploy/deploy.sh', 'deploy/restart-services.sh', '.github/workflows/deploy-prod.yml',
     '.github/workflows/deploy-pushed-branch.yml', 'deploy/tests/test_deploy_security_order.py']) {
     assert.doesNotMatch(read(file), stale, file);
   }
-  for (const file of ['docker-compose.prod.yml', 'docker-compose.staging.yml', 'deploy/deploy.sh',
-    '.github/workflows/deploy-prod.yml', '.github/workflows/deploy-pushed-branch.yml',
+  // Not delivered anywhere else.
+  for (const file of ['docker-compose.staging.yml', '.github/workflows/deploy-pushed-branch.yml',
     'deploy/tests/test_deploy_security_order.py']) {
     assert.doesNotMatch(read(file), /GEMINI_API_KEY/, file);
   }
-  // The private overlay is the one place that passes the key, to the AI worker only.
+  // In docker-compose.prod.yml the key and the worker's database login sit in
+  // the drafts worker's service block only.
+  const compose = read('docker-compose.prod.yml').replace(/\r\n/g, '\n');
+  const services = compose.slice(compose.indexOf('\nservices:\n'));
+  const blocks = services.split(/\n(?=  [a-z0-9-]+:\n)/).filter((block) => /^\s*[a-z0-9-]+:\n/.test(block));
+  const nameOf = (block) => block.trim().split(':')[0];
+  assert.deepEqual(blocks.filter((block) => /GEMINI_API_KEY/.test(block)).map(nameOf), ['sms-v2-template-worker']);
+  assert.deepEqual(blocks.filter((block) => /SMS_AI_WORKER_DATABASE_URL/.test(block)).map(nameOf), ['sms-v2-template-worker']);
+  const worker = blocks.find((block) => nameOf(block) === 'sms-v2-template-worker');
+  assert.doesNotMatch(worker, /\b(ADMIN_API_DATABASE_URL|DATABASE_URL: )/);
+  // The deploy path only writes the key into the host's .env; it is never echoed.
+  for (const file of ['deploy/deploy.sh', '.github/workflows/deploy-prod.yml']) {
+    assert.doesNotMatch(read(file), /echo[^\n]*GEMINI_API_KEY/, file);
+  }
+  // The private overlay passes the key too (the admin host's own worker).
   assert.match(read('deploy/admin/compose.private.yml'), /GEMINI_API_KEY: '\$\{GEMINI_API_KEY:\?\}'/);
 });
 

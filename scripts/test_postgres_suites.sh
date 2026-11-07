@@ -116,7 +116,8 @@ main_url="$admin_url/$main_db"
 admin_runtime_url="postgresql://admin_api_runtime:$admin_api_password@${admin_url#*@}/$main_db"
 api_pg_suites() (
   export EMAIL_IMPORT_TEST_DATABASE_URL="$main_url" SMS_V2_TEST_DATABASE_URL="$main_url" \
-    SMS_V2_TEST_ADMIN_DATABASE_URL="$admin_runtime_url"
+    SMS_V2_TEST_ADMIN_DATABASE_URL="$admin_runtime_url" \
+    SMS_V2_TEST_AI_WORKER_DATABASE_URL="postgresql://sms_ai_worker:$sms_ai_worker_password@${admin_url#*@}/$main_db"
   node_suite api/test/email_import_pg.test.js api/test/sms_v2/*_pg.test.js
 )
 step 'api email import and SMS v2 *_pg suites' api_pg_suites

@@ -35,6 +35,18 @@ INTERVAL="${DEPLOY_HEALTH_INTERVAL_SECONDS:-5}"
 
 SERVICES=(auth api rewards-worker backup)
 
+# SMS AI drafts worker: OPT-IN. Run only when every setting it needs is present
+# and nonempty in .env; with none (or only some) set, the release is unchanged
+# and the worker is skipped. Keep this list in step with deploy/deploy.sh.
+AI_WORKER=sms-v2-template-worker
+ai_worker_configured() {
+  local key value
+  for key in GEMINI_API_KEY SMS_AI_WORKER_DB_PASSWORD SMS_AI_WORKER_DATABASE_URL SMS_V2_AI_MODEL SMS_V2_AI_TPM SMS_V2_AI_INPUT_USD_PER_MILLION SMS_V2_AI_OUTPUT_USD_PER_MILLION; do
+    value="$(awk -v key="$key" 'index($0, key "=") == 1 { v = substr($0, length(key) + 2) } END { print v }' .env       | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")"
+    [ -n "$value" ] || return 1
+  done
+}
+
 wait_for_service() {
   local service="$1" url="$2" id status attempt
   for ((attempt=1; attempt<=ATTEMPTS; attempt++)); do
@@ -70,6 +82,10 @@ else
     echo "==> Building $service"
     "${COMPOSE[@]}" build "$service"
   done
+  if ai_worker_configured; then
+    echo "==> Building $AI_WORKER (optional)"
+    "${COMPOSE[@]}" build "$AI_WORKER" || echo "WARNING: $AI_WORKER build failed; it will be skipped" >&2
+  fi
 fi
 
 for service in "${SERVICES[@]}"; do
@@ -89,3 +105,18 @@ done
   echo 'FATAL: API started without a usable SMS learning feedback key'
   exit 1
 }
+
+# The AI drafts worker is a helper, never a release gate: if it cannot start
+# (for example its database login is not set up yet) stop it, say so, and let
+# the rest of the release stand.
+if ai_worker_configured; then
+  echo "==> Starting $AI_WORKER (optional)"
+  if "${COMPOSE[@]}" up -d --no-build --no-deps "$AI_WORKER" && wait_for_service "$AI_WORKER" ''; then
+    :
+  else
+    echo "WARNING: $AI_WORKER did not become ready; stopping it. The rest of the release is unaffected." >&2
+    "${COMPOSE[@]}" stop "$AI_WORKER" || true
+  fi
+else
+  echo "==> Skipping $AI_WORKER (its AI settings are not all present in .env)"
+fi
