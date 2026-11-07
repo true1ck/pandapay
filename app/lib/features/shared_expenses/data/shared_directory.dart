@@ -172,6 +172,9 @@ final class SharedJoinRequest {
   /// Both are absent when talking to an older server.
   final String? claimantProfileName, claimantPhoneSuffix;
 
+  /// When the request was made and when it lapses (null from older servers).
+  final DateTime? createdAt, expiresAt;
+
   /// Masked number details; null on an older server (use the suffix then).
   final SharedClaimantPhone? claimantPhone;
   const SharedJoinRequest({
@@ -185,6 +188,8 @@ final class SharedJoinRequest {
     this.claimantPhoneSuffix,
     this.contextKind,
     this.claimantPhone,
+    this.createdAt,
+    this.expiresAt,
   });
   factory SharedJoinRequest.fromJson(Map<String, Object?> value) {
     final id = value['invitationId'], ctx = value['contextId'];
@@ -208,6 +213,8 @@ final class SharedJoinRequest {
       phoneSuffix: _suffix(value['verifiedPhoneSuffix']),
       claimantProfileName: _text(value['claimantProfileName']),
       claimantPhoneSuffix: _suffix(value['claimantPhoneSuffix']),
+      createdAt: DateTime.tryParse(value['createdAt'] as String? ?? ''),
+      expiresAt: DateTime.tryParse(value['expiresAt'] as String? ?? ''),
       claimantPhone: SharedClaimantPhone.tryParse(
         value['claimantPhone'],
         fullNumber: value['fullNumber'],

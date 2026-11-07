@@ -452,11 +452,16 @@ class SharedExpensesRuntime extends ChangeNotifier {
     return SharedNameException.fromStored(op.errorCode);
   }
 
+  /// The last list fetched in this session, so the requests page can show
+  /// something at once while it refreshes. In memory only.
+  List<SharedJoinRequest>? cachedJoinRequests;
+
   Future<List<SharedJoinRequest>> joinRequests() async {
     _current();
     if (!proposalsEnabled) return const [];
     final items = await remote.fetchJoinRequests();
     _current();
+    cachedJoinRequests = items;
     return items;
   }
 
@@ -481,16 +486,23 @@ class SharedExpensesRuntime extends ChangeNotifier {
   Future<String> respondToJoinRequest(
     String invitationId, {
     required bool approve,
+    String? operationId,
+    bool refreshAfter = true,
   }) async {
     _current();
     if (!proposalsEnabled) throw const SharedRuntimeUnavailable();
     final status = await remote.respondToJoinRequest(
       invitationId: invitationId,
-      operationId: const Uuid().v4(),
+      // A caller that retries passes the same id so the server replays it.
+      operationId: operationId ?? const Uuid().v4(),
       approve: approve,
     );
     _current();
-    await refresh();
+    cachedJoinRequests = [
+      for (final r in cachedJoinRequests ?? const <SharedJoinRequest>[])
+        if (r.invitationId != invitationId) r,
+    ];
+    if (refreshAfter) await refresh();
     return status;
   }
 
