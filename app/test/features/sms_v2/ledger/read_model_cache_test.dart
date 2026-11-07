@@ -5,29 +5,17 @@
 //   2. only new or changed rows are decoded again;
 //   3. nothing downstream rebuilds when the content did not change.
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
-import 'package:pandapay/data/local/app_database.dart';
-import 'package:pandapay/data/local/financial_store.dart';
-import 'package:pandapay/data/local/response_cache.dart';
-import 'package:pandapay/data/user_cards_repository.dart' show TransactionEntry;
 import 'package:pandapay/features/sms_v2/ledger/json_fingerprint.dart';
 import 'package:pandapay/features/sms_v2/ledger/providers.dart';
 import 'package:pandapay/features/sms_v2/ledger/reports.dart';
 import 'package:pandapay/features/sms_v2/providers/data_providers.dart';
-import 'package:pandapay/features/sms_v2/storage/event_store.dart';
-import 'package:pandapay/features/sms_v2/storage/fact_store.dart';
-import 'package:pandapay/features/sms_v2/storage/instrument_store.dart';
-import 'package:pandapay/features/sms_v2/storage/ledger_store.dart';
 import 'package:pandapay/features/sms_v2/storage/row_decode_cache.dart';
-import 'package:pandapay/features/sms_v2/storage/schema.dart';
-import 'package:pandapay_domain/pandapay_domain.dart' show Money;
 import 'package:pandapay_domain/sms_v2.dart';
-import 'package:pandapay_domain/sms_v2_ledger.dart';
 
 import '../support/ledger_dataset.dart';
 

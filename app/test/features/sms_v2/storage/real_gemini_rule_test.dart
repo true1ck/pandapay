@@ -63,7 +63,7 @@ void _check(String file, bool reads) {
     final engine = RuleEngine();
     final before = engine.interpretDetailed(message, shared, appVersion: '1');
     expect(before.result.outcome, InterpretOutcome.unknown);
-    final localHash = before.result.templateHash!;
+    final localHash = before.result.templateHash;
 
     final state = SyncStateStore(db, namespace: 'user:1');
     TemplateOriginStore(state).remember(
