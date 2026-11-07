@@ -6,6 +6,8 @@ import 'package:share_plus/share_plus.dart';
 import '../../../app/design/app_theme.dart';
 import '../data/shared_directory.dart';
 import '../data/shared_invitations.dart';
+import '../data/shared_transport.dart';
+import '../storage/shared_store.dart' show SharedNameException;
 import '../runtime/shared_runtime.dart';
 import 'shared_components.dart';
 
@@ -196,25 +198,41 @@ final class SharedAddFriendInput {
 
 class SharedAddFriendSheet extends StatefulWidget {
   final SharedExpensesRuntime runtime;
-  const SharedAddFriendSheet({super.key, required this.runtime});
+  final String? initialName, initialPhone, initialError;
+  const SharedAddFriendSheet({
+    super.key,
+    required this.runtime,
+    this.initialName,
+    this.initialPhone,
+    this.initialError,
+  });
   static Future<SharedAddFriendInput?> show(
     BuildContext context,
-    SharedExpensesRuntime runtime,
-  ) => showModalBottomSheet<SharedAddFriendInput>(
+    SharedExpensesRuntime runtime, {
+    String? initialName,
+    String? initialPhone,
+    String? initialError,
+  }) => showModalBottomSheet<SharedAddFriendInput>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: BambooInk.paper,
-    builder: (_) => SharedAddFriendSheet(runtime: runtime),
+    builder: (_) => SharedAddFriendSheet(
+      runtime: runtime,
+      initialName: initialName,
+      initialPhone: initialPhone,
+      initialError: initialError,
+    ),
   );
   @override
   State<SharedAddFriendSheet> createState() => _AddFriendState();
 }
 
 class _AddFriendState extends State<SharedAddFriendSheet> {
-  final _name = TextEditingController(), _phone = TextEditingController();
+  late final _name = TextEditingController(text: widget.initialName),
+      _phone = TextEditingController(text: widget.initialPhone);
   SharedPhoneLookup _lookup = SharedPhoneLookup.none;
-  String? _error;
+  late String? _error = widget.initialError;
 
   @override
   void dispose() {
@@ -358,37 +376,60 @@ Future<String?> runAddFriendFlow(
   BuildContext context,
   SharedExpensesRuntime runtime,
 ) async {
-  final input = await SharedAddFriendSheet.show(context, runtime);
-  if (input == null || !context.mounted) return null;
-  final existing = input.lookup.existingContextId;
-  if (existing != null) return existing;
   final messenger = ScaffoldMessenger.of(context);
-  final same = await runtime.sameNameFriend(input.name);
-  if (same != null && context.mounted) {
-    final open = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('You already split with ${input.name}'),
-        content: const Text(
-          'Open that split, or add a separate person with the same name.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Add anyway'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Open existing'),
-          ),
-        ],
-      ),
+  String? name0, phone0, error0;
+  late SharedAddFriendInput input;
+  late SharedFriendAdded added;
+  while (true) {
+    if (!context.mounted) return null;
+    final got = await SharedAddFriendSheet.show(
+      context,
+      runtime,
+      initialName: name0,
+      initialPhone: phone0,
+      initialError: error0,
     );
-    if (open == true) return same;
-    if (open == null) return null;
+    if (got == null || !context.mounted) return null;
+    input = got;
+    name0 = input.name;
+    phone0 = input.phone;
+    error0 = null;
+    final existing = input.lookup.existingContextId;
+    if (existing != null) return existing;
+    final same = await runtime.sameNameFriend(input.name);
+    if (same != null && context.mounted) {
+      final open = await showSharedFriendNameTakenDialog(context, input.name);
+      if (open == true) return same;
+      if (open == null) return null;
+      continue; // Edit name
+    }
+    try {
+      added = await runtime.addFriend(name: input.name, phone: input.phone);
+      break;
+    } on SharedNameException catch (error) {
+      if (!context.mounted) return null;
+      if (error.code == 'friend_name_taken') {
+        final open = await showSharedFriendNameTakenDialog(context, input.name);
+        if (open == true && error.existingContextId != null) {
+          return error.existingContextId;
+        }
+        if (open == null) return null;
+      }
+      error0 = sharedInviteIssueMessage(
+        SharedTransportException(code: error.code),
+      );
+    } catch (error) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not save the friend yet. Try again in a moment.',
+          ),
+        ),
+      );
+      return null;
+    }
   }
   try {
-    final added = await runtime.addFriend(name: input.name, phone: input.phone);
     if (added.link != null && !input.lookup.found) {
       await SharePlus.instance.share(
         ShareParams(
@@ -456,3 +497,29 @@ Future<String?> runAddFriendFlow(
     return null;
   }
 }
+
+/// Same-name friend: open the chat they already have, or change the name.
+/// There is deliberately no "add anyway". Returns true to open the existing
+/// chat, false to edit the name, null if dismissed.
+Future<bool?> showSharedFriendNameTakenDialog(
+  BuildContext context,
+  String name,
+) => showDialog<bool>(
+  context: context,
+  builder: (ctx) => AlertDialog(
+    title: Text('You already have a friend called $name'),
+    content: const Text(
+      'Open that chat or use a different name (add a surname).',
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(ctx, false),
+        child: const Text('Edit name'),
+      ),
+      TextButton(
+        onPressed: () => Navigator.pop(ctx, true),
+        child: const Text('Open existing'),
+      ),
+    ],
+  ),
+);

@@ -149,6 +149,24 @@ class MainActivity : FlutterFragmentActivity() {
 
     private fun configurePandaPayFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        // Blocks screenshots and the recents thumbnail while a revealed phone
+        // number is on screen (see SharedSecureScreen in the Flutter app).
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "pandapay/secure_screen")
+            .setMethodCallHandler { call, result ->
+                if (call.method == "setSecure") {
+                    val enable = call.argument<Boolean>("enable") == true
+                    runOnUiThread {
+                        if (enable) {
+                            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                        } else {
+                            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                        }
+                    }
+                    result.success(null)
+                } else {
+                    result.notImplemented()
+                }
+            }
         assistantChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, ASSISTANT_CHANNEL)
         assistantChannel?.setMethodCallHandler { call, result ->
             when (call.method) {

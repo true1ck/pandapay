@@ -8,6 +8,7 @@ import '../data/shared_commands.dart';
 import '../data/shared_directory.dart';
 import '../data/shared_http_transport.dart';
 import '../data/shared_invitations.dart';
+import '../data/shared_phone_display.dart';
 import '../data/shared_transport.dart';
 import '../storage/shared_store.dart';
 import '../sync/shared_sync.dart';
@@ -221,6 +222,11 @@ class SharedExpensesRuntime extends ChangeNotifier {
     );
     await store.enqueueFriendSetup(context, member);
     await refresh();
+    // The server may refuse the name; nothing is shown for the refused
+    // friend, so the person just picks another name.
+    final refused =
+        nameFailure(context.operationId) ?? nameFailure(member.operationId);
+    if (refused != null) throw refused;
     return (contextId: id, memberId: memberId);
   }
 
@@ -422,11 +428,40 @@ class SharedExpensesRuntime extends ChangeNotifier {
     _current();
   }
 
+  /// Owner-only, one request at a time. The caller keeps the result in widget
+  /// state and drops it after a minute; it is never cached or stored here.
+  Future<SharedRevealedPhone> revealClaimantPhone(String invitationId) async {
+    _current();
+    if (!proposalsEnabled) throw const SharedRuntimeUnavailable();
+    final result = await remote.revealClaimantPhone(
+      invitationId: invitationId,
+      operationId: const Uuid().v4(),
+    );
+    _current();
+    return result;
+  }
+
+  /// Why a queued name command was refused, or null if it was not.
+  SharedNameException? nameFailure(String operationId) {
+    final op = store.operation(operationId);
+    if (op == null ||
+        (op.state != SharedCommandState.rejected &&
+            op.state != SharedCommandState.conflict)) {
+      return null;
+    }
+    return SharedNameException.fromStored(op.errorCode);
+  }
+
+  /// The last list fetched in this session, so the requests page can show
+  /// something at once while it refreshes. In memory only.
+  List<SharedJoinRequest>? cachedJoinRequests;
+
   Future<List<SharedJoinRequest>> joinRequests() async {
     _current();
     if (!proposalsEnabled) return const [];
     final items = await remote.fetchJoinRequests();
     _current();
+    cachedJoinRequests = items;
     return items;
   }
 
@@ -451,16 +486,23 @@ class SharedExpensesRuntime extends ChangeNotifier {
   Future<String> respondToJoinRequest(
     String invitationId, {
     required bool approve,
+    String? operationId,
+    bool refreshAfter = true,
   }) async {
     _current();
     if (!proposalsEnabled) throw const SharedRuntimeUnavailable();
     final status = await remote.respondToJoinRequest(
       invitationId: invitationId,
-      operationId: const Uuid().v4(),
+      // A caller that retries passes the same id so the server replays it.
+      operationId: operationId ?? const Uuid().v4(),
       approve: approve,
     );
     _current();
-    await refresh();
+    cachedJoinRequests = [
+      for (final r in cachedJoinRequests ?? const <SharedJoinRequest>[])
+        if (r.invitationId != invitationId) r,
+    ];
+    if (refreshAfter) await refresh();
     return status;
   }
 
@@ -589,12 +631,17 @@ class SharedExpensesRuntime extends ChangeNotifier {
 
   /// Returns `joined` (phone-bound link) or `awaiting_owner` (the group owner
   /// must approve). Joining never accepts any expense or debt.
-  Future<String> claimInvite(String token, String operationId) async {
+  Future<String> claimInvite(
+    String token,
+    String operationId, {
+    bool? sharePhone,
+  }) async {
     _current();
     if (!proposalsEnabled) throw const SharedRuntimeUnavailable();
     final status = await remote.claimInvitation(
       token: token,
       operationId: operationId,
+      sharePhone: sharePhone,
     );
     _current();
     await refresh();
@@ -666,6 +713,14 @@ class SharedExpensesRuntime extends ChangeNotifier {
     syncLag = true;
     _notify();
     await refresh();
+    final refused = nameFailure(command.operationId);
+    if (refused != null) {
+      // Roll the optimistic name back.
+      _renameOverlay.remove('$contextId:$memberId');
+      if (directCounterpart) _directTitles.remove(contextId);
+      _notify();
+      throw refused;
+    }
     // Once the server has it, its roster is the truth again.
     if (store.operation(command.operationId)?.state ==
         SharedCommandState.committed) {

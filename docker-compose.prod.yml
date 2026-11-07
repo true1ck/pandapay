@@ -161,6 +161,12 @@ services:
       # this host-only key (at least 32 characters). Blank keeps the invitation
       # routes answering a truthful 503 instead of stopping the API.
       SHARED_EXPENSE_INVITE_SECRET: "${SHARED_EXPENSE_INVITE_SECRET:-}"
+      # Join requests may carry the claimant's phone number for the group owner, only
+      # when the claimant chose to share it. Off unless explicitly enabled. The key
+      # ring is a host-only secret (JSON, see .env.prod.example); without a usable
+      # ring nothing is ever stored and the API logs a warning at startup.
+      SHARED_EXPENSE_PHONE_SHARING_ENABLED: "${SHARED_EXPENSE_PHONE_SHARING_ENABLED:-false}"
+      SHARED_EXPENSE_PHONE_ENC_KEYS: "${SHARED_EXPENSE_PHONE_ENC_KEYS:-}"
     ports:
       - "127.0.0.1:4000:4000"
 

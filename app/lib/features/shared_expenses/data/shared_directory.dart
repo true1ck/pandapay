@@ -1,4 +1,5 @@
 import 'shared_invitations.dart';
+import 'shared_phone_display.dart';
 import 'shared_transport.dart';
 
 String? _suffix(Object? v) =>
@@ -21,7 +22,9 @@ String? sharedSignedInAs({
       profile.isNotEmpty &&
       profile.toLowerCase() != (label ?? '').trim().toLowerCase();
   final tail = phoneSuffix == null ? null : '\u2022\u2022$phoneSuffix';
-  if (differs) return 'Signed in as $profile${tail == null ? '' : ' \u00b7 $tail'}';
+  if (differs) {
+    return 'Signed in as $profile${tail == null ? '' : ' \u00b7 $tail'}';
+  }
   return tail == null ? null : 'Number $tail';
 }
 
@@ -168,6 +171,12 @@ final class SharedJoinRequest {
   /// The person's live PandaPay profile name and verified number ending.
   /// Both are absent when talking to an older server.
   final String? claimantProfileName, claimantPhoneSuffix;
+
+  /// When the request was made and when it lapses (null from older servers).
+  final DateTime? createdAt, expiresAt;
+
+  /// Masked number details; null on an older server (use the suffix then).
+  final SharedClaimantPhone? claimantPhone;
   const SharedJoinRequest({
     required this.invitationId,
     required this.contextId,
@@ -178,6 +187,9 @@ final class SharedJoinRequest {
     this.claimantProfileName,
     this.claimantPhoneSuffix,
     this.contextKind,
+    this.claimantPhone,
+    this.createdAt,
+    this.expiresAt,
   });
   factory SharedJoinRequest.fromJson(Map<String, Object?> value) {
     final id = value['invitationId'], ctx = value['contextId'];
@@ -201,6 +213,12 @@ final class SharedJoinRequest {
       phoneSuffix: _suffix(value['verifiedPhoneSuffix']),
       claimantProfileName: _text(value['claimantProfileName']),
       claimantPhoneSuffix: _suffix(value['claimantPhoneSuffix']),
+      createdAt: DateTime.tryParse(value['createdAt'] as String? ?? ''),
+      expiresAt: DateTime.tryParse(value['expiresAt'] as String? ?? ''),
+      claimantPhone: SharedClaimantPhone.tryParse(
+        value['claimantPhone'],
+        fullNumber: value['fullNumber'],
+      ),
       contextKind: value['contextKind'] is String
           ? value['contextKind'] as String
           : null,
@@ -221,7 +239,10 @@ final class SharedJoinRequest {
   String? get signedInAs => sharedSignedInAs(
     label: label,
     profileName: claimantProfileName ?? claimantName,
-    phoneSuffix: claimantPhoneSuffix ?? phoneSuffix,
+    // The number itself has its own block when the server sends details.
+    phoneSuffix: claimantPhone != null
+        ? null
+        : claimantPhoneSuffix ?? phoneSuffix,
   );
 
   /// Who actually opened the link: PandaPay name and verified number ending.
@@ -281,6 +302,18 @@ String sharedInviteIssueMessage(Object error) {
       'That person declined recently. Try again in a few days.',
     'invitation_rate_limited' || 'lookup_rate_limited' =>
       'Too many tries for now. Please wait a while and try again.',
+    'member_name_taken' =>
+      'Someone in this split already has that name. Add a surname or initial.',
+    'friend_name_taken' =>
+      'You already have a friend with that name. Open that chat or add a surname.',
+    'member_name_reserved' =>
+      'That name cannot be used. Please choose a different one.',
+    'phone_not_available' => 'This number is no longer available to view.',
+    'owner_phone_required' =>
+      'Add and verify your own phone number to view numbers.',
+    'reveal_rate_limited' =>
+      'You have viewed several numbers recently. Please try again later.',
+    'context_not_authorized' => 'Only the owner of this split can do that.',
     'invitation_phone_mismatch' =>
       'This invite was sent to a different mobile number than the one on your account.',
     'join_declined_recently' =>
@@ -332,9 +365,11 @@ final class SharedOwnerInvitation {
   final bool phoneBound;
   final DateTime? createdAt;
   final String? claimantName, phoneSuffix;
+  final SharedClaimantPhone? claimantPhone;
   const SharedOwnerInvitation({
     this.claimantName,
     this.phoneSuffix,
+    this.claimantPhone,
     required this.invitationId,
     required this.memberId,
     required this.status,
@@ -367,6 +402,10 @@ final class SharedOwnerInvitation {
       status: status,
       phoneBound: bound,
       claimantName: value['claimantName'] as String?,
+      claimantPhone: SharedClaimantPhone.tryParse(
+        value['claimantPhone'],
+        fullNumber: value['fullNumber'],
+      ),
       phoneSuffix:
           _suffix(value['claimantPhoneSuffix']) ??
           _suffix(value['verifiedPhoneSuffix']),

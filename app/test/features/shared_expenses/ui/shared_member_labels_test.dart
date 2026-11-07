@@ -15,6 +15,7 @@ import 'package:pandapay/features/shared_expenses/runtime/shared_providers.dart'
 import 'package:pandapay/features/shared_expenses/runtime/shared_runtime.dart';
 import 'package:pandapay/features/shared_expenses/storage/shared_store.dart';
 import 'package:pandapay/features/shared_expenses/ui/shared_invite_inbox.dart';
+import 'package:pandapay/features/shared_expenses/ui/shared_join_requests_page.dart';
 import 'package:pandapay/features/shared_expenses/ui/shared_members_sheet.dart';
 import 'package:pandapay/features/shared_expenses/ui/shared_rename_member_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -293,7 +294,22 @@ void main() {
 
   Future<void> inbox(WidgetTester tester, SharedJoinRequest request) async {
     runtime.requests = [request];
-    await show(tester, SharedInviteInbox(runtime: runtime));
+    tester.view.physicalSize = const Size(430, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedExpensesRuntimeProvider.overrideWith((ref) async => runtime),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: SharedJoinRequestsPage(runtime: runtime),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
   }
 
   SharedJoinRequest join(Map<String, Object?> extra) =>
@@ -304,7 +320,7 @@ void main() {
         ...extra,
       });
 
-  testWidgets('join card: label as title, signed-in line when it differs', (
+  testWidgets('request row: label as title, signed-in line when it differs', (
     tester,
   ) async {
     await inbox(
@@ -316,27 +332,29 @@ void main() {
         'claimantPhoneSuffix': '4821',
       }),
     );
-    expect(find.text('Rahul wants to join "Goa"'), findsOneWidget);
-    expect(find.text('Signed in as Rahul Kumar · ${dot}4821'), findsOneWidget);
+    expect(find.text('Rahul'), findsOneWidget);
+    expect(
+      find.text('Signed in as Rahul Kumar \u00b7 \u2022\u20224821'),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('join card without profile data falls back gracefully', (
+  testWidgets('request row without profile data falls back gracefully', (
     tester,
   ) async {
     await inbox(tester, join({'memberName': 'Rahul'}));
-    expect(find.text('Rahul wants to join "Goa"'), findsOneWidget);
-    expect(find.byKey(const Key('join-signed-in-as')), findsNothing);
-    expect(find.textContaining('opened the link'), findsOneWidget);
+    expect(find.text('Rahul'), findsOneWidget);
+    expect(find.textContaining('Signed in as'), findsNothing);
   });
 
-  testWidgets('join card shows no duplicate line when names match', (
+  testWidgets('request row shows no duplicate line when names match', (
     tester,
   ) async {
     await inbox(
       tester,
       join({'memberName': 'Asha', 'claimantProfileName': 'Asha'}),
     );
-    expect(find.byKey(const Key('join-signed-in-as')), findsNothing);
+    expect(find.textContaining('Signed in as'), findsNothing);
   });
 
   Map<String, Object?> ctxRow(String id, String name, {String? suffix}) => {
@@ -421,16 +439,9 @@ void main() {
         'claimantPhoneSuffix': '4821',
       }),
     ];
-    runtime.people = [
-      const SharedEditorMember(me, 'You', profileId: account, role: 'owner'),
-      SharedEditorMember(friend, long, profileId: friend, rawName: long),
-    ];
-    Widget scaled(Widget child) => ProviderScope(
+    Widget scaled(Widget home) => ProviderScope(
       overrides: [
         sharedExpensesRuntimeProvider.overrideWith((ref) async => runtime),
-        cacheNamespaceProvider.overrideWith(
-          (ref) => ref.watch(sessionNamespace),
-        ),
       ],
       child: MaterialApp(
         theme: AppTheme.light(),
@@ -440,24 +451,26 @@ void main() {
           ).copyWith(textScaler: const TextScaler.linear(2.0)),
           child: c!,
         ),
-        home: Scaffold(body: SingleChildScrollView(child: child)),
+        home: home,
       ),
     );
-    await tester.pumpWidget(scaled(SharedInviteInbox(runtime: runtime)));
+    await tester.pumpWidget(scaled(SharedJoinRequestsPage(runtime: runtime)));
     await tester.pumpAndSettle();
     expect(find.textContaining('Ramachandran'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(
       scaled(
-        Builder(
-          builder: (context) => TextButton(
-            onPressed: () => showSharedRenameMemberDialog(
-              context,
-              title: 'Edit name',
-              initialName: long,
+        Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showSharedRenameMemberDialog(
+                context,
+                title: 'Edit name',
+                initialName: long,
+              ),
+              child: const Text('open'),
             ),
-            child: const Text('open'),
           ),
         ),
       ),
@@ -511,7 +524,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('7 requests at 2x scale: no overflow, friends list reachable', (
+  testWidgets('7 requests at 2x: one summary row, friends list reachable', (
     tester,
   ) async {
     final long = 'Ramachandran ' * 9 + 'Iyer';
@@ -526,17 +539,12 @@ void main() {
           'contextId': group,
           'contextName': 'Goa',
           'memberName': n == 3 ? long : 'Person $n',
-          'claimantProfileName': 'Signed ${'Name ' * 10}$n',
-          'claimantPhoneSuffix': '4821',
         }),
     ];
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           sharedExpensesRuntimeProvider.overrideWith((ref) async => runtime),
-          cacheNamespaceProvider.overrideWith(
-            (ref) => ref.watch(sessionNamespace),
-          ),
         ],
         child: MaterialApp(
           theme: AppTheme.light(),
@@ -546,7 +554,6 @@ void main() {
             ).copyWith(textScaler: const TextScaler.linear(2.0)),
             child: c!,
           ),
-          // Same shape as the Splits screen: inbox above a scrolling list.
           home: Scaffold(
             body: Column(
               children: [
@@ -567,30 +574,13 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+    expect(find.text('7 people want to join'), findsOneWidget);
     expect(find.text('Friend row 0'), findsOneWidget);
-    expect(find.text('+4 more requests'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Friend row 19'),
       300,
       scrollable: find.byType(Scrollable).last,
     );
     expect(tester.takeException(), isNull);
-    expect(find.text('Friend row 19'), findsOneWidget);
-    // Expanding keeps everything inside the capped, scrollable inbox.
-    await tester.tap(find.byKey(const Key('join-requests-toggle')));
-    await tester.pumpAndSettle();
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('direct join card drops the repeated split name', (tester) async {
-    await inbox(
-      tester,
-      join({
-        'memberName': 'Rahul Sharma',
-        'contextName': 'Rahul Sharma',
-        'contextKind': 'direct',
-      }),
-    );
-    expect(find.text('Rahul Sharma wants to join your split'), findsOneWidget);
   });
 }

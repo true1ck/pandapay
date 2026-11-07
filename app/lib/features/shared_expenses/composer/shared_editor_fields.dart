@@ -219,12 +219,13 @@ class SharedEditorFields extends StatelessWidget {
                 children: [
                   for (final mode in SharedSplitMode.values)
                     ChoiceChip(
-                      label: Text(switch (mode) {
-                        SharedSplitMode.equal => 'Equally',
-                        SharedSplitMode.exact => 'Exact ₹',
-                        SharedSplitMode.percentage => '%',
-                        SharedSplitMode.shares => 'Shares',
-                      },
+                      label: Text(
+                        switch (mode) {
+                          SharedSplitMode.equal => 'Equally',
+                          SharedSplitMode.exact => 'Exact ₹',
+                          SharedSplitMode.percentage => '%',
+                          SharedSplitMode.shares => 'Shares',
+                        },
                         style: BambooFonts.ui(
                           13,
                           weight: FontWeight.w600,
