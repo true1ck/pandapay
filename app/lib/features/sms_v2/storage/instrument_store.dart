@@ -4,6 +4,8 @@ import 'package:pandapay_domain/sms_v2.dart'
     show Instrument, InstrumentKind, InstrumentStatus, LimitChangeRecord;
 import 'package:sqlite3/sqlite3.dart';
 
+import 'row_decode_cache.dart';
+
 /// Two stored instruments would share an identity key
 /// (`kind`, `issuerSlug`, `maskDigits`) in one account.
 class InstrumentKeyConflict implements Exception {
@@ -134,10 +136,24 @@ ON CONFLICT(namespace, instrument_id) DO UPDATE SET
       args.add(kind.wire);
     }
     final rows = _db.select(
-      'SELECT payload FROM v2_instruments WHERE $where',
+      'SELECT instrument_id,payload FROM v2_instruments WHERE $where',
       args,
     );
-    final out = [for (final r in rows) _decode(r['payload'] as String)];
+    // Instruments are immutable values; an unchanged payload reuses its
+    // decoded Instrument (the ledger read model lists them on every rebuild).
+    final pass = RowDecodeCache.of<Instrument>(
+      _db,
+      'v2_instruments',
+    ).begin(namespace);
+    final out = [
+      for (final r in rows)
+        pass.resolve(
+          r['instrument_id'] as String,
+          r['payload'] as String,
+          _decode,
+        ),
+    ];
+    pass.finish(complete: status == null && kind == null);
     out.sort((a, b) {
       final c = b.lastSeenAt.compareTo(a.lastSeenAt);
       return c != 0 ? c : a.instrumentId.compareTo(b.instrumentId);
