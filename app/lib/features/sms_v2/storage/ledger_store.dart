@@ -100,7 +100,9 @@ payload=excluded.payload,dirty=excluded.dirty WHERE v2_ledger.payload != exclude
       .toList();
   List<LedgerEntry> forEvent(String eventId) => [
     for (final row in db.select(
-      'SELECT payload FROM v2_ledger WHERE namespace=? AND event_id=? ORDER BY entry_id',
+      // Pinned to the event index: with ORDER BY entry_id SQLite may walk the
+      // primary key and scan the whole ledger for every event.
+      'SELECT payload FROM v2_ledger INDEXED BY idx_v2_ledger_event WHERE namespace=? AND event_id=? ORDER BY entry_id',
       [namespace, eventId],
     ))
       _decode(row['payload'] as String),

@@ -334,9 +334,20 @@ class SmsV2Runtime {
     }
     _checkAccount();
     final intake = SmsIntakeRepository(financial.database);
+    Set<String>? previousBatch;
     while (accountIsCurrent()) {
       final pending = intake.pending(namespace, limit: 200);
       if (pending.isEmpty) break;
+      // A pass that leaves the very same messages pending can never finish
+      // them; stop and retry on the next sync instead of spinning on the UI
+      // thread.
+      final batch = {for (final entry in pending) entry.id};
+      if (previousBatch != null &&
+          previousBatch.length == batch.length &&
+          previousBatch.containsAll(batch)) {
+        break;
+      }
+      previousBatch = batch;
       for (final entry in pending) {
         if (classifySmsTriage(entry.message.sender, entry.message.body).kind ==
             SmsTriageKind.sensitive) {
