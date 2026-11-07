@@ -843,7 +843,7 @@
     "senders": [
       "JIOPAY"
     ],
-    "pattern": "^(?![\\s\\S]*?\\b(?:debited|credited|deducted|withdrawn|charged|spent|refund(?:ed|s)?|reversed|reversal|received|paid|receipt|thank\\s+you|success(?:ful|fully)?)\\b)[\\s\\S]*?(?:\\bis\\s+due\\s+for\\s+payment\\s+today\\b|\\bbarred\\s+due\\s+to\\s+non-?payment\\b|\\bnever\\s+miss\\s+a\\s+recharge\\s+date\\b)",
+    "pattern": "^(?![\\s\\S]*?\\b(?:debited|credited|deducted|withdrawn|received|thank\\s+you|successful(?:ly)?)\\b)[\\s\\S]*?(?:\\bis\\s+due\\s+for\\s+payment\\s+today\\b|\\bbarred\\s+due\\s+to\\s+non-?payment\\b|\\bnever\\s+miss\\s+a\\s+recharge\\s+date\\b)",
     "flags": "i",
     "reason": "service"
   },
@@ -945,6 +945,123 @@
       "*"
     ],
     "pattern": "\\bhas\\s+requested\\s+money\\s+from\\s+you\\s+on\\s+cred\\b",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-NOTICE-MF-CONFIRMATION",
+    "senders": [
+      "*"
+    ],
+    "pattern": "(?:\\bdear\\s+investor,?\\s*(?:we\\s+have\\s+received\\s+your\\s+subscription|your\\s+subscription\\b|your\\s+redemption\\b|your\\s+purchase\\s+of\\s+(?:rs\\.?|inr|₹)\\s*[\\d,.]+\\s+in\\s+folio\\s+\\d+\\s+in\\b|your\\s+purchase\\s+request\\b)|\\bwe\\s+confirm\\s+receipt\\s+of\\s+your\\s+request\\s+for\\s+new\\s+purchase\\b|\\bfolio\\s+x+\\d+\\s*-\\s*your\\s+purchase\\s+request\\b)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-NOTICE-BROKER-SETTLEMENT",
+    "senders": [
+      "*"
+    ],
+    "pattern": "(?:\\byour\\s+zerodha\\s+account\\s+is\\s+due\\s+for\\s+settlement\\b|\\bas\\s+per\\s+sebi'?s?\\s+mandate\\s+regarding\\s+the\\s+settlement\\s+of\\s+accounts\\b|\\bas\\s+per\\s+sebi\\s+directives\\s+on\\s+periodic\\s+settlement,?\\s+payout\\s+of\\b|\\bas\\s+per\\s+your\\s+request,\\s+payout\\s+of\\s+[^.\\n]{0,30}has\\s+been\\s+made\\s+to\\s+your\\b|\\bwe'?ve\\s+transferred\\s+unused\\s+funds\\s+from\\s+your\\s+trading\\s+account\\b|\\btransferred\\s+unused\\s+funds\\s+of\\s+[^.\\n]{0,30}from\\s+your\\s+\\w+\\s+trading\\s+account\\b|\\bopendated\\s+a/c:\\s*\\d+\\s+received:)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-NOTICE-DEMAT-SHARE-CREDIT",
+    "senders": [
+      "*"
+    ],
+    "pattern": "\\bcdsl:\\s*credited\\s+in\\s+a/c\\s+\\*?\\d+\\s+shares\\s+of\\b",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-NOTICE-GOVT-GRANT-CENTRAL",
+    "senders": [
+      "*"
+    ],
+    "pattern": "\\bis\\s+credited\\s+for\\s+scheme\\s+[^\\n]{0,60}?\\s+through\\s+pfms\\s+on\\b",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-NOTICE-CARD-BILL-REMINDERS",
+    "senders": [
+      "*"
+    ],
+    "pattern": "(?:\\breminder!\\s+[^\\n]{0,30}is\\s+overdue\\s+on\\s+hdfc\\s+bank\\s+credit\\s+card\\b|\\bhere'?s\\s+the\\s+link\\s+to\\s+quickly\\s+pay\\b[^\\n]{0,40}towards\\s+your\\s+hdfc\\s+bank\\s+credit\\s+card\\s+dues\\b|\\breminder\\s+that\\s+your\\s+hdfc\\s+bank\\s+credit\\s+card\\s+bill\\s+of\\b[^\\n]{0,40}has\\s+been\\s+generated\\b|\\blooks\\s+like\\s+you\\s+left\\s+your\\s+credit\\s+card\\s+bill\\s+payment\\s+order\\b|\\bthank\\s+you\\s+for\\s+using\\s+your\\s+yes\\s+bank\\s+credit\\s+card\\.\\s+pay\\s+your\\s+credit\\s+card\\s+outstanding\\b)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-NOTICE-CARD-PROGRAM",
+    "senders": [
+      "*"
+    ],
+    "pattern": "(?:\\bunlock\\s+domestic\\s+lounge\\s+access\\s+on\\s+your\\s+hdfc\\s+bank\\s+credit\\s+card\\b|\\bcredit\\s+limit\\s+update:\\s*the\\s+limit\\s+on\\s+your\\s+new\\s+credit\\s+card\\b|\\byour\\s+request\\s+to\\s+re-?set\\s+the\\s+limit\\s+for\\s+[^\\n]{0,40}trxns\\.?\\s+on\\s+your\\s+sbi\\s+credit\\s+card\\b|\\bcredit\\s+card\\s+[x*#\\d]+\\s+has\\s+been\\s+activated\\s+on\\b[^\\n]{0,60}available\\s+balance\\b|\\byou\\s+can\\s+initiate\\s+your\\s+first\\s+transaction\\s+with\\s+max\\s+limit\\s+of\\b|\\bis\\s+withheld\\s+for\\s+security\\s+reasons\\b)",
+    "flags": "i",
+    "reason": "promotion"
+  },
+  {
+    "id": "IGN-NOTICE-CARD-PAYMENT-APP-RECEIPT",
+    "senders": [
+      "*"
+    ],
+    "pattern": "(?:\\byour\\s+hdfc\\s+bank\\s+credit\\s+card\\s+bill\\s+payment\\s+of\\b[^\\n]{0,30}is\\s+successful\\b|\\bpayment\\s+of\\s+(?:rs\\.?|inr)\\s*[\\d,.]+\\s+for\\s+your\\s+sbi\\s+credit\\s+card\\s+has\\s+been\\s+successfully\\s+processed\\b|\\bstanding\\s+instruction\\s+\\S+\\s+on\\s+icici\\s+bank\\s+credit\\s+card\\s+\\S+\\s+has\\s+been\\s+cancel+ed\\b)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-NOTICE-UPI-AUTOPAY",
+    "senders": [
+      "*"
+    ],
+    "pattern": "(?:\\bupi\\s+autopay\\s+for\\s+[^\\n]{0,60}debit\\s+of\\b[^\\n]{0,30}is\\s+scheduled\\s+on\\b|\\bupi\\s+autopay\\s+of\\s+[^\\n]{0,30}for\\s+[^\\n]{0,40}is\\s+due\\s+on\\b|\\bupi-mandate\\s+could\\s+not\\s+be\\s+revoked\\b|\\bupi\\s+autopay\\s+mandate\\s+on\\s+rupay\\s+credit\\s+card\\b[^\\n]{0,60}(?:successfully\\s+created|is\\s+successfully\\s+revoked))",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-NOTICE-PAYMENT-RECEIPTS",
+    "senders": [
+      "*"
+    ],
+    "pattern": "(?:\\btransaction\\s+no\\.?\\s*\\d+\\s+for\\s+[^\\n]{0,30}done\\s+for\\s+[^\\n]{0,60}has\\s+succeeded\\b|\\bthank\\s+you\\s+for\\s+making\\s+a\\s+successful\\s+transaction\\.\\s+your\\s+transaction\\s+with\\s+txn\\s+id\\b|\\bhas\\s+requested\\s+payment\\s+of\\s+[^\\n]{0,30}you\\s+can\\s+pay\\s+through\\s+this\\s+link\\b|\\byour\\s+payment\\s+of\\s+[^\\n]{0,30}for\\s+the\\s+subscription\\s+to\\s+[^\\n]{0,40}is\\s+successful\\b|\\bis\\s+requesting\\s+a\\s+payment\\s+of\\b[^\\n]{0,30}tap\\s+on\\s+the\\s+link\\b|\\bthanks\\s+for\\s+shopping\\s+at\\s+[^\\n]{0,40}paid\\.\\s+view\\s+your\\s+invoice\\b|\\bthank\\s+you\\s+for\\s+shopping\\s+at\\s+levi'?s\\b|\\bwe\\s+have\\s+successfully\\s+received\\s+it\\s+for\\s+your\\s+order\\b|\\bwe\\s+have\\s+received\\s+payment\\s+of\\b[^\\n]{0,30}for\\s+your\\s+car\\s+insurance\\b|\\bcongratulations\\s+on\\s+booking\\s+your\\b[^\\n]{0,60}received\\s+the\\s+booking\\s+amount\\b|\\breceived\\s+(?:rs\\.?|inr)\\s*[\\d,.]+/-\\s+against\\s+new\\s+registration\\s+fee\\b|\\byour\\s+application\\s+for\\s+[^\\n]{0,40}is\\s+due\\s+for\\s+payment\\s+with\\s+the\\s+following\\s+remarks\\b|\\bsbcollect\\s+txn\\b[^\\n]{0,80}is\\s+successful\\b|\\byour\\s+payment\\s+towards\\s+[^\\n]{0,40}fixed\\s+deposit\\s+of\\b[^\\n]{0,30}has\\s+been\\s+processed\\s+successfully\\b|\\bchallan\\s+payment\\s+of\\b[^\\n]{0,110}has\\s+been\\s+successfully\\s+paid\\b|\\bloan\\s+payment\\s+of\\b[^\\n]{0,30}is\\s+due\\s+today\\b|\\bis\\s+scheduled\\s+for\\s+renewal\\s+in\\b[^\\n]{0,60}maintain\\s+sufficient\\b)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-NOTICE-WALLET-AND-LOYALTY",
+    "senders": [
+      "*"
+    ],
+    "pattern": "(?:\\bdebited\\s+from\\s+redbus\\s+wallet\\s+towards\\b|\\bhas\\s+been\\s+credited\\s+into\\s+your\\s+redbus\\s+wallet\\b|\\bcredited\\s+to\\s+your\\s+power\\s+cash\\s+wallet\\b|\\byour\\s+account\\s+has\\s+been\\s+debited\\s+with\\s+[\\d.]+\\s+neucoin|\\btradeconfirmation\\b[^\\n]{0,40}received\\s+in\\s+account\\b|\\bbuy\\s+\\d+\\s+qty\\s+of\\s+[^\\n]{0,40}target\\b[^\\n]{0,40}stoploss\\b)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-NOTICE-JIO-SERVICE",
+    "senders": [
+      "*"
+    ],
+    "pattern": "(?:\\byou\\s+have\\s+consumed\\s+\\d+%\\s+of\\s+the\\s+daily\\b[^\\n]{0,60}sms\\s+quota\\b|\\bsome\\s+important\\s+things\\s+to\\s+keep\\s+in\\s+mind\\s+regarding\\s+your\\s+jioairfiber\\s+bills\\b|\\bis\\s+due\\s+for\\s+payment\\s+on\\s+\\d{2}-00-0001\\b)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-NOTICE-TINY-FOREIGN-AUTHORISATION",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^\\s*(?:usd|inr|eur|gbp)\\s*\\.\\d{1,2}\\s+spent\\s+using\\s+icici\\s+bank\\s+card\\b",
+    "flags": "i",
+    "reason": "other"
+  },
+  {
+    "id": "IGN-NOTICE-DECLINED-CARD-TRANSACTION",
+    "senders": [
+      "*"
+    ],
+    "pattern": "\\ba\\s+transaction\\s+of\\s+(?:rs\\.?|inr)\\s*[\\d,.]+\\s+on\\s+your\\s+yes\\s+bank\\s+credit\\s+card\\s+ending\\s+\\d+[^\\n]{0,80}\\bis\\s+declined\\b",
     "flags": "i",
     "reason": "service"
   }

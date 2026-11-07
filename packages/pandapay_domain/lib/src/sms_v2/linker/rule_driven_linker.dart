@@ -1802,6 +1802,12 @@ class _Run {
   bool _standsAlone(LinkRule rule, LegRole role, Fact f) {
     switch (kinds[rule]!) {
       case LinkRuleKind.cardBill:
+        // A bank debit typed as a bill payment may join a card receipt, but on
+        // its own it is a plain bill payment (a utility bill), not a card bill.
+        if (role == LegRole.debitLeg) {
+          return f is MovementFact && f.purpose == MovementPurpose.cardPayment;
+        }
+        return role == LegRole.creditLeg;
       case LinkRuleKind.walletTopup:
         return role == LegRole.debitLeg || role == LegRole.creditLeg;
       case LinkRuleKind.ipo:

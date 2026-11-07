@@ -185,19 +185,26 @@ class DefaultInstrumentResolver implements InstrumentResolver {
         if (i.issuerSlug == issuer) i,
     ];
 
-    // 1. Exact key match.
+    // 1. Exact key match, then the same number printed longer or shorter
+    //    (SBI prints XXXXX728648 in one message and X8648 in another).
     if (kind != null && mask != null) {
       final exact = sameIssuer.where((i) => i.kind == kind && i.maskDigits == mask).toList();
       if (exact.isNotEmpty) return _pick(exact);
+      final sameNumber = sameIssuer.where((i) => i.kind == kind && _sameNumberEnding(i.maskDigits, mask)).toList();
+      if (sameNumber.isNotEmpty) return _pick(sameNumber);
     }
     // 2. No kind: the one instrument with that issuer and mask.
     if (kind == null) {
-      final byMask = sameIssuer.where((i) => i.maskDigits == mask).toList();
+      final byMask = sameIssuer.where((i) => i.maskDigits == mask || _sameNumberEnding(i.maskDigits, mask)).toList();
       if (byMask.isNotEmpty) return _pick(byMask);
     }
-    // 3. No mask: the one instrument with that issuer and kind.
+    // 3. No mask: the one instrument with that issuer and kind. When a wallet
+    //    was first seen without a number and later with one, the numbered one is
+    //    the real instrument.
     if (mask == null) {
       final byKind = sameIssuer.where((i) => i.kind == kind).toList();
+      final numbered = byKind.where((i) => i.maskDigits != null).toList();
+      if (byKind.length > 1 && numbered.length == 1) return _pick(numbered);
       if (byKind.isNotEmpty) return _pick(byKind);
     }
 
@@ -273,6 +280,14 @@ class DefaultInstrumentResolver implements InstrumentResolver {
       lastSeenAt: observedAt.toUtc(),
       evidenceCount: 0,
     );
+  }
+
+  /// True when two different masks are one number printed to different
+  /// lengths: both have at least four digits and one ends with the other.
+  static bool _sameNumberEnding(String? a, String? b) {
+    if (a == null || b == null || a == b) return false;
+    if (a.length < 4 || b.length < 4) return false;
+    return a.endsWith(b) || b.endsWith(a);
   }
 
   /// The mask when it is 2 to 6 digits, else null.

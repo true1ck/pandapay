@@ -6683,5 +6683,142 @@
     "status": "active",
     "createdBy": "review-noise-2y",
     "updatedAt": "2026-11-07T00:00:00Z"
+  },
+  {
+    "id": "HDFC-CARD-SPEND-SPENTFIRST-CC",
+    "version": 1,
+    "family": "card_spend",
+    "senders": [
+      "HDFCBK",
+      "HDFCBN"
+    ],
+    "priority": 752,
+    "match": {
+      "pattern": "\\bspent\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z0-9+&.'/ -]{0,40}?\\s)?(?:(?:credit|debit|prepaid|forex)\\s+)?card(?:\\s*(?:no|number)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+at\\s+(?<merchant>[^\\n]+?)(?=\\s+(?:on|dated)\\s+(?:date\\s+)?\\d|\\s+on\\s+[a-z]{3}\\b|\\.(?:\\s|$)|[;,(/\\n]|\\s+(?:on|using|with)\\s+(?:your|the|my|a)\\b|\\s+(?:from|avl|avail|available|ref|reference|not\\s+you|if\\s+not|if\\s+this|call|txn|trxn|bal|balance|limit|lmt|total|via|using|upi|utr|ending)\\b|$)(?:\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?))?",
+      "flags": "i",
+      "requireAll": [
+        "block cc"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        },
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "AD-HDFCBK-S",
+        "body": "Spent Rs.293.00 On HDFC Bank Card 1234 At SAMPLE CAFE On 2025-05-11:13:07:50.Not You? To Block+Reissue Call 18002586161/SMS BLOCK CC 1234 to 7308080808",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AD-HDFCBK-S",
+        "body": "Spent Rs.293.00 On HDFC Bank Card 1234 At SAMPLE CAFE On 2025-05-11:13:07:50.Not You? To Block+Reissue Call 18002586161/SMS BLOCK DC 1234 to 7308080808",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "review-2y",
+    "updatedAt": "2026-11-07T00:00:00Z"
   }
 ]

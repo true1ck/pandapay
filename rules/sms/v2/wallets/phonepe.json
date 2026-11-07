@@ -855,5 +855,84 @@
     "status": "active",
     "createdBy": "baseline",
     "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PHONEPE-GIFTCARD-PAID",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "PHONPE"
+    ],
+    "priority": 630,
+    "match": {
+      "pattern": "you'?ve\\s+paid\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+via\\s+phonepe\\s+gift\\s+card\\s+to\\s+(?<merchant>.+?)\\s+on\\s+[a-z]{3}\\s+\\d{1,2},\\s*\\d{4}[\\s\\S]{0,60}?remaining\\s+balance\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "phonepe"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "PHONPE-S",
+        "body": "You've paid Rs.904 via PhonePe gift card to Example Recharge on Jun 8, 2026 at 11:24:23 AM. Not you? Call us on 022-00000000. Remaining balance Rs.596.",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "PHONPE-S",
+        "body": "Your PhonePe gift card payment of Rs.904 to Example Recharge failed. Remaining balance Rs.596.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "review-2y",
+    "updatedAt": "2026-11-07T00:00:00Z"
   }
 ]

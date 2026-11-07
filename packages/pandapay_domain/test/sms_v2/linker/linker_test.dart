@@ -108,6 +108,62 @@ void main() {
     );
   });
 
+  group('LINK-CARD-BILL with a bill-payment debit', () {
+    // A bank's "bill pay" debit does not say what was paid. A card receipt for
+    // the same amount shortly after says it was a card bill.
+    final billDebit = debit(
+      'bill_payment',
+      93000,
+      at: '2026-11-19T12:44:00Z',
+      inst: hdfcAcct,
+    );
+    final cardReceipt = credit(
+      'card_payment',
+      93000,
+      at: '2026-11-19T13:03:00Z',
+      inst: hdfcCard,
+    );
+
+    test('the debit and the card receipt are one card bill payment', () {
+      final e = _only(linkAll([billDebit, cardReceipt]));
+      expect(shape(e), 'card_bill_payment[credit_leg,debit_leg]');
+      expect(e.amountMinor, 93000);
+    });
+
+    test('the receipt first gives the same pair', () {
+      final e = _only(linkAll([cardReceipt, billDebit]));
+      expect(shape(e), 'card_bill_payment[credit_leg,debit_leg]');
+    });
+
+    test('a bill-payment debit with no card receipt is a plain bill payment', () {
+      expect(shapes(linkAll([billDebit])), ['bill_payment[debit_leg]']);
+    });
+
+    test('a different amount does not join', () {
+      final other = credit(
+        'card_payment',
+        90000,
+        at: '2026-11-19T13:03:00Z',
+        inst: hdfcCard,
+      );
+      expect(shapes(linkAll([billDebit, other])), [
+        'bill_payment[debit_leg]',
+        'card_bill_payment[credit_leg]',
+      ]);
+    });
+
+    test('a debit typed as a card payment still stands alone as a card bill', () {
+      final typed = debit(
+        'card_payment',
+        93000,
+        at: '2026-11-19T12:44:00Z',
+        inst: hdfcAcct,
+        counterparty: party(kind: 'own'),
+      );
+      expect(shapes(linkAll([typed])), ['card_bill_payment[debit_leg]']);
+    });
+  });
+
   group('LINK-WALLET-TOPUP', () {
     test(
       'bank top-up and wallet credit pair; the wallet purchase is the spend',

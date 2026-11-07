@@ -1,0 +1,40 @@
+{
+  "id": "review2y:hdfc_card_spent_first_is_credit",
+  "templateHash": "f449215268b7280aba3df282ec6ae24cd5c6f1b7277485113594ff8e7cd032eb",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AD-HDFCBK-S",
+      "body": "Spent Rs.293.00 On HDFC Bank Card 4321 At SAMPLE CAFE On 2025-05-11:13:07:50.Not You? To Block+Reissue Call 18002586161/SMS BLOCK CC 4321 to 7308080808",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 29300
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskDigits": "4321"
+        },
+        "counterparty": {
+          "name": "SAMPLE CAFE"
+        }
+      }
+    ]
+  },
+  "note": "HDFC card spend that says SMS BLOCK CC is a credit card spend.",
+  "origin": "review-2y"
+}

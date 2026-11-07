@@ -103,6 +103,55 @@ void main() {
     });
   });
 
+  group('one number printed to different lengths', () {
+    // SBI prints XXXXX728648 in one message and X8648 in another.
+    test('a longer print of a known account is the same account', () {
+      final known = instrument(kind: InstrumentKind.bankAccount, issuer: 'sbi', mask: '8648');
+      final out = run(mention(kind: InstrumentKind.bankAccount, issuer: 'sbi', mask: '728648'), [known]);
+      expect(matched(out).instrumentId, known.instrumentId);
+    });
+
+    test('a shorter print of a known account is the same account', () {
+      final known = instrument(kind: InstrumentKind.bankAccount, issuer: 'sbi', mask: '728648');
+      final out = run(mention(kind: InstrumentKind.bankAccount, issuer: 'sbi', mask: '8648'), [known]);
+      expect(matched(out).instrumentId, known.instrumentId);
+    });
+
+    test('a mention without a kind finds it too', () {
+      final known = instrument(kind: InstrumentKind.bankAccount, issuer: 'sbi', mask: '8648');
+      expect(matched(run(mention(kind: null, issuer: 'sbi', mask: '728648'), [known])).instrumentId, known.instrumentId);
+    });
+
+    test('different numbers, short masks and other issuers are never merged', () {
+      final known = instrument(kind: InstrumentKind.bankAccount, issuer: 'sbi', mask: '8648');
+      // a different number that does not end with it
+      expect(created(run(mention(kind: InstrumentKind.bankAccount, issuer: 'sbi', mask: '728649'), [known])).maskDigits, '728649');
+      // under four digits there is too little to call it the same number
+      final short = instrument(kind: InstrumentKind.bankAccount, issuer: 'sbi', mask: '48');
+      expect(created(run(mention(kind: InstrumentKind.bankAccount, issuer: 'sbi', mask: '8648'), [short])).maskDigits, '8648');
+      // another issuer
+      expect(created(run(mention(kind: InstrumentKind.bankAccount, issuer: 'icici', mask: '728648'), [known])).issuerSlug, 'icici');
+      // a card is not an account
+      expect(created(run(mention(kind: InstrumentKind.creditCard, issuer: 'sbi', mask: '728648'), [known])).kind, InstrumentKind.creditCard);
+    });
+  });
+
+  group('a wallet first seen without a number', () {
+    test('the numbered wallet is chosen over its number-less duplicate', () {
+      final numbered = instrument(kind: InstrumentKind.wallet, issuer: 'pluxee', mask: '6546');
+      final bare = instrument(kind: InstrumentKind.wallet, issuer: 'pluxee', mask: null);
+      final out = run(mention(kind: InstrumentKind.wallet, issuer: 'pluxee', mask: null), [bare, numbered]);
+      expect(matched(out).instrumentId, numbered.instrumentId);
+    });
+
+    test('two numbered wallets are still ambiguous', () {
+      final a = instrument(kind: InstrumentKind.wallet, issuer: 'pluxee', mask: '6546');
+      final b = instrument(kind: InstrumentKind.wallet, issuer: 'pluxee', mask: '1111');
+      final out = run(mention(kind: InstrumentKind.wallet, issuer: 'pluxee', mask: null), [a, b]);
+      expect(out, isA<InstrumentReviewNeeded>());
+    });
+  });
+
   group('step 2: mention without a kind', () {
     test('the one instrument with that issuer and mask', () {
       final a = instrument(kind: InstrumentKind.creditCard, mask: '5678');

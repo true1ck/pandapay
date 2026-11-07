@@ -5811,5 +5811,686 @@
     "status": "active",
     "createdBy": "baseline",
     "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "ICICI-ACCT-DEBIT-BILLPAY",
+    "version": 1,
+    "family": "bill_payment",
+    "senders": [
+      "ICICIB",
+      "ICICIT",
+      "ICICIO",
+      "ICICIS",
+      "ICICIC"
+    ],
+    "priority": 771,
+    "match": {
+      "pattern": "icici\\s+bank\\s+acc\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+debited\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{1,2}-[a-z]{3}-\\d{2,4})\\s+infobil\\*",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "bill_payment",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "AD-ICICIT-S",
+        "body": "ICICI Bank Acc XX1234 debited Rs. 930.00 on 19-Nov-25 InfoBIL*001115038.Avl Bal Rs. 4,10,294.02.To dispute call 18002662 or SMS BLOCK 1234 to 9215676766",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "ICICIT-S",
+        "body": "ICICI Bank Acc XX1234 debited Rs. 149.00 on 07-Jun-26 InfoBIL*INFT*FFB8.Avl Bal Rs. 5,43,787.25.To dispute call 18002662 or SMS BLOCK 1234 to 9215676766",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "ICICIT-S",
+        "body": "ICICI Bank Acc XX1234 debited Rs. 930.00 on 19-Nov-25 InfoNEFT*ABC123.Avl Bal Rs. 4,10,294.02.To dispute call 18002662",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "review-2y",
+    "updatedAt": "2026-11-07T00:00:00Z"
+  },
+  {
+    "id": "ICICI-ACCT-DEBIT-VIN-CARD",
+    "version": 1,
+    "family": "card_spend",
+    "senders": [
+      "ICICIB",
+      "ICICIT",
+      "ICICIO",
+      "ICICIS",
+      "ICICIC"
+    ],
+    "priority": 771,
+    "match": {
+      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+debited\\s+from\\s+icici\\s+bank\\s+acc\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+on\\s+(?<date>\\d{1,2}-[a-z]{3}-\\d{2,4})\\s+vin\\*(?<merchant>[^.\\n]+?)\\s*\\.\\s*bal",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "ICICIT-S",
+        "body": "Rs. 446.00 debited from ICICI Bank Acc XX1234 on 28-Sep-26 VIN*SAMPLEMART . Bal Rs. 7,89,916.43. If not you call 18002662 or SMS BLOCK 1234 to 9215676766",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "ICICIT-S",
+        "body": "Rs. 446.00 debited from ICICI Bank Acc XX1234 on 28-Sep-26 NEFT*ABC . Bal Rs. 7,89,916.43.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "review-2y",
+    "updatedAt": "2026-11-07T00:00:00Z"
+  },
+  {
+    "id": "ICICI-ACCT-DEBIT-CHEQUE-CLEARING",
+    "version": 1,
+    "family": "cheque",
+    "senders": [
+      "ICICIB",
+      "ICICIT",
+      "ICICIO",
+      "ICICIS",
+      "ICICIC"
+    ],
+    "priority": 771,
+    "match": {
+      "pattern": "icici\\s+bank\\s+acc\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+debited\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{1,2}-[a-z]{3}-\\d{2,4})\\s+infoclg\\*(?<payee>[^.\\n]+?)\\s*\\.\\s*avl",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "unknown",
+          "rail": "cheque"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payee",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "ICICIT-S",
+        "body": "ICICI Bank Acc XX1234 debited Rs. 50,000.00 on 27-Mar-26 InfoCLG*SAMPLE PERSON.Avl Bal Rs. 3,12,781.91.To dispute call 18002662",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "ICICIT-S",
+        "body": "ICICI Bank Acc XX1234 debited Rs. 50,000.00 on 27-Mar-26 InfoNEFT*SAMPLE PERSON.Avl Bal Rs. 3,12,781.91.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "review-2y",
+    "updatedAt": "2026-11-07T00:00:00Z"
+  },
+  {
+    "id": "ICICI-ACCT-CREDIT-DIVIDEND-ACH",
+    "version": 1,
+    "family": "dividend",
+    "senders": [
+      "ICICIB",
+      "ICICIT",
+      "ICICIO",
+      "ICICIS",
+      "ICICIC"
+    ],
+    "priority": 771,
+    "match": {
+      "pattern": "icici\\s+bank\\s+account\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+credited:\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{1,2}-[a-z]{3}-\\d{2,4})\\.\\s*info\\s+ach\\*(?<issuer>[a-z0-9 .&'-]+?)\\s+(?:finl|final|interim)\\s+div",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "dividend",
+          "rail": "nach"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "issuer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "ICICIT-S",
+        "body": "ICICI Bank Account XX1234 credited:Rs. 5.50 on 09-Sep-26. Info ACH*SAMPLE LTD FINL DIV 2025-26*IN3. Available Balance is Rs. 10,30,278.43.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "ICICIT-S",
+        "body": "ICICI Bank Account XX1234 credited:Rs. 5.50 on 09-Sep-26. Info ACH*SAMPLE LTD EMI 2025-26*IN3.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "review-2y",
+    "updatedAt": "2026-11-07T00:00:00Z"
+  },
+  {
+    "id": "ICICI-CARD-PAYMENT-AUTODEBIT-THANKS",
+    "version": 1,
+    "family": "card_payment_received",
+    "senders": [
+      "ICICIB",
+      "ICICIT",
+      "ICICIO",
+      "ICICIS",
+      "ICICIC"
+    ],
+    "priority": 746,
+    "match": {
+      "pattern": "thank\\s+you\\s+for\\s+your\\s+payment\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+towards\\s+icici\\s+bank\\s+credit\\s+card\\s+account\\s+\\d?[x*]+(?<mask>\\d{4})\\s+through\\s+auto\\s+debit\\s+from\\s+account\\s+[x*]+(?<bmask>\\d{3,6})\\s+on\\s+(?<date>\\d{1,2}-[a-z]{3}-\\d{2,4})",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "card_payment",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        },
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "icici",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "own",
+          "accountMaskFrom": "bmask"
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "ICICIT-S",
+        "body": "Dear Customer, thank you for your payment of INR 50,625.32 towards ICICI Bank Credit Card Account XX1234 through Auto Debit from Account XX5678 on 30-Jun-26",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "ICICIT-S",
+        "body": "Dear Customer, your payment of INR 50,625.32 towards ICICI Bank Credit Card Account XX1234 has failed.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "review-2y",
+    "updatedAt": "2026-11-07T00:00:00Z"
   }
 ]

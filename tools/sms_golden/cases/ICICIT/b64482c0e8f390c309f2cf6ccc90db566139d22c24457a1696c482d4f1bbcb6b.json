@@ -1,0 +1,40 @@
+{
+  "id": "review2y:icici_debit_card_vin_merchant",
+  "templateHash": "b64482c0e8f390c309f2cf6ccc90db566139d22c24457a1696c482d4f1bbcb6b",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "ICICIT-S",
+      "body": "Rs. 446.00 debited from ICICI Bank Acc XX4321 on 28-Sep-26 VIN*SAMPLEMART . Bal Rs. 7,89,916.43. If not you call 18002662 or SMS BLOCK 4321 to 9215676766",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 44600
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "4321"
+        },
+        "counterparty": {
+          "name": "SAMPLEMART"
+        }
+      }
+    ]
+  },
+  "note": "ICICI debit-card style debit keeps the merchant.",
+  "origin": "review-2y"
+}

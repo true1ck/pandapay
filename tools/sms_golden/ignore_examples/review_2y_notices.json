@@ -1,0 +1,229 @@
+[
+  {
+    "rule": "IGN-NOTICE-MF-CONFIRMATION",
+    "positive": [
+      {
+        "sender": "VM-MFAMC-S",
+        "body": "Dear Investor, Your Purchase of Rs 5000.00 in Folio 123456 in Sample Index Fund - Direct Plan has been processed."
+      },
+      {
+        "sender": "VM-MFAMC-S",
+        "body": "Dear Investor, Your subscription in Sample Fund - Dir Gr under folio 123456, vide reference number 99 for Rs 1000.00 is processed."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-MFAMC-S",
+        "body": "Dear Investor, your SIP installment for Folio 123456 could not be processed."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-NOTICE-BROKER-SETTLEMENT",
+    "positive": [
+      {
+        "sender": "VM-ZRODHA-S",
+        "body": "Your Zerodha account is due for settlement and it will be settled within the next 3 days. The idle funds will be returned."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-ZRODHA-S",
+        "body": "Your Zerodha order to buy 10 shares of Sample Ltd is executed at Rs 100."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-NOTICE-DEMAT-SHARE-CREDIT",
+    "positive": [
+      {
+        "sender": "VM-CDSLTX-S",
+        "body": "CDSL:CREDITED IN A/C *1234 SHARES OF SAMPLE LIMITED TOWARDS SCHEME OF ARRANGEMENT ON 01/01/26.CONTACT YOUR DP FOR MORE INFO"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-CDSLTX-S",
+        "body": "CDSL: Debit in a/c *1234 for SAMPLE-EQ on 01JAN"
+      }
+    ]
+  },
+  {
+    "rule": "IGN-NOTICE-GOVT-GRANT-CENTRAL",
+    "positive": [
+      {
+        "sender": "VM-CGAGOV-S",
+        "body": "Your bank A/c No. ******1234 is credited for Scheme SAMPLE GRANT of Rs. 10850.00 through PFMS on 2025-01-01 Transaction ID C122447316111."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-CGAGOV-S",
+        "body": "Your bank A/c No. ******1234 is debited for Scheme SAMPLE GRANT of Rs. 10850.00 on 2025-01-01."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-NOTICE-CARD-BILL-REMINDERS",
+    "positive": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "REMINDER! Rs.1,234.00 is overdue on HDFC Bank Credit Card 1234. Please complete your payment today: example.com/p Ignore if paid!"
+      },
+      {
+        "sender": "VM-YESBNK-S",
+        "body": "Dear Customer, Thank you for using your YES BANK Credit Card. Pay your Credit Card outstanding of INR 41,094.65 in EMIs. Click here example.com"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Payment of Rs.1,234.00 received towards your HDFC Bank Credit Card 1234. Thank you."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-NOTICE-CARD-PROGRAM",
+    "positive": [
+      {
+        "sender": "VM-SSFBNK-S",
+        "body": "Your Example Credit Card 1234 has been activated on 01-01-26 10:00:00 and the available balance is Rs 50000.00"
+      },
+      {
+        "sender": "VM-SBICRD-S",
+        "body": "Dear SBI Cardholder, your request to re-set the limit for Domestic online Trxns. on your SBI Credit Card ending 1234 has been accepted."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-SSFBNK-S",
+        "body": "Rs 500.00 spent on your Example Credit Card 1234 at SAMPLE STORE."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-NOTICE-CARD-PAYMENT-APP-RECEIPT",
+    "positive": [
+      {
+        "sender": "VM-TATANU-S",
+        "body": "Hi, your HDFC BANK CREDIT CARD bill payment of Rs. 598.00 is successful. Transaction ID BPPTN0000000 - Team Example"
+      },
+      {
+        "sender": "VM-SBICRD-S",
+        "body": "Dear SBI Cardholder, payment of Rs 1,000.00 for your SBI Credit Card has been successfully processed. ref no : ABC123"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-TATANU-S",
+        "body": "Hi, your HDFC BANK CREDIT CARD bill payment of Rs. 598.00 failed."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-NOTICE-UPI-AUTOPAY",
+    "positive": [
+      {
+        "sender": "VM-SBIUPI-S",
+        "body": "Dear UPI User, UPI AutoPay for Example Streaming debit of Rs 199.00 is scheduled on 01/01/26, abc@bank. Please ensure sufficient balance in your account. -SBI"
+      },
+      {
+        "sender": "VM-SBIUPI-S",
+        "body": "UPI-Mandate could not be revoked. RESPMANDATE TIMEOUT AT REMITTER END -SBI"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-SBIUPI-S",
+        "body": "Dear UPI User, UPI AutoPay for Example Streaming debit of Rs 199.00 was successful. -SBI"
+      }
+    ]
+  },
+  {
+    "rule": "IGN-NOTICE-PAYMENT-RECEIPTS",
+    "positive": [
+      {
+        "sender": "VM-PAYUIB-S",
+        "body": "Transaction No. 123456 for Rs 200.00 done for Example Shop has succeeded Team PayU"
+      },
+      {
+        "sender": "VM-EASEBZ-S",
+        "body": "Dear Customer, Thank you for making a successful transaction. Your transaction with TXN ID: E123 has been successfully processed. Your amount deducted is Rs. 244.0 -Easebuzz"
+      },
+      {
+        "sender": "VM-ITDCPC-S",
+        "body": "Dear User, Challan payment of Rs 27950.00 against PAN/TAN ABCDE1234F for Assessment Year 2026 has been successfully paid. e-Filing, ITD"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-PAYUIB-S",
+        "body": "Transaction No. 123456 for Rs 200.00 done for Example Shop has failed Team PayU"
+      }
+    ]
+  },
+  {
+    "rule": "IGN-NOTICE-WALLET-AND-LOYALTY",
+    "positive": [
+      {
+        "sender": "VM-REDBUS-S",
+        "body": "Dear , Rs. 100.00 debited from redBus Wallet towards Bus booking. Updated wallet balance is Rs. 0.00 redBus"
+      },
+      {
+        "sender": "VM-TATLUX-S",
+        "body": "CREDIT ALERT: Rs 500.00 credited to your Power Cash Wallet. Access here: example.com Tata CLiQ Luxury"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-REDBUS-S",
+        "body": "Rs 100.00 debited from your example bank account towards a bus booking."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-NOTICE-JIO-SERVICE",
+    "positive": [
+      {
+        "sender": "VM-JIOPAY-S",
+        "body": "You have consumed 80% of the daily 100.0 Units SMS quota from Rs.299_28D_1.5GB/D on Jio Number 9000000000 as on 01-Sep-26 10:00."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-JIOPAY-S",
+        "body": "Your Jio plan Rs.299 recharge was successful."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-NOTICE-TINY-FOREIGN-AUTHORISATION",
+    "positive": [
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "USD .50 spent using ICICI Bank Card XX1234 on 03-Nov-26 on SAMPLE TOOLS. Avl Limit: INR 5,00,000.00. If not you, call 18002662"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "USD 50.00 spent using ICICI Bank Card XX1234 on 03-Nov-26 on SAMPLE TOOLS. Avl Limit: INR 5,00,000.00."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-NOTICE-DECLINED-CARD-TRANSACTION",
+    "positive": [
+      {
+        "sender": "VM-YESBNK-S",
+        "body": "A transaction of INR 2,000.00 on your YES BANK Credit Card ending 1234 on 01-01-26 at 10:00:00 pm at SAMPLE SHOP is declined due to insufficient limit."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-YESBNK-S",
+        "body": "A transaction of INR 2,000.00 on your YES BANK Credit Card ending 1234 was successful."
+      }
+    ]
+  }
+]
