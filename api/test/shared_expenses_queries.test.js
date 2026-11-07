@@ -113,3 +113,23 @@ test('expense reads preserve explicit full bill metadata and keep legacy totals 
   assert.equal(result.items[0].totalMinor,'120000');
  }
 });
+
+
+test('legacy projection cursors replay from zero once, without trusting another account cursor', async()=>{
+  const scope={actorId:actor,kind:'projection_changes',contextId:null};
+  const legacy=Buffer.from(JSON.stringify({v:1,scope,lastKey:['70','50_activity:'+id]})).toString('base64url');
+  const calls=[];
+  await pullProjectionChanges({query:async(sql,args)=>{calls.push(args);return{rows:[]};}},actor,{after:legacy});
+  assert.equal(calls[0][1],'0','replay events skipped by the old text ordering');
+  const foreign=Buffer.from(JSON.stringify({v:1,scope:{...scope,actorId:id},lastKey:['70','50_activity:'+id]})).toString('base64url');
+  await assert.rejects(pullProjectionChanges({query:async()=>{throw new Error('must not query');}},actor,{after:foreign}),{code:'INVALID_CURSOR'});
+});
+
+test('new projection cursors keep numeric position after recovery', async()=>{
+  const scope={actorId:actor,kind:'projection_changes',contextId:null};
+  const cursor=encodeCursor(scope,['70','50_activity:'+id]);
+  assert.equal(JSON.parse(Buffer.from(cursor,'base64url')).v,2);
+  let args;
+  await pullProjectionChanges({query:async(sql,params)=>{args=params;return{rows:[]};}},actor,{after:cursor});
+  assert.equal(args[1],'70');
+});

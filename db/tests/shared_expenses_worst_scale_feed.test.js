@@ -84,7 +84,7 @@ describe('Z03 many events / feed', { skip: SKIP, timeout: 4 * 3600 * 1000 }, () 
     record('Z03.2_B15', rows);
     // desired behaviour: every event delivered exactly once (known defect B15 -> todo)
   });
-  it('Z03.2b desired: a 150-event stream paged with limit 5 delivers every event exactly once (B15)', { todo: 'BUG B15 (S1): final ORDER BY uses the text alias of profile_sequence, so "10"<"2"; events are skipped' }, async () => {
+  it('Z03.2b desired: a 150-event stream paged with limit 5 delivers every event exactly once (B15)', async () => {
     const A = await F.profile('b15c'), Bp = await F.profile('b15d'); const cx = uuid(); const c = await S.createCtx(F, A, cx, 'group', 'B15x'); const m = uuid();
     await S.inviteMember(F, A, cx, m, 'Bea', Bp); await S.respondMembership(F, Bp, cx, m, true);
     for (let i = 0; i < 30; i++) await S.submit(F, A, S.proposal(cx, S.equalSnapshot(1000 + i, c.memberId, [c.memberId])));
@@ -107,7 +107,7 @@ describe('Z03 many events / feed', { skip: SKIP, timeout: 4 * 3600 * 1000 }, () 
     record('Z03.5', { contextEvents: total, activity: { delivered: uniq(act), duplicates: act.length - uniq(act), firstPageOfTenSequences: firstPage }, changes: { delivered: uniq(chg), duplicates: chg.length - uniq(chg), expected: (await F.q('SELECT count(*)::int c FROM shared_expenses.profile_events WHERE profile_id=$1', [B]))[0].c } });
     globalThis.__act = { total, act, chg };
   });
-  it('Z03.5b desired: the activity feed of a split returns events 1..N in order, exactly once (listContextActivity / listChanges)', { todo: 'NEW (same root cause as B15): SELECT sequence::text ... ORDER BY sequence sorts by the text alias: wrong order, events skipped/duplicated across pages, and a full sort of the whole split per page (457ms at 3.4k events, 2.3s at 15k)' }, () => {
+  it('Z03.5b desired: the activity feed of a split returns events 1..N in order, exactly once (listContextActivity / listChanges)', () => {
     const { total, act } = globalThis.__act; assert.deepEqual(act.slice(0, 10), ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']); assert.equal(new Set(act).size, total);
   });
   it('Z03.3 invitation / purge backlog: 100k invitation rows (half with phone ciphertext due), hourly purge batch, lazy purge on reads', async () => {

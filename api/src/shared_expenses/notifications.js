@@ -72,7 +72,7 @@ function plan({ kind, payload, actorMemberName, contextName, members, actorId })
   }
 }
 
-async function loadAudience(client, contextId, actorId) {
+async function loadAudience(client, contextId, actorId, revision) {
   const members = await client.query(
     `SELECT m.member_id, m.profile_id, m.role, shared_expenses._member_label(m.display_name, m.profile_id) AS display_name
        FROM shared_expenses.members m
@@ -80,12 +80,29 @@ async function loadAudience(client, contextId, actorId) {
       LIMIT 200`,
     [contextId],
   );
+  let audience = members.rows;
+  if (revision) {
+    // The stored revision includes old and new participants, payer-only people,
+    // and late-bound identities. The submitted snapshot alone is insufficient.
+    const reviewers = await client.query(
+      `SELECT DISTINCT m.member_id, m.profile_id, m.role,
+              shared_expenses._member_label(m.display_name, m.profile_id) AS display_name
+         FROM shared_expenses.revision_members rm
+         JOIN shared_expenses.members m USING (context_id, member_id)
+        WHERE rm.context_id = $1::uuid AND rm.expense_id = $2::uuid
+          AND rm.revision_id = $3::uuid AND rm.approval_required
+          AND m.state = 'active' AND m.profile_id IS NOT NULL
+        ORDER BY m.profile_id`,
+      [contextId, revision.expenseId, revision.revisionId],
+    );
+    audience = reviewers.rows;
+  }
   const context = await client.query(
     'SELECT shared_expenses._context_label(c.kind, c.name, c.created_by, $2::uuid, c.context_id) AS name FROM shared_expenses.contexts c WHERE c.context_id = $1',
     [contextId, actorId],
   );
   return {
-    members: members.rows.map((r) => ({ memberId: r.member_id, profileId: r.profile_id, role: r.role, name: r.display_name })),
+    members: audience.map((r) => ({ memberId: r.member_id, profileId: r.profile_id, role: r.role, name: r.display_name })),
     contextName: context.rows[0]?.name ?? null,
   };
 }
@@ -146,7 +163,7 @@ async function notifyAfterCommit({ withUserClient, actorId, kind, payload, conte
     const invitation = kind.startsWith('invitation.');
     const audience = invitation
       ? await withUserClient(actorId, (client) => loadInvitationAudience(client, tokenHash))
-      : await withUserClient(actorId, (client) => loadAudience(client, contextId, actorId));
+      : await withUserClient(actorId, (client) => loadAudience(client, contextId, actorId, kind === 'expense.propose' ? { expenseId: payload?.expenseId, revisionId: payload?.revisionId } : null));
     const actor = audience.members.find((m) => m.profileId === actorId);
     const targets = plan({
       kind,
@@ -157,7 +174,8 @@ async function notifyAfterCommit({ withUserClient, actorId, kind, payload, conte
       actorId,
     });
     let sent = 0;
-    for (const target of targets.slice(0, 50)) {
+    // The group cap bounds this work to 199 recipients; never discard reviewers.
+    for (const target of targets) {
       try {
         if (await deliverOne({ withUserClient, target, contextId, dedupeKey: `split:${operationId}:${target.profileId}`, logger })) sent += 1;
       } catch (error) {

@@ -9,7 +9,7 @@ function uuid(value,field) {if(!v.matches(UUID,value))v.fail('INVALID_INPUT',fie
 function text(value,field,max) {if(typeof value!=='string'||!value.trim()||value.length>max||/[\u0000-\u001f\u007f]/.test(value))v.fail('INVALID_INPUT',field);}
 /** Same normalisation the database applies: strip control chars, collapse whitespace, trim, cap 40. */
 const {cleanLabel}=require('./label');
-function memberName(value,field) {if(typeof value!=='string'||value.length>400||!cleanLabel(value))v.fail('INVALID_INPUT',field);}
+function memberName(value,field) {if(typeof value!=='string'||value.length>400||value.includes('\u0000')||!cleanLabel(value))v.fail('INVALID_INPUT',field);}
 function day(value,field) {
   if(!v.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/,value)||value.startsWith('0000'))v.fail('INVALID_INPUT',field);
   const parsed=new Date(`${value}T00:00:00.000Z`);

@@ -34,24 +34,12 @@ test('SEC-INPUT-01: member.rename displayName rejects SQL-metacharacter and over
   }
 });
 
-test('SEC-INPUT-02 (KNOWN GAP): memberName validation does not reject raw control characters, '
-  + 'even though cleanLabel() strips them — a NUL byte in displayName reaches the SQL layer '
-  + 'un-rejected and causes an unhandled Postgres error (observed as HTTP 500 on the live stack) '
-  + 'instead of a 400 invalid_input. Unlike context.create\'s `name` field (which uses the '
-  + 'stricter `text()` validator and correctly rejects control characters), member.invite/'
-  + 'member.rename displayName uses `memberName()`, which only checks that cleanLabel(value) is '
-  + 'non-empty — it does not reject the *raw* value for containing control characters before '
-  + 'that raw value is forwarded to the database.', () => {
-    const withNul = '\u0000nullbyte';
-    // cleanLabel() strips the NUL byte and leaves non-empty text, so memberName() accepts it...
-    assert.equal(cleanLabel(withNul), 'nullbyte');
-    // ...and validateCommand does NOT throw, passing the UNCLEANED raw string through.
-    const { command } = validateCommand(renameCommand(withNul));
-    assert.equal(command.payload.displayName, withNul); // raw NUL byte preserved, not the cleaned version
-    // Recommendation: memberName() should validate against the SAME control-character
-    // regex `text()` uses (or store cleanLabel(value) itself), so invalid input is
-    // rejected with 400 before it ever reaches a query parameter.
-  });
+test('SEC-INPUT-02: member names with embedded NUL are rejected before SQL', () => {
+  for (const value of ['\u0000nullbyte', 'name\u0000end']) {
+    assert.throws(() => validateCommand(renameCommand(value)), SharedExpenseError);
+    assert.throws(() => validateCommand(inviteCommand(value)), SharedExpenseError);
+  }
+});
 
 test('SEC-INPUT-03: member.invite/rename reject non-string, object, and other-typed displayName', () => {
   for (const bad of [12345, null, { nested: 'x' }, ['a'], true]) {

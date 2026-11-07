@@ -16,8 +16,19 @@ const members = [
 ];
 const base = { actorMemberName: 'Asha', contextName: 'Goa trip', members, actorId: actor };
 const quiet = { warn() {} };
+const expensePayload = {
+  contextId: ctx,
+  expenseId: '66666666-6666-4666-8666-666666666666',
+  revisionId: '77777777-7777-4777-8777-777777777777',
+  expectedHeadRevisionId: null,
+  snapshot: {
+    currency: 'INR', totalMinor: '100', memberOrder: ['m-actor', 'm-friend'],
+    contributions: [{ memberId: 'm-actor', amountMinor: '100' }],
+    shares: [{ memberId: 'm-friend', amountMinor: '100' }],
+  },
+};
 
-test('a new expense notifies everyone else, never the author, and carries no amount', () => {
+test('an expense reviewer audience excludes the author and carries no amount', () => {
   const out = plan({ ...base, kind: 'expense.propose', payload: {} });
   assert.deepEqual(out.map((o) => o.profileId).sort(), [friend, owner].sort());
   for (const o of out) assert.doesNotMatch(o.title + o.body, /₹|\d{3,}/);
@@ -40,18 +51,25 @@ test('unrelated command kinds notify nobody', () => {
   }
 });
 
-function fakeDb(log, { failFor } = {}) {
+function fakeDb(log, { failFor, audience = members, reviewers = audience, disabled = [], inbox = new Map() } = {}) {
   return async (profileId, fn) => {
     const client = {
       async query(sql, params) {
         log.push({ profileId, sql: sql.replace(/\s+/g, ' ').trim().slice(0, 40), params });
-        if (/FROM shared_expenses.members/.test(sql)) {
-          return { rows: members.map((m) => ({ member_id: m.memberId, profile_id: m.profileId, role: m.role, display_name: m.name })) };
-        }
+        // Stored revision members are authoritative: they include payers and
+        // people removed by an edit, unlike the new snapshot's shares alone.
+        const storedRows = (rows) => rows.map((m) => ({ member_id: m.memberId, profile_id: m.profileId, approver_profile_id: m.profileId, role: m.role, display_name: m.name, approval_required: true }));
+        if (/shared_expenses\.revision_members/.test(sql)) return { rows: storedRows(reviewers) };
+        if (/FROM shared_expenses.members/.test(sql)) return { rows: storedRows(audience) };
         if (/_context_label/.test(sql)) return { rows: [{ name: 'Goa trip' }] };
-        if (/notification_preferences/.test(sql)) return { rowCount: 0, rows: [] };
+        if (/notification_preferences/.test(sql)) return disabled.includes(profileId)
+          ? { rowCount: 1, rows: [{ enabled: false }] }
+          : { rowCount: 0, rows: [] };
         if (/INSERT INTO notifications/.test(sql)) {
           if (failFor === profileId) throw new Error('boom');
+          const key = `${params[0]}|${params[5]}`;
+          if (inbox.has(key)) return { rowCount: 0, rows: [] };
+          inbox.set(key, { profileId: params[0], deepLink: params[4], dedupeKey: params[5] });
           return { rowCount: 1, rows: [{ id: 'n-' + profileId }] };
         }
         return { rows: [] };
@@ -70,7 +88,7 @@ test('kill switch off: nothing is read or written', async () => {
 
 test('enabled: one dedupe key per operation and recipient, deep link to the split', async () => {
   const log = [];
-  const sent = await notifyAfterCommit({ withUserClient: fakeDb(log), actorId: actor, kind: 'expense.propose', payload: {}, contextId: ctx, operationId: 'op-1', options: { enabled: true }, logger: quiet });
+  const sent = await notifyAfterCommit({ withUserClient: fakeDb(log), actorId: actor, kind: 'expense.propose', payload: expensePayload, contextId: ctx, operationId: 'op-1', options: { enabled: true }, logger: quiet });
   assert.equal(sent, 2);
   const inserts = log.filter((l) => l.sql.startsWith('INSERT INTO notifi'));
   assert.deepEqual(inserts.map((i) => i.params[5]).sort(), [`split:op-1:${friend}`, `split:op-1:${owner}`].sort());
@@ -80,7 +98,7 @@ test('enabled: one dedupe key per operation and recipient, deep link to the spli
 
 test('one recipient failing never throws and does not stop the others', async () => {
   const log = [];
-  const sent = await notifyAfterCommit({ withUserClient: fakeDb(log, { failFor: owner }), actorId: actor, kind: 'expense.propose', payload: {}, contextId: ctx, operationId: 'op-2', options: { enabled: true }, logger: quiet });
+  const sent = await notifyAfterCommit({ withUserClient: fakeDb(log, { failFor: owner }), actorId: actor, kind: 'expense.propose', payload: expensePayload, contextId: ctx, operationId: 'op-2', options: { enabled: true }, logger: quiet });
   assert.equal(sent, 1);
 });
 
@@ -226,4 +244,79 @@ test('group-link join request: one "wants to join" inbox row per owner, deduped 
     assert.equal(r.title, 'Ravi wants to join');
     assert.doesNotMatch(`${r.title} ${r.body}`, /\d{3,}|4821/);
   }
+});
+
+
+
+const expenseArgs = (withUserClient, operationId, payload = expensePayload) => ({
+  withUserClient, actorId: actor, kind: 'expense.propose', payload,
+  contextId: ctx, operationId, options: { enabled: true }, logger: quiet,
+});
+const notifiedProfiles = (log) => log.filter((row) => row.sql.startsWith('INSERT INTO notifi')).map((row) => row.params[0]).sort();
+
+test('expense proposal notifies its stored required reviewer, not the uninvolved owner', async () => {
+  const log = [];
+  const withUserClient = fakeDb(log, { reviewers: [members[0], members[2]] });
+  const sent = await notifyAfterCommit(expenseArgs(withUserClient, 'op-reviewer'));
+  assert.equal(sent, 1);
+  assert.deepEqual(notifiedProfiles(log), [friend]);
+});
+
+test('expense edit notifies a payer-only reviewer and an old participant removed from the new snapshot', async () => {
+  const payer = { memberId: 'm-payer', profileId: '88888888-8888-4888-8888-888888888888', role: 'member', name: 'Payer' };
+  const removed = { memberId: 'm-removed', profileId: '99999999-9999-4999-8999-999999999999', role: 'member', name: 'Old participant' };
+  const audience = [...members, payer, removed];
+  const reviewers = [members[0], members[2], payer, removed];
+  const payload = {
+    ...expensePayload, expectedHeadRevisionId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    snapshot: {
+      ...expensePayload.snapshot,
+      memberOrder: ['m-actor', 'm-friend', 'm-payer'],
+      contributions: [{ memberId: 'm-actor', amountMinor: '50' }, { memberId: 'm-payer', amountMinor: '50' }],
+      // The old participant is absent here but remains a required reviewer of
+      // the change to their already accepted position.
+      shares: [{ memberId: 'm-friend', amountMinor: '100' }],
+    },
+  };
+  const log = [];
+  const sent = await notifyAfterCommit(expenseArgs(fakeDb(log, { audience, reviewers }), 'op-edit-reviewers', payload));
+  assert.equal(sent, 3);
+  assert.deepEqual(notifiedProfiles(log), [friend, payer.profileId, removed.profileId].sort());
+});
+
+test('all 116 required reviewers of a valid large edit receive a notification, with no 50-recipient cutoff', async () => {
+  const person = (n) => ({
+    memberId: `member-${n}`,
+    profileId: `${n.toString(16).padStart(8, '0')}-0000-4000-8000-000000000000`,
+    role: 'member', name: `Person ${n}`,
+  });
+  const reviewers = Array.from({ length: 116 }, (_, i) => person(i + 10));
+  const bystanders = Array.from({ length: 83 }, (_, i) => person(i + 1000));
+  const audience = [members[0], ...bystanders, ...reviewers];
+  // The authoritative revision contains the old and new disjoint sets of
+  // 50 sharers + 8 payers. Only the new set appears in this command body.
+  const current = reviewers.slice(58);
+  const payload = {
+    ...expensePayload, expectedHeadRevisionId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    snapshot: {
+      currency: 'INR', totalMinor: '400', memberOrder: current.map((m) => m.memberId),
+      contributions: current.slice(50).map((m) => ({ memberId: m.memberId, amountMinor: '50' })),
+      shares: current.slice(0, 50).map((m) => ({ memberId: m.memberId, amountMinor: '8' })),
+    },
+  };
+  const log = [];
+  const sent = await notifyAfterCommit(expenseArgs(fakeDb(log, { audience, reviewers }), 'op-large-edit', payload));
+  assert.equal(sent, 116);
+  assert.deepEqual(notifiedProfiles(log), reviewers.map((m) => m.profileId).sort());
+});
+
+test('reviewer targeting preserves notification preferences, operation dedupe and split deep links', async () => {
+  const log = [], inbox = new Map();
+  const withUserClient = fakeDb(log, { reviewers: members, disabled: [owner], inbox });
+  const args = expenseArgs(withUserClient, 'op-reviewer-dedupe');
+  assert.equal(await notifyAfterCommit(args), 1);
+  assert.equal(await notifyAfterCommit(args), 0, 'replaying the command creates no second inbox row');
+  assert.deepEqual([...inbox.values()], [{
+    profileId: friend, deepLink: `/insights/splits/${ctx}`, dedupeKey: `split:op-reviewer-dedupe:${friend}`,
+  }]);
 });

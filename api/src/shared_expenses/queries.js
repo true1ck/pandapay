@@ -9,7 +9,7 @@ function pageRequest(query) {
   if(query.after!==undefined && (typeof query.after!=='string'||query.after.length>1024))v.fail('INVALID_CURSOR','query.after');
   return {limit:query.limit===undefined?50:Number(query.limit),after:query.after};
 }
-function encodeCursor(scope,lastKey) {return Buffer.from(canonicalJson({v:1,scope,lastKey}),'utf8').toString('base64url');}
+function encodeCursor(scope,lastKey) {return Buffer.from(canonicalJson({v:scope.kind==='projection_changes'?2:1,scope,lastKey}),'utf8').toString('base64url');}
 function decodeCursor(value,scope) {
   if(typeof value!=='string'||value.length>1024||!v.matches(/^[A-Za-z0-9_-]+$/,value))v.fail('INVALID_CURSOR','after');
   let parsed;
@@ -18,7 +18,7 @@ function decodeCursor(value,scope) {
     if(bytes.toString('base64url')!==value)throw new Error('invalid');
     parsed=JSON.parse(bytes.toString('utf8'));
     v.record(parsed,['v','scope','lastKey']);
-    if(parsed.v!==1||canonicalJson(parsed.scope)!==canonicalJson(scope)||!Array.isArray(parsed.lastKey)||parsed.lastKey.length>2||parsed.lastKey.some(key=>typeof key!=='string'||key.length>128))throw new Error('invalid');
+    if(!(parsed.v===1||(scope.kind==='projection_changes'&&parsed.v===2))||canonicalJson(parsed.scope)!==canonicalJson(scope)||!Array.isArray(parsed.lastKey)||parsed.lastKey.length>2||parsed.lastKey.some(key=>typeof key!=='string'||key.length>128))throw new Error('invalid');
   } catch {v.fail('INVALID_CURSOR','after');}
   return parsed.lastKey;
 }
@@ -130,16 +130,16 @@ async function listContextActivity(client,actorId,contextId,query={}) {
   let after='0';
   if(request.after) {const keys=decodeCursor(request.after,scope);if(keys.length!==1)v.fail('INVALID_CURSOR','after');after=sequence(keys[0],'after');}
   await authorizeContext(client,contextId);
-  const {rows}=await client.query(`SELECT sequence::text,event_id,kind,origin_id,actor_profile_id,payload,created_at FROM shared_expenses.context_events
-    WHERE context_id=$1::uuid AND sequence>$2::bigint ORDER BY sequence LIMIT $3::int`,[contextId,after,request.limit+1]);
+  const {rows}=await client.query(`SELECT ce.sequence::text,event_id,kind,origin_id,actor_profile_id,payload,created_at FROM shared_expenses.context_events ce
+    WHERE context_id=$1::uuid AND ce.sequence>$2::bigint ORDER BY ce.sequence LIMIT $3::int`,[contextId,after,request.limit+1]);
   return page(scope,request,rows,row=>[row.sequence],row=>({contextId,sequence:row.sequence,eventId:row.event_id,kind:row.kind,originId:row.origin_id,actorProfileId:row.actor_profile_id,payload:row.payload,createdAt:timestamp(row.created_at)}));
 }
 async function listChanges(client,actorId,query={}) {
   const request=pageRequest(query),scope=scopeFor(actorId,'changes');
   let after='0';
   if(request.after) {const keys=decodeCursor(request.after,scope);if(keys.length!==1)v.fail('INVALID_CURSOR','after');after=sequence(keys[0],'after');}
-  const {rows}=await client.query(`SELECT sequence::text,context_id,context_sequence::text FROM shared_expenses.profile_events
-    WHERE profile_id=$1::uuid AND sequence > $2::bigint ORDER BY sequence LIMIT $3::int`,[actorId,after,request.limit+1]);
+  const {rows}=await client.query(`SELECT pe.sequence::text,context_id,context_sequence::text FROM shared_expenses.profile_events pe
+    WHERE profile_id=$1::uuid AND pe.sequence > $2::bigint ORDER BY pe.sequence LIMIT $3::int`,[actorId,after,request.limit+1]);
   const result=page(scope,request,rows,row=>[row.sequence],row=>({sequence:row.sequence,contextId:row.context_id,contextSequence:row.context_sequence}));
   const cursorAfter=result.items.at(-1)?.sequence??after;
   return {...result,cursorAfter,cursor:encodeCursor(scope,[cursorAfter])};
@@ -279,11 +279,18 @@ const PROJECTION_FEED_SQL=`WITH selected_events AS MATERIALIZED (
 )
 SELECT profile_sequence::text,record_key,entity,id,context_id,revision,payload,deleted,marker,
   EXISTS(SELECT FROM shared_expenses.profile_events more WHERE more.profile_id=$1::uuid AND more.sequence>(SELECT max(profile_sequence) FROM selected_events)) AS stream_more
-FROM records ORDER BY profile_sequence,record_key COLLATE "C" LIMIT $4::int`;
+FROM records ORDER BY records.profile_sequence,record_key COLLATE "C" LIMIT $4::int`;
 
 async function pullProjectionChanges(client,actorId,query={}) {
   const request=pageRequest(query),scope=scopeFor(actorId,'projection_changes');
   let afterSequence='0',afterKey='',rank=-1,low=null,high=null;
+  if(request.after) {
+    // Validate actor/scope before recovering a cursor issued by the old sort.
+    // Clients treat cursors as opaque; replay updates projections idempotently
+    // and never removes or resubmits their immutable pending commands.
+    decodeCursor(request.after,scope);
+    if(JSON.parse(Buffer.from(request.after,'base64url').toString('utf8')).v===1)request.after=undefined;
+  }
   if(request.after) {
     const keys=decodeCursor(request.after,scope);
     if(keys.length!==2)v.fail('INVALID_CURSOR','after');
