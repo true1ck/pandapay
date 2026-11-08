@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:pandapay_domain/sms_v2.dart' as v2;
 import 'package:share_plus/share_plus.dart';
 
 import '../../app/design/app_theme.dart';
@@ -24,6 +25,7 @@ import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
 import '../account/account_screen.dart' show AccountTile;
 import '../cards/card_summary.dart';
+import 'mark_transaction_kind.dart';
 import 'report_transaction_screen.dart';
 import 'foreign_payments_screen.dart';
 import '../sync/split_sync.dart';
@@ -142,7 +144,9 @@ class TransactionDetailScreen extends ConsumerWidget {
                       ),
                     )
                   : _DetailBody(entry: entry)
-            : txn.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
+            : txn.when(
+                skipLoadingOnReload: true,
+                skipLoadingOnRefresh: true,
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (err, _) => ErrorState(
                   message: userFacingErrorMessage(err),
@@ -616,6 +620,26 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     }
   }
 
+  Future<void> _markKind(v2.EventType type) async {
+    try {
+      final namespace = ref.read(cacheNamespaceProvider);
+      final controller = await smsReviewController(ref);
+      if (!mounted || namespace != ref.read(cacheNamespaceProvider)) return;
+      await markTransactionKind(
+        context: context,
+        controller: controller,
+        entry: widget.entry,
+        type: type,
+      );
+      ref.invalidate(transactionDetailProvider(widget.entry.id));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+    }
+  }
+
   Future<void> _markIgnored(String reason) async {
     final deleting = reason == 'transfer';
     setState(() => _ignoring = true);
@@ -809,51 +833,100 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
       ),
+      isScrollControlled: true,
       builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(AppSpace.lg),
-              child: Text(
-                'Choose an action',
-                style: BambooFonts.heading(16, color: BambooInk.ink900),
-              ),
-            ),
-            for (final r in const [
-              'refund',
-              'reversal',
-              'wrong_transaction',
-              'transfer',
-            ])
-              ListTile(
-                leading: r == 'transfer'
-                    ? const Icon(Icons.delete_outline, color: BambooInk.clayInk)
-                    : r == 'wrong_transaction'
-                    ? const Icon(Icons.flag_outlined, color: BambooInk.clayInk)
-                    : null,
-                title: Text(
-                  _reasonLabel(r),
-                  style: BambooFonts.ui(
-                    14.5,
-                    color: r == 'transfer' || r == 'wrong_transaction'
-                        ? BambooInk.clayInk
-                        : BambooInk.ink900,
-                  ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(AppSpace.lg),
+                child: Text(
+                  'Choose an action',
+                  style: BambooFonts.heading(16, color: BambooInk.ink900),
                 ),
-                subtitle: r == 'wrong_transaction'
-                    ? Text(
-                        'This is not a transaction I recognise. It is excluded '
-                        'from spend and reviewed with your consent.',
-                        style: BambooFonts.ui(12, color: BambooInk.ink500),
-                      )
-                    : null,
-                onTap: () => Navigator.of(context).pop(r),
               ),
-          ],
+              // An SMS payment can be marked as a move between the person's own
+              // accounts or a credit card bill. Both leave spending, so they are
+              // plain choices here rather than something to find in Edit.
+              if (widget.entry.pipelineVersion == 2) ...[
+                ListTile(
+                  key: const Key('mark-own-transfer'),
+                  leading: const Icon(Icons.swap_horiz_rounded),
+                  title: Text(
+                    'Transfer between my accounts',
+                    style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                  ),
+                  subtitle: Text(
+                    'Money moved between your own accounts. Not counted as spending.',
+                    style: BambooFonts.ui(12, color: BambooInk.ink500),
+                  ),
+                  onTap: () => Navigator.of(context).pop('mark_own_transfer'),
+                ),
+                ListTile(
+                  key: const Key('mark-card-bill'),
+                  leading: const Icon(Icons.credit_card_rounded),
+                  title: Text(
+                    'Credit card bill payment',
+                    style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                  ),
+                  subtitle: Text(
+                    'Paying off a card. Not counted again as spending.',
+                    style: BambooFonts.ui(12, color: BambooInk.ink500),
+                  ),
+                  onTap: () => Navigator.of(context).pop('mark_card_bill'),
+                ),
+                const Divider(height: 1),
+              ],
+              for (final r in const [
+                'refund',
+                'reversal',
+                'wrong_transaction',
+                'transfer',
+              ])
+                ListTile(
+                  leading: r == 'transfer'
+                      ? const Icon(
+                          Icons.delete_outline,
+                          color: BambooInk.clayInk,
+                        )
+                      : r == 'wrong_transaction'
+                      ? const Icon(
+                          Icons.flag_outlined,
+                          color: BambooInk.clayInk,
+                        )
+                      : null,
+                  title: Text(
+                    _reasonLabel(r),
+                    style: BambooFonts.ui(
+                      14.5,
+                      color: r == 'transfer' || r == 'wrong_transaction'
+                          ? BambooInk.clayInk
+                          : BambooInk.ink900,
+                    ),
+                  ),
+                  subtitle: r == 'wrong_transaction'
+                      ? Text(
+                          'This is not a transaction I recognise. It is excluded '
+                          'from spend and reviewed with your consent.',
+                          style: BambooFonts.ui(12, color: BambooInk.ink500),
+                        )
+                      : null,
+                  onTap: () => Navigator.of(context).pop(r),
+                ),
+            ],
+          ),
         ),
       ),
     );
+    if (reason == 'mark_own_transfer' || reason == 'mark_card_bill') {
+      await _markKind(
+        reason == 'mark_card_bill'
+            ? v2.EventType.cardBillPayment
+            : v2.EventType.ownTransfer,
+      );
+      return;
+    }
     if (reason == 'transfer') {
       final confirmed = await showDialog<bool>(
         context: context,
@@ -1383,7 +1456,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                             observation.source == 'sms_bulk',
                       ))
                     _SmsEvidenceSection(entry: entry),
-                  attachments.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
+                  attachments.when(
+                    skipLoadingOnReload: true,
+                    skipLoadingOnRefresh: true,
                     loading: () => const SizedBox.shrink(),
                     error: (_, __) => _ReceiptSection(
                       attachments: const [],

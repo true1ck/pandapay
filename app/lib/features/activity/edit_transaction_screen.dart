@@ -25,6 +25,7 @@ import '../../data/local/self_transfer_rules.dart';
 import '../../data/local/sms_intake_repository.dart';
 import 'category_bulk_review_sheet.dart';
 import '../sms_v2/similar/similar_runner.dart';
+import '../sms_v2/storage/event_store.dart';
 import 'merchant_future_rule_sheet.dart';
 
 /// D3 Edit Transaction (ui-spec Group D). All fields editable, explicit
@@ -62,6 +63,11 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   SelfTransferDestination? _clearedSelfTransfer;
   bool _rememberSelfTransferChoice = false;
   bool _applyHistoricalSelfTransferChoice = false;
+
+  /// A transfer is either between the person's own accounts or a credit card
+  /// bill. Both show as "Transfer"; the ledger's event type tells them apart.
+  bool _cardBill = false;
+  bool _originalCardBill = false;
   TxnRail _rail = TxnRail.unknown;
   bool _initialized = false;
   bool _saving = false;
@@ -108,6 +114,20 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     }
     _instrument = entry.instrumentKnown ? entry.instrument : null;
     _rail = entry.rail;
+    if (entry.pipelineVersion == 2 && entry.eventId != null) {
+      try {
+        final cache = ref.read(responseCacheProvider).valueOrNull;
+        if (cache != null) {
+          final stored = EventStore(
+            cache.financialStore.database.db,
+            namespace: ref.read(cacheNamespaceProvider),
+          ).get(entry.eventId!)?.type;
+          _cardBill = _originalCardBill = stored == v2.EventType.cardBillPayment;
+        }
+      } catch (_) {
+        // Without it the choice just starts on "between my accounts".
+      }
+    }
     // The bottom action is built before the body's AsyncValue builder runs.
     // Request one safe rebuild after the first frame so Save is enabled for
     // the loaded row instead of remaining disabled until another provider
@@ -149,6 +169,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
             ? original.instrument != _instrument
             : _instrument != null) ||
         original.entryKind != _entryKind ||
+        _cardBill != _originalCardBill ||
         original.rail != _rail;
     try {
       final categoryChanged =
@@ -359,7 +380,8 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         TxnEntryKind.income => v2.EventType.income,
         TxnEntryKind.investment => v2.EventType.investment,
         TxnEntryKind.refund => v2.EventType.refund,
-        TxnEntryKind.transfer => v2.EventType.ownTransfer,
+        TxnEntryKind.transfer =>
+          _cardBill ? v2.EventType.cardBillPayment : v2.EventType.ownTransfer,
         _ => v2.EventType.unknown,
       };
       final rail = _rail == original.rail
@@ -370,7 +392,9 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       // What the transaction looked like before this edit changes it.
       final similar = SimilarChanges.forController(controller);
       final before = similar.snapshot(original);
-      final typeChanged = _entryKind != original.entryKind;
+      final typeChanged =
+          _entryKind != original.entryKind ||
+          (_entryKind == TxnEntryKind.transfer && _cardBill != _originalCardBill);
       SmsTransactionActions(controller: controller).edit(
         original,
         amountMinor: Money.fromRupees(amount).paise,
@@ -458,7 +482,9 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           TxnEntryKind.income => 'income',
           TxnEntryKind.investment => 'an investment',
           TxnEntryKind.refund => 'a refund',
-          TxnEntryKind.transfer => 'a transfer between your accounts',
+          TxnEntryKind.transfer => _cardBill
+              ? 'a credit card bill payment'
+              : 'a transfer between your accounts',
           _ => 'a spend',
         },
       };
@@ -885,6 +911,31 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                       },
                     ),
                     const SizedBox(height: AppSpace.lg),
+                    if (_entryKind == TxnEntryKind.transfer &&
+                        entry.pipelineVersion == 2) ...[
+                      DropdownButtonFormField<bool>(
+                        key: ValueKey('transfer-type:$_cardBill'),
+                        initialValue: _cardBill,
+                        isExpanded: true,
+                        style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                        decoration: inputDecoration('Transfer type'),
+                        items: const [
+                          DropdownMenuItem(
+                            value: false,
+                            child: Text('Between my accounts'),
+                          ),
+                          DropdownMenuItem(
+                            value: true,
+                            child: Text('Credit card bill'),
+                          ),
+                        ],
+                        onChanged: _saving
+                            ? null
+                            : (value) =>
+                                  setState(() => _cardBill = value ?? false),
+                      ),
+                      const SizedBox(height: AppSpace.lg),
+                    ],
                     _selfTransferPicker(entry),
                     if (_selfTransfer != null)
                       CheckboxListTile(

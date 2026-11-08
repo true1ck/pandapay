@@ -439,6 +439,43 @@ void main() {
     );
   });
 
+  testWidgets('a transfer on an SMS payment can be set to a credit card bill', (tester) async {
+    final entry = TransactionEntry(
+      id: 'v2:e1',
+      eventId: 'e1',
+      sourceKey: 's' * 64,
+      pipelineVersion: 2,
+      amount: Money.fromRupees(500),
+      occurredAt: DateTime.utc(2026, 10, 28, 10),
+      merchantName: 'Transfer',
+      source: 'sms',
+      status: 'active',
+      instrument: TxnInstrument.upiBank,
+      entryKind: TxnEntryKind.transfer,
+    );
+    await _pump(tester, repo: _FakeUserCardsRepository(entry), initialEntry: entry);
+    expect(find.text('Transfer type'), findsOneWidget);
+    expect(find.text('Between my accounts'), findsOneWidget);
+    await tester.tap(find.text('Between my accounts'));
+    await tester.pumpAndSettle();
+    expect(find.text('Credit card bill'), findsWidgets);
+  });
+
+  testWidgets('a transfer on a manual entry has no card-bill choice', (tester) async {
+    final entry = TransactionEntry(
+      id: 't-manual',
+      amount: Money.fromRupees(500),
+      occurredAt: DateTime.utc(2026, 10, 28, 10),
+      merchantName: 'Savings',
+      source: 'manual',
+      status: 'active',
+      instrument: TxnInstrument.upiBank,
+      entryKind: TxnEntryKind.transfer,
+    );
+    await _pump(tester, repo: _FakeUserCardsRepository(entry), initialEntry: entry);
+    expect(find.text('Transfer type'), findsNothing);
+  });
+
   testWidgets('income transactions keep their kind editable without a card', (
     tester,
   ) async {

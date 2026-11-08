@@ -62,7 +62,7 @@ class SimilarOfferWords {
       SimilarField.type => SimilarOfferWords(
         title: 'Change $others to $target?',
         body:
-            'These came from the same kind of SMS and are read the same way. Changing their type changes your totals.',
+            'These are your other payments to the same payee. Changing their type changes your totals.',
         apply: n == 1 ? 'Change it' : 'Change all $n',
         skip: 'Only this one',
       ),

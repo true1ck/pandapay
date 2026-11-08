@@ -54,17 +54,23 @@ class SmsTransactionActions {
           apply(CorrectionKind.wrongCategory, {'category': category});
         if (instrumentId != null)
           apply(CorrectionKind.wrongInstrument, {'instrumentId': instrumentId});
-        if (eventType.wire != _eventType(original).wire || rail != null)
+        // A card bill and a transfer between the person's accounts both show as
+        // "Transfer", so for those the stored type decides whether anything
+        // changed; for the rest the kind is compared, so a subscription stays a
+        // subscription when the person only saves the same kind.
+        final stored = EventStore(
+          db,
+          namespace: controller.namespace,
+        ).get(original.eventId!)?.type;
+        final transferFamily =
+            eventType == EventType.ownTransfer ||
+            eventType == EventType.cardBillPayment;
+        final kindChanged = transferFamily && stored != null
+            ? stored != eventType
+            : eventType.wire != _eventType(original).wire;
+        if (kindChanged || rail != null)
           apply(CorrectionKind.wrongKind, {
-            'eventType':
-                (eventType == _eventType(original)
-                        ? EventStore(
-                                db,
-                                namespace: controller.namespace,
-                              ).get(original.eventId!)?.type ??
-                              eventType
-                        : eventType)
-                    .wire,
+            'eventType': (kindChanged ? eventType : (stored ?? eventType)).wire,
             if (rail != null) 'rail': rail.wire,
           });
         db.execute('RELEASE sms_transaction_edit');
@@ -75,6 +81,23 @@ class SmsTransactionActions {
       }
     });
   }
+
+  /// The event type the ledger holds for [original], which tells a card bill
+  /// from a transfer between the person's accounts (both display as "Transfer").
+  EventType? storedType(TransactionEntry original) => original.eventId == null
+      ? null
+      : EventStore(
+          financial.database.db,
+          namespace: controller.namespace,
+        ).get(original.eventId!)?.type;
+
+  /// One-tap "this was a transfer between my accounts" or "this was a credit
+  /// card bill": changes only the type, which takes it out of spending.
+  void markAs(TransactionEntry original, EventType type) => controller.apply(
+    items: [_item(original)],
+    kind: CorrectionKind.wrongKind,
+    corrected: {'eventType': type.wire},
+  );
 
   void hide(TransactionEntry original) {
     final event = EventStore(

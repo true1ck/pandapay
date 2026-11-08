@@ -716,6 +716,54 @@ void main() {
     expect(repo.lastIgnoreReason, 'refund');
   });
 
+  testWidgets('an SMS payment can be marked as an own transfer or a card bill from the action sheet', (
+    tester,
+  ) async {
+    final repo = _FakeUserCardsRepository(
+      TransactionEntry(
+        id: 'v2:e1',
+        eventId: 'e1',
+        sourceKey: 's' * 64,
+        pipelineVersion: 2,
+        amount: Money.fromRupees(750),
+        occurredAt: DateTime(2026, 3, 1),
+        source: 'sms',
+        status: 'active',
+      ),
+    );
+    await _pump(tester, repo: repo);
+
+    await tester.tap(find.text('Refund, reversal, or delete transaction'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('mark-own-transfer')), findsOneWidget);
+    expect(find.text('Transfer between my accounts'), findsOneWidget);
+    expect(find.byKey(const Key('mark-card-bill')), findsOneWidget);
+    expect(find.text('Credit card bill payment'), findsOneWidget);
+  });
+
+  testWidgets('a manual entry does not get the SMS-only transfer and card bill actions', (
+    tester,
+  ) async {
+    final repo = _FakeUserCardsRepository(
+      TransactionEntry(
+        id: 't1',
+        amount: Money.fromRupees(750),
+        occurredAt: DateTime(2026, 3, 1),
+        userCardId: 'uc1',
+        source: 'manual',
+        status: 'active',
+      ),
+    );
+    await _pump(tester, repo: repo);
+
+    await tester.tap(find.text('Refund, reversal, or delete transaction'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('mark-own-transfer')), findsNothing);
+    expect(find.byKey(const Key('mark-card-bill')), findsNothing);
+  });
+
   testWidgets('labels the transfer action as delete transaction', (
     tester,
   ) async {
