@@ -10,12 +10,14 @@ import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/response_cache.dart';
 import 'package:pandapay/features/shared_expenses/composer/shared_editor.dart';
 import 'package:pandapay/features/shared_expenses/data/shared_http_transport.dart';
+import 'package:pandapay/features/shared_expenses/data/shared_transport.dart';
 import 'package:pandapay/features/shared_expenses/runtime/shared_runtime.dart';
 import 'package:pandapay/features/shared_expenses/runtime/shared_providers.dart';
 import 'package:pandapay/features/shared_expenses/storage/shared_store.dart';
 import 'package:pandapay/features/shared_expenses/data/shared_directory.dart';
 import 'package:pandapay/features/shared_expenses/ui/shared_invite_inbox.dart';
 import 'package:pandapay/features/shared_expenses/ui/shared_members_sheet.dart';
+import 'package:pandapay/features/shared_expenses/ui/shared_settle_sheet.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqlite3/sqlite3.dart';
 
@@ -26,7 +28,6 @@ const account = '11111111-1111-4111-8111-111111111111',
     report = '55555555-5555-4555-8555-555555555555';
 final sessionNamespace = StateProvider<String>((ref) => 'user:$account');
 
-
 class Runtime extends SharedExpensesRuntime {
   Runtime({required super.store, required super.remote, required super.cache})
     : super(isCurrent: () => true);
@@ -34,8 +35,12 @@ class Runtime extends SharedExpensesRuntime {
   List<SharedInboxInvite> invites = const [];
   final answered = <String>[];
   final left = <String>[];
+  Object? leaveError;
   @override
-  Future<void> leaveContext(String contextId) async => left.add(contextId);
+  Future<void> leaveContext(String contextId) async {
+    if (leaveError != null) throw leaveError!;
+    left.add(contextId);
+  }
   @override
   Future<List<SharedInboxInvite>> inviteInbox() async => invites;
   @override
@@ -46,7 +51,7 @@ class Runtime extends SharedExpensesRuntime {
     required bool accept,
   }) async {
     answered.add('${invite.invitationId}:${accept ? 'accept' : 'decline'}');
-    return invite.contextId;
+    return accept ? 'awaiting_owner' : 'declined';
   }
 
   bool owner = true;
@@ -126,7 +131,6 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-
   Future<void> openMembers(WidgetTester tester) => show(
     tester,
     SharedMembersSheet(
@@ -195,7 +199,9 @@ void main() {
     expect(find.textContaining('Take over as owner'), findsOneWidget);
   });
 
-  testWidgets('unjoined people are labelled in expense pickers', (tester) async {
+  testWidgets('unjoined people are labelled in expense pickers', (
+    tester,
+  ) async {
     expect(
       const SharedEditorMember(friend, 'Asha', state: 'invited').label,
       'Asha (not joined yet)',
@@ -223,13 +229,45 @@ void main() {
     expect(find.text('Declined.'), findsOneWidget);
   });
 
+  testWidgets('a phone invitation waits for the owner after a join request', (
+    tester,
+  ) async {
+    runtime.invites = [
+      SharedInboxInvite(
+        invitationId: report,
+        contextId: group,
+        contextKind: 'group',
+        contextName: 'Group split',
+        inviterName: 'Riya S.',
+      ),
+    ];
+    var joined = false;
+    await show(
+      tester,
+      SharedInviteInbox(runtime: runtime, onJoined: () => joined = true),
+    );
+    await tester.tap(find.text('Request to join'));
+    await tester.pumpAndSettle();
+    expect(runtime.answered, ['$report:accept']);
+    expect(
+      find.text('Request sent. The split owner will confirm.'),
+      findsOneWidget,
+    );
+    expect(joined, isFalse);
+  });
+
   testWidgets('leaving closes the sheet and reports it to the screen below', (
     tester,
   ) async {
     runtime.owner = false;
     runtime.people = [
       const SharedEditorMember(me, 'You', profileId: account),
-      const SharedEditorMember(friend, 'Boss', profileId: friend, role: 'owner'),
+      const SharedEditorMember(
+        friend,
+        'Boss',
+        profileId: friend,
+        role: 'owner',
+      ),
     ];
     bool? result;
     await show(
@@ -256,4 +294,101 @@ void main() {
     expect(result, isTrue);
     expect(find.text('Leave this split'), findsNothing);
   });
+
+  testWidgets(
+    'leaving with unsettled balances triggers guided Bamboo cannot-leave sheet',
+    (tester) async {
+      runtime.owner = false;
+      runtime.people = [
+        const SharedEditorMember(me, 'You', profileId: account),
+        const SharedEditorMember(
+          friend,
+          'Boss',
+          profileId: friend,
+          role: 'owner',
+        ),
+      ];
+      runtime.leaveError = const SharedTransportException(
+        statusCode: 409,
+        code: 'settle_first',
+      );
+      bool? result;
+      await show(
+        tester,
+        Builder(
+          builder: (context) => TextButton(
+            onPressed: () async => result = await SharedMembersSheet.show(
+              context,
+              runtime: runtime,
+              contextId: group,
+              groupName: 'Trip Group',
+            ),
+            child: const Text('open'),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Leave this split'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Leave'));
+      await tester.pumpAndSettle();
+      expect(runtime.left, isEmpty);
+      expect(result, isNull);
+      expect(find.text('Settle up before leaving'), findsOneWidget);
+      expect(
+        find.textContaining('You have unsettled balances in "Trip Group"'),
+        findsOneWidget,
+      );
+      expect(find.widgetWithText(FilledButton, 'Settle up'), findsOneWidget);
+      expect(
+        find.widgetWithText(OutlinedButton, 'Stay in split'),
+        findsOneWidget,
+      );
+
+      // Tapping "Stay in split" dismisses the guard and keeps member on the sheet.
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Stay in split'));
+      await tester.pumpAndSettle();
+      expect(find.text('Settle up before leaving'), findsNothing);
+      expect(find.text('Leave this split'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'tapping Settle up in cannot-leave sheet navigates to Settle up',
+    (tester) async {
+      runtime.owner = false;
+      runtime.people = [
+        const SharedEditorMember(me, 'You', profileId: account),
+        const SharedEditorMember(
+          friend,
+          'Boss',
+          profileId: friend,
+          role: 'owner',
+        ),
+      ];
+      runtime.leaveError = const SharedTransportException(
+        statusCode: 409,
+        code: 'settle_first',
+      );
+      await show(
+        tester,
+        SharedMembersSheet(
+          runtime: runtime,
+          contextId: group,
+          groupName: 'Trip Group',
+        ),
+      );
+      await tester.tap(find.text('Leave this split'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Leave'));
+      await tester.pumpAndSettle();
+      expect(find.text('Settle up before leaving'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Settle up'));
+      await tester.pumpAndSettle();
+      expect(find.text('Settle up before leaving'), findsNothing);
+      expect(find.byType(SharedSettleSheet), findsOneWidget);
+    },
+  );
 }

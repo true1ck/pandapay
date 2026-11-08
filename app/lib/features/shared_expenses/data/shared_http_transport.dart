@@ -8,6 +8,7 @@ import '../../../data/authenticated_http_client.dart';
 import 'shared_commands.dart';
 import 'shared_directory.dart';
 import 'shared_invitations.dart';
+import 'shared_phone_display.dart';
 import 'shared_transport.dart';
 import 'package:pandapay_domain/shared_expenses.dart';
 
@@ -135,6 +136,9 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
               ? error
               : null,
           retryable: result['retryable'] == true,
+          existingContextId: sharedUuid(result['existingContextId'])
+              ? result['existingContextId'] as String
+              : null,
         );
       }
       return result;
@@ -351,12 +355,17 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
   Future<String> claimInvitation({
     required String token,
     required String operationId,
+    bool? sharePhone,
   }) async {
     if (!sharedUuid(operationId)) throw ArgumentError('Invalid operation ID');
     final value = (await _request(
       'POST',
       '/shared-expenses/invitations/claim',
-      body: jsonEncode({'token': token, 'operationId': operationId}),
+      body: jsonEncode({
+        'token': token,
+        'operationId': operationId,
+        'sharePhone': ?sharePhone,
+      }),
     ))!;
     final status = value['status'];
     if (status is! String || status.length > 32) {
@@ -583,22 +592,75 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
   }
 
   Future<List<SharedJoinRequest>> fetchJoinRequests() async {
+    Future<List<SharedJoinRequest>> load({required bool withFull}) async {
+      final value = (await _request(
+        'GET',
+        '/shared-expenses/invitations/requests',
+        query: withFull ? {'withLookalikeFull': '1'} : null,
+      ))!;
+      final items = value['items'];
+      if (items is! List || items.length > 50) {
+        throw const SharedTransportException(code: 'invalid_response');
+      }
+      return [
+        for (final item in items)
+          SharedJoinRequest.fromJson(
+            item is Map
+                ? Map<String, Object?>.from(item)
+                : throw const SharedTransportException(
+                    code: 'invalid_response',
+                  ),
+          ),
+      ];
+    }
+
+    // Plain request first so an older or rolled-back API never sees a
+    // parameter it may reject. Only when the server itself flags look-alikes
+    // do we ask once more for their full numbers; any refusal keeps the
+    // first answer.
+    final plain = await load(withFull: false);
+    final needsFull = plain.any(
+      (r) =>
+          r.claimantPhone != null &&
+          r.claimantPhone!.lookalike &&
+          r.claimantPhone!.fullNumber == null,
+    );
+    if (!needsFull) return plain;
+    try {
+      return await load(withFull: true);
+    } on SharedTransportException catch (error) {
+      if (error.code == 'network_unavailable' || error.statusCode == 401) {
+        rethrow;
+      }
+      return plain;
+    }
+  }
+
+  /// Owner-only, audited and rate limited: the full number of one pending
+  /// request. The result must stay in memory only.
+  Future<SharedRevealedPhone> revealClaimantPhone({
+    required String invitationId,
+    required String operationId,
+  }) async {
+    if (!sharedUuid(invitationId) || !sharedUuid(operationId)) {
+      throw ArgumentError('Invalid identifier');
+    }
     final value = (await _request(
-      'GET',
-      '/shared-expenses/invitations/requests',
+      'POST',
+      '/shared-expenses/invitations/reveal-phone',
+      body: jsonEncode({
+        'invitationId': invitationId,
+        'operationId': operationId,
+      }),
     ))!;
-    final items = value['items'];
-    if (items is! List || items.length > 50) {
+    final e164 = value['e164'];
+    if ((value['invitationId'] as String?)?.toLowerCase() !=
+            invitationId.toLowerCase() ||
+        e164 is! String ||
+        !RegExp(r'^\+[0-9]{7,15}$').hasMatch(e164)) {
       throw const SharedTransportException(code: 'invalid_response');
     }
-    return [
-      for (final item in items)
-        SharedJoinRequest.fromJson(
-          item is Map
-              ? Map<String, Object?>.from(item)
-              : throw const SharedTransportException(code: 'invalid_response'),
-        ),
-    ];
+    return SharedRevealedPhone(e164);
   }
 
   /// Owner approves or declines someone who joined through a shared link.

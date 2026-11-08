@@ -89,6 +89,15 @@ class MainActivity : FlutterFragmentActivity() {
             Trace.endSection()
             traceStartup("onCreate complete")
         }
+        // Android 12+ keeps its system splash (app icon on a scrim) on screen
+        // and cross-fades it out over the first Flutter frame. That fade runs
+        // on the app's UI thread, so on a busy start-up it showed as a
+        // translucent logo over Home for seconds. The system only calls this
+        // once the first frame is drawn, so removing the view right away
+        // hides nothing but the fade.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            splashScreen.setOnExitAnimationListener { splashView -> splashView.remove() }
+        }
         // The initial URI is read by Flutter after the engine is ready. Keep
         // the Android intent as the source of truth so a cold launch and a
         // warm singleTop launch behave consistently.
@@ -140,6 +149,24 @@ class MainActivity : FlutterFragmentActivity() {
 
     private fun configurePandaPayFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        // Blocks screenshots and the recents thumbnail while a revealed phone
+        // number is on screen (see SharedSecureScreen in the Flutter app).
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "pandapay/secure_screen")
+            .setMethodCallHandler { call, result ->
+                if (call.method == "setSecure") {
+                    val enable = call.argument<Boolean>("enable") == true
+                    runOnUiThread {
+                        if (enable) {
+                            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                        } else {
+                            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                        }
+                    }
+                    result.success(null)
+                } else {
+                    result.notImplemented()
+                }
+            }
         assistantChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, ASSISTANT_CHANNEL)
         assistantChannel?.setMethodCallHandler { call, result ->
             when (call.method) {

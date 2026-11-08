@@ -12,12 +12,20 @@ class SharedEditorMember {
   final String id, name;
   final String state, role;
   final String? profileId;
+
+  /// Last four digits of the verified number, when the server shares it.
+  final String? phoneSuffix;
+
+  /// The name stored on the server (no "You"), used to prefill a rename.
+  final String? rawName;
   const SharedEditorMember(
     this.id,
     this.name, {
     this.state = 'active',
     this.role = 'member',
     this.profileId,
+    this.phoneSuffix,
+    this.rawName,
   });
   bool get canSettle => state == 'active' && profileId != null;
 

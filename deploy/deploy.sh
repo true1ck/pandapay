@@ -52,6 +52,7 @@ DEPLOY_TARGET_STAGE=''
 DB_CA_TEMP=''
 OLD_WRITER_CONTAINER_IDS=()
 BACKUP_COMPOSE_FILES=()
+FENCED_WRITE_SERVICES=()
 
 remaining_maintenance_seconds() {
   local remaining=$((MAINTENANCE_DEADLINE - SECONDS))
@@ -72,8 +73,9 @@ run_in_maintenance_window() {
 
 stop_writer_services_best_effort() {
   local compose_stop_failed=0 query_failed=0 container_id active_output
+  local -a stop_targets=("${FENCED_WRITE_SERVICES[@]:-${WRITE_SERVICES[@]}}")
   if ! timeout --kill-after=10s --foreground 60s docker compose --profile sms-ai --profile sms-learning \
-    -f docker-compose.prod.yml "${BACKUP_COMPOSE_FILES[@]}" --env-file .env stop --timeout 30 "${WRITE_SERVICES[@]}"; then
+    -f docker-compose.prod.yml "${BACKUP_COMPOSE_FILES[@]}" --env-file .env stop --timeout 30 "${stop_targets[@]}"; then
     compose_stop_failed=1
   fi
 
@@ -81,7 +83,7 @@ stop_writer_services_best_effort() {
   # any still-running target containers and stop them directly by ID.
   local -a active_ids=()
   if active_output="$(timeout --kill-after=10s --foreground 20s docker compose --profile sms-ai --profile sms-learning \
-    -f docker-compose.prod.yml "${BACKUP_COMPOSE_FILES[@]}" --env-file .env ps -q "${WRITE_SERVICES[@]}" 2>/dev/null)"; then
+    -f docker-compose.prod.yml "${BACKUP_COMPOSE_FILES[@]}" --env-file .env ps -q "${stop_targets[@]}" 2>/dev/null)"; then
     while IFS= read -r container_id; do
       [ -n "$container_id" ] && active_ids+=("$container_id")
     done <<< "$active_output"
@@ -298,9 +300,18 @@ if [ -n "${GOOGLE_PLACES_API_KEY:-}" ]; then
   echo "    google places api key configuration updated"
 fi
 
-# The SMS AI drafts worker and its Gemini key run only on the private admin
-# host (deploy/admin/compose.private.yml); this public deploy never sends them.
-# Optional keys below are persisted only from values supplied by the host
+# SMS AI drafts worker settings (opt-in). The workflow forwards each one only
+# when its repository secret is set; a value that is not supplied keeps whatever
+# the host's .env already has. The worker itself is built and started only when
+# every setting is present (see ai_worker_configured below).
+for name in GEMINI_API_KEY SMS_AI_WORKER_DB_PASSWORD SMS_AI_WORKER_DATABASE_URL SMS_V2_AI_MODEL SMS_V2_AI_TPM SMS_V2_AI_INPUT_USD_PER_MILLION SMS_V2_AI_OUTPUT_USD_PER_MILLION; do
+  if [ -n "${!name:-}" ]; then
+    upsert_env_value "$name" "${!name}"
+    echo "    $name configuration updated"
+  fi
+done
+
+# Other optional keys below are persisted only from values supplied by the host
 # operator/secret store. Never print a secret.
 ensure_optional_env_key() {
   local key="$1"
@@ -423,8 +434,26 @@ fi
 [ -d "$MIGRATION_BASELINES_DIR" ] && [ ! -L "$MIGRATION_BASELINES_DIR" ] || {
   echo 'FATAL: migration baseline mount must be a real directory' >&2; exit 1;
 }
+# SMS AI drafts worker: OPT-IN. It is built, fenced and restarted only when
+# every setting it needs is present and nonempty in the host's .env; with none
+# (or only some) set, this deploy is exactly what it was before. It is a helper,
+# never a release gate, so a failed build here only drops it from this release.
+# Keep the setting list in step with deploy/restart-services.sh.
+AI_WORKER=sms-v2-template-worker
+ai_worker_configured() {
+  local key value
+  for key in GEMINI_API_KEY SMS_AI_WORKER_DB_PASSWORD SMS_AI_WORKER_DATABASE_URL SMS_V2_AI_MODEL SMS_V2_AI_TPM SMS_V2_AI_INPUT_USD_PER_MILLION SMS_V2_AI_OUTPUT_USD_PER_MILLION; do
+    value="$(awk -v key="$key" 'index($0, key "=") == 1 { v = substr($0, length(key) + 2) } END { print v }' "$APP_DIR/.env"       | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")"
+    [ -n "$value" ] || return 1
+  done
+}
 echo "==> Building target images before the maintenance window"
 "${TARGET_COMPOSE[@]}" build api auth rewards-worker backup db-migrate
+if ai_worker_configured; then
+  "${TARGET_COMPOSE[@]}" build "$AI_WORKER"     || echo "WARNING: $AI_WORKER build failed; this release goes out without it." >&2
+else
+  echo "==> Skipping $AI_WORKER (its AI settings are not all present in .env)"
+fi
 
 echo "==> Read-only product migration and auth contact preflight before downtime"
 timeout --kill-after=10s --foreground 240s "${TARGET_COMPOSE[@]}" run --rm --no-deps \
@@ -432,7 +461,10 @@ timeout --kill-after=10s --foreground 240s "${TARGET_COMPOSE[@]}" run --rm --no-
 timeout --kill-after=10s --foreground 120s "${TARGET_COMPOSE[@]}" run --rm --no-deps \
   --entrypoint node db-migrate /workspace/auth/scripts/auditContactUniqueness.js --require-unique
 
-WRITE_SERVICES=(auth api rewards-worker)
+# The drafts worker is always fenced with the writers: a copy left running from an
+# earlier release must not keep working while the schema migrates, even when this
+# release no longer has the settings to start it again.
+WRITE_SERVICES=(auth api rewards-worker "$AI_WORKER")
 echo "==> Checking the running Compose service inventory against this release"
 active_services="$(timeout --kill-after=10s --foreground 20s docker ps \
   --filter label=com.docker.compose.project=pandapay-prod \
@@ -447,7 +479,7 @@ while read -r container_id live_project live_service extra; do
     exit 1
   fi
   case "$live_service" in
-    auth|api|rewards-worker|backup|db-migrate|maps-scraper) ;;
+    auth|api|rewards-worker|backup|db-migrate|maps-scraper|sms-v2-template-worker) ;;
     *)
       echo 'FATAL: an unreviewed production service is running; reconcile the deployed release and all writers before downtime.' >&2
       exit 1
@@ -456,20 +488,26 @@ while read -r container_id live_project live_service extra; do
 done <<< "$active_services"
 
 echo "==> Fencing API/auth and background writer services before the paired backup"
+FENCED_WRITE_SERVICES=()
 for service in "${WRITE_SERVICES[@]}"; do
-  container_ids="$(docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml "${BACKUP_COMPOSE_FILES[@]}" --env-file .env ps -q "$service")" || {
+  if container_output="$(docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml "${BACKUP_COMPOSE_FILES[@]}" --env-file .env ps -q "$service" 2>&1)"; then
+    FENCED_WRITE_SERVICES+=("$service")
+    while IFS= read -r container_id; do
+      [ -n "$container_id" ] && OLD_WRITER_CONTAINER_IDS+=("$container_id")
+    done <<< "$container_output"
+  elif [ "$service" = "$AI_WORKER" ] && grep -qi "no such service" <<< "$container_output"; then
+    echo "    $service is not defined in the current compose file; omitting from fence list"
+  else
+    echo "$container_output" >&2
     echo "FATAL: could not inventory the existing $service container; refusing to fence writers without a recovery list." >&2
     exit 1
-  }
-  while IFS= read -r container_id; do
-    [ -n "$container_id" ] && OLD_WRITER_CONTAINER_IDS+=("$container_id")
-  done <<< "$container_ids"
+  fi
 done
 MAINTENANCE_DEADLINE=$((SECONDS + MAINTENANCE_WINDOW_SECONDS))
 SERVICES_FENCED=1
 run_in_maintenance_window 'Stopping writer services with a 30-second graceful timeout' \
   docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml --env-file .env \
-    "${BACKUP_COMPOSE_FILES[@]}" stop --timeout 30 "${WRITE_SERVICES[@]}"
+    "${BACKUP_COMPOSE_FILES[@]}" stop --timeout 30 "${FENCED_WRITE_SERVICES[@]}"
 
 echo "==> Creating and verifying the paired encrypted product/auth backup"
 run_in_maintenance_window 'Paired backup' \

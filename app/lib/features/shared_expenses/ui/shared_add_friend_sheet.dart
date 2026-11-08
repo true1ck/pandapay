@@ -6,6 +6,8 @@ import 'package:share_plus/share_plus.dart';
 import '../../../app/design/app_theme.dart';
 import '../data/shared_directory.dart';
 import '../data/shared_invitations.dart';
+import '../data/shared_transport.dart';
+import '../storage/shared_store.dart' show SharedNameException;
 import '../runtime/shared_runtime.dart';
 import 'shared_components.dart';
 
@@ -158,8 +160,9 @@ Future<(String, String)?> sharedPickContact(BuildContext context) async {
     final picked = await FlutterContacts.native.showPicker(
       properties: {ContactProperty.name, ContactProperty.phone},
     );
-    final name = picked?.displayName?.trim() ?? '';
-    if (picked == null || name.isEmpty) return null;
+    final rawName = picked?.displayName?.trim() ?? '';
+    if (picked == null || rawName.isEmpty) return null;
+    final name = rawName.length > 40 ? rawName.substring(0, 40).trim() : rawName;
     final numbers = [
       for (final p in picked.phones)
         if (sharedCleanPhone(p.number) != null) sharedCleanPhone(p.number)!,
@@ -196,28 +199,59 @@ final class SharedAddFriendInput {
 
 class SharedAddFriendSheet extends StatefulWidget {
   final SharedExpensesRuntime runtime;
-  const SharedAddFriendSheet({super.key, required this.runtime});
+  final String? initialName, initialPhone, initialError;
+  const SharedAddFriendSheet({
+    super.key,
+    required this.runtime,
+    this.initialName,
+    this.initialPhone,
+    this.initialError,
+  });
   static Future<SharedAddFriendInput?> show(
     BuildContext context,
-    SharedExpensesRuntime runtime,
-  ) => showModalBottomSheet<SharedAddFriendInput>(
+    SharedExpensesRuntime runtime, {
+    String? initialName,
+    String? initialPhone,
+    String? initialError,
+  }) => showModalBottomSheet<SharedAddFriendInput>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: BambooInk.paper,
-    builder: (_) => SharedAddFriendSheet(runtime: runtime),
+    builder: (_) => SharedAddFriendSheet(
+      runtime: runtime,
+      initialName: initialName,
+      initialPhone: initialPhone,
+      initialError: initialError,
+    ),
   );
   @override
   State<SharedAddFriendSheet> createState() => _AddFriendState();
 }
 
 class _AddFriendState extends State<SharedAddFriendSheet> {
-  final _name = TextEditingController(), _phone = TextEditingController();
+  late final _name = TextEditingController(text: widget.initialName),
+      _phone = TextEditingController(text: widget.initialPhone);
   SharedPhoneLookup _lookup = SharedPhoneLookup.none;
-  String? _error;
+  late String? _error = widget.initialError;
+
+  @override
+  void initState() {
+    super.initState();
+    _name.addListener(_onFieldChanged);
+    _phone.addListener(_onFieldChanged);
+  }
+
+  void _onFieldChanged() {
+    if (_error != null) {
+      setState(() => _error = null);
+    }
+  }
 
   @override
   void dispose() {
+    _name.removeListener(_onFieldChanged);
+    _phone.removeListener(_onFieldChanged);
     _name.dispose();
     _phone.dispose();
     super.dispose();
@@ -226,17 +260,36 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
   Future<void> _pick() async {
     final contact = await sharedPickContact(context);
     if (contact == null || !mounted) return;
+    final pickedName = contact.$1;
+    final pickedPhone = sharedCleanPhone(contact.$2);
+    String? error;
+    final lower = pickedName.trim().toLowerCase();
+    if (lower == 'you' || lower == 'me' || lower == 'myself') {
+      error = 'That name cannot be used. Please choose a different one.';
+    }
     setState(() {
-      _name.text = contact.$1;
-      _phone.text = contact.$2;
-      _error = null;
+      _name.text = pickedName;
+      _phone.text = pickedPhone ?? '';
+      _error = error;
     });
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     final name = _name.text.trim(), raw = _phone.text.trim();
     if (name.isEmpty || RegExp(r'[\x00-\x1f\x7f]').hasMatch(name)) {
       setState(() => _error = 'Enter a name.');
+      return;
+    }
+    if (name.length > 40) {
+      setState(() => _error = 'Use 40 characters or fewer.');
+      return;
+    }
+    final lower = name.toLowerCase();
+    if (lower == 'you' || lower == 'me' || lower == 'myself') {
+      setState(
+        () => _error =
+            'That name cannot be used. Please choose a different one.',
+      );
       return;
     }
     final phone = sharedCleanPhone(raw);
@@ -246,11 +299,18 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
       );
       return;
     }
-    if (_lookup.self) {
-      setState(() => _error = 'That is your own number.');
-      return;
+    var lookup = _lookup;
+    if (raw.isNotEmpty && phone != null) {
+      try {
+        lookup = await widget.runtime.lookupPhone(phone);
+      } catch (_) {}
+      if (lookup.self) {
+        if (mounted) setState(() => _error = 'That is your own number.');
+        return;
+      }
     }
-    Navigator.pop(context, SharedAddFriendInput(name, phone, _lookup));
+    if (!mounted) return;
+    Navigator.pop(context, SharedAddFriendInput(name, phone, lookup));
   }
 
   @override
@@ -288,7 +348,7 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
         const SizedBox(height: 12),
         TextField(
           controller: _name,
-          maxLength: 120,
+          maxLength: 40,
           buildCounter:
               (_, {required currentLength, required isFocused, maxLength}) =>
                   null,
@@ -358,37 +418,60 @@ Future<String?> runAddFriendFlow(
   BuildContext context,
   SharedExpensesRuntime runtime,
 ) async {
-  final input = await SharedAddFriendSheet.show(context, runtime);
-  if (input == null || !context.mounted) return null;
-  final existing = input.lookup.existingContextId;
-  if (existing != null) return existing;
   final messenger = ScaffoldMessenger.of(context);
-  final same = await runtime.sameNameFriend(input.name);
-  if (same != null && context.mounted) {
-    final open = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('You already split with ${input.name}'),
-        content: const Text(
-          'Open that split, or add a separate person with the same name.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Add anyway'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Open existing'),
-          ),
-        ],
-      ),
+  String? name0, phone0, error0;
+  late SharedAddFriendInput input;
+  late SharedFriendAdded added;
+  while (true) {
+    if (!context.mounted) return null;
+    final got = await SharedAddFriendSheet.show(
+      context,
+      runtime,
+      initialName: name0,
+      initialPhone: phone0,
+      initialError: error0,
     );
-    if (open == true) return same;
-    if (open == null) return null;
+    if (got == null || !context.mounted) return null;
+    input = got;
+    name0 = input.name;
+    phone0 = input.phone;
+    error0 = null;
+    final existing = input.lookup.existingContextId;
+    if (existing != null) return existing;
+    final same = await runtime.sameNameFriend(input.name);
+    if (same != null && context.mounted) {
+      final open = await showSharedFriendNameTakenDialog(context, input.name);
+      if (open == true) return same;
+      if (open == null) return null;
+      continue; // Edit name
+    }
+    try {
+      added = await runtime.addFriend(name: input.name, phone: input.phone);
+      break;
+    } on SharedNameException catch (error) {
+      if (!context.mounted) return null;
+      if (error.code == 'friend_name_taken') {
+        final open = await showSharedFriendNameTakenDialog(context, input.name);
+        if (open == true && error.existingContextId != null) {
+          return error.existingContextId;
+        }
+        if (open == null) return null;
+      }
+      error0 = sharedInviteIssueMessage(
+        SharedTransportException(code: error.code),
+      );
+    } catch (error) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not save the friend yet. Try again in a moment.',
+          ),
+        ),
+      );
+      return null;
+    }
   }
   try {
-    final added = await runtime.addFriend(name: input.name, phone: input.phone);
     if (added.link != null && !input.lookup.found) {
       await SharePlus.instance.share(
         ShareParams(
@@ -456,3 +539,29 @@ Future<String?> runAddFriendFlow(
     return null;
   }
 }
+
+/// Same-name friend: open the chat they already have, or change the name.
+/// There is deliberately no "add anyway". Returns true to open the existing
+/// chat, false to edit the name, null if dismissed.
+Future<bool?> showSharedFriendNameTakenDialog(
+  BuildContext context,
+  String name,
+) => showDialog<bool>(
+  context: context,
+  builder: (ctx) => AlertDialog(
+    title: Text('You already have a friend called $name'),
+    content: const Text(
+      'Open that chat or use a different name (add a surname).',
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(ctx, false),
+        child: const Text('Edit name'),
+      ),
+      TextButton(
+        onPressed: () => Navigator.pop(ctx, true),
+        child: const Text('Open existing'),
+      ),
+    ],
+  ),
+);

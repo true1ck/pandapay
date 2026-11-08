@@ -2,12 +2,15 @@
 const crypto=require('node:crypto');
 const {uuid}=require('./commands');
 const {record,fail}=require('./validation');
+const {encryptPhone,decryptPhone}=require('./phone_crypto');
+const {cleanLabel}=require('./label');
+const {describePhone}=require('./phone_display');
 const TOKEN=/^[A-Za-z0-9_-]{43}$/;
 function normalizePhone(value) {
   if(typeof value!=='string'||value.length>40||!/^[+0-9 ()-]+$/.test(value))fail('INVALID_INPUT','phoneNumber');
   let phone=value.replace(/[ ()-]/g,'');
   if(/^[6-9][0-9]{9}$/.test(phone))phone='+91'+phone;
-  if(!/^\+[1-9][0-9]{7,14}$/.test(phone))fail('INVALID_INPUT','phoneNumber');
+  if(!/^\+[1-9][0-9]{6,14}$/.test(phone))fail('INVALID_INPUT','phoneNumber');
   return phone;
 }
 function key(secret) {
@@ -33,7 +36,7 @@ function tokenHash(token) {if(!TOKEN.test(token))fail('INVALID_INPUT','token');r
 /** First name and last initial only: enough to recognise a person, not to profile them. */
 function maskName(name) {
   if(typeof name!=='string')return null;
-  const parts=name.trim().split(/\s+/).filter(Boolean);
+  const parts=cleanLabel(name).split(/\s+/).filter(Boolean);
   if(!parts.length)return null;
   return parts.length===1?parts[0].slice(0,40):parts[0].slice(0,40)+' '+Array.from(parts[parts.length-1])[0]+'.';
 }
@@ -77,7 +80,9 @@ function landingPage(token,packageId) {
   '<a class="btn p" href="'+store+'">Install PandaPay</a><a class="btn s" href="'+open+'">Already have the app? Open it</a>'+
   '<small>Opening this page does not join anyone.</small></main></body></html>';
 }
-function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,androidPackageId='app.pandapay.pandapay',notify=async()=>0}) {
+function stripPhone(items) {return (items||[]).map(({claimantPhone,...rest})=>rest);}
+function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,androidPackageId='app.pandapay.pandapay',notify=async()=>0,phone:phoneOpts={enabled:()=>false,ring:()=>null}}) {
+  const phoneOn=()=>phoneOpts.enabled()===true;
   app.get('/split/join/:token',(req,res)=>{
     res.set({'Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Robots-Tag':'noindex, nofollow','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"});
     if(!TOKEN.test(req.params.token))return res.status(404).type('text/plain').send('Not found');
@@ -101,15 +106,48 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
   route('/shared-expenses/invitations/preview',async(req,res)=>{
     record(req.body,['token']);const hash=tokenHash(req.body.token);
     const result=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.preview_invitation($1::text) AS result',[hash])).rows[0].result);
-    res.json(result);
+    if(!phoneOn())return res.json(result);
+    // phoneSharing: the feature is on and this server can store a number. ownPhoneMask is the caller's OWN
+    // masked number (from the verified session) so they can see exactly what would be shared; null without one.
+    let ownPhoneMask=null;
+    try {
+      const own=verifiedPhoneHash(secret,req.verifiedSession?.verifiedContacts)?normalizePhone(req.verifiedSession.verifiedContacts.phone.value):null;
+      if(own)ownPhoneMask=describePhone(own).mask;
+    }catch(_){ownPhoneMask=null;}
+    res.json({...result,phoneSharing:phoneOpts.ring()!=null,ownPhoneMask});
   });
   route('/shared-expenses/invitations/claim',async(req,res)=>{
-    const b=req.body;record(b,['token','operationId']);uuid(b.operationId,'operationId');
+    const b=req.body;record(b,['token','operationId'],'$','INVALID_INPUT',['sharePhone']);uuid(b.operationId,'operationId');
+    if(Object.hasOwn(b,'sharePhone')&&typeof b.sharePhone!=='boolean')fail('INVALID_INPUT','sharePhone');
     const hash=tokenHash(b.token),phone=verifiedPhoneHash(secret,req.verifiedSession?.verifiedContacts);
-    const last4=phone?normalizePhone(req.verifiedSession.verifiedContacts.phone.value).slice(-4):null;
+    const e164=phone?normalizePhone(req.verifiedSession.verifiedContacts.phone.value):null;
+    const last4=e164?e164.slice(-4):null;
+    const on=phoneOn();
+    // Consent is only recorded when the feature is on. No verified phone => 'none'. A missing sharePhone
+    // (older app) stays 'not_asked' and nothing is stored.
+    const share=!on?null:!e164?'none':b.sharePhone===true?'shared':b.sharePhone===false?'declined':null;
     let result;
     try {
-      result=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.claim_invitation($1::text,$2::text,$3::text,$4::uuid,$5::text) AS result',[hash,phone,last4,b.operationId,requestHash({tokenHash:hash,accept:true})])).rows[0].result);
+      result=await withUserClient(req.userId,async client=>{
+        const r=(await client.query('SELECT shared_expenses.claim_invitation($1::text,$2::text,$3::text,$4::uuid,$5::text,$6::text) AS result',[hash,phone,last4,b.operationId,requestHash({tokenHash:hash,accept:true,sharePhone:on&&Object.hasOwn(b,'sharePhone')?b.sharePhone:null}),share==='shared'?null:share])).rows[0].result;
+        let phoneShare=share==='shared'?'not_asked':(share||'not_asked');
+        const ring=share==='shared'&&r?.fresh===true&&r?.status==='awaiting_owner'&&r.invitationId?phoneOpts.ring():null;
+        if(ring) {
+          // The number is bound to the invitation id, which this very call may have just created,
+          // so it is attached afterwards in the same transaction. Any failure keeps the claim and stores nothing.
+          await client.query('SAVEPOINT attach_phone');
+          try {
+            const sealed=encryptPhone(ring,r.invitationId,e164),shown=describePhone(e164);
+            const attached=(await client.query('SELECT shared_expenses.attach_claimant_phone($1::uuid,$2::uuid,$3::text,$4::text,$5::text,$6::bytea,$7::text,$8::text) AS result',[r.invitationId,b.operationId,phone,shown.countryCode,shown.mask,sealed.enc,sealed.keyId,last4])).rows[0].result;
+            if(attached?.attached===true)phoneShare='shared';
+            await client.query('RELEASE SAVEPOINT attach_phone');
+          } catch(_) {
+            await client.query('ROLLBACK TO SAVEPOINT attach_phone');
+          }
+        }
+        const {fresh,...reply}=r;
+        return on?{...reply,phoneShare}:(({invitationId,...rest})=>rest)(reply);
+      });
     }catch(error){
       // A number-bound invite needs a verified number; say that instead of "wrong number".
       if(error?.message==='invitation_phone_mismatch'&&!phone)return res.status(409).json({error:'phone_not_verified'});
@@ -117,6 +155,37 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
     }
     res.json(result);
     void notify({actorId:req.userId,kind:result?.status==='joined'?'invitation.joined':'invitation.requested',payload:{},contextId:result?.contextId,operationId:b.operationId,tokenHash:hash});
+  });
+  route('/shared-expenses/invitations/reveal-phone',async(req,res)=>{
+    if(!phoneOn())return res.status(404).json({error:'not_found'});
+    const b=req.body;record(b,['invitationId','operationId']);uuid(b.invitationId,'invitationId');uuid(b.operationId,'operationId');
+    res.set('Cache-Control','no-store');
+    const invitationId=b.invitationId.toLowerCase();
+    const undecryptable=Symbol('undecryptable');
+    let out;
+    try {
+      out=await withUserClient(req.userId,async client=>{
+        const r=(await client.query('SELECT shared_expenses.reveal_claimant_phone($1::uuid) AS result',[invitationId])).rows[0].result;
+        if(r.error)return {error:r.error};
+        // Decrypt before the reveal counts: if it cannot be read, the transaction (audit row included) is rolled back.
+        const plain=decryptPhone(phoneOpts.ring(),String(r.invitationId).toLowerCase(),Buffer.from(String(r.enc),'hex'),r.keyId);
+        if(!plain)throw undecryptable;
+        return {invitationId:String(r.invitationId).toLowerCase(),e164:plain};
+      });
+    }catch(error){
+      if(error===undecryptable)return res.status(409).json({error:'phone_not_available'});
+      throw error;
+    }
+    if(out.error)return res.status(out.error==='reveal_rate_limited'?429:409).json({error:out.error});
+    res.json({invitationId:out.invitationId,e164:out.e164,revealedAt:new Date().toISOString()});
+  });
+  route('/shared-expenses/invitations/check-phone',async(req,res)=>{
+    if(!phoneOn())return res.status(404).json({error:'not_found'});
+    const b=req.body;record(b,['invitationId','phoneNumber']);uuid(b.invitationId,'invitationId');
+    const typed=phoneHash(secret,b.phoneNumber);
+    const r=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.check_claimant_phone($1::uuid,$2::text) AS result',[b.invitationId,typed])).rows[0].result);
+    if(r.error)return res.status(['check_attempts_exhausted','check_rate_limited'].includes(r.error)?429:409).json({error:r.error});
+    res.json({matches:r.matches===true?true:r.matches===false?false:null,attemptsLeft:r.attemptsLeft});
   });
   route('/shared-expenses/invitations/respond',async(req,res)=>{
     const b=req.body;record(b,['invitationId','operationId','approve']);uuid(b.invitationId,'invitationId');uuid(b.operationId,'operationId');if(typeof b.approve!=='boolean')fail('INVALID_INPUT','approve');
@@ -201,9 +270,22 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
   }));
   app.get('/shared-expenses/invitations/requests',...protect(async(req,res)=>{
     key(secret);
-    if(Object.keys(req.query).length)fail('INVALID_INPUT','query');
-    const result=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.list_join_requests() AS result')).rows[0].result);
-    res.json({items:result.items||[]});
+    if(Object.keys(req.query).some(k=>k!=='withLookalikeFull')||(req.query.withLookalikeFull!==undefined&&!['0','1'].includes(req.query.withLookalikeFull)))fail('INVALID_INPUT','query');
+    const items=await withUserClient(req.userId,async client=>{
+      const list=(await client.query('SELECT shared_expenses.list_join_requests() AS result')).rows[0].result.items||[];
+      if(!phoneOn())return stripPhone(list);
+      const ids=req.query.withLookalikeFull==='1'?list.filter(i=>i.claimantPhone?.lookalike===true).map(i=>i.invitationId):[];
+      if(!ids.length)return list;
+      const sealed=new Map(((await client.query('SELECT shared_expenses.list_join_requests_enc($1::uuid[]) AS result',[ids])).rows[0].result||[]).map(r=>[r.invitationId,r]));
+      const ring=phoneOpts.ring();
+      return list.map(i=>{
+        const s=sealed.get(i.invitationId);
+        const full=s?decryptPhone(ring,i.invitationId,Buffer.from(String(s.enc),'hex'),s.keyId):null;
+        return full?{...i,fullNumber:full}:i;
+      });
+    });
+    res.set('Cache-Control','no-store');
+    res.json({items});
   }));
   for(const [path,fn] of [['accept','claim_invitation_by_id'],['decline','decline_invitation']]) {
     route('/shared-expenses/invitations/'+path,async(req,res)=>{
@@ -212,10 +294,16 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
       if(!phone)return res.status(409).json({error:'phone_not_verified'});
       const rh=requestHash({invitationId:b.invitationId,action:path});
       const result=await withUserClient(req.userId,async client=>{
-        const sql=path==='accept'?'SELECT shared_expenses.claim_invitation_by_id($1::uuid,$2::text,$3::text,$4::uuid,$5::text) AS result':'SELECT shared_expenses.decline_invitation($1::uuid,$2::text,$4::uuid,$5::text) AS result';
-        return (await client.query(sql,[b.invitationId,phone,normalizePhone(req.verifiedSession.verifiedContacts.phone.value).slice(-4),b.operationId,rh])).rows[0].result;
+        const sql=path==='accept'?'SELECT shared_expenses.claim_invitation_by_id($1::uuid,$2::text,$3::text,$4::uuid,$5::text) AS result':'SELECT shared_expenses.decline_invitation($1::uuid,$2::text,$3::uuid,$4::text) AS result';
+        const params=path==='accept'?[b.invitationId,phone,normalizePhone(req.verifiedSession.verifiedContacts.phone.value).slice(-4),b.operationId,rh]:[b.invitationId,phone,b.operationId,rh];
+        return (await client.query(sql,params)).rows[0].result;
       });
-      res.json(result);
+      const {audienceKey,...publicResult}=result;
+      res.json(publicResult);
+      if(path==='accept'&&result.status==='awaiting_owner'&&audienceKey) {
+        void notify({actorId:req.userId,kind:'invitation.requested',payload:{},contextId:result.contextId,
+          operationId:b.operationId,tokenHash:audienceKey});
+      }
     });
   }
   app.get('/shared-expenses/contexts/:contextId/invitations',...protect(async(req,res)=>{
@@ -223,7 +311,7 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
     const after=req.query.after??null;if(after!==null)uuid(after,'after');
     if(Object.keys(req.query).some(k=>k!=='after'))fail('INVALID_INPUT','query');
     const result=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.list_invitations($1::uuid,$2::uuid) AS result',[req.params.contextId,after])).rows[0].result);
-    res.json(result);
+    res.json(phoneOn()?result:{...result,items:stripPhone(result.items)});
   }));
 }
 module.exports={normalizePhone,inviteCredentials,groupLinkCredentials,verifiedPhoneHash,registerInvitationRoutes,createDirectoryToucher,maskName};

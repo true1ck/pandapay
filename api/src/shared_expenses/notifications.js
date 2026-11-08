@@ -15,7 +15,11 @@ const config = require('../config');
 const notificationService = require('../notification_service');
 const { enqueueNotification } = require('../notification_outbox');
 
+const { cleanLabel: sharedCleanLabel } = require('./label');
+
 const CATEGORY = 'needs_review';
+/** The generic title a direct split gets when the other person has no name at all. */
+const GENERIC_CONTEXT_LABEL = 'PandaPay friend';
 
 /** Only these commands ever notify someone; every other kind must cost no query. */
 const NOTIFYING_KINDS = new Set(['expense.propose', 'settlement.report', 'invitation.requested', 'invitation.joined']);
@@ -24,10 +28,23 @@ function enabled(options = {}) {
   return (options.enabled ?? config.sharedExpenseNotificationsEnabled) === true;
 }
 
+/**
+ * A name that is safe to show in a push: control characters stripped,
+ * whitespace collapsed, capped at 40 characters. Returns null when nothing is left.
+ */
+function cleanLabel(value) {
+  return sharedCleanLabel(value) || null;
+}
+
 /** Who needs to hear about a committed command, and what to tell them. */
 function plan({ kind, payload, actorMemberName, contextName, members, actorId }) {
-  const who = actorMemberName || 'Someone';
-  const where = contextName ? ` in ${contextName}` : '';
+  const label = cleanLabel(actorMemberName);
+  const who = label || 'Someone';
+  const cleanContext = cleanLabel(contextName);
+  // "in PandaPay friend" reads wrongly, so the generic fallback is left out like a missing name.
+  const where = cleanContext && cleanContext !== GENERIC_CONTEXT_LABEL ? ` in ${cleanContext}` : '';
+  // "asked to join Goa trip" reads better than "asked to join in Goa trip".
+  const joinWhat = cleanContext && cleanContext !== GENERIC_CONTEXT_LABEL ? ` "${cleanContext}"` : ' your split';
   const others = members.filter((m) => m.profileId && m.profileId !== actorId);
   switch (kind) {
     case 'expense.propose':
@@ -45,30 +62,47 @@ function plan({ kind, payload, actorMemberName, contextName, members, actorId })
     case 'invitation.requested':
       return others
         .filter((m) => m.role === 'owner')
-        .map((m) => ({ profileId: m.profileId, title: 'Someone wants to join', body: `${who} asked to join${where || ' your split'}. Approve or decline.` }));
+        .map((m) => ({ profileId: m.profileId, title: `${who} wants to join`, body: `${who} asked to join${joinWhat}. Approve or decline.` }));
     case 'invitation.joined':
       return others
         .filter((m) => m.role === 'owner')
-        .map((m) => ({ profileId: m.profileId, title: 'Invite accepted', body: `${who} joined${where || ' your split'}.` }));
+        .map((m) => ({ profileId: m.profileId, title: label ? `${label} joined` : 'Invite accepted', body: `${who} joined${joinWhat}.` }));
     default:
       return [];
   }
 }
 
-async function loadAudience(client, contextId, actorId) {
+async function loadAudience(client, contextId, actorId, revision) {
   const members = await client.query(
-    `SELECT m.member_id, m.profile_id, m.role, m.display_name
+    `SELECT m.member_id, m.profile_id, m.role, shared_expenses._member_label(m.display_name, m.profile_id) AS display_name
        FROM shared_expenses.members m
       WHERE m.context_id = $1 AND m.state = 'active' AND m.profile_id IS NOT NULL
       LIMIT 200`,
     [contextId],
   );
+  let audience = members.rows;
+  if (revision) {
+    // The stored revision includes old and new participants, payer-only people,
+    // and late-bound identities. The submitted snapshot alone is insufficient.
+    const reviewers = await client.query(
+      `SELECT DISTINCT m.member_id, m.profile_id, m.role,
+              shared_expenses._member_label(m.display_name, m.profile_id) AS display_name
+         FROM shared_expenses.revision_members rm
+         JOIN shared_expenses.members m USING (context_id, member_id)
+        WHERE rm.context_id = $1::uuid AND rm.expense_id = $2::uuid
+          AND rm.revision_id = $3::uuid AND rm.approval_required
+          AND m.state = 'active' AND m.profile_id IS NOT NULL
+        ORDER BY m.profile_id`,
+      [contextId, revision.expenseId, revision.revisionId],
+    );
+    audience = reviewers.rows;
+  }
   const context = await client.query(
-    'SELECT shared_expenses._context_label(c.kind, c.name, c.created_by, $2::uuid) AS name FROM shared_expenses.contexts c WHERE c.context_id = $1',
+    'SELECT shared_expenses._context_label(c.kind, c.name, c.created_by, $2::uuid, c.context_id) AS name FROM shared_expenses.contexts c WHERE c.context_id = $1',
     [contextId, actorId],
   );
   return {
-    members: members.rows.map((r) => ({ memberId: r.member_id, profileId: r.profile_id, role: r.role, name: r.display_name })),
+    members: audience.map((r) => ({ memberId: r.member_id, profileId: r.profile_id, role: r.role, name: r.display_name })),
     contextName: context.rows[0]?.name ?? null,
   };
 }
@@ -129,7 +163,7 @@ async function notifyAfterCommit({ withUserClient, actorId, kind, payload, conte
     const invitation = kind.startsWith('invitation.');
     const audience = invitation
       ? await withUserClient(actorId, (client) => loadInvitationAudience(client, tokenHash))
-      : await withUserClient(actorId, (client) => loadAudience(client, contextId, actorId));
+      : await withUserClient(actorId, (client) => loadAudience(client, contextId, actorId, kind === 'expense.propose' ? { expenseId: payload?.expenseId, revisionId: payload?.revisionId } : null));
     const actor = audience.members.find((m) => m.profileId === actorId);
     const targets = plan({
       kind,
@@ -140,7 +174,8 @@ async function notifyAfterCommit({ withUserClient, actorId, kind, payload, conte
       actorId,
     });
     let sent = 0;
-    for (const target of targets.slice(0, 50)) {
+    // The group cap bounds this work to 199 recipients; never discard reviewers.
+    for (const target of targets) {
       try {
         if (await deliverOne({ withUserClient, target, contextId, dedupeKey: `split:${operationId}:${target.profileId}`, logger })) sent += 1;
       } catch (error) {
@@ -154,4 +189,4 @@ async function notifyAfterCommit({ withUserClient, actorId, kind, payload, conte
   }
 }
 
-module.exports = { notifyAfterCommit, plan, enabled };
+module.exports = { notifyAfterCommit, plan, enabled, cleanLabel };

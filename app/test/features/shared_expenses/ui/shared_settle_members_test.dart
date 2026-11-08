@@ -403,6 +403,117 @@ void main() {
       expect(runtime.store.pendingCount, 1);
     },
   );
+
+  testWidgets(
+    'adding duplicate member or invalid name/phone is prevented with clear error',
+    (tester) async {
+      await show(
+        tester,
+        SharedMembersSheet(
+          runtime: runtime,
+          contextId: group,
+          groupName: 'Trip Group',
+        ),
+      );
+      await tap(tester, 'Add person');
+      // Case 1: Entering an existing member's name ('Friend User')
+      await tester.enterText(find.byType(TextField).first, '  friend user  ');
+      await tester.tap(find.widgetWithText(FilledButton, 'Add person'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Someone in this split already has that name. Add a surname or initial.'),
+        findsOneWidget,
+      );
+      expect(runtime.store.pendingCount, 0);
+
+      // Case 2: Name field limits input to 40 characters
+      final nameField = tester.widget<TextField>(find.byType(TextField).first);
+      expect(nameField.maxLength, 40);
+
+      // Case 3: Entering an invalid phone number
+      await tester.enterText(find.byType(TextField).first, 'Valid Person');
+      await tester.enterText(find.byType(TextField).at(1), '12345');
+      await tester.tap(find.widgetWithText(FilledButton, 'Add person'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Enter a valid mobile number, or leave it empty.'),
+        findsOneWidget,
+      );
+      expect(runtime.store.pendingCount, 0);
+
+      // Case 4: Entering a reserved name like 'You', 'Me', or 'Myself'
+      await tester.enterText(find.byType(TextField).first, 'You');
+      await tester.enterText(find.byType(TextField).at(1), '');
+      await tester.tap(find.widgetWithText(FilledButton, 'Add person'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('That name cannot be used. Please choose a different one.'),
+        findsOneWidget,
+      );
+      expect(runtime.store.pendingCount, 0);
+
+      // Case 5: Typing a new character clears the error immediately
+      await tester.enterText(find.byType(TextField).first, 'Yo');
+      await tester.pumpAndSettle();
+      expect(
+        find.text('That name cannot be used. Please choose a different one.'),
+        findsNothing,
+      );
+
+      // Case 6: Entering 'Myself' is also blocked
+      await tester.enterText(find.byType(TextField).first, 'Myself');
+      await tester.tap(find.widgetWithText(FilledButton, 'Add person'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('That name cannot be used. Please choose a different one.'),
+        findsOneWidget,
+      );
+      expect(runtime.store.pendingCount, 0);
+    },
+  );
+  testWidgets(
+    'advanced edge cases: phone prefix variations, whitespace duplicate names, and comma pasted amounts',
+    (tester) async {
+      await show(tester, SharedSettleSheet(runtime: runtime, contextId: group));
+      await tester.enterText(
+        find.byKey(const ValueKey('settlement-amount')),
+        '₹ 1,500.50',
+      );
+      await tap(tester, 'Record payment');
+      expect(runtime.store.pendingCount, 1);
+      final cmd = runtime.store.readPendingOperations().items.single.command;
+      expect((cmd.toJson()['payload'] as Map)['amountMinor'], '150050');
+
+      await show(
+        tester,
+        SharedMembersSheet(
+          runtime: runtime,
+          contextId: group,
+          groupName: 'Trip Group',
+        ),
+      );
+      await tap(tester, 'Add person');
+      await tester.enterText(find.byType(TextField).first, 'Friend   User');
+      await tester.tap(find.widgetWithText(FilledButton, 'Add person'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          'Someone in this split already has that name. Add a surname or initial.',
+        ),
+        findsOneWidget,
+      );
+
+      await tester.enterText(find.byType(TextField).first, 'Unique Person');
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          'Someone in this split already has that name. Add a surname or initial.',
+        ),
+        findsNothing,
+      );
+    },
+  );
+
   for (final kind in ['members', 'history', 'settle']) {
     testWidgets(
       '$kind hides private data immediately when context is revoked',
@@ -470,6 +581,22 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Friend User'), findsNothing);
       expect(find.textContaining('no longer available'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'settlement sheet renders with BambooSheet and validates max limit cleanly',
+    (tester) async {
+      await show(tester, SharedSettleSheet(runtime: runtime, contextId: group));
+      expect(find.byType(SharedSettleSheet), findsOneWidget);
+      expect(find.text('Settle up'), findsOneWidget);
+      await tester.enterText(
+        find.byKey(const ValueKey('settlement-amount')),
+        '120000000',
+      );
+      await tap(tester, 'Record payment');
+      expect(runtime.store.pendingCount, 0);
+      expect(find.textContaining('1,00,00,000'), findsOneWidget);
     },
   );
 }

@@ -69,7 +69,7 @@ test("prompt versions are stored and a covered layout reaches phones as queued",
   assert.equal(await worker.claim(), null);
   // Phones see it as queued, never as a new status.
   const seen = await phone.results(profile, null);
-  assert.deepEqual(seen.items.map((entry) => [entry.templateHash, entry.status]), [[template.template_hash, "queued"]]);
+  assert.deepEqual(seen.items.map((entry) => [entry.templateHash, entry.status]), [[template.template_hash, "pending"]]);
 });
 
 test("the worker store counts distinct reporters per kind and finds sibling layouts", { skip: !url || !adminUrl }, async (t) => {

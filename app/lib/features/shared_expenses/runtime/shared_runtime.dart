@@ -8,6 +8,7 @@ import '../data/shared_commands.dart';
 import '../data/shared_directory.dart';
 import '../data/shared_http_transport.dart';
 import '../data/shared_invitations.dart';
+import '../data/shared_phone_display.dart';
 import '../data/shared_transport.dart';
 import '../storage/shared_store.dart';
 import '../sync/shared_sync.dart';
@@ -145,6 +146,13 @@ class SharedExpensesRuntime extends ChangeNotifier {
       });
     } catch (error) {
       lastError = error;
+      // Type and code only (never the message): a silent apply failure must
+      // not look like "still loading".
+      debugPrint(
+        'shared refresh failed: ${error.runtimeType}'
+        '${error is SharedTransportException ? ' ${error.code}' : ''}'
+        '${error is SharedLocalException ? ' ${error.code}' : ''}',
+      );
       offline =
           error is SharedTransportException &&
           error.code == 'network_unavailable';
@@ -214,6 +222,11 @@ class SharedExpensesRuntime extends ChangeNotifier {
     );
     await store.enqueueFriendSetup(context, member);
     await refresh();
+    // The server may refuse the name; nothing is shown for the refused
+    // friend, so the person just picks another name.
+    final refused =
+        nameFailure(context.operationId) ?? nameFailure(member.operationId);
+    if (refused != null) throw refused;
     return (contextId: id, memberId: memberId);
   }
 
@@ -279,14 +292,19 @@ class SharedExpensesRuntime extends ChangeNotifier {
   Future<String?> sameNameFriend(String name) async {
     try {
       _current();
-      final wanted = name.trim().toLowerCase();
+      final wanted =
+          name.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
       final page = await remote.fetchContexts(
         kind: 'direct',
         search: name.trim(),
       );
       for (final raw in (page['items'] as List? ?? const [])) {
         final row = raw as Map;
-        if ((row['name'] as String? ?? '').trim().toLowerCase() == wanted) {
+        final candidate = (row['name'] as String? ?? '')
+            .trim()
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .toLowerCase();
+        if (candidate == wanted) {
           return row['contextId'] as String?;
         }
       }
@@ -415,11 +433,40 @@ class SharedExpensesRuntime extends ChangeNotifier {
     _current();
   }
 
+  /// Owner-only, one request at a time. The caller keeps the result in widget
+  /// state and drops it after a minute; it is never cached or stored here.
+  Future<SharedRevealedPhone> revealClaimantPhone(String invitationId) async {
+    _current();
+    if (!proposalsEnabled) throw const SharedRuntimeUnavailable();
+    final result = await remote.revealClaimantPhone(
+      invitationId: invitationId,
+      operationId: const Uuid().v4(),
+    );
+    _current();
+    return result;
+  }
+
+  /// Why a queued name command was refused, or null if it was not.
+  SharedNameException? nameFailure(String operationId) {
+    final op = store.operation(operationId);
+    if (op == null ||
+        (op.state != SharedCommandState.rejected &&
+            op.state != SharedCommandState.conflict)) {
+      return null;
+    }
+    return SharedNameException.fromStored(op.errorCode);
+  }
+
+  /// The last list fetched in this session, so the requests page can show
+  /// something at once while it refreshes. In memory only.
+  List<SharedJoinRequest>? cachedJoinRequests;
+
   Future<List<SharedJoinRequest>> joinRequests() async {
     _current();
     if (!proposalsEnabled) return const [];
     final items = await remote.fetchJoinRequests();
     _current();
+    cachedJoinRequests = items;
     return items;
   }
 
@@ -444,16 +491,23 @@ class SharedExpensesRuntime extends ChangeNotifier {
   Future<String> respondToJoinRequest(
     String invitationId, {
     required bool approve,
+    String? operationId,
+    bool refreshAfter = true,
   }) async {
     _current();
     if (!proposalsEnabled) throw const SharedRuntimeUnavailable();
     final status = await remote.respondToJoinRequest(
       invitationId: invitationId,
-      operationId: const Uuid().v4(),
+      // A caller that retries passes the same id so the server replays it.
+      operationId: operationId ?? const Uuid().v4(),
       approve: approve,
     );
     _current();
-    await refresh();
+    cachedJoinRequests = [
+      for (final r in cachedJoinRequests ?? const <SharedJoinRequest>[])
+        if (r.invitationId != invitationId) r,
+    ];
+    if (refreshAfter) await refresh();
     return status;
   }
 
@@ -582,20 +636,108 @@ class SharedExpensesRuntime extends ChangeNotifier {
 
   /// Returns `joined` (phone-bound link) or `awaiting_owner` (the group owner
   /// must approve). Joining never accepts any expense or debt.
-  Future<String> claimInvite(String token, String operationId) async {
+  Future<String> claimInvite(
+    String token,
+    String operationId, {
+    bool? sharePhone,
+  }) async {
     _current();
     if (!proposalsEnabled) throw const SharedRuntimeUnavailable();
     final status = await remote.claimInvitation(
       token: token,
       operationId: operationId,
+      sharePhone: sharePhone,
     );
     _current();
     await refresh();
     return status;
   }
 
+  final _renameOverlay = <String, String>{};
+
+  /// Friend splits whose counterpart was just renamed here: contextId -> name.
+  final _directTitles = <String, String>{};
+
+  /// Renames still on their way to the server, newest typed name winning.
+  Map<String, String> _pendingRenames(String contextId) {
+    final out = <String, String>{};
+    try {
+      final page = store.readPendingOperations(
+        contextId: contextId,
+        limit: 100,
+      );
+      for (final op in page.items) {
+        if (op.command.kind != 'member.rename' ||
+            op.state == SharedCommandState.rejected ||
+            op.state == SharedCommandState.conflict) {
+          continue;
+        }
+        final payload = op.command.toJson()['payload'] as Map;
+        out[payload['memberId'] as String] = payload['displayName'] as String;
+      }
+    } catch (_) {}
+    out.addAll({
+      for (final e in _renameOverlay.entries)
+        if (e.key.startsWith('$contextId:'))
+          e.key.substring(contextId.length + 1): e.value,
+    });
+    return out;
+  }
+
+  /// Sets the name other people see for a member. Saved on this phone first
+  /// (works offline), shown immediately, and synced when online. Throws
+  /// [FormatException] for an empty or over-long name.
+  Future<String> renameMember({
+    required String contextId,
+    required String memberId,
+    required String name,
+    bool directCounterpart = false,
+  }) async {
+    _current();
+    final clean = sharedCleanMemberName(name);
+    if (clean == null || clean.length > sharedMemberNameMax) {
+      throw const FormatException('Invalid member name');
+    }
+    if (!proposalsEnabled || store.isContextRevoked(contextId)) {
+      throw const SharedRuntimeUnavailable();
+    }
+    final command = SharedCommand(
+      operationId: const Uuid().v4(),
+      kind: 'member.rename',
+      payload: {
+        'contextId': contextId,
+        'memberId': memberId,
+        'displayName': clean,
+      },
+    );
+    await store.enqueue(command);
+    _current();
+    _renameOverlay['$contextId:$memberId'] = clean;
+    // In a friend split the other person's name IS the split's title.
+    if (directCounterpart) _directTitles[contextId] = clean;
+    syncLag = true;
+    _notify();
+    await refresh();
+    final refused = nameFailure(command.operationId);
+    if (refused != null) {
+      // Roll the optimistic name back.
+      _renameOverlay.remove('$contextId:$memberId');
+      if (directCounterpart) _directTitles.remove(contextId);
+      _notify();
+      throw refused;
+    }
+    // Once the server has it, its roster is the truth again.
+    if (store.operation(command.operationId)?.state ==
+        SharedCommandState.committed) {
+      _renameOverlay.remove('$contextId:$memberId');
+      _directTitles.remove(contextId);
+    }
+    return command.operationId;
+  }
+
   Future<SharedRoster> contextRoster(String id) async {
     final before = await context(id);
+    final pendingRenames = _pendingRenames(id);
     final roster = <SharedEditorMember>[];
     String? after, own;
     for (var page = 0; page < 4; page++) {
@@ -607,18 +749,27 @@ class SharedExpensesRuntime extends ChangeNotifier {
         if (row['profileId'] == accountId && row['state'] == 'active') {
           own = row['memberId'] as String;
         }
+        final memberId = row['memberId'] as String;
+        // A rename waiting to sync shows straight away.
+        final typed = pendingRenames[memberId] ?? row['displayName'] as String?;
+        final suffix = row['phoneSuffix'];
         roster.add(
           SharedEditorMember(
-            row['memberId'] as String,
+            memberId,
             row['profileId'] == accountId
                 ? 'You'
-                : row['displayName'] as String? ??
+                : typed ??
                       (before['kind'] == 'direct' && row['role'] == 'owner'
                           ? before['name'] as String? ?? 'Member'
                           : 'Member'),
             state: row['state'] as String,
             role: row['role'] as String? ?? 'member',
             profileId: row['profileId'] as String?,
+            phoneSuffix:
+                suffix is String && RegExp(r'^[0-9]{4}$').hasMatch(suffix)
+                ? suffix
+                : null,
+            rawName: typed,
           ),
         );
       }
@@ -781,6 +932,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     final queued = store.operation(id), result = store.receipt(id)?.result;
     if (result is Map) {
       return switch (result['status']) {
+        'renamed' => 'Name updated.',
         'confirmed' => 'Payment confirmed by receiver',
         'rejected' => 'Payment report rejected',
         'invited' => 'Person added. Tap Invite to send them a link.',
@@ -931,7 +1083,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     return SharedGroupPresentation(
       id: id,
       direct: details['kind'] == 'direct',
-      title: details['name'] as String,
+      title: _directTitles[id] ?? details['name'] as String,
       expenses: SharedPage(
         items: expenseRows,
         hasMore: expensePage['hasMore'] == true,
@@ -997,11 +1149,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
       SharedHubTab tab,
     ) {
       return SharedPage(
-        items: [
-          for (final raw in data['items'] as List)
-            if (!store.isContextRevoked((raw as Map)['contextId'] as String))
-              _contextRow(Map<String, Object?>.from(raw)),
-        ],
+        items: contextRows(data['items'] as List),
         hasMore: data['hasMore'] == true,
         incomplete: syncLag,
         hasPrevious: after[tab] != null,
@@ -1021,7 +1169,9 @@ class SharedExpensesRuntime extends ChangeNotifier {
             SharedActivityRow(
               id: (raw as Map)['contextId'] as String,
               description: _activityCopy(raw['kind']),
-              contextLabel: raw['contextName'] as String?,
+              contextLabel:
+                  _directTitles[raw['contextId']] ??
+                  raw['contextName'] as String?,
               occurredAtLabel: raw['createdAt'] as String,
             ),
         ],
@@ -1036,7 +1186,44 @@ class SharedExpensesRuntime extends ChangeNotifier {
     );
   }
 
-  static SharedContextRow _contextRow(Map<String, Object?> row) {
+  /// Rows for a list of context records, with a just-typed friend name shown
+  /// at once and a number ending under rows that would look identical.
+  @visibleForTesting
+  List<SharedContextRow> contextRows(List<Object?> items) {
+    final rows = [
+      for (final raw in items)
+        if (!store.isContextRevoked((raw as Map)['contextId'] as String))
+          _contextRow(Map<String, Object?>.from(raw)),
+    ];
+    final hints = sharedSameNameHints([
+      for (final raw in items)
+        if (!store.isContextRevoked((raw as Map)['contextId'] as String))
+          (
+            id: raw['contextId'] as String,
+            label: _directTitles[raw['contextId']] ?? raw['name'] as String,
+            suffix: _suffixOf(
+              raw['counterpartPhoneSuffix'] ?? raw['phoneSuffix'],
+            ),
+          ),
+    ]);
+    return [
+      for (final r in rows)
+        hints[r.id] == null || r.subtitle != null
+            ? r
+            : SharedContextRow(
+                id: r.id,
+                title: r.title,
+                balance: r.balance,
+                state: r.state,
+                subtitle: hints[r.id],
+              ),
+    ];
+  }
+
+  static String? _suffixOf(Object? v) =>
+      v is String && RegExp(r'^[0-9]{4}$').hasMatch(v) ? v : null;
+
+  SharedContextRow _contextRow(Map<String, Object?> row) {
     final invited = row['membershipState'] == 'invited';
     final known = row['owedMinor'] is String && row['owingMinor'] is String;
     final balance = known
@@ -1049,7 +1236,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
           );
     return SharedContextRow(
       id: row['contextId'] as String,
-      title: row['name'] as String,
+      title: _directTitles[row['contextId']] ?? row['name'] as String,
       balance: balance,
       state: invited
           ? SharedContextState.pendingInvite
@@ -1069,6 +1256,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     'context.created' => 'Group created',
     'membership.invited' => 'Member invited',
     'membership.responded' => 'Membership updated',
+    'member.renamed' => 'Name changed',
     'expense.proposed' => 'Expense submitted for review',
     'expense.responded' => 'Expense review updated',
     'settlement.reported' => 'Payment reported Â· awaiting confirmation',

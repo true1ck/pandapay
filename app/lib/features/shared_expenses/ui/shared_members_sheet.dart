@@ -1,5 +1,6 @@
 import 'dart:async';
-import '../storage/shared_store.dart' show SharedCommandState;
+import '../storage/shared_store.dart'
+    show SharedCommandState, SharedNameException;
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -11,9 +12,13 @@ import '../composer/shared_editor.dart';
 import '../data/shared_invitations.dart';
 import '../runtime/shared_runtime.dart';
 import '../data/shared_directory.dart';
+import '../data/shared_transport.dart';
 import 'shared_add_friend_sheet.dart';
 import 'shared_components.dart';
 import 'shared_context_guard.dart';
+import 'shared_rename_member_dialog.dart';
+import '../../../app/design/bamboo_components.dart';
+import 'shared_settle_sheet.dart';
 
 /// Existing context's membership. A name records a shadow member; it neither
 /// sends an invitation nor verifies identity or accepts debt.
@@ -72,6 +77,28 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
     _roster = widget.runtime.contextRoster(widget.contextId);
     _loadInvitations();
     _loadGroupLink();
+    _loadPendingPhones();
+    _nameField.addListener(_onFieldChanged);
+    _phoneField.addListener(_onFieldChanged);
+  }
+
+  void _onFieldChanged() {
+    if (_formError != null) {
+      setState(() => _formError = null);
+    }
+  }
+
+  Future<void> _loadPendingPhones() async {
+    try {
+      final roster = await _roster;
+      for (final m in roster.members) {
+        if (_phones.containsKey(m.id)) continue;
+        final phone = await widget.runtime.pendingPhones.phoneFor(m.id);
+        if (phone != null && mounted) {
+          _phones[m.id] = phone;
+        }
+      }
+    } catch (_) {}
   }
 
   /// A person without a saved name (no verified phone) still reads clearly.
@@ -128,6 +155,124 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
     }
   }
 
+  String _stateLine(SharedEditorMember member) => switch (member.state) {
+    'active' =>
+      member.profileId == null
+          ? 'Account no longer active · history kept'
+          : member.role == 'owner'
+          ? 'Owner'
+          : 'Active member',
+    'invited' =>
+      member.profileId == null ? _statusLine(member) : 'Invitation pending',
+    'removed' => 'Removed · history retained',
+    'left' => 'Left · history retained',
+    _ => 'Membership needs review',
+  };
+
+  /// Number endings for people who would otherwise look identical.
+  Map<String, String> _sameNameHints(SharedRoster roster) =>
+      sharedSameNameHints([
+        for (final m in roster.members)
+          (
+            id: m.id,
+            label: m.id == roster.ownMemberId ? 'You' : _displayName(m),
+            suffix: m.phoneSuffix ?? _inv[m.id]?.phoneSuffix,
+          ),
+      ]);
+
+  Widget _subtitle(
+    SharedRoster roster,
+    SharedEditorMember member,
+    Map<String, String> hints,
+  ) {
+    final style = BambooFonts.ui(12, color: BambooInk.ink700);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _stateLine(member),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: style,
+        ),
+        if (hints[member.id] != null)
+          Text(
+            hints[member.id]!,
+            key: ValueKey('member-hint-${member.id}'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: style,
+          ),
+        if (_canRename(roster, member))
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              key: ValueKey('edit-name-${member.id}'),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(48, 32),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                alignment: Alignment.centerLeft,
+              ),
+              onPressed: _busy ? null : () => _rename(roster, member),
+              child: Text('Edit name', style: BambooFonts.ui(12.5)),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// The server lets the owner rename anyone who is still around and everyone
+  /// rename themselves; it refuses people who left or were removed.
+  bool _canRename(SharedRoster roster, SharedEditorMember member) {
+    if (!widget.runtime.proposalsEnabled) return false;
+    final self = member.id == roster.ownMemberId;
+    final owner = roster.members.any(
+      (m) => m.id == roster.ownMemberId && m.role == 'owner',
+    );
+    final live =
+        (member.state == 'active' && member.profileId != null) ||
+        (member.state == 'invited' && owner);
+    return live && (owner || self);
+  }
+
+  Future<void> _rename(SharedRoster roster, SharedEditorMember member) async {
+    if (_busy || !_authorized) return;
+    final self = member.id == roster.ownMemberId;
+    String? opId;
+    final name = await showSharedRenameMemberDialog(
+      context,
+      title: self ? 'Edit your name' : 'Edit name',
+      initialName: member.rawName ?? (self ? '' : _displayName(member)),
+      onSave: (typed) async {
+        try {
+          opId = await widget.runtime.renameMember(
+            contextId: widget.contextId,
+            memberId: member.id,
+            name: typed,
+            directCounterpart: roster.direct && !self,
+          );
+          return null;
+        } on SharedNameException catch (error) {
+          return sharedInviteIssueMessage(
+            SharedTransportException(code: error.code),
+          );
+        } on FormatException {
+          return 'Enter a name up to $sharedMemberNameMax characters.';
+        } catch (error) {
+          return error is SharedTransportException
+              ? sharedInviteIssueMessage(error)
+              : 'Could not save the name yet. Try again.';
+        }
+      },
+    );
+    if (name == null || opId == null || !mounted || !_authorized) return;
+    setState(() {
+      _notice = widget.runtime.operationStatus(opId!);
+      _roster = widget.runtime.contextRoster(widget.contextId);
+    });
+  }
+
   /// Rare on purpose: a split stays after everyone settles and can be used for
   /// the next expense. Leaving only works when nothing is owed or waiting.
   Future<void> _leave() async {
@@ -146,12 +291,50 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
       if (mounted) Navigator.pop(context, true);
     } catch (error) {
       if (mounted) {
-        setState(() {
-          _notice = sharedInviteIssueMessage(error);
-          _busy = false;
-        });
+        final isSettleFirst =
+            (error is SharedTransportException && error.code == 'settle_first') ||
+            error.toString().contains('settle_first');
+        if (isSettleFirst) {
+          setState(() => _busy = false);
+          _showCannotLeaveSheet();
+        } else {
+          setState(() {
+            _notice = sharedInviteIssueMessage(error);
+            _busy = false;
+          });
+        }
       }
     }
+  }
+
+  void _showCannotLeaveSheet() {
+    showBambooSheet(
+      context: context,
+      builder: (ctx) => BambooSheet(
+        title: 'Settle up before leaving',
+        subtitle:
+            'You have unsettled balances in "${widget.groupName}". Clear your balances first, then you can leave cleanly.',
+        actions: [
+          FilledButton.icon(
+            icon: const Icon(Icons.payments_outlined, size: 18),
+            label: const Text('Settle up'),
+            onPressed: () {
+              Navigator.pop(ctx);
+              SharedSettleSheet.show(
+                context,
+                runtime: widget.runtime,
+                contextId: widget.contextId,
+              );
+            },
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Stay in split'),
+          ),
+        ],
+        children: const [],
+      ),
+    );
   }
 
   Future<void> _makeOwner(SharedEditorMember member) async {
@@ -358,8 +541,7 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
       'open' when inv!.phoneBound => 'Invite sent · waiting for them to join',
       'open' => 'Link shared · waiting for them to join',
       'awaiting_owner' =>
-        '${inv!.claimantName ?? 'A PandaPay user'} wants to join'
-            '${inv.phoneSuffix == null ? '' : ' · number ending ${inv.phoneSuffix}'}',
+        'Wants to join · ${sharedSignedInAs(label: member.name, profileName: inv!.claimantName, phoneSuffix: inv.phoneSuffix) ?? 'PandaPay user'}',
       'declined' => 'Declined the invite',
       'expired' => 'Invite expired',
       'rejected' => 'Not invited right now',
@@ -369,10 +551,26 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
 
   @override
   void dispose() {
+    _nameField.removeListener(_onFieldChanged);
+    _phoneField.removeListener(_onFieldChanged);
     _nameField.dispose();
     _phoneField.dispose();
     super.dispose();
   }
+
+  static bool _phonesMatch(String? a, String? b) {
+    if (a == null || b == null) return false;
+    final da = a.replaceAll(RegExp(r'[^0-9]'), '');
+    final db = b.replaceAll(RegExp(r'[^0-9]'), '');
+    if (da == db && da.isNotEmpty) return true;
+    if (da.length >= 10 && db.length >= 10) {
+      return da.substring(da.length - 10) == db.substring(db.length - 10);
+    }
+    return false;
+  }
+
+  static String _normalizeName(String s) =>
+      s.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
 
   Future<void> _add() async {
     if (_busy || !_authorized) return;
@@ -384,6 +582,20 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
           setState(() => _formError = 'Enter the person\'s name.');
           return;
         }
+        if (text.length > 40) {
+          setState(
+            () => _formError = 'Name cannot be more than 40 characters.',
+          );
+          return;
+        }
+        final lower = text.toLowerCase();
+        if (lower == "you" || lower == "me" || lower == "myself") {
+          setState(
+            () => _formError =
+                "That name cannot be used. Please choose a different one.",
+          );
+          return;
+        }
         final cleaned = phone.isEmpty ? null : sharedCleanPhone(phone);
         if (phone.isNotEmpty && cleaned == null) {
           setState(
@@ -392,14 +604,42 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
           );
           return;
         }
-        if (_lookup.self) {
-          setState(() => _formError = 'That is your own number.');
-          return;
+        var lookup = _lookup;
+        if (phone.isNotEmpty && cleaned != null) {
+          try {
+            lookup = await widget.runtime.lookupPhone(cleaned);
+          } catch (_) {}
+          if (lookup.self) {
+            setState(() => _formError = 'That is your own number.');
+            return;
+          }
         }
         final name = text;
         _pendingPhone = cleaned;
         final current = await widget.runtime.contextRoster(widget.contextId);
         if (!current.canInvite) throw const SharedRuntimeUnavailable();
+        final norm = _normalizeName(name);
+        final duplicateName = current.members.any(
+          (m) =>
+              m.state != 'left' &&
+              (_normalizeName(m.name) == norm ||
+                  (m.rawName != null && _normalizeName(m.rawName!) == norm)),
+        );
+        if (duplicateName) {
+          setState(
+            () => _formError =
+                'Someone in this split already has that name. Add a surname or initial.',
+          );
+          return;
+        }
+        if (cleaned != null &&
+            _phones.values.any((p) => _phonesMatch(p, cleaned))) {
+          setState(
+            () => _formError =
+                'Someone in this split is already invited with that number.',
+          );
+          return;
+        }
         _pendingMemberId = const Uuid().v4();
         _pending = SharedCommand(
           operationId: const Uuid().v4(),
@@ -414,6 +654,21 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
       if (!_authorized || !widget.runtime.proposalsEnabled) return;
       await widget.runtime.store.enqueue(_pending!);
       await widget.runtime.flushEditor();
+      final refused = widget.runtime.nameFailure(_pending!.operationId);
+      if (refused != null) {
+        // Roll back: nothing was added, so let them change the name.
+        if (mounted) {
+          setState(() {
+            _formError = sharedInviteIssueMessage(
+              SharedTransportException(code: refused.code),
+            );
+            _pending = null;
+            _pendingMemberId = null;
+            _pendingPhone = null;
+          });
+        }
+        return;
+      }
       if (mounted && _authorized) {
         if (_pendingPhone != null && _pendingMemberId != null) {
           _phones[_pendingMemberId!] = _pendingPhone!;
@@ -455,10 +710,34 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
   Future<void> _fillFromContacts() async {
     final contact = await _pickContact();
     if (contact == null || !mounted) return;
+    final pickedName = contact.$1;
+    final pickedPhone = sharedCleanPhone(contact.$2);
+
+    String? error;
+    try {
+      final lower = pickedName.trim().toLowerCase();
+      if (lower == "you" || lower == "me" || lower == "myself") {
+        error = "That name cannot be used. Please choose a different one.";
+      } else {
+        final current = await _roster;
+        final norm = _normalizeName(pickedName);
+        if (current.members.any((m) =>
+            m.state != 'left' &&
+            (_normalizeName(m.name) == norm ||
+                (m.rawName != null && _normalizeName(m.rawName!) == norm)))) {
+          error =
+              'Someone in this split already has that name. Add a surname or initial.';
+        } else if (pickedPhone != null &&
+            _phones.values.any((p) => _phonesMatch(p, pickedPhone))) {
+          error = 'Someone in this split is already invited with that number.';
+        }
+      }
+    } catch (_) {}
+
     setState(() {
-      _nameField.text = contact.$1;
-      _phoneField.text = sharedCleanPhone(contact.$2) ?? '';
-      _formError = null;
+      _nameField.text = pickedName;
+      _phoneField.text = pickedPhone ?? "";
+      _formError = error;
     });
   }
 
@@ -470,7 +749,7 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                'Contacts access was not granted. You can still type a name and number.',
+                "Contacts access was not granted. You can still type a name and number.",
               ),
             ),
           );
@@ -480,11 +759,35 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
       final picked = await FlutterContacts.native.showPicker(
         properties: {ContactProperty.name, ContactProperty.phone},
       );
-      final name = picked?.displayName?.trim() ?? '';
-      if (picked == null || name.isEmpty) return null;
-      final number = picked.phones.isEmpty ? '' : picked.phones.first.number;
-      final cleaned = number.replaceAll(RegExp(r'[^+0-9 ()-]'), '').trim();
-      return (name, cleaned.length > 20 ? '' : cleaned);
+      final rawName = picked?.displayName?.trim() ?? "";
+      if (picked == null || rawName.isEmpty) return null;
+      final name = rawName.length > 40 ? rawName.substring(0, 40).trim() : rawName;
+      final numbers = [
+        for (final p in picked.phones)
+          if (sharedCleanPhone(p.number) != null) sharedCleanPhone(p.number)!,
+      ].toSet().toList();
+      if (numbers.length > 1 && mounted) {
+        final choice = await showDialog<String>(
+          context: context,
+          builder: (ctx) => SimpleDialog(
+            title: Text("Which number for $name?"),
+            children: [
+              for (final n in numbers)
+                SimpleDialogOption(
+                  onPressed: () => Navigator.pop(ctx, n),
+                  child: Text(n),
+                ),
+            ],
+          ),
+        );
+        if (choice == null) return null;
+        return (name, choice);
+      }
+      final number = numbers.isNotEmpty
+          ? numbers.first
+          : (picked.phones.isEmpty ? "" : picked.phones.first.number);
+      final cleaned = number.replaceAll(RegExp(r"[^+0-9 ()-]"), "").trim();
+      return (name, cleaned.length > 20 ? "" : cleaned);
     } catch (_) {
       return null;
     }
@@ -545,7 +848,7 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
       TextField(
         controller: _nameField,
         autofocus: true,
-        maxLength: 120,
+        maxLength: 40,
         buildCounter:
             (_, {required currentLength, required isFocused, maxLength}) =>
                 null,
@@ -679,6 +982,7 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
                               );
                             }
                             final roster = snapshot.data!;
+                            final hints = _sameNameHints(roster);
                             return ListView(
                               padding: const EdgeInsets.all(16),
                               children: [
@@ -692,37 +996,19 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
                                   _groupLinkCard(),
                                 for (final member in roster.members)
                                   ListTile(
+                                    key: ValueKey('member-${member.id}'),
                                     title: Text(
                                       member.id == roster.ownMemberId
                                           ? 'You'
                                           : _displayName(member),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
                                       style: BambooFonts.ui(
                                         14,
                                         weight: FontWeight.w600,
                                       ),
                                     ),
-                                    subtitle: Text(
-                                      switch (member.state) {
-                                        'active' =>
-                                          member.profileId == null
-                                              ? 'Account no longer active · history kept'
-                                              : member.role == 'owner'
-                                              ? 'Owner'
-                                              : 'Active member',
-                                        'invited' =>
-                                          member.profileId == null
-                                              ? _statusLine(member)
-                                              : 'Invitation pending',
-                                        'removed' =>
-                                          'Removed · history retained',
-                                        'left' => 'Left · history retained',
-                                        _ => 'Membership needs review',
-                                      },
-                                      style: BambooFonts.ui(
-                                        12,
-                                        color: BambooInk.ink700,
-                                      ),
-                                    ),
+                                    subtitle: _subtitle(roster, member, hints),
                                     // TextButton, not FilledButton: the app theme
                                     // forces filled buttons full width in a trailing.
                                     trailing:

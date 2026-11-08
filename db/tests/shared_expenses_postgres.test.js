@@ -62,6 +62,7 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114020000_shared_expense_group_links.sql'),'utf8'));
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114030000_shared_expense_membership_exit.sql'),'utf8'));
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114040000_shared_expense_owner_and_former.sql'),'utf8'));
+  for (const file of ['20261116080000_shared_expense_invitation_audience.sql', '20261116090100_shared_expense_member_labels.sql', '20261116100100_shared_expense_join_identity.sql', '20261117010000_shared_expense_command_safety.sql', '20261117020000_shared_expense_privacy_safety.sql']) await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/'+file),'utf8'));
   // Replay the pre-existing role setup's broad grants. A new isolated schema
   // must retain its ACL even when public and pandapay grants are restored.
   await db.query('GRANT USAGE ON SCHEMA public,pandapay TO app_user; GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO app_user; GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pandapay TO app_user');
@@ -70,6 +71,8 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
   await db.query('INSERT INTO public.profiles VALUES($1),($2)',[a,b]);
   await db.query("INSERT INTO public.transactions VALUES($1,$2,1200,now(),'active','spend','manual','cash',now(),1,null,null)",[tx,a]);
   async function actor(id, callback) { await db.query('SAVEPOINT request'); try { await db.query('SET LOCAL ROLE app_user'); await db.query("SELECT set_config('app.user_id',$1,true)",[id]); const result=await callback(); await db.query('RESET ROLE'); await db.query('RELEASE SAVEPOINT request'); return result; } catch(error) { await db.query('ROLLBACK TO SAVEPOINT request'); await db.query('RELEASE SAVEPOINT request'); throw error; } }
+  const approvePhone = (owner, invitationId) => actor(owner,()=>db.query(
+    'SELECT shared_expenses.respond_invitation($1,true,$2,$3)',[invitationId,crypto.randomUUID(),'a'.repeat(64)]));
   await actor(a,async()=> {
     const cap=(await db.query('SELECT shared_expenses.capabilities() AS v')).rows[0].v;
     assert.equal(cap.acceptedWrites,false); assert.equal(cap.proposals,false);
@@ -114,8 +117,9 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     await actor(a,()=>db.query('SELECT shared_expenses.create_invitation($1,$2)',[payload,'6'.repeat(64)]));
     await assert.rejects(actor(c,()=>db.query('SELECT shared_expenses.claim_invitation($1,$2,$3,$4,$5)',['5'.repeat(64),'0'.repeat(64),'0000',crypto.randomUUID(),'7'.repeat(64)])),/invitation_phone_mismatch/);
     const operation=crypto.randomUUID(),claim=()=>actor(b,()=>db.query('SELECT shared_expenses.claim_invitation($1,$2,$3,$4,$5) AS v',['5'.repeat(64),'4'.repeat(64),'3210',operation,'8'.repeat(64)]));
-    assert.equal((await claim()).rows[0].v.status,'joined');
-    assert.equal((await claim()).rows[0].v.status,'joined');
+    assert.equal((await claim()).rows[0].v.status,'awaiting_owner');
+    assert.equal((await claim()).rows[0].v.status,'awaiting_owner');
+    await approvePhone(a,invitation);
     assert.deepEqual((await db.query('SELECT approver_profile_id,paid_minor,share_minor FROM shared_expenses.revision_members WHERE context_id=$1 AND member_id=$2',[group,member])).rows,before);
     assert.equal((await db.query('SELECT count(*)::int n FROM shared_expenses.journal_entries WHERE context_id=$1',[group])).rows[0].n,0);
     const {listExpenseRevisions}=requireApi('./src/shared_expenses/queries');
@@ -198,8 +202,9 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     await assert.rejects(accept(c,H('c'),crypto.randomUUID()),/invitation_unavailable/);
     await assert.rejects(accept(a,H('b'),crypto.randomUUID()),/invitation_unavailable/,'the inviter cannot claim their own invitation');
     const op=crypto.randomUUID();
-    assert.equal((await accept(b,H('b'),op)).rows[0].v.status,'joined');
-    assert.equal((await accept(b,H('b'),op)).rows[0].v.status,'joined','replay');
+    assert.equal((await accept(b,H('b'),op)).rows[0].v.status,'awaiting_owner');
+    assert.equal((await accept(b,H('b'),op)).rows[0].v.status,'awaiting_owner','replay');
+    await approvePhone(a,inv);
     assert.equal((await db.query('SELECT profile_id FROM shared_expenses.members WHERE context_id=$1 AND member_id=$2',[ctxId,member])).rows[0].profile_id,b);
     assert.equal((await inbox(b,H('b'))).length,0);
     assert.equal((await db.query('SELECT count(*)::int n FROM shared_expenses.journal_entries WHERE context_id=$1',[ctxId])).rows[0].n,0,'joining posts no money');
@@ -217,9 +222,10 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     assert.equal(existing.rows[0].v.found,true);
     const g=crypto.randomUUID(), gm1=crypto.randomUUID(), gm2=crypto.randomUUID(), gi=crypto.randomUUID();
     await actor(a,()=>db.query("SELECT shared_expenses.create_context($1,'group','Flat',$2,$3)",[g,crypto.randomUUID(),H('1')]));
-    for(const m of [gm1,gm2]) await actor(a,()=>db.query('SELECT shared_expenses.invite_member($1,$2,$3)',[{contextId:g,memberId:m,displayName:'Rahul'},crypto.randomUUID(),H('9')]));
+    for(const [m,nm] of [[gm1,'Rahul'],[gm2,'Rahul Two']]) await actor(a,()=>db.query('SELECT shared_expenses.invite_member($1,$2,$3)',[{contextId:g,memberId:m,displayName:nm},crypto.randomUUID(),H('9')]));
     await create(a,{invitationId:gi,contextId:g,memberId:gm1,targetPhoneHash:H('b'),tokenHash:crypto.randomBytes(32).toString('hex')},H('5'));
     await actor(b,()=>db.query('SELECT shared_expenses.claim_invitation_by_id($1,$2,$3,$4,$5)',[gi,H('b'),'3210',crypto.randomUUID(),H('6')]));
+    await approvePhone(a,gi);
     await assert.rejects(create(a,{invitationId:crypto.randomUUID(),contextId:g,memberId:gm2,targetPhoneHash:H('b'),tokenHash:crypto.randomBytes(32).toString('hex')},H('7')),/invitation_already_member/,'a person already in the context cannot be invited again by number');
     // Decline: no money, owner sees a decline, re-inviting is paused for a week.
     const ctx2=crypto.randomUUID(), m2=crypto.randomUUID(), i2=crypto.randomUUID(), m3=crypto.randomUUID();
@@ -319,6 +325,7 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     await assert.rejects(xfer(a,q),/membership_conflict/,'target must be an active member');
     await actor(a,()=>db.query('SELECT shared_expenses.create_invitation($1,$2)',[{invitationId:i,contextId:g,memberId:q,targetPhoneHash:H('b'),tokenHash:crypto.randomBytes(32).toString('hex')},H('5')]));
     await actor(b,()=>db.query('SELECT shared_expenses.claim_invitation_by_id($1,$2,$3,$4,$5)',[i,H('b'),'3210',crypto.randomUUID(),H('6')]));
+    await approvePhone(a,i);
     await assert.rejects(xfer(b,q),/context_not_authorized/,'only the owner transfers');
     await assert.rejects(actor(b,()=>db.query('SELECT shared_expenses.take_over_ownership($1,$2,$3)',[g,crypto.randomUUID(),H('8')])),/owner_still_present/);
     assert.equal((await xfer(a,q)).rows[0].v.status,'owner');
@@ -350,6 +357,7 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     await actor(a,()=>db.query('SELECT shared_expenses.create_invitation($1,$2)',[{invitationId:crypto.randomUUID(),contextId:g,memberId:m2,targetPhoneHash:H('b'),tokenHash:tok()},H('5')]));
     const inv=(await db.query("SELECT invitation_id FROM shared_expenses.invitations WHERE member_id=$1 AND state='open'",[m2])).rows[0].invitation_id;
     await actor(b,()=>db.query('SELECT shared_expenses.claim_invitation_by_id($1,$2,$3,$4,$5)',[inv,H('b'),'3210',crypto.randomUUID(),H('6')]));
+    await approvePhone(a,inv);
     const leave=(who,op2=crypto.randomUUID())=>actor(who,()=>db.query('SELECT shared_expenses.leave_context($1,$2,$3) AS v',[g,op2,H('7')]));
     await assert.rejects(leave(a),/owner_cannot_leave/);
     await assert.rejects(leave(c),/membership_not_authorized/,'a stranger cannot leave');
@@ -360,6 +368,7 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     await actor(a,()=>db.query('SELECT shared_expenses.invite_member($1,$2,$3)',[{contextId:g2,memberId:q1,displayName:'Bee'},crypto.randomUUID(),H('2')]));
     await actor(a,()=>db.query('SELECT shared_expenses.create_invitation($1,$2)',[{invitationId:i2,contextId:g2,memberId:q1,targetPhoneHash:H('b'),tokenHash:tok()},H('5')]));
     await actor(b,()=>db.query('SELECT shared_expenses.claim_invitation_by_id($1,$2,$3,$4,$5)',[i2,H('b'),'3210',crypto.randomUUID(),H('6')]));
+    await approvePhone(a,i2);
     assert.equal((await actor(b,()=>db.query('SELECT * FROM shared_expenses.contexts WHERE context_id=$1',[g2]))).rowCount,1);
     const lop=crypto.randomUUID();
     const left=()=>actor(b,()=>db.query('SELECT shared_expenses.leave_context($1,$2,$3) AS v',[g2,lop,H('7')]));
@@ -664,5 +673,587 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     const outsider='10000000-0000-0000-0000-000000000099';
     assert.equal((await actor(outsider,()=>db.query('SELECT bill FROM shared_expenses.expense_revisions WHERE revision_id=$1',[payload.revisionId]))).rowCount,0);
   });
+  await t.test('member labels: typed name wins, live profile name next, Former member last; member.rename',async()=>{
+    const H=(ch)=>ch.repeat(64), uuid=()=>crypto.randomUUID();
+    const own='60000000-0000-0000-0000-000000000001', pal='60000000-0000-0000-0000-000000000002', stranger='60000000-0000-0000-0000-000000000003', gone='60000000-0000-0000-0000-000000000004', joiner='60000000-0000-0000-0000-000000000005';
+    await db.query("INSERT INTO public.profiles VALUES($1,'Olive Owner'),($2,'Pal Profile'),($3,'Stranger Sam'),($4,'Gone Gary'),($5,'Joiner Jo')",[own,pal,stranger,gone,joiner]);
+    const call=(who,fn,args)=>actor(who,()=>db.query(`SELECT shared_expenses.${fn} AS v`,args)).then(r=>r.rows[0].v);
+    const label=(name,profile)=>db.query('SELECT shared_expenses._member_label($1,$2) AS v',[name,profile]).then(r=>r.rows[0].v);
+    const memberName=(ctxId,mid)=>db.query('SELECT display_name FROM shared_expenses.members WHERE context_id=$1 AND member_id=$2',[ctxId,mid]).then(r=>r.rows[0].display_name);
+    const g=uuid(); const ownerMember=(await call(own,"create_context($1,'group','Label trip',$2,$3)",[g,uuid(),H('1')])).memberId;
+    // A typed name beats the profile name; the pal joins through a phone-bound invite.
+    const palMember=uuid();
+    await call(own,'invite_member($1,$2,$3)',[{contextId:g,memberId:palMember,displayName:'Mom'},uuid(),H('2')]);
+    const inv=uuid();
+    await call(own,'create_invitation($1,$2)',[{invitationId:inv,contextId:g,memberId:palMember,targetPhoneHash:H('c'),tokenHash:crypto.randomBytes(32).toString('hex')},H('3')]);
+    await call(pal,'claim_invitation_by_id($1,$2,$3,$4,$5)',[inv,H('c'),'3210',uuid(),H('4')]);
+    await approvePhone(own,inv);
+    assert.equal((await db.query('SELECT state FROM shared_expenses.members WHERE member_id=$1',[palMember])).rows[0].state,'active');
+    assert.equal(await label(await memberName(g,palMember),pal),'Mom','typed beats profile');
+    // No typed name: the live profile name, and a rename of the profile shows straight away.
+    await db.query('UPDATE shared_expenses.members SET display_name=NULL WHERE member_id=$1',[palMember]);
+    assert.equal(await label(null,pal),'Pal Profile');
+    assert.equal(await label('   ',pal),'Pal Profile','blank typed name counts as none');
+    await db.query("UPDATE public.profiles SET display_name='Pal Renamed' WHERE id=$1",[pal]);
+    assert.equal(await label(null,pal),'Pal Renamed','live, not cached');
+    // A stale phone_directory copy is ignored; so is its absence.
+    assert.equal((await db.query('SELECT count(*)::int n FROM shared_expenses.phone_directory WHERE profile_id=$1',[pal])).rows[0].n,0,'no directory row for this person');
+    await db.query("INSERT INTO shared_expenses.phone_directory(profile_id,phone_hash,display_name,discoverable) VALUES($1,$2,'Stale Copy',false)",[pal,H('d')]);
+    assert.equal(await label(null,pal),'Pal Renamed','the stale directory copy is never used');
+    await db.query("UPDATE public.profiles SET display_name=NULL WHERE id=$1",[pal]);
+    assert.equal(await label(null,pal),null,'no typed name and no profile name: the caller falls back (Someone)');
+    await db.query("UPDATE public.profiles SET display_name='Pal Renamed' WHERE id=$1",[pal]);
+    assert.equal(await label(null,null),'Former member','deleted account');
+    assert.equal(await label('Mom',null),'Mom','a typed name survives account deletion');
+    // The roster label is what the app shows; read it through the app role.
+    const roster=(await actor(own,()=>db.query('SELECT shared_expenses._member_label(m.display_name,m.profile_id) AS v FROM shared_expenses.members m WHERE m.member_id=$1',[palMember]))).rows[0].v;
+    assert.equal(roster,'Pal Renamed','the app role can read another member\'s live name');
 
+    // member.rename
+    const rename=(who,mid,displayName,op=uuid(),hash=H('5'),ctxId=g)=>call(who,'rename_member($1,$2,$3)',[{contextId:ctxId,memberId:mid,displayName},op,hash]);
+    const events=()=>db.query("SELECT count(*)::int n FROM shared_expenses.context_events WHERE context_id=$1 AND kind='member.renamed'",[g]).then(r=>r.rows[0].n);
+    const op1=uuid();
+    const first=await rename(own,palMember,'  Pal   the   Friend ',op1,H('6'));
+    assert.equal(first.status,'renamed');assert.equal(first.displayName,'Pal the Friend');
+    assert.equal(await memberName(g,palMember),'Pal the Friend','owner renamed another member');
+    assert.equal(await events(),1);
+    assert.deepEqual(await rename(own,palMember,'  Pal   the   Friend ',op1,H('6')),first,'replay returns the same result');
+    assert.equal(await events(),1,'replay emits nothing new');
+    await assert.rejects(rename(own,palMember,'Different',op1,H('7')),/operation_conflict/);
+    assert.equal((await rename(pal,palMember,'Pal Self')).displayName,'Pal Self','a member renames their own row');
+    await assert.rejects(rename(pal,ownerMember,'Hijack'),/member_rename_not_authorized/,'not someone else\'s row');
+    await assert.rejects(rename(stranger,palMember,'Nope'),/context_not_authorized/,'a stranger cannot rename');
+    await assert.rejects(rename(own,uuid(),'Ghost'),/member_not_found/);
+    for(const bad of ['','   ','\u0007\u0001','\n\t'])await assert.rejects(rename(own,palMember,bad),/invalid_member_name/,JSON.stringify(bad));
+    await assert.rejects(actor(own,()=>db.query('SELECT shared_expenses.rename_member($1,$2,$3)',[{contextId:g,memberId:palMember,displayName:7},uuid(),H('8')])),/invalid_member_name/);
+    await assert.rejects(actor(own,()=>db.query('SELECT shared_expenses.rename_member($1,$2,$3)',[{contextId:g,memberId:palMember,displayName:'x',extra:1},uuid(),H('8')])),/invalid_member_name/);
+    assert.equal((await rename(own,palMember,'A \n\u0007  B')).displayName,'A B','control characters stripped, whitespace collapsed');
+    assert.equal((await rename(own,palMember,'y'.repeat(200))).displayName,'y'.repeat(40),'capped at 40');
+    assert.equal(await memberName(g,palMember),'y'.repeat(40));
+    // Names are unique within a split (see the join-identity tests for the full matrix).
+    await rename(own,palMember,'Twin');
+    await assert.rejects(rename(own,ownerMember,'twin'),/member_name_taken/);
+    assert.equal(await memberName(g,palMember),'Twin');
+    // Hostile text is only ever data.
+    assert.equal((await rename(own,palMember,"Robert'); DROP TABLE shared_expenses.members;--")).displayName,"Robert'); DROP TABLE shared_expenses.members;--".slice(0,40));
+    assert.ok((await db.query('SELECT count(*)::int n FROM shared_expenses.members')).rows[0].n>0);
+    // Invited (not yet joined) people: the owner may name them, other members may not; closed rows are refused.
+    const shadow=uuid();
+    await call(own,'invite_member($1,$2,$3)',[{contextId:g,memberId:shadow,displayName:'Shadow'},uuid(),H('9')]);
+    assert.equal((await rename(own,shadow,'Shadow Two')).displayName,'Shadow Two');
+    await assert.rejects(rename(pal,shadow,'Nope'),/member_rename_not_authorized/);
+    await db.query("UPDATE shared_expenses.members SET state='declined' WHERE member_id=$1",[shadow]);
+    await assert.rejects(rename(own,shadow,'Again'),/member_not_renamable/);
+    await db.query("UPDATE shared_expenses.members SET state='active',profile_id=NULL WHERE member_id=$1",[shadow]);
+    await assert.rejects(rename(own,shadow,'Again'),/member_not_renamable/,'former member keeps their history label');
+    await db.query("UPDATE shared_expenses.members SET state='left' WHERE member_id=$1",[shadow]);
+    await assert.rejects(rename(own,shadow,'Again'),/member_not_renamable/);
+
+    // member.invite uses the same cleaner as rename (trigger on every stored name).
+    const invite=(displayName)=>{const m=uuid();return call(own,'invite_member($1,$2,$3)',[{contextId:g,memberId:m,displayName},uuid(),H('f')]).then(()=>memberName(g,m));};
+    assert.equal(await invite('z'.repeat(110)),'z'.repeat(40),'long invite name capped');
+    assert.equal(await invite(' Ra\n\thul\u0085  K '),'Ra hul K','control chars incl. U+0085 become one space');
+    assert.equal(await invite('\u{1D4D0}'.repeat(60)),'\u{1D4D0}'.repeat(40),'cut on a code point, no half pair');
+    for(const bad of ['\u0085','\u0085\u0009\u009f','\u0007'])await assert.rejects(call(own,'invite_member($1,$2,$3)',[{contextId:g,memberId:uuid(),displayName:bad},uuid(),H('f')]),/invalid_member_name/,JSON.stringify(bad));
+    // Join request: the owner sees the claimant's LIVE name next to the typed label, plus the new keys.
+    const g2=uuid(), friend=uuid(), inv2=uuid(), tokenHash=crypto.randomBytes(32).toString('hex');
+    await call(own,"create_context($1,'direct','Join labels',$2,$3)",[g2,uuid(),H('a')]);
+    await call(own,'invite_member($1,$2,$3)',[{contextId:g2,memberId:friend,displayName:'Bestie'},uuid(),H('b')]);
+    await call(own,'create_invitation($1,$2)',[{invitationId:inv2,contextId:g2,memberId:friend,targetPhoneHash:null,tokenHash},H('c')]);
+    assert.equal((await call(joiner,'claim_invitation($1,$2,$3,$4,$5)',[tokenHash,null,null,uuid(),H('d')])).status,'awaiting_owner');
+    const joinReq=async()=>(await call(own,'list_join_requests()',[])).items.find(i=>i.invitationId===inv2);
+    let req=await joinReq();
+    assert.equal(req.claimantName,'Joiner Jo');assert.equal(req.claimantProfileName,'Joiner Jo');
+    assert.equal(req.memberName,'Bestie');assert.ok('claimantPhoneSuffix' in req);assert.ok('verifiedPhoneSuffix' in req);
+    assert.equal((await db.query('SELECT count(*)::int n FROM shared_expenses.phone_directory WHERE profile_id=$1',[joiner])).rows[0].n,0,'no directory row needed');
+    await db.query("UPDATE public.profiles SET display_name='Joiner Renamed' WHERE id=$1",[joiner]);
+    assert.equal((await joinReq()).claimantName,'Joiner Renamed','live name on the join card');
+    const listed=(await call(own,'list_invitations($1,NULL)',[g2])).items.find(i=>i.invitationId===inv2);
+    assert.equal(listed.claimantName,'Joiner Renamed');assert.equal(listed.memberName,'Bestie');
+    // invitation_audience: typed name wins for the push label; profile name and phone suffix ride along separately.
+    let audience=await call(joiner,'invitation_audience($1)',[tokenHash]);
+    assert.equal(audience.claimantName,'Joiner Renamed');assert.equal(audience.claimantProfileName,'Joiner Renamed');assert.ok('claimantPhoneSuffix' in audience);
+    assert.deepEqual(audience.owners,[own]);
+    await db.query('UPDATE shared_expenses.members SET display_name=NULL WHERE member_id=$1',[friend]);
+    audience=await call(joiner,'invitation_audience($1)',[tokenHash]);
+    assert.equal(audience.claimantName,'Joiner Renamed','no typed name: live profile name');
+    await db.query("UPDATE public.profiles SET display_name=NULL WHERE id=$1",[joiner]);
+    audience=await call(joiner,'invitation_audience($1)',[tokenHash]);
+    assert.equal(audience.claimantName,null);
+    await assert.rejects(call(stranger,'invitation_audience($1)',[tokenHash]),/invitation_unavailable/,'only the claimant');
+  });
+  await t.test('direct split title is the counterpart\'s live label for each viewer',async()=>{
+    const H=(ch)=>ch.repeat(64), uuid=()=>crypto.randomUUID();
+    const cr='70000000-0000-0000-0000-000000000001', fr='70000000-0000-0000-0000-000000000002';
+    await db.query("INSERT INTO public.profiles VALUES($1,'Creator Cee'),($2,'Friend Eff')",[cr,fr]);
+    const call=(who,fn,args)=>actor(who,()=>db.query(`SELECT shared_expenses.${fn} AS v`,args)).then(r=>r.rows[0].v);
+    const title=(who,id)=>actor(who,()=>db.query("SELECT shared_expenses._context_label(c.kind,c.name,c.created_by,$1::uuid,c.context_id) AS v FROM shared_expenses.contexts c WHERE c.context_id=$2",[who,id])).then(r=>r.rows[0].v);
+    const g=uuid(), friendMember=uuid(), inv=uuid();
+    const creatorMember=(await call(cr,"create_context($1,'direct','Rahul',$2,$3)",[g,uuid(),H('1')])).memberId;
+    await call(cr,'invite_member($1,$2,$3)',[{contextId:g,memberId:friendMember,displayName:'Rahul'},uuid(),H('2')]);
+    assert.equal(await title(cr,g),'Rahul','invited friend, typed name');
+    await call(cr,'create_invitation($1,$2)',[{invitationId:inv,contextId:g,memberId:friendMember,targetPhoneHash:H('e'),tokenHash:crypto.randomBytes(32).toString('hex')},H('3')]);
+    await call(fr,'claim_invitation_by_id($1,$2,$3,$4,$5)',[inv,H('e'),'3210',uuid(),H('4')]);
+    await approvePhone(cr,inv);
+    await call(cr,'rename_member($1,$2,$3)',[{contextId:g,memberId:friendMember,displayName:'Rahul Sharma'},uuid(),H('5')]);
+    assert.equal(await title(cr,g),'Rahul Sharma','creator sees the renamed counterpart');
+    assert.equal(await title(fr,g),'Creator Cee','the other person sees the creator\'s live profile name');
+    await db.query("UPDATE public.profiles SET display_name='Creator Renamed' WHERE id=$1",[cr]);
+    assert.equal(await title(fr,g),'Creator Renamed','profile rename is live');
+    await call(cr,'rename_member($1,$2,$3)',[{contextId:g,memberId:creatorMember,displayName:'Cee Typed'},uuid(),H('6')]);
+    assert.equal(await title(fr,g),'Cee Typed','a typed label for the creator wins');
+    // Fallbacks.
+    await db.query('UPDATE shared_expenses.members SET display_name=NULL WHERE member_id=$1',[friendMember]);
+    await db.query("UPDATE public.profiles SET display_name=NULL WHERE id=$1",[fr]);
+    assert.equal(await title(cr,g),'Rahul','no counterpart name: the split\'s own name');
+    await db.query('UPDATE shared_expenses.members SET display_name=NULL WHERE member_id=$1',[creatorMember]);
+    await db.query("UPDATE public.profiles SET display_name=NULL WHERE id=$1",[cr]);
+    assert.equal(await title(fr,g),'PandaPay friend');
+    // NULL context id keeps the old behaviour; groups are untouched.
+    assert.equal((await db.query("SELECT shared_expenses._context_label('direct','Typed',$1,$2,NULL) AS v",[cr,fr])).rows[0].v,'PandaPay friend');
+    const grp=uuid();
+    await call(cr,"create_context($1,'group','Goa',$2,$3)",[grp,uuid(),H('7')]);
+    assert.equal(await title(cr,grp),'Goa');
+  });
+
+  const {parseKeyRing,encryptPhone,decryptPhone}=requireApi('./src/shared_expenses/phone_crypto');
+  const {describePhone}=requireApi('./src/shared_expenses/phone_display');
+  const labelLib=requireApi('./src/shared_expenses/label');
+  const ring=parseKeyRing(JSON.stringify({current:'k1',keys:{k1:crypto.randomBytes(32).toString('base64')}}));
+  const pid=(n)=>`80000000-0000-0000-0000-${n.toString(16).padStart(12,'0')}`;
+  const phoneHash=(e)=>crypto.createHash('sha256').update('test-phone:'+e).digest('hex');
+  await t.test('join identity: consent, capture, lookalikes, reveal, check, purge',async()=>{
+    const H=(ch)=>ch.repeat(64), uuid=()=>crypto.randomUUID(), tok=()=>crypto.randomBytes(32).toString('hex');
+    const own=pid(1), mem=pid(2), stranger=pid(3), c1=pid(4), c2=pid(5), c3=pid(6), c4=pid(7), c5=pid(8), c6=pid(9), c7=pid(10), c8=pid(11);
+    const E={[c1]:'+917234512345',[c2]:'+917299912345',[c3]:'+14155552671',[c4]:'+917234512345',[c6]:'+442079460958',[c7]:'+918800011122',[c8]:'+919811100099'};
+    await db.query("INSERT INTO public.profiles VALUES($1,'Olive Owner'),($2,'Mia Member'),($3,'Stranger Sam'),($4,'Rahul Sharma'),($5,'Rahul Sharma'),($6,'Cee Three'),($7,'Dee Four'),($8,'Eve Email'),($9,'Fay Six'),($10,'Gus Seven'),($11,'Hal Eight')",[own,mem,stranger,c1,c2,c3,c4,c5,c6,c7,c8]);
+    const call=(who,fn,args)=>actor(who,()=>db.query(`SELECT shared_expenses.${fn} AS v`,args)).then(r=>r.rows[0].v);
+    const g=uuid(), link=tok();
+    await call(own,"create_context($1,'group','Identity trip',$2,$3)",[g,uuid(),H('1')]);
+    await call(own,'register_phone($1,NULL)',[phoneHash('+919000000001')]);
+    await call(c1,'register_phone($1,NULL)',[phoneHash(E[c1])]);
+    await call(own,'create_group_link($1,$2,$3,$4)',[g,link,uuid(),H('2')]);
+    const claim=(who,share,suffix='2345',op=uuid(),token=link)=>call(who,'claim_invitation($1,$2,$3,$4,$5,$6)',[token,E[who]?phoneHash(E[who]):null,suffix,op,H('3'),share]).then(r=>({...r,op}));
+    const attach=(who,claimed,e164=E[who])=>{const sealed=encryptPhone(ring,claimed.invitationId,e164),shown=describePhone(e164);return call(who,'attach_claimant_phone($1,$2,$3,$4,$5,$6,$7,$8)',[claimed.invitationId,claimed.op,phoneHash(e164),shown.countryCode,shown.mask,sealed.enc,sealed.keyId,e164.slice(-4)]);};
+    const requests=async()=>(await call(own,'list_join_requests()',[])).items;
+    const item=async(inv)=>(await requests()).find(i=>i.invitationId===inv);
+    const row=(inv)=>db.query('SELECT * FROM shared_expenses.invitations WHERE invitation_id=$1',[inv]).then(r=>r.rows[0]);
+    const reveal=(who,inv)=>call(who,'reveal_claimant_phone($1)',[inv]);
+    const check=(who,inv,h)=>call(who,'check_claimant_phone($1,$2)',[inv,h]);
+
+    // --- old caller: five arguments, no consent => not_asked, nothing stored, claim still works
+    const old=await actor(c3,()=>db.query('SELECT shared_expenses.claim_invitation($1,$2,$3,$4,$5) AS v',[link,phoneHash(E[c3]),'2671',uuid(),H('3')])).then(r=>r.rows[0].v);
+    assert.equal(old.status,'awaiting_owner');assert.ok(old.invitationId);
+    let it=await item(old.invitationId);
+    assert.deepEqual(it.claimantPhone,{v:1,source:'verified',consent:'not_asked',countryCode:null,last4:'2671',mask:null,available:false,unavailableReason:'claimed_before_update',lookalike:false,duplicateOf:[],numberStatus:'unknown',matchesTyped:null,capturedAt:null});
+    assert.equal(it.verifiedPhoneSuffix,'2671');assert.equal(it.claimantPhoneSuffix,'2671');assert.equal(it.claimantName,'Cee Three');
+    // --- shared: claim then attach in the same transaction shape the API uses
+    const r1=await claim(c1,null,'2345');
+    assert.equal((await attach(c1,r1)).attached,true);
+    it=await item(r1.invitationId);
+    assert.match(it.claimantPhone.capturedAt,/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
+    assert.deepEqual({...it.claimantPhone,capturedAt:'T'},{v:1,source:'verified',consent:'shared',countryCode:'+91',last4:'2345',mask:'+91 72••• •2345',available:true,unavailableReason:null,lookalike:false,duplicateOf:[],numberStatus:'confirmed',matchesTyped:null,capturedAt:'T'});
+    assert.equal(it.memberName,'Rahul Sharma','placeholder label from the live name');
+    // --- declined: no number, no hash, no mask
+    const r2=await claim(c2,'declined','2345');
+    it=await item(r2.invitationId);
+    assert.equal(it.memberName,'Rahul Sharma (2)','a second person with the same name gets a numeric suffix');
+    assert.deepEqual(it.claimantPhone,{v:1,source:'verified',consent:'declined',countryCode:null,last4:null,mask:null,available:false,unavailableReason:'claimant_declined',lookalike:false,duplicateOf:[],numberStatus:'unknown',matchesTyped:null,capturedAt:null});
+    assert.equal((await row(r2.invitationId)).claimant_phone_hash,null,'declined stores no hash');
+    assert.equal(it.verifiedPhoneSuffix,null,'asking without sharing shows the name only');assert.equal(it.claimantPhoneSuffix,null);
+    assert.equal((await row(r2.invitationId)).verified_phone_suffix,null);
+    // --- none: email-only account
+    const r5=await claim(c5,'none',null);
+    it=await item(r5.invitationId);
+    assert.deepEqual(it.claimantPhone,{v:1,source:'none',consent:'none',countryCode:null,last4:null,mask:null,available:false,unavailableReason:'no_verified_phone',lookalike:false,duplicateOf:[],numberStatus:'unknown',matchesTyped:null,capturedAt:null});
+    assert.equal(it.verifiedPhoneSuffix,null);
+    assert.equal((await reveal(own,r5.invitationId)).error,'phone_not_available','nothing to reveal for none');
+    assert.equal((await reveal(own,old.invitationId)).error,'phone_not_available','nothing to reveal for not_asked');
+    assert.equal((await reveal(own,r2.invitationId)).error,'phone_not_available','nothing to reveal for declined');
+
+    // --- re-claim refresh: consent flips, suffix refreshes, expiry is not extended, no second member
+    const before=await row(r2.invitationId), membersBefore=(await db.query('SELECT count(*)::int n FROM shared_expenses.members WHERE context_id=$1',[g])).rows[0].n;
+    const again=await claim(c2,null,'9999');
+    assert.equal(again.invitationId,r2.invitationId);assert.equal(again.memberId,r2.memberId);
+    assert.equal((await row(r2.invitationId)).verified_phone_suffix,'9999');
+    assert.equal((await row(r2.invitationId)).phone_share,'not_asked','a repeat claim without consent re-applies not_asked');
+    assert.deepEqual((await row(r2.invitationId)).expires_at,before.expires_at);
+    assert.equal((await db.query('SELECT count(*)::int n FROM shared_expenses.members WHERE context_id=$1',[g])).rows[0].n,membersBefore);
+    const r2b=await claim(c2,null,'2345');
+    assert.equal((await attach(c2,r2b)).attached,true);
+    assert.equal((await row(r2.invitationId)).verified_phone_suffix,'2345','sharing keeps the last four');
+    assert.equal((await row(r2.invitationId)).phone_share,'shared');
+    // flip to declined removes the stored number at once
+    await claim(c2,'declined','2345');
+    let r2row=await row(r2.invitationId);
+    assert.equal(r2row.claimant_phone_enc,null);assert.equal(r2row.claimant_phone_hash,null);assert.ok(r2row.phone_purged_at);assert.equal(r2row.phone_share,'declined');assert.equal(r2row.verified_phone_suffix,null);
+    const r2c=await claim(c2,null,'2345');await attach(c2,r2c);
+
+    // --- lookalikes (same mask, different number) and duplicates (same number, different account)
+    const r4=await claim(c4,null,'2345');
+    await attach(c4,r4);
+    const all=await requests();
+    const byId=(id)=>all.find(i=>i.invitationId===id).claimantPhone;
+    assert.equal(byId(r1.invitationId).lookalike,true,'c1 and c2 share a mask but not a number');
+    assert.equal(byId(r2.invitationId).lookalike,true);
+    assert.equal(byId(r1.invitationId).mask,byId(r2.invitationId).mask);
+    assert.deepEqual(byId(r1.invitationId).duplicateOf,[r4.invitationId],'same number, different account');
+    assert.deepEqual(byId(r4.invitationId).duplicateOf,[r1.invitationId]);
+    assert.equal(byId(r4.invitationId).numberStatus,'moved','the number is now registered to another account');
+    assert.equal(byId(r1.invitationId).numberStatus,'confirmed');
+    assert.equal(byId(r2.invitationId).numberStatus,'unknown');
+    assert.equal(byId(old.invitationId).lookalike,false);
+    const enc=await call(own,'list_join_requests_enc($1)',[[r1.invitationId,r2.invitationId,old.invitationId,r5.invitationId]]);
+    assert.deepEqual(enc.map(e=>e.invitationId).sort(),[r1.invitationId,r2.invitationId].sort(),'ciphertext only for look-alike requests');
+    for(const e of enc)assert.equal(decryptPhone(ring,e.invitationId,Buffer.from(e.enc,'hex'),e.keyId),E[e.invitationId===r1.invitationId?c1:c2]);
+    assert.deepEqual(await call(stranger,'list_join_requests_enc($1)',[[r1.invitationId]]),[],'only an owner');
+    assert.deepEqual(await call(c1,'list_join_requests_enc($1)',[[r1.invitationId]]),[]);
+
+    // --- no plaintext number anywhere the owner or the ledger can read
+    const digits=['7234512345','7299912345','4155552671','2079460958'];
+    const dump=JSON.stringify([all,await call(own,'list_invitations($1,NULL)',[g]),(await db.query('SELECT result,input_hash,request_hash FROM shared_expenses.operation_receipts')).rows,(await db.query('SELECT * FROM shared_expenses.phone_reveals')).rows,(await db.query('SELECT * FROM shared_expenses.context_events')).rows]);
+    for(const d of digits)assert.ok(!dump.includes(d),'plaintext digits '+d+' leaked');
+    assert.ok(!JSON.stringify(await call(c1,'invitation_audience($1)',[(await row(r1.invitationId)).token_hash])).includes('72345'),'audience carries no number');
+    assert.ok(!Object.keys(await call(c1,'invitation_audience($1)',[(await row(r1.invitationId)).token_hash])).some(k=>/phone/i.test(k)&&k!=='claimantPhoneSuffix'));
+
+    // --- AAD: a ciphertext copied to another invitation does not decrypt
+    const sealed=await row(r1.invitationId);
+    assert.equal(decryptPhone(ring,r1.invitationId,sealed.claimant_phone_enc,sealed.claimant_phone_key_id),E[c1]);
+    assert.equal(decryptPhone(ring,r2.invitationId,sealed.claimant_phone_enc,sealed.claimant_phone_key_id),null);
+    // attach refuses another person's request, a wrong shape, and a non-pending request
+    assert.equal((await attach(c3,r1,E[c3])).attached,false);
+    assert.equal((await call(c1,'attach_claimant_phone($1,$2,$3,$4,$5,$6,$7,$8)',[r1.invitationId,r1.op,'zz','+91','+91 72',Buffer.from('short'),'k1','2345'])).attached,false);
+
+    // --- reveal permission matrix
+    const mm=uuid();
+    await call(own,'invite_member($1,$2,$3)',[{contextId:g,memberId:mm,profileId:mem,displayName:'Mia Member'},uuid(),H('4')]);
+    await call(mem,'respond_membership($1,$2,$3,$4,$5)',[g,mm,true,uuid(),H('5')]);
+    for(const who of [mem,stranger,c1,c2])await assert.rejects(reveal(who,r1.invitationId),/context_not_authorized/,'reveal denied for '+who);
+    await assert.rejects(reveal(own,uuid()),/context_not_authorized/,'unknown invitation looks like no access');
+    const got=await reveal(own,r1.invitationId);
+    assert.equal(decryptPhone(ring,got.invitationId,Buffer.from(got.enc,'hex'),got.keyId),E[c1]);
+    assert.equal((await db.query("SELECT count(*)::int n FROM shared_expenses.phone_reveals WHERE owner_profile_id=$1 AND via='tap'",[own])).rows[0].n,1,'audited');
+    assert.deepEqual(Object.keys((await db.query('SELECT * FROM shared_expenses.phone_reveals LIMIT 1')).rows[0]).sort(),['at','invitation_id','owner_profile_id','reveal_id','via']);
+    // the owner needs a verified number of their own
+    await db.query('DELETE FROM shared_expenses.phone_directory WHERE profile_id=$1',[own]);
+    assert.equal((await reveal(own,r1.invitationId)).error,'owner_phone_required');
+    await call(own,'register_phone($1,NULL)',[phoneHash('+919000000001')]);
+    // caps: 5 per hour, 30 per day (look-alike disclosures share the same budget, so start clean)
+    await db.query("DELETE FROM shared_expenses.phone_reveals WHERE via='lookalike'");
+    for(let n=0;n<4;n++)assert.ok((await reveal(own,r1.invitationId)).enc);
+    assert.equal((await reveal(own,r1.invitationId)).error,'reveal_rate_limited','sixth in an hour');
+    await db.query("UPDATE shared_expenses.phone_reveals SET at=clock_timestamp()-interval '2 hours'");
+    for(let n=0;n<5;n++)assert.ok((await reveal(own,r1.invitationId)).enc,'a new hour opens again');
+    await db.query("UPDATE shared_expenses.phone_reveals SET at=clock_timestamp()-interval '2 hours'");
+    await db.query("INSERT INTO shared_expenses.phone_reveals(invitation_id,owner_profile_id,at) SELECT $1,$2,clock_timestamp()-interval '3 hours' FROM generate_series(1,20)",[r1.invitationId,own]);
+    assert.equal((await reveal(own,r1.invitationId)).error,'reveal_rate_limited','thirty in a day');
+    await db.query('DELETE FROM shared_expenses.phone_reveals');
+
+    // --- check-phone: hashed comparison, three attempts, owner only
+    const rightHash=phoneHash(E[c1]), wrongHash=phoneHash('+917000000000');
+    await assert.rejects(check(mem,r1.invitationId,rightHash),/context_not_authorized/);
+    await assert.rejects(check(own,r1.invitationId,'nothex'),/invalid_invitation/);
+    assert.deepEqual(await check(own,r1.invitationId,wrongHash),{matches:false,attemptsLeft:2});
+    assert.deepEqual(await check(own,r1.invitationId,rightHash),{matches:true,attemptsLeft:1});
+    assert.deepEqual(await check(own,r1.invitationId,rightHash),{matches:true,attemptsLeft:0});
+    assert.equal((await check(own,r1.invitationId,rightHash)).error,'check_attempts_exhausted');
+    assert.deepEqual(await check(own,r2.invitationId,rightHash),{matches:false,attemptsLeft:2});
+    assert.deepEqual(await check(own,r5.invitationId,rightHash),{matches:null,attemptsLeft:3},'no answer and no count when nothing was shared');
+    assert.deepEqual(await check(own,old.invitationId,rightHash),{matches:null,attemptsLeft:3});
+
+    // --- purge on every resolution path
+    // approve: number gone, 4 digits and hash stay
+    await call(own,'respond_invitation($1,true,$2,$3)',[r1.invitationId,uuid(),H('6')]);
+    let a1=await row(r1.invitationId);
+    assert.equal(a1.claimant_phone_enc,null);assert.equal(a1.claimant_phone_mask,null);assert.ok(a1.phone_purged_at);assert.equal(a1.verified_phone_suffix,'2345');assert.equal(a1.claimant_phone_hash,phoneHash(E[c1]));assert.equal(a1.state,'joined');
+    assert.equal((await reveal(own,r1.invitationId)).error,'phone_not_available');
+    assert.equal((await check(own,r1.invitationId,rightHash)).error,'phone_not_available');
+    // decline
+    await call(own,'respond_invitation($1,false,$2,$3)',[r2.invitationId,uuid(),H('7')]);
+    assert.equal((await row(r2.invitationId)).claimant_phone_enc,null);
+    // remove the pending person (remove_member rejects the request)
+    await assert.ok((await row(r4.invitationId)).claimant_phone_enc);
+    await call(own,'remove_member($1,$2,$3,$4)',[g,r4.memberId,uuid(),H('8')]);
+    a1=await row(r4.invitationId);assert.equal(a1.claimant_phone_enc,null);assert.equal(a1.state,'rejected');
+    // link revoke drops numbers of requests that came through the link
+    const r6=await claim(c6,null,'0958');await attach(c6,r6);
+    assert.ok((await row(r6.invitationId)).claimant_phone_enc);
+    await call(own,'revoke_group_link($1,$2,$3)',[g,uuid(),H('9')]);
+    assert.equal((await row(r6.invitationId)).claimant_phone_enc,null);
+    await call(own,'create_group_link($1,$2,$3,$4)',[g,link,uuid(),H('a')]);
+    // lazy purge at expiry (a list is enough), and the hourly function
+    const r7=await claim(c7,null,'1122');await attach(c7,r7);
+    await db.query("UPDATE shared_expenses.invitations SET expires_at=clock_timestamp()-interval '1 minute' WHERE invitation_id IN ($1,$2)",[r7.invitationId,r6.invitationId]);
+    assert.ok((await row(r7.invitationId)).claimant_phone_enc,'still stored until something looks');
+    assert.equal((await requests()).some(i=>i.invitationId===r7.invitationId),false,'expired requests are not listed');
+    assert.equal((await row(r7.invitationId)).claimant_phone_enc,null,'lazy purge on list');
+    assert.equal((await reveal(own,r7.invitationId)).error,'phone_not_available');
+    // zombie: an expired pending request comes back to life on a new claim, with the same member
+    const back=await claim(c7,null,'1122');
+    r7.op=back.op;
+    assert.equal(back.invitationId,r7.invitationId);assert.equal(back.memberId,r7.memberId);
+    assert.ok((await row(r7.invitationId)).expires_at>new Date(Date.now()+6*86400000),'expiry reset to a week');
+    assert.equal((await requests()).some(i=>i.invitationId===r7.invitationId),true);
+    await attach(c7,r7);
+    await db.query("UPDATE shared_expenses.invitations SET expires_at=clock_timestamp()-interval '1 minute' WHERE invitation_id=$1",[r7.invitationId]);
+    assert.equal((await db.query('SELECT shared_expenses.purge_expired_claimant_phones() AS n')).rows[0].n>=1,true,'hourly purge');
+    assert.equal((await row(r7.invitationId)).claimant_phone_enc,null);
+    // expired rows do not count towards the 20-request cap
+    await db.query("INSERT INTO shared_expenses.members(context_id,member_id,role,state,display_name) SELECT $1,gen_random_uuid(),'member','invited','filler '||n FROM generate_series(1,20) n",[g]);
+    await db.query("INSERT INTO shared_expenses.invitations(invitation_id,context_id,member_id,issuer_profile_id,token_hash,claimed_profile_id,state,via_group_link,expires_at) SELECT gen_random_uuid(),$1,m.member_id,$2,encode(sha256(convert_to(m.member_id::text,'UTF8')),'hex'),$2,'awaiting_owner',true,clock_timestamp()-interval '1 day' FROM shared_expenses.members m WHERE m.context_id=$1 AND m.display_name LIKE 'filler %'",[g,own]);
+    const r8=await claim(c8,null,'0099');
+    assert.equal(r8.status,'awaiting_owner','20 expired zombies do not block a new request');
+    // account deletion scrubs everything about the claimant
+    await attach(c8,r8);
+    await db.query('DELETE FROM public.profiles WHERE id=$1',[c8]);
+    const gone=await row(r8.invitationId);
+    assert.equal(gone.claimed_profile_id,null);assert.equal(gone.verified_phone_suffix,null);assert.equal(gone.claimant_phone_enc,null);assert.equal(gone.claimant_phone_hash,null);assert.equal(gone.claimant_phone_cc,null);assert.equal(gone.claimant_phone_mask,null);assert.equal(gone.state,'rejected');
+    assert.equal((await db.query('SELECT state FROM shared_expenses.members WHERE member_id=$1',[r8.memberId])).rows[0].state,'declined');
+
+    // --- names shown on join cards are cleaned (bidi, zero width, controls, length)
+    await db.query("UPDATE public.profiles SET display_name=$2 WHERE id=$1",[c3,'Cee\u202e T\u200bhree\n\t'+'x'.repeat(80)]);
+    const cleaned=(await item(old.invitationId)).claimantName;
+    assert.equal(cleaned,('Cee Three '+'x'.repeat(80)).slice(0,40));
+    assert.ok(!/[\u202e\u200b\n\t]/.test(cleaned));
+    assert.equal((await call(c3,'invitation_audience($1)',[(await row(old.invitationId)).token_hash])).claimantProfileName,cleaned);
+  });
+  await t.test('join identity: unique names, reserved names and friend uniqueness',async()=>{
+    const H=(ch)=>ch.repeat(64), uuid=()=>crypto.randomUUID(), tok=()=>crypto.randomBytes(32).toString('hex');
+    const o1=pid(0x20), o2=pid(0x21), p1=pid(0x22), p2=pid(0x23), p3=pid(0x24), p4=pid(0x25);
+    await db.query("INSERT INTO public.profiles VALUES($1,'Naomi Owner'),($2,'Otto Owner'),($3,'Pat'),($4,'Pat'),($5,'Admin'),($6,$7)",[o1,o2,p1,p2,p3,p4,'\u200bPat\u202e '+'z'.repeat(60)]);
+    const call=(who,fn,args)=>actor(who,()=>db.query(`SELECT shared_expenses.${fn} AS v`,args)).then(r=>r.rows[0].v);
+    const g=uuid();
+    const ownerMember=(await call(o1,"create_context($1,'group','Names',$2,$3)",[g,uuid(),H('1')])).memberId;
+    const invite=(name,ctxId=g,who=o1,mid=uuid())=>call(who,'invite_member($1,$2,$3)',[{contextId:ctxId,memberId:mid,displayName:name},uuid(),H('2')]).then(()=>mid);
+    const rename=(mid,name,ctxId=g,who=o1)=>call(who,'rename_member($1,$2,$3)',[{contextId:ctxId,memberId:mid,displayName:name},uuid(),H('3')]);
+    const nameOf=(mid)=>db.query('SELECT display_name FROM shared_expenses.members WHERE member_id=$1',[mid]).then(r=>r.rows[0].display_name);
+    const rahul=await invite('Rahul');
+    for(const dup of ['rahul','RAHUL',' R a h u l ','Rahul.','R-a_h(u)l','R\u0430hul','\uff32ahul','Rah\u00fal','Ra\u200bhul','Ra\u202ehul'])
+      await assert.rejects(invite(dup),/member_name_taken/,JSON.stringify(dup));
+    await assert.rejects(invite('Naomi Owner'),/member_name_taken/,'the owner\'s own live name counts');
+    await assert.rejects(invite('naomi  owner'),/member_name_taken/);
+    for(const word of ['You','me','Myself','Owner','ADMIN','Support','Someone','PandaPay','Panda Pay','Pand\u0430 Pay','pandapay friend','Former member','FORMER-MEMBER','Unknown','Deleted'])
+      await assert.rejects(invite(word),/member_name_reserved/,word);
+    for(const nothing of ['...','!!','\u0085',' \u200b '])await assert.rejects(invite(nothing),/invalid_member_name/,JSON.stringify(nothing));
+    const meera=await invite('Meera');
+    // rename
+    await assert.rejects(rename(meera,'RAHUL'),/member_name_taken/);
+    await assert.rejects(rename(meera,'Admin'),/member_name_reserved/);
+    await assert.rejects(rename(meera,'...'),/invalid_member_name/);
+    assert.equal((await rename(meera,'MEERA')).displayName,'MEERA','case only');
+    assert.equal((await rename(meera,'M e e r a')).displayName,'M e e r a','spacing only');
+    assert.equal((await rename(meera,'Meera Two')).displayName,'Meera Two');
+    assert.equal(await nameOf(rahul),'Rahul');
+    // legacy duplicates are grandfathered: only a changed label is checked
+    const d1=uuid(), d2=uuid(), d3=await invite('Dana');
+    await db.query("INSERT INTO shared_expenses.members(context_id,member_id,role,state,display_name) VALUES($1,$2,'member','invited','Twin'),($1,$3,'member','invited','twin')",[g,d1,d2]);
+    assert.equal((await rename(d1,'TWIN')).status,'renamed','same key as its own current label');
+    assert.equal((await rename(d2,'Twin')).status,'renamed','its legacy twin does not block it');
+    await assert.rejects(rename(d3,'Twin'),/member_name_taken/,'but nobody else may take it');
+    // group-link placeholders get a numeric suffix, cleaned and reserved names fall back
+    const link=tok();
+    await call(o1,'create_group_link($1,$2,$3,$4)',[g,link,uuid(),H('4')]);
+    const claim=(who)=>call(who,'claim_invitation($1,$2,$3,$4,$5,$6)',[link,phoneHash('+9199'+who.slice(-6).replace(/\D/g,'1')),'0000',uuid(),H('5'),'none']);
+    const c1=await claim(p1), c2=await claim(p2), c3=await claim(p3), c4=await claim(p4);
+    assert.deepEqual([await nameOf(c1.memberId),await nameOf(c2.memberId)],['Pat','Pat (2)']);
+    assert.equal(await nameOf(c3.memberId),'PandaPay user','a reserved profile name falls back');
+    const long=await nameOf(c4.memberId);
+    assert.ok(Array.from(long).length<=40);assert.match(long,/^Pat z+/);assert.ok(!/[\u200b\u202e]/.test(long));
+    // friends: one direct split per friend name for a creator
+    const d=uuid(), friend=uuid();
+    await call(o2,"create_context($1,'direct','Anil',$2,$3)",[d,uuid(),H('6')]);
+    await call(o2,'invite_member($1,$2,$3)',[{contextId:d,memberId:friend,displayName:'Anil'},uuid(),H('7')]);
+    for(const dup of ['anil','ANIL ','An\u00efl']) {
+      const e=await call(o2,"create_context($1,'direct',$2,$3,$4)",[uuid(),dup,uuid(),H('8')]).then(()=>null,(x)=>x);
+      assert.equal(e?.message,'friend_name_taken',dup);assert.equal(e.detail,d,'the error points at the existing split');
+    }
+    await assert.rejects(call(o2,"create_context($1,'direct','You',$2,$3)",[uuid(),uuid(),H('9')]),/member_name_reserved/);
+    assert.equal((await call(o1,"create_context($1,'direct','Anil',$2,$3)",[uuid(),uuid(),H('a')])).status,'created','another creator may have an Anil');
+    const d2c=uuid(), friend2=uuid();
+    await call(o2,"create_context($1,'direct','Bela',$2,$3)",[d2c,uuid(),H('b')]);
+    await call(o2,'invite_member($1,$2,$3)',[{contextId:d2c,memberId:friend2,displayName:'Bela'},uuid(),H('c')]);
+    const taken=await rename(friend2,'anil',d2c,o2).then(()=>null,(x)=>x);
+    assert.equal(taken?.message,'friend_name_taken');assert.equal(taken.detail,d);
+    const d3c=uuid();
+    await call(o2,"create_context($1,'direct','Cora',$2,$3)",[d3c,uuid(),H('d')]);
+    const third=await invite('ANIL',d3c,o2,uuid()).then(()=>null,(x)=>x);
+    assert.equal(third?.message,'friend_name_taken','inviting into another direct split checks friends too');
+    assert.equal((await rename(friend2,'Bela B',d2c,o2)).status,'renamed');
+    assert.equal((await rename(friend,'ANIL',d,o2)).status,'renamed','renaming a friend to its own name is fine');
+    // vectors shared with Node
+    const vectors=require('../../contracts/shared_expenses/v1/label_key_vectors.json');
+    for(const v of vectors.labelKey)assert.equal((await db.query('SELECT shared_expenses._label_key($1) AS v',[v.input])).rows[0].v,v.key,'label key '+JSON.stringify(v.input));
+    for(const v of vectors.cleanLabel)assert.equal((await db.query('SELECT shared_expenses._clean_label($1) AS v',[v.input])).rows[0].v,v.clean,'clean '+JSON.stringify(v.input));
+    for(const v of vectors.labelKey)assert.equal(labelLib.labelKey(v.input),v.key);
+    for(const v of vectors.reserved)assert.equal((await db.query('SELECT shared_expenses._label_reserved(shared_expenses._label_key($1)) AS v',[v.input])).rows[0].v,v.reserved,'reserved '+JSON.stringify(v.input));
+    for(const v of vectors.reserved)assert.equal(labelLib.isReservedLabel(v.input),v.reserved);
+  });
+  await t.test('join identity review fixes: replay, caps, scoping, friends, cleaning, group-link audience',async()=>{
+    const H=(ch)=>ch.repeat(64), uuid=()=>crypto.randomUUID(), tok=()=>crypto.randomBytes(32).toString('hex');
+    const o=pid(0x30), o2=pid(0x31), c1=pid(0x32), c2=pid(0x33), c3=pid(0x34), c4=pid(0x35), fr=pid(0x36), stray=pid(0x38);
+    await db.query("INSERT INTO public.profiles VALUES($1,'Pia Owner'),($2,'Quin Owner'),($3,'Rita Claim'),($4,'Sita Claim'),($5,'Tara Claim'),($6,'Uma Claim'),($7,'Vik Friend'),($8,'Xan Stray')",[o,o2,c1,c2,c3,c4,fr,stray]);
+    const E={[c1]:'+917234500001',[c2]:'+917299900001',[c3]:'+917234500003',[c4]:'+917288800003'};
+    const call=(who,fn,args)=>actor(who,()=>db.query(`SELECT shared_expenses.${fn} AS v`,args)).then(r=>r.rows[0].v);
+    const row=(inv)=>db.query('SELECT * FROM shared_expenses.invitations WHERE invitation_id=$1',[inv]).then(r=>r.rows[0]);
+    const g=uuid(), link=tok(), g2=uuid(), link2=tok();
+    await call(o,"create_context($1,'group','Review trip',$2,$3)",[g,uuid(),H('1')]);
+    await call(o2,"create_context($1,'group','Other trip',$2,$3)",[g2,uuid(),H('2')]);
+    await call(o,'register_phone($1,NULL)',[phoneHash('+919100000001')]);
+    await call(o2,'register_phone($1,NULL)',[phoneHash('+919100000002')]);
+    await call(o,'create_group_link($1,$2,$3,$4)',[g,link,uuid(),H('3')]);
+    await call(o2,'create_group_link($1,$2,$3,$4)',[g2,link2,uuid(),H('4')]);
+    const claim=(who,share,suffix='0001',op=uuid(),token=link,h=H('5'))=>call(who,'claim_invitation($1,$2,$3,$4,$5,$6)',[token,E[who]?phoneHash(E[who]):null,suffix,op,h,share]).then(r=>({...r,op}));
+    const attach=(who,c,e164=E[who],op=c.op)=>{const sealed=encryptPhone(ring,c.invitationId,e164),shown=describePhone(e164);return call(who,'attach_claimant_phone($1,$2,$3,$4,$5,$6,$7,$8)',[c.invitationId,op,phoneHash(e164),shown.countryCode,shown.mask,sealed.enc,sealed.keyId,e164.slice(-4)]);};
+
+    // (2) a replay is recognisable and can never re-share; a changed choice is a conflict
+    const first=await claim(c1,null,'0001');
+    assert.equal(first.fresh,true);
+    const replay=await call(c1,'claim_invitation($1,$2,$3,$4,$5,$6)',[link,phoneHash(E[c1]),'0001',first.op,H('5'),null]);
+    assert.equal(replay.fresh,undefined,'the stored reply has no fresh marker');assert.equal(replay.invitationId,first.invitationId);
+    await assert.rejects(call(c1,'claim_invitation($1,$2,$3,$4,$5,$6)',[link,phoneHash(E[c1]),'0001',first.op,H('6'),null]),/operation_conflict/,'same operation, different request hash');
+    assert.equal((await attach(c1,first)).attached,true);
+    assert.equal((await attach(c1,first)).attached,false,'a replayed claim cannot attach twice');
+    const declined=await claim(c1,'declined','0001');
+    assert.equal((await attach(c1,first)).attached,false,'a stale claim cannot re-share after "ask without sharing"');
+    assert.equal((await row(first.invitationId)).phone_share,'declined');
+    const third=await claim(c1,null,'0001');
+    assert.equal((await attach(c1,first)).attached,false,'nor after a newer claim with a different operation');
+    assert.equal((await attach(c1,declined)).attached,false);
+    assert.equal((await attach(c1,third)).attached,true);
+
+    // group-link claims reach the owner's notifier: the audience resolves the LINK token to the caller's own request
+    const aud=await call(c1,'invitation_audience($1)',[link]);
+    assert.deepEqual(aud.owners,[o]);assert.equal(aud.contextId,g);assert.equal(aud.claimantName,'Rita Claim');
+    assert.ok(!JSON.stringify(aud).includes('72345'));assert.ok(Object.keys(aud).every((k)=>!/phone/i.test(k)||k==='claimantPhoneSuffix'));
+    await assert.rejects(call(c2,'invitation_audience($1)',[link]),/invitation_unavailable/,'a person who never claimed gets nothing');
+    await assert.rejects(call(c1,'invitation_audience($1)',[link2]),/invitation_unavailable/);
+
+    // (10) the caps are checked before an expired request is revived
+    const z=await claim(c2,null,'0001');
+    await db.query("UPDATE shared_expenses.invitations SET expires_at=clock_timestamp()-interval '1 hour' WHERE invitation_id=$1",[z.invitationId]);
+    await db.query("INSERT INTO shared_expenses.members(context_id,member_id,role,state,display_name) SELECT $1,gen_random_uuid(),'member','invited','live '||n FROM generate_series(1,20) n",[g]);
+    await db.query("INSERT INTO shared_expenses.invitations(invitation_id,context_id,member_id,issuer_profile_id,token_hash,claimed_profile_id,state,via_group_link,expires_at) SELECT gen_random_uuid(),$1,m.member_id,$2,encode(sha256(convert_to(m.member_id::text,'UTF8')),'hex'),gen_random_uuid(),'awaiting_owner',true,clock_timestamp()+interval '2 days' FROM shared_expenses.members m WHERE m.context_id=$1 AND m.display_name LIKE 'live %'",[g,o]);
+    await assert.rejects(claim(c2,null,'0001'),/join_requests_full/,'a full list blocks the revival');
+    assert.ok((await row(z.invitationId)).expires_at<new Date(),'and the request stays expired');
+    await db.query("DELETE FROM shared_expenses.invitations WHERE invitation_id IN (SELECT i.invitation_id FROM shared_expenses.invitations i JOIN shared_expenses.members m USING(context_id,member_id) WHERE m.display_name LIKE 'live %')");
+    await db.query("DELETE FROM shared_expenses.members WHERE display_name LIKE 'live %'");
+    const revived=await claim(c2,null,'0001');
+    assert.equal(revived.invitationId,z.invitationId);assert.ok((await row(z.invitationId)).expires_at>new Date());
+
+    // (9) look-alike full numbers spend the reveal budget; when it is spent the item is left out
+    const l3=await claim(c3,null,'0003');await attach(c3,l3);
+    const l4=await claim(c4,null,'0003');await attach(c4,l4);
+    await attach(c2,revived);
+    const lookalike=(await call(o,'list_join_requests()',[])).items.filter((i)=>i.claimantPhone.lookalike);
+    assert.ok(lookalike.length>=4,'same mask, different numbers');
+    await db.query("DELETE FROM shared_expenses.phone_reveals");
+    await db.query("INSERT INTO shared_expenses.phone_reveals(invitation_id,owner_profile_id,via) SELECT gen_random_uuid(),$1,'tap' FROM generate_series(1,5)",[o]);
+    const ids=lookalike.map((i)=>i.invitationId);
+    assert.deepEqual(await call(o,'list_join_requests_enc($1)',[ids]),[],'budget spent => nothing in full, no failure');
+    assert.ok((await call(o,'list_join_requests()',[])).items.filter((i)=>i.claimantPhone.lookalike).length>=4,'still marked look-alike');
+    await db.query("DELETE FROM shared_expenses.phone_reveals");
+    assert.equal((await call(o,'list_join_requests_enc($1)',[ids])).length,ids.length);
+    assert.equal((await call(o,'list_join_requests_enc($1)',[ids])).length,ids.length,'same hour, same requests: no second charge');
+    assert.equal((await db.query("SELECT count(*)::int n FROM shared_expenses.phone_reveals WHERE via='lookalike'")).rows[0].n,ids.length);
+    await db.query("DELETE FROM shared_expenses.phone_directory WHERE profile_id=$1",[o]);
+    await db.query("DELETE FROM shared_expenses.phone_reveals");
+    assert.deepEqual(await call(o,'list_join_requests_enc($1)',[ids]),[],'the owner needs a verified number for this too');
+    assert.equal((await call(o,'reveal_claimant_phone($1)',[l3.invitationId])).error,'owner_phone_required');
+    assert.equal((await call(o,'check_claimant_phone($1,$2)',[l3.invitationId,H('a')])).error,'owner_phone_required');
+    await call(o,'register_phone($1,NULL)',[phoneHash('+919100000001')]);
+
+    // (16) check-phone is audited and capped per owner per day
+    assert.equal((await call(o,'check_claimant_phone($1,$2)',[l3.invitationId,H('a')])).matches,false);
+    assert.equal((await db.query("SELECT count(*)::int n FROM shared_expenses.phone_reveals WHERE via='check' AND owner_profile_id=$1",[o])).rows[0].n,1);
+    await db.query("INSERT INTO shared_expenses.phone_reveals(invitation_id,owner_profile_id,via) SELECT $1,$2,'check' FROM generate_series(1,20)",[l3.invitationId,o]);
+    assert.equal((await call(o,'check_claimant_phone($1,$2)',[l3.invitationId,H('b')])).error,'check_rate_limited');
+    await db.query("DELETE FROM shared_expenses.phone_reveals");
+
+    // (15) once a request is resolved nothing is guessed about its number any more
+    await call(o,'respond_invitation($1,true,$2,$3)',[l3.invitationId,uuid(),H('7')]);
+    const resolved=(await call(o,'list_invitations($1,NULL)',[g])).items.find((i)=>i.invitationId===l3.invitationId).claimantPhone;
+    assert.equal(resolved.numberStatus,'unknown');assert.equal(resolved.lookalike,false);assert.deepEqual(resolved.duplicateOf,[]);assert.equal(resolved.mask,null);assert.equal(resolved.available,false);
+
+    // (14) the lazy purge touches only the reader's own splits, and never breaks a read-only read
+    const other=await claim(c3,null,'0003',uuid(),link2);await attach(c3,other);
+    await db.query("UPDATE shared_expenses.invitations SET expires_at=clock_timestamp()-interval '1 minute' WHERE invitation_id=$1",[other.invitationId]);
+    await call(o,'list_join_requests()',[]);
+    assert.ok((await row(other.invitationId)).claimant_phone_enc,'another owner\'s expired row is left alone by this owner\'s read');
+    await call(o2,'list_join_requests()',[]);
+    assert.equal((await row(other.invitationId)).claimant_phone_enc,null,'its own owner\'s read purges it');
+    const other2=await claim(c4,null,'0003',uuid(),link2);await attach(c4,other2);
+    await db.query("UPDATE shared_expenses.invitations SET expires_at=clock_timestamp()-interval '1 minute' WHERE invitation_id=$1",[other2.invitationId]);
+    assert.ok((await db.query('SELECT shared_expenses.purge_expired_claimant_phones() AS n')).rows[0].n>=1);
+    assert.equal((await row(other2.invitationId)).claimant_phone_enc,null);
+    const sentinel=new Error('rollback-read-only');
+    await assert.rejects(actor(o,async()=>{
+      await db.query('SET LOCAL transaction_read_only=on');
+      const listed=(await db.query('SELECT shared_expenses.list_join_requests() AS v')).rows[0].v;
+      assert.ok(Array.isArray(listed.items),'a read-only transaction still lists');
+      throw sentinel;
+    }),/rollback-read-only/);
+
+    // (5) Erasure is atomic and anonymizes the phone-reveal audit owner.
+    assert.equal((await db.query("SELECT count(*)::int n FROM pg_indexes WHERE schemaname='shared_expenses' AND indexname='shared_invitations_claimed_profile'")).rows[0].n,1);
+    await db.query("INSERT INTO shared_expenses.phone_reveals(invitation_id,owner_profile_id,via) VALUES($1,$2,'tap')",[l4.invitationId,stray]);
+    await db.query('DELETE FROM public.profiles WHERE id=$1',[stray]);
+    assert.equal((await db.query('SELECT count(*)::int n FROM shared_expenses.phone_reveals WHERE owner_profile_id IS NULL')).rows[0].n,1);
+    const broken=await claim(c4,null,'0003',uuid(),link);
+    await db.query("ALTER TABLE shared_expenses.invitations ADD CONSTRAINT scrub_boom CHECK(phone_share<>'none') NOT VALID");
+    await db.query('SAVEPOINT scrub_failure');
+    await assert.rejects(db.query('DELETE FROM public.profiles WHERE id=$1',[c4]), /scrub_boom/);
+    await db.query('ROLLBACK TO SAVEPOINT scrub_failure');
+    await db.query('RELEASE SAVEPOINT scrub_failure');
+    assert.equal((await db.query('SELECT count(*)::int n FROM public.profiles WHERE id=$1',[c4])).rows[0].n,1,'failed scrub cannot report account erasure complete');
+    await db.query('ALTER TABLE shared_expenses.invitations DROP CONSTRAINT scrub_boom');
+    await db.query('DELETE FROM public.profiles WHERE id=$1',[c4]);
+    assert.equal(broken.status,'awaiting_owner');
+
+    // (3) + (8) friends: only the creator is checked against their own list, a gone friend never blocks
+    const d1=uuid(), d1m=uuid(), d2=uuid(), d2m=uuid();
+    await call(o2,"create_context($1,'direct','Kiran',$2,$3)",[d1,uuid(),H('8')]);
+    await call(o2,'invite_member($1,$2,$3)',[{contextId:d1,memberId:d1m,profileId:fr,displayName:'Kiran'},uuid(),H('9')]);
+    await call(fr,'respond_membership($1,$2,$3,$4,$5)',[d1,d1m,true,uuid(),H('a')]);
+    await call(o2,"create_context($1,'direct','Lena',$2,$3)",[d2,uuid(),H('b')]);
+    await call(o2,'invite_member($1,$2,$3)',[{contextId:d2,memberId:d2m,displayName:'Lena'},uuid(),H('c')]);
+    const e=await call(o2,'rename_member($1,$2,$3)',[{contextId:d2,memberId:d2m,displayName:'kiran'},uuid(),H('d')]).then(()=>null,(x)=>x);
+    assert.equal(e?.message,'friend_name_taken');assert.equal(e.detail,d1,'the creator is pointed at their own split');
+    // the counterpart renaming THEIR OWN row is never checked against the creator's friends list
+    const selfRename=await call(fr,'rename_member($1,$2,$3)',[{contextId:d1,memberId:d1m,displayName:'Lena'},uuid(),H('e')]);
+    assert.equal(selfRename.displayName,'Lena');
+    // the creator's friend who left or was removed does not dead-end the name
+    const gone=uuid(), goneM=uuid();
+    await call(o2,"create_context($1,'direct','Mira',$2,$3)",[gone,uuid(),H('2')]);
+    await call(o2,'invite_member($1,$2,$3)',[{contextId:gone,memberId:goneM,displayName:'Mira'},uuid(),H('3')]);
+    const again=await call(o2,"create_context($1,'direct','mira',$2,$3)",[uuid(),uuid(),H('4')]).then(()=>null,(x)=>x);
+    assert.equal(again?.message,'friend_name_taken','while Mira is invited');
+    await call(o2,'remove_member($1,$2,$3,$4)',[gone,goneM,uuid(),H('5')]);
+    assert.equal((await call(o2,"create_context($1,'direct','mira',$2,$3)",[uuid(),uuid(),H('6')])).status,'created','after removal the name is free again');
+    // an invitation that expired unanswered also frees the name
+    const exp=uuid(), expM=uuid();
+    await call(o2,"create_context($1,'direct','Noor',$2,$3)",[exp,uuid(),H('7')]);
+    await call(o2,'invite_member($1,$2,$3)',[{contextId:exp,memberId:expM,displayName:'Noor'},uuid(),H('8')]);
+    await call(o2,'create_invitation($1,$2)',[{invitationId:uuid(),contextId:exp,memberId:expM,targetPhoneHash:null,tokenHash:tok()},H('9')]);
+    await db.query("UPDATE shared_expenses.invitations SET expires_at=clock_timestamp()-interval '1 day' WHERE context_id=$1",[exp]);
+    assert.equal((await call(o2,"create_context($1,'direct','noor',$2,$3)",[uuid(),uuid(),H('a')])).status,'created');
+    // a declined friend does not use up the direct split's two seats
+    const seat=uuid(), seatM=uuid(), seatM2=uuid();
+    await call(o2,"create_context($1,'direct','Omar',$2,$3)",[seat,uuid(),H('b')]);
+    await call(o2,'invite_member($1,$2,$3)',[{contextId:seat,memberId:seatM,displayName:'Omar'},uuid(),H('c')]);
+    await call(o2,'remove_member($1,$2,$3,$4)',[seat,seatM,uuid(),H('d')]);
+    assert.equal((await call(o2,'invite_member($1,$2,$3)',[{contextId:seat,memberId:seatM2,displayName:'Omar B'},uuid(),H('e')])).status,'invited');
+
+    // (13) names that reach other people are cleaned wherever they come from
+    const dirty='Bad‮ ​Trip';
+    const named=uuid();
+    await call(o2,"create_context($1,'group',$2,$3,$4)",[named,dirty+'\n'+'y'.repeat(100),uuid(),H('f')]).catch((x)=>assert.fail(x.message));
+    const storedName=(await db.query('SELECT name FROM shared_expenses.contexts WHERE context_id=$1',[named])).rows[0].name;
+    assert.ok(!/[‮​\n]/.test(storedName));assert.ok(Array.from(storedName).length<=120);assert.match(storedName,/^Bad Trip y+/);
+    await db.query("UPDATE shared_expenses.contexts SET name=$2 WHERE context_id=$1",[named,'Legacy‮​ name']);
+    assert.equal((await db.query("SELECT shared_expenses._context_label('group','Legacy‮​ name',$1,$1,$2) AS v",[o2,named])).rows[0].v,'Legacy name','stored legacy names are cleaned on the way out');
+    assert.equal((await db.query("SELECT shared_expenses._member_label($1,NULL) AS v",['Eve‮l​'])).rows[0].v,'Evel');
+    await db.query("UPDATE public.profiles SET display_name=$2 WHERE id=$1",[o2,'Quin‮​ Owner']);
+    const pv=await call(c3,'preview_invitation($1)',[link2]);
+    assert.equal(pv.ownerName,'Quin Owner');
+  });
 });

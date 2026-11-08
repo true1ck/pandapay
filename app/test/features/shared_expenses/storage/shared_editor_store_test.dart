@@ -22,7 +22,9 @@ void main() {
   );
   setUp(() {
     folder = Directory.systemTemp.createTempSync('split-submit-');
-    db = AppDatabase.openUnencryptedFileForTesting('${folder.path}/data.sqlite');
+    db = AppDatabase.openUnencryptedFileForTesting(
+      '${folder.path}/data.sqlite',
+    );
     store = SharedExpensesStore(db, namespace: f.accountA);
   });
   tearDown(() {
@@ -39,7 +41,9 @@ void main() {
         receipt: receipt,
       );
       db.close();
-      db = AppDatabase.openUnencryptedFileForTesting('${folder.path}/data.sqlite');
+      db = AppDatabase.openUnencryptedFileForTesting(
+        '${folder.path}/data.sqlite',
+      );
       store = SharedExpensesStore(db, namespace: f.accountA);
       expect(
         store.operation(f.op2)!.command.canonicalJson,

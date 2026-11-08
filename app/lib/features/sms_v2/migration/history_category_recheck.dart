@@ -104,11 +104,13 @@ class HistoryCategoryRecheck {
   // A changed bundle or newly imported event set creates a new explicit job.
   // Runtime downloads do not call this operation.
   Set<String> _pendingMoneyEvents() => {
+    // json_extract reads the id inside SQLite; decoding every pending payload
+    // in Dart for each chunk of 25 events was the larger share of this call.
     for (final row in db.select(
-      "SELECT payload FROM v2_outbox WHERE namespace=? AND kind='ledger' AND coalesce(json_extract(payload,'\$._categoryOnly'),0)!=1",
+      "SELECT json_extract(payload,'\$.eventId') AS event_id FROM v2_outbox WHERE namespace=? AND kind='ledger' AND coalesce(json_extract(payload,'\$._categoryOnly'),0)!=1",
       [namespace],
     ))
-      (jsonDecode(row['payload'] as String) as Map)['eventId'] as String,
+      row['event_id'] as String,
   };
   late final _periodEvents = onlyEventIds != null
       ? {
@@ -139,7 +141,7 @@ class HistoryCategoryRecheck {
       'personalRules': personal.userRules.map((rule) => rule.toJson()).toList(),
       'confirmedHistory': personal.confirmedHistory,
       'userDecisions': {
-        for (final entry in _ledger.categoryDecisions().entries)
+        for (final entry in _ledger.categoryDecisions().entries) // perf-ok: once per run, not per chunk
           if (entry.value.source == CategorySource.user)
             entry.key: entry.value.slug,
       },
@@ -280,6 +282,34 @@ class HistoryCategoryRecheck {
         .any((e) => pending.contains(e.eventId));
   }
 
+  /// Display transactions of the given events, grouped by event id, read with a
+  /// single scan per 400 events.
+  Map<String, List<_TransactionRow>> _transactionRowsByEvent(
+    Iterable<String> eventIds,
+  ) {
+    final ids = eventIds.toList();
+    final result = <String, List<_TransactionRow>>{};
+    for (var start = 0; start < ids.length; start += 400) {
+      final group = ids.sublist(start, (start + 400).clamp(0, ids.length));
+      for (final row in db.select(
+        "SELECT id,payload,json_extract(payload,'\$.event_id') AS event_id,"
+        "json_extract(payload,'\$.user_category_id') IS NOT NULL AS custom "
+        "FROM financial_entities WHERE namespace=? AND entity='transactions' "
+        "AND json_extract(payload,'\$.event_id') IN (${List.filled(group.length, '?').join(',')})",
+        [namespace, ...group],
+      )) {
+        (result[row['event_id'] as String] ??= []).add(
+          _TransactionRow(
+            row['id'],
+            row['payload'] as String,
+            (row['custom'] as int) == 1,
+          ),
+        );
+      }
+    }
+    return result;
+  }
+
   (int, int) _apply(Set<String> targetIds) {
     final affected = <String, Event>{
       for (final id in targetIds) id: ?_events.get(id),
@@ -306,27 +336,27 @@ class HistoryCategoryRecheck {
         instrument.instrumentId: instrument,
     };
     final instrumentIds = <String, String>{};
-    for (final id in facts.keys) {
-      final rows = db.select(
-        'SELECT instrument_id FROM v2_facts WHERE namespace=? AND fact_id=?',
-        [namespace, id],
-      );
-      if (rows.firstOrNull?['instrument_id'] case final String instrument) {
-        instrumentIds[id] = instrument;
+    final factKeys = facts.keys.toList();
+    for (var start = 0; start < factKeys.length; start += 400) {
+      final group = factKeys.skip(start).take(400).toList();
+      for (final row in db.select(
+        'SELECT fact_id,instrument_id FROM v2_facts WHERE namespace=? AND instrument_id IS NOT NULL '
+        'AND fact_id IN (${List.filled(group.length, '?').join(',')})',
+        [namespace, ...group],
+      )) {
+        instrumentIds[row['fact_id'] as String] = row['instrument_id'] as String;
       }
     }
     final before = _ledger.categoryDecisions(eventIds: affected.keys.toSet());
     // Custom user categories have no slug in the frozen ledger contract.
     // Preserve both the display choice and its existing ledger attribution.
-    final customCategories = <String>{};
-    for (final id in affected.keys) {
-      if (db.select(
-        "SELECT 1 FROM financial_entities WHERE namespace=? AND entity='transactions' AND json_extract(payload,'\$.event_id')=? AND json_extract(payload,'\$.user_category_id') IS NOT NULL LIMIT 1",
-        [namespace, id],
-      ).isNotEmpty) {
-        customCategories.add(id);
-      }
-    }
+    // One table scan for the whole chunk (there is no index on the JSON
+    // event id): per-event lookups made this pass quadratic on the UI thread.
+    final transactionRows = _transactionRowsByEvent(affected.keys);
+    final customCategories = <String>{
+      for (final entry in transactionRows.entries)
+        if (entry.value.any((row) => row.hasCustomCategory)) entry.key,
+    };
     final locked = Map<String, CategoryDecision>.of(before)
       ..removeWhere(
         (id, decision) =>
@@ -383,11 +413,17 @@ class HistoryCategoryRecheck {
         .map((entry) => entry.key)
         .toSet();
     // A category pass may never change money, counts, dates or instrument legs.
+    final storedRows = _ledger.forEvents(snapshot.events.map((e) => e.eventId));
+    final projectedRows = <String, List<LedgerEntry>>{};
+    for (final entry in snapshot.entries) {
+      (projectedRows[entry.eventId] ??= []).add(entry);
+    }
     for (final event in snapshot.events) {
-      final old = _ledger.forEvent(event.eventId);
-      final updated = snapshot.entries
-          .where((entry) => entry.eventId == event.eventId)
-          .toList();
+      // Same order as LedgerStore.forEvent (entry id), which the comparison
+      // below has always used.
+      final old = [...?storedRows[event.eventId]]
+        ..sort((a, b) => a.entryId.compareTo(b.entryId));
+      final updated = projectedRows[event.eventId] ?? const <LedgerEntry>[];
       Map<String, Object?> money(LedgerEntry row) => Map.of(row.toJson())
         ..remove('category')
         ..remove('categorySource');
@@ -412,11 +448,8 @@ class HistoryCategoryRecheck {
         if (category == null) continue;
         // Change only automatic display categorization. Preserve all other
         // fields, including a pending deletion and corrected amounts/merchants.
-        for (final row in db.select(
-          "SELECT id,payload FROM financial_entities WHERE namespace=? AND entity='transactions' AND json_extract(payload,'\$.event_id')=?",
-          [namespace, event.eventId],
-        )) {
-          final payload = (jsonDecode(row['payload'] as String) as Map)
+        for (final row in transactionRows[event.eventId] ?? const []) {
+          final payload = (jsonDecode(row.payload) as Map)
               .cast<String, Object?>();
           payload['category_id'] = TaxonomyRegistry.v1.categoryIdForSlug(
             category.slug,
@@ -427,7 +460,7 @@ class HistoryCategoryRecheck {
               ?.displayName;
           db.execute(
             "UPDATE financial_entities SET payload=? WHERE namespace=? AND entity='transactions' AND id=?",
-            [jsonEncode(payload), namespace, row['id']],
+            [jsonEncode(payload), namespace, row.id],
           );
         }
       }
@@ -456,4 +489,11 @@ class HistoryCategoryRecheck {
           .length,
     );
   }
+}
+
+class _TransactionRow {
+  const _TransactionRow(this.id, this.payload, this.hasCustomCategory);
+  final Object? id;
+  final String payload;
+  final bool hasCustomCategory;
 }

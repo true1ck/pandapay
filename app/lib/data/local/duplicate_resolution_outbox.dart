@@ -212,7 +212,7 @@ class DuplicateResolutionOutboxRepository {
       }
       // Yield between entries so a reconnect/resume flush cannot monopolise
       // the Dart isolate while it drains a backlog.
-      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero); // perf-ok: bounded 20-row outbox batch
     }
     return sent;
   }

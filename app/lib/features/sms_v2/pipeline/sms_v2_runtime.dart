@@ -13,15 +13,14 @@ import 'package:pandapay_domain/sms_v2.dart';
 import 'package:pandapay_domain/pandapay_domain.dart' show CardProduct;
 
 import '../../../data/local/financial_store.dart';
-import '../../../data/local/sms_import_store.dart';
 import '../../../data/user_cards_repository.dart';
 import '../instruments/instrument_seeder.dart';
+import 'ai_withdrawal.dart';
 import '../storage/instrument_store.dart';
 import '../ledger/card_state_adapter.dart';
 import '../../../data/local/sms_intake_repository.dart';
 import '../../sms_import/sms_background_queue.dart';
 import '../../sms_import/sms_text_hint.dart';
-import '../category/category_snapshot.dart';
 import '../storage/bundle_store.dart';
 import '../storage/outbox_store.dart';
 import '../storage/schema.dart';
@@ -37,9 +36,10 @@ import '../similar/fact_keys.dart';
 import '../sync/requeue_for_upload.dart';
 import '../sync/facts_upload.dart';
 import '../sync/sync_pull.dart';
+import 'capture_executor.dart';
+import 'capture_worker.dart';
 import 'receipt_review.dart';
 import 'rules_refresh.dart';
-import 'sms_v2_pipeline.dart';
 
 /// One foreground account owner. Capture is available offline, and the
 /// lifecycle provider admits network work at start, resume and foreground ticks.
@@ -61,6 +61,7 @@ class SmsV2Runtime {
     this.cardRepository,
 
     this.categoryIdBySlug = const {},
+    this.captureExecutor,
     DateTime Function()? clock,
   }) : clock = clock ?? DateTime.now {
     SmsV2Schema.ensure(financial.database.db);
@@ -84,6 +85,7 @@ class SmsV2Runtime {
   final Future<RuleBundle?> Function(String) verify;
   final Future<String> Function() loadShippedBundle;
   final bool Function() accountIsCurrent;
+  final CaptureExecutor? captureExecutor;
   final Map<String, String> categoryIdBySlug;
   final DateTime Function() clock;
   late final PersonalRuleStore _personalRules = PersonalRuleStore(_state);
@@ -163,10 +165,32 @@ class SmsV2Runtime {
   Future<RuleBundle> activeBundle() async =>
       ProvisionalStore(_state).overlay(await _loadBundle()).bundle;
 
+  static int _captureSessions = 0;
+
+  /// In-memory databases (every test) and the fallback run capture
+  /// synchronously on this isolate; a file-backed database captures in the
+  /// shared worker isolate with its own connection (R1, R9).
+  late final CaptureExecutor _executor = captureExecutor ?? _defaultExecutor();
+
+  CaptureExecutor _defaultExecutor() {
+    final inProcess = InProcessCaptureExecutor(
+      financial: financial,
+      namespace: namespace,
+      engine: _engine,
+      personalRules: _personalRules,
+    );
+    if (financial.database.filePath == null) return inProcess;
+    return FallbackCaptureExecutor(
+      primary: PooledCaptureExecutor(financial.database),
+      fallback: inProcess,
+    );
+  }
+
+  /// Captures [messages] in chunks of 200. Returns normally only when every
+  /// chunk was captured, processed and acknowledged; any error leaves the
+  /// failed chunk's messages pending in `sms_intake` for the next sync.
   Future<void> capture(List<QueuedSms> messages, {bool? backfill}) async {
     final shared = await _loadBundle();
-    final overlay = ProvisionalStore(_state).overlay(shared);
-    final bundle = overlay.bundle;
     final instrumentStore = InstrumentStore(
       financial.database.db,
       namespace: namespace,
@@ -179,48 +203,39 @@ class SmsV2Runtime {
       issuerSlugOf: cardIssuerSlugFromCatalogue(catalogue),
       bankAccounts: const [],
     );
+    final session = ++_captureSessions;
     for (var start = 0; start < messages.length; start += 200) {
       _checkAccount();
       final chunk = messages.sublist(
         start,
         (start + 200).clamp(0, messages.length),
       );
-      final categories = CategorySnapshot.load(
-        financial.database,
-        namespace: namespace,
-        aliases: bundle.merchantAliases,
+      final historyBefore = clock().subtract(const Duration(days: 1));
+      final groups = [
+        for (final history in [true, false])
+          CaptureGroup(
+            backfill: history,
+            messages: [
+              for (final message in chunk)
+                if ((backfill ?? message.receivedAt.isBefore(historyBefore)) ==
+                    history)
+                  message,
+            ],
+          ),
+      ];
+      await _executor.run(
+        CaptureChunkRequest(
+          namespace: namespace,
+          appVersion: appVersion,
+          categoryIdBySlug: categoryIdBySlug,
+          session: session,
+          shared: shared,
+          groups: groups,
+          ownerNames: ownerNames(),
+          onCommitted: (entities) =>
+              financial.notifyExternalChanges(namespace, entities),
+        ),
       );
-      final pipeline = SmsV2Pipeline(
-        financial: financial,
-        namespace: namespace,
-        bundle: bundle,
-        appVersion: appVersion,
-        userRules: categories.userRules,
-        confirmedHistory: categories.confirmedHistory,
-        categoryIdBySlug: categoryIdBySlug,
-        engine: _engine,
-        revision: _revision(overlay.revision),
-        ownerNames: ownerNames(),
-      );
-      for (final history in [true, false]) {
-        final selected = chunk
-            .where(
-              (message) =>
-                  (backfill ??
-                      message.receivedAt.isBefore(
-                        clock().subtract(const Duration(days: 1)),
-                      )) ==
-                  history,
-            )
-            .toList();
-        if (selected.isEmpty) continue;
-        SmsImportStore(
-          financial,
-          v2Pipeline: pipeline,
-          v2Backfill: history,
-        ).captureBatch(namespace, selected);
-      }
-      await Future<void>.delayed(Duration.zero);
     }
   }
 
@@ -364,9 +379,20 @@ class SmsV2Runtime {
     }
     _checkAccount();
     final intake = SmsIntakeRepository(financial.database);
+    Set<String>? previousBatch;
     while (accountIsCurrent()) {
       final pending = intake.pending(namespace, limit: 200);
       if (pending.isEmpty) break;
+      // A pass that leaves the very same messages pending can never finish
+      // them; stop and retry on the next sync instead of spinning on the UI
+      // thread.
+      final batch = {for (final entry in pending) entry.id};
+      if (previousBatch != null &&
+          previousBatch.length == batch.length &&
+          previousBatch.containsAll(batch)) {
+        break;
+      }
+      previousBatch = batch;
       for (final entry in pending) {
         if (classifySmsTriage(entry.message.sender, entry.message.body).kind ==
             SmsTriageKind.sensitive) {
@@ -491,6 +517,7 @@ class SmsV2Runtime {
         await _refreshRules();
       }
     });
+    await guarded(_withdrawRejectedAiReadings);
     final active = ProvisionalStore(_state).overlay(_bundle!);
     final previousRevision = _state.get('pipeline:revision');
     if (previousRevision != _revision(active.revision)) {
@@ -528,6 +555,32 @@ class SmsV2Runtime {
       }
     }
     return read;
+  }
+
+  /// Once the server says a layout's AI rule was rejected (or could not be
+  /// made), what that rule read leaves the ledger and the messages are read
+  /// again without it, so they return to a plain Needs review item.
+  Future<void> _withdrawRejectedAiReadings() async {
+    final withdrawal = AiWithdrawal(
+      financial: financial,
+      namespace: namespace,
+      bundle: _bundle!,
+      categoryIdBySlug: categoryIdBySlug,
+    );
+    final sources = <String>[
+      for (final hash in withdrawal.rejectedTemplates())
+        ...withdrawal.sourcesRead(hash),
+    ];
+    if (sources.isEmpty) return;
+    _checkAccount();
+    withdrawal.withdraw(sources);
+    final intake = SmsIntakeRepository(financial.database);
+    final messages = <QueuedSms>[
+      for (final source in sources)
+        if (intake.capturedById(namespace, source) case final entry?)
+          entry.message,
+    ];
+    if (messages.isNotEmpty) await capture(messages, backfill: true);
   }
 
   /// A new shared rule set can categorise shops that earlier sat in "Other".

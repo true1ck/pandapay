@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart' show compute, debugPrint;
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import 'local/response_cache.dart';
@@ -66,6 +66,9 @@ class CatalogueFeed {
 
   int get skippedCards => skippedCardIds.length;
 }
+
+/// Top-level so it can run in a `compute` isolate.
+Object? decodeCatalogueJson(String raw) => jsonDecode(raw);
 
 /// A v2 response: the parsed feed and the raw body to cache.
 class CatalogueV2Fetch {
@@ -353,7 +356,8 @@ class CatalogueLoader {
     try {
       final raw = await store.get(key);
       if (raw == null) return null;
-      final decoded = jsonDecode(raw);
+      // The cached catalogue is large; decode it off the UI thread.
+      final decoded = await compute(decodeCatalogueJson, raw);
       // A body under the v2 key must say so: an old v1 body is never read
       // as v2.
       if (schema == 2 && !(decoded is Map && decoded['schema'] == 2)) {

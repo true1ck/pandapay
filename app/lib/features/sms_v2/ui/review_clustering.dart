@@ -2,6 +2,7 @@ import 'package:intl/intl.dart';
 import 'package:pandapay_domain/sms_v2_template.dart';
 
 import '../providers/data_providers.dart';
+import '../../../data/cached_regexp.dart';
 
 /// Groups Needs review items into bundles of "the same thing", sorts them
 /// into content types for the filter chips, and works out what a bundle may
@@ -40,35 +41,35 @@ enum ReviewContent {
   bool get summable => this == credit || this == debit;
 }
 
-final _declined = RegExp(
+final _declined = cachedRegExp(
   r'\b(declined|failed|failure|unsuccessful|not successful|rejected|could not be processed|insufficient (?:balance|funds))\b',
   caseSensitive: false,
 );
-final _security = RegExp(
+final _security = cachedRegExp(
   r'\botp\b|verification code|one[- ]?time password|do not share|never share|\bcvv\b|login (?:alert|attempt)|password',
   caseSensitive: false,
 );
-final _promotion = RegExp(
+final _promotion = cachedRegExp(
   r'pre-?approved|\boffer\b|apply now|limited time|t&c|terms apply|click here|congratulations|\bwin\b|\bcoupon\b',
   caseSensitive: false,
 );
-final _mandate = RegExp(
+final _mandate = cachedRegExp(
   r'\bmandate\b|auto-?pay|auto[- ]?debit|standing instruction|\bnach\b|e-?mandate',
   caseSensitive: false,
 );
-final _bill = RegExp(
+final _bill = cachedRegExp(
   r'\bbill\b|statement|minimum (?:amount )?due|total (?:amount )?due|due date|payment due|outstanding',
   caseSensitive: false,
 );
-final _credit = RegExp(
+final _credit = cachedRegExp(
   r'\b(credited|received|refund(?:ed)?|cashback|deposited|reversed|reversal)\b',
   caseSensitive: false,
 );
-final _debit = RegExp(
+final _debit = cachedRegExp(
   r'\b(debited|spent|purchase|paid|withdrawn|deducted|charged|txn of|transaction of|used for|sent to|transferred|payment of)\b|\bsent\s+(?:rs\.?|inr|₹)',
   caseSensitive: false,
 );
-final _balance = RegExp(
+final _balance = cachedRegExp(
   r'\b(?:avl|available|a/c|account) ?(?:bal|balance)\b|\bbalance\b',
   caseSensitive: false,
 );
@@ -154,41 +155,41 @@ class ReviewBundle {
 /// (`AX-HDFCBK-S` becomes `HDFCBK`).
 String cleanReviewSender(String sender) {
   var s = sender.trim();
-  s = s.replaceFirst(RegExp(r'^[A-Za-z]{2}-'), '');
-  s = s.replaceFirst(RegExp(r'-[A-Za-z]$'), '');
+  s = s.replaceFirst(cachedRegExp(r'^[A-Za-z]{2}-'), '');
+  s = s.replaceFirst(cachedRegExp(r'-[A-Za-z]$'), '');
   return s.trim();
 }
 
 final _providers = <({String name, RegExp sender, RegExp body})>[
   (
     name: 'Amazon Pay Later (Axio)',
-    sender: RegExp(r'axio', caseSensitive: false),
-    body: RegExp(r'\baxio\b|amazon\s+pay\s+later', caseSensitive: false),
+    sender: cachedRegExp(r'axio', caseSensitive: false),
+    body: cachedRegExp(r'\baxio\b|amazon\s+pay\s+later', caseSensitive: false),
   ),
   (
     name: 'LazyPay',
-    sender: RegExp(r'lazyp', caseSensitive: false),
-    body: RegExp(r'\blazypay\b', caseSensitive: false),
+    sender: cachedRegExp(r'lazyp', caseSensitive: false),
+    body: cachedRegExp(r'\blazypay\b', caseSensitive: false),
   ),
   (
     name: 'Simpl',
-    sender: RegExp(r'^simpl[a-z]?$', caseSensitive: false),
-    body: RegExp(r'\bsimpl\b', caseSensitive: false),
+    sender: cachedRegExp(r'^simpl[a-z]?$', caseSensitive: false),
+    body: cachedRegExp(r'\bsimpl\b', caseSensitive: false),
   ),
   (
     name: 'Flipkart Pay Later',
-    sender: RegExp(r'^(fkrt|flipkt|flipkart)', caseSensitive: false),
-    body: RegExp(r'flipkart\s+pay\s+later', caseSensitive: false),
+    sender: cachedRegExp(r'^(fkrt|flipkt|flipkart)', caseSensitive: false),
+    body: cachedRegExp(r'flipkart\s+pay\s+later', caseSensitive: false),
   ),
   (
     name: 'PostPe',
-    sender: RegExp(r'postpe', caseSensitive: false),
-    body: RegExp(r'\bpostpe\b', caseSensitive: false),
+    sender: cachedRegExp(r'postpe', caseSensitive: false),
+    body: cachedRegExp(r'\bpostpe\b', caseSensitive: false),
   ),
   (
     name: 'ZestMoney',
-    sender: RegExp(r'zestm', caseSensitive: false),
-    body: RegExp(r'\bzestmoney\b', caseSensitive: false),
+    sender: cachedRegExp(r'zestm', caseSensitive: false),
+    body: cachedRegExp(r'\bzestmoney\b', caseSensitive: false),
   ),
 ];
 
@@ -210,7 +211,7 @@ String? payLaterProviderOf(String sender, String body) {
   return null;
 }
 
-final _amount = RegExp(
+final _amount = cachedRegExp(
   r'(?:₹|\brs\.?|\binr)\s*([\d,]+(?:\.\d{1,2})?)(?!\d)',
   caseSensitive: false,
 );
@@ -225,7 +226,7 @@ int? reviewItemAmountMinor(LocalReviewItem item) {
   final raw = match?.group(1)?.replaceAll(',', '');
   final m = raw == null
       ? null
-      : RegExp(r'^(\d+)(?:\.(\d{1,2}))?$').firstMatch(raw);
+      : cachedRegExp(r'^(\d+)(?:\.(\d{1,2}))?$').firstMatch(raw);
   if (m == null) return null;
   final paise =
       int.parse(m[1]!) * 100 + int.parse((m[2] ?? '').padRight(2, '0'));

@@ -4,6 +4,7 @@ import 'package:pandapay_domain/pandapay_domain.dart'
     show Money, buildUpiPayUri;
 import 'package:uuid/uuid.dart';
 import '../../../app/design/app_theme.dart';
+import '../../../app/design/bamboo_components.dart';
 import '../../../data/upi_payment_service.dart';
 import '../composer/shared_amount_input.dart';
 import '../composer/shared_editor.dart';
@@ -37,10 +38,8 @@ class SharedSettleSheet extends StatefulWidget {
     String? initialReceiverId,
     Money? initialAmount,
     UpiPaymentService? upi,
-  }) => showModalBottomSheet<void>(
+  }) => showBambooSheet<void>(
     context: context,
-    isScrollControlled: true,
-    backgroundColor: BambooInk.paper,
     builder: (_) => SharedSettleSheet(
       runtime: runtime,
       contextId: contextId,
@@ -77,11 +76,26 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
     if (widget.initialAmount != null) {
       _amount.text = sharedRupeesText(widget.initialAmount!);
     }
+    _amount.addListener(_onFieldChanged);
+    _reference.addListener(_onFieldChanged);
+    _vpa.addListener(_onFieldChanged);
     _load();
+  }
+
+  void _onFieldChanged() {
+    if (_error != null || _upiNotice != null) {
+      setState(() {
+        _error = null;
+        _upiNotice = null;
+      });
+    }
   }
 
   @override
   void dispose() {
+    _amount.removeListener(_onFieldChanged);
+    _reference.removeListener(_onFieldChanged);
+    _vpa.removeListener(_onFieldChanged);
     _amount.dispose();
     _reference.dispose();
     _vpa.dispose();
@@ -139,8 +153,12 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
   Future<void> _openUpi({bool confirmed = false}) async {
     final service = widget.upi;
     if (service == null || _upiBusy || _sealed || _saving) return;
+    final rawAmount = _amount.text
+        .replaceAll(',', '')
+        .replaceAll('₹', '')
+        .replaceAll(' ', '');
     final amount = SharedDecimalInput.parse(
-      _amount.text,
+      rawAmount,
       allowZero: false,
     ).units;
     final vpa = _vpa.text.trim();
@@ -258,8 +276,12 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
       }
       return;
     }
+    final rawAmount = _amount.text
+        .replaceAll(',', '')
+        .replaceAll('₹', '')
+        .replaceAll(' ', '');
     final amount = SharedDecimalInput.parse(
-      _amount.text,
+      rawAmount,
       allowZero: false,
     ).units;
     final reference = _reference.text.trim();
@@ -450,8 +472,27 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
                         ('bank', 'Bank'),
                       ])
                         ChoiceChip(
-                          label: Text(method.$2, style: BambooFonts.ui(13)),
+                          label: Text(
+                            method.$2,
+                            style: BambooFonts.ui(
+                              13,
+                              weight: FontWeight.w600,
+                              color: _method == method.$1
+                                  ? BambooInk.onSlate
+                                  : BambooInk.ink900,
+                            ),
+                          ),
                           selected: _method == method.$1,
+                          selectedColor: BambooInk.slate,
+                          checkmarkColor: BambooInk.lime,
+                          side: BorderSide(
+                            color: _method == method.$1
+                                ? BambooInk.slate
+                                : BambooInk.hairlineOnPaper,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                           onSelected: _sealed || _saving
                               ? null
                               : (_) => setState(() => _method = method.$1),
@@ -474,7 +515,8 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
                         hintText: 'name@bank',
                       ),
                     ),
-                    TextButton.icon(
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
                       onPressed: _upiBusy || _sealed || _saving
                           ? null
                           : _openUpi,
@@ -485,7 +527,19 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
                             : _upiOpened
                             ? 'Open UPI app again'
                             : 'Pay with UPI app',
-                        style: BambooFonts.ui(13),
+                        style: BambooFonts.ui(
+                          14,
+                          weight: FontWeight.w600,
+                          color: BambooInk.ink900,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: BambooInk.ink900,
+                        side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        minimumSize: const Size.fromHeight(48),
                       ),
                     ),
                     if (_upiConfirmAgain) ...[
@@ -549,8 +603,9 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
                       labelText: 'Payment reference (optional)',
                     ),
                   ),
-                  TextButton(
-                    onPressed: _sealed || _saving
+                  const SizedBox(height: 12),
+                  InkWell(
+                    onTap: _sealed || _saving
                         ? null
                         : () async {
                             final date = await showDatePicker(
@@ -563,14 +618,22 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
                               setState(() => _paidOn = date);
                             }
                           },
-                    child: Text(
-                      'Paid on ${DateFormat.yMMMd().format(_paidOn)}',
-                      style: BambooFonts.ui(13),
+                    borderRadius: BorderRadius.circular(12),
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Payment date',
+                        suffixIcon: Icon(Icons.calendar_today_rounded, size: 18),
+                      ),
+                      child: Text(
+                        'Paid on ${DateFormat.yMMMd().format(_paidOn)}',
+                        style: BambooFonts.ui(14),
+                      ),
                     ),
                   ),
                   if (_sealed)
                     SharedNotice(widget.runtime.operationStatus(_operationId)),
                   const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   FilledButton(
                     style: sharedPrimaryButtonStyle(),
                     onPressed: !enabled || _saving ? null : _save,
@@ -580,7 +643,13 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
                           : _sealed
                           ? 'Check status'
                           : 'Record payment',
-                      style: BambooFonts.ui(14, weight: FontWeight.w600),
+                      style: BambooFonts.ui(
+                        15,
+                        weight: FontWeight.w600,
+                        color: (!enabled || _saving)
+                            ? BambooInk.lime.withValues(alpha: 0.5)
+                            : BambooInk.lime,
+                      ),
                     ),
                   ),
                 ],

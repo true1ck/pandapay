@@ -122,6 +122,11 @@ module.exports = {
   androidPackageId: process.env.ANDROID_PACKAGE_ID || 'app.pandapay.pandapay',
   // Push about pending split items. On by default; set the variable to
   // 'false' to switch it off (its own kill switch, separate from the feature).
+  // Storing and revealing a claimant's phone number for join requests. OFF by default: when off
+  // nothing is stored, revealed or shown and the API behaves as before. Key ring for the encryption:
+  // {"current":"k1","keys":{"k1":"<base64 of 32 random bytes>"}}, never shared with other secrets.
+  sharedExpensePhoneSharingEnabled: process.env.SHARED_EXPENSE_PHONE_SHARING_ENABLED === 'true',
+  sharedExpensePhoneEncKeys: process.env.SHARED_EXPENSE_PHONE_ENC_KEYS || null,
   sharedExpenseNotificationsEnabled: process.env.SHARED_EXPENSE_NOTIFICATIONS_ENABLED !== 'false',
   referralIdentityHmacKey: process.env.REFERRAL_IDENTITY_HMAC_KEY || null,
   referralIdentityHmacKeyVersion: process.env.REFERRAL_IDENTITY_HMAC_KEY_VERSION || 'v1',

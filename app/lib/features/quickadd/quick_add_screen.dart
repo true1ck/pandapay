@@ -3010,6 +3010,31 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
           // --- Amount + entry kind (identical to Quick Add) ---
           _buildAmountHeader(),
 
+          if (ref.watch(sharedExpensesEnabledProvider) &&
+              !_sharing &&
+              _entryKind == TxnEntryKind.spend)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                icon: const Icon(Icons.people_outline_rounded),
+                label: const Text('Split with people'),
+                onPressed: () {
+                  setState(() => _sharing = true);
+                  unawaited(_startSharing());
+                },
+              ),
+            ),
+          if (_sharing && _sharedEditor != null)
+            SharedEditorFields(
+              editor: _sharedEditor!,
+              onChooseContext: () => unawaited(_chooseSharedContext()),
+              onAddMember: _sharedEditor!.contextId == null
+                  ? null
+                  : () => unawaited(_addSharedMember()),
+              loading: _sharingLoading,
+              error: _sharingError,
+            ),
+
           // --- Merchant & Category card ---
           CardSummaryPanel(
             elevated: false,

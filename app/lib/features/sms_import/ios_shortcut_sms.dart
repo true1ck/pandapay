@@ -1,5 +1,6 @@
 import 'sms_background_queue.dart';
 import '../../data/sms_security_policy.dart';
+import '../../data/cached_regexp.dart';
 
 /// Validates the iOS acquisition boundary. Accepted messages are the exact
 /// QueuedSms values consumed by Android's SmsImportStore and upload worker.
@@ -33,14 +34,14 @@ class IosShortcutSmsBatch {
   /// spacing so the shared phone-number rules recognise them.
   static String normalizeSender(String sender) {
     final trimmed = sender.trim();
-    if (RegExp(r'^\+?[\d\s\-().]+$').hasMatch(trimmed) &&
-        RegExp(r'\d').allMatches(trimmed).length >= 7) {
-      return trimmed.replaceAll(RegExp(r'[\s\-().]'), '');
+    if (cachedRegExp(r'^\+?[\d\s\-().]+$').hasMatch(trimmed) &&
+        cachedRegExp(r'\d').allMatches(trimmed).length >= 7) {
+      return trimmed.replaceAll(cachedRegExp(r'[\s\-().]'), '');
     }
     return trimmed;
   }
 
-  static final _filterTag = RegExp(
+  static final _filterTag = cachedRegExp(
     r'\s*\((?:smsft(?:_fi|_rm|_or)?|smsfp)\)\s*$',
     caseSensitive: false,
   );
@@ -56,47 +57,47 @@ class IosShortcutSmsBatch {
   /// header as a contact, so a name always stands for a phone or email.
   static bool looksLikeContactName(String sender) {
     final s = senderForTriage(sender).trim();
-    if (s.isEmpty || !RegExp(r'[A-Za-z]').hasMatch(s) || s.contains('@')) {
+    if (s.isEmpty || !cachedRegExp(r'[A-Za-z]').hasMatch(s) || s.contains('@')) {
       return false;
     }
-    final header = RegExp(
+    final header = cachedRegExp(
       r'^(?:[A-Za-z]{2}-)?[A-Za-z0-9]{2,11}(?:-[A-Za-z])?$',
     );
     if (!header.hasMatch(s)) return true;
     // A bare word with lowercase and no route suffix is a name, not a header.
-    return RegExp(r'[a-z]').hasMatch(s) &&
-        !RegExp(r'-[A-Za-z]$').hasMatch(s) &&
-        !RegExp(r'^[A-Za-z]{2}-').hasMatch(s);
+    return cachedRegExp(r'[a-z]').hasMatch(s) &&
+        !cachedRegExp(r'-[A-Za-z]$').hasMatch(s) &&
+        !cachedRegExp(r'^[A-Za-z]{2}-').hasMatch(s);
   }
 
   /// Banks and card issuers, checked first. More specific entries (SBI Card)
   /// come before the broader issuer (SBI) and claim their words, so one
   /// message naming "SBI Card" is not read as two issuers.
   static final List<(RegExp, String)> _issuers = [
-    (RegExp(r'\bsbi\s*(?:credit\s*|cr\.?\s*)?card'), 'VM-SBICRD'),
-    (RegExp(r'\b(?:sbi|state bank of india)\b'), 'VM-SBIINB'),
-    (RegExp(r'\bhdfc\b'), 'VM-HDFCBK'),
-    (RegExp(r'\bicici\b'), 'VM-ICICIB'),
-    (RegExp(r'\baxis\b'), 'VM-AXISBK'),
-    (RegExp(r'\bkotak\b'), 'VM-KOTAKB'),
-    (RegExp(r'\b(?:bob|bank of baroda)\b'), 'VM-BOBTXN'),
-    (RegExp(r'\b(?:pnb|punjab national)\b'), 'VM-PNBSMS'),
-    (RegExp(r'\bindusind\b'), 'VM-INDBNK'),
-    (RegExp(r'\bidfc\b'), 'VM-IDFCFB'),
-    (RegExp(r'\byes\s*bank\b'), 'VM-YESBNK'),
-    (RegExp(r'\bcanara\b'), 'VM-CANBNK'),
-    (RegExp(r'\bunion bank\b'), 'VM-UBINBK'),
-    (RegExp(r'\bfederal bank\b'), 'VM-FEDBNK'),
-    (RegExp(r'\brbl\b'), 'VM-RBLBNK'),
-    (RegExp(r'\bau (?:small finance )?bank\b'), 'VM-AUBANK'),
-    (RegExp(r'\bone\s*card\b'), 'VM-ONECRD'),
+    (cachedRegExp(r'\bsbi\s*(?:credit\s*|cr\.?\s*)?card'), 'VM-SBICRD'),
+    (cachedRegExp(r'\b(?:sbi|state bank of india)\b'), 'VM-SBIINB'),
+    (cachedRegExp(r'\bhdfc\b'), 'VM-HDFCBK'),
+    (cachedRegExp(r'\bicici\b'), 'VM-ICICIB'),
+    (cachedRegExp(r'\baxis\b'), 'VM-AXISBK'),
+    (cachedRegExp(r'\bkotak\b'), 'VM-KOTAKB'),
+    (cachedRegExp(r'\b(?:bob|bank of baroda)\b'), 'VM-BOBTXN'),
+    (cachedRegExp(r'\b(?:pnb|punjab national)\b'), 'VM-PNBSMS'),
+    (cachedRegExp(r'\bindusind\b'), 'VM-INDBNK'),
+    (cachedRegExp(r'\bidfc\b'), 'VM-IDFCFB'),
+    (cachedRegExp(r'\byes\s*bank\b'), 'VM-YESBNK'),
+    (cachedRegExp(r'\bcanara\b'), 'VM-CANBNK'),
+    (cachedRegExp(r'\bunion bank\b'), 'VM-UBINBK'),
+    (cachedRegExp(r'\bfederal bank\b'), 'VM-FEDBNK'),
+    (cachedRegExp(r'\brbl\b'), 'VM-RBLBNK'),
+    (cachedRegExp(r'\bau (?:small finance )?bank\b'), 'VM-AUBANK'),
+    (cachedRegExp(r'\bone\s*card\b'), 'VM-ONECRD'),
   ];
 
   /// Payment apps are used only when no bank or card issuer is named: a bank
   /// alert often mentions the app ("via PhonePe") but the bank sent it.
   static final List<(RegExp, String)> _paymentApps = [
-    (RegExp(r'\bphone\s*pe\b'), 'VM-PHONPE'),
-    (RegExp(r'\bpaytm\b'), 'VM-PAYTMB'),
+    (cachedRegExp(r'\bphone\s*pe\b'), 'VM-PHONPE'),
+    (cachedRegExp(r'\bpaytm\b'), 'VM-PAYTMB'),
   ];
 
   /// Every sender [inferSenderFromBody] can return.
@@ -182,7 +183,7 @@ class IosShortcutSmsBatch {
       final dateValid =
           date != null &&
           rawDate is String &&
-          RegExp(r'(?:Z|[+-]\d{2}:?\d{2})$').hasMatch(rawDate);
+          cachedRegExp(r'(?:Z|[+-]\d{2}:?\d{2})$').hasMatch(rawDate);
 
       String effectiveSender;
       var inferred = false;

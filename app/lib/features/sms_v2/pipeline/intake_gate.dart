@@ -1,6 +1,7 @@
 import '../../../data/sms_gate_filter.dart';
 import '../../sms_import/ios_shortcut_sms.dart';
 import '../../sms_import/sms_text_hint.dart';
+import '../../../data/cached_regexp.dart';
 
 /// Whether the rules may overrule the gate's "unrelated" or "promotion" call
 /// for a message from [sender].
@@ -14,7 +15,7 @@ bool gateRejectionMayBeOverruled(String sender) {
   final bare = IosShortcutSmsBatch.senderForTriage(sender);
   if (bare.trim().isEmpty) return false;
   return !IosShortcutSmsBatch.looksLikeContactName(bare) &&
-      !RegExp(r'-[Pp]$').hasMatch(bare.trim());
+      !cachedRegExp(r'-[Pp]$').hasMatch(bare.trim());
 }
 
 /// Preserve security/sender exclusions and admit non-spending lifecycles.
@@ -27,21 +28,22 @@ SmsTriageResult classifySmsV2Intake(String sender, String body) {
   final bare = IosShortcutSmsBatch.senderForTriage(sender);
   final gate = SmsGateFilter.evaluate(bare, body);
   if (IosShortcutSmsBatch.looksLikeContactName(bare) ||
-      RegExp(r'-[Pp]$').hasMatch(bare.trim())) {
+      cachedRegExp(r'-[Pp]$').hasMatch(bare.trim())) {
     return previous;
   }
-  if (!gate.passed && gate.dropReason != SmsGateDropReason.noFinancialKeywords) {
+  if (!gate.passed &&
+      gate.dropReason != SmsGateDropReason.noFinancialKeywords) {
     return previous;
   }
-  final lifecycle = RegExp(
+  final lifecycle = cachedRegExp(
     r'\b(?:blocked|released|unblocked|allotted|allotment|asba|lien|mandate|points|reward\s+balance|credit\s+limit)\b',
     caseSensitive: false,
   ).hasMatch(body);
-  final account = RegExp(
+  final account = cachedRegExp(
     r'\b(?:a/?c|account|card|wallet|folio|ipo|asba|mandate|points)\b',
     caseSensitive: false,
   ).hasMatch(body);
-  return lifecycle && account && RegExp(r'\d').hasMatch(body)
+  return lifecycle && account && cachedRegExp(r'\d').hasMatch(body)
       ? const SmsTriageResult(
           SmsTriageKind.financialCandidate,
           'v2_financial_lifecycle',

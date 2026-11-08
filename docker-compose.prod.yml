@@ -64,6 +64,8 @@ services:
       # Opt-in: blank keeps the autonomous SMS learner disabled (no dedicated
       # login is bootstrapped — see db/setup_app_role.sql).
       SMS_LEARNING_WORKER_DB_PASSWORD: "${SMS_LEARNING_WORKER_DB_PASSWORD:-}"
+      # Opt-in: blank leaves the SMS AI drafts worker's login (sms_ai_worker) uncreated.
+      SMS_AI_WORKER_DB_PASSWORD: "${SMS_AI_WORKER_DB_PASSWORD:-}"
       PHONE_LOOKUP_HMAC_KEY: "${PHONE_LOOKUP_HMAC_KEY:?}"
       ENCRYPTION_ENABLED: "${ENCRYPTION_ENABLED:-true}"
       ENCRYPTION_KEY: "${ENCRYPTION_KEY:?}"
@@ -161,6 +163,12 @@ services:
       # this host-only key (at least 32 characters). Blank keeps the invitation
       # routes answering a truthful 503 instead of stopping the API.
       SHARED_EXPENSE_INVITE_SECRET: "${SHARED_EXPENSE_INVITE_SECRET:-}"
+      # Join requests may carry the claimant's phone number for the group owner, only
+      # when the claimant chose to share it. Off unless explicitly enabled. The key
+      # ring is a host-only secret (JSON, see .env.prod.example); without a usable
+      # ring nothing is ever stored and the API logs a warning at startup.
+      SHARED_EXPENSE_PHONE_SHARING_ENABLED: "${SHARED_EXPENSE_PHONE_SHARING_ENABLED:-false}"
+      SHARED_EXPENSE_PHONE_ENC_KEYS: "${SHARED_EXPENSE_PHONE_ENC_KEYS:-}"
     ports:
       - "127.0.0.1:4000:4000"
 
@@ -216,6 +224,55 @@ services:
       IMAP_ENCRYPTION_KEY: "${IMAP_ENCRYPTION_KEY:?}"
       IMAP_ENCRYPTION_KEY_ID: "${IMAP_ENCRYPTION_KEY_ID:-k1}"
       IMAP_ENCRYPTION_PREVIOUS_KEYS: "${IMAP_ENCRYPTION_PREVIOUS_KEYS:-}"
+
+  # SMS AI drafts: asks Gemini to draft a rule for each shared, REDACTED message
+  # layout (never message text). OPT-IN: deploy/deploy.sh and restart-services.sh
+  # only build and start this when every setting below is present in the host's
+  # .env; with none of them set the production deploy is exactly as before.
+  # Nothing here is `:?`-required, so a missing setting can never stop Compose
+  # from parsing the file for the other services. Only this service is given the
+  # Gemini key and the least-privilege `sms_ai_worker` database login (created by
+  # db-migrate from SMS_AI_WORKER_DB_PASSWORD); api/auth/rewards-worker get neither.
+  sms-v2-template-worker:
+    profiles: [sms-ai]
+    build:
+      context: ./api
+    command: ["node", "src/sms_v2/jobs/template_worker_main.js"]
+    # No HTTP server; check the actual PID 1 command, as rewards-worker does.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          process.exit(require('fs').readFileSync('/proc/1/cmdline', 'utf8')
+          .includes('template_worker_main.js') ? 0 : 1)
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    logging: *default-logging
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    # The production host is small (see deploy/restart-services.sh).
+    mem_limit: 192m
+    cpus: 0.25
+    environment:
+      NODE_ENV: production
+      SMS_AI_WORKER_DATABASE_URL: "${SMS_AI_WORKER_DATABASE_URL:-}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      SMS_V2_AI_MODEL: "${SMS_V2_AI_MODEL:-}"
+      SMS_V2_AI_TPM: "${SMS_V2_AI_TPM:-}"
+      SMS_V2_AI_RPM: "${SMS_V2_AI_RPM:-60}"
+      SMS_V2_AI_MAX_OUTPUT_TOKENS: "${SMS_V2_AI_MAX_OUTPUT_TOKENS:-4096}"
+      SMS_V2_AI_INPUT_USD_PER_MILLION: "${SMS_V2_AI_INPUT_USD_PER_MILLION:-}"
+      SMS_V2_AI_OUTPUT_USD_PER_MILLION: "${SMS_V2_AI_OUTPUT_USD_PER_MILLION:-}"
+      DB_SSL: "${DB_SSL:-true}"
+      DB_SSL_CA: "${DB_SSL_CA:-}"
 
   auth:
     build:

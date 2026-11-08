@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show compute;
 import 'package:http/http.dart' as http;
 import 'package:pandapay_domain/pandapay_domain.dart';
 
@@ -73,7 +74,8 @@ class HttpCatalogueRepository
     if (response.statusCode != 200) {
       throw ApiException('GET /catalogue?schema=2 failed: ${response.statusCode}');
     }
-    final decoded = jsonDecode(response.body);
+    // The catalogue is large; decode it off the UI thread.
+    final decoded = await compute(decodeCatalogueJson, response.body);
     if (decoded is! Map || decoded['schema'] != 2) {
       throw const CatalogueSchemaMismatch();
     }

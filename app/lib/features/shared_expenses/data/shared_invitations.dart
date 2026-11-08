@@ -60,6 +60,17 @@ final class SharedInvitePreview {
   final String contextName, memberName, status;
   final bool phoneBound;
 
+  /// True only when the server has phone sharing switched on. Absent means
+  /// off: the join screen then behaves exactly as before, with no choice.
+  final bool phoneSharing;
+
+  /// The group owner's name, when the server says it.
+  final String? ownerName;
+
+  /// The claimant's own number, masked (e.g. `+91 72••• •4821`), or null when
+  /// the account has no verified phone. Never a full number.
+  final String? ownPhoneMask;
+
   /// `group_link` for a group's shared link, otherwise `invitation`.
   final String kind;
   bool get isGroupLink => kind == 'group_link';
@@ -69,6 +80,9 @@ final class SharedInvitePreview {
     required this.memberName,
     required this.status,
     required this.phoneBound,
+    this.phoneSharing = false,
+    this.ownerName,
+    this.ownPhoneMask,
   });
   factory SharedInvitePreview.fromJson(Map<String, Object?> value) {
     String text(String key) {
@@ -77,6 +91,11 @@ final class SharedInvitePreview {
         throw const SharedTransportException(code: 'invalid_response');
       }
       return v;
+    }
+
+    String? optional(String key, int max) {
+      final v = value[key];
+      return v is String && v.isNotEmpty && v.length <= max ? v : null;
     }
 
     if (value['phoneBound'] is! bool) {
@@ -92,6 +111,9 @@ final class SharedInvitePreview {
       memberName: text('memberName'),
       status: text('status'),
       phoneBound: value['phoneBound'] as bool,
+      phoneSharing: value['phoneSharing'] == true,
+      ownerName: optional('ownerName', 100),
+      ownPhoneMask: optional('ownPhoneMask', 40),
     );
   }
 }

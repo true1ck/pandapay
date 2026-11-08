@@ -106,6 +106,11 @@ TransactionEntry? transactionForEvent(
   );
 }
 
+bool _unchanged(TransactionEntry? stored, TransactionEntry row) =>
+    stored != null &&
+    stored.id == row.id &&
+    jsonEncode(stored.toJson()) == jsonEncode(row.toJson());
+
 class ProjectionWriter {
   ProjectionWriter(this.financial, this.ledger) {
     if (!identical(financial.database.db, ledger.db)) {
@@ -227,7 +232,14 @@ class ProjectionWriter {
             display.add(old.copyWith(status: 'ignored'));
           }
         }
-        financial.saveTransactions(ledger.namespace, display);
+        // A pull re-projects events whose display row did not change (the same
+        // facts, the same ledger). Writing those again costs a receipt upsert,
+        // a pending-row delete and a row upsert each, so only rows that
+        // differ from what is stored are saved.
+        financial.saveTransactions(ledger.namespace, [
+          for (final row in display)
+            if (!_unchanged(existing[row.eventId], row)) row,
+        ]);
         db.execute('RELEASE v2_projection');
       } catch (_) {
         db.execute('ROLLBACK TO v2_projection');

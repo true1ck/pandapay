@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:pandapay_domain/sms_v2.dart';
 import 'package:sqlite3/sqlite3.dart';
 
+import 'row_decode_cache.dart';
+
 /// Account-scoped ledger. Local category context is stripped from wire JSON,
 /// just as InstrumentStore strips local limit history.
 ///
@@ -98,9 +100,49 @@ payload=excluded.payload,dirty=excluded.dirty WHERE v2_ledger.payload != exclude
             (to == null || e.occurredAt.isBefore(to)),
       )
       .toList();
+
+  /// Ledger rows of [eventIds], grouped by event, each group in the same
+  /// `(occurred_at, entry_id)` order as [list]. One indexed query per 400 ids,
+  /// so a caller needing several events pays for those events only.
+  Map<String, List<LedgerEntry>> forEvents(Iterable<String> eventIds) {
+    final out = <String, List<LedgerEntry>>{};
+    for (final r in _rows(eventIds: eventIds.toSet())) {
+      (out[r['event_id'] as String] ??= []).add(
+        _decode(r['payload'] as String),
+      );
+    }
+    return out;
+  }
+
+  /// Entry id -> event id of every dirty row, optionally for [eventIds] only.
+  /// Reads two small columns; nothing is JSON-decoded.
+  Map<String, String> dirtyEntries({Set<String>? eventIds}) {
+    final out = <String, String>{};
+    final groups = eventIds == null
+        ? [<String>[]]
+        : [
+            for (var start = 0; start < eventIds.length; start += 400)
+              eventIds.skip(start).take(400).toList(),
+          ];
+    for (final ids in groups) {
+      final filter = eventIds == null
+          ? ''
+          : ' AND event_id IN (${List.filled(ids.length, '?').join(',')})';
+      for (final r in db.select(
+        'SELECT entry_id,event_id FROM v2_ledger WHERE namespace=? AND dirty=1$filter',
+        [namespace, ...ids],
+      )) {
+        out[r['entry_id'] as String] = r['event_id'] as String;
+      }
+    }
+    return out;
+  }
+
   List<LedgerEntry> forEvent(String eventId) => [
     for (final row in db.select(
-      'SELECT payload FROM v2_ledger WHERE namespace=? AND event_id=? ORDER BY entry_id',
+      // Pinned to the event index: with ORDER BY entry_id SQLite may walk the
+      // primary key and scan the whole ledger for every event.
+      'SELECT payload FROM v2_ledger INDEXED BY idx_v2_ledger_event WHERE namespace=? AND event_id=? ORDER BY entry_id',
       [namespace, eventId],
     ))
       _decode(row['payload'] as String),
@@ -147,6 +189,64 @@ payload=excluded.payload,dirty=excluded.dirty WHERE v2_ledger.payload != exclude
     return Map.unmodifiable(result);
   }
 
+  /// Every entry plus the per-event category decisions, i.e. exactly
+  /// `(list(), categoryDecisions())`, in one pass over the table.
+  ///
+  /// Entries are immutable, so a row whose payload text is unchanged since the
+  /// previous call reuses its already-decoded entry and decision (the very
+  /// same instances); only new or edited rows are parsed. The ledger read
+  /// model calls this on every revision bump.
+  (List<LedgerEntry>, Map<String, CategoryDecision>) readAllCached() {
+    final pass = RowDecodeCache.of<_DecodedRow>(
+      db,
+      'v2_ledger',
+    ).begin(namespace);
+    final entries = <LedgerEntry>[];
+    final decisions = <String, CategoryDecision>{};
+    for (final r in db.select(
+      'SELECT entry_id,event_id,payload FROM v2_ledger WHERE namespace=? ORDER BY occurred_at,entry_id',
+      [namespace],
+    )) {
+      final row = pass.resolve(
+        r['entry_id'] as String,
+        r['payload'] as String,
+        _decodeRow,
+      );
+      entries.add(row.entry);
+      final decision = row.decision;
+      if (decision != null) decisions[r['event_id'] as String] = decision;
+    }
+    pass.finish();
+    return (entries, Map.unmodifiable(decisions));
+  }
+
+  static _DecodedRow _decodeRow(String payload) {
+    final j = (jsonDecode(payload) as Map).cast<String, Object?>();
+    final c = j['_categoryDecision'] as Map?;
+    final entry = LedgerEntry.fromJson({...j}..remove('_categoryDecision'));
+    CategoryDecision? decision;
+    if (c == null && j['category'] != null) {
+      // CCR-003: a refund row's wire category is its decision. Spend rows
+      // keep using local metadata, which also holds the rule id.
+      if (entry.isRefundShaped && entry.categorySource != null) {
+        decision = CategoryDecision(
+          slug: entry.category!,
+          source: entry.categorySource!,
+          confidence: 1,
+        );
+      }
+    }
+    if (c != null) {
+      decision = CategoryDecision(
+        slug: c['slug'] as String,
+        source: CategorySource.fromWire(c['source'] as String),
+        ruleId: c['ruleId'] as String?,
+        confidence: (c['confidence'] as num).toDouble(),
+      );
+    }
+    return _DecodedRow(entry, decision);
+  }
+
   Iterable<Row> _rows({bool dirty = false, Set<String>? eventIds}) sync* {
     final groups = eventIds == null
         ? [<String>[]]
@@ -169,4 +269,10 @@ payload=excluded.payload,dirty=excluded.dirty WHERE v2_ledger.payload != exclude
     (jsonDecode(payload) as Map).cast<String, Object?>()
       ..remove('_categoryDecision'),
   );
+}
+
+class _DecodedRow {
+  const _DecodedRow(this.entry, this.decision);
+  final LedgerEntry entry;
+  final CategoryDecision? decision;
 }

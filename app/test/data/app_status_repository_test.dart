@@ -20,11 +20,29 @@ void main() {
       expect(isVersionOlderThan('1.1', '1.0.9'), false);
     });
 
+    test('a Dev flavor at the minimum release version is supported', () {
+      expect(isVersionOlderThan('1.0.17-dev', '1.0.17'), false);
+    });
+
+    test('an older Dev flavor still requires an upgrade', () {
+      expect(isVersionOlderThan('1.0.16-dev', '1.0.17'), true);
+    });
+
+    test('a newer Dev flavor is supported', () {
+      expect(isVersionOlderThan('1.0.18-dev', '1.0.17'), false);
+    });
+
+    test('build metadata and flavor suffixes preserve release components', () {
+      expect(isVersionOlderThan('1.0.17-dev+10220', '1.0.17'), false);
+      expect(isVersionOlderThan('1.0.17+134', '1.0.17'), false);
+      expect(isVersionOlderThan('1.0.16+999', '1.0.17'), true);
+      expect(isVersionOlderThan('1.0.17', '1.0.17-staging+134'), false);
+    });
     test('a non-numeric segment does not throw — falls back to 0, not full semver', () {
-      // "0-beta" isn't parseable as an int, so int.tryParse returns null and
+      // "bad" isn't parseable as an int, so int.tryParse returns null and
       // this falls back to 0, same as "1.0.0" — a known, documented
       // simplification (not full semver pre-release ordering).
-      expect(isVersionOlderThan('1.0.0-beta', '1.0.0'), false);
+      expect(isVersionOlderThan('1.0.bad', '1.0.0'), false);
     });
   });
 

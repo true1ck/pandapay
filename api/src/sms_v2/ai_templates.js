@@ -51,14 +51,18 @@ function createTemplateStore({ withUserClient }) {
         return {
           items: rows.map((row) => ({
             templateHash: row.template_hash,
+            // The sync contract allows only pending, ready and rejected; any other
+            // value makes the phone refuse the whole sync response.
             status:
               row.ai_status === "ready"
                 ? "ready"
                 : row.ai_status === "failed"
-                  ? "failed"
-                  : "queued",
-            ruleId: row.ai_draft?.id || null,
-            ruleVersion: row.ai_draft?.version || null,
+                  ? "rejected"
+                  : "pending",
+            // The contract wants a string and an integer here, so leave them out
+            // (never null) when there is no draft.
+            ...(row.ai_draft?.id ? { ruleId: row.ai_draft.id } : {}),
+            ...(row.ai_draft?.version ? { ruleVersion: row.ai_draft.version } : {}),
             ...(row.ai_status === "ready" && row.ai_draft
               ? { rule: row.ai_draft }
               : {}),
@@ -252,11 +256,15 @@ function registerPrivateTemplateRoutes(api) {
         );
         const row = (
           await client.query(
-            "SELECT ai_status FROM sms_v2_unknown_templates WHERE template_hash=$1 FOR UPDATE",
+            "SELECT ai_status,admin_decision FROM sms_v2_unknown_templates WHERE template_hash=$1 FOR UPDATE",
             [req.params.hash],
           )
         ).rows[0];
         if (!row) throw new HttpError(404, "template_not_found");
+        // An approval already made a draft rule; reject that rule in the rules
+        // flow instead of reversing the decision here.
+        if (row.admin_decision === "approved")
+          throw new HttpError(409, "template_already_approved");
         // Only a finished draft can be rejected; a busy or untouched layout cannot.
         if (row.ai_status !== "ready")
           throw new HttpError(409, "template_not_rejectable");

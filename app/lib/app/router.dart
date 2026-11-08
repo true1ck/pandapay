@@ -181,6 +181,7 @@ abstract final class AppRoute {
   static const splits = '/insights/splits';
   static const splitContext = '/insights/splits/:contextId';
   static const splitJoin = '/split/join/:token';
+  static const splitRequests = '/split/requests';
   static const myContributions = '/insights/my-contributions';
 
   /// Group F (Data Import & Sync) — implementation-plan-group-e-f-g.md §3.
@@ -910,6 +911,13 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           onOpenContext: (id) => context.push('${AppRoute.splits}/$id'),
           onAddExpense: () =>
               context.push('${AppRoute.assistantAddSpend}?shared=true'),
+          onOpenRequests: () => context.push<void>(AppRoute.splitRequests),
+        ),
+      ),
+      GoRoute(
+        path: AppRoute.splitRequests,
+        builder: (context, state) => SharedJoinRequestsRoute(
+          onShareGroupLink: () => context.go(AppRoute.splits),
         ),
       ),
       GoRoute(
