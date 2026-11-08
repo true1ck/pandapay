@@ -53,8 +53,35 @@ class _AutoSmsSyncScreenState extends ConsumerState<AutoSmsSyncScreen>
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  Timer? _refreshTimer;
+
+  /// The first scan slice returns early; the rest of the inbox keeps scanning
+  /// in the background. Keep the success screen's counts live until it ends.
+  void _startBackgroundRefresh() {
+    _refreshTimer?.cancel();
+    final controller = ref.read(smsAutoImportProvider);
+    if (controller.inboxScanProgress.value.complete) return;
+    _refreshTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      final done = controller.inboxScanProgress.value.complete;
+      try {
+        final overview = await controller.inboxOverview();
+        if (!mounted) return;
+        setState(() => _overview = overview);
+        ref.invalidate(needsReviewCountProvider);
+      } catch (_) {
+        /* Keep the last counts. */
+      }
+      if (done) timer.cancel();
+    });
   }
 
   @override
@@ -233,6 +260,7 @@ class _AutoSmsSyncScreenState extends ConsumerState<AutoSmsSyncScreen>
 
       ref.invalidate(smsImportBatchesProvider);
       ref.invalidate(needsReviewCountProvider);
+      _startBackgroundRefresh();
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -416,6 +444,42 @@ class _AutoSmsSyncScreenState extends ConsumerState<AutoSmsSyncScreen>
         const SizedBox(height: 22),
         ImportPermissionArtwork(complete: _errorMessage == null),
         const SizedBox(height: 20),
+        if (_errorMessage == null)
+          ValueListenableBuilder<SmsInboxScanProgress>(
+            valueListenable: ref.read(smsAutoImportProvider).inboxScanProgress,
+            builder: (context, progress, _) {
+              if (progress.complete) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Semantics(
+                  liveRegion: true,
+                  child: _Surface(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'Still checking your SMS inbox…',
+                          style: BambooFonts.heading(15, weight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 12),
+                        const LinearProgressIndicator(
+                          color: BambooInk.jade,
+                          backgroundColor: Color(0xFFEAF1E2),
+                          minHeight: 5,
+                          borderRadius: BorderRadius.all(Radius.circular(5)),
+                        ),
+                        const SizedBox(height: 10),
+                        _body(
+                          '${progress.checked} messages checked · ${progress.matched} financial alerts found',
+                          small: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
         if (overview != null)
           _Surface(
             child: Row(
