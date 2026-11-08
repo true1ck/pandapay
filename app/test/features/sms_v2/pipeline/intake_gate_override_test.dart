@@ -121,4 +121,55 @@ void main() {
     expect(decisionOf('VM-HDFCBK-P', spendWithEmiFooter), 'ignored');
     expect(LedgerStore(db.db, namespace: _ns).list(), isEmpty);
   });
+
+  // Before the override existed the gate recorded these as final "ignored"
+  // decisions with no parser revision, and the phone never looked at them
+  // again. A message that arrives again (a history import) must be read now.
+  void recordOldGateIgnore(String sender, String body) =>
+      SmsIntakeRepository(db).recordDecision(
+        _ns,
+        sourceKey: smsSourceKey(_ns, sender, body),
+        decision: 'ignored',
+        state: 'final',
+        reasonCode: 'promotion',
+        receivedAt: DateTime.utc(2026, 11, 1, 7).millisecondsSinceEpoch,
+        policyVersion: 'v2',
+      );
+
+  test('a spend the old gate ignored is read when it arrives again', () {
+    recordOldGateIgnore('VM-HDFCBK-S', spendWithEmiFooter);
+
+    SmsImportStore(
+      financial,
+      v2Pipeline: pipeline,
+    ).capture(_ns, sms('VM-HDFCBK-S', spendWithEmiFooter));
+
+    expect(decisionOf('VM-HDFCBK-S', spendWithEmiFooter), 'matched');
+    final entries = LedgerStore(db.db, namespace: _ns).list();
+    expect(entries.single.amountMinor, 49900);
+    expect(entries.single.isSpend, isTrue);
+  });
+
+  test('a message read once under this rule revision is not read again', () {
+    final store = SmsImportStore(financial, v2Pipeline: pipeline);
+    store.capture(_ns, sms('VM-HDFCBK-S', spendWithEmiFooter));
+    store.capture(_ns, sms('VM-HDFCBK-S', spendWithEmiFooter));
+
+    expect(LedgerStore(db.db, namespace: _ns).list(), hasLength(1));
+  });
+
+  test('a promotion ignored by the old gate stays ignored when it returns', () {
+    const promo =
+        'Dear Customer, your Rs.50,000 spends are eligible for conversion to '
+        'EMI. Call 1800123456 to convert.';
+    recordOldGateIgnore('VM-HDFCBK-S', promo);
+
+    SmsImportStore(
+      financial,
+      v2Pipeline: pipeline,
+    ).capture(_ns, sms('VM-HDFCBK-S', promo));
+
+    expect(decisionOf('VM-HDFCBK-S', promo), 'ignored');
+    expect(LedgerStore(db.db, namespace: _ns).list(), isEmpty);
+  });
 }

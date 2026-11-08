@@ -85,9 +85,15 @@ class SmsV2Pipeline {
     final unique = <String, SmsMessage>{};
     for (final message in messages) {
       final previous = _intake.decision(namespace, message.sourceKey);
+      // A message the rules could not read, or that was dropped as "ignored"
+      // under an older rule revision (or by the keyword gate, which records no
+      // revision at all), is read again when it arrives again. Without this an
+      // old "ignored" call was final: a real card spend with an EMI footer
+      // stayed out of the ledger for good, even after the gate was fixed.
+      final mayBeRead = previous?.decision == 'unknown' ||
+          previous?.decision == 'ignored';
       if (previous?.policyVersion != 'v2' ||
-          previous?.decision == 'unknown' &&
-              previous?.parserVersion != processingRevision) {
+          mayBeRead && previous?.parserVersion != processingRevision) {
         unique.putIfAbsent(message.sourceKey, () => message);
       }
     }
