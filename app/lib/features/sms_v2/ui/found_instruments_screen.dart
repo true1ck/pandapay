@@ -83,6 +83,18 @@ class FoundInstrumentsScreen extends ConsumerWidget {
           final repository = ref.read(app.userCardsRepositoryProvider);
           if (repository == null) throw StateError('Session unavailable');
           final selected = products ?? <CardProduct>[];
+          if (selected.isEmpty) {
+            // Nothing was saved: the card stays as it was until a wallet card
+            // is chosen for it.
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Not added yet. Choose a card to add it to your wallet.',
+                ),
+              ),
+            );
+            return;
+          }
           if (selected.length > 1) {
             throw ArgumentError('Choose one card for this account');
           }
@@ -170,7 +182,7 @@ class FoundInstrumentsList extends StatelessWidget {
       ),
       children: [
         Text(
-          'Confirm what belongs to you. You can change these choices later.',
+          'Confirm what belongs to you. Credit cards are added to your wallet. You can change these choices later.',
           style: BambooFonts.ui(14, color: BambooInk.ink700, height: 1.45),
         ),
         for (final kind in InstrumentKind.values)
@@ -216,6 +228,11 @@ class _InstrumentPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final detected = instrument.status == InstrumentStatus.detected;
     final isCard = instrument.kind == InstrumentKind.creditCard;
+    // A credit card counts only once a wallet card stands behind it. An older
+    // build could confirm one without linking it, so "confirmed" alone does
+    // not mean it is in the wallet.
+    final inWallet = isCard && !detected && instrument.userCardId != null;
+    final needsAction = isCard ? !inWallet : detected;
     final quiet = [
       TextButton(
         style: BambooButtons.quiet,
@@ -259,9 +276,9 @@ class _InstrumentPanel extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (!detected) ...[
-                  const StatusPill(
-                    label: 'Confirmed',
+                if (isCard ? inWallet : !detected) ...[
+                  StatusPill(
+                    label: isCard ? 'In wallet' : 'Confirmed',
                     icon: Icons.check_rounded,
                     foreground: BambooInk.rankBadgeInk,
                     background: BambooInk.rankBadgeBg,
@@ -287,11 +304,11 @@ class _InstrumentPanel extends StatelessWidget {
           BambooFigureRow('Last activity', smsDate(instrument.lastSeenAt)),
           const SizedBox(height: AppSpace.md),
           BambooActionBar(
-            primary: detected
+            primary: needsAction
                 ? FilledButton(
                     style: BambooButtons.primary,
                     onPressed: () => onConfirm(instrument),
-                    child: const Text('Confirm'),
+                    child: Text(isCard ? 'Add to wallet' : 'Confirm'),
                   )
                 : null,
             quiet: quiet,

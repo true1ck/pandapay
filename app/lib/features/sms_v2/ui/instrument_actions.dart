@@ -26,11 +26,21 @@ class InstrumentActions {
   final RuleBundle bundle;
   final List<CardProduct> catalogue;
 
+  /// Confirms [id] as the user's own.
+  ///
+  /// A credit card is confirmed only once it is a wallet card, because the
+  /// wallet is what the rest of the app reads. When no single wallet card
+  /// matches, nothing is saved and [CardNeedsProduct] is returned: the caller
+  /// opens the card picker and finishes with [attachCard]. Backing out of the
+  /// picker therefore leaves the card exactly as it was, still waiting for the
+  /// user, never "confirmed" without a wallet card behind it.
   CardLinkResult? confirm(String id) {
     final current = _owned(id);
     final next = current.copyWith(status: InstrumentStatus.confirmed);
-    _write(next);
-    if (next.kind != InstrumentKind.creditCard) return null;
+    if (current.kind != InstrumentKind.creditCard) {
+      _write(next);
+      return null;
+    }
     final result =
         InstrumentCardLinker(
           store: InstrumentStore(financial.database.db, namespace: namespace),
@@ -43,7 +53,14 @@ class InstrumentActions {
               .map(UserCard.fromJson)
               .toList(),
         );
-    if (result case CardLinked(:final instrument)) _write(instrument);
+    switch (result) {
+      case CardLinked(:final instrument):
+        _write(instrument);
+      case CardAlreadyLinked(:final instrument):
+        if (current.status != InstrumentStatus.confirmed) _write(instrument);
+      case CardNeedsProduct():
+        break;
+    }
     return result;
   }
 

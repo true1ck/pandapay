@@ -57,6 +57,82 @@ void main() {
     await tester.tap(find.text('Rename'));
     expect(action, 'rename');
   });
+  Instrument card({
+    required InstrumentStatus status,
+    String? userCardId,
+    InstrumentKind kind = InstrumentKind.creditCard,
+  }) => Instrument(
+    instrumentId: '22222222-2222-4222-8222-222222222222',
+    kind: kind,
+    issuerSlug: 'yes',
+    maskDigits: '1260',
+    displayName: 'YES credit card',
+    status: status,
+    userCardId: userCardId,
+    firstSeenAt: DateTime.utc(2026, 11, 1),
+    lastSeenAt: DateTime.utc(2026, 11, 2),
+    evidenceCount: 2,
+  );
+  Future<void> pumpFound(
+    WidgetTester tester,
+    Instrument instrument, {
+    ValueChanged<Instrument>? onConfirm,
+  }) => tester.pumpWidget(
+    app(
+      FoundInstrumentsList(
+        instruments: [instrument],
+        onConfirm: onConfirm ?? (_) {},
+        onReject: (_) {},
+        onRename: (_) {},
+        onOpen: (_) {},
+      ),
+    ),
+  );
+  testWidgets('a found credit card offers to add it to the wallet', (
+    tester,
+  ) async {
+    Instrument? chosen;
+    await pumpFound(
+      tester,
+      card(status: InstrumentStatus.detected),
+      onConfirm: (i) => chosen = i,
+    );
+    expect(find.text('Confirm'), findsNothing);
+    expect(find.text('In wallet'), findsNothing);
+    await tester.tap(find.text('Add to wallet'));
+    expect(chosen?.kind, InstrumentKind.creditCard);
+  });
+  testWidgets(
+    'a credit card confirmed without a wallet card is not shown as in the wallet',
+    (tester) async {
+      await pumpFound(tester, card(status: InstrumentStatus.confirmed));
+      expect(find.text('In wallet'), findsNothing);
+      expect(find.text('Confirmed'), findsNothing);
+      expect(find.text('Add to wallet'), findsOneWidget);
+    },
+  );
+  testWidgets('a credit card with a wallet card shows it is in the wallet', (
+    tester,
+  ) async {
+    await pumpFound(
+      tester,
+      card(
+        status: InstrumentStatus.confirmed,
+        userCardId: '33333333-3333-4333-8333-333333333333',
+      ),
+    );
+    expect(find.text('In wallet'), findsOneWidget);
+    expect(find.text('Add to wallet'), findsNothing);
+    expect(find.text('Confirm'), findsNothing);
+  });
+  testWidgets('a confirmed bank account still reads Confirmed', (tester) async {
+    await pumpFound(
+      tester,
+      card(status: InstrumentStatus.confirmed, kind: InstrumentKind.bankAccount),
+    );
+    expect(find.text('Confirmed'), findsOneWidget);
+    expect(find.text('Add to wallet'), findsNothing);
+  });
   testWidgets('why sheet explains category choice and offers a report', (
     tester,
   ) async {
