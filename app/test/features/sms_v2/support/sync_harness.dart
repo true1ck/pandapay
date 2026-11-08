@@ -254,6 +254,7 @@ Map<String, Object?> digest(Device device) {
 List<({String sender, String body, DateTime at})> sharedHistory(
   RuleBundle bundle, {
   int synthetic = 250,
+  int seed = 21,
 }) {
   final out = <({String sender, String body, DateTime at})>[];
   for (final file
@@ -268,7 +269,7 @@ List<({String sender, String body, DateTime at})> sharedHistory(
       ));
     }
   }
-  for (final m in SyntheticCorpus.generate(bundle, count: synthetic, seed: 21, spanDays: 300).messages) {
+  for (final m in SyntheticCorpus.generate(bundle, count: synthetic, seed: seed, spanDays: 300).messages) {
     out.add((sender: m.sender, body: m.body, at: m.receivedAt.toUtc()));
   }
   out.sort((a, b) => a.at.compareTo(b.at));
