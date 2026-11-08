@@ -27,7 +27,11 @@ RuleBundle testRuleBundle() {
       k: [],
   };
   final root = Directory(_rulesDir);
-  for (final f in root.listSync(recursive: true).whereType<File>()) {
+  // Sorted: the synthetic corpus draws rule examples by index, so the rule order
+  // must not depend on the file system (macOS and Linux list folders differently).
+  final files = root.listSync(recursive: true).whereType<File>().toList()
+    ..sort((a, b) => a.path.compareTo(b.path));
+  for (final f in files) {
     if (!f.path.endsWith('.json')) continue;
     final rel = f.path.substring(root.path.length + 1).replaceAll('\\', '/');
     if (rel == 'meta.json') continue;
