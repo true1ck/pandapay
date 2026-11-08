@@ -250,5 +250,69 @@
     "status": "active",
     "createdBy": "lane-i",
     "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "BRK-PAYOUT-DHAN-SETTLEMENT",
+    "version": 1,
+    "family": "broker_withdraw",
+    "senders": [
+      "*"
+    ],
+    "priority": 725,
+    "match": {
+      "pattern": "transferred\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+to\\s+your\\s+bank\\s+account\\s+ending\\s+with\\s+[x*•.]*(?<mask4>\\d{2,6})\\s+as\\s+a\\s+part\\s+of\\s+(?:[a-z ]+)?running\\s+account\\s+settlement[\\s\\S]*?your\\s+(?<broker>dhan)\\s+account",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "rejected",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "investment",
+          "rail": "neft"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask4"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "broker",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-DHANHQ-S",
+        "body": "Dear Sujay We have transferred Rs 93.82 to your bank account ending with XXXXXX2626 as a part of running account settlement vide Ref No PO26101713812965. To continue trading and investing, add funds back to your Dhan account.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-DHANHQ-S",
+        "body": "Dear Sujay We have transferred Rs 93.82 to your bank account ending with XXXXXX2626 as a part of running account settlement failed. To continue trading and investing, add funds back to your Dhan account.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
   }
 ]

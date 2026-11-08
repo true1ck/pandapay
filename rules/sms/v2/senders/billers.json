@@ -169,5 +169,13 @@
       "VIBILL",
       "VIAPPS"
     ]
+  },
+  {
+    "brand": "WELFOR",
+    "issuerSlug": "wellness_forever",
+    "issuerKind": "biller",
+    "aliases": [
+      "WELLNESS"
+    ]
   }
 ]

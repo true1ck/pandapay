@@ -1253,5 +1253,193 @@
     "status": "active",
     "createdBy": "baseline",
     "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "KOTAK-IMPS-SENT-B",
+    "version": 1,
+    "family": "transfer",
+    "senders": [
+      "KOTAKB",
+      "KOTAKC",
+      "KMBANK"
+    ],
+    "priority": 774,
+    "match": {
+      "pattern": "\\bsent\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+from\\s+kotak\\s+bank\\s+ac\\s*[x*•.]*\\s?(?<mask4>\\d{2,18})\\s+to\\s+[x*•.]*(?<dmask>\\d{2,18})\\s+on\\s+(?<date>\\d{2}-\\d{2}-\\d{2,4})\\.?\\s*utr:\\s*(?<ref_impsRef>\\d+)",
+      "flags": "i",
+      "rejectAny": [
+        "declined",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "p2p",
+          "rail": "imps"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yy"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask4"
+        },
+        "counterparty": {
+          "accountMaskFrom": "dmask",
+          "kind": "person"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "JD-KOTAKB-S",
+        "body": "Sent Rs.200.00 from Kotak Bank AC X2626 to X5712 on 21-08-25.UTR:523321944322.Click https://kotak.com/KBANKT/Fraud for dispute",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "JD-KOTAKB-S",
+        "body": "Declined Sent Rs.200.00 from Kotak Bank AC X2626 to X5712 on 21-08-25.UTR:523321944322",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "KOTAK-AUTOPAY-BILL-DUE",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "KOTAKB",
+      "KOTAKC",
+      "KMBANK"
+    ],
+    "priority": 660,
+    "match": {
+      "pattern": "REMINDER:\\s*(?:INR|Rs\\.?|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+will\\s+be\\s+auto-debited\\s+on\\s+(?<due>\\d{1,2}-\\d{1,2}-\\d{2,4})\\s+from\\s+your\\s+Kotak\\s+Bank\\s+A/?c\\s+towards\\s+o/?s\\s+dues?\\s+(?:of|on)\\s+Kotak\\s+(?:Credit\\s+)?Card\\s*[x*•.]*(?<card>\\d{2,16})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "kotak",
+          "maskFrom": "card"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "AD-KOTAKB-S",
+        "body": "REMINDER: INR 30 will be auto-debited on 23-09-26 from your Kotak Bank A/c towards o/s dues on Kotak Card x0592. Please keep Bank account funded.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "AD-KOTAKB-S",
+        "body": "REMINDER: INR 30 was paid on 23-09-26",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "KOTAK-CARD-AUTOPAY-PAID",
+    "version": 1,
+    "family": "bill_receipt",
+    "senders": [
+      "KOTAKB",
+      "KOTAKC",
+      "KMBANK"
+    ],
+    "priority": 660,
+    "match": {
+      "pattern": "Payment\\s+of\\s+(?:INR|Rs\\.?|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+received\\s+towards\\s+Kotak\\s+Bank\\s+Credit\\s+Card\\s*[x*•.]*(?<card>\\d{2,16})\\s+via\\s+auto-debit",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "declined"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "bill_payment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "kotak",
+          "maskFrom": "card"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "TX-Kotakb-S",
+        "body": "Hi! Payment of INR 30 received towards Kotak Bank Credit Card x0592 via auto-debit on 23-Sep-2026 and will be posted to your card account by end of day.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "TX-Kotakb-S",
+        "body": "Hi! Payment of INR 30 failed towards Kotak Bank Credit Card",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
   }
 ]

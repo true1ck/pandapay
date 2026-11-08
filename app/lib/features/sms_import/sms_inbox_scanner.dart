@@ -154,6 +154,7 @@ class SmsInboxScanner {
     final throughId = await head();
     checkAccount();
     var captured = 0;
+    var checked = 0;
     var lastId = progress.lastId(namespace);
     if (throughId < lastId) {
       // Detect provider restoration before deciding whether a slice is due.
@@ -168,15 +169,18 @@ class SmsInboxScanner {
         throughId: throughId,
         maxPages: 2,
         maxDuration: const Duration(milliseconds: 50),
+        initialChecked: checked,
+        initialCaptured: captured,
         emitInitialProgress: false,
       );
       captured += result.captured;
+      checked += result.checked;
       hasMore = result.hasMore;
     }
     if (throughId == progress.lastId(namespace)) {
       progress.commit(namespace, throughId, complete: true);
       onProgress?.call(
-        SmsInboxScanProgress(checked: 0, matched: captured, complete: true),
+        SmsInboxScanProgress(checked: checked, matched: captured, complete: true),
       );
     }
     return captured;
@@ -190,12 +194,16 @@ class SmsInboxScanner {
     int? throughId,
     int maxPages = 2,
     Duration maxDuration = const Duration(milliseconds: 50),
+    int initialChecked = 0,
+    int initialCaptured = 0,
   }) => AccountRecoveryOperationGate.process.run(
     () => _scanSlice(
       namespace,
       throughId: throughId,
       maxPages: maxPages,
       maxDuration: maxDuration,
+      initialChecked: initialChecked,
+      initialCaptured: initialCaptured,
     ),
   );
 
@@ -204,6 +212,8 @@ class SmsInboxScanner {
     int? throughId,
     required int maxPages,
     required Duration maxDuration,
+    int initialChecked = 0,
+    int initialCaptured = 0,
     bool emitInitialProgress = true,
   }) async {
     if (maxPages <= 0) throw ArgumentError.value(maxPages, 'maxPages');
@@ -211,7 +221,14 @@ class SmsInboxScanner {
       throw ArgumentError.value(maxDuration, 'maxDuration');
     }
     checkAccount();
-    if (emitInitialProgress) onProgress?.call(const SmsInboxScanProgress());
+    if (emitInitialProgress) {
+      onProgress?.call(
+        SmsInboxScanProgress(
+          checked: initialChecked,
+          matched: initialCaptured,
+        ),
+      );
+    }
     final boundary = throughId ?? await head();
     checkAccount();
     var afterId = progress.lastId(namespace);
@@ -250,7 +267,10 @@ class SmsInboxScanner {
       checked += page.rowCount;
       pages++;
       onProgress?.call(
-        SmsInboxScanProgress(checked: checked, matched: captured),
+        SmsInboxScanProgress(
+          checked: initialChecked + checked,
+          matched: initialCaptured + captured,
+        ),
       );
       if (afterId < boundary &&
           DateTime.now().difference(started) >= maxDuration) {
@@ -265,8 +285,8 @@ class SmsInboxScanner {
     }
     onProgress?.call(
       SmsInboxScanProgress(
-        checked: checked,
-        matched: captured,
+        checked: initialChecked + checked,
+        matched: initialCaptured + captured,
         complete: !hasMore,
       ),
     );

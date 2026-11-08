@@ -536,8 +536,12 @@ class SmsV2Runtime {
   Future<int> _rereadUnknown() async {
     final intake = SmsIntakeRepository(financial.database);
     final unknown = financial.database.db.select(
-      "SELECT source_key FROM sms_source_decisions WHERE namespace=? AND policy_version='v2' AND decision='unknown'",
-      [namespace],
+      "SELECT DISTINCT source_key FROM ("
+      "SELECT source_key FROM sms_source_decisions WHERE namespace=? AND policy_version='v2' AND decision='unknown' "
+      "UNION "
+      "SELECT json_extract(payload, '\$.sourceKey') AS source_key FROM v2_review_items WHERE namespace=? AND kind='template' AND status='open'"
+      ") WHERE source_key IS NOT NULL",
+      [namespace, namespace],
     );
     var read = 0;
     for (var offset = 0; offset < unknown.length; offset += 200) {

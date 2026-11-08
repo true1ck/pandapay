@@ -236,5 +236,70 @@
     "status": "active",
     "createdBy": "baseline",
     "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "AXIS-MANDATE-UPCOMING-NOTIFICATION",
+    "version": 1,
+    "family": "attempt_mandate",
+    "senders": [
+      "AXISBK"
+    ],
+    "priority": 670,
+    "match": {
+      "pattern": "for\\s+the\\s+upcoming\\s+mandate\\s+set\\s+for\\s+(?<date>\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}),?\\s+your\\s+account\\s+will\\s+be\\s+debited\\s+with\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+towards\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+for\\s+upi\\s+mandate",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "scheduled",
+          "direction": "debit",
+          "purpose": "bill_payment",
+          "dueAt": {
+            "from": "date",
+            "formats": [
+              "dd-MM-yy",
+              "dd/MM/yy",
+              "dd-MM-yyyy",
+              "dd/MM/yyyy"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "axis"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m"
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "For the upcoming mandate set for 15-11-26, your account will be debited with Rs.649.00 towards Netflix Entertainment for UPI Mandate. To stop execution, pause mandate - Axis Bank",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "Mandate cancelled for Netflix Entertainment. - Axis Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-08T00:00:00Z"
   }
 ]

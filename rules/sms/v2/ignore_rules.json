@@ -1064,5 +1064,239 @@
     "pattern": "\\ba\\s+transaction\\s+of\\s+(?:rs\\.?|inr)\\s*[\\d,.]+\\s+on\\s+your\\s+yes\\s+bank\\s+credit\\s+card\\s+ending\\s+\\d+[^\\n]{0,80}\\bis\\s+declined\\b",
     "flags": "i",
     "reason": "service"
+  },
+  {
+    "id": "IGN-WELLNESS-FOREVER-EBILL",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^Bill\\s+amount\\s+Rs\\.?\\s*[\\d,]+(?:\\.\\d{1,2})?\\s+for\\s+Bill\\s+No\\s+[A-Za-z0-9/]+[\\s\\S]*?View\\s+your\\s+e-bill",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-MOBIKWIK-COLLECT-REQUEST",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^Mobikwik:\\s*Collect\\s+request\\s+initiated\\s+by[\\s\\S]*?Authorise\\s+the\\s+request\\s+by\\s+entering\\s+UPI\\s+PIN",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-VICARE-POSTCALL-BALANCE",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^Last-Call:\\s*\\d{2}:\\d{2}:\\d{2},\\s*Charge:\\s*(?:Rs\\.?|INR|₹)?\\s*0(?:\\.00)?,\\s*Main-Bal:",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-EPFO-UAN-LINKED",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^Your\\s+UAN\\s+[A-Za-z0-9X]+\\s+has\\s+been\\s+linked\\s+by\\s+establishment",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-MCX-CLIENT-FUNDS",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^Client\\s+Funds\\s+on\\s+\\d{2}/\\d{2}/\\d{4}\\.MCX",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-EKART-DELIVERY-UPDATE",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^Ekart\\s+Update:\\s*",
+    "flags": "i",
+    "reason": "delivery"
+  },
+  {
+    "id": "IGN-AXIO-SERVICE-UPDATE",
+    "senders": [
+      "*"
+    ],
+    "pattern": "(?:Service\\s+Update,\\s*by\\s+continuing\\s+to\\s+make\\s+timely\\s+EMI\\s+payments|Your\\s+Pay\\s+Later\\s+a/?c\\s+has\\s+got\\s+you\\s+a\\s+personal\\s+loan|Service\\s+Notice:\\s*Your\\s+Pay\\s+Later\\s+a/?c\\s+has\\s+a\\s+new\\s+eligibility\\s+update)",
+    "flags": "i",
+    "reason": "promotion"
+  },
+  {
+    "id": "IGN-RELGEN-INSURANCE-RENEWAL",
+    "senders": [
+      "*"
+    ],
+    "pattern": "(?:renew\\s+your\\s+Two\\s+Wheeler\\s+Insurance|Two\\s+Wheeler\\s+Insurance[\\s\\S]*?has\\s+expired|Two\\s+Wheeler\\s+Insurance[\\s\\S]*?expires\\s+TODAY)",
+    "flags": "i",
+    "reason": "promotion"
+  },
+  {
+    "id": "IGN-CANBNK-STRIKE-NOTICE",
+    "senders": [
+      "*"
+    ],
+    "pattern": "(?:In\\s+view\\s+of\\s+bank\\s+strike|बैंक\\s+यूनियनों\\s+ने)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-FITGYM-WELCOME",
+    "senders": [
+      "*"
+    ],
+    "pattern": "welcome\\s+to\\s+fitgym\\s+club",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-PANDAPAY-QA-PROBE",
+    "senders": [
+      "*"
+    ],
+    "pattern": "probe\\s+message\\s+from\\s+pandapay\\s+qa",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-VICARE-DAILY-BALANCE",
+    "senders": [
+      "*"
+    ],
+    "pattern": "(?:daily\\s+free\\s+sms\\s+balance|main-bal:rs|binge\\s+at\\s+night|surf,stream,share)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-CANBNK-APY-MAINTAIN-BAL",
+    "senders": [
+      "*"
+    ],
+    "pattern": "atal\\s+pension\\s+yojana[\\s\\S]{0,60}?maintain\\s+sufficient\\s+balance|atal\\s+pension\\s+yojana\\s+contribution\\s+amount",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-INSURANCE-EXPIRING-RENEWAL",
+    "senders": [
+      "*"
+    ],
+    "pattern": "(?:insurance\\s+policy|insurance\\s+for|two\\s+wheeler\\s+insurance)[\\s\\S]{0,60}?(?:is\\s+expiring|will\\s+expire|renew\\s+your\\s+policy)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-BANK-MAINTENANCE-SERVICE",
+    "senders": [
+      "*"
+    ],
+    "pattern": "(?:due\\s+to\\s+scheduled\\s+maintenance|services\\s+are\\s+restored)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-DELIVERY-RETURN-UPDATE",
+    "senders": [
+      "*"
+    ],
+    "pattern": "(?:pickup\\s+arranged|return\\s+request\\s+received|lpg\\s+refill\\s+is\\s+delivered)",
+    "flags": "i",
+    "reason": "delivery"
+  },
+  {
+    "id": "IGN-DOTGOI-SANCHAR-SAATHI",
+    "senders": [
+      "*"
+    ],
+    "pattern": "(?:संचार\\s+साथी|संसार\\s+साथी|मोबाईल\\s+टॉवर्स|sancharsaathi)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-MINTPAY-LOW-BALANCE",
+    "senders": [
+      "*"
+    ],
+    "pattern": "mintpay\\s+balance\\s+is\\s+low",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-AXIS-DECLINED-USAGE-LIMIT",
+    "senders": [
+      "*"
+    ],
+    "pattern": "txn\\s+on\\s+axis\\s+bank\\s+credit\\s+card\\s+[x*•.]+\\d+\\s+has\\s+been\\s+declined\\s+as\\s+amt\\s+exceeds\\s+usage\\s+limit",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-MOBIKWIK-COLLECT-REQ",
+    "senders": [
+      "*"
+    ],
+    "pattern": "has\\s+requested\\s+money\\s+on\\s+MobiKwik\\s+app",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-INDIALENDS-LOAN-REQ",
+    "senders": [
+      "*"
+    ],
+    "pattern": "Your\\s+loan\\s+request\\s+for\\s+(?:Rs\\.?|INR|₹)[\\s\\S]*?has\\s+been\\s+received",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-BURGERKING-CROWNS",
+    "senders": [
+      "*"
+    ],
+    "pattern": "\\b\\d+\\s+Crowns\\s+credited\\s+to\\s+your\\s+BK\\s+account\\b",
+    "flags": "i",
+    "reason": "promotion"
+  },
+  {
+    "id": "IGN-HPPAY-PROSPECTIVE-COINS",
+    "senders": [
+      "*"
+    ],
+    "pattern": "Happy\\s+coins\\b[\\s\\S]*?\\bshall\\s+be\\s+credited\\s+shortly\\b",
+    "flags": "i",
+    "reason": "promotion"
+  },
+  {
+    "id": "IGN-LIC-PREMIUM-ADJUSTED",
+    "senders": [
+      "*"
+    ],
+    "pattern": "premium\\s+due\\s+from[\\s\\S]*?\\bis\\s+adjusted\\s+on\\b",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-AXIO-PAYLATER-LIMIT-UPDATE",
+    "senders": [
+      "*"
+    ],
+    "pattern": "Approved\\s+credit\\s+for\\s+your\\s+Pay\\s+Later\\s+account\\s+has\\s+been\\s+modified",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-PROTEAN-APY-PRAN",
+    "senders": [
+      "*"
+    ],
+    "pattern": "APY\\(PRAN[^\\)]+\\)\\s+Contribution\\s+of\\s+(?:Rs\\.?|INR|₹)[\\s\\S]*?credited\\s+to\\s+your\\s+PRAN",
+    "flags": "i",
+    "reason": "service"
   }
 ]

@@ -694,5 +694,251 @@
     "status": "active",
     "createdBy": "baseline",
     "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "ALEGRA-BROADBAND-PAYMENT",
+    "version": 1,
+    "family": "bill_receipt",
+    "senders": [
+      "ALEGRA"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "Payment\\s+received\\s+against\\s+Invoice\\s+No[\\s\\S]*?with\\s+Amt\\s*(?:Rs\\.?|INR|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{1,2}-[a-z]{3}-\\d{2,4})[\\s\\S]*?-(?<biller>Alegra\\s+Broadband)",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "declined"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "bill_payment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MMM-yyyy",
+            "dd-MMM-yy"
+          ]
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "biller",
+          "transforms": [
+            "upperTrim"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "AD-ALEGBB-S",
+        "body": "Payment received against Invoice No PBN_ECO_40Mbps_UL_30Days with Amt Rs. 472.00 on 24-Oct-2026. Happy Browsing!! -Alegra Broadband",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AD-ALEGBB-S",
+        "body": "Payment failed against Invoice No PBN_ECO_40Mbps_UL_30Days with Amt Rs. 472.00 on 24-Oct-2026 -Alegra Broadband",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "HDFC-BILLPAY-PRESENTED-DUE",
+    "version": 1,
+    "family": "bill_due",
+    "senders": [
+      "HDFCBK",
+      "HDFCBN",
+      "HDFCCB",
+      "HDFCCC"
+    ],
+    "priority": 660,
+    "match": {
+      "pattern": "^(?:Pay\\s+Now\\s*!|New\\s+Bill\\s+Alert:)\\s*(?:Your\\s+)?(?<biller>[a-z0-9_ ]+?)\\s+Bill\\s+(?<billNo>[a-z0-9_]+)\\s+of\\s+(?:Rs\\.?|INR|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+is\\s+due\\s+on\\s+(?<due>\\d{1,2}-[a-z]{3}-\\d{4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "was already paid"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          },
+          "billerName": {
+            "from": "biller",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VD-HDFCBK-S",
+        "body": "Pay Now!\nGoaElectricity Bill 60008413407 of Rs.927.00 is due on 09-Nov-2026. Use HDFC Bank NetBanking or Mobile App > BillPay\nT&C. Ignore if paid",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "New Bill Alert:\nYour Alegra Communication Bill sujay_kurtikar_alegra of Rs.2400.00 is due on 30-Oct-2026. To pay, login to HDFC Bank Net/Mobile Banking>BillPay\nT&C. Ignore if paid",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VD-HDFCBK-S",
+        "body": "Pay Now! GoaElectricity Bill was already paid",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "LIC-PREMIUM-DUE",
+    "version": 1,
+    "family": "bill_due",
+    "senders": [
+      "LICIND"
+    ],
+    "priority": 660,
+    "match": {
+      "pattern": "Policy\\s+No\\.(?<policy>\\d+)\\s+Premium\\s+due\\s+(?:Rs\\.?|INR|₹)\\s*(?:\\*+)?(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+pay\\s+on\\s+or\\s+before\\s+(?<due>\\d{1,2}/\\d{1,2}/\\d{2,4})[\\s\\S]*?-(?<biller>LIC)",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "was already paid"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          },
+          "billerName": {
+            "from": "biller",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "JD-LICIND-S",
+        "body": "Policy No.930688185 Premium due Rs.*****2970.00 pay on or before 21/09/2026.ClicknPayhttps://ebiz.licindia.in/spy.Plz ignore if already paid-LIC",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "JD-LICIND-S",
+        "body": "Policy No.930688185 Premium due Rs.2970.00 was already paid -LIC",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "WELFOR-EBILL-RECEIPT",
+    "version": 1,
+    "family": "spend_merchant",
+    "senders": [
+      "WELFOR"
+    ],
+    "priority": 660,
+    "match": {
+      "pattern": "thank\\s+you\\s+for\\s+choosing\\s+(?<m>wellness\\s+forever)[\\s\\S]{0,30}?view\\s+e-bill\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-WELFOR-S",
+        "body": "Thank you for choosing Wellness Forever. View e-bill of Rs 223.54 - https://b.wlfr.in/app/ebill",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-WELFOR-S",
+        "body": "Welcome to Wellness Forever club.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-08T00:00:00Z"
   }
 ]

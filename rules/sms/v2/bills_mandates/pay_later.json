@@ -486,5 +486,203 @@
     "status": "active",
     "createdBy": "baseline",
     "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "AXIO-PAYLATER-PURCHASE",
+    "version": 1,
+    "family": "pay_later",
+    "senders": [
+      "*"
+    ],
+    "priority": 660,
+    "match": {
+      "pattern": "(?<m>Amazon)\\s+Pay\\s+Later:\\s*(?:Rs\\.?|INR|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+used\\s+for\\s+your\\s+purchase(?:\\s+on\\s+(?<date>\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}))?",
+      "flags": "i",
+      "rejectAny": [
+        "declined",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yy"
+          ]
+        },
+        "instrument": {
+          "kind": "pay_later",
+          "issuerSlug": "axio"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "upperTrim"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "AD-AXIOIN-S",
+        "body": "Amazon Pay Later: Rs.760 used for your purchase on 03-11-2026. Pay via Axio app.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AD-AXIOIN-S",
+        "body": "Declined Amazon Pay Later: Rs.760 used for your purchase on 03-11-2026",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "AXIO-PAYLATER-BILL-DUE",
+    "version": 1,
+    "family": "bill_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 660,
+    "match": {
+      "pattern": "Your\\s+Axio\\s+bill\\s+of\\s+(?:Rs\\.?|INR|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+is\\s+generated\\.\\s*Pay\\s+by\\s+(?<due>\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "pay_later",
+          "issuerSlug": "axio"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "AD-AXIOIN-S",
+        "body": "Your Axio bill of Rs.3,400 is generated. Pay by 05-12-2026 to avoid late fee.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "AD-AXIOIN-S",
+        "body": "Your Axio bill of Rs.3,400 was paid on 05-12-2026",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "LAZYPAY-PURCHASE",
+    "version": 1,
+    "family": "pay_later",
+    "senders": [
+      "LAZYPY"
+    ],
+    "priority": 660,
+    "match": {
+      "pattern": "^lazypay:\\s*(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+spent\\s+at\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+on\\s+(?<date>\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4})\\.?\\s+repay\\s+by\\b",
+      "flags": "i",
+      "rejectAny": [
+        "declined",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd/MM/yyyy",
+            "dd-MM-yy",
+            "dd/MM/yy"
+          ]
+        },
+        "instrument": {
+          "kind": "pay_later",
+          "issuerSlug": "lazypay"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VK-LZYPAY-S",
+        "body": "LazyPay: Rs.500 spent at Zomato on 04-11-2026. Repay by 15th.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VK-LZYPAY-S",
+        "body": "Declined LazyPay: Rs.500 spent at Zomato on 04-11-2026. Repay by 15th.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-08T00:00:00Z"
   }
 ]

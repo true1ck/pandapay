@@ -9,7 +9,7 @@
     ],
     "priority": 765,
     "match": {
-      "pattern": "a/?c\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+debited\\s+for\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\s+by\\s+(?:mob\\s*bk|mobile\\s*banking|upi|imps)\\s*ref\\s*no\\.?\\s*(?<ref_upiRef>\\d{9,18})(?:,?\\s*fvg\\s*:?\\s*(?<payee>[^\\n]+?))?(?=\\s+avl|\\.\\s|\\.$|$)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "pattern": "a/?c\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+debited(?:\\s+for\\s+|\\s+)(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\s+by\\s+(?:mob\\s*bk|mobile\\s*banking|upi|imps)\\s*ref\\s*no\\.?\\s*(?<ref_upiRef>\\d{9,18})(?:,?\\s*fvg\\s*:?\\s*(?<payee>[^\\n]+?))?(?=\\s+avl|\\.\\s|\\.$|$)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
       "flags": "i"
     },
     "emit": [
@@ -143,6 +143,22 @@
         ]
       },
       {
+        "sender": "JK-UNIONB-T",
+        "body": "Union Bank of India A/c *8565 Debited Rs:81.00 on 25-10-2026 22:00:20 by Mob Bk ref no 629806980380, Fvg: Amazon P Avl Bal Rs:1723.92. Not you?Call 18002333/SMS BLOCK 8565 to 8879365472",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "JK-UNIONB-T",
+        "body": "Union Bank of India A/c *8565 Debited Rs:1.00 on 29-10-2026 01:26:04 by Mob Bk ref no 630201186551, Fvg: CHANDRES Avl Bal Rs:5127.92. Not you?Call 18002333/SMS BLOCK 8565 to 8879365472",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
         "sender": "VM-UNIONB-S",
         "body": "A/c *8565 will be Debited for Rs:3000.00 on 14-08-2025 21:18:19 by Mob Bk ref no 559227806547",
         "expectFactTypes": []
@@ -162,7 +178,7 @@
     ],
     "priority": 763,
     "match": {
-      "pattern": "a/?c\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+credited\\s+for\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\s+by\\s+(?:mob\\s*bk|mobile\\s*banking|upi|imps)\\s*ref\\s*no\\.?\\s*(?<ref_upiRef>\\d{9,18})[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "pattern": "a/?c\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+credited(?:\\s+for\\s+|\\s+)(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\s+by\\s+(?:mob\\s*bk|mobile\\s*banking|upi|imps)\\s*ref\\s*no\\.?\\s*(?<ref_upiRef>\\d{9,18})[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
       "flags": "i"
     },
     "emit": [
@@ -309,7 +325,7 @@
     ],
     "priority": 760,
     "match": {
-      "pattern": "a/?c\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+debited\\s+for\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\s+by\\s+(?:mob\\s*bk|mobile\\s*banking|upi|imps)\\s*ref\\s*no\\.?\\s*(?<ref_upiRef>\\d{9,18})(?:,?\\s*fvg\\s*:?\\s*(?<payee>[^\\n]+?))?(?=\\s+avl|\\.\\s|\\.$|$)",
+      "pattern": "a/?c\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+debited(?:\\s+for\\s+|\\s+)(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\s+by\\s+(?:mob\\s*bk|mobile\\s*banking|upi|imps)\\s*ref\\s*no\\.?\\s*(?<ref_upiRef>\\d{9,18})(?:,?\\s*fvg\\s*:?\\s*(?<payee>[^\\n]+?))?(?=\\s+avl|\\.\\s|\\.$|$)",
       "flags": "i"
     },
     "emit": [
@@ -423,6 +439,13 @@
         ]
       },
       {
+        "sender": "JK-UNIONB-T",
+        "body": "Union Bank of India A/c *8565 Debited Rs:1.00 on 29-10-2026 01:26:04 by Mob Bk ref no 630201186551, Fvg: CHANDRES",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
         "sender": "VM-UNIONB-S",
         "body": "A/c *8565 will be Debited for Rs:3000.00 on 14-08-2025 21:18:19 by Mob Bk ref no 559227806547",
         "expectFactTypes": []
@@ -442,7 +465,7 @@
     ],
     "priority": 758,
     "match": {
-      "pattern": "a/?c\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+credited\\s+for\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\s+by\\s+(?:mob\\s*bk|mobile\\s*banking|upi|imps)\\s*ref\\s*no\\.?\\s*(?<ref_upiRef>\\d{9,18})",
+      "pattern": "a/?c\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+credited(?:\\s+for\\s+|\\s+)(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\s+by\\s+(?:mob\\s*bk|mobile\\s*banking|upi|imps)\\s*ref\\s*no\\.?\\s*(?<ref_upiRef>\\d{9,18})",
       "flags": "i"
     },
     "emit": [

@@ -6820,5 +6820,631 @@
     "status": "active",
     "createdBy": "review-2y",
     "updatedAt": "2026-11-07T00:00:00Z"
+  },
+  {
+    "id": "HDFC-ATM-WITHDRAWAL-B",
+    "version": 1,
+    "family": "atm_withdrawal",
+    "senders": [
+      "HDFCBK",
+      "HDFCBN",
+      "HDFCCB",
+      "HDFCCC"
+    ],
+    "priority": 770,
+    "match": {
+      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+withdrawn\\s+from\\s+hdfc\\s+bank\\s+card\\s*[x*•.]*\\s?(?<mask4>\\d{2,18})\\s+at\\s+(?<location>[^\\n]+?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}:\\d{2}:\\d{2}:\\d{2}|\\d{4}-\\d{2}-\\d{2}(?:\\s+\\d{2}:\\d{2}(?::\\d{2})?)?)[\\s\\S]*?\\b(?:avl|avail(?:able)?|clear)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)?\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "declined",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "atm",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy HH:mm:ss"
+          ]
+        },
+        "instrument": {
+          "kind": "debit_card",
+          "maskFrom": "mask4"
+        },
+        "counterparty": {
+          "nameFrom": "location",
+          "kind": "bank",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.500.00 withdrawn from HDFC Bank card 1797 at HDFC ATM on 2026-10-31:14:20:10. Avl Bal Rs.25,000.00",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Declined Rs.500.00 withdrawn from HDFC Bank card 1797 at HDFC ATM on 2026-10-31:14:20:10",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "HDFC-ACCT-SENT-B",
+    "version": 1,
+    "family": "transfer",
+    "senders": [
+      "HDFCBK",
+      "HDFCBN",
+      "HDFCCB",
+      "HDFCCC"
+    ],
+    "priority": 768,
+    "match": {
+      "pattern": "amt\\s+sent\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+from\\s+hdfc\\s+bank\\s+a/?c\\s*[x*•.]*\\s?(?<mask4>\\d{2,18})\\s+to\\s+(?<dest>[^\\n]+?)\\s+on\\s+(?<date>\\d{1,2}[-/]\\d{1,2}(?:[-/]\\d{2,4})?)\\s+ref\\s*(?:no\\.?)?\\s*:?\\s*(?<ref_impsRef>\\d+)(?:[\\s\\S]*?\\b(?:avl|avail(?:able)?|clear)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)?\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?))?",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "declined"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "p2p",
+          "rail": "imps"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM",
+            "dd-MM-yy",
+            "dd-MM-yyyy"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask4"
+        },
+        "counterparty": {
+          "nameFrom": "dest",
+          "kind": "person",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Amt Sent Rs.1000.00 From HDFC Bank A/C *1797 To SUJAY SHANTARAM KURTIKAR On 18-11 Ref 432306688497 Avl Bal Rs.34444.60",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Amt Sent Rs.1000.00 From HDFC Bank A/C *1797 To SUJAY SHANTARAM KURTIKAR On 18-11 Ref 432306688497 failed",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "HDFC-AUTOPAY-ALERT-BILL-DUE",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "HDFCBK",
+      "HDFCBN",
+      "HDFCCB",
+      "HDFCCC"
+    ],
+    "priority": 660,
+    "match": {
+      "pattern": "^(?:AutoPay\\s+Alert!|AutoPay\\s+Reminder:)[\\s\\S]*?Your\\s+HDFC\\s+Bank\\s+Credit\\s+Card\\s+(?<maskCard>\\d{2,16})\\s+bill[\\s\\S]*?Total\\s+Amt:\\s*(?:Rs\\.?|INR|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[\\s\\S]*?will\\s+be\\s+deducted\\s+from\\s+your\\s+A/?C\\s*(?<maskAcct>\\d{2,16})\\s+on\\s+(?<due>\\d{1,2}/[A-Za-z]{3}/\\d{4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due",
+            "formats": [
+              "dd/MMM/yyyy",
+              "dd/MM/yyyy",
+              "dd-MMM-yyyy",
+              "dd-MM-yyyy"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hdfc",
+          "maskFrom": "maskCard"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "AutoPay Alert!\nYour HDFC Bank Credit Card 8708 bill\nTotal Amt: Rs.8331\nwill be deducted from your A/C 1797 on 08/NOV/2026. Ignore if paid",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "AutoPay Alert!\nYour HDFC Bank Credit Card 8708 bill was paid on 08/NOV/2026",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "HDFC-AUTOPAY-REMINDER-BILL-DUE",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "HDFCBK",
+      "HDFCBN",
+      "HDFCCB",
+      "HDFCCC"
+    ],
+    "priority": 660,
+    "match": {
+      "pattern": "^(?:AutoPay\\s+Reminder:|AutoPay\\s+Alert:)[\\s\\S]*?(?:Rs\\.?|INR|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+will\\s+be\\s+deducted\\s+from\\s+HDFC\\s+Bank\\s+A/?c\\s*(?<maskAcct>\\d{2,16})\\s+on\\s+(?<due>\\d{1,2}/[A-Za-z]{3}/\\d{4})\\s+for\\s+Credit\\s+Card\\s+(?<maskCard>\\d{2,16})\\s+bill",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due",
+            "formats": [
+              "dd/MMM/yyyy",
+              "dd/MM/yyyy",
+              "dd-MMM-yyyy",
+              "dd-MM-yyyy"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hdfc",
+          "maskFrom": "maskCard"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-HDFCBN-S",
+        "body": "AutoPay Reminder:\nRs.1147 will be deducted from HDFC Bank A/c 1797 on 08/SEP/2026 for Credit Card 8708 bill.\nFor Query: Ask EVA resu.io/ZPCKZ7",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBN-S",
+        "body": "AutoPay Reminder: Your Credit Card bill was paid on 08/SEP/2026",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "HDFC-CARD-TXN-REVERSED",
+    "version": 1,
+    "family": "refund",
+    "senders": [
+      "HDFCBK",
+      "HDFCBN",
+      "HDFCCB",
+      "HDFCCC"
+    ],
+    "priority": 770,
+    "match": {
+      "pattern": "^Transaction\\s+Reversed\\s*!\\s*On\\s+HDFC\\s+Bank\\s+CREDIT\\s+Card\\s+[x*•.]*(?<maskCard>\\d{2,16})\\s+Amt:\\s*(?:Rs\\.?|INR|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+By\\s+(?<merchant>[^\\n]+?)\\s+On\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?::\\d{2}:\\d{2}(?::\\d{2})?)?)",
+      "flags": "i",
+      "rejectAny": [
+        "declined",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd"
+          ]
+        },
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hdfc",
+          "maskFrom": "maskCard"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "AX-HDFCBK-S",
+        "body": "Transaction Reversed!On HDFC Bank CREDIT Card xx8708 Amt: Rs.102.53 By ORACLE  SINGAPORE On 2026-11-06:00:33:05",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AX-HDFCBK-S",
+        "body": "Declined Transaction Reversed!On HDFC Bank CREDIT Card xx8708",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "HDFC-UPI-DEBITED-TO-MERCHANT",
+    "version": 1,
+    "family": "debit_upi",
+    "senders": [
+      "HDFCBK"
+    ],
+    "priority": 775,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+debited\\s+to\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+via\\s+upi\\s+on\\s+(?<date>\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4})\\.?\\s+(?:account|a/c)\\s+(?:[x*•.]+\\s*)?(?<mask>\\d{2,6})\\s+balance\\s+(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "declined",
+        "failed",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd/MM/yyyy",
+            "dd-MM-yy",
+            "dd/MM/yy"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "hdfc",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.98,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs 549 debited to KFC INDIA via UPI on 31-10-2026. Account XX9876 balance Rs 39800",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Declined Rs 549 debited to KFC INDIA via UPI on 31-10-2026. Account XX9876 balance Rs 39800",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-08T00:00:00Z"
+  },
+  {
+    "id": "HDFC-CARD-TXN-AT-MERCHANT",
+    "version": 1,
+    "family": "spend_card",
+    "senders": [
+      "HDFCBK"
+    ],
+    "priority": 775,
+    "match": {
+      "pattern": "^txn\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+on\\s+your\\s+hdfc\\s+bank\\s+card\\s+(?:[x*•.]+\\s*)?(?<mask>\\d{2,6})\\s+at\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+on\\s+(?<date>\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4})\\.?\\s+avl\\s+bal\\s+(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "declined",
+        "failed",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yy",
+            "dd/MM/yy",
+            "dd-MM-yyyy",
+            "dd/MM/yyyy"
+          ]
+        },
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hdfc",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.98,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Txn of Rs.4,312.00 on your HDFC Bank Card xx1234 at BOMBAY BAZAAR on 31-10-26. Avl Bal Rs.12,500.00",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Declined Txn of Rs.4,312.00 on your HDFC Bank Card xx1234 at BOMBAY BAZAAR on 31-10-26. Avl Bal Rs.12,500.00",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-08T00:00:00Z"
+  },
+  {
+    "id": "HDFC-CARD-SPEND-SPENTFIRST-DC",
+    "version": 1,
+    "family": "card_spend",
+    "senders": [
+      "HDFCBK",
+      "HDFCBN"
+    ],
+    "priority": 753,
+    "match": {
+      "pattern": "\\bspent\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:from|on)\\s+(?:(?:your|the)\\s+)?(?:hdfc\\s+bank\\s+)?card\\s*[x*•.]*\\s?(?<mask4>\\d{2,18})\\s+at\\s+(?<merchant>[^\\n]+?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)(?=[\\s\\S]*?\\bbal\\b\\s*(?:is\\s*)?(?:\\b(?:rs\\.?|inr)|₹)?\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)|)",
+      "flags": "i",
+      "requireAll": [
+        "block dc"
+      ],
+      "rejectAny": [
+        "declined",
+        "failed",
+        "unsuccessful"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy HH:mm:ss"
+          ]
+        },
+        "instrument": {
+          "kind": "debit_card",
+          "maskFrom": "mask4"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "AD-HDFCBK-S",
+        "body": "Spent Rs.310 From HDFC Bank Card x8406 At QUALITY FUEL STATION On 2026-04-07:21:41:16 Bal Rs.135317.02 Not You? Call 18002586161/SMS BLOCK DC  8406 to 7308080808",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "AD-HDFCBK-S",
+        "body": "Spent Rs.310 From HDFC Bank Card x8406 At QUALITY FUEL STATION On 2026-04-07:21:41:16 Bal Rs.135317.02 Not You? Call 18002586161/SMS BLOCK CC  8406 to 7308080808",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
   }
 ]

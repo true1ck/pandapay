@@ -241,5 +241,165 @@
     "status": "active",
     "createdBy": "baseline",
     "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-ATT-ECS-RETURNED-INSUFFICIENT-FUNDS",
+    "version": 1,
+    "family": "attempt_declined",
+    "senders": [
+      "*"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "(?:ecs|nach)\\s+debit\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:presented\\s+to|on)\\s+your\\s+a/c\\s+(?:[x*•.]+\\s*)?(?<mask>\\d{2,6})[\\s\\S]{0,50}?(?:returned|could\\s+not\\s+be\\s+processed)\\s+due\\s+to\\s+insufficient\\s+(?:funds|balance)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "failed",
+          "direction": "debit",
+          "purpose": "bill_payment"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "\"ECS Debit of Rs.42,500.00 presented to your A/c XX5552 on 30-10-26 has been returned due to insufficient funds.\"",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "ECS Debit of Rs.42,500.00 presented to your A/c XX5552 on 30-10-26 was successful.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-08T00:00:00Z"
+  },
+  {
+    "id": "SUB-ATT-CARD-DECLINED-INSUFFICIENT-FUNDS",
+    "version": 1,
+    "family": "attempt_declined",
+    "senders": [
+      "*"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "(?:txn\\s+of\\s+)?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:spent\\s+at\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+)?(?:on|using|with)\\s+your\\s+[a-z\\s]+card\\s+(?:[x*•.]+\\s*)?(?<mask>\\d{2,6})[\\s\\S]{0,60}?was\\s+declined\\s+due\\s+to\\s+insufficient\\s+(?:funds|balance)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "declined",
+          "direction": "debit",
+          "purpose": "purchase"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "\"Rs.81,467.00 spent at PHOENIX MALL on your HDFC Bank Credit Card xx1234 was declined due to insufficient funds. - HDFC Bank\"",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "\"Rs.81,467.00 spent at PHOENIX MALL on your HDFC Bank Credit Card xx1234 was approved. - HDFC Bank\"",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-08T00:00:00Z"
+  },
+  {
+    "id": "SUB-ATT-SIP-FAILED-INSUFFICIENT-FUNDS",
+    "version": 1,
+    "family": "attempt_declined",
+    "senders": [
+      "*"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+debited\\s+from\\s+your\\s+a/c\\s+(?:[x*•.]+\\s*)?(?<mask>\\d{2,6})\\s+towards\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+on\\s+(?<date>\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4})\\.?\\s+payment\\s+failed\\s+due\\s+to\\s+insufficient\\s+funds",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "failed",
+          "direction": "debit",
+          "purpose": "investment"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-SBIINB-S",
+        "body": "\"Rs.2,000.00 debited from your A/c XX4321 towards SBI Bluechip Fund SIP on 30-10-26. Payment failed due to insufficient funds.\"",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-SBIINB-S",
+        "body": "\"Rs.2,000.00 debited from your A/c XX4321 towards SBI Bluechip Fund SIP on 30-10-26. Payment successful.\"",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-08T00:00:00Z"
   }
 ]

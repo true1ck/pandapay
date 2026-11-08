@@ -518,5 +518,134 @@
     "status": "active",
     "createdBy": "baseline",
     "updatedAt": "2026-11-08T00:00:00Z"
+  },
+  {
+    "id": "SUB-BIL-SCHEDULED-AUTO-01",
+    "version": 1,
+    "family": "bill_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 665,
+    "match": {
+      "pattern": "bill\\s+payment\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+for\\s+(?<biller>[^\\n]+?)\\s+is\\s+scheduled\\s+for\\s+(?<due>\\d{2}[-/]\\d{2}[-/]\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was cancelled",
+        "cancelled",
+        "declined"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due",
+            "formats": [
+              "dd-MM-yyyy",
+              "dd-MM-yy",
+              "dd/MM/yyyy",
+              "dd/MM/yy"
+            ]
+          },
+          "billerName": {
+            "from": "biller",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "Bill payment of INR 1283.00 for Goa Electricity Department 60008413407 is scheduled for 29-06-2026. Please maintain sufficient balance. - Axis Bank",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "Bill payment of INR 1283.00 for Goa Electricity Department 60008413407 was cancelled.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "SUB-BIL-LIC-PREMIUM-01",
+    "version": 1,
+    "family": "bill_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 665,
+    "match": {
+      "pattern": "lic\\s+premium\\s+for\\s+policy\\s+no\\.?\\s*(?<policy>\\d+)\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?:\\*+)?(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+is\\s+due\\s+on\\s+(?<due>\\d{2}[-/]\\d{2}[-/]\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid online"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due",
+            "formats": [
+              "dd/MM/yyyy",
+              "dd/MM/yy",
+              "dd-MM-yyyy",
+              "dd-MM-yy"
+            ]
+          },
+          "billerName": {
+            "from": "policy",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VA-LICIND-S",
+        "body": "LIC Premium for Policy No. 930688185 of Rs. *****3036.83 is due on 21/09/2025. You can pay premium online at https://ebiz.licindia.in/D2CPM/#Login.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VA-LICIND-S",
+        "body": "LIC Premium for Policy No. 930688185 of Rs. *****3036.83 was paid online at https://ebiz.licindia.in/D2CPM/#Login.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
   }
 ]

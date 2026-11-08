@@ -434,5 +434,73 @@
     "status": "active",
     "createdBy": "baseline",
     "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-CC-STMT-AXIS-GEN",
+    "version": 1,
+    "family": "card_statement",
+    "senders": [
+      "*"
+    ],
+    "priority": 715,
+    "match": {
+      "pattern": "statement\\s+(?:for\\s+)?(?:your\\s+)?(?:[a-z\\s]{1,30}?)credit\\s+card(?:\\s*(?:no|number)\\.?)?\\s*[x*•.]*\\s?(?<mask4>\\d{2,6})\\s+(?:is|has\\s+been)?\\s+generated[\\s\\S]*?due\\s+(?:on|by|date)?\\s*:?\\s*(?<due>\\d{2}[-/]\\d{2}[-/]\\d{2,4})[\\s\\S]*?total\\s+amt\\s*:?\\s*(?:\\b(?:rs\\.?|inr)|₹)?\\s*(?:dr\\.?)?\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)[\\s\\S]*?min(?:imum)?\\s+amt\\s+due\\s*:?\\s*(?:\\b(?:rs\\.?|inr)|₹)?\\s*(?:dr\\.?)?\\s*(?<min>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "declined",
+        "failed",
+        "unsuccessful"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due",
+            "formats": [
+              "dd-MM-yy",
+              "dd-MM-yyyy",
+              "dd/MM/yy",
+              "dd/MM/yyyy"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          },
+          {
+            "role": "due_minimum",
+            "from": "min",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask4"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-AXISBK-S",
+        "body": "Statement for your Axis Bank Credit Card no. XX7105 has been generated.\nDue on: 03-12-25\nTotal amt: INR  Dr. 2890.57\nMin amt due: INR  Dr. 100.00\nTo pay, visit axisbank.com/ccpaynow",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-AXISBK-S",
+        "body": "Statement for your Axis Bank Credit Card no. XX7105 has been generated failed.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
   }
 ]

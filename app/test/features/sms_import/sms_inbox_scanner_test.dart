@@ -291,4 +291,34 @@ void main() {
     );
     expect(headReads, 0);
   });
+
+  test('scan accumulates checked and matched counts in onProgress across slices', () async {
+    final rows = [for (var id = 1; id <= 6; id++) message(id)];
+    final progressEvents = <SmsInboxScanProgress>[];
+    final owner = SmsInboxScanner(
+      progress: progress,
+      head: () async => rows.last.id!,
+      read: (after, through) async {
+        final page = rows
+            .where((row) => row.id! > after && row.id! <= through)
+            .take(2)
+            .toList();
+        return SmsInboxPage(
+          page,
+          page.isEmpty ? after : page.last.id!,
+          page.length,
+        );
+      },
+      capture: (_) async {},
+      checkAccount: () {},
+      onProgress: progressEvents.add,
+    );
+
+    expect(await owner.scan('user:a'), 6);
+    expect(progressEvents, isNotEmpty);
+    final last = progressEvents.last;
+    expect(last.complete, isTrue);
+    expect(last.checked, 6);
+    expect(last.matched, 6);
+  });
 }

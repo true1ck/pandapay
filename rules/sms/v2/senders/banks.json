@@ -543,5 +543,14 @@
     "issuerSlug": "yes",
     "issuerKind": "bank",
     "aliases": []
+  },
+  {
+    "brand": "SLCBNK",
+    "issuerSlug": "slice",
+    "issuerKind": "bank",
+    "aliases": [
+      "SLICE",
+      "SLICEB"
+    ]
   }
 ]

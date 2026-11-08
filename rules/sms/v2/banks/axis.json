@@ -3070,5 +3070,194 @@
     "status": "active",
     "createdBy": "lane-t",
     "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "AXIS-CARD-SPEND-INR-B",
+    "version": 1,
+    "family": "card_spend",
+    "senders": [
+      "AXISBK",
+      "AXISBN",
+      "AXISCC",
+      "AXISMB"
+    ],
+    "priority": 778,
+    "match": {
+      "pattern": "Spent\\s+(?:INR|Rs\\.?|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+using\\s+Axis\\s+Bank\\s+Credit\\s+Card\\s+no\\.\\s*[x*•.]*(?<card>\\d{2,16})\\s+on\\s+(?<date>\\d{1,2}-\\d{1,2}-\\d{2,4}\\s+\\d{2}:\\d{2}:\\d{2}\\s+[A-Z]{3})\\s+at\\s+(?<m>[^\\n]+?)\\.(?:\\s*Avl\\s+limit:\\s*(?:INR|Rs\\.?|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?))?",
+      "flags": "i",
+      "rejectAny": [
+        "declined",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yy HH:mm:ss zzz",
+            "dd-MM-yyyy HH:mm:ss zzz",
+            "dd-MM-yy",
+            "dd-MM-yyyy"
+          ]
+        },
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "axis",
+          "maskFrom": "card"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "AD-AXISBK-S",
+        "body": "Spent INR 78217 using Axis Bank Credit Card no. XX7105 on 16-10-26 22:15:10 IST at FLIPKART IN. Avl limit: INR 543. Not you? SMS BLOCK 7105 to +919951860002. To convert the transaction to FLEXI EMI, visit https://ccm.axis.bank.in/AXISBK/MvBI4klm",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AD-AXISBK-S",
+        "body": "Declined Spent INR 78217 using Axis Bank Credit Card no. XX7105 on 16-10-26",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "AXIS-CARD-TXN-REVERSAL-FOREIGN",
+    "version": 1,
+    "family": "refund",
+    "senders": [
+      "AXISBK",
+      "AXISBN",
+      "AXISCC",
+      "AXISMB"
+    ],
+    "priority": 775,
+    "match": {
+      "pattern": "^Txn\\s+reversal\\s+of\\s+(?<cur>[a-z]{3})\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+at\\s+(?<m>[^\\n]+?)\\s+was\\s+successful[\\s\\S]*?Card\\s+no\\.\\s*[x*•.]*(?<card>\\d{2,16})",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "declined"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unitFrom": "cur"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "axis",
+          "maskFrom": "card"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VA-AXISBK-S",
+        "body": "Txn reversal of SGD 1.38 at ORACLE  SIN was successful. \nCard no. XX7105\n06-11-26 00:23:05 IST\nAvl Limit: INR 78531\nAxis Bank",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VA-AXISBK-S",
+        "body": "Txn reversal of SGD 1.38 at ORACLE failed",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "AXIS-AUTOPAY-ACTIVATION-MANDATE",
+    "version": 1,
+    "family": "mandate",
+    "senders": [
+      "AXISBK"
+    ],
+    "priority": 680,
+    "match": {
+      "pattern": "autopay\\s+activation\\s+successful[\\s\\S]{0,30}?txn\\s+amt:\\s*(?:inr|rs\\.?|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+merchant:\\s*(?<m>[a-z0-9&.' _*-]+?)\\s+axis\\s+bank\\s+card\\s+no\\.:\\s*(?:[x*•.]+\\s*)?(?<mask>\\d{2,6})",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": "OpenAILLC"
+        },
+        "amounts": [],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "axis",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "AutoPay activation successful. Txn amt: INR 0.00 Merchant: OpenAILLC Axis Bank Card no.: XX7105",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "AutoPay cancelled for OpenAILLC Axis Bank Card no.: XX7105",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-08T00:00:00Z"
   }
 ]
