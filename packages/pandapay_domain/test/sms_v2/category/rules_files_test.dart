@@ -31,7 +31,7 @@ void main() {
 
   test('the files have the expected size and only catalogue rules', () {
     expect(rules.length, 453);
-    expect(aliases.length, 138);
+    expect(aliases.length, 154);
     expect(rules.every((r) => r.source == CategorySource.catalogue), isTrue);
     expect(rules.every((r) => r.senders.length == 1 && r.senders.single == '*'), isTrue);
   });

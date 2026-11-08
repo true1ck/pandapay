@@ -688,5 +688,85 @@
     "alias": "ZEPTONOW BDPG",
     "merchantKey": "ZEPTO",
     "kind": "variant"
+  },
+  {
+    "alias": "AMAZON PAY ECOM",
+    "merchantKey": "AMAZON",
+    "kind": "marketplace"
+  },
+  {
+    "alias": "RAZ SWIGGY",
+    "merchantKey": "SWIGGY",
+    "kind": "variant"
+  },
+  {
+    "alias": "RAZ SWIGGY TECHNOLOGIE",
+    "merchantKey": "SWIGGY",
+    "kind": "variant"
+  },
+  {
+    "alias": "PTM SWIGGY",
+    "merchantKey": "SWIGGY",
+    "kind": "variant"
+  },
+  {
+    "alias": "RSP SWIGGY FOO",
+    "merchantKey": "SWIGGY",
+    "kind": "variant"
+  },
+  {
+    "alias": "SWIGGY E COM",
+    "merchantKey": "SWIGGY",
+    "kind": "variant"
+  },
+  {
+    "alias": "PYU SWIGGY INSTAMART P",
+    "merchantKey": "SWIGGY INSTAMART",
+    "kind": "variant"
+  },
+  {
+    "alias": "SWIGGY INSTAMART PRIVA",
+    "merchantKey": "SWIGGY INSTAMART",
+    "kind": "variant"
+  },
+  {
+    "alias": "SWIGGY INSTA MART GR",
+    "merchantKey": "SWIGGY INSTAMART",
+    "kind": "variant"
+  },
+  {
+    "alias": "MAKEMYTRIP INDIA B",
+    "merchantKey": "MAKEMYTRIP",
+    "kind": "variant"
+  },
+  {
+    "alias": "MAKEMYTRIP INDIA PVT L",
+    "merchantKey": "MAKEMYTRIP",
+    "kind": "variant"
+  },
+  {
+    "alias": "FLIPKART ONLINE",
+    "merchantKey": "FLIPKART",
+    "kind": "variant"
+  },
+  {
+    "alias": "ZEPTO MAR",
+    "merchantKey": "ZEPTO",
+    "kind": "variant"
+  },
+  {
+    "alias": "AIRTELRECHARGE",
+    "merchantKey": "AIRTEL RECHARGE",
+    "kind": "variant"
+  },
+  {
+    "alias": "JIO RECHARGE",
+    "merchantKey": "JIO",
+    "kind": "variant"
+  },
+  {
+    "alias": "L N B FILLING ST",
+    "merchantKey": "L N B FILLING STAT",
+    "kind": "variant"
   }
 ]
