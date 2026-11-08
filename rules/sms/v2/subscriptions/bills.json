@@ -463,5 +463,60 @@
     "status": "active",
     "createdBy": "baseline",
     "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-RCH-DONE-01",
+    "version": 1,
+    "family": "bill_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "(?:\\d+/\\d+\\s+)?recharge\\s+done\\s+on\\s+[\\d\\-/]+\\s+[\\d:]+\\s*,\\s*mrp\\s*:\\s*(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "unsuccessful",
+        "not successful",
+        "failed",
+        "pending"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "bill_payment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "1/2 Recharge done on 07-11-2026 20:39,MRP : INR 10.00,GST 18% payable by Company/Distributor/Retailer,Talktime:RS 7.47,Bal:INR ,TransID 000000.Check your balance on the app.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Recharge done on 07-11-2026 20:39,MRP : INR 10.00 failed. Amount will be refunded.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-08T00:00:00Z"
   }
 ]
