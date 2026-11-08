@@ -69,7 +69,7 @@ loop; use `cachedRegExp` not `RegExp(` in per-message code; pin id lookups with 
 cheap UI values must not build expensive lists; a rewrite must port the old subsystem's
 threading/budget guarantees. Before claiming a performance change works, run
 `flutter test test/performance_guards_test.dart` and `scripts/perf_smoke_android.sh` on a
-real phone with a profile build from `latest-dev`.
+real phone with a profile build from `master`.
 
 ## Explicitly not for this project
 
