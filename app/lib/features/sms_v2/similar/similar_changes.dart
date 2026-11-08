@@ -201,20 +201,57 @@ class SimilarChanges {
           ),
           {'instrumentId': instrumentId},
         ),
-      if (eventType != null && before.ruleId != null && before.type != null)
+      // A type change is offered for the same payee first ("the other payments
+      // to this person"). Only a message with no payee falls back to every
+      // payment the same SMS layout reads, which is far wider.
+      if (eventType != null && before.type != null)
         ?offer(
           SimilarField.type,
-          SimilarCriteria.type(ruleId: before.ruleId!, type: before.type!),
+          before.merchantKey != null
+              ? SimilarCriteria.shopType(
+                  merchantKey: before.merchantKey!,
+                  type: before.type!,
+                )
+              : before.ruleId == null
+              ? null
+              : SimilarCriteria.type(
+                  ruleId: before.ruleId!,
+                  type: before.type!,
+                ),
           {'eventType': eventType.wire},
         ),
     ];
   }
 
-  /// Applies [offer] to every other transaction it matches, [chunkSize] at a
-  /// time, yielding between chunks. [shouldContinue] false stops cleanly after
+  /// Every other transaction [offer] matches, newest first, for the person to
+  /// tick. Up to [limit]; a payee with more than that is cut at the newest.
+  List<SimilarExample> others(SimilarOffer offer, {int limit = 500}) {
+    final out = <SimilarExample>[];
+    SimilarCursor? after;
+    while (out.length < limit) {
+      final page = _finder.page(
+        offer.criteria,
+        limit: (limit - out.length).clamp(1, 100),
+        excludeEventId: offer.eventId,
+        after: after,
+      );
+      if (page.isEmpty) break;
+      for (final item in page) {
+        final example = _finder.example(item.eventId);
+        if (example != null) out.add(example);
+      }
+      after = page.last.cursor;
+    }
+    return out;
+  }
+
+  /// Applies [offer] to the other transactions it matches, [chunkSize] at a
+  /// time, yielding between chunks. [onlyEventIds], when given, limits it to
+  /// the ones the person ticked. [shouldContinue] false stops cleanly after
   /// the current chunk; what was done stays done.
   Future<SimilarResult> apply(
     SimilarOffer offer, {
+    Set<String>? onlyEventIds,
     void Function(int done, int total)? onProgress,
     bool Function()? shouldContinue,
   }) async {
@@ -230,7 +267,11 @@ class SimilarChanges {
         after: after,
       );
       if (page.isEmpty) break;
-      ids.addAll(page.map((item) => item.eventId));
+      ids.addAll(
+        page
+            .map((item) => item.eventId)
+            .where((id) => onlyEventIds == null || onlyEventIds.contains(id)),
+      );
       after = page.last.cursor;
     }
     return switch (offer.field) {

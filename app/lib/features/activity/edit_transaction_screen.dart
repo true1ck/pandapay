@@ -24,6 +24,7 @@ import '../../data/local/financial_store.dart' show canonicalBankSender;
 import '../../data/local/self_transfer_rules.dart';
 import '../../data/local/sms_intake_repository.dart';
 import 'category_bulk_review_sheet.dart';
+import '../sms_v2/similar/similar_runner.dart';
 import 'merchant_future_rule_sheet.dart';
 
 /// D3 Edit Transaction (ui-spec Group D). All fields editable, explicit
@@ -174,6 +175,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       ref.invalidate(spendReportProvider);
       ref.invalidate(categorySpendProvider);
       ref.invalidate(budgetsProvider);
+      _confirmSaved(original);
 
       // The original row is saved before this optional bulk flow starts. A
       // preview is only useful for a real online category change; tags and
@@ -283,6 +285,23 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// Tells the person the edit is in, at once. An SMS transaction is saved on
+  /// this phone first and reaches the account in the background, so the
+  /// message says that instead of implying the server already has it.
+  void _confirmSaved(TransactionEntry? original) {
+    if (!mounted) return;
+    final offline = ref.read(isOnlineProvider).valueOrNull == false;
+    final onPhone = original?.pipelineVersion == 2;
+    final text = onPhone
+        ? (offline
+              ? 'Saved on this phone. It will sync when you are back online.'
+              : 'Saved on this phone. Syncing in the background.')
+        : 'Saved.';
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text)));
   }
 
   Future<void> _submitEdit(double amount) async {
@@ -443,43 +462,40 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           _ => 'a spend',
         },
       };
-      final result = await showSimilarOfferSheet(
+      final ids = await showSimilarOfferSheet(
         context: context,
         offer: offer,
         changes: similar,
         shop: _similarShop,
         target: target,
       );
-      if (result == null || !mounted) continue;
-      ref.invalidate(transactionsProvider);
-      ref.invalidate(utilizationTransactionsProvider);
-      ref.invalidate(homeSummaryProvider);
-      ref.invalidate(spendReportProvider);
-      ref.invalidate(categorySpendProvider);
-      final changeId = result.changeId;
-      final waiting = result.awaitingSync > 0
-          ? ' ${result.awaitingSync} still syncing; try again after the next sync.'
-          : '';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            result.stopped
-                ? 'Stopped after changing ${result.changed}.$waiting'
-                : 'Changed ${result.changed} other transaction${result.changed == 1 ? '' : 's'}.$waiting',
-          ),
-          action: changeId == null
-              ? null
-              : SnackBarAction(
-                  label: 'Undo',
-                  onPressed: () {
-                    similar.undo(changeId);
-                    ref.invalidate(transactionsProvider);
-                  },
-                ),
+      if (ids == null || ids.isEmpty || !mounted) continue;
+      // The screen may be gone before this finishes, so the run holds on to
+      // the messenger and the provider container, not to this State.
+      final messenger = ScaffoldMessenger.of(context);
+      final container = ProviderScope.containerOf(context);
+      void refresh() {
+        container.invalidate(transactionsProvider);
+        container.invalidate(utilizationTransactionsProvider);
+        container.invalidate(homeSummaryProvider);
+        container.invalidate(spendReportProvider);
+        container.invalidate(categorySpendProvider);
+      }
+      // One run at a time: a name and a category offer for the same
+      // transactions must not interleave their writes.
+      _similarRuns = _similarRuns.then(
+        (_) => applySimilarInBackground(
+          messenger: messenger,
+          changes: similar,
+          offer: offer,
+          eventIds: ids,
+          onChanged: refresh,
         ),
       );
     }
   }
+
+  Future<void> _similarRuns = Future<void>.value();
 
   Future<void> _rememberSelfTransfer() async {
     // The server has already committed. A local cache failure must not turn

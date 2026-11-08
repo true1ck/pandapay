@@ -432,6 +432,11 @@ void main() {
     expect(repo.editCalls, 1);
     expect(repo.lastEditArgs?['amountInr'], 555.0);
     expect(find.byType(EditTransactionScreen), findsNothing);
+    expect(
+      find.text('Saved.'),
+      findsOneWidget,
+      reason: 'Save must always say it worked; closing silently looked like nothing happened',
+    );
   });
 
   testWidgets('income transactions keep their kind editable without a card', (

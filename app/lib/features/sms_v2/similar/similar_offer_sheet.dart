@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/design/app_theme.dart';
 import 'similar_changes.dart';
+import 'similar_finder.dart';
 
 /// What the sheet shows for one offer. Kept apart from the widget so the
 /// wording can be tested without pumping a screen.
@@ -16,6 +17,15 @@ class SimilarOfferWords {
   final String body;
   final String apply;
   final String skip;
+
+  /// The apply button for [selected] of [total] ticked. All of them keeps the
+  /// "all N" wording; a part says how many; none says to choose.
+  String applyFor(int selected, int total) {
+    if (selected == 0) return 'Choose some';
+    if (selected == total) return apply;
+    final verb = apply.split(' ').first;
+    return '$verb $selected';
+  }
 
   /// [shop] is the shop as the SMS prints it; [target] is what the person
   /// chose (the name, the category, the card or the type) in words.
@@ -60,26 +70,29 @@ class SimilarOfferWords {
   }
 }
 
-/// Asks the person whether to apply a change to the others that look the same,
-/// and does it with progress. Returns the result, or null when they chose to
-/// leave the others alone.
-Future<SimilarResult?> showSimilarOfferSheet({
+/// Asks which of the other transactions a change should also apply to, as a
+/// checklist. Returns the event ids the person ticked and confirmed, or null
+/// when they chose to leave the others alone (or closed the sheet). Applying
+/// is the caller's job, so the person can carry on while it runs.
+///
+/// A name or category starts with everything ticked, because later SMS follow
+/// it anyway. A change that moves money (payment method, type) starts with
+/// nothing ticked, so each transaction is a choice.
+Future<Set<String>?> showSimilarOfferSheet({
   required BuildContext context,
   required SimilarOffer offer,
   required SimilarChanges changes,
   required String shop,
   required String target,
-}) => showModalBottomSheet<SimilarResult>(
+}) => showModalBottomSheet<Set<String>>(
   context: context,
   isScrollControlled: true,
   useSafeArea: true,
   showDragHandle: true,
-  isDismissible: false,
-  enableDrag: false,
   backgroundColor: BambooInk.paper,
   builder: (_) => _SimilarOfferSheet(
     offer: offer,
-    changes: changes,
+    others: changes.others(offer),
     words: SimilarOfferWords.of(offer, shop: shop, target: target),
   ),
 );
@@ -87,11 +100,11 @@ Future<SimilarResult?> showSimilarOfferSheet({
 class _SimilarOfferSheet extends StatefulWidget {
   const _SimilarOfferSheet({
     required this.offer,
-    required this.changes,
+    required this.others,
     required this.words,
   });
   final SimilarOffer offer;
-  final SimilarChanges changes;
+  final List<SimilarExample> others;
   final SimilarOfferWords words;
 
   @override
@@ -99,34 +112,9 @@ class _SimilarOfferSheet extends StatefulWidget {
 }
 
 class _SimilarOfferSheetState extends State<_SimilarOfferSheet> {
-  bool _working = false;
-  bool _cancelled = false;
-  int _done = 0;
-  String? _error;
-
-  Future<void> _apply() async {
-    setState(() {
-      _working = true;
-      _error = null;
-    });
-    try {
-      final result = await widget.changes.apply(
-        widget.offer,
-        onProgress: (done, total) {
-          if (mounted) setState(() => _done = done);
-        },
-        shouldContinue: () => !_cancelled && mounted,
-      );
-      if (mounted) Navigator.of(context).pop(result);
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _working = false;
-        _error =
-            'Could not change the others. This transaction is saved; you can try again from its edit screen.';
-      });
-    }
-  }
+  late final Set<String> _ticked = widget.offer.movesMoney
+      ? <String>{}
+      : {for (final example in widget.others) example.eventId};
 
   String _money(int paise) => '₹${(paise / 100).toStringAsFixed(2)}';
 
@@ -139,9 +127,15 @@ class _SimilarOfferSheetState extends State<_SimilarOfferSheet> {
     return '${day.day} ${months[day.month - 1]} ${day.year}';
   }
 
+  void _toggleAll(bool? on) => setState(() {
+    _ticked.clear();
+    if (on ?? false) _ticked.addAll(widget.others.map((e) => e.eventId));
+  });
+
   @override
   Widget build(BuildContext context) {
-    final total = widget.offer.summary.count;
+    final total = widget.others.length;
+    final selected = _ticked.length;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
       child: Column(
@@ -157,78 +151,85 @@ class _SimilarOfferSheetState extends State<_SimilarOfferSheet> {
             widget.words.body,
             style: BambooFonts.ui(13.5, color: BambooInk.ink700),
           ),
-          const SizedBox(height: 12),
-          for (final example in widget.offer.summary.examples)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '${example.merchantName ?? 'Transaction'} · ${_date(example.occurredAt)}',
-                      style: BambooFonts.ui(13, color: BambooInk.ink900),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+          const SizedBox(height: 8),
+          CheckboxListTile(
+            key: const Key('similar-select-all'),
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            dense: true,
+            tristate: true,
+            value: selected == 0
+                ? false
+                : selected == total
+                ? true
+                : null,
+            onChanged: (value) => _toggleAll(selected != total),
+            title: Text(
+              'Select all',
+              style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+            ),
+            secondary: Text(
+              '$selected of $total selected',
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+            ),
+          ),
+          const Divider(height: 1),
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: total,
+              itemBuilder: (context, index) {
+                final example = widget.others[index];
+                return CheckboxListTile(
+                  key: Key('similar-row-${example.eventId}'),
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  dense: true,
+                  value: _ticked.contains(example.eventId),
+                  onChanged: (on) => setState(() {
+                    if (on ?? false) {
+                      _ticked.add(example.eventId);
+                    } else {
+                      _ticked.remove(example.eventId);
+                    }
+                  }),
+                  title: Text(
+                    example.merchantName ?? 'Transaction',
+                    style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  Text(
+                  subtitle: Text(
+                    _date(example.occurredAt),
+                    style: BambooFonts.ui(12, color: BambooInk.ink500),
+                  ),
+                  secondary: Text(
                     _money(example.amountPaise),
                     style: BambooFonts.ui(13, color: BambooInk.ink700),
                   ),
-                ],
-              ),
+                );
+              },
             ),
-          if (total > widget.offer.summary.examples.length)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text(
-                'and ${total - widget.offer.summary.examples.length} more',
-                style: BambooFonts.ui(12, color: BambooInk.ink500),
-              ),
-            ),
-          if (_error != null) ...[
-            const SizedBox(height: 10),
-            Text(_error!, style: BambooFonts.ui(12.5, color: BambooInk.clay)),
-          ],
-          const SizedBox(height: 16),
-          if (_working) ...[
-            LinearProgressIndicator(value: total == 0 ? null : _done / total),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _cancelled
-                        ? 'Stopping…'
-                        : 'Changing $_done of $total…',
-                    style: BambooFonts.ui(12.5, color: BambooInk.ink700),
-                  ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(widget.words.skip),
                 ),
-                TextButton(
-                  onPressed: _cancelled
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton(
+                  onPressed: selected == 0
                       ? null
-                      : () => setState(() => _cancelled = true),
-                  child: const Text('Stop'),
+                      : () => Navigator.of(context).pop({..._ticked}),
+                  child: Text(widget.words.applyFor(selected, total)),
                 ),
-              ],
-            ),
-          ] else
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: Text(widget.words.skip),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: _apply,
-                    child: Text(widget.words.apply),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
+          ),
         ],
       ),
     );

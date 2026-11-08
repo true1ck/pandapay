@@ -60,11 +60,13 @@ void main() {
     database.db.dispose();
   });
 
-  String receive(int day) {
+  String receive(int day, {String? shop}) {
     final source = day.toRadixString(16).padLeft(2, '0') * 32;
     final message = SmsMessage(
       sender: 'VM-HDFCBK-S',
-      body: bundle.rules.first.examples.first.body,
+      body: shop == null
+          ? bundle.rules.first.examples.first.body
+          : bundle.rules.first.examples.first.body.replaceAll('SWIGGY', shop),
       sourceKey: source,
       observedAt: DateTime.utc(2026, 11, day, 7),
     );
@@ -238,6 +240,69 @@ void main() {
             .first;
         expect(events.get(anchor.factId)!.type, EventType.income, reason: source);
       }
+    });
+  });
+
+  String movementId(String source) => FactStore(database.db, namespace: namespace)
+      .forSource(source)
+      .whereType<MovementFact>()
+      .first
+      .factId;
+
+  group('a type, by payee', () {
+    test('is offered for the same shop only, not for every payment the rule reads', () {
+      final swiggy1 = receive(1);
+      receive(2, shop: 'ZOMATO');
+      receive(3, shop: 'ZOMATO');
+      final swiggy2 = receive(4);
+      final before = changes.snapshot(row(swiggy2))!;
+      edit(swiggy2, CorrectionKind.wrongKind, {'eventType': 'income'});
+      final offer = changes.offers(before, eventType: EventType.income).single;
+      expect(offer.field, SimilarField.type);
+      expect(offer.summary.count, 1, reason: 'only the other SWIGGY payment');
+      expect(changes.others(offer).map((e) => e.eventId), [movementId(swiggy1)]);
+    });
+  });
+
+  group('choosing which others', () {
+    test('others lists every match, newest first', () {
+      final sources = [for (var day = 1; day <= 4; day++) receive(day)];
+      final before = changes.snapshot(row(sources[3]))!;
+      edit(sources[3], CorrectionKind.wrongKind, {'eventType': 'income'});
+      final offer = changes.offers(before, eventType: EventType.income).single;
+      final list = changes.others(offer);
+      // Received on days 1, 2 and 3 (they print the same date): newest first.
+      expect(list.map((e) => e.eventId), [
+        movementId(sources[2]),
+        movementId(sources[1]),
+        movementId(sources[0]),
+      ]);
+    });
+
+    test('apply changes only the chosen ones', () async {
+      final sources = [for (var day = 1; day <= 4; day++) receive(day)];
+      final before = changes.snapshot(row(sources[3]))!;
+      edit(sources[3], CorrectionKind.wrongKind, {'eventType': 'income'});
+      final offer = changes.offers(before, eventType: EventType.income).single;
+      final facts = FactStore(database.db, namespace: namespace);
+      final chosen = {for (final i in [0, 2]) movementId(sources[i])};
+      final result = await changes.apply(offer, onlyEventIds: chosen);
+      expect(result.changed, 2);
+      final events = EventStore(database.db, namespace: namespace);
+      EventType typeOf(String source) =>
+          events.get(facts.forSource(source).whereType<MovementFact>().first.factId)!.type;
+      expect(typeOf(sources[0]), EventType.income);
+      expect(typeOf(sources[1]), EventType.purchase, reason: 'not chosen');
+      expect(typeOf(sources[2]), EventType.income);
+    });
+
+    test('choosing none changes nothing', () async {
+      final sources = [for (var day = 1; day <= 3; day++) receive(day)];
+      final before = changes.snapshot(row(sources[2]))!;
+      edit(sources[2], CorrectionKind.wrongKind, {'eventType': 'income'});
+      final offer = changes.offers(before, eventType: EventType.income).single;
+      final result = await changes.apply(offer, onlyEventIds: const {});
+      expect(result.changed, 0);
     });
   });
 }

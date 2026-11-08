@@ -13,6 +13,7 @@ import 'package:pandapay/features/sms_v2/providers/data_providers.dart';
 import 'package:pandapay/features/sms_v2/similar/similar_changes.dart';
 import 'package:pandapay/features/sms_v2/similar/similar_finder.dart';
 import 'package:pandapay/features/sms_v2/similar/similar_offer_sheet.dart';
+import 'package:pandapay/features/sms_v2/similar/similar_runner.dart';
 import 'package:pandapay/features/sms_v2/storage/schema.dart';
 import 'package:pandapay/features/sms_v2/ui/review_controller.dart';
 import 'package:pandapay_domain/sms_v2.dart';
@@ -113,7 +114,11 @@ void main() {
       database.db.dispose();
     });
 
-    Future<void> open(WidgetTester tester, void Function(SimilarResult?) done) async {
+    Future<void> open(
+      WidgetTester tester,
+      void Function(Set<String>?) done, {
+      SimilarOffer? asking,
+    }) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -122,7 +127,7 @@ void main() {
                 onPressed: () async => done(
                   await showSimilarOfferSheet(
                     context: context,
-                    offer: offer,
+                    offer: asking ?? offer,
                     changes: changes,
                     shop: 'SWIGGY',
                     target: 'Corner Shop',
@@ -138,33 +143,95 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('shows the question, the count and the examples, and "only from now on" changes nothing', (tester) async {
-      SimilarResult? result = SimilarResult(changed: -1, stopped: false);
+    SimilarOffer typeOffer() => SimilarOffer(
+      field: SimilarField.type,
+      criteria: SimilarCriteria.shopType(
+        merchantKey: 'SWIGGY',
+        type: EventType.purchase,
+      ),
+      summary: const SimilarSummary(count: 3, examples: []),
+      eventId: offer.eventId,
+      change: const {'eventType': 'ownTransfer'},
+      snapshot: offer.snapshot,
+    );
+
+    testWidgets('lists every other transaction with a tick, all ticked for a name', (tester) async {
+      Set<String>? result = {'untouched'};
       await open(tester, (value) => result = value);
       expect(find.text('Rename 3 other transactions from SWIGGY?'), findsOneWidget);
+      expect(find.byType(Checkbox), findsNWidgets(4), reason: 'select all and three rows');
+      expect(find.text('3 of 3 selected'), findsOneWidget);
       expect(find.text('Rename all 3'), findsOneWidget);
-      expect(find.text('Only from now on'), findsOneWidget);
       await tester.tap(find.text('Only from now on'));
       await tester.pumpAndSettle();
-      expect(result, isNull);
-      final names = financial
-          .entities(namespace, 'transactions')
-          .map(TransactionEntry.fromJson)
-          .map((e) => e.merchantName)
-          .toList();
-      expect(names.where((n) => n == 'Corner Shop'), hasLength(1), reason: 'only the edited one');
+      expect(result, isNull, reason: 'skipping returns nothing to apply');
     });
 
-    testWidgets('"Rename all" changes the others and reports how many', (tester) async {
-      SimilarResult? result;
+    testWidgets('unticking one changes the count and the button, and returns just the ticked ones', (tester) async {
+      Set<String>? result;
       await open(tester, (value) => result = value);
-      await tester.runAsync(() async {
-        await tester.tap(find.text('Rename all 3'));
-        await Future<void>.delayed(const Duration(milliseconds: 200));
-      });
+      await tester.tap(find.byType(Checkbox).at(1));
       await tester.pumpAndSettle();
-      expect(result?.changed, 3);
-      expect(result?.changeId, isNotNull);
+      expect(find.text('2 of 3 selected'), findsOneWidget);
+      expect(find.text('Rename 2'), findsOneWidget);
+      await tester.tap(find.text('Rename 2'));
+      await tester.pumpAndSettle();
+      expect(result, hasLength(2));
+    });
+
+    testWidgets('select all ticks or clears everything', (tester) async {
+      await open(tester, (_) {});
+      await tester.tap(find.byType(Checkbox).first);
+      await tester.pumpAndSettle();
+      expect(find.text('0 of 3 selected'), findsOneWidget);
+      await tester.tap(find.byType(Checkbox).first);
+      await tester.pumpAndSettle();
+      expect(find.text('3 of 3 selected'), findsOneWidget);
+    });
+
+    testWidgets('a type change starts with nothing ticked and cannot be applied to none', (tester) async {
+      Set<String>? result = {'untouched'};
+      await open(tester, (value) => result = value, asking: typeOffer());
+      expect(find.text('0 of 3 selected'), findsOneWidget);
+      expect(find.text('Choose some'), findsOneWidget);
+      await tester.tap(find.text('Choose some'));
+      await tester.pumpAndSettle();
+      expect(result, {'untouched'}, reason: 'the sheet stays open');
+      await tester.tap(find.byType(Checkbox).at(2));
+      await tester.pumpAndSettle();
+      expect(find.text('Change 1'), findsOneWidget);
+    });
+
+    testWidgets('applying runs in the background: a progress bar, then a result with Undo', (tester) async {
+      final done = <int>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => applySimilarInBackground(
+                  messenger: ScaffoldMessenger.of(context),
+                  changes: changes,
+                  offer: offer,
+                  eventIds: changes.others(offer).map((e) => e.eventId).toSet(),
+                  onChanged: () => done.add(1),
+                ),
+                child: const Text('run'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('run'));
+      await tester.pump();
+      expect(find.byType(MaterialBanner), findsOneWidget);
+      expect(find.text('Stop'), findsOneWidget);
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
+      await tester.pumpAndSettle();
+      expect(find.byType(MaterialBanner), findsNothing, reason: 'the banner goes when it is done');
+      expect(find.text('Changed 3 other transactions.'), findsOneWidget);
+      expect(find.text('Undo'), findsOneWidget, reason: 'a shop name can be taken back');
+      expect(done, isNotEmpty);
       final names = financial
           .entities(namespace, 'transactions')
           .map(TransactionEntry.fromJson)

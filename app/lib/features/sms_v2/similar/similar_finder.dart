@@ -24,6 +24,17 @@ class SimilarCriteria {
     'instrument',
   );
 
+  /// The same shop or payee as the SMS prints it, and the same current type.
+  /// This is how a type change is offered: "the other payments to this payee".
+  factory SimilarCriteria.shopType({
+    required String merchantKey,
+    required EventType type,
+  }) => SimilarCriteria._(
+    'f.merchant_key = ? AND e.type = ?',
+    [merchantKey, type.wire],
+    'shopType',
+  );
+
   /// The same rule and the same current type.
   factory SimilarCriteria.type({
     required String ruleId,
