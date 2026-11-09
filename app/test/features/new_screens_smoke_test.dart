@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/features/auth/recovery_email_reminder.dart';
 import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/data/account_recovery_api.dart';
 import 'package:pandapay/data/bills_projection_api.dart';
 import 'package:pandapay/data/past_bill_receipts.dart';
 import 'package:pandapay/data/pending_bills.dart';
@@ -93,6 +94,7 @@ TransactionEntry _txn({
 /// smoke tests there is no server to ask, so the nudge is switched off.
 final _hubOverrides = <Override>[
   recoveryEmailNudgeProvider.overrideWith((ref) async => false),
+  recoveryPendingProvider.overrideWith((ref) async => null),
 ];
 
 Future<void> _pump(
@@ -298,6 +300,38 @@ void main() {
         overrides: _hubOverrides,
       );
       expect(find.text('SECURITY'), findsOneWidget);
+    });
+
+    testWidgets('says so, first, when a recovery of this account is waiting', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        const SettingsHubScreen(),
+        size: const Size(320, 640),
+        overrides: [
+          ..._hubOverrides,
+          recoveryPendingProvider.overrideWith(
+            (ref) async => RecoveryPending(
+              pending: true,
+              holdUntil: DateTime(2026, 11, 10, 15, 20),
+            ),
+          ),
+        ],
+      );
+      expect(find.byKey(const Key('recovery-pending-card')), findsOneWidget);
+      expect(find.textContaining('Someone is changing your sign-in email'), findsOneWidget);
+      expect(find.textContaining('3:20 PM'), findsOneWidget);
+      expect(find.byKey(const Key('recovery-pending-cancel')), findsOneWidget);
+    });
+
+    testWidgets('shows no warning when nothing is waiting', (tester) async {
+      await _pump(
+        tester,
+        const SettingsHubScreen(),
+        overrides: _hubOverrides,
+      );
+      expect(find.byKey(const Key('recovery-pending-card')), findsNothing);
     });
   });
 

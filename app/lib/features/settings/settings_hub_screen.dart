@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
+import '../../app/providers.dart';
+import '../../data/api_exception.dart';
 import '../account/account_screen.dart' show AccountTile;
 import '../auth/recovery_email_reminder.dart';
 import '../cards/deleted_cards_screen.dart';
@@ -74,6 +76,32 @@ class SettingsHubScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.all(AppSpace.lg),
           children: [
+            // A recovery of this account is waiting out its 24 hours. Shown first and
+            // always, because the owner has until then to stop it.
+            if (ref.watch(recoveryPendingProvider).valueOrNull
+                case final pending? when pending.pending) ...[
+              _RecoveryPendingCard(
+                holdUntil: pending.holdUntil,
+                onCancel: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  try {
+                    await ref.read(recoveryPendingApiProvider)?.cancel();
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('The recovery was cancelled.'),
+                      ),
+                    );
+                  } catch (error) {
+                    messenger.showSnackBar(
+                      SnackBar(content: Text(userFacingErrorMessage(error))),
+                    );
+                  } finally {
+                    ref.invalidate(recoveryPendingProvider);
+                  }
+                },
+              ),
+              const SizedBox(height: AppSpace.xl),
+            ],
             // Shown from one hour after sign-up until a recovery email exists.
             if (ref.watch(recoveryEmailNudgeProvider).valueOrNull == true) ...[
               _RecoveryEmailCard(onTap: () => open(const EmailPhoneScreen())),
@@ -236,7 +264,11 @@ class _RecoveryEmailCard extends StatelessWidget {
           ),
           child: Row(
             children: [
-              const Icon(Icons.shield_outlined, size: 20, color: BambooInk.clay),
+              const Icon(
+                Icons.shield_outlined,
+                size: 20,
+                color: BambooInk.clay,
+              ),
               const SizedBox(width: AppSpace.md),
               Expanded(
                 child: Column(
@@ -249,7 +281,11 @@ class _RecoveryEmailCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       'A second way back in if you lose your sign-in email.',
-                      style: BambooFonts.ui(12.5, color: BambooInk.ink500, height: 1.4),
+                      style: BambooFonts.ui(
+                        12.5,
+                        color: BambooInk.ink500,
+                        height: 1.4,
+                      ),
                     ),
                   ],
                 ),
@@ -258,6 +294,71 @@ class _RecoveryEmailCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A request to change this account's sign-in email is waiting out its 24 hours.
+class _RecoveryPendingCard extends StatelessWidget {
+  final DateTime? holdUntil;
+  final Future<void> Function() onCancel;
+  const _RecoveryPendingCard({required this.holdUntil, required this.onCancel});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = MaterialLocalizations.of(context);
+    final when = holdUntil == null
+        ? 'within 24 hours'
+        : 'on ${l10n.formatMediumDate(holdUntil!)} at '
+              '${l10n.formatTimeOfDay(TimeOfDay.fromDateTime(holdUntil!))}';
+    return Container(
+      key: const Key('recovery-pending-card'),
+      padding: const EdgeInsets.all(AppSpace.lg),
+      decoration: BoxDecoration(
+        color: BambooInk.clay.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: BambooInk.clay.withValues(alpha: 0.45)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.warning_amber_rounded,
+                size: 20,
+                color: BambooInk.clay,
+              ),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Text(
+                  'Someone is changing your sign-in email',
+                  style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpace.sm),
+          Text(
+            'A recovery of this account will finish $when. If this was not you, '
+            'cancel it now.',
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500, height: 1.4),
+          ),
+          const SizedBox(height: AppSpace.md),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton(
+              key: const Key('recovery-pending-cancel'),
+              style: FilledButton.styleFrom(
+                backgroundColor: BambooInk.clay,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: onCancel,
+              child: const Text('This wasn’t me, cancel it'),
+            ),
+          ),
+        ],
       ),
     );
   }

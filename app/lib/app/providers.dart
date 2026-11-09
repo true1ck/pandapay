@@ -73,8 +73,10 @@ import '../data/pending_bills.dart';
 import '../data/past_bill_receipts.dart';
 import '../data/premium_reminders.dart';
 import '../data/recovery_api.dart';
+import '../data/account_recovery_api.dart';
 import '../data/phone_api.dart';
 import '../data/recovery_email_api.dart';
+import '../features/auth/recovery_hold_store.dart';
 import '../data/referral_repository.dart';
 import '../data/spend_by_category_repository.dart';
 import '../data/spend_reports_repository.dart';
@@ -121,6 +123,42 @@ final authApiProvider = Provider<AuthApi>((ref) {
     client: client,
     versionedOtpEnabled: Env.versionedOtpEnabled,
   );
+});
+
+/// "Can't sign in?" (`/auth/recovery/*`). Used while signed out, so it carries no
+/// session. Points at `authBaseUrl`.
+final accountRecoveryApiProvider = Provider<AccountRecoveryApi>((ref) {
+  final client = localSmsRigHttpClient();
+  if (client != null) ref.onDispose(client.close);
+  return AccountRecoveryApi(authBaseUrl: _authBaseUrl, client: client);
+});
+
+/// A recovery that is waiting out its 24 hours, kept on this install.
+final recoveryHoldStoreProvider = Provider<RecoveryHoldStore>(
+  (ref) => RecoveryHoldStore(),
+);
+
+/// The calls for a recovery that is waiting on this account. Null while signed out.
+final recoveryPendingApiProvider = Provider<RecoveryPendingApi?>((ref) {
+  final token = _stableSessionToken(ref);
+  if (token == null) return null;
+  return RecoveryPendingApi(
+    authBaseUrl: _authBaseUrl,
+    accessToken: token,
+    client: ref.read(authenticatedHttpClientProvider),
+  );
+});
+
+/// Whether a recovery is waiting on this account, so Settings can offer to cancel
+/// it. Null while signed out, on an older server, or on any failure.
+final recoveryPendingProvider = FutureProvider.autoDispose<RecoveryPending?>((ref) async {
+  final api = ref.watch(recoveryPendingApiProvider);
+  if (api == null) return null;
+  try {
+    return await api.status();
+  } catch (_) {
+    return null;
+  }
 });
 
 /// Owns the short post-authentication idle window used to serialize

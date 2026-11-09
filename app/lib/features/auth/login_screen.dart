@@ -17,7 +17,7 @@ import '../../data/consent_policy.dart';
 import '../../data/product_access_api.dart';
 import '../settings/feedback_support_screen.dart';
 import '../settings/legal_screen.dart';
-import 'account_recovery_screen.dart';
+import 'cant_sign_in_screen.dart';
 import 'phone_gate_provider.dart';
 import 'recovery_email_reminder.dart';
 import 'phone_input.dart';
@@ -688,7 +688,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     .push<bool>(
                                       MaterialPageRoute(
                                         builder: (_) =>
-                                            const AccountRecoveryScreen(),
+                                            const CantSignInScreen(),
                                       ),
                                     );
                                 if (!mounted || resetFields != true) return;

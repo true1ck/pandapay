@@ -3,7 +3,6 @@ import 'package:http/http.dart' as http;
 
 import 'api_exception.dart';
 import 'phone_api.dart';
-import 'recovery_api.dart';
 
 /// UA-3: the user app's own OTP login flow against auth/ — mirrors
 /// console/lib/data/admin_api.dart's AuthApi/AuthTokens (same auth/
@@ -146,13 +145,6 @@ class AuthApi {
     authBaseUrl: authBaseUrl,
     accessToken: accessToken,
     client: client ?? _client,
-  );
-
-  RecoveryApi recoveryApiFor(String accessToken) => RecoveryApi(
-    authBaseUrl: authBaseUrl,
-    accessToken: accessToken,
-    client: _client,
-    versionedOtpEnabled: versionedOtpEnabled,
   );
 
   Future<OtpChallenge?> requestOtp(
