@@ -35,24 +35,66 @@ if (config.emailHost && config.emailUser && config.emailPass) {
   console.warn('Email SMTP credentials missing. Email authentication delivery is unavailable.');
 }
 
+// What each kind of code is for, so two codes sent for one action are not confused.
+const CODE_PURPOSES = Object.freeze({
+  signin: {
+    subject: 'Your PandaPay Verification Code',
+    heading: 'PandaPay Verification Code',
+    lead: 'Your verification code is:',
+    textLead: 'Your PandaPay verification code is:',
+  },
+  'recovery-email-signin': {
+    subject: 'Confirm it is you: PandaPay recovery email',
+    heading: 'Confirm it is you',
+    lead: 'Someone is adding a recovery email to your PandaPay account. To confirm it is you, enter this code:',
+  },
+  'recovery-email-new': {
+    subject: 'Your PandaPay recovery email code',
+    heading: 'Confirm your recovery email',
+    lead: 'This address is being added as a PandaPay recovery email. Enter this code to confirm it:',
+  },
+});
+
+async function deliver(mailOptions, recipient, what) {
+  try {
+    if (!transporter) {
+      return { success: false, error: 'Email delivery is not configured' };
+    }
+    const info = await otpAdmission.run('email', () => transporter.sendMail(mailOptions));
+    const accepted = info.accepted || [];
+    if (!accepted.some(address => String(address).toLowerCase() === recipient.toLowerCase())) {
+      console.error(`[Email Service] SMTP did not accept the ${what} recipient`);
+      return { success: false, error: 'Email recipient was not accepted' };
+    }
+    console.info(`${what} email delivery succeeded`);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    if (error instanceof OtpCapacityError) return { success: false, error: 'Email delivery is temporarily busy', code: BUSY_CODE };
+    console.error(`[Email Service] Failed to send ${what}:`, safeErrorCode(error, 'delivery_error'));
+    return { success: false, error: 'Email delivery failed' };
+  }
+}
+
 /**
  * Send an OTP code via Email
  * @param {string} email - Recipient email address
  * @param {string} code - The OTP code
+ * @param {{purpose?: 'signin'|'recovery-email-signin'|'recovery-email-new'}} [options]
  * @returns {Promise<{success: boolean, messageId?: string, error?: string}>}
  */
-async function sendOtpEmail(email, code) {
+async function sendOtpEmail(email, code, { purpose = 'signin' } = {}) {
+  const wording = CODE_PURPOSES[purpose] || CODE_PURPOSES.signin;
   const mailOptions = {
     from: config.emailFrom || '"PandaPay" <noreply@example.com>',
     to: email,
-    subject: 'Your PandaPay Verification Code',
+    subject: wording.subject,
     disableFileAccess: true,
     disableUrlAccess: true,
-    text: `Your PandaPay verification code is: ${code}\nThis code will expire in 1 minute. Do not share it with anyone.`,
+    text: `${wording.textLead || wording.lead} ${code}\nThis code will expire in 1 minute. Do not share it with anyone.`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
-        <h2 style="color: #333; text-align: center;">PandaPay Verification Code</h2>
-        <p style="color: #555; font-size: 16px;">Your verification code is:</p>
+        <h2 style="color: #333; text-align: center;">${wording.heading}</h2>
+        <p style="color: #555; font-size: 16px;">${wording.lead}</p>
         <div style="background-color: #f5f5f5; padding: 15px; border-radius: 4px; text-align: center; margin: 20px 0;">
           <strong style="font-size: 28px; letter-spacing: 5px; color: #000;">${code}</strong>
         </div>
@@ -60,27 +102,26 @@ async function sendOtpEmail(email, code) {
       </div>
     `,
   };
+  return deliver(mailOptions, email, 'OTP');
+}
 
-  try {
-    if (!transporter) {
-      return { success: false, error: 'Email delivery is not configured' };
-    }
-
-    const info = await otpAdmission.run('email', () => transporter.sendMail(mailOptions));
-    const accepted = info.accepted || [];
-    if (!accepted.some(address => String(address).toLowerCase() === email.toLowerCase())) {
-      console.error('[Email Service] SMTP did not accept the OTP recipient');
-      return { success: false, error: 'Email recipient was not accepted' };
-    }
-    console.info('OTP email delivery succeeded');
-    return { success: true, messageId: info.messageId };
-  } catch (error) {
-    if (error instanceof OtpCapacityError) return { success: false, error: 'Email delivery is temporarily busy', code: BUSY_CODE };
-    console.error('[Email Service] Failed to send OTP:', safeErrorCode(error, 'delivery_error'));
-    return { success: false, error: 'Email delivery failed' };
-  }
+/**
+ * A plain security notice (no code): a recovery email was added, a sign-in email
+ * changed, and so on. The body is text only and never contains a code or a link.
+ */
+async function sendSecurityNotice({ to, subject, text }) {
+  const mailOptions = {
+    from: config.emailFrom || '"PandaPay" <noreply@example.com>',
+    to,
+    subject,
+    disableFileAccess: true,
+    disableUrlAccess: true,
+    text,
+  };
+  return deliver(mailOptions, to, 'security notice');
 }
 
 module.exports = {
   sendOtpEmail,
+  sendSecurityNotice,
 };

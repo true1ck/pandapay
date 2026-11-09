@@ -119,5 +119,7 @@ module.exports = {
   // The phone lock. Off by default. See utils/phoneGate.js and services/phoneClaim.js.
   requirePhoneAtSignup: phoneGateRequired(),
   allowedPhoneCountries: parseAllowedCountries(process.env.PHONE_ALLOWED_COUNTRIES),
+  // One reminder email, 7 days after sign-up, to accounts with no recovery email.
+  recoveryReminderEmailsEnabled: retirementFlag(process.env.RECOVERY_REMINDER_EMAILS_ENABLED, 'RECOVERY_REMINDER_EMAILS_ENABLED'),
 };
 

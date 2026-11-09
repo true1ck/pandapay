@@ -153,6 +153,7 @@ app.use('/auth', authRoutes);
 app.use('/users', userRoutes);
 app.use('/users/me/recovery-contact', require('./routes/recoveryContactRoutes'));
 app.use('/users/me/phone', require('./routes/phoneClaimRoutes'));
+app.use('/users/me/recovery-email', require('./routes/recoveryEmailRoutes'));
 app.use('/internal', internalRoutes);
 app.post('/internal/account/deletion/apply', (req,res,next)=>{
   if(!internalRoutes.serviceAuthenticated(req))return res.status(typeof config.authInternalServiceSecret==='string'&&Buffer.byteLength(config.authInternalServiceSecret)>=32?401:503).json({error:'Unauthorized service'});
@@ -178,12 +179,20 @@ const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, () => {
   console.info('Auth service started');
 });
+let stopRecoveryReminders = null;
+if (config.recoveryReminderEmailsEnabled) {
+  stopRecoveryReminders = require('./services/recoveryReminders').startRecoveryReminderJob({
+    getPool: () => db.pool,
+    sendNotice: require('./services/emailService').sendSecurityNotice,
+  });
+}
 telemetry.start();
 
 async function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   console.info('Auth service shutting down');
+  if (stopRecoveryReminders) stopRecoveryReminders();
 
   const forceExit = setTimeout(() => process.exit(1), 10000);
   forceExit.unref();
