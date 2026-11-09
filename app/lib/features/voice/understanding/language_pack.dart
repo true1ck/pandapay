@@ -81,6 +81,10 @@ class LanguagePack {
     required this.dayPrefixWords,
     required this.percentWords,
     required this.pronouns,
+    required this.categoryTerms,
+    required this.instrumentWords,
+    required this.determiners,
+    required this.phraseStops,
   });
 
   /// `en`, `hi`, ...
@@ -200,4 +204,16 @@ class LanguagePack {
   final Set<String> dayPrefixWords;
   final Set<String> percentWords;
   final Set<String> pronouns;
+
+  /// Category slug -> words and phrases that point at it.
+  final Map<String, List<String>> categoryTerms;
+
+  /// Instrument key (`cash`, `upi`, `debit`, `credit`, `wallet`) -> phrases.
+  final Map<String, List<String>> instrumentWords;
+
+  /// Words skipped at the front of an object phrase ("a", "some", "the").
+  final Set<String> determiners;
+
+  /// Words that end an object phrase ("using", "with", "and").
+  final Set<String> phraseStops;
 }
