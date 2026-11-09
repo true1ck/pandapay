@@ -3,6 +3,18 @@ import 'dart:convert';
 import '../api_exception.dart';
 import '../local/app_database.dart';
 
+/// One queued command, as seen by a screen that overlays it.
+class PendingCommand {
+  const PendingCommand({
+    required this.kind,
+    required this.target,
+    required this.payload,
+  });
+  final String kind;
+  final String target;
+  final Map<String, Object?> payload;
+}
+
 /// Runs one queued command against the server. Throw to report failure.
 typedef CommandHandler = Future<void> Function(Map<String, Object?> payload);
 
@@ -102,6 +114,24 @@ class CommandOutbox {
               )
               .first['c']
           as int;
+
+  /// Queued, unparked commands of the given [kinds], oldest first. Screens
+  /// use this to show a pending change on top of the last data they loaded.
+  List<PendingCommand> pendingOf(Set<String> kinds) => [
+    for (final r in _appDb.db.select(
+      'SELECT kind, target, payload_json FROM command_outbox '
+      'WHERE namespace=? AND parked=0 ORDER BY id',
+      [namespace],
+    ))
+      if (kinds.contains(r['kind']))
+        PendingCommand(
+          kind: r['kind'] as String,
+          target: r['target'] as String,
+          payload: Map<String, Object?>.from(
+            jsonDecode(r['payload_json'] as String) as Map,
+          ),
+        ),
+  ];
 
   /// Commands the server refused for good. They stay for the person to see.
   List<({int id, String kind, String target, String? error})> parked() => [

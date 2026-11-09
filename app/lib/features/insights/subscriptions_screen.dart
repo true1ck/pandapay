@@ -8,6 +8,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../data/local_first/pending_overlays.dart';
 import '../../data/api_exception.dart';
 import '../../data/bills_projection_api.dart';
 import '../../data/commitments_repository.dart';
@@ -2242,16 +2243,22 @@ class _SeriesCard extends ConsumerWidget {
     );
     if (saved == true && context.mounted) {
       try {
-        await ref
-            .read(spendReportsRepositoryProvider)!
-            .updateRecurring(
-              series.id,
-              displayName: name.text.trim(),
-              amountInr: double.parse(amount.text),
-              cadenceDays: int.parse(cadence.text),
-              nextExpectedOn: next!,
-              autopayStatus: autopayStatus,
-            );
+        // Local first: the edit shows at once; the command outbox sends it.
+        final n = next!;
+        await queueCommand(
+          ref,
+          kind: OverlayCommand.recurringUpdate,
+          target: series.id,
+          payload: {
+            'id': series.id,
+            'displayName': name.text.trim(),
+            'amountInr': double.parse(amount.text),
+            'cadenceDays': int.parse(cadence.text),
+            'nextExpectedOn':
+                '${n.year.toString().padLeft(4, '0')}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}',
+            'autopayStatus': autopayStatus,
+          },
+        );
         if (!context.mounted) return;
         ref.invalidate(recurringReportProvider);
         ScaffoldMessenger.of(
@@ -2297,9 +2304,15 @@ class _SeriesCard extends ConsumerWidget {
     );
     if (confirmed != true || !context.mounted) return;
     try {
-      await ref
-          .read(spendReportsRepositoryProvider)!
-          .dismissRecurring(series.id);
+      // Hiding a subscription is saved on the phone first; a queued edit of
+      // the same subscription is dropped because it is about to disappear.
+      await queueCommand(
+        ref,
+        kind: OverlayCommand.recurringDismiss,
+        target: series.id,
+        payload: {'id': series.id},
+        cancels: const [],
+      );
       if (!context.mounted) return;
       ref.invalidate(recurringReportProvider);
       ScaffoldMessenger.of(

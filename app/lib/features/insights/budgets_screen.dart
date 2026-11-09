@@ -5,6 +5,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../data/local_first/pending_overlays.dart';
 import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart' show SpendCategory;
 import '../../data/spend_reports_repository.dart';
@@ -299,10 +300,15 @@ class _BudgetCard extends ConsumerWidget {
       ),
     );
     if (confirmed != true) return;
-    final repo = ref.read(spendReportsRepositoryProvider);
-    if (repo == null) return;
     try {
-      await repo.deleteBudget(budget.id);
+      // Local first: the budget disappears at once and the command outbox
+      // tells the server, retrying until it accepts.
+      await queueCommand(
+        ref,
+        kind: OverlayCommand.budgetDelete,
+        target: budget.id,
+        payload: {'id': budget.id},
+      );
       ref.invalidate(budgetsProvider);
     } catch (e) {
       if (context.mounted) {
@@ -554,12 +560,42 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
       _error = null;
     });
     try {
-      await repo.saveBudget(
-        scope: _scope,
-        scopeRefId: _scopeRefId,
-        period: _period,
-        amount: Money.fromRupees(amount),
-      );
+      // Changing the amount of a budget that already exists is certain to look
+      // right on the phone (what was spent does not change), so it is saved
+      // locally and sent later. A brand-new budget needs the server to say how
+      // much is already spent, so it is sent now.
+      final existing = ref
+          .read(budgetsProvider)
+          .valueOrNull
+          ?.where(
+            (b) =>
+                b.scope == _scope &&
+                (b.scopeRefId ?? '') == (_scopeRefId ?? '') &&
+                b.period == _period,
+          )
+          .firstOrNull;
+      if (existing != null) {
+        await queueCommand(
+          ref,
+          kind: OverlayCommand.budgetSave,
+          target: '${_scope.wireValue}|${_scopeRefId ?? ''}|${_period.wireValue}',
+          payload: {
+            'scope': _scope.wireValue,
+            'scopeRefId': _scopeRefId,
+            'period': _period.wireValue,
+            'amountInr': amount,
+            'rollover': false,
+          },
+        );
+        ref.invalidate(budgetsProvider);
+      } else {
+        await repo.saveBudget(
+          scope: _scope,
+          scopeRefId: _scopeRefId,
+          period: _period,
+          amount: Money.fromRupees(amount),
+        );
+      }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
