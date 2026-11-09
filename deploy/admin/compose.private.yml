@@ -114,41 +114,8 @@ services:
       SMS_V2_BUNDLE_REFRESH_BEFORE_HOURS: '${SMS_V2_BUNDLE_REFRESH_BEFORE_HOURS:-72}'
       DB_SSL: 'true'
       DB_SSL_CA: '${DB_SSL_CA:-}'
-  # AI drafts: asks Gemini (paid key only) to draft a rule for each shared, redacted
-  # message layout. Needs outbound HTTPS to generativelanguage.googleapis.com.
-  sms-v2-template-worker:
-    profiles: [admin]
-    build:
-      context: ./api
-    command: [node, src/sms_v2/jobs/template_worker_main.js]
-    restart: unless-stopped
-    read_only: true
-    tmpfs: [/tmp]
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
-    pids_limit: 64
-    mem_limit: 256m
-    cpus: 0.25
-    networks: [admin_private]
-    healthcheck:
-      disable: true
-    environment:
-      NODE_ENV: production
-      ADMIN_API_DATABASE_URL: '${ADMIN_API_DATABASE_URL:?}'
-      SMS_V2_JOB_ADMIN_ID: '${SMS_V2_JOB_ADMIN_ID:?}'
-      GEMINI_API_KEY: '${GEMINI_API_KEY:?}'
-      SMS_V2_AI_MODEL: '${SMS_V2_AI_MODEL:?}'
-      SMS_V2_AI_TPM: '${SMS_V2_AI_TPM:?}'
-      SMS_V2_AI_RPM: '${SMS_V2_AI_RPM:-60}'
-      SMS_V2_AI_MAX_OUTPUT_TOKENS: '${SMS_V2_AI_MAX_OUTPUT_TOKENS:-4096}'
-      # Required so the console's AI cost figures are never blank.
-      SMS_V2_AI_INPUT_USD_PER_MILLION: '${SMS_V2_AI_INPUT_USD_PER_MILLION:?}'
-      SMS_V2_AI_OUTPUT_USD_PER_MILLION: '${SMS_V2_AI_OUTPUT_USD_PER_MILLION:?}'
-      DB_SSL: 'true'
-      DB_SSL_CA: '${DB_SSL_CA:-}'
 networks:
   admin_private:
     driver: bridge
-    # Egress needed for reviewed PostgreSQL and SMTP endpoints, and HTTPS to
-    # generativelanguage.googleapis.com for sms-v2-template-worker only.
+    # Egress needed for reviewed PostgreSQL and SMTP endpoints.
     # Restrict egress with the actual host firewall; no customer/worker joins.

@@ -6,6 +6,7 @@ const {
   fillSynthetic,
   buildPrompt,
   validateDraft,
+  validateDraftSafely,
   stampDraft,
   runTemplateWorkerOnce,
   createGeminiTemplateProvider,
@@ -191,7 +192,10 @@ test("failed second draft stays failed, and exhausted capacity makes no call", a
   );
   assert.equal(calls, 0);
   assert.equal(finish.requeue, true);
-  assert.throws(() => workerConfig({ SMS_V2_AI_MODEL: "test" }), /TPM_invalid/);
+  // Only the key and a database login come from the host: the rest has defaults.
+  assert.equal(workerConfig({}).model, "gemini-3.5-flash-lite");
+  assert.equal(workerConfig({ SMS_V2_AI_MODEL: "test" }).tpm, 100000);
+  assert.throws(() => workerConfig({ SMS_V2_AI_TPM: "0" }), /TPM_invalid/);
   assert.equal(
     workerConfig({
       SMS_V2_AI_MODEL: "test",
@@ -486,6 +490,11 @@ test("the worker stamps the fields it owns, so a model slip there never fails a 
   assert.equal(stamped.match.pattern, "(");
   assert.notDeepEqual(validateDraft(stamped, template, config.model), []);
   assert.equal(stampDraft(null, template, config.model), null);
+    // Model puts tests instead of examples and omits confidence:
+    const withTests = { ...rule(), tests: rule().examples };
+    delete withTests.examples;
+    delete withTests.confidence;
+    assert.deepEqual(validateDraft(stampDraft(withTests, template, config.model), template, config.model), []);
 });
 
 test("a reference key outside the fact contract is refused here, because the phone would refuse the fact", () => {
@@ -494,4 +503,24 @@ test("a reference key outside the fact contract is refused here, because the pho
   assert.ok(validateDraft(draft, template, config.model).includes("reference_key_invalid"));
   draft.emit[0].references = { upiRef: "ref" };
   assert.ok(!validateDraft(draft, template, config.model).includes("reference_key_invalid"));
+});
+
+test("validation runs in one reusable thread, and a runaway regex times out without breaking the next draft", async () => {
+  const good = rule();
+  assert.deepEqual(await validateDraftSafely(good, template, config.model, []), []);
+  assert.deepEqual(await validateDraftSafely(good, template, config.model, []), []);
+  // Passes the pattern lint but backtracks exponentially on a near match.
+  const runaway = rule();
+  runaway.match = { ...runaway.match, pattern: "^(?:(?:a?){10}){10}b" };
+  runaway.examples = [
+    ...runaway.examples,
+    { sender: "TESTBK", body: "a".repeat(30), expectFactTypes: [] },
+  ];
+  const started = Date.now();
+  assert.deepEqual(
+    await validateDraftSafely(runaway, template, config.model, [], { timeoutMs: 500 }),
+    ["validation_timeout"],
+  );
+  assert.ok(Date.now() - started < 5000);
+  assert.deepEqual(await validateDraftSafely(good, template, config.model, []), []);
 });

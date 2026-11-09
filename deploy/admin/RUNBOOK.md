@@ -38,16 +38,15 @@ Configure independent backend-only values: `ADMIN_AUTH_DATABASE_URL`, `ADMIN_API
 
 ## SMS rule job and AI drafts
 
-The admin profile also runs two background services from the API image. Neither has a port or an HTTP health check.
+The admin profile also runs a background service from the API image. It has no port or HTTP health check.
 
 - `sms-v2-rule-jobs` runs `src/sms_v2/jobs/rule_jobs_main.js --loop`: once at start-up, then at minute 7 of every hour (UTC). It re-signs the SMS rule sets phones download (they expire 7 days after signing) and pauses rules with too many corrections. Without it, `GET /sms/v2/rules` answers `503 bundle_unavailable` 7 days after the last signing and new installs get no rules.
-- `sms-v2-template-worker` runs `src/sms_v2/jobs/template_worker_main.js`: it asks Gemini to draft a rule for each shared, redacted message layout. Gemini never receives message text.
 
-Settings, all on the private admin host only (never in the public `api` service's environment): `SMS_RULES_SIGNING_KEY` and `SMS_RULES_KEY_ID` (also on `admin-api`, which signs on publish, pause and rollback; see `docs/sms-pipeline-v2/runbooks/signing-keys.md`), `SMS_V2_JOB_ADMIN_ID` (an active owner's `admin_users.id` with `learning.publish`), and for the AI worker `GEMINI_API_KEY`, `SMS_V2_AI_MODEL`, `SMS_V2_AI_TPM`, `SMS_V2_AI_INPUT_USD_PER_MILLION` and `SMS_V2_AI_OUTPUT_USD_PER_MILLION` (from Google's pricing page for that model). Optional: `SMS_V2_AI_RPM` (default 60), `SMS_V2_AI_MAX_OUTPUT_TOKENS` (default 4096), `SMS_V2_BUNDLE_REFRESH_BEFORE_HOURS` (default 72).
+Settings, all on the private admin host only (never in the public `api` service's environment): `SMS_RULES_SIGNING_KEY` and `SMS_RULES_KEY_ID` (also on `admin-api`, which signs on publish, pause and rollback; see `docs/sms-pipeline-v2/runbooks/signing-keys.md`), `SMS_V2_JOB_ADMIN_ID` (an active owner's `admin_users.id` with `learning.publish`). Optional: `SMS_V2_BUNDLE_REFRESH_BEFORE_HOURS` (default 72).
 
-`GEMINI_API_KEY` must come from a Google Cloud project with billing turned on, on a paid tier: on the unpaid tier Google may use inputs to improve its products and human reviewers may read them. Set a monthly budget alert in Google Cloud.
+The AI drafts worker (`sms-v2-template-worker`) does not run here: this host is started only when needed, and drafting must run continuously. It runs on the backend host (`docker-compose.prod.yml`, see `deploy/DEPLOY.md`). Its model, rate limits and budget are the console's Settings tab.
 
-Egress: allow outbound HTTPS from the `admin_private` network to `generativelanguage.googleapis.com`, for the template worker only. The rule job needs only PostgreSQL.
+Egress: the rule job needs only PostgreSQL.
 
 Check after start:
 

@@ -304,7 +304,7 @@ fi
 # when its repository secret is set; a value that is not supplied keeps whatever
 # the host's .env already has. The worker itself is built and started only when
 # every setting is present (see ai_worker_configured below).
-for name in GEMINI_API_KEY SMS_AI_WORKER_DB_PASSWORD SMS_AI_WORKER_DATABASE_URL SMS_V2_AI_MODEL SMS_V2_AI_TPM SMS_V2_AI_INPUT_USD_PER_MILLION SMS_V2_AI_OUTPUT_USD_PER_MILLION; do
+for name in GEMINI_API_KEY SMS_AI_WORKER_DB_PASSWORD SMS_AI_WORKER_DATABASE_URL; do
   if [ -n "${!name:-}" ]; then
     upsert_env_value "$name" "${!name}"
     echo "    $name configuration updated"
@@ -442,7 +442,7 @@ fi
 AI_WORKER=sms-v2-template-worker
 ai_worker_configured() {
   local key value
-  for key in GEMINI_API_KEY SMS_AI_WORKER_DB_PASSWORD SMS_AI_WORKER_DATABASE_URL SMS_V2_AI_MODEL SMS_V2_AI_TPM SMS_V2_AI_INPUT_USD_PER_MILLION SMS_V2_AI_OUTPUT_USD_PER_MILLION; do
+  for key in GEMINI_API_KEY SMS_AI_WORKER_DB_PASSWORD SMS_AI_WORKER_DATABASE_URL; do
     value="$(awk -v key="$key" 'index($0, key "=") == 1 { v = substr($0, length(key) + 2) } END { print v }' "$APP_DIR/.env"       | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")"
     [ -n "$value" ] || return 1
   done
