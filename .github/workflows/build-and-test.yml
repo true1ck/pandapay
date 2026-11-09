@@ -442,7 +442,7 @@ jobs:
         run: docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 -f - < db/tests/20261021133000_referral_journey_test.sql
 
       - name: Verify referral real-use gate is off by default and gates qualification when on
-        run: docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 -f - < db/tests/20261117030000_referral_real_use_gate_test.sql
+        run: docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 -f - < db/tests/20261118020000_referral_real_use_gate_test.sql
 
       - name: Verify isolated reward worker leases and retries
         run: docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 -f - < db/tests/20261021140000_rewards_worker_outbox_test.sql

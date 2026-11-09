@@ -1,5 +1,5 @@
 -- Disposable-DB test for the referral "reward only after real use" gate
--- (migration 20261117030000_referral_real_use_gate.sql). Run in a fresh migrated
+-- (migration 20261118020000_referral_real_use_gate.sql). Run in a fresh migrated
 -- database, after the permission and journey tests. Everything rolls back.
 --
 -- With campaign_versions.real_use_required_days = 0 (the default) a referee still

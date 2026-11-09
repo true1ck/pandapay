@@ -17,7 +17,7 @@ not built into an app**. Nothing has touched production. Plans and designs this 
 | Card question for recovery | `api` `POST /internal/recovery/card-fact` | uses `AUTH_INTERNAL_SERVICE_SECRET` |
 | One phone, many accounts | `deviceAccountLimit.js` | `DEVICE_ACCOUNT_LIMIT=3`, `DEVICE_ACCOUNT_LIMIT_ENFORCE=false` (log-only) |
 | Support tools | `auth/scripts/recovery_support.js`, `auth/scripts/account_clusters.js` | need `AUTH_SUPPORT_DATABASE_URL` |
-| Referral reward only after real use (added 10 Nov 2026) | product DB migration `20261117030000_referral_real_use_gate.sql`, section below | `campaign_versions.real_use_required_days = 0` (off) |
+| Referral reward only after real use (added 10 Nov 2026) | product DB migration `20261118020000_referral_real_use_gate.sql`, section below | `campaign_versions.real_use_required_days = 0` (off) |
 
 ## Order of rollout
 
