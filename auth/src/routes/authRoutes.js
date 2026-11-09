@@ -11,6 +11,7 @@ const { sendOtpEmail } = require('../services/emailService');
 const { verifyGoogleToken } = require('../services/googleAuthService');
 const { resolveGoogleAccount, GoogleIdentityError } = require('../services/googleIdentity');
 const { newAccountsPaused, respondPaused, CODE: REGISTRATION_PAUSED } = require('../services/newAccountAdmission');
+const { createDeviceAccountLimit } = require('../services/deviceAccountLimit');
 const { verifyAccessToken } = require('../services/accessTokenVerification');
 const { verifyCurrentSession } = require('../services/currentSessionVerification');
 const {
@@ -148,6 +149,14 @@ function isValidPhoneNumber(phone) {
 
   return true;
 }
+
+// Accounts per phone. Log-only until DEVICE_ACCOUNT_LIMIT_ENFORCE=true (see the service).
+const deviceAccountLimit = createDeviceAccountLimit({
+  query: (...args) => db.query(...args),
+  audit: (event) => logAuthEvent(event),
+  limit: config.deviceAccountLimit ?? 0,
+  enforce: config.deviceAccountLimitEnforce === true,
+});
 
 function sanitizeDeviceId(deviceId) {
   if (!deviceId || typeof deviceId !== 'string') {
@@ -963,6 +972,15 @@ router.post(
         if (isDisposableEmail(normalizedEmail)) {
           return res.status(400).json({ error: 'Please use your regular email address, not a temporary one.', code: 'email_not_allowed' });
         }
+        const deviceAdmission = await deviceAccountLimit.admitNewAccount({
+          deviceId: devId, ip: clientIp, userAgent: req.headers['user-agent'],
+        });
+        if (!deviceAdmission.allowed) {
+          return res.status(403).json({
+            error: 'Too many accounts have been created on this phone. Please contact support.',
+            code: 'DEVICE_ACCOUNT_LIMIT',
+          });
+        }
         const newUserResult = await db.query(
           `INSERT INTO users (email, language, timezone, is_email_verified)
            VALUES ($1, $2, $3, TRUE)
@@ -1134,6 +1152,13 @@ router.post(
           device_info?.fcm_token || null
         ]
       );
+
+      // A Google sign-up cannot be refused after the fact, so this only records.
+      if (isNewAccount) {
+        await deviceAccountLimit.flagNewAccount({
+          userId: user.id, deviceId: devId, ip: clientIp, userAgent: req.headers['user-agent'],
+        });
+      }
 
       const previousAuth = await getPreviousAuthInfo(user.id, devId);
       const riskScore = await calculateRiskScore({

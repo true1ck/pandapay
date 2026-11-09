@@ -255,6 +255,10 @@ services:
       # the address people can reach auth/ at from outside.
       PRODUCT_API_INTERNAL_URL: http://api:4000
       AUTH_PUBLIC_BASE_URL: "${AUTH_PUBLIC_BASE_URL:-}"
+      # Accounts one phone may hold; past it a sign-up is only logged until enforcement
+      # is switched on. 0 turns the check off. See .env.prod.example.
+      DEVICE_ACCOUNT_LIMIT: "${DEVICE_ACCOUNT_LIMIT:-3}"
+      DEVICE_ACCOUNT_LIMIT_ENFORCE: "${DEVICE_ACCOUNT_LIMIT_ENFORCE:-false}"
     ports:
       - "127.0.0.1:3210:3210"
 

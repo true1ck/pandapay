@@ -38,6 +38,17 @@ const {retirementFlag}=require('./middleware/legacyAuthAdmission');
 const { phoneGateRequired } = require('./utils/phoneGate');
 const { parseAllowedCountries } = require('./utils/claimedPhone');
 
+// An integer setting that must be whole and in range; a typo fails startup rather
+// than silently running with a different limit.
+function boundedInteger(value, fallback, min, max, name) {
+  if (value === undefined || value === '') return fallback;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
+    throw new Error(`${name} must be a whole number from ${min} to ${max}`);
+  }
+  return parsed;
+}
+
 // DATABASE_URL is only required if not using AWS SSM Parameter Store
 const REQUIRED_ENV = [
   'JWT_ACCESS_SECRET',
@@ -125,5 +136,9 @@ module.exports = {
   productApiInternalBaseUrl: (process.env.PRODUCT_API_INTERNAL_URL || '').replace(/\/$/, '') || null,
   authPublicBaseUrl: (process.env.AUTH_PUBLIC_BASE_URL || '').replace(/\/$/, '') || null,
   recoveryReminderEmailsEnabled: retirementFlag(process.env.RECOVERY_REMINDER_EMAILS_ENABLED, 'RECOVERY_REMINDER_EMAILS_ENABLED'),
+  // Accounts one phone may hold (0 turns the check off). Past it a sign-up is only
+  // logged, until DEVICE_ACCOUNT_LIMIT_ENFORCE=true. See services/deviceAccountLimit.js.
+  deviceAccountLimit: boundedInteger(process.env.DEVICE_ACCOUNT_LIMIT, 3, 0, 50, 'DEVICE_ACCOUNT_LIMIT'),
+  deviceAccountLimitEnforce: retirementFlag(process.env.DEVICE_ACCOUNT_LIMIT_ENFORCE, 'DEVICE_ACCOUNT_LIMIT_ENFORCE'),
 };
 

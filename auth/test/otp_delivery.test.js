@@ -62,8 +62,10 @@ async function harness(t, {
   googleVerificationError = null, googleResolve = null,
   otpCapacityError = false, providerBusy = false,
   overrideV2Verification = false, mailboxUsers = {},
+  deviceAccounts = 0, configExtra = {},
 } = {}) {
   const rows = [];
+  const auditEvents = [];
   abuseStore ||= createMemoryRateLimitStore();
   const userWrites = [];
   const userQueries = [];
@@ -158,6 +160,9 @@ async function harness(t, {
       if (sql.startsWith('UPDATE users') || sql.startsWith('INSERT INTO users')) {
         if (sql.startsWith('UPDATE users') && signupUpdateError) throw signupUpdateError;
         userWrites.push({ sql, args });
+        if (sql.startsWith('INSERT INTO users (email')) {
+          return { rows: [{ id: 'created-user-1', email: args[0], name: null, role: 'user', token_version: 1 }] };
+        }
         if (sql.startsWith('UPDATE users') && sql.includes('SET name =')) {
           return { rows: [{
             ...identityUser,
@@ -168,13 +173,14 @@ async function harness(t, {
         }
         return { rows: [] };
       }
+      if (sql.includes('COUNT(DISTINCT d.user_id)')) return { rows: [{ accounts: deviceAccounts }] };
       if (sql.includes('SELECT COUNT(*) as count FROM user_devices')) return { rows: [{ count: '1' }] };
       if (sql.includes('SELECT id FROM user_devices')) return { rows: [] };
       if (sql.includes('INSERT INTO user_devices')) return { rows: [] };
       throw new Error('Unexpected database operation in email delivery test');
     },
   };
-  const config = { isProduction: true, enableEmailOtp: true, enablePhoneOtp: true };
+  const config = { isProduction: true, enableEmailOtp: true, enablePhoneOtp: true, ...configExtra };
   const otp = load('../src/services/otpService.js', {
     '../db': db,
     '../config': config,
@@ -236,7 +242,7 @@ async function harness(t, {
       calculateRiskScore: async () => ({ score: 0, reasons: [], isSuspicious: false }),
     },
     '../services/auditLogger': {
-      logAuthEvent: noop, logBlockedIpLogin: noop, logSuspiciousOtpAttempt: noop,
+      logAuthEvent: async event => { auditEvents.push(event); }, logBlockedIpLogin: noop, logSuspiciousOtpAttempt: noop,
       checkAnomalies: noop,
       RISK_LEVELS: { INFO: 'info' },
     },
@@ -260,7 +266,7 @@ async function harness(t, {
   });
   t.after(() => { server.closeAllConnections(); server.close(); });
   return {
-    rows, otp, limiter, abuseStore, userWrites, userQueries,
+    rows, otp, limiter, abuseStore, userWrites, userQueries, auditEvents,
     failDelivery() { delivered = false; },
     restoreDelivery() { delivered = true; },
     get mailCount() { return mailCount; },
@@ -867,4 +873,52 @@ test('aliases of one mailbox share a single code-request budget, so +tags cannot
   const second = await h.request('ab+1@gmail.com');
   assert.equal(second.status, 429, 'the second alias is held by the first one\'s active code');
   assert.equal(h.mailCount, 1);
+});
+
+const newAccountBody = { email: 'fresh.device@example.com', code: '1234', device_id: 'limit-device-1' };
+const deviceEvents = h => h.auditEvents.filter(e => e.action === 'device_account_limit');
+
+test('device limit, enforced: a fourth account on one phone is refused before it is created', async t => {
+  const h = await harness(t, { deviceAccounts: 3, configExtra: { deviceAccountLimit: 3, deviceAccountLimitEnforce: true } });
+  const r = await h.post('verify-email-otp', newAccountBody);
+  assert.equal(r.status, 403);
+  assert.equal(r.body.code, 'DEVICE_ACCOUNT_LIMIT');
+  assert.match(r.body.error, /contact support/);
+  assert.equal(h.userWrites.some(w => w.sql.startsWith('INSERT INTO users')), false, 'no account was created');
+  assert.deepEqual(deviceEvents(h).map(e => [e.status, e.deviceId, e.meta]), [['blocked', 'limit-device-1', { accounts: 3, limit: 3, enforced: true }]]);
+});
+
+test('device limit, log-only: the same sign-up goes through and is only recorded', async t => {
+  const h = await harness(t, { deviceAccounts: 3, configExtra: { deviceAccountLimit: 3, deviceAccountLimitEnforce: false } });
+  const r = await h.post('verify-email-otp', newAccountBody);
+  assert.equal(r.status, 200);
+  assert.equal(h.userWrites.some(w => w.sql.startsWith('INSERT INTO users')), true);
+  assert.deepEqual(deviceEvents(h).map(e => [e.status, e.meta.enforced]), [['flagged', false]]);
+});
+
+test('device limit: under the limit, or switched off, records nothing and asks nothing', async t => {
+  const under = await harness(t, { deviceAccounts: 2, configExtra: { deviceAccountLimit: 3, deviceAccountLimitEnforce: true } });
+  assert.equal((await under.post('verify-email-otp', newAccountBody)).status, 200);
+  assert.equal(deviceEvents(under).length, 0);
+  const off = await harness(t, { deviceAccounts: 99 });
+  assert.equal((await off.post('verify-email-otp', newAccountBody)).status, 200);
+  assert.equal(deviceEvents(off).length, 0);
+});
+
+test('device limit: an existing account signing in is never counted against the phone', async t => {
+  const existing = { id: 'old-1', email: 'old.device@example.com', name: 'Old', role: 'user', token_version: 1, is_email_verified: true };
+  const h = await harness(t, { deviceAccounts: 9, mailboxUsers: { 'old.device@example.com': existing }, configExtra: { deviceAccountLimit: 3, deviceAccountLimitEnforce: true } });
+  const r = await h.post('verify-email-otp', { email: 'old.device@example.com', code: '1234', device_id: 'limit-device-1' });
+  assert.equal(r.status, 200);
+  assert.equal(deviceEvents(h).length, 0);
+});
+
+test('device limit: a Google sign-up cannot be refused after the fact, only recorded', async t => {
+  const h = await harness(t, {
+    deviceAccounts: 4, configExtra: { deviceAccountLimit: 3, deviceAccountLimitEnforce: true },
+    googleResolve: async () => ({ user: { id: 'g-new', email: 'g.new@gmail.com', name: '', role: 'user', token_version: 1 }, isNewAccount: true }),
+  });
+  const r = await h.post('google', { id_token: 'synthetic-google-id-token', device_id: 'limit-device-1' });
+  assert.equal(r.status, 200);
+  assert.deepEqual(deviceEvents(h).map(e => [e.status, e.userId]), [['flagged', 'g-new']]);
 });
