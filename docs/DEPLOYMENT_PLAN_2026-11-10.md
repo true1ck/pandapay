@@ -41,7 +41,7 @@ Each of these would have broken a deploy or a feature. All are fixed and committ
 |---|---|
 | Auth tests, candidate, no `.env` (as CI) | 475 pass, 0 fail |
 | API tests, candidate, clean `npm ci`, no env | 2306 pass, 32 skipped (need a database), 0 fail |
-| CI "PostgreSQL-backed suites" run locally on the candidate (product migrations incl. Sujay's and the gate, 50+ SQL assertion scripts incl. the renumbered gate test, fixtures) | see section 8 |
+| CI "PostgreSQL-backed suites" run locally on the candidate (product migrations incl. Sujay's and the gate, 50+ SQL assertion scripts incl. the renumbered gate test, fixtures) all 53 steps pass on a fresh cluster (including the renumbered gate test and the shared-expense suites) |
 | Five lock/recovery database fixtures on a throwaway no-locale cluster (`scripts/test_auth_lock_recovery_postgres.sh`) | all pass |
 | **Upgrade rehearsal**: real migration runner, database at the pre-recovery state with users, then 0015 to 0018 with a separate runtime login | 5 of 5 users kept, canonical emails filled, runtime login can insert but not delete on the new table |
 | **Duplicate rehearsal**: two accounts on one Gmail mailbox | stops at 0016 (0015 applied); after closing one, a rerun finishes 0016 to 0018 |
