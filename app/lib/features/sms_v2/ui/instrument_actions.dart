@@ -106,12 +106,16 @@ class InstrumentActions {
           for (final row in store.list()) row.instrumentId: row,
         };
         final ledger = LedgerStore(db, namespace: namespace);
+        // One full scan of v2_facts, shared by the projection and the writer.
+        final instrumentIdByFactId = facts.instrumentIdsSince(
+          DateTime.utc(1900),
+        );
         final snapshot = LedgerSnapshot.project(
           events: affected,
           factsById: allFacts,
           instrumentsById: instruments,
           bundle: bundle,
-          instrumentIdByFactId: facts.instrumentIdsSince(DateTime.utc(1900)),
+          instrumentIdByFactId: instrumentIdByFactId,
           userRules: categories.userRules,
           confirmedHistory: categories.confirmedHistory,
           lockedCategories: ledger.categoryDecisions(),
@@ -124,7 +128,7 @@ class InstrumentActions {
           snapshot,
           factsById: allFacts,
           instrumentsById: instruments,
-          instrumentIdByFactId: facts.instrumentIdsSince(DateTime.utc(1900)),
+          instrumentIdByFactId: instrumentIdByFactId,
         );
         final queue = OutboxStore(db, namespace: namespace);
         queue.enqueue(

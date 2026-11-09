@@ -28,7 +28,9 @@ import 'local_category_learning.dart';
 import '../../data/local/sms_intake_repository.dart';
 import '../sms_v2/storage/outbox_store.dart';
 import '../sms_v2/sync/learning_signals.dart';
-import '../sms_v2/ui/review_controller.dart' show readSharingConsent;
+import '../sms_v2/ui/review_controller.dart'
+    show readSharingConsent, smsReviewController;
+import '../sms_v2/ui/transaction_actions.dart';
 
 /// D1 Transaction List (ui-spec Group D, implementation-plan-group-c-d.md)
 /// — extends the original flat list (UA-3+/Chunk 18) with date grouping,
@@ -372,8 +374,29 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 
     setState(() => _isBulkOperating = true);
     try {
+      // SMS transactions (`v2:` ids) live on this phone and sync from there;
+      // the server has no such id and answers 400. Save them locally and send
+      // only the rest to the API.
+      final selected = visible.where((e) => _selectedIds.contains(e.id));
+      final local = selected.where((e) => e.pipelineVersion == 2).toList();
+      final localIds = {for (final e in local) e.id};
+      if (local.isNotEmpty) {
+        final slug = categories
+            .where((c) => c.id == chosen)
+            .map((c) => c.slug)
+            .firstOrNull;
+        if (slug == null) {
+          throw ArgumentError(
+            'Choose a supported category for SMS transactions',
+          );
+        }
+        final controller = await smsReviewController(ref);
+        SmsTransactionActions(controller: controller).setCategory(local, slug);
+      }
       await Future.wait(
-        ids.map((id) => repo.editTransaction(id, categoryId: chosen)),
+        ids
+            .where((id) => !localIds.contains(id))
+            .map((id) => repo.editTransaction(id, categoryId: chosen)),
       );
       unawaited(_teachLocalCategoryRules(visible, chosen));
       unawaited(_shareCategoryChoices(visible, chosen));
@@ -547,8 +570,17 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 
     setState(() => _isBulkOperating = true);
     try {
+      // An SMS transaction's account is confirmed in Needs review or its own
+      // Edit screen; the server cannot take a `v2:` id, so skip those rather
+      // than failing the whole batch.
+      final skipped = visible
+          .where((e) => _selectedIds.contains(e.id) && e.pipelineVersion == 2)
+          .map((e) => e.id)
+          .toSet();
       await Future.wait(
-        ids.map((id) => repo.editTransaction(id, userCardId: chosen.id)),
+        ids
+            .where((id) => !skipped.contains(id))
+            .map((id) => repo.editTransaction(id, userCardId: chosen.id)),
       );
       if (mounted) {
         setState(() {
@@ -565,7 +597,9 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Assigned ${ids.length} transaction${ids.length == 1 ? '' : 's'} to $cardTitle',
+              skipped.isEmpty
+                  ? 'Assigned ${ids.length} transaction${ids.length == 1 ? '' : 's'} to $cardTitle'
+                  : 'Assigned ${ids.length - skipped.length} to $cardTitle. ${skipped.length} SMS transaction${skipped.length == 1 ? '' : 's'} skipped: change those from their own Edit screen.',
             ),
           ),
         );

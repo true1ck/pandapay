@@ -120,6 +120,14 @@ String userFacingErrorMessage(Object error) {
   if (error is AuthenticationUnavailableException) return error.message;
   if (error is CardAlreadyAddedException) return error.message;
   if (error is StateError) return error.message;
+  // Deliberate validation failures in the local (SMS) edit path, such as
+  // "Choose a confirmed account or card" or a date later than the message.
+  // Their text is hand-written for the person, so show it instead of blaming
+  // the connection.
+  if (error is ArgumentError && error.message is String) {
+    final text = error.message as String;
+    if (text.isNotEmpty) return text;
+  }
   return 'Something went wrong. Please check your connection and try again.';
 }
 

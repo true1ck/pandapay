@@ -302,7 +302,15 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         }
         return;
       }
-      setState(() => _error = userFacingErrorMessage(e));
+      // Keep the real cause in the log: the on-screen copy is deliberately
+      // generic for anything that is not a validation message.
+      debugPrint('Edit transaction save failed: $e');
+      final locked = e.toString().contains('database is locked');
+      setState(
+        () => _error = locked
+            ? 'The phone is busy reading your messages. Wait a moment and save again.'
+            : userFacingErrorMessage(e),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }

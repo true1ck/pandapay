@@ -180,6 +180,7 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
           financial: controller.financial,
           namespace: namespace,
           bundle: controller.bundle,
+          categoryIdBySlug: controller.categoryIdBySlug,
         ).teachFormat(
           choice: choice,
           sourceKeys: group.map(
