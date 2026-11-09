@@ -8,6 +8,30 @@ Background: `ACCOUNT_LOCK_AND_RECOVERY_ROLLOUT_2026-11-09.md` (what each switch 
 
 ## 1. Where things stand
 
+> **Update, 10 Nov 01:35 IST. Read this first; the table below is from earlier.**
+> Sujay merged `origin/dev` into `dev` and pushed `2f4d704` to both `origin/dev` and
+> `origin/prod`. That commit contains my lock, recovery and device-check work (auth
+> migrations 0015 to 0018 included) but **not** the reward gate. My commits had reached
+> `origin/dev` without my pushing them, through a merge made under your name at 00:48 that I
+> did not run. The push started the deploy run `42688467981` at 01:28. You asked me to
+> cancel it; it was cancelled while still in the test phase, **before the deploy job ran**.
+> I then checked the server read-only: it is still on `a575b29` (Sujay's earlier successful
+> deploy), api and auth healthy, auth ledger still at `9001`, so **production was not
+> touched**.
+>
+> The run's "Security migrations and encrypted PostgreSQL recovery" job had already failed:
+> my change to `googleIdentity.js` needs the `email_canonical` column from migration 0016,
+> and the Google identity fixture's schema did not have it. That job gates every deploy, so
+> until it is fixed any push to `prod` is blocked in CI. The fix is a small test-schema
+> change, committed on local `dev` as "fix(ci): apply migration 0016 in the Google identity
+> fixture", and `security_remaining_postgres.py` passes in full locally. **It is not pushed.**
+>
+> Consequence for this plan: the candidate branch `integrate-2026-11-10` is out of date.
+> What is still missing from `origin/prod` is the CI fix, the renumbered reward gate and the
+> docs. Phase A now means: rebuild the candidate as `origin/prod` + those three, re-test,
+> then continue at Phase C.
+
+
 | Thing | State |
 |---|---|
 | Production (`origin/prod`) | `666a943`, deployed by Sujay on 10 Nov. It is **16 commits ahead of `origin/master`** and has none of the lock, recovery or gate work. |
