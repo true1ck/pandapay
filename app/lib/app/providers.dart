@@ -55,6 +55,7 @@ import '../data/local/financial_read_worker.dart';
 import '../data/local/sms_intake_repository.dart';
 import '../data/local/sms_import_store.dart';
 import '../data/local/sync_queue.dart';
+import '../data/local_first/local_first_cards.dart';
 import '../data/local/duplicate_resolution_outbox.dart';
 import '../data/local/transaction_outbox_repository.dart';
 import '../data/local/transaction_attachments_repository.dart';
@@ -597,6 +598,19 @@ final syncQueueProvider = FutureProvider<SyncQueue>((ref) async {
     cache.financialStore.database,
     namespace: namespace,
     onChanged: () => cache.financialStore.notifyPendingChange(namespace),
+  );
+});
+
+/// Wallet writes that save on the phone first and reach the server through the
+/// sync queue. See [LocalFirstCards].
+final localFirstCardsProvider = FutureProvider<LocalFirstCards>((ref) async {
+  final namespace = ref.watch(cacheNamespaceProvider);
+  final cache = await ref.watch(responseCacheProvider.future);
+  final queue = await ref.watch(syncQueueProvider.future);
+  return LocalFirstCards(
+    store: cache.financialStore,
+    queue: queue,
+    namespace: namespace,
   );
 });
 
