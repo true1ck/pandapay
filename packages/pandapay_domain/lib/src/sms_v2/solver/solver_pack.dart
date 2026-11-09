@@ -83,6 +83,7 @@ const solverLexiconNames = <String>[
   'billerStop', // generic words that are not a biller's name
   'merchantCue', // words before the merchant a mandate or subscription is for
   'loanWord',
+  'financialWord', // payment, transaction, card, account ...: a "failed" notice with these is about money
   'nonMoneyUnit', // "points", "coins": completed wording about something that is not money
 ];
 
@@ -146,8 +147,9 @@ class SolverPack {
       if (list == null) {
         throw FormatException('solver pack lexicon "$name" is missing');
       }
-      if (list is! List)
+      if (list is! List) {
         throw FormatException('lexicon "$name" must be a list');
+      }
       lex[name] = [
         for (final e in list)
           if (e is String)
@@ -173,8 +175,9 @@ class SolverPack {
 
   static LexEntry _entry(String lexicon, Map<String, dynamic> e) {
     final p = e['p'];
-    if (p is! String)
+    if (p is! String) {
       throw FormatException('lexicon "$lexicon": entry without "p"');
+    }
     try {
       return LexEntry(
         Phrase.parse(p),

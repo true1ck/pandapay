@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/financial_store.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
+import 'package:pandapay/features/sms_v2/ledger/adapters.dart';
 import 'package:pandapay/features/sms_v2/pipeline/sms_v2_pipeline.dart';
 import 'package:pandapay/features/sms_v2/storage/event_store.dart';
 import 'package:pandapay/features/sms_v2/storage/fact_store.dart';
@@ -154,6 +155,39 @@ void main() {
       db.db.select("SELECT * FROM v2_review_items WHERE kind='template' AND status='open'"),
       isNotEmpty,
     );
+  });
+
+  test('a mandate set-up and its AutoPay debit become one NAMED subscription', () {
+    final setup = sms('Mandate created for Rs 149 for SAMPLE VIDEO. Mandate ID 5566. Auto debit will happen on the 8th of every month.');
+    final charge = sms('UPI AutoPay: Rs 149 debited from A/c XX1111 for SAMPLE VIDEO on 08-Nov. Mandate ID 5566.');
+    pipeline.process(setup);
+    pipeline.process(charge);
+    final rows = subscriptionsFromLedger(
+      FactStore(db.db, namespace: _ns).all(),
+      EventStore(db.db, namespace: _ns).listSince(DateTime.utc(1900)),
+      now: DateTime.utc(2026, 11, 9),
+    );
+    expect(rows, hasLength(1), reason: 'one service, not one per message');
+    expect(rows.single.displayName.toUpperCase(), contains('SAMPLE VIDEO'));
+    expect(rows.single.displayName, isNot(contains('Unknown')));
+  });
+
+  test('a bill and its reminder for the same cycle from a sender no rule knows are one bill', () {
+    final statement = sms(
+      'Your credit card statement for card ending 4410 is generated. Total amount due Rs 23,540.00, minimum amount due Rs 1,177.00, payment due date 20-Nov-2026.',
+      sender: 'VM-NEWBNK-S',
+    );
+    final reminder = sms(
+      'Reminder: your credit card bill of Rs 23,540 for card ending 4410 is due on 20-Nov-2026. Pay now to avoid late charges.',
+      sender: 'VM-NEWBNK-S',
+    );
+    pipeline.process(statement);
+    pipeline.process(reminder);
+    final bills = FactStore(db.db, namespace: _ns).all().whereType<BillDueFact>().toList();
+    expect(bills, hasLength(2));
+    expect(bills.map((b) => b.instrument?.issuerSlug).toSet(), {'newbnk'});
+    expect(bills.map((b) => b.instrument?.maskDigits).toSet(), {'4410'});
+    expect(bills.map((b) => b.dueDate).toSet(), {'2026-11-20'});
   });
 
   test('a message a rule matches is read by the rule, never by the solver', () {

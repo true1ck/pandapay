@@ -238,3 +238,35 @@ Findings from reading the redacted layouts of everything it would count:
 - The 8 bills are real utility and card bills with due dates, correctly read.
 
 This is a check of the real pipeline's behaviour on one person's inbox, not an accuracy figure: nobody has labelled these messages. The remaining unknowns by sender (Axis, NSE, and a few billers) are the next pack-growth targets.
+
+## 12. Generalization, app audit and the real-gate count, 10 Nov 2026
+
+**Measured with the app's real intake gate** (a temporary, uncommitted test running the private export through `classifySmsV2Intake` and the engine; counts only). Of 6,019 inbox messages: 935 security wording (dropped), 2,525 dropped by the gate, 247 let through because a rule reads them, 2,559 reach the engine.
+
+| | Without the solver | With the solver |
+| --- | --- | --- |
+| Matched | 2,050 | 2,198 |
+| Ignored | 269 | 325 |
+| **Unknown (Needs Review)** | **240** | **36** |
+
+0 rule-matched messages changed. The solver resolved 204 of the 240.
+
+**Generalizing to other banks and wording (all general rules, none tied to one message)**
+- Issuer identity: a sender the registry does not know gets a plain issuer slug from its header ("NEWBNK" -> "newbnk"; digit-only short codes get none), as the app already does for unrecognised issuers. Without it the app's bill logic could neither match a reminder to its statement nor a bill to its payment.
+- Bill generated date: a "ready / generated" notice with no printed date was generated the day it arrived. Reminders get none. A printed statement date always wins.
+- "Due in N days", "payable in N days", "expires in N days" are counted from the arrival day.
+- A subscription or mandate debit names its merchant (otherwise the subscriptions list merges every unnamed one into "Unknown service"); a mandate carries its own reference so a later charge quoting it joins it.
+- Biller name falls back to the sender header so bills from one biller share an identity.
+- Plain money-in and refund wording ("Received Rs X in your A/c", "received by your wallet", "processed to your ...", "recharged with Rs X"), "purchase of X" payee, Pay Later "credit of Rs X using Pay Later", broker "traded value" notices.
+- A failure with no payment wording ("couldn't deliver your package"), "receipt of your application", and a due/renewal reminder with no amount are no longer left in review: they hold no money.
+- A credit that mentions a loan is reviewed (it may be a disbursal); loan EMI debits still count.
+
+**App audit (subscriptions, bills)**
+- Subscriptions are built from mandate facts plus subscription-charge events, one series per merchant name. Fixed above: solver charges and mandates now carry the merchant name and reference.
+- Bills are grouped by issuer identity (or biller name) and due date, and paid by matching card-payment events on the same issuer and card mask. Fixed above: solver bills now carry an issuer identity even for unknown senders.
+- Upcoming-debit notices ("will renew on 12 Nov for Rs 99") were stored but never used. The subscription list now takes an announced future date as the next expected charge. It still adds no charge and no amount, matching the existing rule that attempts are not money.
+- Still pending (not done): a screen for upcoming debits that are not subscriptions; bills read by rules still carry no generated date; the receipts review (a biller's receipt with no bank debit asks the user in the current month) will ask about solver receipts too, which is the existing policy.
+
+**The 36 still in Needs Review, and why**
+- EMI nudges with an amount but no due date (6); coin redemptions (3); loan-sounding wallet credits (6, held on purpose); dividends that state only a per-share amount (6); foreign-currency card spends with no rupee amount (2); IPO "no shares allotted, blocked amount available" (2, existing hold logic); wallet top-up via UPI with long wording (2); refund wording with no named account (3); a mutual-fund purchase request acknowledgement; a deposit received; an AutoPay mandate request whose verb is not recognised; a "payment could not be completed" notice; interest-cycle notice; a few others.
+- Owner help wanted on: the Axis "Processed payment of Rs X for XX1234 ... instant cashback" family (15 messages, counted in the earlier replay but filtered by the gate in the real app) and the refund-to-wallet family: is each a card bill payment, a purchase, or a refund credit?

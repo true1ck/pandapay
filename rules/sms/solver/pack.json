@@ -54,7 +54,8 @@
       "is used",
       "transaction|txn * done|made|completed",
       "dr",
-      "purchase|purchases <amt>"
+      "purchase|purchases <amt>",
+      "credit of <amt> using pay later"
     ],
     "credit": [
       "credited",
@@ -70,7 +71,10 @@
       "rcvd",
       "cr",
       "you got",
-      "you have got"
+      "you have got",
+      "received <amt>",
+      "received by your",
+      "processed to your"
     ],
     "billerReceived": [
       "we have received",
@@ -165,7 +169,9 @@
       "requested by",
       "requested money",
       "money through",
-      "requests money"
+      "requests money",
+      "traded value",
+      "contract note"
     ],
     "promo": [
       "pre-approved",
@@ -553,6 +559,22 @@
       {
         "p": "tomorrow",
         "kind": "1"
+      },
+      {
+        "p": "due in <ref> days|day",
+        "kind": "num@2"
+      },
+      {
+        "p": "payable in <ref> days|day",
+        "kind": "num@2"
+      },
+      {
+        "p": "expires in <ref> days|day",
+        "kind": "num@2"
+      },
+      {
+        "p": "within <ref> days|day",
+        "kind": "num@1"
       }
     ],
     "purposeCue": [
@@ -694,7 +716,11 @@
       "reversal",
       "reversed",
       "chargeback",
-      "dispute"
+      "dispute",
+      {
+        "p": "loan|loans",
+        "kind": "credit"
+      }
     ],
     "security": [
       "otp",
@@ -915,6 +941,14 @@
       {
         "p": "add money request * * successful|completed",
         "cue": true
+      },
+      {
+        "p": "recharged with",
+        "cue": true
+      },
+      {
+        "p": "recharged by",
+        "cue": true
       }
     ],
     "investment": [
@@ -958,7 +992,8 @@
       "to",
       "at",
       "towards",
-      "info"
+      "info",
+      "purchase of"
     ],
     "payeeCredit": [
       "from",
@@ -1209,6 +1244,39 @@
     "reminderWord": [
       "reminder",
       "kindly"
+    ],
+    "financialWord": [
+      "payment",
+      "payments",
+      "transaction",
+      "txn",
+      "debit",
+      "debited",
+      "credit",
+      "credited",
+      "upi",
+      "card",
+      "account",
+      "a/c",
+      "wallet",
+      "mandate",
+      "autopay",
+      "auto-pay",
+      "emi",
+      "bank",
+      "amount",
+      "refund",
+      "loan",
+      "transfer",
+      "withdrawal",
+      "balance",
+      "cheque",
+      "neft",
+      "imps",
+      "rtgs",
+      "nach",
+      "paid",
+      "charged"
     ]
   }
 }

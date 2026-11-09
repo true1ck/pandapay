@@ -342,6 +342,125 @@ void main() {
 
   // Found by replaying a real inbox (counts only). The wording here is invented;
   // only the structure is the real one.
+  group('generalisation: other banks and slightly different wording', () {
+    test('a "ready / generated" bill with no printed date was generated the day it arrived', () {
+      for (final body in [
+        'Your Sample Bank credit card bill of Rs 4,200 is ready. Pay by 25-Nov-2026 to avoid late charges.',
+        'Statement for your card XX1234 has been generated. Total due Rs 4,200. Pay by 25 Nov.',
+        'Your e-statement is available. Amount due Rs 4,200, due date 25/11/2026.',
+      ]) {
+        final d = _solve(body);
+        expect(d.read, SolverRead.billDue, reason: body);
+        expect(d.statementDate?.iso, '2026-11-09', reason: body);
+        expect(d.dueDate?.iso, '2026-11-25', reason: body);
+      }
+    });
+
+    test('a reminder is not a statement: no generated date is invented', () {
+      expect(_solve('Reminder: your bill of Rs 800 is due on 20-Nov-2026. Pay now.').statementDate, isNull);
+    });
+
+    test('a printed statement date wins over the arrival day', () {
+      expect(_solve('Your bill dated 01-Nov-2026 is generated. Total due Rs 800. Due date 20-Nov-2026.').statementDate?.iso, '2026-11-01');
+    });
+
+    test('"due in N days" and variants are counted from the day the message arrived', () {
+      expect(_solve('Your bill of Rs 800 is due in 3 days. Pay now to avoid late charges.').dueDate?.iso, '2026-11-12');
+      expect(_solve('Your bill of Rs 800 is due in 1 day. Pay now to avoid late charges.').dueDate?.iso, '2026-11-10');
+      expect(_solve('Your plan payment of Rs 800 is payable in 10 days. Please pay.').dueDate?.iso, '2026-11-19');
+    });
+
+    test('a subscription debit names its merchant, so charges are not merged into one "Unknown service"', () {
+      for (final body in [
+        'UPI AutoPay: Rs 149 debited from A/c XX1111 for SAMPLE VIDEO on 08-Nov. Mandate ID 5566.',
+        'Rs 149 debited from your account XX1111 towards SAMPLE VIDEO under UPI mandate 5566.',
+      ]) {
+        final d = _solve(body);
+        expect(d.countsInTotals, isTrue, reason: body);
+        expect(d.party?.toUpperCase(), contains('SAMPLE VIDEO'), reason: body);
+        final m = _facts(d).facts.first as MovementFact;
+        expect(m.counterparty?.name?.toUpperCase(), contains('SAMPLE VIDEO'), reason: body);
+      }
+    });
+
+    test('a mandate carries its own reference so a later charge quoting it joins it', () {
+      final d = _solve('Mandate created for Rs 649 for SAMPLE STREAM. Mandate ID 5566. Auto debit will happen on the 5th of every month.');
+      final m = _facts(d).facts.single as MandateFact;
+      expect(m.references['umrn'], '5566');
+    });
+
+    test('a sender the registry does not know still gets a stable issuer identity; a numeric short code does not', () {
+      final engine = RuleEngine();
+      const body = 'Your credit card statement for card ending 4410 is generated. Total amount due Rs 23,540.00, minimum amount due Rs 1,177.00, payment due date 20-Nov-2026.';
+      final a = engine.interpretDetailed(_msg('VM-NEWBNK-S', body), _bundle(), appVersion: '2.0.0');
+      final bill = a.result.facts.whereType<BillDueFact>().single;
+      expect(bill.instrument?.issuerSlug, 'newbnk');
+      final b = engine.interpretDetailed(_msg('VM-NEWBNK-T', body), _bundle(), appVersion: '2.0.0');
+      expect(b.result.facts.whereType<BillDueFact>().single.instrument?.issuerSlug, 'newbnk');
+      final c = engine.interpretDetailed(_msg('56767', body), _bundle(), appVersion: '2.0.0');
+      expect(c.result.facts.whereType<BillDueFact>().single.instrument?.issuerSlug, isNull);
+    });
+
+    test('a bill with no biller name falls back to its sender header, so reminders and statements share an identity', () {
+      final engine = RuleEngine();
+      final out = engine.interpretDetailed(
+        _msg('BZ-POWERC', 'Your bill of Rs 1,420.00 is ready. Pay by 12-Nov-2026 to avoid disconnection.'),
+        _bundle(),
+        appVersion: '2.0.0',
+      );
+      expect(out.result.facts.whereType<BillDueFact>().single.billerName, isNotNull);
+    });
+
+    test('plain money-in wording in other phrasings is read as a credit', () {
+      for (final body in [
+        'Received Rs 500 on 08-Nov-26 in your A/C XX9988 via IMPS from a linked mobile. Ref 1234.',
+        'Amount of Rs 300 has been received by your wallet A/c.',
+        'Your refund of Rs 799 for the order is successfully processed to your Sample Pay balance.',
+      ]) {
+        final d = _solve(body);
+        expect(d.read, SolverRead.credit, reason: body);
+        expect(d.debitDirection, isFalse, reason: body);
+      }
+    });
+
+    test('a failure that is not about a payment is not financial; one that is stays in review', () {
+      expect(_solve("Sorry, we couldn't deliver your package today. Please click the link for the next step.").accepted, isTrue);
+      expect(_solve("Sorry, we couldn't deliver your package today. Please click the link for the next step.").read, SolverRead.info);
+      final payment = _solve('Your card payment could not be completed. Please try again.');
+      expect(payment.accepted, isFalse);
+    });
+
+    test('"receipt of your application" is not money wording', () {
+      final d = _solve('Dear Sam, we acknowledge the receipt of your Example Bank Credit Card application No 1234. Track the status after 3 days.');
+      expect(d.read, SolverRead.info);
+      expect(d.accepted, isTrue);
+    });
+
+    test('a renewal or due reminder with no amount holds no money and is not left in review', () {
+      final d = _solve('Dear customer, renew your insurance before it expires on 20-Nov-2026. Visit https://x.example');
+      expect(d.read, SolverRead.info);
+      expect(d.accepted, isTrue);
+    });
+
+    test('"wallet recharged with Rs X" is a top-up', () {
+      final d = _solve('Your Wallet Account has been recharged with Rs 500. Current balance Rs 640.');
+      expect(d.read, SolverRead.walletTopup);
+    });
+
+    test('a credit that mentions a loan may be a disbursal, so it is reviewed; a loan EMI debit still counts', () {
+      final credit = _solve('Dear Customer, Amount of Rs 20,000 has been received by your wallet A/c. Check it https://x.example Sample Loans');
+      expect(credit.countsInTotals, isFalse);
+      expect(credit.accepted, isFalse);
+      final emi = _solve('Your EMI of Rs 4,500.00 for loan A/c LN8812 has been debited from your account XX3345 on 05-11-2026.');
+      expect(emi.countsInTotals, isTrue);
+    });
+
+    test('a broker "traded value" summary is a notice, not money', () {
+      final d = _solve('Dear Client, your traded value for 07-Nov-2026 is Rs 12,500. Check your registered email.');
+      expect(d.countsInTotals, isFalse);
+    });
+  });
+
   group('structures found on a real inbox', () {
     test('a payout "transferred Rs X to your bank account" is money coming back from investments, not a debit', () {
       final d = _solve('Dear Client, We have transferred Rs 9,000.00 to your bank account No 123456789 as a part of running account settlement vide Ref No CMS123456.');

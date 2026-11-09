@@ -316,8 +316,9 @@ class SolverFacts {
         );
       case SolverRead.ownTransfer:
         final minor = d.minor;
-        if (minor == null || d.debitDirection != true || d.unit != 'INR')
+        if (minor == null || d.debitDirection != true || d.unit != 'INR') {
           return null;
+        }
         final own = d.ownMasks;
         facts.add(
           envelope(
@@ -562,6 +563,8 @@ class SolverFacts {
         if (d.mandatePurpose != null) 'mandatePurpose': d.mandatePurpose,
       },
       amounts: amount,
+      // The mandate's own reference, so a later charge that quotes it joins this mandate.
+      references: {if (d.mandateRef != null) 'umrn': d.mandateRef!},
     );
   }
 }

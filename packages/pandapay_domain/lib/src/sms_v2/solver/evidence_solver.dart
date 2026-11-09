@@ -200,17 +200,32 @@ class EvidenceSolver {
 
   /// Reads [body]. [observedAt] (UTC) is the day the message arrived; dates with
   /// no year and words like "today" are read against it.
-  SolverDecision solve(String body, {DateTime? observedAt}) {
+  ///
+  /// [senderBrand] is the normalised sender header (for example a biller's short
+  /// code). It is only ever a last-resort name for a biller the text does not name.
+  SolverDecision solve(
+    String body, {
+    DateTime? observedAt,
+    String? senderBrand,
+  }) {
     final capped = body.length > maxBody ? body.substring(0, maxBody) : body;
     final text = SolverText.parse(capped);
-    return _Run(pack, text, observedAt ?? DateTime.now().toUtc()).run();
+    return _Run(
+      pack,
+      text,
+      observedAt ?? DateTime.now().toUtc(),
+      senderBrand,
+    ).run();
   }
 }
 
 const _istOffset = Duration(hours: 5, minutes: 30);
 
 class _Run {
-  _Run(this.pack, this.text, this.observedAt) : toks = text.toks;
+  _Run(this.pack, this.text, this.observedAt, this.senderBrand)
+    : toks = text.toks;
+
+  final String? senderBrand;
 
   final SolverPack pack;
   final SolverText text;
@@ -254,19 +269,22 @@ class _Run {
   bool _voided(_Hit h) {
     final from = math.max(0, h.start - 3);
     for (final n in hits('negator')) {
-      if (n.start >= from && n.end <= h.start && same(n.start, h.start))
+      if (n.start >= from && n.end <= h.start && same(n.start, h.start)) {
         return true;
+      }
     }
     // "will be Dr. from A/C XX1 and Cr. to X": one "will" governs both verbs (up to eight tokens).
     final farFrom = math.max(0, h.start - 8);
     for (final n in hits('futureMarker')) {
-      if (n.start >= farFrom && n.end <= h.start && same(n.start, h.start))
+      if (n.start >= farFrom && n.end <= h.start && same(n.start, h.start)) {
         return true;
+      }
     }
     // "credited ... when you spend Rs 5,000": a promise, not an event.
     for (final n in hits('conditional')) {
-      if (n.start >= h.end && n.start - h.end <= 8 && same(h.start, n.start))
+      if (n.start >= h.end && n.start - h.end <= 8 && same(h.start, n.start)) {
         return true;
+      }
     }
     return false;
   }
@@ -392,8 +410,9 @@ class _Run {
         for (var i = h.end; i < toks.length && i <= h.end + 5; i++) {
           final t = toks[i];
           if ((t.kind == TokKind.num || t.kind == TokKind.ref) &&
-              RegExp(r'^\d{4,8}$').hasMatch(t.text))
+              RegExp(r'^\d{4,8}$').hasMatch(t.text)) {
             return true;
+          }
         }
         return false;
       });
@@ -453,6 +472,12 @@ class _Run {
     final declined = _s(cue).toLowerCase().contains('declin');
     final amt = eligible.isEmpty ? null : toks[eligible.first];
     final m = _mask(true, eligible.isEmpty ? null : eligible.first);
+    if ((amt == null || amt.unit != 'INR') && hits('financialWord').isEmpty) {
+      // "We couldn't deliver your package": a failure of something that is not a
+      // payment. Nothing financial to review.
+      reasons.add('a failed notice with no payment wording: not financial');
+      return _done(SolverRead.info, SolverVerdict.accept, 1);
+    }
     if (amt == null || amt.unit != 'INR') {
       // A failed-payment notice with no printed amount is financial: it stays in
       // review rather than being ignored or given an invented amount.
@@ -497,6 +522,7 @@ class _Run {
         SolverVerdict.accept,
         1,
         mandatePhase: h.entry.kind ?? 'revoked',
+        mandateRef: _mandateRef(),
         party: _merchantNear(h.start),
         mandatePurpose: _mandatePurpose(recurring.isNotEmpty),
       );
@@ -516,6 +542,7 @@ class _Run {
         enough ? 1 : 0.4,
         amount: amt != null && amt.unit == 'INR' ? amt : null,
         mandatePhase: 'created',
+        mandateRef: _mandateRef(),
         party: party,
         frequency: freq.$1,
         oneTime: freq.$2,
@@ -552,7 +579,9 @@ class _Run {
     // "Fund requested by X. On approval, Rs 500 will be debited": someone is
     // asking you for money. Nothing is scheduled and nothing is owed yet.
     if (notice.any((n) => _s(n).toLowerCase().contains('request'))) {
-      reasons.add('a money request, not a scheduled debit: "${_s(notice.firstWhere((n) => _s(n).toLowerCase().contains('request')))}"');
+      reasons.add(
+        'a money request, not a scheduled debit: "${_s(notice.firstWhere((n) => _s(n).toLowerCase().contains('request')))}"',
+      );
       return _done(SolverRead.info, SolverVerdict.accept, 1);
     }
 
@@ -618,8 +647,10 @@ class _Run {
           a,
     ];
     if (money.isEmpty) {
-      reasons.add('bill without an amount');
-      return _done(SolverRead.billDue, SolverVerdict.candidate, 0.4);
+      // A due or renewal reminder that prints no amount holds no money and cannot
+      // become a bill record, so there is nothing for a person to review.
+      reasons.add('a due notice with no amount: nothing to record');
+      return _done(SolverRead.info, SolverVerdict.accept, 1);
     }
     final totals = money.where((a) => role[a] == 'due_total').toList();
     final bare = money
@@ -680,12 +711,19 @@ class _Run {
         statementDate: statement,
       );
     }
+    if (statement == null && hits('generated').isNotEmpty) {
+      // "Your bill is ready": with no date printed, it was generated the day it arrived.
+      final t = _today;
+      statement = SolverDate(t.year, t.month, t.day);
+      reasons.add('generated date taken from the day the notice arrived');
+    }
     if (statement != null && statement == due) statement = null;
     final m = _mask(null, totalIdx ?? mins.first);
     var kind = m?.$2;
     // Only credit cards send statements with a minimum due.
-    if (minimum != null && (kind == null || kind == 'card'))
+    if (minimum != null && (kind == null || kind == 'card')) {
       kind = 'credit_card';
+    }
     return _done(
       SolverRead.billDue,
       SolverVerdict.accept,
@@ -710,6 +748,12 @@ class _Run {
     if (amts.isEmpty) {
       if (hits('nonMoneyUnit').isNotEmpty) {
         reasons.add('completed wording about points or coins, not money');
+        return _done(SolverRead.info, SolverVerdict.accept, 1);
+      }
+      // Receipt-style or purpose-only wording ("we acknowledge the receipt of your
+      // application") with no amount is not money wording at all.
+      if (cues.every((c) => c.how == 'receipt' || c.how == 'implied' || c.how == 'kind')) {
+        reasons.add('receipt-style wording with no amount: not money');
         return _done(SolverRead.info, SolverVerdict.accept, 1);
       }
       // "Your account has been debited" with no amount is financial: review it.
@@ -767,7 +811,10 @@ class _Run {
     final wallet = hits('walletTopup');
     final cardPay = hits('cardPayment');
     final invest = hits('investment');
-    final hold = hits('holdForReview');
+    // A credit that mentions a loan may be a disbursal, not income: review-only for credits.
+    final hold = hits('holdForReview')
+        .where((h) => h.entry.kind != 'credit' || !debitDir)
+        .toList();
     final recurring = hits('recurring');
     final billNoun = hits('billNoun');
     final paidWords =
@@ -794,6 +841,14 @@ class _Run {
 
     final mask = _mask(debitDir, amtIdx);
     final party = _party(debitDir, amtIdx);
+    // A subscription / mandate debit must name its merchant, or every unnamed one
+    // would merge into a single "Unknown service" in the subscriptions list.
+    (String, bool)? merchantParty = party;
+    if (merchantParty == null &&
+        (recurring.isNotEmpty || _mandateRef() != null)) {
+      final m = _merchantNear(cue.start);
+      if (m != null) merchantParty = (m, false);
+    }
     final rail = hits('rail').isNotEmpty;
     final owns = hits('ownMarker');
     final named = hits('instrumentKind').any(
@@ -905,9 +960,13 @@ class _Run {
     // "get a voucher when your loan is credited! offer valid till today": a
     // promotion that merely contains the word. Only a bank-voice alert (a bank
     // verb with the account named) is trusted to carry an offer footer.
-    if ((kind == SolverRead.debit || kind == SolverRead.credit) && !bankVoice && hits('promo').isNotEmpty) {
+    if ((kind == SolverRead.debit || kind == SolverRead.credit) &&
+        !bankVoice &&
+        hits('promo').isNotEmpty) {
       conflict = true;
-      reasons.add('promotional wording beside the cue: "${_s(hits('promo').first)}"');
+      reasons.add(
+        'promotional wording beside the cue: "${_s(hits('promo').first)}"',
+      );
     }
 
     // A reminder nudges; it does not report an event ("Reminder: Rs X was paid ... by 20-11").
@@ -969,8 +1028,8 @@ class _Run {
       originalUnit: origUnit,
       mask: mask?.$1,
       instrumentKind: _instrumentWire(mask?.$2, kind),
-      party: party?.$1,
-      partyIsVpa: party?.$2 ?? false,
+      party: merchantParty?.$1,
+      partyIsVpa: merchantParty?.$2 ?? false,
       debitDirection: kind == SolverRead.cardPayment && cue.how == 'biller'
           ? false
           : debitDir,
@@ -1095,8 +1154,14 @@ class _Run {
 
   SolverDate? _relativeDay() {
     for (final h in hits('relativeDay')) {
-      final n = int.tryParse(h.entry.kind ?? '');
-      if (n == null) continue;
+      var kind = h.entry.kind ?? '';
+      // "num@2": the number of days is the token two places into the phrase ("due in 3 days").
+      if (kind.startsWith('num@')) {
+        final at = h.start + (int.tryParse(kind.substring(4)) ?? -1);
+        kind = at >= 0 && at < h.end ? toks[at].text : '';
+      }
+      final n = int.tryParse(kind);
+      if (n == null || n < 0 || n > 365) continue;
       final d = _today.add(Duration(days: n));
       return SolverDate(d.year, d.month, d.day);
     }
@@ -1153,7 +1218,15 @@ class _Run {
       words.insert(0, t.text);
       i--;
     }
-    return words.isEmpty ? null : words.join(' ');
+    if (words.isNotEmpty) return words.join(' ');
+    return _brandName();
+  }
+
+  /// The sender header as a last-resort biller name (never a bare number).
+  String? _brandName() {
+    final b = senderBrand?.trim();
+    if (b == null || b.length < 3 || RegExp(r'^\d+$').hasMatch(b)) return null;
+    return b;
   }
 
   // ---- shared helpers ----
@@ -1298,8 +1371,9 @@ class _Run {
         i++;
       }
       if (i >= toks.length || !same(c.start, i)) continue;
-      if (toks[i].kind == TokKind.vpa)
+      if (toks[i].kind == TokKind.vpa) {
         return (toks[i].text.toLowerCase(), true);
+      }
       final words = <String>[];
       while (i < toks.length &&
           words.length < p.partyMaxWords &&
@@ -1340,6 +1414,7 @@ class _Run {
     String? billerName,
     bool recurring = false,
     bool? debit,
+    String? mandateRef,
   }) => SolverDecision(
     read: read,
     verdict: verdict,
@@ -1355,6 +1430,7 @@ class _Run {
     frequency: frequency,
     oneTime: oneTime,
     attemptStatus: attemptStatus,
+    mandateRef: mandateRef,
     dueMinorMinimum: dueMinorMinimum,
     dueDate: dueDate,
     statementDate: statementDate,

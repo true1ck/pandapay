@@ -272,8 +272,9 @@ class SolverText {
   static bool _dotEndsSentence(String body, int at, List<Tok> before) {
     if (before.isEmpty) return false;
     final prev = before.last;
-    if (prev.end != at)
+    if (prev.end != at) {
       return true; // "word ." with a gap is unusual; treat as end
+    }
     if (prev.kind == TokKind.word && _abbrev.contains(prev.lower)) return false;
     // A dot between two words with no space ("Avl.Bal") is not an end.
     final next = at + 1 < body.length ? body[at + 1] : '';
@@ -281,8 +282,9 @@ class SolverText {
         next != ' ' &&
         next != '\n' &&
         next != '\r' &&
-        next != '\t')
+        next != '\t') {
       return false;
+    }
     return true;
   }
 }
@@ -431,8 +433,9 @@ class Phrase {
         if (k > 0 &&
             p - 1 < toks.length &&
             pos < toks.length &&
-            toks[p - 1].sentence != toks[pos].sentence)
+            toks[p - 1].sentence != toks[pos].sentence) {
           break;
+        }
         final r = _matchAt(toks, p, slot + 1);
         if (r != null) return r;
       }
@@ -539,11 +542,13 @@ SolverDate? parseSolverDate(
   }
 
   var m = _isoDate.firstMatch(s);
-  if (m != null)
+  if (m != null) {
     return _checked(int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!));
+  }
   m = _dmyDate.firstMatch(s);
-  if (m != null)
+  if (m != null) {
     return _checked(_fullYear(m[3]!), int.parse(m[2]!), int.parse(m[1]!));
+  }
   m = _dmDate.firstMatch(s);
   if (m != null) return withoutYear(int.parse(m[2]!), int.parse(m[1]!));
   if (s.contains(':') && !RegExp(r'[A-Za-z]{3}').hasMatch(s)) return null;

@@ -82,6 +82,49 @@ void main() {
     expect(rows.single.nextExpectedOn, DateTime.utc(2026, 11, 30, 18, 30));
   });
 
+  test('an announced renewal sets the next expected date but adds no charge or amount', () {
+    final setup = fixture('mandate.subscription_created') as MandateFact;
+    final announced = fixture(
+      'attempt.failed_si',
+      changes: {
+        'instrument': setup.instrument?.toJson(),
+        'counterparty': {
+          'name': setup.merchantName,
+          'vpa': null,
+          'kind': 'merchant',
+          'accountMask': null,
+        },
+        'amounts': [
+          {'role': 'scheduled', 'minor': 9900, 'unit': 'INR'},
+        ],
+        'attrs': {
+          'status': 'scheduled',
+          'direction': 'debit',
+          'purpose': 'purchase',
+          'dueAt': '2026-12-12T18:30:00Z',
+        },
+        'observedAt': '2026-12-01T00:00:00Z',
+        'occurredAt': null,
+      },
+    );
+    final rows = subscriptionsFromLedger(
+      [setup, announced],
+      const [],
+      now: DateTime.utc(2026, 12, 2),
+    );
+    expect(rows.single.nextExpectedOn, DateTime.utc(2026, 12, 12, 18, 30));
+    expect(rows.single.occurrenceCount, 0);
+    expect(rows.single.amountKnown, isFalse);
+    expect(rows.single.annualCost.paise, 0);
+    // A date already in the past is not an announcement of anything to come.
+    final stale = subscriptionsFromLedger(
+      [setup, announced],
+      const [],
+      now: DateTime.utc(2026, 12, 20),
+    );
+    expect(stale.single.nextExpectedOn, isNull);
+  });
+
   test('a scheduled or failed attempt never becomes a charge', () {
     final setup = fixture('mandate.subscription_created') as MandateFact;
     final failed = fixture(

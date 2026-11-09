@@ -242,12 +242,23 @@ class RuleEngine implements SmsInterpreter {
 
   // ---- tier 2 ----
 
+  /// An issuer identity for a sender the registry does not know: its header in
+  /// plain lower case ("NEWBNK" -> "newbnk"). Bills and card payments from the same
+  /// header then share one identity, so a bill can be matched to its payment and
+  /// a reminder to its statement, for banks no rule was ever written for. The
+  /// app already gives an unrecognised issuer a plain slug the same way. A header
+  /// that is only digits (a short code) names nobody.
+  static String? _plainIssuerSlug(String brand) {
+    final slug = brand.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
+    return slug.length < 3 || RegExp(r'^\d+$').hasMatch(slug) ? null : slug;
+  }
+
   EngineOutcome? _solve(CompiledBundle cb, SmsMessage msg, String brand, String hash, String appVersion) {
     final solver = cb.solver;
     if (solver == null) return null;
     final SolverDecision decision;
     try {
-      decision = solver.solve(msg.body, observedAt: msg.observedAt);
+      decision = solver.solve(msg.body, observedAt: msg.observedAt, senderBrand: brand);
     } on Object {
       return null;
     }
@@ -261,7 +272,7 @@ class RuleEngine implements SmsInterpreter {
         decision,
         sourceKey: msg.sourceKey,
         observedAt: msg.observedAt,
-        issuerSlug: cb.sendersByBrand[brand]?.issuerSlug,
+        issuerSlug: cb.sendersByBrand[brand]?.issuerSlug ?? _plainIssuerSlug(brand),
         packVersion: solver.pack.version,
         bundleVersion: cb.bundle.bundleVersion,
         engineVersion: engineVersion,

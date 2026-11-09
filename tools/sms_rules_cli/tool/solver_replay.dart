@@ -30,6 +30,10 @@ void main(List<String> args) {
     stderr.writeln('refusing: the message export must live outside the repository');
     exit(65);
   }
+  final ui = args.indexOf('--unresolved');
+  final unresolvedLayouts = ui >= 0 ? int.parse(args[ui + 1]) : 0;
+  final unresolved = <String, int>{};
+  final moneyWord = RegExp(r'(?:rs\.?|inr|₹)\s*[\d,]+', caseSensitive: false);
   final li = args.indexOf('--layouts');
   final layoutsPerGroup = li >= 0 ? int.parse(args[li + 1]) : 0;
 
@@ -105,6 +109,16 @@ void main(List<String> args) {
       }
     } else {
       stillUnknown++;
+      if (unresolvedLayouts > 0) {
+        final red = redactSms(
+          sender: sender,
+          body: body,
+          observedAt: at,
+          options: SmsRedactionOptions(salt: 'replay-${DateTime.now().microsecondsSinceEpoch}', merchantCatalogue: {}),
+        );
+        final key = (moneyWord.hasMatch(body) ? '[amount] ' : '[no amount] ') + smsSkeleton(red.body);
+        unresolved[key] = (unresolved[key] ?? 0) + 1;
+      }
       final brand = engine.compiled(withPack).normalize(sender).brand;
       unknownBySender[brand] = (unknownBySender[brand] ?? 0) + 1;
     }
@@ -125,6 +139,13 @@ void main(List<String> args) {
       '$countedCredits credits (${(countedCreditMinor / 100).toStringAsFixed(0)} rupees)');
   final top = (unknownBySender.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).take(8);
   stdout.writeln('still-unknown by sender brand (top 8): ${top.map((e) => "${e.key}=${e.value}").join("  ")}');
+  if (unresolvedLayouts > 0) {
+    stdout.writeln('\n## STILL UNRESOLVED (redacted layouts, most frequent first)');
+    final sorted = unresolved.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    for (final e in sorted.take(unresolvedLayouts)) {
+      stdout.writeln('  x${e.value}  ${e.key.length > 230 ? e.key.substring(0, 230) : e.key}');
+    }
+  }
   if (layoutsPerGroup > 0) {
     for (final g in layouts.entries) {
       stdout.writeln('\n## ${g.key}: redacted layouts');
