@@ -2581,6 +2581,10 @@ final pendingOutboxCountProvider = FutureProvider<int>((ref) async {
 /// Flushes the outbox the moment connectivity comes back — read once from
 /// _AppShell alongside cacheLifecycleProvider/sessionKeepAliveProvider so
 /// it runs for the app's whole lifetime, not just while Home is visible.
+/// Bump to ask [outboxFlushProvider] to send queued quick-adds now. A save
+/// writes the outbox and bumps this; it never waits for the delivery.
+final outboxFlushRequestProvider = StateProvider<int>((ref) => 0);
+
 final outboxFlushProvider = Provider<void>((ref) {
   var running = false;
   var disposed = false;
@@ -2620,6 +2624,7 @@ final outboxFlushProvider = Provider<void>((ref) {
   ref.listen(isOnlineProvider, (_, next) {
     if (next.valueOrNull == true) unawaited(flush());
   });
+  ref.listen(outboxFlushRequestProvider, (_, _) => unawaited(flush()));
   ref.listen(cacheNamespaceProvider, (_, next) {
     if (next == 'signed-out') {
       return;

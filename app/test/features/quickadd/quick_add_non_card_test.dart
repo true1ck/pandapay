@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay/data/local/response_cache.dart';
 import 'package:pandapay/data/merchant_search_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/quickadd/quick_add_screen.dart';
@@ -28,32 +30,20 @@ class _RecordingUserCardsRepository extends UserCardsRepository {
   _RecordingUserCardsRepository()
     : super(apiBaseUrl: 'http://localhost', accessToken: 't');
 
-  Map<String, dynamic>? lastCall;
+  /// Quick add is local first: Save writes the phone's outbox and delivers
+  /// later, so what was "sent" is read back from the outbox.
+  final AppDatabase db = openInMemoryForTesting();
 
-  @override
-  Future<String> logTransaction({
-    String? userCardId,
-    required Money amount,
-    String? categoryId,
-    String? userCategoryId,
-    String? merchantName,
-    String? merchantVpa,
-    String? mcc,
-    DateTime? occurredAt,
-    String? note,
-    String? rail,
-    TxnInstrument instrument = TxnInstrument.creditCard,
-    TxnEntryKind entryKind = TxnEntryKind.spend,
-    String? clientMutationId,
-  }) async {
-    lastCall = {
-      'userCardId': userCardId,
-      'amount': amount,
-      'instrument': instrument,
-      'entryKind': entryKind,
-      'clientMutationId': clientMutationId,
+  Map<String, dynamic>? get lastCall {
+    final rows = db.db.select('SELECT * FROM transaction_outbox_entries');
+    if (rows.isEmpty) return null;
+    final row = rows.last;
+    return {
+      'userCardId': row['user_card_id'],
+      'instrument': TxnInstrument.fromJson(row['instrument'] as String?),
+      'entryKind': TxnEntryKind.fromJson(row['entry_kind'] as String?),
+      'clientMutationId': row['client_mutation_id'],
     };
-    return 'fake-txn-id';
   }
 
   @override
@@ -75,6 +65,10 @@ Future<void> _pump(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        cacheNamespaceProvider.overrideWithValue('legacy'),
+        responseCacheProvider.overrideWith(
+          (ref) async => ResponseCache(repo.db),
+        ),
         userCardsProvider.overrideWith((ref) async => const []),
         categoriesProvider.overrideWith((ref) async => const []),
         merchantSearchRepositoryProvider.overrideWithValue(

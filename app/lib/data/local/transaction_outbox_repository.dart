@@ -157,6 +157,30 @@ class TransactionOutboxRepository {
     );
   }
 
+  /// Takes a queued entry back before it was sent (Undo right after saving).
+  /// Returns false when it is no longer queued, i.e. it has already reached the
+  /// server; use [syncedTransactionId] to find the real transaction then.
+  bool cancel(String clientMutationId) {
+    _appDb.db.execute(
+      'DELETE FROM transaction_outbox_entries WHERE namespace=? AND client_mutation_id=?',
+      [namespace, clientMutationId],
+    );
+    if (_appDb.db.updatedRows == 0) return false;
+    financialStore?.markInactive(namespace, 'local-outbox:$clientMutationId');
+    return true;
+  }
+
+  /// The server id of an entry that has been delivered, found through the
+  /// source key the delivered row was stored under; null when not delivered.
+  String? syncedTransactionId(String clientMutationId) {
+    final rows = _appDb.db.select(
+      "SELECT id FROM financial_entities WHERE namespace=? AND entity='transactions' "
+      "AND json_extract(payload, '\$.source_key')=? AND id NOT LIKE 'local-outbox:%' LIMIT 1",
+      [namespace, _sourceKey(clientMutationId)],
+    );
+    return rows.isEmpty ? null : rows.first['id'] as String;
+  }
+
   Future<List<TransactionOutboxEntry>> pending({int? limit}) async {
     final boundedLimit = limit?.clamp(1, 200);
     final limitClause = boundedLimit == null ? '' : ' LIMIT $boundedLimit';

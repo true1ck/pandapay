@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/api_exception.dart';
 import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay/data/local/financial_store.dart';
 import 'package:pandapay/data/local/transaction_outbox_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -125,5 +126,30 @@ void main() {
     final remaining = await outbox.pending();
     expect(remaining, hasLength(1));
     expect(remaining.single.lastError, isNotNull);
+  });
+
+  test('cancel takes back a queued entry once, then reports it gone', () async {
+    await outbox.enqueue(userCardId: 'uc1', amount: Money.fromRupees(100), clientMutationId: 'undo-me');
+
+    expect(outbox.cancel('undo-me'), isTrue);
+    expect(await outbox.pending(), isEmpty);
+    expect(outbox.cancel('undo-me'), isFalse);
+  });
+
+  test('a delivered entry can be found by its server id for Undo', () async {
+    final store = FinancialStore(appDb);
+    addTearDown(store.dispose);
+    final withStore = TransactionOutboxRepository(
+      appDb,
+      namespace: outbox.namespace,
+      financialStore: store,
+    );
+    await withStore.enqueue(userCardId: 'uc1', amount: Money.fromRupees(100), clientMutationId: 'sent-one');
+    expect(withStore.syncedTransactionId('sent-one'), isNull);
+
+    await withStore.flush(_FakeUserCardsRepository());
+
+    expect(withStore.syncedTransactionId('sent-one'), 'fake-txn-id');
+    expect(await withStore.pending(), isEmpty);
   });
 }
