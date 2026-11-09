@@ -154,3 +154,29 @@ test('canonical provider links grant only lookup and insertion to explicit auth 
     'GRANT SELECT, INSERT ON TABLE public.oauth_accounts TO "auth_runtime"',
   ]);
 });
+
+test('account recovery attempts get select, insert and update for an explicit runtime role, and no delete', async () => {
+  const client=fakeClient();
+  await configureAuthRuntimeRole(client,{files:[{file:'0018_account_recovery.sql'}],runtimeRole:'auth_runtime'});
+  assert.deepEqual(client.queries.filter(x=>x.sql.startsWith('GRANT')).map(x=>x.sql),[
+    'GRANT SELECT, INSERT, UPDATE ON TABLE public.recovery_attempts TO "auth_runtime"',
+  ]);
+});
+
+test('account recovery grants nothing without a named runtime role, or when the migration is not in this run', async () => {
+  const none=fakeClient();
+  assert.deepEqual(await configureAuthRuntimeRole(none,{files:[{file:'0018_account_recovery.sql'}],runtimeRole:''}),{configured:false});
+  assert.equal(none.queries.some(x=>x.sql.startsWith('GRANT')),false);
+  const other=fakeClient();
+  await configureAuthRuntimeRole(other,{files:[{file:'0017_recovery_email.sql'}],runtimeRole:'auth_runtime'});
+  assert.equal(other.queries.some(x=>x.sql.includes('recovery_attempts')),false);
+});
+
+test('a runtime role that cannot reach recovery attempts after the grant fails the migration loudly', async () => {
+  const client=fakeClient();const query=client.query.bind(client);
+  client.query=async(sql,params)=>{
+    if(sql.includes('has_table_privilege')&&sql.includes('recovery_attempts')){client.queries.push({sql,params});return {rows:[{can_select:true,can_insert:false,can_update:true}]};}
+    return query(sql,params);
+  };
+  await assert.rejects(configureAuthRuntimeRole(client,{files:[{file:'0018_account_recovery.sql'}],runtimeRole:'auth_runtime'}),/lacks account recovery access/);
+});

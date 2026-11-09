@@ -6,6 +6,7 @@ const {
   runAudit,
   boundedTimeout,
   CONTACT_METRICS_SQL,
+  mailboxDuplicates,
   auditExitCode,
 } = require('../scripts/auditContactUniqueness');
 
@@ -22,7 +23,7 @@ test('deployment audit gate rejects active conflicts and undefined lifecycle wit
   assert.equal(auditExitCode(report), 2);
 });
 
-function fakePool({ lifecycleNull = 0, readOnly = 'on', isolation = 'repeatable read', failOn = null } = {}) {
+function fakePool({ lifecycleNull = 0, readOnly = 'on', isolation = 'repeatable read', failOn = null, liveEmails = [] } = {}) {
   const queries = [];
   let released = null;
   const client = {
@@ -58,6 +59,10 @@ function fakePool({ lifecycleNull = 0, readOnly = 'on', isolation = 'repeatable 
           duplicate_rows: activeOnly ? '2' : '5',
           extra_rows: activeOnly ? '1' : '3',
         }] };
+      }
+      if (statement === 'SELECT email FROM users WHERE deleted IS FALSE AND email IS NOT NULL') {
+        if (failOn === 'mailboxes') throw Object.assign(new Error(USER_CONTACT_MARKER), { code: 'XX000' });
+        return { rows: liveEmails.map(email => ({ email })) };
       }
       throw new Error(`Unexpected query in fake pool: ${statement}`);
     },
@@ -142,4 +147,31 @@ test('timeout values are validated and bounded', () => {
   assert.equal(boundedTimeout('5000', 15000, 'connect', 30000), 5000);
   assert.throws(() => boundedTimeout(999, 15000, 'statement', 300000), /integer from 1000/);
   assert.throws(() => boundedTimeout(30001, 5000, 'connect', 30000), /integer from 1000/);
+});
+
+test('the audit counts accounts that share one mailbox, and prints only counts', async () => {
+  const fake = fakePool({ liveEmails: [
+    'jo.hn@gmail.com', 'john+offer@googlemail.com', 'John@gmail.com',
+    'asha@outlook.com', 'asha+shop@outlook.com',
+    'ravi@outlook.in', 'ravi@outlook.com',
+    'fine@yahoo.com', 'fine+a@yahoo.com', 'solo@example.com',
+  ] });
+  const report = await runAudit(fake.pool);
+  assert.deepEqual(report.duplicates.email_canonical.active_only, { duplicate_groups: 2, duplicate_rows: 5, extra_rows: 3 });
+  assert.equal(report.gates.active_uniqueness_clear, false);
+  const emitted = JSON.stringify(report);
+  assert.doesNotMatch(emitted, /gmail|outlook|yahoo|example/);
+  assert.ok(fake.queries.some(q => q.statement.startsWith('SELECT email FROM users WHERE deleted IS FALSE')));
+});
+
+test('a clean mailbox set leaves the gate to the other checks, and a read failure is rethrown', async () => {
+  const clean = fakePool({ liveEmails: ['a@gmail.com', 'b@gmail.com', 'c@outlook.com'] });
+  const report = await runAudit(clean.pool);
+  assert.deepEqual(report.duplicates.email_canonical.active_only, { duplicate_groups: 0, duplicate_rows: 0, extra_rows: 0 });
+  await assert.rejects(runAudit(fakePool({ failOn: 'mailboxes' }).pool), error => error.message === USER_CONTACT_MARKER);
+});
+
+test('mailbox counting ignores blank values and treats the same address in any case as one account', async () => {
+  const counted = await mailboxDuplicates({ query: async () => ({ rows: [{ email: '' }, { email: '   ' }, { email: 'A@X.com' }, { email: 'a@x.com ' }] }) });
+  assert.deepEqual(counted, { duplicate_groups: 1, duplicate_rows: 2, extra_rows: 1 });
 });

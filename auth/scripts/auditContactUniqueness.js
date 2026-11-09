@@ -1,6 +1,7 @@
 'use strict';
 
 const { safeErrorCode } = require('../src/utils/safeErrorCode');
+const { canonicalEmail } = require('../src/utils/emailIdentity');
 
 const DEFAULT_STATEMENT_TIMEOUT_MS = 15000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 5000;
@@ -52,6 +53,28 @@ const DUPLICATE_EXPRESSIONS = Object.freeze({
   email_trimmed_lower: Object.freeze({ column: 'email', expression: 'lower(btrim(email))' }),
   phone_lookup_hash: Object.freeze({ column: 'phone_lookup_hash', expression: 'phone_lookup_hash' }),
 });
+
+// Migration 0016 allows one live account per canonical mailbox (Gmail ignores dots and
+// +tags; Outlook, iCloud and a few others ignore +tags). The canonical form does not exist
+// in the database until that migration has run, so it is computed here, with the same rule
+// the migration uses (a shared test corpus keeps the two in step). Only counts leave.
+const LIVE_EMAILS_SQL = 'SELECT email FROM users WHERE deleted IS FALSE AND email IS NOT NULL';
+
+async function mailboxDuplicates(client) {
+  const { rows } = await client.query(LIVE_EMAILS_SQL);
+  const perMailbox = new Map();
+  for (const row of rows) {
+    const key = canonicalEmail(row.email);
+    if (key) perMailbox.set(key, (perMailbox.get(key) || 0) + 1);
+  }
+  let groups = 0;
+  let duplicateRows = 0;
+  let extraRows = 0;
+  for (const count of perMailbox.values()) {
+    if (count > 1) { groups += 1; duplicateRows += count; extraRows += count - 1; }
+  }
+  return { duplicate_groups: groups, duplicate_rows: duplicateRows, extra_rows: extraRows };
+}
 
 function duplicateMetricsSql({ column, expression }) {
   return `
@@ -114,6 +137,8 @@ async function runAudit(pool, {
         ]);
       }
     }
+
+    duplicates.email_canonical = { active_only: await mailboxDuplicates(client) };
 
     return {
       audit: 'auth-contact-uniqueness-v1',
@@ -220,5 +245,6 @@ module.exports = {
   boundedTimeout,
   CONTACT_METRICS_SQL,
   duplicateMetricsSql,
+  mailboxDuplicates,
   auditExitCode,
 };

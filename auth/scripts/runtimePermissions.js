@@ -4,6 +4,7 @@ const ABUSE_MIGRATION_FILE = '0004_auth_abuse_buckets.sql';
 const DB_ACCESS_MIGRATION_FILE = '0005_db_access_log.sql';
 const DASHBOARD_MIGRATION_FILE = '0007_security_dashboard_capability.sql';
 const GOOGLE_MIGRATION_FILE = '0006_google_oauth_identity.sql';
+const RECOVERY_MIGRATION_FILE = '0018_account_recovery.sql';
 
 function isDbAccessLoggingEnabled(env = process.env) {
   return env.DB_ACCESS_LOGGING_ENABLED === 'true' || env.DB_ACCESS_LOGGING_ENABLED === '1';
@@ -73,7 +74,8 @@ async function configureAuthRuntimeRole(client, {
   const hasDbAccessMigration = dbAccessLoggingEnabled && includesDbAccessMigration(files);
   const hasDashboardMigration = securityDashboardEnabled && Array.isArray(files) && files.some(file => file?.file === DASHBOARD_MIGRATION_FILE);
   const hasGoogleMigration = Array.isArray(files) && files.some(file => file?.file === GOOGLE_MIGRATION_FILE);
-  if (!hasAbuseMigration && !hasDbAccessMigration && !hasDashboardMigration && !hasGoogleMigration) return { configured: false };
+  const hasRecoveryMigration = Array.isArray(files) && files.some(file => file?.file === RECOVERY_MIGRATION_FILE);
+  if (!hasAbuseMigration && !hasDbAccessMigration && !hasDashboardMigration && !hasGoogleMigration && !hasRecoveryMigration) return { configured: false };
   if (runtimeRole === undefined || runtimeRole === '') return { configured: false };
   if (typeof runtimeRole !== 'string') throw new Error('AUTH_RUNTIME_ROLE must be a PostgreSQL role name');
 
@@ -138,6 +140,18 @@ async function configureAuthRuntimeRole(client, {
     }
   }
 
+  if (hasRecoveryMigration) {
+    // Account recovery attempts. The service reads, creates and advances them; it never
+    // deletes (rows leave with their user through the foreign key, which needs no grant).
+    await client.query(`GRANT SELECT, INSERT, UPDATE ON TABLE public.recovery_attempts TO ${quotedRole}`);
+    const access = await client.query(
+      `SELECT has_table_privilege($1, 'public.recovery_attempts', 'SELECT') AS can_select,
+              has_table_privilege($1, 'public.recovery_attempts', 'INSERT') AS can_insert,
+              has_table_privilege($1, 'public.recovery_attempts', 'UPDATE') AS can_update`, [runtimeRole]);
+    if (access.rows?.[0]?.can_select !== true || access.rows?.[0]?.can_insert !== true || access.rows?.[0]?.can_update !== true) {
+      throw new Error('AUTH_RUNTIME_ROLE lacks account recovery access');
+    }
+  }
   if (hasAbuseMigration) await verifyRuntimeRoleAccess(client, runtimeRole, { dbAccessLoggingEnabled: hasDbAccessMigration });
   else if (hasDbAccessMigration) {
     await verifyDatabaseAccessLogRoleAccess(client, runtimeRole);
