@@ -233,7 +233,27 @@ All schema changes are additive, so old code still runs on the new schema.
   `master` shows it red, that is Sujay's test to fix, not a reason to hold the release.
 - The analyzer reports 116 informational notes and no errors or warnings, the same count
   as before the merge.
-- Not yet run by anyone: Phase B on the real server, and everything in Phases C to G.
+- **Phase B was run on 10 Nov** (read-only: queries inside `BEGIN READ ONLY` / a transaction
+  that is rolled back, and a count of which settings exist; no values printed, nothing changed):
+  - Production checkout is at `666a943` and api, auth, rewards worker and the AI worker were
+    healthy. They had been up only about 20 minutes, so a deploy had just happened. Check
+    with Sujay before pushing `prod`.
+  - **Duplicate mailboxes: none.** Migration 0016 will pass on today's data. Run the preflight
+    again just before Phase D, because new sign-ups can change it.
+  - Server `.env`: `AUTH_PUBLIC_BASE_URL` is **not set** (add it before Phase D);
+    `AUTH_RUNTIME_ROLE` is not set (production runs auth as the table owner, so the
+    recovery-table grant fix has no effect there; it is harmless); `REQUIRE_PHONE_AT_SIGNUP`,
+    `DEVICE_ACCOUNT_LIMIT` and `RECOVERY_REMINDER_EMAILS_ENABLED` are not set, so the compose
+    defaults (off, 3, off) apply; `AUTH_INTERNAL_SERVICE_SECRET` is at least 32 characters.
+  - Auth ledger newest is `9001_active_contact_uniqueness`, then `0014_approved_browser_enrollment`:
+    exactly the state the upgrade rehearsal started from. 0015 to 0018 are not applied.
+  - Product ledger newest is `20261118010000_shared_expenses_enable_runtime_flags.sql`; the
+    reward gate is not applied. `app_status.min_supported_version` is `1.0.17`, maintenance off.
+  - **Scale: 14 live accounts**, none without an email, 4 with a phone number on file. So
+    "every existing account must add a phone at next open" affects 14 people, and the whole
+    forced-upgrade and lock sequence can be done by hand with them.
+- Not yet run by anyone: the rest of Phase D onwards (anything that changes production, and the
+  phone, email and nginx checks).
 
 ## 9. What stays unbuilt
 
