@@ -51,6 +51,10 @@ class AuthenticatedHttpClient extends http.BaseClient {
   final Future<String?> Function() refreshAccessToken;
   final String? Function()? currentAccessToken;
   final void Function(http.BaseRequest)? onSuccessfulMutation;
+
+  /// Called when the server answers 403 `phone_required`: its phone lock is on and
+  /// this account has no phone yet. The caller opens the Add phone screen.
+  final void Function()? onPhoneRequired;
   final AccountRecoveryOperationGate recoveryGate;
   final AuthenticatedHttpTimeoutPolicy Function(http.BaseRequest) timeoutFor;
 
@@ -68,6 +72,7 @@ class AuthenticatedHttpClient extends http.BaseClient {
     required this.refreshAccessToken,
     this.currentAccessToken,
     this.onSuccessfulMutation,
+    this.onPhoneRequired,
     this.refreshAccessTokenForToken,
     AccountRecoveryOperationGate? recoveryGate,
     AuthenticatedHttpTimeoutPolicy Function(http.BaseRequest)? timeoutFor,
@@ -159,6 +164,21 @@ class AuthenticatedHttpClient extends http.BaseClient {
     }
     final response = await _sendHeaders(request, policy, stopwatch, admission);
     _didRespond(request, response);
+    if (response.statusCode == 403 &&
+        onPhoneRequired != null &&
+        request is http.Request) {
+      // Read the reply so a 403 that means "add your phone" can be told apart from
+      // any other 403, then hand the unchanged reply back to the caller.
+      final body = await _readBody(response.stream, policy, stopwatch);
+      if (_isPhoneRequired(body)) {
+        try {
+          onPhoneRequired!.call();
+        } catch (_) {
+          // Opening the screen is best effort; the caller still sees the 403.
+        }
+      }
+      return _replayResponse(response, body);
+    }
     if (response.statusCode != 401 || request is! http.Request) {
       return response;
     }
@@ -310,6 +330,15 @@ class AuthenticatedHttpClient extends http.BaseClient {
         // Refresh metadata is best-effort. A server-accepted write must not
         // look failed and invite the user to submit another transaction.
       }
+    }
+  }
+
+  static bool _isPhoneRequired(List<int> body) {
+    try {
+      final decoded = jsonDecode(utf8.decode(body, allowMalformed: true));
+      return decoded is Map && decoded['error'] == 'phone_required';
+    } catch (_) {
+      return false;
     }
   }
 

@@ -10,6 +10,7 @@ import '../onboarding/entry_brand.dart';
 import '../onboarding/onboarding_back.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart' show AppRoute;
+import '../../data/api_exception.dart';
 import '../../data/auth_api.dart';
 import '../../data/phone_number_hint.dart';
 import '../../data/consent_policy.dart';
@@ -17,6 +18,8 @@ import '../../data/product_access_api.dart';
 import '../settings/feedback_support_screen.dart';
 import '../settings/legal_screen.dart';
 import 'account_recovery_screen.dart';
+import 'phone_gate_provider.dart';
+import 'phone_input.dart';
 import 'auth_feedback.dart';
 
 /// A4: DPDP §8.2 — purpose-specific, unbundled consent, never a single
@@ -203,16 +206,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!identifier.contains('@')) {
       return 'That email address doesn\'t look right.';
     }
-    // Design 06: email and phone are both mandatory in every mode, never an
-    // either/or — see AuthMode's doc comment for what log-in does (and
-    // doesn't) do with this once it's collected.
-    final phone = _phoneController.text.trim();
-    if (phone.isEmpty) return 'Enter your phone number.';
-    // auth/ normalises a bare 10-digit number to +91; anything else must
-    // already be E.164.
-    final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.length < 10) return 'That phone number looks too short.';
+    // Sign-up asks for a mobile number, which is saved on the new account (one
+    // number belongs to one account). Log-in is the email alone: a typed phone
+    // proves nothing there.
     if (_isSignUp) {
+      final phoneProblem = indianMobileError(_phoneController.text);
+      if (phoneProblem != null) return phoneProblem;
       if (!_acceptedTerms) {
         return 'You need to accept the Terms & Privacy Policy to continue.';
       }
@@ -230,9 +229,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool get _canSubmit {
     final identifier = _identifierController.text.trim();
     if (identifier.isEmpty || !identifier.contains('@')) return false;
-    final digits = _phoneController.text.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.length < 10) return false;
-    if (_isSignUp && (!_acceptedTerms || !_confirmedAdult)) return false;
+    if (_isSignUp) {
+      if (indianMobileDigits(_phoneController.text) == null) return false;
+      if (!_acceptedTerms || !_confirmedAdult) return false;
+    }
     return true;
   }
 
@@ -387,6 +387,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
       );
+      // The phone lock. Settled before the token is published, so the router
+      // already knows whether the Add phone screen must come first. Never fails
+      // the sign-in: an older server, a lock that is off, or no network just
+      // leaves the gate closed.
+      await _settlePhone(container, tokens.accessToken);
+
       // Setting the token swaps this screen out of the tree, which disposes
       // this State and its `ref`. Keep the provider container, which outlives
       // the screen, for the steps that must still run afterwards; using `ref`
@@ -396,7 +402,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       // Keep returning-user sign-in on its existing path. New sign-ups must
       // pass the product-access gate before POST /profile creates a profile.
-      if (!_isSignUp) {
+      if (!_isSignUp && !container.read(phoneGateProvider).needsPhone) {
         await container
             .read(profileApiProvider)!
             .ensureProfile(email: identifier);
@@ -439,6 +445,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (rejected && !_codeLocked) _codeFocusNode.requestFocus();
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Saves the number typed at sign-up on the new account, or finds out that this
+  /// account still needs one. Anything that goes wrong here is swallowed unless the
+  /// server says the phone lock is on, because the lock is off by default.
+  Future<void> _settlePhone(ProviderContainer container, String accessToken) async {
+    try {
+      final phoneApi = container.read(authApiProvider).phoneApiFor(accessToken);
+      var status = await phoneApi.status();
+      if (!status.required || status.hasPhone) return;
+      final gate = container.read(phoneGateProvider.notifier);
+      final typed = _isSignUp ? indianMobileDigits(_phoneController.text) : null;
+      if (typed == null) {
+        gate.needs();
+        return;
+      }
+      try {
+        await phoneApi.claim(typed);
+      } on ApiException catch (error) {
+        // The number is taken or refused: let the person see why and change it.
+        gate.needs(prefill: typed, message: error.userMessage);
+      }
+    } catch (_) {
+      // Lock off, older server, or offline: the sign-in goes ahead.
     }
   }
 
@@ -839,16 +870,19 @@ class _IdentifierStep extends StatelessWidget {
               TextField(
                 controller: identifierController,
                 keyboardType: TextInputType.emailAddress,
-                textInputAction: TextInputAction.next,
+                textInputAction: isSignUp ? TextInputAction.next : TextInputAction.done,
                 autofillHints: const [AutofillHints.email],
-                onSubmitted: (_) => phoneFocusNode.requestFocus(),
+                onSubmitted: (_) => isSignUp
+                    ? phoneFocusNode.requestFocus()
+                    : (loading || !canSubmit() ? null : onSubmit()),
                 style: BambooFonts.ui(15),
                 decoration: _fieldDecoration(
                   hint: 'Email address',
                   icon: Icons.mail_outline_rounded,
                 ),
               ),
-              const SizedBox(height: 12),
+              if (isSignUp) const SizedBox(height: 12),
+              if (isSignUp)
               TextField(
                 controller: phoneController,
                 focusNode: phoneFocusNode,
@@ -859,7 +893,7 @@ class _IdentifierStep extends StatelessWidget {
                 style: BambooFonts.ui(15),
                 decoration:
                     _fieldDecoration(
-                      hint: 'Phone number',
+                      hint: 'Mobile number (India)',
                       icon: Icons.phone_outlined,
                     ).copyWith(
                       suffixIcon: IconButton(

@@ -98,6 +98,7 @@ import '../features/sms_import/sms_background_queue.dart';
 import '../features/sms_import/ios_shortcut_sms.dart';
 import '../features/settings/settings_sync.dart';
 import '../features/sync/sync_engine.dart';
+import '../features/auth/phone_gate_provider.dart';
 import 'env.dart';
 import 'local_sms_rig_http_client.dart';
 import '../data/sms_security_policy.dart';
@@ -157,6 +158,7 @@ final authenticatedHttpClientProvider = Provider<AuthenticatedHttpClient>((
             ?.markAccountStale(ref.read(cacheNamespaceProvider));
       }
     },
+    onPhoneRequired: () => ref.read(phoneGateProvider.notifier).needs(),
     refreshAccessTokenForToken: (rejectedAccessToken) =>
         refreshCoordinator.refresh(expectedAccessToken: rejectedAccessToken),
   );

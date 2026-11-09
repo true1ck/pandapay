@@ -47,7 +47,6 @@ void main() {
       ),
     );
     await tester.enterText(find.byType(TextField).at(0), 'person@example.test');
-    await tester.enterText(find.byType(TextField).at(1), '9999999999');
     // Both controllers rebuild the Send code button on the next frame.
     await tester.pump();
     await tester.tap(find.text('Send code'));

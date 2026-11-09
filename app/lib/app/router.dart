@@ -28,7 +28,9 @@ import '../features/activity/duplicate_review_screen.dart';
 import '../features/activity/edit_transaction_screen.dart';
 import '../features/activity/foreign_payments_screen.dart';
 import '../features/activity/transaction_detail_screen.dart';
+import '../features/auth/add_phone_screen.dart';
 import '../features/auth/login_screen.dart';
+import '../features/auth/phone_gate_provider.dart';
 import '../features/auth/invite_link_screen.dart';
 import '../features/auth/product_activation_screen.dart';
 import '../features/cards/benefit_detail_screen.dart';
@@ -102,6 +104,9 @@ abstract final class AppRoute {
   static const inviteLink = '/i/:code';
   static const inviteLinkPrefix = '/i';
   static const productActivation = '/account/activate';
+
+  /// Shown when the server's phone lock is on and the account has no phone yet.
+  static const addPhone = '/account/add-phone';
   static const home = '/home';
   static const bankAccounts = '/home/bank-accounts';
   static const cards = '/cards';
@@ -271,6 +276,8 @@ class _RouterRefreshNotifier extends ChangeNotifier {
     // made GoRouter re-evaluate the whole shell every refresh interval.
     ref.listen(cacheNamespaceProvider, (_, _) => notifyListeners());
     ref.listen(onboardingCompleteProvider, (_, _) => notifyListeners());
+    // The phone gate opens when the server says this account needs a phone.
+    ref.listen(phoneGateProvider, (_, _) => notifyListeners());
     ref.listen(
       activationVerifiedNamespaceProvider,
       (_, _) => notifyListeners(),
@@ -518,6 +525,17 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             : AppRoute.welcome;
       }
 
+      // Phone lock. When the server requires a phone and this account has none,
+      // the only reachable screen is the one that adds it. The gate is off (and
+      // this never fires) unless the server runs with REQUIRE_PHONE_AT_SIGNUP.
+      final needsPhone = ref.read(phoneGateProvider).needsPhone;
+      if (needsPhone) {
+        return path == AppRoute.addPhone ? null : AppRoute.addPhone;
+      }
+      if (path == AppRoute.addPhone) {
+        return complete ? AppRoute.home : AppRoute.productActivation;
+      }
+
       // New accounts must complete setup before entering Home. Returning
       // accounts with a persisted onboarding flag go straight to the shell.
       if (!complete) {
@@ -621,6 +639,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) => NoTransitionPage(
           child: InviteLinkScreen(code: state.pathParameters['code'] ?? ''),
         ),
+      ),
+      GoRoute(
+        path: AppRoute.addPhone,
+        pageBuilder: (context, state) =>
+            const NoTransitionPage(child: AddPhoneScreen()),
       ),
       GoRoute(
         path: AppRoute.productActivation,

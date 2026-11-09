@@ -305,7 +305,6 @@ void main() {
       );
       final loginFields = find.byType(TextField);
       await tester.enterText(loginFields.at(0), 'old@example.com');
-      await tester.enterText(loginFields.at(1), '+919876548102');
       await tester.ensureVisible(find.text('Need help signing in?'));
       await tester.tap(find.text('Need help signing in?'));
       await tester.pumpAndSettle();
@@ -319,13 +318,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(LoginScreen), findsOneWidget);
       final returnedFields = find.byType(TextField);
-      expect(returnedFields, findsNWidgets(2));
+      expect(returnedFields, findsOneWidget, reason: 'log-in is the email alone');
       expect(
         tester.widget<TextField>(returnedFields.at(0)).controller!.text,
-        isEmpty,
-      );
-      expect(
-        tester.widget<TextField>(returnedFields.at(1)).controller!.text,
         isEmpty,
       );
       expect(

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'api_exception.dart';
+import 'phone_api.dart';
 import 'recovery_api.dart';
 
 /// UA-3: the user app's own OTP login flow against auth/ — mirrors
@@ -138,6 +139,14 @@ class AuthApi {
     }
     return {'challenge_id': challenge.id};
   }
+
+  /// The phone lock's endpoints for one access token. Pass [client] to reuse a
+  /// session-refreshing client; by default the plain auth client is used.
+  PhoneApi phoneApiFor(String accessToken, {http.Client? client}) => PhoneApi(
+    authBaseUrl: authBaseUrl,
+    accessToken: accessToken,
+    client: client ?? _client,
+  );
 
   RecoveryApi recoveryApiFor(String accessToken) => RecoveryApi(
     authBaseUrl: authBaseUrl,

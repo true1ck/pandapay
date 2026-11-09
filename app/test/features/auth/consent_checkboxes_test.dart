@@ -103,8 +103,8 @@ void main() {
         ),
       );
       await tester.enterText(find.byType(TextField).at(0), 'sujay@example.com');
-      await tester.enterText(find.byType(TextField).at(1), '9876543210');
-      // Send code only enables once the fields validate on the next frame.
+      // Send code only enables once the field validates on the next frame.
+      // (Log-in is the email alone; there is no phone box.)
       await tester.pump();
       await tester.tap(find.text('Send code'));
       await tester.pumpAndSettle();
@@ -280,7 +280,7 @@ void main() {
   });
 
   testWidgets(
-    'Send code on the sign-in form is disabled until email and phone are valid',
+    'Send code on the sign-in form needs only a valid email and has no phone box',
     (tester) async {
       var otpRequested = false;
       final authApi = AuthApi(
@@ -301,15 +301,12 @@ void main() {
       final submit = find.widgetWithText(FilledButton, 'Send code');
       expect(tester.widget<FilledButton>(submit).onPressed, isNull);
 
-      await tester.enterText(find.byType(TextField).at(0), 'sujay@example.com');
+      expect(find.byType(TextField), findsOneWidget, reason: 'log-in is email only');
+      await tester.enterText(find.byType(TextField).at(0), 'not-an-email');
       await tester.pump();
-      expect(
-        tester.widget<FilledButton>(submit).onPressed,
-        isNull,
-        reason: 'phone still empty',
-      );
+      expect(tester.widget<FilledButton>(submit).onPressed, isNull);
 
-      await tester.enterText(find.byType(TextField).at(1), '9876543210');
+      await tester.enterText(find.byType(TextField).at(0), 'sujay@example.com');
       await tester.pump();
       expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
 
