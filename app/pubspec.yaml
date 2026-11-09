@@ -241,6 +241,9 @@ dependencies:
   google_sign_in: ^6.2.1
   image: 4.10.1
   flutter_contacts: ^2.6.0
+  # Reads voice answers aloud with the phone's own on-device voices; nothing
+  # is sent to a server. Used only by features/voice/voice_speaker.dart.
+  flutter_tts: ^4.2.5
 
 dev_dependencies:
   integration_test:

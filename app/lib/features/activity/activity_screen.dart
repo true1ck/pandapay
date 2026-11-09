@@ -53,6 +53,9 @@ class ActivityScreen extends ConsumerStatefulWidget {
   final DateTime? initialTo;
   final bool initialSpendOnly;
 
+  /// A merchant or note search to start with, e.g. from a voice answer.
+  final String? initialQuery;
+
   const ActivityScreen({
     super.key,
     this.initialTagIds = const {},
@@ -61,6 +64,7 @@ class ActivityScreen extends ConsumerStatefulWidget {
     this.initialFrom,
     this.initialTo,
     this.initialSpendOnly = false,
+    this.initialQuery,
   });
 
   @override
@@ -227,7 +231,8 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       widget.initialCategoryLabel != null ||
       widget.initialFrom != null ||
       widget.initialTo != null ||
-      widget.initialSpendOnly;
+      widget.initialSpendOnly ||
+      widget.initialQuery != null;
 
   @override
   void initState() {
@@ -254,7 +259,8 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         oldWidget.initialCategoryLabel != widget.initialCategoryLabel ||
         oldWidget.initialFrom != widget.initialFrom ||
         oldWidget.initialTo != widget.initialTo ||
-        oldWidget.initialSpendOnly != widget.initialSpendOnly) {
+        oldWidget.initialSpendOnly != widget.initialSpendOnly ||
+        oldWidget.initialQuery != widget.initialQuery) {
       _initialFilterReady = !_hasInitialFilter;
       if (_hasInitialFilter) {
         _applyInitialFilterAfterBuild();
@@ -286,6 +292,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         type: widget.initialSpendOnly
             ? _ActivityTypeFilter.spending
             : _ActivityTypeFilter.all,
+        query: widget.initialQuery,
       );
       setState(() => _initialFilterReady = true);
     });

@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:uuid/uuid.dart';
@@ -14,6 +15,10 @@ import '../../data/transaction_tags_repository.dart' show TransactionTag;
 import '../../data/user_cards_repository.dart'
     show TxnEntryKind, TxnInstrument, UserCard;
 import '../sms_v2/ledger/providers.dart' show smsV2LedgerReadModelProvider;
+import 'answers/question_model.dart';
+import 'answers/voice_answer.dart';
+import 'answers/voice_answer_card.dart';
+import 'answers/voice_answer_service.dart';
 import 'follow_up/follow_up.dart';
 import 'follow_up/refund_candidates.dart';
 import 'understanding/en_pack.dart';
@@ -21,6 +26,8 @@ import 'understanding/language_pack.dart';
 import 'voice_action_parser.dart';
 import 'voice_draft_editor.dart';
 import 'voice_entry_review.dart';
+import 'voice_settings.dart';
+import 'voice_speaker.dart';
 import 'voice_transcript_buffer.dart';
 
 Future<void> showVoiceInputSheet(BuildContext context) {
@@ -66,11 +73,28 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
   String? _localeId;
   List<String>? _merchantCache;
   bool _answerListening = false;
+  VoiceAnswer? _answer;
+  bool _thinking = false;
+
+  /// The sentence was typed, not spoken. Typed questions are answered on
+  /// screen only.
+  bool _typedInput = false;
+  bool? _speaking;
+  final VoiceSpeaker _speaker = VoiceSpeaker();
   DateTime _now = DateTime.now();
   final Map<int, ({String key, List<RefundCandidate> list})> _refundCache = {};
 
   @override
+  void initState() {
+    super.initState();
+    _speaker.setOnEnd(() {
+      if (mounted && _speaking == true) setState(() => _speaking = false);
+    });
+  }
+
+  @override
   void dispose() {
+    _speaker.dispose();
     _completionTimer?.cancel();
     _restartTimer?.cancel();
     _keepListening = false;
@@ -370,6 +394,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
     _completionTimer?.cancel();
     _completionTimer = null;
     _speechSessionCompleted = true;
+    _typedInput = false;
     // Fence late platform callbacks before parsing so the displayed transcript
     // and the drafts being confirmed always represent the same speech.
     _listenGeneration++;
@@ -399,6 +424,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
     if (!mounted) return;
     _listenGeneration++;
     _speechSessionCompleted = true;
+    _typedInput = true;
     _transcriptBuffer.clear();
     final session = _transcriptBuffer.beginSession();
     _transcriptBuffer.update(session, value, isFinal: true);
@@ -444,10 +470,65 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
     });
   }
 
-  void _handleQuestion(VoiceActionDraft draft) {
+  /// A question: read what it asks, work it out from the data on the phone,
+  /// show the answer with buttons to the right screens, and say it aloud when
+  /// it was asked by voice and the user has not turned speech off.
+  Future<void> _handleQuestion(VoiceActionDraft draft) async {
     setState(() {
-      _error = 'I can’t answer questions yet. Try “spent 250 on lunch”.';
+      _thinking = true;
+      _error = null;
     });
+    final cards = ref.read(userCardsProvider).valueOrNull ?? const <UserCard>[];
+    final categories =
+        ref.read(categoriesProvider).valueOrNull ?? const <SpendCategory>[];
+    final now = ref.read(clockProvider).now();
+    final question = QuestionReader(_pack).read(
+      draft.transcript,
+      now: now,
+      cards: cards,
+      categories: categories,
+      knownMerchants: _merchants(),
+    );
+    final answer = await VoiceAnswerService(ref).answer(question);
+    if (!mounted) return;
+    setState(() {
+      _answer = answer;
+      _thinking = false;
+      _now = now;
+      _speaking = null;
+    });
+    if (!_typedInput &&
+        answer.status == AnswerStatus.ok &&
+        ref.read(voiceSpeakAnswersProvider)) {
+      final ok = await _speaker.speak(answer.spoken);
+      if (mounted) setState(() => _speaking = ok ? true : null);
+    }
+  }
+
+  Future<void> _toggleSpeech() async {
+    final answer = _answer;
+    if (answer == null) return;
+    if (_speaking == true) {
+      await _speaker.stop();
+      if (mounted) setState(() => _speaking = false);
+      return;
+    }
+    final ok = await _speaker.speak(answer.spoken);
+    if (!mounted) return;
+    setState(() {
+      _speaking = ok;
+      if (!ok) {
+        _error =
+            'This phone has no English voice installed, so I can’t read it aloud.';
+      }
+    });
+  }
+
+  void _openAction(AnswerAction action) {
+    final router = GoRouter.of(context);
+    final route = routeFor(action);
+    Navigator.of(context).pop();
+    router.push(route);
   }
 
   String get _visibleTranscript => [
@@ -758,13 +839,51 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
           20 + MediaQuery.viewInsetsOf(context).bottom,
         ),
         child: SingleChildScrollView(
-          child: _drafts.isEmpty
+          child: _answer != null
+              ? _answerView()
+              : _thinking
+              ? _thinkingView()
+              : _drafts.isEmpty
               ? _recordView()
               : _reviewView(cards, categories),
         ),
       ),
     );
   }
+
+  Widget _thinkingView() => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 48),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const CircularProgressIndicator(strokeWidth: 2),
+        const SizedBox(height: 16),
+        Text(
+          'Working it out on your phone…',
+          style: BambooFonts.ui(13, color: BambooInk.ink500),
+        ),
+      ],
+    ),
+  );
+
+  Widget _answerView() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _quote(_transcriptBuffer.text),
+      const SizedBox(height: 16),
+      VoiceAnswerCard(
+        answer: _answer!,
+        onAction: _openAction,
+        onAskAnother: _resetToRecord,
+        spoken: _answer!.status == AnswerStatus.ok ? (_speaking ?? false) : null,
+        onToggleSpeech: _answer!.status == AnswerStatus.ok ? _toggleSpeech : null,
+      ),
+      if (_error != null) ...[
+        const SizedBox(height: 8),
+        Text(_error!, style: BambooFonts.ui(13, color: BambooInk.clay)),
+      ],
+    ],
+  );
 
   Widget _recordView() => Column(
     mainAxisSize: MainAxisSize.min,
@@ -786,7 +905,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
       ),
       const SizedBox(height: 6),
       Text(
-        'Say a spend, money in, a refund or a points redemption. Nothing is saved until you confirm it.',
+        'Say a spend, money in, a refund or a points redemption, or ask about your spending, bills, caps, points or best card. Nothing is saved until you confirm it.',
         textAlign: TextAlign.center,
         style: BambooFonts.ui(13, color: BambooInk.ink500),
       ),
@@ -984,8 +1103,11 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
     }
     _editors.clear();
     _refundCache.clear();
+    unawaited(_speaker.stop());
     setState(() {
       _drafts = const [];
+      _answer = null;
+      _speaking = null;
       _error = null;
     });
   }

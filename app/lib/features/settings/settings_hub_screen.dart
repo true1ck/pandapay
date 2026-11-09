@@ -23,6 +23,7 @@ import 'merchant_future_rules_screen.dart';
 import 'notification_settings_screen.dart';
 import 'privacy_permissions_screen.dart';
 import 'transaction_tags_screen.dart';
+import '../voice/voice_settings.dart';
 
 /// Design 20 "Settings & security" — one screen, grouped, reached from a
 /// single row on You.
@@ -194,6 +195,12 @@ class SettingsHubScreen extends ConsumerWidget {
               icon: Icons.palette_outlined,
               label: 'Appearance',
               onTap: () => open(const AppearanceScreen()),
+            ),
+            const SizedBox(height: AppSpace.sm),
+            AccountTile(
+              icon: Icons.mic_none_rounded,
+              label: 'Voice',
+              onTap: () => open(const VoiceSettingsScreen()),
             ),
             const SizedBox(height: AppSpace.xxl),
 

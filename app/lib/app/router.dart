@@ -743,6 +743,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             ),
             initialTo: DateTime.tryParse(state.uri.queryParameters['to'] ?? ''),
             initialSpendOnly: state.uri.queryParameters['spendOnly'] == 'true',
+            initialQuery: state.uri.queryParameters['q'],
           ),
         ),
       ),

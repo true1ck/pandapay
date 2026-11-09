@@ -8,6 +8,7 @@ enum AnswerActionKind {
   spendTrends,
   paymentsDue,
   caps,
+  milestones,
   wallet,
   home,
   pointsExpiry,
