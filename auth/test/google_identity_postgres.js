@@ -26,6 +26,8 @@ const pool = new Pool(fixtureConfig(process.env.AUTH_GOOGLE_IDENTITY_TEST_URL));
 const migration = fs.readFileSync(path.join(__dirname, '../db/migrations/0006_google_oauth_identity.sql'), 'utf8');
 const base = fs.readFileSync(path.join(__dirname, '../db/pandapay-auth/init.sql'), 'utf8');
 const contacts = fs.readFileSync(path.join(__dirname, '../db/migrations/9001_active_contact_uniqueness.sql'), 'utf8');
+// googleIdentity.js matches accounts by email_canonical, which migration 0016 adds.
+const canonical = fs.readFileSync(path.join(__dirname, '../db/migrations/0016_email_canonical.sql'), 'utf8');
 
 async function transaction(work) {
   const client = await pool.connect();
@@ -51,6 +53,7 @@ async function main() {
   if (existing.rows[0].count !== 0) throw new Error('Fixture refuses a non-empty disposable database');
   await pool.query(base);
   await transaction(client => client.query(contacts));
+  await transaction(client => client.query(canonical));
   await migrate();
   await migrate();
   assert.equal((await pool.query("SELECT count(*)::int AS count FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND column_name='google_id'")).rows[0].count, 0);
