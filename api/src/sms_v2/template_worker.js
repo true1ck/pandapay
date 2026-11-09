@@ -36,8 +36,11 @@ const attrValidators = Object.fromEntries(
 // the prompt text or its rules, and run the --eval dry run first.
 const PROMPT_VERSION = "tpl-2026-11-17";
 
+// Compose passes an unset variable through as "", which means "not set".
+const isSet = (env, key) => env[key] !== undefined && env[key] !== "";
+
 function positiveInteger(env, key, fallback) {
-  const value = Number(env[key] === undefined ? fallback : env[key]);
+  const value = Number(isSet(env, key) ? env[key] : fallback);
   if (!Number.isSafeInteger(value) || value < 1)
     throw new Error(`${key}_invalid`);
   return value;
@@ -50,7 +53,7 @@ function workerConfig(env = process.env) {
   if (!/^[A-Za-z0-9_.-]+$/.test(model))
     throw new Error("SMS_V2_AI_MODEL_required");
   const price = (key) => {
-    if (env[key] === undefined) return null;
+    if (!isSet(env, key)) return null;
     const value = Number(env[key]);
     if (!Number.isFinite(value) || value < 0) throw new Error(`${key}_invalid`);
     return value;

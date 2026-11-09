@@ -196,6 +196,18 @@ test("failed second draft stays failed, and exhausted capacity makes no call", a
   assert.equal(workerConfig({}).model, "gemini-3.5-flash-lite");
   assert.equal(workerConfig({ SMS_V2_AI_MODEL: "test" }).tpm, 100000);
   assert.throws(() => workerConfig({ SMS_V2_AI_TPM: "0" }), /TPM_invalid/);
+  // Compose hands an unset variable over as an empty string: that means "unset".
+  const blank = workerConfig({
+    SMS_V2_AI_MODEL: "",
+    SMS_V2_AI_TPM: "",
+    SMS_V2_AI_RPM: "",
+    SMS_V2_AI_MAX_OUTPUT_TOKENS: "",
+    SMS_V2_AI_INPUT_USD_PER_MILLION: "",
+    SMS_V2_AI_OUTPUT_USD_PER_MILLION: "",
+  });
+  assert.equal(blank.model, "gemini-3.5-flash-lite");
+  assert.equal(blank.tpm, 100000);
+  assert.equal(blank.inputPrice, null);
   assert.equal(
     workerConfig({
       SMS_V2_AI_MODEL: "test",

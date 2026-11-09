@@ -107,7 +107,7 @@ async function main() {
 
 if (require.main === module) {
   main().catch((error) => {
-    console.error("SMS v2 template worker stopped", error.code || error.name);
+    console.error("SMS v2 template worker stopped", error.code || error.name, String(error.message).slice(0, 200));
     process.exitCode = 1;
   });
 }
