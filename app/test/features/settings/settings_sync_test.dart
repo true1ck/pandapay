@@ -166,4 +166,50 @@ void main() {
     );
     expect(kDeliberatelyDeviceLocalPrefs, contains('settings_biometric_lock_v1'));
   });
+
+  test('a choice whose push failed is not overwritten by the older server value', () async {
+    SharedPreferences.setMockInitialValues({themeKey: 'dark'});
+    var online = false;
+    final server = <String, Object?>{themeKey: 'light'};
+    final pushes = <Map<String, dynamic>>[];
+    final client = MockClient((request) async {
+      if (request.method == 'GET') {
+        return http.Response(
+          jsonEncode({'settings': server, 'revision': 1, 'updatedAt': null}),
+          200,
+        );
+      }
+      if (!online) return http.Response('down', 503);
+      final patch =
+          ((jsonDecode(request.body) as Map)['settings'] as Map).cast<String, dynamic>();
+      pushes.add(patch);
+      server.addAll(patch);
+      return http.Response(
+        jsonEncode({'settings': server, 'revision': 2, 'updatedAt': null}),
+        200,
+      );
+    });
+    final container = ProviderContainer(
+      overrides: [
+        userSettingsApiProvider.overrideWithValue(
+          UserSettingsApi(apiBaseUrl: 'http://test', accessToken: 'token', client: client),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final sync = container.read(settingsSyncProvider);
+
+    // The person picks dark while the server is unreachable.
+    await expectLater(sync.pushKey(themeKey), throwsA(anything));
+
+    // Back online, a pull must send their choice, not adopt the old value.
+    online = true;
+    final applied = await sync.pullAndApply();
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString(themeKey), 'dark');
+    expect(applied, isNot(contains(themeKey)));
+    expect(server[themeKey], 'dark');
+    expect(pushes.last[themeKey], 'dark');
+  });
 }

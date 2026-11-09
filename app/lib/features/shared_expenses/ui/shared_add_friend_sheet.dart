@@ -242,8 +242,14 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
     _phone.addListener(_onFieldChanged);
   }
 
+  // Controllers also notify on cursor and focus moves; only a real edit of
+  // the text should dismiss a validation message.
+  late String _seenName = _name.text, _seenPhone = _phone.text;
   void _onFieldChanged() {
-    if (_error != null) {
+    final changed = _name.text != _seenName || _phone.text != _seenPhone;
+    _seenName = _name.text;
+    _seenPhone = _phone.text;
+    if (changed && _error != null) {
       setState(() => _error = null);
     }
   }

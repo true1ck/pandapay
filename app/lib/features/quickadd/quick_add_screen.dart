@@ -25,7 +25,12 @@ import '../../data/receipt_parser.dart' show parseReceiptFields;
 import '../../data/receipt_ocr.dart' show ReceiptOcr;
 import '../../data/import_models.dart' show ParsedStatementLine;
 import '../../data/user_cards_repository.dart'
-    show TransactionEntry, TxnEntryKind, TxnInstrument, UserCard;
+    show
+        TransactionEntry,
+        TxnEntryKind,
+        TxnInstrument,
+        UserCard,
+        UserCardsRepository;
 import '../cards/card_summary.dart';
 import '../cards/card_visual.dart';
 import '../cards/recommendation_confidence.dart';
@@ -1262,6 +1267,25 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     final clientMutationId = _pendingClientMutationId!;
     final effectiveOccurredAt = _pendingOccurredAt!;
     try {
+      // Local first. Without a receipt the transaction is saved in the
+      // phone's outbox (it shows in Activity at once) and delivered in the
+      // background; the screen never waits on the API. A receipt needs the
+      // server's transaction id to attach to, so that case keeps the direct
+      // call below.
+      if (_receipt == null) {
+        await _saveLocalFirst(
+          repo: repo,
+          amount: amount,
+          merchantName: merchantName,
+          note: note,
+          occurredAt: effectiveOccurredAt,
+          clientMutationId: clientMutationId,
+        );
+        _pendingClientMutationId = null;
+        _pendingPayloadFingerprint = null;
+        _pendingOccurredAt = null;
+        return;
+      }
       final transactionId = await repo.logTransaction(
         userCardId:
             _instrument == TxnInstrument.creditCard ||
@@ -1455,6 +1479,99 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<void> _saveLocalFirst({
+    required UserCardsRepository repo,
+    required double amount,
+    required String? merchantName,
+    required String? note,
+    required DateTime occurredAt,
+    required String clientMutationId,
+  }) async {
+    final outbox = await ref.read(outboxRepositoryProvider.future);
+    await outbox.enqueue(
+      userCardId:
+          _instrument == TxnInstrument.creditCard ||
+              _instrument == TxnInstrument.debitCard
+          ? _selectedUserCardId
+          : null,
+      amount: Money.fromRupees(amount),
+      categoryId: _selectedCategoryId,
+      merchantName: merchantName,
+      occurredAt: occurredAt,
+      note: note,
+      instrument: _instrument,
+      entryKind: _entryKind,
+      clientMutationId: clientMutationId,
+    );
+    String? tagError;
+    if (_selectedTagIds.isNotEmpty) {
+      try {
+        await ref.read(transactionTagsProvider)?.assign([
+          'local-outbox:$clientMutationId',
+        ], _selectedTagIds.toList());
+      } catch (error) {
+        tagError =
+            'Transaction saved. Tags could not be saved: ${userFacingErrorMessage(error)}';
+      }
+    }
+    if (_selectedUserCardId != null && _instrument == TxnInstrument.creditCard) {
+      await _rememberLastUsedCard(_selectedUserCardId!);
+    }
+    if (merchantName != null) await _rememberMerchant(merchantName);
+    ref.invalidate(pendingOutboxCountProvider);
+    ref.invalidate(transactionsProvider);
+    ref.invalidate(utilizationTransactionsProvider);
+    ref.invalidate(homeSummaryProvider);
+    // Deliver in the background. This returns at once.
+    ref.read(outboxFlushRequestProvider.notifier).state++;
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final container = ProviderScope.containerOf(context, listen: false);
+    final offline = ref.read(isOnlineProvider).valueOrNull == false;
+    Navigator.of(context).pop();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          tagError ??
+              (offline
+                  ? "Saved offline — this'll sync automatically once you're back online."
+                  : 'Logged ${Money.fromRupees(amount).format()} ${_entryKind == TxnEntryKind.income ? 'income' : 'spend'}'),
+        ),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () async {
+            try {
+              // Still queued: take it back, nothing ever reached the server.
+              if (outbox.cancel(clientMutationId)) {
+                container.invalidate(pendingOutboxCountProvider);
+              } else {
+                // Already delivered: reverse it on the server by its real id.
+                final id = outbox.syncedTransactionId(clientMutationId);
+                if (id == null) {
+                  throw StateError(
+                    'It is still being saved. Try again in a moment.',
+                  );
+                }
+                await repo.ignoreTransaction(id, reason: 'reversal');
+              }
+              container.invalidate(userCardsProvider);
+              container.invalidate(transactionsProvider);
+              container.invalidate(utilizationTransactionsProvider);
+              container.invalidate(homeSummaryProvider);
+              messenger.showSnackBar(const SnackBar(content: Text('Undone.')));
+            } catch (e) {
+              messenger.showSnackBar(
+                SnackBar(
+                  content: Text('Could not undo. ${userFacingErrorMessage(e)}'),
+                ),
+              );
+            }
+          },
+        ),
+      ),
+    );
   }
 
   @override

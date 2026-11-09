@@ -8,6 +8,8 @@ import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/api_exception.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/response_cache.dart';
+import 'package:pandapay/data/local/sync_queue.dart';
+import 'package:pandapay/data/local_first/command_outbox.dart';
 import 'package:pandapay/data/local/sms_intake_repository.dart';
 import 'package:pandapay/features/sms_import/sms_background_queue.dart';
 import 'package:pandapay/data/transaction_tags_repository.dart';
@@ -118,6 +120,17 @@ class _FakeUserCardsRepository implements UserCardsRepository {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
+
+/// Ignoring or restoring is local first: the screen queues a command and the
+/// outbox sends it later. This runs that delivery against [repo], so the tests
+/// still check what the server would be told.
+Future<int> _deliver(AppDatabase db, _FakeUserCardsRepository repo) =>
+    CommandOutbox(db, namespace: 'user:test').flush(commandHandlersFor(repo));
+
+List<Override> _outboxOverrides(AppDatabase db) => [
+  cacheNamespaceProvider.overrideWithValue('user:test'),
+  responseCacheProvider.overrideWith((ref) async => ResponseCache(db)),
+];
 
 Future<void> _pump(
   WidgetTester tester, {
@@ -448,7 +461,16 @@ void main() {
         status: 'active',
       ),
     );
-    await _pump(tester, repo: repo);
+    final noteDb = openInMemoryForTesting();
+    addTearDown(noteDb.close);
+    await _pump(
+      tester,
+      repo: repo,
+      extraOverrides: [
+        cacheNamespaceProvider.overrideWithValue('user:test'),
+        responseCacheProvider.overrideWith((ref) async => ResponseCache(noteDb)),
+      ],
+    );
 
     final addNote = find.text('Add a note');
     await tester.ensureVisible(addNote);
@@ -458,7 +480,10 @@ void main() {
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
-    expect(repo.lastNote, 'Bought for the office');
+    // Local first: the note is queued for sync and the API is not called.
+    final queued = SyncQueue(noteDb, namespace: 'user:test').pending();
+    expect(queued.single.payload, {'note': 'Bought for the office'});
+    expect(repo.lastNote, isNull);
     expect(find.text('Bought for the office'), findsOneWidget);
   });
 
@@ -610,6 +635,28 @@ void main() {
   );
 
   testWidgets(
+    'a phone-only v2 payment never asks the server for private splits',
+    (tester) async {
+      final id = 'v2:${'a' * 64}';
+      final repo = _FakeUserCardsRepository(
+        TransactionEntry(
+          id: id,
+          amount: Money.fromRupees(1000),
+          occurredAt: DateTime(2026, 3, 1),
+          source: 'sms',
+          status: 'active',
+        ),
+        // The real API answers 400 "invalid transaction id" for this shape.
+        failSplits: true,
+      );
+      await _pump(tester, repo: repo, transactionId: id);
+
+      expect(find.textContaining('Could not load split details'), findsNothing);
+      expect(find.text('Retry'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'an ignored transaction shows the exclusion banner and no ignore action',
     (tester) async {
       final repo = _FakeUserCardsRepository(
@@ -693,7 +740,7 @@ void main() {
     );
   });
 
-  testWidgets('marking ignored calls the repository with the chosen reason', (
+  testWidgets('marking ignored queues the chosen reason for the server', (
     tester,
   ) async {
     final repo = _FakeUserCardsRepository(
@@ -706,13 +753,17 @@ void main() {
         status: 'active',
       ),
     );
-    await _pump(tester, repo: repo);
+    final db = openInMemoryForTesting();
+    addTearDown(db.close);
+    await _pump(tester, repo: repo, extraOverrides: _outboxOverrides(db));
 
     await tester.tap(find.text('Refund, reversal, or delete transaction'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Refund'));
     await tester.pumpAndSettle();
 
+    expect(repo.lastIgnoreReason, isNull, reason: 'the screen does not wait on the API');
+    expect(await _deliver(db, repo), 1);
     expect(repo.lastIgnoreReason, 'refund');
   });
 
@@ -777,7 +828,9 @@ void main() {
         status: 'active',
       ),
     );
-    await _pump(tester, repo: repo);
+    final db = openInMemoryForTesting();
+    addTearDown(db.close);
+    await _pump(tester, repo: repo, extraOverrides: _outboxOverrides(db));
 
     await tester.tap(find.text('Refund, reversal, or delete transaction'));
     await tester.pumpAndSettle();
@@ -803,10 +856,11 @@ void main() {
     await tester.tap(find.text('Delete'), warnIfMissed: false);
     await tester.pumpAndSettle();
 
+    await _deliver(db, repo);
     expect(repo.lastIgnoreReason, 'transfer');
   });
 
-  testWidgets('a failed delete keeps the row and never claims it was deleted', (
+  testWidgets('a delete is saved on the phone and kept for retry when the server is down', (
     tester,
   ) async {
     final repo = _FakeUserCardsRepository(
@@ -820,7 +874,9 @@ void main() {
       ),
       failIgnore: true,
     );
-    await _pump(tester, repo: repo);
+    final db = openInMemoryForTesting();
+    addTearDown(db.close);
+    await _pump(tester, repo: repo, extraOverrides: _outboxOverrides(db));
 
     await tester.tap(find.text('Refund, reversal, or delete transaction'));
     await tester.pumpAndSettle();
@@ -829,14 +885,12 @@ void main() {
     await tester.tap(find.text('Delete'), warnIfMissed: false);
     await tester.pumpAndSettle();
 
-    // A swallowed server error used to leave a locally "deleted" row that the
-    // server still had active, so it never reached Deleted transactions.
-    expect(find.text('Transaction deleted.'), findsNothing);
-    expect(find.byType(SnackBar), findsOneWidget);
-    expect(find.text('Active'), findsOneWidget);
-    expect(
-      find.text('Refund, reversal, or delete transaction'),
-      findsOneWidget,
-    );
+    // The person's delete is honoured at once, without waiting on the API.
+    expect(find.text('Transaction deleted.'), findsOneWidget);
+
+    // A server that is down does not lose it: delivery fails, the command
+    // stays queued, and it is not reported as sent.
+    expect(await _deliver(db, repo), 0);
+    expect(CommandOutbox(db, namespace: 'user:test').pendingCount, 1);
   });
 }

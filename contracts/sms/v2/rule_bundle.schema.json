@@ -88,6 +88,30 @@
         "$ref": "#/$defs/merchantAlias"
       }
     },
+    "solverPack": {
+      "type": "object",
+      "required": [
+        "schema",
+        "version",
+        "lexicons"
+      ],
+      "properties": {
+        "schema": {
+          "const": "pandapay.sms.solver/1"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "params": {
+          "type": "object"
+        },
+        "lexicons": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
     "signature": {
       "type": [
         "object",

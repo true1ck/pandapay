@@ -637,6 +637,7 @@ final class RuleBundle extends JsonValue {
     List<LinkRule> linkRules = const [],
     List<CategoryRule> categoryRules = const [],
     List<MerchantAlias> merchantAliases = const [],
+    this.solverPack,
     this.signature,
   })  : senders = List.unmodifiable(senders),
         ignoreRules = List.unmodifiable(ignoreRules),
@@ -666,6 +667,9 @@ final class RuleBundle extends JsonValue {
       linkRules: _list(json['linkRules'], LinkRule.fromJson),
       categoryRules: _list(json['categoryRules'], CategoryRule.fromJson),
       merchantAliases: _list(json['merchantAliases'], MerchantAlias.fromJson),
+      solverPack: json['solverPack'] == null
+          ? null
+          : Map<String, Object?>.of((json['solverPack'] as Map).cast<String, Object?>()),
       signature: json['signature'] == null
           ? null
           : BundleSignature.fromJson(json['signature'] as Json),
@@ -687,6 +691,11 @@ final class RuleBundle extends JsonValue {
   final List<LinkRule> linkRules;
   final List<CategoryRule> categoryRules;
   final List<MerchantAlias> merchantAliases;
+
+  /// The vocabulary of the evidence solver (tier 2, `pandapay.sms.solver/1`), or
+  /// null. Kept as plain JSON here; the solver library parses and checks it.
+  /// Left out of `toJson` when null, so a bundle without one signs exactly as before.
+  final Map<String, Object?>? solverPack;
 
   /// Null only for `bundleVersion` 0.
   final BundleSignature? signature;
@@ -713,6 +722,7 @@ final class RuleBundle extends JsonValue {
         'linkRules': [for (final l in linkRules) l.toJson()],
         'categoryRules': [for (final c in categoryRules) c.toJson()],
         'merchantAliases': [for (final m in merchantAliases) m.toJson()],
+        if (solverPack != null) 'solverPack': solverPack,
         'signature': signature?.toJson(),
       };
 

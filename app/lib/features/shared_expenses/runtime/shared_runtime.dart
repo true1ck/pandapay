@@ -109,6 +109,23 @@ class SharedExpensesRuntime extends ChangeNotifier {
     super.dispose();
   }
 
+  /// One quick capabilities read so screens can decide what is available
+  /// without waiting for a full sync. Failures leave [capabilities] unset.
+  Future<void> ensureCapabilities() async {
+    _current();
+    if (capabilities != null) return;
+    try {
+      final flags = await remote.fetchCapabilities();
+      _current();
+      capabilities = flags;
+    } catch (error) {
+      lastError = error;
+      offline =
+          error is SharedTransportException &&
+          error.code == 'network_unavailable';
+    }
+  }
+
   Future<void> refresh({int maxPullPages = 2}) async {
     _current();
     if (busy) return;

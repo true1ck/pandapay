@@ -110,13 +110,13 @@ class SimilarChanges {
   /// The same account, rules and sharing choice as [controller].
   factory SimilarChanges.forController(
     ReviewController controller, {
-    Map<String, String> categoryIdBySlug = const {},
+    Map<String, String>? categoryIdBySlug,
   }) => SimilarChanges(
     financial: controller.financial,
     namespace: controller.namespace,
     bundle: controller.bundle,
     controller: controller,
-    categoryIdBySlug: categoryIdBySlug,
+    categoryIdBySlug: categoryIdBySlug ?? controller.categoryIdBySlug,
   );
 
   final FinancialStore financial;

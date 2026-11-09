@@ -52,7 +52,22 @@ class _DeletedTransactionsScreenState
     try {
       final repository = ref.read(userCardsRepositoryProvider);
       if (repository == null) throw StateError('Account is unavailable.');
-      await repository.restoreTransaction(entry.id);
+      // Local first: bring the row back on the phone and let the command
+      // outbox tell the server (it reverses nothing, it re-applies rewards).
+      final commands = await ref.read(commandOutboxProvider.future);
+      commands.enqueue(
+        kind: OutboxCommand.restoreTransaction,
+        target: entry.id,
+        payload: {'id': entry.id},
+        cancels: const [OutboxCommand.ignoreTransaction],
+      );
+      final cache = await ref.read(responseCacheProvider.future);
+      cache.financialStore.markActive(
+        ref.read(cacheNamespaceProvider),
+        entry.id,
+      );
+      ref.read(outboxFlushRequestProvider.notifier).state++;
+      ref.invalidate(pendingOutboxCountProvider);
       // Drop the cached detail, otherwise reopening the row from Activity
       // shows the pre-restore "Deleted" status until the app restarts.
       ref.invalidate(transactionDetailProvider(entry.id));

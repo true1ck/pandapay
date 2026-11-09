@@ -2035,6 +2035,10 @@ app.post('/user-cards', requireAuth, async (req, res) => {
   if (normalizedLast4 !== null && !/^[0-9]{4}$/.test(normalizedLast4)) {
     return res.status(400).json({ error: 'last4 must be exactly 4 digits' });
   }
+  // The whole-history repair is scheduled after the response is sent. Running
+  // it inside this request held the card add (and the app's spinner) for
+  // minutes on an account with a long SMS history.
+  let deferredRepair = null;
   try {
     const result = await withUserClient(req.userId, async (client) => {
       // Serialize adds for the same account/product pair. The UI performs a
@@ -2090,9 +2094,7 @@ app.post('/user-cards', requireAuth, async (req, res) => {
           [normalizedLast4, nickname || null, conflict.userCard.id, req.userId],
         );
         if (linked.rows.length > 0) {
-          await repairSmsHistory(client, req.userId, {
-            reviewCrossSource: true, reviewCardId: linked.rows[0].id,
-          });
+          deferredRepair = { reviewCrossSource: true, reviewCardId: linked.rows[0].id };
           return { linkedExisting: true, userCard: linked.rows[0] };
         }
       }
@@ -2111,9 +2113,7 @@ app.post('/user-cards', requireAuth, async (req, res) => {
       // latency. Discovery/import paths that know the suffix still get the
       // immediate attribution repair.
       if (inserted.rows.length > 0 && normalizedLast4) {
-        await repairSmsHistory(client, req.userId, {
-          reviewCrossSource: true, reviewCardId: inserted.rows[0].id,
-        });
+        deferredRepair = { reviewCrossSource: true, reviewCardId: inserted.rows[0].id };
       }
       return inserted.rows[0];
     });
@@ -2127,9 +2127,12 @@ app.post('/user-cards', requireAuth, async (req, res) => {
       });
     }
     if (result.linkedExisting) {
-      return res.status(200).json({ userCard: result.userCard, linkedExisting: true });
+      res.status(200).json({ userCard: result.userCard, linkedExisting: true });
+      if (deferredRepair) scheduleSmsRepair(req.userId, deferredRepair, 'POST /user-cards');
+      return;
     }
     res.status(201).json({ userCard: result });
+    if (deferredRepair) scheduleSmsRepair(req.userId, deferredRepair, 'POST /user-cards');
   } catch (err) {
     if (err && err.code === '23505' && err.constraint === 'uq_user_cards_active_identity') {
       return res.status(409).json({
@@ -2357,12 +2360,8 @@ app.post('/user-cards/:id/archive', requireAuth, async (req, res) => {
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'user_card not found' });
 
-    try {
-      await withUserClient(req.userId, (client) => repairSmsHistory(client, req.userId));
-    } catch (repairError) {
-      console.error('POST /user-cards/:id/archive repair warning', safeErrorCode(repairError));
-    }
     res.json({ ok: true });
+    scheduleSmsRepair(req.userId, {}, 'POST /user-cards/:id/archive');
   } catch (err) {
     console.error('POST /user-cards/:id/archive error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
@@ -3648,6 +3647,29 @@ async function profileDisplayName(db, userId) {
   } catch (_) {
     return null;
   }
+}
+
+// Runs the whole-history SMS repair after the HTTP response has been sent,
+// one job at a time per account. The repair is O(account history) and used to
+// run inside card add/archive requests, which made the app wait minutes. Errors
+// are logged, never thrown: the card change is already committed.
+const smsRepairChains = new Map();
+function scheduleSmsRepair(userId, options, label) {
+  const previous = smsRepairChains.get(userId) || Promise.resolve();
+  const next = previous
+    .then(async () => {
+      const started = Date.now();
+      await withUserClient(userId, (client) => repairSmsHistory(client, userId, options));
+      console.log(label, 'sms repair finished in', Date.now() - started, 'ms');
+    })
+    .catch((repairError) => {
+      console.error(label, 'sms repair warning', safeErrorCode(repairError));
+    })
+    .finally(() => {
+      if (smsRepairChains.get(userId) === next) smsRepairChains.delete(userId);
+    });
+  smsRepairChains.set(userId, next);
+  return next;
 }
 
 async function repairSmsHistory(client, userId, { reviewCrossSource = false, reviewCardId = null } = {}) {

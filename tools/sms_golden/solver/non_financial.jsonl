@@ -1,0 +1,30 @@
+{"id":"n001","sender":"VM-SHOPXX-P","body":"Flat Rs 500 OFF on orders above Rs 2,999. Use code SAVE500. Valid till 15-Nov. T&C apply.","expect":{"read":"promo","amount":null,"counts":false}}
+{"id":"n002","sender":"AD-LOANCO-P","body":"Pre-approved personal loan of Rs 5,00,000 at 10.5% p.a. EMI starts at Rs 9,500. Apply now.","expect":{"read":"promo","amount":null,"counts":false}}
+{"id":"n003","sender":"VM-NEWBNK","body":"Convert your Rs 12,000 purchase into easy EMIs at just Rs 1,100 per month. Offer valid till 30-Nov.","expect":{"read":"promo","amount":null,"counts":false}}
+{"id":"n004","sender":"VM-NEWBNK-S","body":"Your credit limit has been enhanced to Rs 3,00,000. Enjoy shopping!","expect":{"read":"info","amount":null,"counts":false}}
+{"id":"n005","sender":"VM-TELCOX-P","body":"Recharge with Rs 299 and get 2GB data per day for 28 days. Offer ends today.","expect":{"read":"promo","amount":null,"counts":false}}
+{"id":"n006","sender":"VM-SHOPXX","body":"Your order 4455 worth Rs 1,499 is out for delivery. Pay Rs 1,499 in cash on delivery.","expect":{"read":"info","amount":null,"counts":false}}
+{"id":"n007","sender":"VM-SHOPXX","body":"Your order has been delivered. Rate us and win Rs 100 voucher.","expect":{"read":"promo","amount":null,"counts":false}}
+{"id":"n008","sender":"VM-NEWBNK-S","body":"Dear Customer, Rs 1,00,000 daily UPI limit applies on your account. Visit branch for changes.","expect":{"read":"info","amount":null,"counts":false}}
+{"id":"n009","sender":"VM-NEWBNK-S","body":"Your KYC is due for update. Submit documents before 30-Nov-2026 to avoid account restrictions.","expect":{"read":"info","amount":null,"counts":false}}
+{"id":"n010","sender":"VM-INSURY-P","body":"Secure your family with life cover of Rs 1 crore at Rs 500 per month. Click to get a quote.","expect":{"read":"promo","amount":null,"counts":false}}
+{"id":"n011","sender":"VM-BROKXX-P","body":"Open a demat account today and get Rs 500 brokerage credit. Limited period offer.","expect":{"read":"promo","amount":null,"counts":false}}
+{"id":"n012","sender":"VM-NEWBNK-S","body":"Use OTP 556677 to pay Rs 2,300 at EXAMPLE STORE. Do not share OTP with anyone.","expect":{"read":"info","amount":null,"counts":false}}
+{"id":"n013","sender":"VM-WALLXY","body":"Earn Rs 50 cashback when you pay your electricity bill of Rs 500 or more this month.","expect":{"read":"promo","amount":null,"counts":false}}
+{"id":"n014","sender":"VM-CARDBK-S","body":"Reward points worth Rs 750 will expire on 30-Nov-2026. Redeem now.","expect":{"read":"promo","amount":null,"counts":false}}
+{"id":"n015","sender":"VM-NEWBNK-S","body":"Your cheque book request has been received. It will be delivered in 7 working days.","expect":{"read":"info","amount":null,"counts":false}}
+{"id":"n016","sender":"VM-NEWBNK-S","body":"Your debit card ending 6677 is due for renewal. Annual fee of Rs 499 will apply.","expect":{"read":"info","amount":null,"counts":false}}
+{"id":"n017","sender":"VM-FUNDXX","body":"Start a SIP of Rs 500 per month in Example Equity Fund. Invest now.","expect":{"read":"promo","amount":null,"counts":false}}
+{"id":"n018","sender":"VM-SHOPXX","body":"Payment of Rs 1,299 pending for your cart. Complete your order now before the price changes.","expect":{"read":"promo","amount":null,"counts":false}}
+{"id":"n019","sender":"VM-NEWBNK-S","body":"Rs 25,000 limit available on your pre-approved credit line. Withdraw instantly at the app.","expect":{"read":"promo","amount":null,"counts":false}}
+{"id":"n020","sender":"VM-GAMEXX-P","body":"Deposit Rs 1,000 and get Rs 2,000 bonus. Play now and win big!","expect":{"read":"promo","amount":null,"counts":false}}
+{"id":"n021","sender":"VM-TELCOX","body":"Your data pack of Rs 199 is active till 20-Nov-2026. Balance 1.2GB.","expect":{"read":"info","amount":null,"counts":false}}
+{"id":"n022","sender":"VM-NEWBNK-S","body":"Dear Customer, interest rate on your savings account has changed. New rate 3.5%. Minimum balance Rs 10,000.","expect":{"read":"info","amount":null,"counts":false}}
+{"id":"n023","sender":"VM-SHOPXX","body":"Hi! Your wishlist item dropped in price to Rs 1,499. Grab it before stock runs out.","expect":{"read":"promo","amount":null,"counts":false}}
+{"id":"n024","sender":"VM-RIDEXX","body":"Your ride fare is estimated at Rs 240. Driver arriving in 3 mins.","expect":{"read":"info","amount":null,"counts":false}}
+{"id":"n025","sender":"VM-FOODXX","body":"Your order of Rs 560 is confirmed and will be delivered in 30 mins.","expect":{"read":"info","amount":null,"counts":false}}
+{"id":"n026","sender":"VM-NEWBNK-S","body":"Congratulations! You have been selected for a gold credit card with a limit of Rs 2,00,000. Apply now.","expect":{"read":"promo","amount":null,"counts":false}}
+{"id":"n027","sender":"VM-CARDBK-S","body":"Your credit card XX4410 has been activated. Set your PIN to start using it.","expect":{"read":"info","amount":null,"counts":false}}
+{"id":"n028","sender":"VM-NEWBNK-S","body":"Alert: Never share your card number, CVV or OTP. We will never ask for it. Report fraud at 1800-000-000.","expect":{"read":"info","amount":null,"counts":false}}
+{"id":"n029","sender":"VM-NEWBNK-S","body":"Your statement for Oct 2026 has been sent to your registered email id.","expect":{"read":"info","amount":null,"counts":false}}
+{"id":"n030","sender":"VM-MUSICX","body":"Upgrade to annual plan and save Rs 400. Your plan renews at Rs 99 per month.","expect":{"read":"promo","amount":null,"counts":false}}

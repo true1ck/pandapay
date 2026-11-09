@@ -99,6 +99,29 @@ ON CONFLICT(namespace, event_id) DO UPDATE SET
     final ids = factIds.toSet().toList();
     final out = <String, Event>{};
     const chunk = 500;
+    if (ids.length > chunk) {
+      // There is no index on the legs' fact ids, so every chunked query below
+      // scans the whole event table. For a big instrument that is
+      // ceil(N / 500) full scans; read the table once and match in Dart.
+      final wanted = ids.toSet();
+      final rows = _db.select(
+        '''
+SELECT e.event_id AS event_id, e.payload AS payload,
+       json_extract(j.value, '\$.factId') AS fact_id
+FROM v2_events e, json_each(e.payload, '\$.legs') j
+WHERE e.namespace = ?
+''',
+        [namespace],
+      );
+      for (final r in rows) {
+        final eventId = r['event_id'] as String;
+        if (out.containsKey(eventId)) continue;
+        if (wanted.contains(r['fact_id'])) {
+          out[eventId] = _decode(r['payload'] as String);
+        }
+      }
+      return out.values.toList()..sort((a, b) => a.eventId.compareTo(b.eventId));
+    }
     for (var i = 0; i < ids.length; i += chunk) {
       final part = ids.sublist(
         i,

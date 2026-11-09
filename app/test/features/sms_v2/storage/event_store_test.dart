@@ -67,6 +67,22 @@ void main() {
     expect(store.findByFactIds([_id(2), _id(4)]).length, 2);
   });
 
+  test('a lookup of more than 500 facts finds the same events in one pass', () {
+    store.upsert(_event(1));
+    store.upsert(
+      _event(2, type: EventType.refund, more: [(1, LegRole.original)]),
+    );
+    store.upsert(_event(3, more: [(4, LegRole.creditLeg)]));
+    store.upsert(_event(5));
+    // 600 ids that match nothing, plus fact 1 and fact 4.
+    final ids = [for (var n = 1000; n < 1600; n++) _id(n), _id(1), _id(4)];
+    expect(ids.length, greaterThan(500));
+    expect(
+      [for (final e in store.findByFactIds(ids)) e.eventId],
+      [_id(1), _id(2), _id(3)],
+    );
+  });
+
   test('legs never shrink, and a new leg is added', () {
     store.upsert(_event(1, more: [(2, LegRole.creditLeg)]));
     final stored = store.upsert(

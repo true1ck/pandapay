@@ -69,3 +69,12 @@ test('runtime commands derive frozen balanced revisions and isolate unsupported 
   assert.doesNotMatch(sql,/GRANT EXECUTE ON FUNCTION[^;]*\._(?:post_pair|accept_revision|operation|finish|emit|inspect_source)\(/);
   assert.ok(sql.includes("'pair_balance','pair_credit'"));
 });
+
+test('a later migration turns the shared expense runtime flags on for deployed databases', () => {
+  const sql = fs.readFileSync(path.join(directory, '20261118010000_shared_expenses_enable_runtime_flags.sql'), 'utf8');
+  assert.match(sql, /UPDATE shared_expenses\.settings/);
+  for (const flag of ['reads_enabled', 'proposals_enabled', 'accepted_writes_enabled', 'settlements_enabled']) {
+    assert.match(sql, new RegExp(flag + " *= *true"));
+  }
+  assert.doesNotMatch(sql, /source_guards_enabled/);
+});

@@ -84,6 +84,17 @@ class SettingsSync {
 
   UserSettingsApi? get _api => _ref.read(userSettingsApiProvider);
 
+  /// Keys changed on this phone whose push to the server has not succeeded
+  /// yet. Without this a failed push was lost: the next pull let the server's
+  /// older value overwrite the choice the person had just made.
+  static const _dirtyKey = 'pandapay_app.settings_dirty_v1';
+
+  Future<void> _markDirty(SharedPreferences prefs, String key, bool dirty) async {
+    final keys = (prefs.getStringList(_dirtyKey) ?? const <String>[]).toSet();
+    if (dirty ? !keys.add(key) : !keys.remove(key)) return;
+    await prefs.setStringList(_dirtyKey, keys.toList());
+  }
+
   /// Pulls the server blob and applies it locally, then pushes back any
   /// registry key this device has that the server doesn't.
   ///
@@ -105,10 +116,15 @@ class SettingsSync {
     final prefs = await SharedPreferences.getInstance();
     final applied = <String>[];
     final toSeed = <String, Object?>{};
+    final dirty = (prefs.getStringList(_dirtyKey) ?? const <String>[]).toSet();
 
     for (final pref in kSyncedPrefs) {
       final remote = snapshot.settings[pref.key];
-      if (remote != null) {
+      if (dirty.contains(pref.key)) {
+        // A choice made on this phone that never reached the server: send it
+        // instead of letting the older server value replace it.
+        toSeed[pref.key] = _readLocal(prefs, pref);
+      } else if (remote != null) {
         if (await _writeLocal(prefs, pref, remote)) applied.add(pref.key);
       } else {
         final local = _readLocal(prefs, pref);
@@ -118,6 +134,9 @@ class SettingsSync {
 
     if (toSeed.isNotEmpty) {
       await api.patch(toSeed);
+      for (final key in toSeed.keys) {
+        await _markDirty(prefs, key, false);
+      }
     }
     return applied;
   }
@@ -133,7 +152,21 @@ class SettingsSync {
     }
     if (pref == null) return;
     final prefs = await SharedPreferences.getInstance();
-    await api.patch({key: _readLocal(prefs, pref)});
+    // Remember the change before trying: if the push fails the key stays
+    // dirty and goes out on the next pull or the next push of any key.
+    await _markDirty(prefs, key, true);
+    final pending = <String, Object?>{};
+    for (final candidate in kSyncedPrefs) {
+      if ((prefs.getStringList(_dirtyKey) ?? const <String>[]).contains(
+        candidate.key,
+      )) {
+        pending[candidate.key] = _readLocal(prefs, candidate);
+      }
+    }
+    await api.patch(pending);
+    for (final sent in pending.keys) {
+      await _markDirty(prefs, sent, false);
+    }
   }
 
   /// Reads a registry key out of SharedPreferences as a JSON-encodable value.

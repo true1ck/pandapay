@@ -55,6 +55,9 @@ import '../data/local/financial_read_worker.dart';
 import '../data/local/sms_intake_repository.dart';
 import '../data/local/sms_import_store.dart';
 import '../data/local/sync_queue.dart';
+import '../data/local_first/local_first_cards.dart';
+import '../data/local_first/command_outbox.dart';
+import '../data/local_first/pending_overlays.dart';
 import '../data/local/duplicate_resolution_outbox.dart';
 import '../data/local/transaction_outbox_repository.dart';
 import '../data/local/transaction_attachments_repository.dart';
@@ -642,6 +645,19 @@ final syncQueueProvider = FutureProvider<SyncQueue>((ref) async {
   );
 });
 
+/// Wallet writes that save on the phone first and reach the server through the
+/// sync queue. See [LocalFirstCards].
+final localFirstCardsProvider = FutureProvider<LocalFirstCards>((ref) async {
+  final namespace = ref.watch(cacheNamespaceProvider);
+  final cache = await ref.watch(responseCacheProvider.future);
+  final queue = await ref.watch(syncQueueProvider.future);
+  return LocalFirstCards(
+    store: cache.financialStore,
+    queue: queue,
+    namespace: namespace,
+  );
+});
+
 /// Local edits not yet accepted by the server. Distinct from
 /// [pendingOutboxCountProvider], which counts queued server mutations such as
 /// B6 quick-adds and duplicate-review resolutions.
@@ -670,7 +686,10 @@ final pendingRecoveryStatusProvider = FutureProvider<Map<String, int>>((
         ]) +
         count('duplicate_resolution_outbox', 'namespace=? AND attempts>=5', [
           namespace,
-        ]),
+        ]) +
+        // Commands the server refused (for example ignoring a transaction it
+        // no longer has) stay visible here instead of failing silently.
+        count('command_outbox', 'namespace=? AND parked=1', [namespace]),
     'legacy':
         count('sync_pending_changes', "namespace='legacy'", []) +
         count('transaction_outbox_entries', "namespace='legacy'", []) +
@@ -1899,7 +1918,16 @@ final selectedSpendQueryProvider = StateProvider<SpendReportQuery>(
 );
 
 /// Every active budget with its current-period progress.
+/// Budgets with queued changes (a delete, a new amount) shown on top. Screens
+/// watch this; the server list underneath is [budgetsServerProvider].
 final budgetsProvider = FutureProvider<List<BudgetStatus>>((ref) async {
+  ref.watch(commandOutboxRevisionProvider);
+  final base = await ref.watch(budgetsServerProvider.future);
+  final commands = await ref.watch(commandOutboxProvider.future);
+  return overlayBudgets(base, commands.pendingOf(OverlayCommand.budgetKinds));
+});
+
+final budgetsServerProvider = FutureProvider<List<BudgetStatus>>((ref) async {
   final repo = ref.watch(spendReportsRepositoryProvider);
   if (repo == null) return const [];
   final cache = await _cacheOrNull(ref);
@@ -1957,6 +1985,18 @@ final budgetsProvider = FutureProvider<List<BudgetStatus>>((ref) async {
 /// Detected subscriptions, biggest annual cost first.
 final FutureProvider<RecurringReport?>
 recurringReportProvider = FutureProvider<RecurringReport?>((ref) async {
+  ref.watch(commandOutboxRevisionProvider);
+  final base = await ref.watch(recurringReportServerProvider.future);
+  if (base == null) return null;
+  final commands = await ref.watch(commandOutboxProvider.future);
+  return overlayRecurring(
+    base,
+    commands.pendingOf(OverlayCommand.recurringKinds),
+  );
+});
+
+final FutureProvider<RecurringReport?>
+recurringReportServerProvider = FutureProvider<RecurringReport?>((ref) async {
   if (ref.watch(smsV2ReportingEnabledProvider)) {
     final model = await ref.watch(smsV2LedgerReadModelProvider.future);
     return sms_v2_adapters.recurringReportFromLedger(
@@ -2644,12 +2684,100 @@ final pendingOutboxCountProvider = FutureProvider<int>((ref) async {
   final duplicateOutbox = await ref.watch(
     duplicateResolutionOutboxRepositoryProvider.future,
   );
-  return items.length + duplicateOutbox.pendingCount;
+  final commands = await ref.watch(commandOutboxProvider.future);
+  return items.length + duplicateOutbox.pendingCount + commands.pendingCount;
 });
 
 /// Flushes the outbox the moment connectivity comes back — read once from
 /// _AppShell alongside cacheLifecycleProvider/sessionKeepAliveProvider so
 /// it runs for the app's whole lifetime, not just while Home is visible.
+/// Queued server commands (ignore / restore ...). See [CommandOutbox].
+final commandOutboxProvider = FutureProvider<CommandOutbox>((ref) async {
+  final namespace = ref.watch(cacheNamespaceProvider);
+  final cache = await ref.watch(responseCacheProvider.future);
+  return CommandOutbox(cache.financialStore.database, namespace: namespace);
+});
+
+/// Bumped whenever the command outbox changes, so screens that show queued
+/// changes on top of server data rebuild.
+final commandOutboxRevisionProvider = StateProvider<int>((ref) => 0);
+
+/// Queues a server command and tells watchers. Returns false when it cancelled
+/// an opposite queued command instead (nothing left to send).
+Future<bool> queueCommand(
+  WidgetRef ref, {
+  required String kind,
+  required String target,
+  Map<String, Object?> payload = const {},
+  List<String> cancels = const [],
+}) async {
+  final commands = await ref.read(commandOutboxProvider.future);
+  final queued = commands.enqueue(
+    kind: kind,
+    target: target,
+    payload: payload,
+    cancels: cancels,
+  );
+  ref.read(commandOutboxRevisionProvider.notifier).state++;
+  ref.read(outboxFlushRequestProvider.notifier).state++;
+  ref.invalidate(pendingOutboxCountProvider);
+  return queued;
+}
+
+/// Command kinds the outbox knows how to send. Each must be safe to repeat.
+abstract final class OutboxCommand {
+  static const ignoreTransaction = 'ignore_transaction';
+  static const restoreTransaction = 'restore_transaction';
+}
+
+Map<String, CommandHandler> commandHandlersFor(
+  UserCardsRepository repo, {
+  SpendReportsRepository? spend,
+}) => {
+  OutboxCommand.ignoreTransaction: (p) => repo.ignoreTransaction(
+    p['id'] as String,
+    reason: p['reason'] as String,
+  ),
+  OutboxCommand.restoreTransaction: (p) =>
+      repo.restoreTransaction(p['id'] as String),
+  if (spend != null) ...{
+    // Deleting something the server no longer has is already done.
+    OverlayCommand.budgetDelete: (p) =>
+        _goneIsDone(() => spend.deleteBudget(p['id'] as String)),
+    OverlayCommand.budgetSave: (p) => spend.saveBudget(
+      scope: BudgetScope.values.firstWhere((s) => s.wireValue == p['scope']),
+      scopeRefId: p['scopeRefId'] as String?,
+      period: BudgetPeriod.values.firstWhere(
+        (x) => x.wireValue == p['period'],
+      ),
+      amount: Money.fromRupees((p['amountInr'] as num).toDouble()),
+      rollover: p['rollover'] as bool? ?? false,
+    ),
+    OverlayCommand.recurringDismiss: (p) =>
+        _goneIsDone(() => spend.dismissRecurring(p['id'] as String)),
+    OverlayCommand.recurringUpdate: (p) => spend.updateRecurring(
+      p['id'] as String,
+      displayName: p['displayName'] as String,
+      amountInr: (p['amountInr'] as num).toDouble(),
+      cadenceDays: (p['cadenceDays'] as num).toInt(),
+      nextExpectedOn: DateTime.parse(p['nextExpectedOn'] as String),
+      autopayStatus: p['autopayStatus'] as String,
+    ),
+  },
+};
+
+Future<void> _goneIsDone(Future<void> Function() call) async {
+  try {
+    await call();
+  } on ApiException catch (error) {
+    if (error.statusCode != 404) rethrow;
+  }
+}
+
+/// Bump to ask [outboxFlushProvider] to send queued quick-adds now. A save
+/// writes the outbox and bumps this; it never waits for the delivery.
+final outboxFlushRequestProvider = StateProvider<int>((ref) => 0);
+
 final outboxFlushProvider = Provider<void>((ref) {
   var running = false;
   var disposed = false;
@@ -2664,13 +2792,27 @@ final outboxFlushProvider = Provider<void>((ref) {
       final outbox = await ref.read(outboxRepositoryProvider.future);
       if (disposed || outbox.namespace != namespace) return;
       final sent = await outbox.flush(repo);
+      final commands = await ref.read(commandOutboxProvider.future);
+      final commandsSent = await commands.flush(
+        commandHandlersFor(repo, spend: ref.read(spendReportsRepositoryProvider)),
+      );
+      if (commandsSent > 0) {
+        // Drop the cached server lists so the next read shows what the server
+        // now holds, not the snapshot taken before these changes.
+        final cache = await ref.read(responseCacheProvider.future);
+        await cache.clear(_scopedCacheKey(ref, 'budgets'));
+        await cache.clear(_scopedCacheKey(ref, 'recurring_report'));
+        ref.read(commandOutboxRevisionProvider.notifier).state++;
+        ref.invalidate(budgetsServerProvider);
+        ref.invalidate(recurringReportServerProvider);
+      }
       final duplicateOutbox = await ref.read(
         duplicateResolutionOutboxRepositoryProvider.future,
       );
       final duplicateSent = await duplicateOutbox.flush(repo);
       if (!disposed &&
           ref.read(cacheNamespaceProvider) == namespace &&
-          (sent > 0 || duplicateSent > 0)) {
+          (sent > 0 || duplicateSent > 0 || commandsSent > 0)) {
         ref.invalidate(pendingOutboxCountProvider);
         ref.invalidate(transactionsProvider);
         ref.invalidate(utilizationTransactionsProvider);
@@ -2689,6 +2831,7 @@ final outboxFlushProvider = Provider<void>((ref) {
   ref.listen(isOnlineProvider, (_, next) {
     if (next.valueOrNull == true) unawaited(flush());
   });
+  ref.listen(outboxFlushRequestProvider, (_, _) => unawaited(flush()));
   ref.listen(cacheNamespaceProvider, (_, next) {
     if (next == 'signed-out') {
       return;

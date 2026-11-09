@@ -11,7 +11,7 @@ const COHORTS = ['testers', 'pct5', 'pct25', 'all'];
 const COHORT_RANK = { testers: 0, pct5: 1, pct25: 2, all: 3 };
 // `all` is minted first so the first import yields bundle 1 for everyone.
 const MINT_ORDER = ['all', 'pct25', 'pct5', 'testers'];
-const PART_KEYS = ['minEngineVersion', 'taxonomyVersion', 'senders', 'ignoreRules', 'counterpartyPurposes', 'linkRules', 'categoryRules', 'merchantAliases'];
+const PART_KEYS = ['minEngineVersion', 'taxonomyVersion', 'senders', 'ignoreRules', 'counterpartyPurposes', 'linkRules', 'categoryRules', 'merchantAliases', 'solverPack'];
 const BUNDLE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const PARTS_KEY = '@parts';
 
@@ -93,6 +93,8 @@ function assembleBundle({ manifest, rules, parts, bundleVersion, createdAt, expi
     linkRules: parts.linkRules || [],
     categoryRules: parts.categoryRules || [],
     merchantAliases: parts.merchantAliases || [],
+    // Optional: a bundle with no solver pack must stay byte-identical to before.
+    ...(parts.solverPack ? { solverPack: parts.solverPack } : {}),
     signature: null,
   };
   return bundle;

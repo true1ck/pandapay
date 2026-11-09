@@ -163,12 +163,20 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
     final local = repo == null
         ? await ref.read(localUserCardsRepositoryProvider.future)
         : null;
-    await _run(
-      () async => repo != null
-          ? repo.setDefaultCard(widget.card.id)
-          : local!.setDefaultCard(widget.card.id),
-      '$_displayName is now your default card.',
-    );
+    // Signed in: save on the phone and let the sync queue carry it to the
+    // server. The button must not wait on the network.
+    final localFirst = repo != null
+        ? await ref.read(localFirstCardsProvider.future)
+        : null;
+    await _run(() async {
+      if (localFirst != null) {
+        localFirst.setDefault(widget.card.id);
+        ref.invalidate(pendingSyncCountProvider);
+        unawaited(ref.read(syncEngineProvider).sync());
+      } else {
+        await local!.setDefaultCard(widget.card.id);
+      }
+    }, '$_displayName is now your default card.');
   }
 
   Future<void> _confirmRemove() async {

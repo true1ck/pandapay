@@ -131,6 +131,25 @@ List<RecurringSeries> subscriptionsFromLedger(
             )
             .toList()
           ..sort((a, b) => a.effectiveAt.compareTo(b.effectiveAt));
+    // A renewal the service announced ("will renew on 12 Nov") is a better guess
+    // for the next charge than last charge plus cadence. It adds no charge and
+    // no amount: an announcement is not money moved.
+    final announced =
+        (byId.values
+                .whereType<v2.AttemptFact>()
+                .where(
+                  (f) =>
+                      f.status == v2.AttemptStatus.scheduled &&
+                      f.dueAt != null &&
+                      f.dueAt!.isAfter(now) &&
+                      (last == null ||
+                          f.dueAt!.isAfter(last.$1.occurredAt)) &&
+                      _seriesKey(f) == group.key,
+                )
+                .toList()
+              ..sort((a, b) => a.dueAt!.compareTo(b.dueAt!)))
+            .firstOrNull
+            ?.dueAt;
     final cancelled =
         latest?.phase == v2.MandatePhase.revoked ||
         latest?.phase == v2.MandatePhase.expired;
@@ -173,7 +192,7 @@ List<RecurringSeries> subscriptionsFromLedger(
             ? null
             : Money.fromPaise(_amount(latest, v2.AmountRole.ceiling)!),
         lastSeenOn: last?.$1.occurredAt,
-        nextExpectedOn: cancelled ? null : next,
+        nextExpectedOn: cancelled ? null : (announced ?? next),
         startDate:
             mandates.firstOrNull?.effectiveAt ??
             paid.firstOrNull?.$1.occurredAt,
