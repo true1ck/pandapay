@@ -610,6 +610,28 @@ void main() {
   );
 
   testWidgets(
+    'a phone-only v2 payment never asks the server for private splits',
+    (tester) async {
+      final id = 'v2:${'a' * 64}';
+      final repo = _FakeUserCardsRepository(
+        TransactionEntry(
+          id: id,
+          amount: Money.fromRupees(1000),
+          occurredAt: DateTime(2026, 3, 1),
+          source: 'sms',
+          status: 'active',
+        ),
+        // The real API answers 400 "invalid transaction id" for this shape.
+        failSplits: true,
+      );
+      await _pump(tester, repo: repo, transactionId: id);
+
+      expect(find.textContaining('Could not load split details'), findsNothing);
+      expect(find.text('Retry'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'an ignored transaction shows the exclusion banner and no ignore action',
     (tester) async {
       final repo = _FakeUserCardsRepository(

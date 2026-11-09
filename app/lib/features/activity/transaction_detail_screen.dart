@@ -265,7 +265,23 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     _loadSplits();
   }
 
+  /// Phone-only SMS payments carry ids like `v2:<hash>` until they sync; the
+  /// private-split endpoint only knows server UUIDs, so there is nothing to
+  /// load (and nothing to fail) for them yet.
+  bool get _hasServerId =>
+      !widget.entry.id.startsWith('v2:') && !widget.entry.id.startsWith('local');
+
   Future<void> _loadSplits() async {
+    if (!_hasServerId) {
+      if (mounted) {
+        setState(() {
+          _loadingSplits = false;
+          _splitLoadError = null;
+          _splits = const [];
+        });
+      }
+      return;
+    }
     try {
       final store = await ref.read(splitRepositoryProvider.future);
       if (!mounted) return;
@@ -570,6 +586,16 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
 
   Future<void> _showSplitSheet() async {
     if (_savingSplits) return;
+    if (!_hasServerId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Private allocations open once this payment has synced. You can still share it with people.',
+          ),
+        ),
+      );
+      return;
+    }
     // A detail row can be opened before the one-time split read has settled.
     // Finish that read before opening the editor so an existing split is not
     // accidentally presented as a new split and then overwritten.

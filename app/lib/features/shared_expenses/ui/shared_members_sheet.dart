@@ -82,8 +82,15 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
     _phoneField.addListener(_onFieldChanged);
   }
 
+  // Controllers also notify on cursor and focus moves; only a real edit of
+  // the text should dismiss a validation message.
+  String _seenName = '', _seenPhone = '';
   void _onFieldChanged() {
-    if (_formError != null) {
+    final changed =
+        _nameField.text != _seenName || _phoneField.text != _seenPhone;
+    _seenName = _nameField.text;
+    _seenPhone = _phoneField.text;
+    if (changed && _formError != null) {
       setState(() => _formError = null);
     }
   }

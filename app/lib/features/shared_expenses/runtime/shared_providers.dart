@@ -56,7 +56,11 @@ final sharedExpensesRuntimeProvider =
         isCurrent: current,
       );
       ref.onDispose(runtime.dispose);
-      await runtime.refresh();
+      // Only the capability flags gate the screens; the slower sync (queue
+      // flush and change pull) runs behind the UI instead of holding a spinner.
+      await runtime.ensureCapabilities();
+      if (!current()) throw const SharedRuntimeUnavailable();
+      unawaited(runtime.refresh());
       return runtime;
     });
 
