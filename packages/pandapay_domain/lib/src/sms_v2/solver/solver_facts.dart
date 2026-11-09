@@ -66,6 +66,12 @@ class SolverFacts {
         return 'UPCOMING';
       case SolverRead.mandate:
         return 'MANDATE';
+      case SolverRead.redemption:
+        return 'REDEMPTION';
+      case SolverRead.holdRelease:
+        return 'HOLD-RELEASE';
+      case SolverRead.requestPending:
+        return 'REQUEST-PENDING';
       case SolverRead.balance:
         return 'BALANCE';
       case SolverRead.failed:
@@ -460,6 +466,54 @@ class SolverFacts {
               'status': d.attemptStatus ?? 'failed',
               'direction': 'debit',
               'purpose': purpose ?? 'purchase',
+            },
+            amounts: [posted(minor)],
+            instrumentJson: instrument(),
+          ),
+        );
+      case SolverRead.redemption:
+        final minor = d.minor;
+        if (minor == null || d.unit != 'INR') return null;
+        // Activity only: a transfer is shown but never counted as spending or income.
+        facts.add(
+          envelope(
+            'movement',
+            0,
+            attrs: {'direction': 'debit', 'purpose': 'transfer', 'rail': 'wallet'},
+            amounts: [posted(minor)],
+            instrumentJson: instrument(),
+          ),
+        );
+      case SolverRead.holdRelease:
+        final minor = d.minor;
+        if (minor == null || d.unit != 'INR') return null;
+        final holdPurpose = const {'ipo_asba', 'upi_mandate_block', 'preauth', 'lien', 'other'}.contains(d.purpose)
+            ? d.purpose
+            : 'other';
+        facts.add(
+          envelope(
+            'hold',
+            0,
+            attrs: {'phase': 'released', 'purpose': holdPurpose},
+            amounts: [
+              {'role': 'released', 'minor': minor, 'unit': 'INR'},
+            ],
+            instrumentJson: instrument(),
+          ),
+        );
+      case SolverRead.requestPending:
+        final minor = d.minor;
+        if (minor == null || d.unit != 'INR') return null;
+        var pendingPurpose = d.purpose;
+        if (!validPurpose(pendingPurpose)) pendingPurpose = null;
+        facts.add(
+          envelope(
+            'attempt',
+            0,
+            attrs: {
+              'status': 'pending',
+              'direction': 'debit',
+              'purpose': pendingPurpose ?? 'purchase',
             },
             amounts: [posted(minor)],
             instrumentJson: instrument(),

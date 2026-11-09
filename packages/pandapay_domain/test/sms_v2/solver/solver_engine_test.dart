@@ -41,6 +41,12 @@ RuleBundle _bundle({Map<String, Object?>? pack, bool withPack = true}) =>
       'taxonomyVersion': 1,
       'senders': [
         {
+          'brand': 'SAMPLEWAL',
+          'issuerSlug': 'samplewal',
+          'issuerKind': 'wallet',
+          'aliases': <String>[],
+        },
+        {
           'brand': 'KNOWNBK',
           'issuerSlug': 'knownbk',
           'issuerKind': 'bank',
@@ -421,6 +427,89 @@ void main() {
         expect(d.read, SolverRead.credit, reason: body);
         expect(d.debitDirection, isFalse, reason: body);
       }
+    });
+
+    test('a currency written after the number is still an amount', () {
+      final d = _solve('Dear Customer, your A/C XX9988 has been successfully Credited with 12345INR on 09-Nov-26 10:15:00. Check now - https://x.example');
+      expect(d.read, SolverRead.credit);
+      expect(d.minor, 1234500);
+      expect(_solve('Rs 500 debited from A/c XX1111 on 08-Nov').minor, 50000);
+      expect(SolverText.parse('on 05-11-2026 at 12345 hours').toks.where((t) => t.kind == TokKind.amt), isEmpty);
+    });
+
+    test('reward coins redeemed are shown in activity but never counted as spending or income', () {
+      final d = _solve('Sample coins redemption transaction of Rs 120.00 having transaction id 99887766 is successful. Regards, Sample Pay Team');
+      expect(d.read, SolverRead.redemption);
+      expect(d.countsInTotals, isFalse);
+      final m = _facts(d).facts.single as MovementFact;
+      expect(m.purpose, MovementPurpose.transfer);
+      expect(m.direction, Direction.debit);
+    });
+
+    test('a dividend announcement with only per-share amounts is not money; one with a total still is', () {
+      final announce = _solve('3rd Interim Dividend of Rs 2.50 per share for 2026-27 by Sample Ltd has been credited into your bank account on 08-Nov-2026. Team Sample');
+      expect(announce.read, SolverRead.info);
+      expect(announce.accepted, isTrue);
+      final paise = _solve('4th Dividend of 50 paise per share for 2026-27 by Sample Ltd has been credited into your bank account on 08-Nov-2026.');
+      expect(paise.countsInTotals, isFalse);
+      final alert = _solve('Dividend of Rs 1,240.00 (Rs 2.50 per share) credited to your bank A/c XX2209 on 08-Nov-2026.');
+      expect(alert.read, SolverRead.credit);
+      expect(alert.minor, 124000);
+    });
+
+    test('an IPO that was not allotted releases its blocked amount: a hold released, not a failure', () {
+      final d = _solve('Dear Customer, we are sorry to inform you that no shares have been allotted to your ASBA application no. 123456 for Sample Limited dated 05-Nov-2026. The blocked amount of Rs 14,250.00 is now available for use.');
+      expect(d.read, SolverRead.holdRelease);
+      final h = _facts(d).facts.single as HoldFact;
+      expect(h.phase, HoldPhase.released);
+      expect(h.purpose, HoldPurpose.ipoAsba);
+      expect(h.amount(AmountRole.released)!.minor, 1425000);
+    });
+
+    test('"we have received your request" is a pending attempt, not a transaction', () {
+      final d = _solve('We confirm receipt of your request for Purchase of Rs 5,000.00 in Folio 998877 under Sample Tax Fund on 08-Nov-2026. We shall confirm your transaction details shortly.');
+      expect(d.read, SolverRead.requestPending);
+      final a = _facts(d).facts.single as AttemptFact;
+      expect(a.status, AttemptStatus.pending);
+      expect(a.purpose, MovementPurpose.investment);
+      expect(d.countsInTotals, isFalse);
+    });
+
+    test('a successful request to cancel, pause or change a mandate is a mandate update', () {
+      for (final (body, phase) in [
+        ('Your request to cancel the UPI AutoPay Mandate of Rs 299 towards SAMPLE MUSIC is successful. Ref no. 1234', MandatePhase.revoked),
+        ('Your request to pause the UPI AutoPay Mandate of Rs 299 towards SAMPLE MUSIC is successful. Ref no. 1234', MandatePhase.paused),
+        ('Your request to modify the UPI AutoPay Mandate of Rs 299 towards SAMPLE MUSIC was successful.', MandatePhase.modified),
+      ]) {
+        final d = _solve(body);
+        expect(d.read, SolverRead.mandate, reason: body);
+        expect((_facts(d).facts.single as MandateFact).phase, phase, reason: body);
+      }
+    });
+
+    test('a request that is only acknowledged ("has been received") does not change a mandate', () {
+      final d = _solve('Your request to cancel the UPI AutoPay Mandate of Rs 299 towards SAMPLE MUSIC has been received and will be processed shortly.');
+      expect(d.read, isNot(SolverRead.mandate));
+    });
+
+    test('a wallet top-up with long wording is a top-up', () {
+      final d = _solve('Your Wallet Recharge through UPI via Online Bank Payment bearing Order ID 5566, initiated on 08-Nov-2026 at 10:15 AM was successful and your Wallet Account has been recharged with Rs 500.00. Your current balance is Rs 640.00');
+      expect(d.read, SolverRead.walletTopup);
+      expect(d.accepted, isTrue);
+    });
+
+    test('a refund from a registered wallet sender is linked to that wallet; from an unknown sender it stays in review', () {
+      final engine = RuleEngine();
+      const body = 'Refund of Rs 799.00 for your order is successfully processed to your balance.';
+      final known = engine.interpretDetailed(_msg('VM-SAMPLEWAL-S', body), _bundle(), appVersion: '2.0.0');
+      expect(known.result.outcome, InterpretOutcome.matched);
+      final m = known.result.facts.single as MovementFact;
+      expect(m.direction, Direction.credit);
+      expect(m.purpose, MovementPurpose.refund);
+      expect(m.instrument?.kind, InstrumentKind.wallet);
+      expect(m.instrument?.issuerSlug, 'samplewal');
+      final unknown = engine.interpretDetailed(_msg('VM-OTHERXX-S', body), _bundle(), appVersion: '2.0.0');
+      expect(unknown.result.outcome, InterpretOutcome.unknown);
     });
 
     test('a failure that is not about a payment is not financial; one that is stays in review', () {

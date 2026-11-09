@@ -49,6 +49,8 @@ final RegExp _tokenRe = RegExp(
   r'(?<url>https?://\S+|www\.\S+)'
           r'|(?<vpa>[A-Za-z0-9][\w.\-+*]*@[A-Za-z][\w\-]*)'
           r'|(?<amt>(?<![A-Za-z])(?<cur>rs\.?|inr|₹|usd|us\$|\$|eur|gbp|aed|sgd)\s*:?\s*(?<val>\d[\d,]*(?:\.\d+)?)(?:\s*/-)?)'
+          // Currency AFTER the number: "12345INR", "500 Rs".
+          r'|(?<amt2>(?<![\d.,])(?<val2>\d[\d,]*(?:\.\d+)?)\s?(?<cur2>inr|rs\.?|₹)(?![A-Za-z]))'
           r'|(?<date>\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?'
           r'|\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}'
           r'|\d{1,2}[-\s]?' +
@@ -168,6 +170,16 @@ class SolverText {
           start: start,
           end: end,
           sentence: sentence,
+        );
+      } else if (m.namedGroup('amt2') != null) {
+        tok = Tok(
+          kind: TokKind.amt,
+          text: text,
+          start: start,
+          end: end,
+          sentence: sentence,
+          minor: _minorOf(m.namedGroup('val2')!),
+          unit: _unitOf(m.namedGroup('cur2')!),
         );
       } else if (m.namedGroup('amt') != null) {
         final val = m.namedGroup('val')!;

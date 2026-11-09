@@ -84,6 +84,16 @@ const solverLexiconNames = <String>[
   'merchantCue', // words before the merchant a mandate or subscription is for
   'loanWord',
   'financialWord', // payment, transaction, card, account ...: a "failed" notice with these is about money
+  'coinRedemption', // reward coins / points redeemed: shown in activity, never counted
+  'dividendNotice', // "dividend": with only per-share amounts it is an announcement, not money received
+  'perShare', // "per share": marks an amount as per-share
+  'holdRelease', // "blocked amount ... now available": a hold released (entries carry kind: a hold purpose)
+  'pendingRequest', // "we have received your request": nothing has moved yet
+  'coinRedemption', // reward coins / points redeemed: shown in activity, never counted
+  'dividendNotice', // "dividend": with only per-share amounts it is an announcement, not money received
+  'perShare', // "per share": marks an amount as per-share
+  'holdRelease', // "blocked amount ... now available": a hold released (entries carry kind: a hold purpose)
+  'pendingRequest', // "we have received your request": nothing has moved yet
   'nonMoneyUnit', // "points", "coins": completed wording about something that is not money
 ];
 

@@ -270,3 +270,26 @@ This is a check of the real pipeline's behaviour on one person's inbox, not an a
 **The 36 still in Needs Review, and why**
 - EMI nudges with an amount but no due date (6); coin redemptions (3); loan-sounding wallet credits (6, held on purpose); dividends that state only a per-share amount (6); foreign-currency card spends with no rupee amount (2); IPO "no shares allotted, blocked amount available" (2, existing hold logic); wallet top-up via UPI with long wording (2); refund wording with no named account (3); a mutual-fund purchase request acknowledgement; a deposit received; an AutoPay mandate request whose verb is not recognised; a "payment could not be completed" notice; interest-cycle notice; a few others.
 - Owner help wanted on: the Axis "Processed payment of Rs X for XX1234 ... instant cashback" family (15 messages, counted in the earlier replay but filtered by the gate in the real app) and the refund-to-wallet family: is each a card bill payment, a purchase, or a refund credit?
+
+## 13. Owner direction, 10 Nov 2026 (second pass): what was built and what needs a history chain
+
+**Old filters checked:** the app's intake gate drops 2,525 non-security messages on the real inbox (526 promotional, 524 numeric senders, 1,387 with no financial words, 246 no financial signal, 38 promotional-message, 51 demat). Among everything it drops, none from a sender the gate hard-drops is read as money by the rules or the solver; the 247 that rules do read as financial come from bank-like senders and the gate already lets them through. The old filters are effective and are not duplicated in the solver.
+
+**Built from the owner's direction (all general rules):**
+- Coin / reward redemption: shown in activity, never counted. Written as a `transfer` movement (the existing non-counting kind), so it never reaches spending or income.
+- Dividend announcement with only per-share amounts: not money (the amount received arrives in the bank's own credit alert, which counts as dividend income). A per-share amount is now never picked as the money, even when a message also states a total.
+- IPO not allotted ("blocked amount ... now available"): a released `hold` (purpose ipo_asba), so it appears as history next to the original block and links through the existing IPO link rule.
+- "We have received your request ... Purchase of Rs X": a pending attempt (investment when fund words are present), counted nowhere until the confirmation arrives.
+- "Your request to cancel / pause / resume / modify the AutoPay mandate ... is successful": a mandate update with the right phase. A request that is only acknowledged is not.
+- Wallet identification from the header: a credit or debit from a sender the registry knows as a wallet is attributed to that wallet (instrument kind wallet), so a refund with no account named can be accepted and then joined to the matching purchase by the existing refund link rule (same instrument and amount). From an unregistered sender it stays in review.
+- Wallet top-up with long wording, and a currency written after the number ("12345INR").
+
+**Result with the app's real gate on the real inbox:** reach the engine 2,559; Needs Review 240 without the solver, **20** with it; 0 rule-matched messages changed.
+
+**Still in Needs Review (20) and why:** six EMI nudges with an amount but no due date; four wallet credits from a "Loans" brand (held: may be a loan disbursal); two foreign-currency spends with no rupee amount; two refund notices with no wallet identified; one deposit received; one "payment could not be completed"; a few single notices.
+
+**Needs a history chain (not built yet, designed):** the pipeline would give the solver a small read-only context of what it has already stored, and a date-less message would be completed from its own past.
+1. EMI nudge with no date: find the earlier bill or EMI message from the same biller identity (issuer or biller name, same amount) that has a due date; infer the same day of month on or after the arrival day; emit the bill with confidence below 0.7 so it also lands as a one-tap review item ("due on the 5th like last month?").
+2. Refund with no account: if the sender is not a registered wallet, find an earlier spend of the same amount in the last 90 days; if exactly one matches, take its instrument and let the refund link rule join them.
+3. A bank "deposit received" or a mutual-fund purchase confirmation: join to the pending request or deposit by amount and date within a short window.
+This needs a new read-only argument on the engine and a store lookup in the app pipeline, so it is a separate piece of work with its own tests.

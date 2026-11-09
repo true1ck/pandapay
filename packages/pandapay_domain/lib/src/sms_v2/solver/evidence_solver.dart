@@ -35,6 +35,15 @@ enum SolverRead {
 
   /// A standing instruction set up, changed or ended.
   mandate,
+
+  /// Reward coins / points redeemed for value: activity only, never spending.
+  redemption,
+
+  /// Money that was blocked (an IPO application) is available again.
+  holdRelease,
+
+  /// "We have received your request": acknowledged, nothing has moved yet.
+  requestPending,
   balance,
   failed,
   promo,
@@ -207,6 +216,7 @@ class EvidenceSolver {
     String body, {
     DateTime? observedAt,
     String? senderBrand,
+    String? senderKind,
   }) {
     final capped = body.length > maxBody ? body.substring(0, maxBody) : body;
     final text = SolverText.parse(capped);
@@ -215,6 +225,7 @@ class EvidenceSolver {
       text,
       observedAt ?? DateTime.now().toUtc(),
       senderBrand,
+      senderKind,
     ).run();
   }
 }
@@ -222,10 +233,13 @@ class EvidenceSolver {
 const _istOffset = Duration(hours: 5, minutes: 30);
 
 class _Run {
-  _Run(this.pack, this.text, this.observedAt, this.senderBrand)
+  _Run(this.pack, this.text, this.observedAt, this.senderBrand, this.senderKind)
     : toks = text.toks;
 
   final String? senderBrand;
+
+  /// What the sender registry says the sender is (`wallet`, `bank`, ...), or null.
+  final String? senderKind;
 
   final SolverPack pack;
   final SolverText text;
@@ -295,6 +309,12 @@ class _Run {
         if (toks[i].kind == TokKind.amt) i,
     ];
     final role = _roles(amts);
+    // "Rs 2.50 per share" is a rate, never an amount received or paid: the amount
+    // right before "per share" is marked so no later step can pick it as the money.
+    for (final h in hits('perShare')) {
+      final before = amts.where((a) => a < h.start && h.start - a <= 3).toList();
+      if (before.isNotEmpty) role[before.last] = 'per_share';
+    }
     final eligible = [
       for (final a in amts)
         if (role[a] == null || role[a] == 'fee') a,
@@ -353,7 +373,7 @@ class _Run {
     }
     // Wording that itself says a specific kind of movement happened
     // ("added to your wallet") is a completion cue.
-    if (cues.isEmpty) {
+    {
       for (final name in const [
         'walletTopup',
         'cardPayment',
@@ -381,6 +401,52 @@ class _Run {
         return _done(SolverRead.failed, SolverVerdict.candidate, 0.4);
       }
       return _failed(failed.first, eligible, role);
+    }
+
+    // 1b. Reward coins redeemed: money-shaped, but not money out of an account.
+    final redeem = hits('coinRedemption');
+    if (redeem.isNotEmpty && payable.isNotEmpty && toks[payable.first].unit == 'INR') {
+      reasons.add('redemption: "${_s(redeem.first)}"');
+      return _done(SolverRead.redemption, SolverVerdict.accept, 1, amount: toks[payable.first]);
+    }
+
+    // 1c. A dividend announcement that states only per-share amounts: the amount
+    // received is in the bank's own credit alert, so this one is not money.
+    final perShare = hits('perShare');
+    if (hits('dividendNotice').isNotEmpty &&
+        perShare.isNotEmpty &&
+        amts.every((a) => role[a] == 'per_share')) {
+      reasons.add('dividend announcement with per-share amounts only');
+      return _done(SolverRead.info, SolverVerdict.accept, 1);
+    }
+
+    // 1d. Blocked money available again (an IPO that was not allotted).
+    final release = hits('holdRelease');
+    if (release.isNotEmpty && payable.isNotEmpty && toks[payable.first].unit == 'INR') {
+      reasons.add('hold released: "${_s(release.first)}"');
+      return _done(
+        SolverRead.holdRelease,
+        SolverVerdict.accept,
+        1,
+        amount: toks[payable.first],
+        purpose: release.first.entry.kind ?? 'other',
+      );
+    }
+
+    // 1e. "We have received your request": acknowledged, nothing has moved yet.
+    final pending = hits('pendingRequest');
+    if (pending.isNotEmpty &&
+        payable.isNotEmpty &&
+        toks[payable.first].unit == 'INR' &&
+        !cues.any((c) => c.how == 'debit' || c.how == 'credit' || c.how == 'biller')) {
+      reasons.add('request acknowledged: "${_s(pending.first)}"');
+      return _done(
+        SolverRead.requestPending,
+        SolverVerdict.accept,
+        1,
+        amount: toks[payable.first],
+        purpose: hits('investment').isNotEmpty ? 'investment' : 'purchase',
+      );
     }
 
     // 2. Nothing completed: notices about what will, or did not yet, happen. A
@@ -851,7 +917,9 @@ class _Run {
     }
     final rail = hits('rail').isNotEmpty;
     final owns = hits('ownMarker');
-    final named = hits('instrumentKind').any(
+    final named =
+        senderKind == 'wallet' ||
+        hits('instrumentKind').any(
       (k) =>
           k.entry.kind != 'phone' &&
           owns.any(
@@ -985,7 +1053,10 @@ class _Run {
     }
     // A purpose-only cue ("payment of ... successful") with no account or payee
     // is too thin to count: "card payment" could be the bill or a purchase.
-    if (cue.how == 'implied' && mask == null && party == null) {
+    if (cue.how == 'implied' &&
+        (kind == SolverRead.debit || kind == SolverRead.credit) &&
+        mask == null &&
+        party == null) {
       conflict = true;
       reasons.add('inferred from purpose only, with no instrument or payee');
     }
@@ -1027,7 +1098,8 @@ class _Run {
       originalMinor: origMinor,
       originalUnit: origUnit,
       mask: mask?.$1,
-      instrumentKind: _instrumentWire(mask?.$2, kind),
+      instrumentKind:
+          _instrumentWire(mask?.$2, kind) ?? (senderKind == 'wallet' ? 'wallet' : null),
       party: merchantParty?.$1,
       partyIsVpa: merchantParty?.$2 ?? false,
       debitDirection: kind == SolverRead.cardPayment && cue.how == 'biller'

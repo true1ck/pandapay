@@ -353,6 +353,22 @@
       {
         "p": "mandate|autopay|auto-pay|subscription * * resumed|reactivated",
         "kind": "resumed"
+      },
+      {
+        "p": "request to cancel|revoke|delete|remove|stop * * mandate * * successful|successfully|processed|completed",
+        "kind": "revoked"
+      },
+      {
+        "p": "request to pause|suspend * * mandate * * successful|successfully|processed|completed",
+        "kind": "paused"
+      },
+      {
+        "p": "request to resume * * mandate * * successful|successfully|processed|completed",
+        "kind": "resumed"
+      },
+      {
+        "p": "request to modify|change|update|edit * * mandate * * successful|successfully|processed|completed",
+        "kind": "modified"
       }
     ],
     "frequency": [
@@ -1277,6 +1293,41 @@
       "nach",
       "paid",
       "charged"
+    ],
+    "coinRedemption": [
+      "coins redemption",
+      "coin redemption",
+      "coins redeemed",
+      "coin redeemed",
+      "redemption of coins",
+      "points redemption"
+    ],
+    "dividendNotice": [
+      "dividend"
+    ],
+    "perShare": [
+      "per share"
+    ],
+    "holdRelease": [
+      {
+        "p": "blocked amount * * available|released|unblocked",
+        "kind": "ipo_asba"
+      },
+      {
+        "p": "no shares * * allotted",
+        "kind": "ipo_asba"
+      },
+      {
+        "p": "amount * * unblocked|released",
+        "kind": "other"
+      }
+    ],
+    "pendingRequest": [
+      "receipt of your request",
+      "we shall confirm your transaction",
+      "request has been received",
+      "request is received",
+      "request * has been received"
     ]
   }
 }

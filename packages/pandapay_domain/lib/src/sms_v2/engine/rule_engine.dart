@@ -258,7 +258,12 @@ class RuleEngine implements SmsInterpreter {
     if (solver == null) return null;
     final SolverDecision decision;
     try {
-      decision = solver.solve(msg.body, observedAt: msg.observedAt, senderBrand: brand);
+      decision = solver.solve(
+        msg.body,
+        observedAt: msg.observedAt,
+        senderBrand: brand,
+        senderKind: cb.sendersByBrand[brand]?.issuerKind.wire,
+      );
     } on Object {
       return null;
     }
