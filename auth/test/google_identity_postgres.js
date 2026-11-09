@@ -26,6 +26,11 @@ const pool = new Pool(fixtureConfig(process.env.AUTH_GOOGLE_IDENTITY_TEST_URL));
 const migration = fs.readFileSync(path.join(__dirname, '../db/migrations/0006_google_oauth_identity.sql'), 'utf8');
 const base = fs.readFileSync(path.join(__dirname, '../db/pandapay-auth/init.sql'), 'utf8');
 const contacts = fs.readFileSync(path.join(__dirname, '../db/migrations/9001_active_contact_uniqueness.sql'), 'utf8');
+// The sign-in code now matches accounts on users.email_canonical (one mailbox is
+// one account), so the fixture needs the columns and trigger these two add, in
+// the same order the production runner applies them.
+const accountColumns = ['0015_claimed_phone.sql', '0016_email_canonical.sql']
+  .map(file => fs.readFileSync(path.join(__dirname, '../db/migrations', file), 'utf8'));
 
 async function transaction(work) {
   const client = await pool.connect();
@@ -51,6 +56,7 @@ async function main() {
   if (existing.rows[0].count !== 0) throw new Error('Fixture refuses a non-empty disposable database');
   await pool.query(base);
   await transaction(client => client.query(contacts));
+  for (const sql of accountColumns) await transaction(client => client.query(sql));
   await migrate();
   await migrate();
   assert.equal((await pool.query("SELECT count(*)::int AS count FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND column_name='google_id'")).rows[0].count, 0);
