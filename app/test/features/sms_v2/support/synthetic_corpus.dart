@@ -25,9 +25,11 @@ class SyntheticCorpus {
     int spanDays = 730,
   }) {
     final random = Random(seed);
+    // The picks below index into these lists, so their order must not depend on
+    // the file system: macOS and Linux list a folder in different orders, and an
+    // unsorted list drew a different sample for the same seed on CI.
     final scenarios = <List<_Template>>[
-      for (final file
-          in Directory('../tools/sms_golden/scenarios').listSync().whereType<File>())
+      for (final file in _filesUnder('../tools/sms_golden/scenarios'))
         if (file.path.endsWith('.json'))
           [
             for (final m
@@ -41,8 +43,7 @@ class SyntheticCorpus {
           ],
     ];
     final golden = <_Template>[];
-    for (final file
-        in Directory('../tools/sms_golden/cases').listSync(recursive: true).whereType<File>()) {
+    for (final file in _filesUnder('../tools/sms_golden/cases', recursive: true)) {
       if (!file.path.endsWith('.json')) continue;
       for (final m in (jsonDecode(file.readAsStringSync()) as Map)['messages'] as List) {
         golden.add(
@@ -104,6 +105,11 @@ class SyntheticCorpus {
     out.sort((a, b) => a.receivedAt.compareTo(b.receivedAt));
     return SyntheticCorpus(out, origin);
   }
+
+  /// The files in [path], sorted by path so the order is the same everywhere.
+  static List<File> _filesUnder(String path, {bool recursive = false}) =>
+      Directory(path).listSync(recursive: recursive).whereType<File>().toList()
+        ..sort((a, b) => a.path.compareTo(b.path));
 
   static final _amount = RegExp(
     r'(?<=(?:Rs\.?|INR|₹)\s?)\d[\d,]*(?:\.\d{1,2})?',

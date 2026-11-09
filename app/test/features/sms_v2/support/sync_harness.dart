@@ -257,8 +257,12 @@ List<({String sender, String body, DateTime at})> sharedHistory(
   int seed = 21,
 }) {
   final out = <({String sender, String body, DateTime at})>[];
-  for (final file
-      in Directory('../tools/sms_golden/scenarios').listSync().whereType<File>()) {
+  final scenarioFiles = Directory('../tools/sms_golden/scenarios')
+      .listSync()
+      .whereType<File>()
+      .toList()
+    ..sort((a, b) => a.path.compareTo(b.path));
+  for (final file in scenarioFiles) {
     if (!file.path.endsWith('.json')) continue;
     for (final m
         in (jsonDecode(file.readAsStringSync()) as Map)['messages'] as List) {
