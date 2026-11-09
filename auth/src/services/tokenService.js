@@ -36,9 +36,6 @@ function signAccessToken(user, options = {}) {
     // === SECURITY HARDENING: GLOBAL LOGOUT ===
     // Include token_version to support logout-all-devices functionality
     token_version: user.token_version || 1,
-    // === GUEST LOGIN SUPPORT ===
-    // Include is_guest flag (defaults to false for backward compatibility)
-    is_guest: user.is_guest || false,
   };
 
   // Attach device identifier if provided (per-device token invalidation)
@@ -62,9 +59,8 @@ function signAccessToken(user, options = {}) {
     payload.recovery_verified_at = Math.floor(Date.now() / 1000);
   }
 
-  // === GUEST LOGIN SUPPORT ===
-  // Allow custom expiration time (defaults to ACCESS_TTL for backward compatibility)
-  const expiresIn = options.expiresIn || ACCESS_TTL;
+  // Access tokens always use the configured short lifetime.
+  const expiresIn = ACCESS_TTL;
 
   const activeKey = getActiveKey();
   const token = jwt.sign(payload, activeKey.secret, {

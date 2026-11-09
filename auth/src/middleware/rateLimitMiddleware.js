@@ -9,6 +9,7 @@ const {
   ActiveOtpError,
   createRateLimitStore,
 } = require('../services/authAbuseStore');
+const { OTP_LIFETIME_SECONDS } = require('../utils/otpLifetime');
 const rateLimitStore = createRateLimitStore();
 
 function logRateLimitError(event, error) {
@@ -30,7 +31,7 @@ const config = {
   OTP_VERIFY_FAILED_PER_HOUR_LIMIT: parseInt(process.env.OTP_VERIFY_FAILED_PER_HOUR_LIMIT || '10', 10),
   
   // OTP validity
-  OTP_TTL_SECONDS: parseInt(process.env.OTP_TTL_SECONDS || '120', 10), // 2 minutes
+  OTP_TTL_SECONDS: OTP_LIFETIME_SECONDS, // 1 minute
   
   // === SECURITY HARDENING: ENUMERATION PROTECTION ===
   // Stricter limits when enumeration is detected
@@ -99,6 +100,20 @@ async function consumeReplacementBudget(userId, channel, action = 'request') {
 }
 
 /**
+ * Count one use of a named budget (for example "phone-claim-ip" for one address)
+ * and throw once the limit is passed. Stored in the same durable abuse store as
+ * the sign-in limits, so every server instance shares it.
+ */
+async function consumeBudget(name, subject, limit, ttlSeconds) {
+  if (typeof name !== 'string' || !/^[a-z0-9_-]{1,40}$/.test(name)) throw new TypeError('Budget name is invalid');
+  if (typeof subject !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(subject)) throw new TypeError('Budget subject is invalid');
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100000) throw new TypeError('Budget limit is invalid');
+  const count = await incrementCounter(`budget:${name}:${subject}`, ttlSeconds, limit + 1);
+  if (count > limit) throw new RateLimitExceededError();
+  return count;
+}
+
+/**
  * Helper: Normalize phone number (same logic as in routes)
  * This ensures consistent normalization across all checks
  * @param {string} phone - Phone number to normalize
@@ -120,7 +135,7 @@ function otpPurpose(req) {
 /**
  * === ADDED FOR 2-MIN OTP VALIDITY & NO-RESEND ===
  * Middleware: Check if there's an active OTP for the phone number
- * Prevents sending a new OTP if one is already active (within 2 minutes)
+ * Prevents sending a new OTP if one is already active (within 1 minute)
  * This check is shared across devices for the same identifier and OTP purpose.
  */
 async function checkActiveOtpForPhone(req, res, next) {
@@ -515,5 +530,6 @@ module.exports = {
   RateLimitExceededError,
   ActiveOtpError,
   consumeReplacementBudget,
+  consumeBudget,
 };
 

@@ -491,7 +491,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     const SizedBox(height: 12),
                     const Text(
-                      'Use the 43-character grant from local setup. It is single use and expires after 10 minutes. Finish this step within 2 minutes of requesting your email code.',
+                      'Use the 43-character grant from local setup. It is single use and expires after 10 minutes. Finish this step within 1 minute of requesting your email code.',
                       style: TextStyle(
                         fontSize: 12,
                         height: 1.5,
@@ -533,7 +533,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    'The code is valid for 2 minutes.',
+                    'The code is valid for 1 minute.',
                     style: TextStyle(fontSize: 12, color: _muted),
                   ),
                 ],

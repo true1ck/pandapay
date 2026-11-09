@@ -23,10 +23,14 @@ function verifyAccessToken(token) {
 
   for (const secret of secrets) {
     try {
-      return jwt.verify(token, secret, {
+      const claims = jwt.verify(token, secret, {
+        algorithms: ['HS256'],
         issuer: config.jwtIssuer,
         audience: config.jwtAudience,
       });
+      // Guest sessions no longer exist; refuse any guest token still in the wild.
+      if (claims.is_guest === true) throw new Error('Guest tokens are not accepted');
+      return claims;
     } catch (error) {
       lastError = error;
     }
@@ -129,10 +133,22 @@ async function fetchCurrentSession(token, fetchImpl = globalThis.fetch) {
     tokenValid: result?.token_valid === true,
     valid: result?.valid === true,
     subject: typeof result?.subject === 'string' ? result.subject : null,
-    guest: result?.guest === true,
     active: result?.session?.active === true,
     revoked: result?.session?.revoked === true,
     verifiedContacts: result?.verified_contacts || {},
+    // A phone the person typed in. Not verified, so it is kept apart from verifiedContacts.
+    claimedContacts: {
+      phone: result?.claimed_contacts?.phone?.claimed === true
+        && typeof result.claimed_contacts.phone.value === 'string'
+        ? { claimed: true, value: result.claimed_contacts.phone.value }
+        : { claimed: false, value: null },
+    },
+    // Set by auth/ when the phone lock is switched on. An older auth/ sends nothing,
+    // which means "not required", so deploy order does not matter.
+    phoneGate: {
+      required: result?.phone_gate?.required === true,
+      satisfied: result?.phone_gate?.satisfied === true,
+    },
     authProof: result?.auth_proof || {},
   };
   cacheSession(cacheKey, session);
@@ -183,9 +199,16 @@ async function getProductMembership(userId) {
   });
 }
 
+/** With the phone lock on, an account that has no phone can do nothing but add one. */
+function requirePhoneIfLocked(session) {
+  if (session.phoneGate?.required === true && session.phoneGate.satisfied !== true) {
+    throw new SessionVerificationError('phone_required', 403);
+  }
+}
+
 async function verifyMemberRequest(req) {
   const session = await verifyRequestSession(req);
-  if (session.guest) throw new SessionVerificationError('membership_required', 403);
+  requirePhoneIfLocked(session);
   let isMember;
   try {
     isMember = await getProductMembership(req.userId);
@@ -229,6 +252,7 @@ module.exports = {
   verifyAccessToken,
   verifyRequestSession,
   verifyMemberRequest,
+  requirePhoneIfLocked,
   fetchCurrentSession,
   SessionVerificationError,
   _sessionCache: sessionCache,

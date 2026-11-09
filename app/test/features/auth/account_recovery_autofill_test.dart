@@ -245,12 +245,12 @@ void main() {
     expect(
       tester
           .widget<TextButton>(
-            find.widgetWithText(TextButton, 'Resend code in 02:00'),
+            find.widgetWithText(TextButton, 'Resend code in 01:00'),
           )
           .onPressed,
       isNull,
     );
-    await tester.pump(const Duration(seconds: 120));
+    await tester.pump(const Duration(seconds: 60));
     await tester.pumpAndSettle();
     final resend = find.text('Didn’t get the code? Resend code');
     await tester.ensureVisible(resend);
@@ -356,7 +356,7 @@ void main() {
       find.textContaining('A code request is still active'),
       findsOneWidget,
     );
-    expect(find.text('Resend code in 02:00'), findsOneWidget);
+    expect(find.text('Resend code in 01:00'), findsOneWidget);
     expect(find.text('Verify code'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
   });

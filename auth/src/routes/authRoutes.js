@@ -2,7 +2,6 @@ const { safeErrorCode } = require('../utils/safeErrorCode');
 // src/routes/authRoutes.js
 const express = require('express');
 const crypto = require('crypto');
-const { randomUUID } = require('crypto');
 const db = require('../db');
 const config = require('../config');
 const auth = require('../middleware/authMiddleware');
@@ -20,6 +19,7 @@ const {
   createOtpV2, verifyOtpV2, discardUndeliveredOtpV2,
 } = require('../services/otpService');
 const {isVersionedOtpRequest}=require('./versionedOtpRoutes');
+const { OTP_LIFETIME_SECONDS } = require('../utils/otpLifetime');
 const { OtpCapacityError, BUSY_CODE, respondOtpCapacityUnavailable } = require('../services/otpWorkAdmission');
 const { isTestOtpIdentifier } = require('../utils/testOtp');
 const {
@@ -93,7 +93,7 @@ function discardChallenge(req,identifier,type,id,purpose){
   return isVersionedOtpRequest(req)?discardUndeliveredOtpV2(identifier,type,id,purpose,req.body.device_id):discardUndeliveredOtp(identifier,type,id,purpose);
 }
 function requestSuccess(req,result){
-  return isVersionedOtpRequest(req)?{ok:true,version:2,challenge_id:result.requestId,code_length:6,expires_in:120}:{ok:true};
+  return isVersionedOtpRequest(req)?{ok:true,version:2,challenge_id:result.requestId,code_length:6,expires_in:OTP_LIFETIME_SECONDS}:{ok:true};
 }
 const ABUSE_STORE_UNAVAILABLE_MESSAGE = 'Authentication is temporarily unavailable. Please try again shortly.';
 
@@ -169,7 +169,7 @@ function sanitizeDeviceId(deviceId) {
 // === ADDED FOR RATE LIMITING ===
 // Middleware order matters:
 // 1. Input validation
-// 2. Check for active OTP first (2-minute no-resend rule)
+// 2. Check for active OTP first (no resend while the 1-minute code is live)
 // 3. Rate limit by phone number
 // 4. Rate limit by IP address
 // 5. IP blocking check
@@ -412,76 +412,7 @@ router.post(
   }
 );
 
-// POST /auth/guest-login
-// Generate guest JWT tokens without requiring phone authentication
-// No database record is created - guest tokens are stateless
-router.post('/guest-login', async (req, res) => {
-  const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
-
-  // Check if IP is blocked
-  if (isIpBlocked(clientIp)) {
-    await logBlockedIpLogin(clientIp, req.headers['user-agent']);
-    return res.status(403).json({
-      success: false,
-      message: 'Access denied from this location.',
-    });
-  }
-
-  try {
-    const { device_id } = req.body;
-
-    // Generate unique guest identifier - MUST be UUID for database compatibility
-    // We use UUID for guest ID but can track device_id separately in token
-    const guestId = randomUUID();
-    const sanitizedDeviceId = device_id ? sanitizeDeviceId(device_id) : 'guest-device';
-
-    // Create guest token payload (NO DATABASE RECORD)
-    const guestUser = {
-      id: guestId,
-      phone_number: null,
-      role: 'user',
-      user_type: null,
-      token_version: 1,
-      is_guest: true  // Key flag
-    };
-
-    // Generate tokens
-    // === GUEST LOGIN SUPPORT ===
-    // Guest tokens expire after 24 hours (1 day) instead of default 15 minutes
-    const accessToken = signAccessToken(guestUser, {
-      deviceId: sanitizedDeviceId,
-      expiresIn: '24h'  // 24 hours expiration for guest tokens
-    });
-
-    // === GUEST LOGIN SUPPORT ===
-    // Skip refresh tokens for guests - refresh_tokens table has FK constraint to users table
-    // Guests don't have user records, so we can't store refresh tokens
-    // Guests can re-login as guest when access token expires
-    const refreshToken = null;
-
-    // === GUEST LOGIN SUPPORT ===
-    return res.json({
-      success: true,
-      access_token: accessToken,
-      refresh_token: refreshToken,  // null for guests
-      is_guest: true,
-      user: {
-        id: guestId,
-        phone_number: null,
-        name: null,
-        role: 'user',
-        user_type: null,
-        is_guest: true
-      }
-    });
-  } catch (err) {
-    logAuthError('guest-login failed', err);
-    return res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
-  }
-});
+// There is no guest sign-in. Every session belongs to a verified account.
 
 // POST /auth/verify-otp
 // === SECURITY HARDENING: INPUT VALIDATION ===
@@ -1282,37 +1213,27 @@ router.post(
 
       const { userId, deviceId, row: tokenRow } = verification;
 
-      // === GUEST LOGIN SUPPORT ===
-      // Check if user exists in database (guests don't have user records)
+      // A refresh may only continue a live account on a device that is still
+      // signed in. A missing, deleted or disabled account, or a device that was
+      // signed out, ends the session instead of minting more tokens.
       const { rows } = await db.query(
-        `SELECT id, phone_number, name, role, COALESCE(token_version, 1) as token_version FROM users WHERE id = $1`,
-        [userId]
+        `SELECT u.id, u.phone_number, u.name, u.role, COALESCE(u.token_version, 1) as token_version
+           FROM users u
+          WHERE u.id = $1 AND u.deleted = FALSE AND u.is_active = TRUE
+            AND EXISTS (SELECT 1 FROM user_devices d
+                         WHERE d.user_id = u.id AND d.device_identifier = $2 AND d.is_active = TRUE)`,
+        [userId, deviceId]
       );
-
-      let user;
       if (rows.length === 0) {
-        // Guest user - create guest user object (no DB record)
-
-        user = {
-          id: userId,
-          phone_number: null,
-          name: null,
-          role: 'user',
-          token_version: 1,
-          is_guest: true
-        };
-      } else {
-        // Regular user
-        user = rows[0];
-        user.is_guest = false;
+        await revokeRefreshToken(userId, deviceId);
+        return res.status(401).json({ error: 'Invalid refresh token' });
       }
+      const user = rows[0];
 
-      // === GUEST LOGIN SUPPORT ===
-      // Skip risk scoring and OTP checks for guests (they don't have user records)
       let riskScore = { isSuspicious: false, score: 0, reasons: [] };
       let hasRecentOtp = false;
 
-      if (!user.is_guest) {
+      {
         // === SECURITY HARDENING: REFRESH TOKEN THEFT MITIGATION ===
         // Calculate risk score for refresh from different environment (only for regular users)
         const previousAuth = await getPreviousAuthInfo(userId, deviceId);
@@ -1394,8 +1315,8 @@ router.post(
         },
       });
 
-      // Update device last_seen_at when tokens are refreshed (only for regular users)
-      if (!user.is_guest) {
+      // Update device last_seen_at when tokens are refreshed
+      {
         try {
           await db.query(
             `UPDATE user_devices SET last_seen_at = NOW() WHERE user_id = $1 AND device_identifier = $2`,
@@ -1753,7 +1674,7 @@ router.post('/validate-token', async (req, res) => {
 
     try {
       const session = await verifyCurrentSession(token);
-      if (payload.is_guest === true || !session.valid || !session.session?.active ||
+      if (!session.valid || !session.session?.active ||
           session.session?.revoked || session.subject !== payload.sub) {
         return res.json({ valid: false, error: 'Invalid or expired token' });
       }
@@ -1776,7 +1697,6 @@ router.post('/validate-token', async (req, res) => {
         user_type: payload.user_type,
         token_version: payload.token_version || 1,
         high_assurance: payload.high_assurance || false,
-        is_guest: payload.is_guest || false,
       },
     });
   } catch (err) {

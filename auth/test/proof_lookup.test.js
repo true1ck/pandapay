@@ -9,7 +9,7 @@ const NOW = 1792810000000;
 
 function proof(overrides = {}) {
   return {
-    token_valid: true, valid: true, guest: false, subject: SUBJECT, device_id: 'signed-device',
+    token_valid: true, valid: true, subject: SUBJECT, device_id: 'signed-device',
     session: { active: true, revoked: false },
     auth_proof: { channel: 'email', verified_at: Math.floor(NOW/1000)-10 },
     verified_contacts: { email: { verified: true, value: 'operator@example.test' }, phone: { verified: true, value: '+919000000001' } },
@@ -81,9 +81,9 @@ test('all caller-supplied contact, identity and device selectors are uniformly r
   assert.equal(h.queries.length, 0);
 });
 
-test('guests, invalid/revoked/inactive sessions and unbound devices receive no profile data', async () => {
+test('invalid/revoked/inactive sessions and unbound devices receive no profile data', async () => {
   for (const candidate of [
-    proof({ guest: true }), proof({ valid: false }), proof({ token_valid: false }),
+    proof({ valid: false }), proof({ token_valid: false }),
     proof({ session: { active: false, revoked: true } }), proof({ session: { active: true, revoked: true } }),
     proof({ device_id: undefined }), proof({ device_id: '' }), proof({ device_id: 'x\nvalue' }),
     proof({ device_id: '💡'.repeat(64) }), proof({ subject: 'not-a-user-uuid' }),

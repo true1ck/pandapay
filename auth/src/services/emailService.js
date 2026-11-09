@@ -48,7 +48,7 @@ async function sendOtpEmail(email, code) {
     subject: 'Your PandaPay Verification Code',
     disableFileAccess: true,
     disableUrlAccess: true,
-    text: `Your PandaPay verification code is: ${code}\nThis code will expire in 2 minutes. Do not share it with anyone.`,
+    text: `Your PandaPay verification code is: ${code}\nThis code will expire in 1 minute. Do not share it with anyone.`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
         <h2 style="color: #333; text-align: center;">PandaPay Verification Code</h2>
@@ -56,7 +56,7 @@ async function sendOtpEmail(email, code) {
         <div style="background-color: #f5f5f5; padding: 15px; border-radius: 4px; text-align: center; margin: 20px 0;">
           <strong style="font-size: 28px; letter-spacing: 5px; color: #000;">${code}</strong>
         </div>
-        <p style="color: #777; font-size: 14px; text-align: center;">This code will expire in 2 minutes.<br>Do not share this code with anyone.</p>
+        <p style="color: #777; font-size: 14px; text-align: center;">This code will expire in 1 minute.<br>Do not share this code with anyone.</p>
       </div>
     `,
   };

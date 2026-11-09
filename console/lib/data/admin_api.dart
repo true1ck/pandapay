@@ -88,7 +88,7 @@ class AuthApi {
       if (b['ok'] != true ||
           b['version'] != 2 ||
           b['code_length'] != 6 ||
-          b['expires_in'] != 120 ||
+          b['expires_in'] != 60 ||
           id is! String ||
           !RegExp(
             r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
@@ -101,7 +101,7 @@ class AuthApi {
         _contact(identifier, email),
         deviceId!,
         email,
-        DateTime.now().add(const Duration(seconds: 120)),
+        DateTime.now().add(const Duration(seconds: 60)),
       );
     } catch (_) {
       throw AdminApiException(

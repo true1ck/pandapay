@@ -3,6 +3,7 @@ const express = require('express');
 const { timingSafeEqual, randomUUID, createHash } = require('node:crypto');
 const {isIP}=require('node:net');
 const { createConsoleSessionStore } = require('./consoleSessionStore');
+const { OTP_LIFETIME_SECONDS } = require('../utils/otpLifetime');
 
 function validateOrigin(value, { local = false } = {}) {
   const url = new URL(value);
@@ -89,9 +90,9 @@ function createConsoleBrowserRouter({ origin, authUpstream, apiUpstream, pool, e
       const result=await call(authBase,'/auth/'+remote,{body,req});
       if(prefix&&result.status===200){
         const d=result.data;
-        if(d.ok!==true||d.version!==2||d.code_length!==6||d.expires_in!==120||
+        if(d.ok!==true||d.version!==2||d.code_length!==6||d.expires_in!==OTP_LIFETIME_SECONDS||
           typeof d.challenge_id!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(d.challenge_id))throw new Error('Console OTP challenge unavailable');
-        return res.json({ok:true,version:2,challenge_id:d.challenge_id,code_length:6,expires_in:120});
+        return res.json({ok:true,version:2,challenge_id:d.challenge_id,code_length:6,expires_in:OTP_LIFETIME_SECONDS});
       }
       res.status(result.status).json(result.status===200?{success:true}:{error:'otp_request_failed'});
     }));

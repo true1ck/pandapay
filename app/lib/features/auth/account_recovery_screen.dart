@@ -55,7 +55,7 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
     super.dispose();
   }
 
-  void _startResendCooldown([int seconds = 120]) {
+  void _startResendCooldown([int seconds = 60]) {
     _resendTimer?.cancel();
     setState(() => _resendSeconds = seconds);
     _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {

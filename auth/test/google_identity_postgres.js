@@ -78,7 +78,7 @@ async function main() {
   const verifySession = async (token, client) => {
     assert.equal(token, 'synthetic-existing-proof'); checks++;
     const row = (await client.query('SELECT id, deleted, is_active FROM public.users WHERE id=$1', [owner.id])).rows[0];
-    return { valid: !!row && !row.deleted && row.is_active, subject: owner.id, guest: false,
+    return { valid: !!row && !row.deleted && row.is_active, subject: owner.id,
       session: { active: !!row && !row.deleted && row.is_active },
       auth_proof: { channel: 'email', verified_at: Math.floor(Date.now() / 1000) } };
   };

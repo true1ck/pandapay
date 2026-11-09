@@ -58,12 +58,12 @@ async function resolveGoogleAccount({ pool, googleUser, deviceInfo = {}, linking
         }
       };
       proof = await currentProof();
-      if (!proof?.valid || proof.guest || !proof.subject) throw accountLinkRequired();
+      if (!proof?.valid || !proof.subject) throw accountLinkRequired();
       const subject = proof.subject;
       await client.query('SELECT id FROM public.users WHERE id = $1 FOR UPDATE', [subject]);
       proof = await currentProof();
       const age = Math.floor(now() / 1000) - Number(proof?.auth_proof?.verified_at);
-      if (!proof?.valid || proof.guest || proof.subject !== subject || !proof.session?.active ||
+      if (!proof?.valid || proof.subject !== subject || !proof.session?.active ||
           !['email', 'phone', 'google'].includes(proof.auth_proof?.channel) ||
           !Number.isInteger(proof.auth_proof?.verified_at) || age < 0 || age > 300) {
         throw accountLinkRequired();

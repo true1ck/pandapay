@@ -110,7 +110,7 @@ test('concurrent email uniqueness conflict rolls back and requests existing acco
 });
 
 function proof(changes = {}) {
-  return { valid: true, guest: false, subject: account.id, session: { active: true }, auth_proof: { channel: 'email', verified_at: Math.floor(Date.now() / 1000) }, ...changes };
+  return { valid: true, subject: account.id, session: { active: true }, auth_proof: { channel: 'email', verified_at: Math.floor(Date.now() / 1000) }, ...changes };
 }
 
 test('explicit linking checks recent current account proof twice on checked-out connection', async () => {
@@ -127,7 +127,7 @@ test('explicit linking checks recent current account proof twice on checked-out 
 });
 
 for (const [label, value] of Object.entries({
-  guest: proof({ guest: true }), revoked: proof({ valid: false }),
+  revoked: proof({ valid: false }),
   stale: proof({ auth_proof: { channel: 'email', verified_at: 1 } }),
   future: proof({ auth_proof: { channel: 'phone', verified_at: Math.floor(Date.now() / 1000) + 60 } }),
   missing: proof({ auth_proof: {} }),

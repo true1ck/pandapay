@@ -308,10 +308,10 @@ test('upstream fetch rejects redirects and has an actual ten-second abort bounda
 test('v2 console forwards stable device and challenge with recovery purpose, returns no credentials',async t=>{
  const id='bc3f590c-b3c9-412c-98eb-1be64946cb70';
  const h=await harness(t,{authHandler:async(req,res)=>{
-  if(req.path==='/auth/v2/request-email-otp'){res.json({ok:true,version:2,challenge_id:id,code_length:6,expires_in:120,private:'hidden'});return true;}
+  if(req.path==='/auth/v2/request-email-otp'){res.json({ok:true,version:2,challenge_id:id,code_length:6,expires_in:60,private:'hidden'});return true;}
  }});
  let r=await h.request('/v2/request-email-otp',{method:'POST',body:{email:'operator@example.test',device_id:'console-device'}});
- assert.equal(r.status,200);assert.deepEqual(r.data,{ok:true,version:2,challenge_id:id,code_length:6,expires_in:120});
+ assert.equal(r.status,200);assert.deepEqual(r.data,{ok:true,version:2,challenge_id:id,code_length:6,expires_in:60});
  assert.deepEqual(h.calls[0].body,{email:'operator@example.test',device_id:'console-device',recovery_only:true});
  r=await h.request('/v2/verify-email-otp',{method:'POST',body:{email:'operator@example.test',device_id:'console-device',challenge_id:id,code:'819273'}});
  assert.equal(r.status,200);assert.equal(r.data.authenticated,true);assert.equal(r.text.includes(ACCESS),false);

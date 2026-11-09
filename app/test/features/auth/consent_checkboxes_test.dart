@@ -113,7 +113,7 @@ void main() {
       expect(find.text('Code already sent'), findsOneWidget);
       // Its exact expiry is unknown, so no made-up countdown and resend
       // stays available.
-      expect(find.text('Codes are valid for 2 minutes.'), findsOneWidget);
+      expect(find.text('Codes are valid for 1 minute.'), findsOneWidget);
       expect(find.text('Resend code'), findsOneWidget);
       expect(find.text('Verify & continue'), findsOneWidget);
       expect(find.byType(TextField), findsOneWidget);

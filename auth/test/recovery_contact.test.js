@@ -83,7 +83,7 @@ async function harness(t, { requestBudgetLimit = Infinity, verifyBudgetLimit = I
         return { ok };
       },
       async discardUndeliveredOtp() { discarded++; },
-      V2_TTL_SECONDS: 120,
+      V2_TTL_SECONDS: 60,
       async createOtpV2(identifier, type, purpose, device) {
         if (otpStorageError) throw otpStorageError;
         versionedCalls.push(['create', identifier, type, purpose, device]);
@@ -308,7 +308,7 @@ test('v2 replacement keeps the old contact until its account/device/purpose-boun
   const h = await harness(t);
   const r = await h.post('v2/request', {identifier:' NEW@example.com ',device_id:'stable-device-a'});
   assert.equal(r.status,200);assert.equal(r.body.version,2);assert.equal(r.body.code_length,6);
-  assert.ok(r.body.expires_in>0&&r.body.expires_in<=120);assert.equal(r.body.contact_hint,'n•••@example.com');
+  assert.ok(r.body.expires_in>0&&r.body.expires_in<=60);assert.equal(r.body.contact_hint,'n•••@example.com');
   assert.deepEqual(h.sentCodes,['654321']);assert.equal(h.user.email,'old@example.com');
   const claims = require('jsonwebtoken').decode(r.body.challenge);
   assert.equal(claims.protocol_version,2);assert.equal(claims.purpose,'replacement');

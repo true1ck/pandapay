@@ -187,10 +187,10 @@ void main() {
       tester,
     ) async {
       await mount(tester, verify: (_) async => http.Response('{}', 500));
-      expect(find.text('Code expires in 2:00'), findsOneWidget);
-      expect(find.text('Resend in 2:00'), findsOneWidget);
+      expect(find.text('Code expires in 1:00'), findsOneWidget);
+      expect(find.text('Resend in 1:00'), findsOneWidget);
 
-      await elapse(tester, const Duration(seconds: 95));
+      await elapse(tester, const Duration(seconds: 35));
       expect(find.text('Code expires in 0:25'), findsOneWidget);
 
       await elapse(tester, const Duration(seconds: 30));

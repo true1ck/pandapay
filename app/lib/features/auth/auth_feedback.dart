@@ -71,7 +71,7 @@ class AuthNotice {
   const AuthNotice.codeExpired()
     : title = 'Code expired',
       message =
-          'Codes only work for 2 minutes. Request a new code to continue.',
+          'Codes only work for 1 minute. Request a new code to continue.',
       tone = AuthNoticeTone.warning,
       kind = AuthFailureKind.expiredCode,
       reference = null;
@@ -181,7 +181,7 @@ AuthNotice describeAuthFailure(
       return AuthNotice(
         title: 'Code already sent',
         message:
-            'We sent a code to $email less than 2 minutes ago. Enter that '
+            'We sent a code to $email less than a minute ago. Enter that '
             'code, or request a new one once it expires.',
         kind: AuthFailureKind.codeAlreadySent,
         tone: AuthNoticeTone.info,

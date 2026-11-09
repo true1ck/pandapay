@@ -128,6 +128,18 @@ test('requireValidJwt admits request with valid signed JWT without session check
   assert.equal(req.authClaims.sub, 'production-smoke-test');
 });
 
+test('a leftover guest token is refused by both the verifier and requireValidJwt', () => {
+  const guest = makeToken('current-access-secret', 'current', { sub: 'guest-1', is_guest: true });
+  assert.throws(() => verifyAccessToken(guest), /Guest tokens are not accepted/);
+
+  let statusCode;
+  let nextCalls = 0;
+  const res = { status(code) { statusCode = code; return this; }, json() { return this; } };
+  requireValidJwt({ headers: { authorization: 'Bearer ' + guest } }, res, () => { nextCalls += 1; });
+  assert.equal(statusCode, 401);
+  assert.equal(nextCalls, 0);
+});
+
 test('requireValidJwt rejects request with missing or malformed token', () => {
   let statusCode;
   let responseBody;

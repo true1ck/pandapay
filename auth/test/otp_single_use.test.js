@@ -160,7 +160,7 @@ test('database failure after claim clears only the pre-generated request claim',
   await assert.rejects(service.createOtp('member@example.com', 'email', 'recovery'), e => e === error);
   assert.equal(claims.length, 1);
   assert.match(claims[0][2], /^[0-9a-f-]{36}$/i);
-  assert.deepEqual(claims[0], ['member@example.com', 120, claims[0][2], 'recovery']);
+  assert.deepEqual(claims[0], ['member@example.com', 60, claims[0][2], 'recovery']);
   assert.deepEqual(cleanup, [['member@example.com', claims[0][2], 'recovery']]);
 });
 

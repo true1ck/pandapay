@@ -3,13 +3,13 @@
 const db = require('../db');
 const { verifyAccessToken } = require('./accessTokenVerification');
 const { decryptPhoneNumber } = require('../utils/fieldEncryption');
+const { phoneGateRequired } = require('../utils/phoneGate');
 
 async function verifyCurrentSession(token, executor = db) {
   const payload = verifyAccessToken(token);
   const base = {
     token_valid: true,
     subject: payload.sub,
-    guest: payload.is_guest === true,
     auth_proof: {
       channel: ['phone', 'email', 'google'].includes(payload.verified_channel)
         ? payload.verified_channel
@@ -24,25 +24,10 @@ async function verifyCurrentSession(token, executor = db) {
     },
   };
 
-  // Guest sessions have no user row by design and are only revocable by
-  // expiration. Their signed, 24-hour access token is the source of truth.
-  if (base.guest) {
-    return {
-      ...base,
-      valid: true,
-      session: {
-        active: true,
-        revoked: false,
-        expires_at: Number.isInteger(payload.exp) ? new Date(payload.exp * 1000).toISOString() : null,
-        revocation: 'stateless_guest_expires_with_token',
-      },
-    };
-  }
-
   let rows;
   try {
     const result = await executor.query(
-      `SELECT id, email, phone_number, is_email_verified, is_phone_verified,
+      `SELECT id, email, phone_number, is_email_verified, is_phone_verified, claimed_phone_enc,
               is_active, deleted, COALESCE(token_version, 1) AS token_version
          FROM users WHERE id = $1`,
       [payload.sub],
@@ -68,6 +53,11 @@ async function verifyCurrentSession(token, executor = db) {
   }
   const active = Boolean(user && user.is_active && !user.deleted && tokenVersionCurrent && deviceActive);
   const revoked = !active;
+  // A typed (unverified) phone is reported apart from verified contacts, so
+  // nothing can mistake it for proof. The gate is "an account must have a phone"
+  // when REQUIRE_PHONE_AT_SIGNUP is on; a verified phone also satisfies it.
+  const claimedPhone = active && Boolean(user?.claimed_phone_enc);
+  const verifiedPhone = active && Boolean(user?.phone_number) && user.is_phone_verified === true;
 
   return {
     ...base,
@@ -93,6 +83,16 @@ async function verifyCurrentSession(token, executor = db) {
           ? decryptPhoneNumber(user.phone_number)
           : null,
       },
+    },
+    claimed_contacts: {
+      phone: {
+        claimed: claimedPhone,
+        value: claimedPhone ? decryptPhoneNumber(user.claimed_phone_enc) : null,
+      },
+    },
+    phone_gate: {
+      required: phoneGateRequired(),
+      satisfied: claimedPhone || verifiedPhone,
     },
   };
 }

@@ -232,7 +232,6 @@ users (1) ──< (many) leads          [Backend Service]
   "partner_tier_id": 1,
   "token_version": 1,
   "device_id": "device-identifier",
-  "is_guest": false,
   "high_assurance": true,
   "iat": 1234567890,
   "exp": 1234567890

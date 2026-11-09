@@ -24,15 +24,24 @@ function canonicalizePhone(value) {
   return /^\+[1-9]\d{1,14}$/.test(phone) ? phone : null;
 }
 
+// `claimedContacts` is the phone the person typed in (not verified). It counts as
+// the phone claim only when no verified phone exists, so one number gives one
+// fingerprint whether or not it was ever verified, and a repeat is caught either way.
 function buildEligibilityClaims(verifiedContacts, secret = config.referralIdentityHmacKey,
-  keyVersion = config.referralIdentityHmacKeyVersion) {
+  keyVersion = config.referralIdentityHmacKeyVersion, claimedContacts = null) {
   if (!secret || Buffer.byteLength(secret) < 32) {
     throw new Error('referral_identity_not_configured');
   }
   const claims = [];
   for (const kind of ['email', 'phone']) {
-    const contact = verifiedContacts?.[kind];
-    if (contact?.verified !== true || typeof contact.value !== 'string') continue;
+    let contact = verifiedContacts?.[kind];
+    let usable = contact?.verified === true && typeof contact.value === 'string';
+    if (!usable && kind === 'phone' && claimedContacts?.phone?.claimed === true
+        && typeof claimedContacts.phone.value === 'string') {
+      contact = claimedContacts.phone;
+      usable = true;
+    }
+    if (!usable) continue;
     const normalized = kind === 'email'
       ? canonicalizeEmail(contact.value)
       : canonicalizePhone(contact.value);

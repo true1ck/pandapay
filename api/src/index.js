@@ -220,8 +220,9 @@ app.get('/profile', requireAuth, async (req, res) => {
  */
 app.post('/profile', requireVerifiedSession, async (req, res) => {
   const body = req.body || {};
-  if (req.verifiedSession?.guest) {
-    return res.status(403).json({ error: 'membership_required' });
+  // With the phone lock on, no profile (and so no reward) without a phone on the account.
+  if (req.verifiedSession?.phoneGate?.required === true && req.verifiedSession.phoneGate.satisfied !== true) {
+    return res.status(403).json({ error: 'phone_required' });
   }
 
   const invitationCode = typeof body.invitationCode === 'string'
@@ -258,6 +259,9 @@ app.post('/profile', requireVerifiedSession, async (req, res) => {
     try {
       identityClaims = require('./referral_routes').buildEligibilityClaims(
         req.verifiedSession?.verifiedContacts,
+        undefined,
+        undefined,
+        req.verifiedSession?.claimedContacts,
       );
     } catch (_) {
       return res.status(503).json({ error: 'referral_identity_unavailable' });
@@ -2141,8 +2145,8 @@ app.post('/user-cards', requireAuth, async (req, res) => {
  * POST /user-cards/import — plan Phase 1.2. Hands a guest's on-device
  * wallet to the account they just created or signed into.
  *
- * Guest mode (`POST /auth/guest-login` in auth/) issues a random UUID with,
- * in that route's own words, "NO DATABASE RECORD" — a guest's cards live
+ * There is no guest sign-in (auth/ no longer has `POST /auth/guest-login`).
+ * Before an account exists, a visitor's cards live
  * only in the client's `local_user_cards` sqlite table. Until this route,
  * nothing carried them across, so a guest who spent time building a wallet
  * and then signed up watched it vanish at exactly the moment they committed

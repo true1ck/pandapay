@@ -33,6 +33,9 @@ function verifyAccessToken(token) {
     }
   }
   if (!payload || typeof payload.sub !== 'string') throw new Error('invalid_token');
+  // Guest sessions were removed. A guest token minted before that is refused
+  // everywhere, so it cannot outlive its 24-hour expiry by even a minute.
+  if (payload.is_guest === true) throw new Error('invalid_token');
   if (!validateTokenClaims(payload).valid) throw new Error('invalid_token');
   return payload;
 }

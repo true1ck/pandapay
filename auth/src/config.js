@@ -12,7 +12,7 @@
 // - OTP_REQ_IP_DAY_LIMIT: Max OTP requests per IP per 24 hours (default: 100)
 // - OTP_VERIFY_MAX_ATTEMPTS: Max verification attempts per OTP (default: 5)
 // - OTP_VERIFY_FAILED_PER_HOUR_LIMIT: Max failed verifications per phone per hour (default: 10)
-// - OTP_TTL_SECONDS: OTP validity in seconds (default: 120, i.e., 2 minutes)
+// - OTP_TTL_SECONDS: legacy code validity in seconds; capped at 60 (see utils/otpLifetime.js)
 //
 // === SECURITY HARDENING: JWT KEY ROTATION ===
 // - JWT_ACTIVE_KEY_ID: Key ID to use for signing new tokens (default: '1')
@@ -35,6 +35,8 @@
 //   WARNING: Never use '*' when credentials or tokens are involved
 require('dotenv').config();
 const {retirementFlag}=require('./middleware/legacyAuthAdmission');
+const { phoneGateRequired } = require('./utils/phoneGate');
+const { parseAllowedCountries } = require('./utils/claimedPhone');
 
 // DATABASE_URL is only required if not using AWS SSM Parameter Store
 const REQUIRED_ENV = [
@@ -114,5 +116,8 @@ module.exports = {
   retirePublicLookup: retirementFlag(process.env.AUTH_RETIRE_PUBLIC_LOOKUP,'AUTH_RETIRE_PUBLIC_LOOKUP'),
   enablePhoneOtp: process.env.ENABLE_PHONE_OTP !== 'false',
   enableEmailOtp: process.env.ENABLE_EMAIL_OTP !== 'false',
+  // The phone lock. Off by default. See utils/phoneGate.js and services/phoneClaim.js.
+  requirePhoneAtSignup: phoneGateRequired(),
+  allowedPhoneCountries: parseAllowedCountries(process.env.PHONE_ALLOWED_COUNTRIES),
 };
 

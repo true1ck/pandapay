@@ -80,16 +80,15 @@ test('current-session proof returns only verified contacts and rejects revoked s
   assert.equal(revoked.verified_contacts.email.value, null);
 });
 
-test('guest session is explicit and does not query a user row', async () => {
+test('a leftover guest token is refused without touching the database', async () => {
   const { verifyCurrentSession } = sessionService();
   let calls = 0;
-  const result = await verifyCurrentSession(token({ sub: 'guest-1', is_guest: true }), {
-    async query() { calls++; throw new Error('guest must not query users'); },
-  });
-  assert.equal(result.subject, 'guest-1');
-  assert.equal(result.guest, true);
-  assert.equal(result.session.active, true);
-  assert.equal(result.session.revoked, false);
+  await assert.rejects(
+    verifyCurrentSession(token({ sub: 'guest-1', is_guest: true }), {
+      async query() { calls++; throw new Error('guest tokens must never reach the user table'); },
+    }),
+    /invalid_token/,
+  );
   assert.equal(calls, 0);
 });
 
@@ -138,4 +137,47 @@ test('internal session route fails closed when its service secret is not configu
     },
   });
   assert.equal(response.status, 503);
+});
+
+function userRow(changes = {}) {
+  return {
+    id: 'user-1', email: 'person@example.com', phone_number: null, claimed_phone_enc: null,
+    is_email_verified: true, is_phone_verified: false, is_active: true, deleted: false, token_version: 2,
+    ...changes,
+  };
+}
+
+async function sessionFor(row, { gate } = {}) {
+  const prior = process.env.REQUIRE_PHONE_AT_SIGNUP;
+  if (gate === undefined) delete process.env.REQUIRE_PHONE_AT_SIGNUP; else process.env.REQUIRE_PHONE_AT_SIGNUP = gate;
+  try {
+    return await sessionService().verifyCurrentSession(token(), { async query() { return { rows: [row] }; } });
+  } finally {
+    if (prior === undefined) delete process.env.REQUIRE_PHONE_AT_SIGNUP; else process.env.REQUIRE_PHONE_AT_SIGNUP = prior;
+  }
+}
+
+test('a typed phone is reported as claimed, never as a verified contact', async () => {
+  const result = await sessionFor(userRow({ claimed_phone_enc: 'enc:+919876543210' }), { gate: 'true' });
+  assert.deepEqual(result.claimed_contacts, { phone: { claimed: true, value: '+919876543210' } });
+  assert.deepEqual(result.verified_contacts.phone, { verified: false, value: null });
+  assert.deepEqual(result.phone_gate, { required: true, satisfied: true });
+});
+
+test('with the lock on, an account with no phone is not satisfied; with it off nothing is required', async () => {
+  assert.deepEqual((await sessionFor(userRow(), { gate: 'true' })).phone_gate, { required: true, satisfied: false });
+  assert.deepEqual((await sessionFor(userRow())).phone_gate, { required: false, satisfied: false });
+  assert.deepEqual((await sessionFor(userRow(), { gate: 'false' })).phone_gate, { required: false, satisfied: false });
+});
+
+test('a verified phone from before the lock also satisfies it', async () => {
+  const result = await sessionFor(userRow({ phone_number: 'enc:+919876543210', is_phone_verified: true }), { gate: 'true' });
+  assert.deepEqual(result.phone_gate, { required: true, satisfied: true });
+  assert.deepEqual(result.claimed_contacts, { phone: { claimed: false, value: null } });
+});
+
+test('a disabled account exposes no claimed number and is not satisfied', async () => {
+  const result = await sessionFor(userRow({ claimed_phone_enc: 'enc:+919876543210', is_active: false }), { gate: 'true' });
+  assert.deepEqual(result.claimed_contacts, { phone: { claimed: false, value: null } });
+  assert.deepEqual(result.phone_gate, { required: true, satisfied: false });
 });

@@ -352,6 +352,10 @@ services:
       ENABLE_EMAIL_OTP: "${ENABLE_EMAIL_OTP:-true}"
       AUTH_RETIRE_LEGACY_OTP: "${AUTH_RETIRE_LEGACY_OTP:-false}"
       AUTH_RETIRE_PUBLIC_LOOKUP: "${AUTH_RETIRE_PUBLIC_LOOKUP:-false}"
+      # The phone lock (docs/EMAIL_PHONE_LOCK_PLAN_2026-11-09.md). Off until the
+      # app has the phone step; see .env.prod.example before switching it on.
+      REQUIRE_PHONE_AT_SIGNUP: "${REQUIRE_PHONE_AT_SIGNUP:-false}"
+      PHONE_ALLOWED_COUNTRIES: "${PHONE_ALLOWED_COUNTRIES:-IN}"
     ports:
       - "127.0.0.1:3210:3210"
 

@@ -67,7 +67,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   /// auth/'s OTP_TTL_SECONDS and OTP_VERIFY_MAX_ATTEMPTS defaults, which
   /// production uses. v2 challenges carry their own expiry.
-  static const _codeLifetime = Duration(seconds: 120);
+  static const _codeLifetime = Duration(seconds: 60);
   static const _maxCodeAttempts = 5;
 
   OtpChallenge? _challenge;
@@ -1255,7 +1255,7 @@ class _CodeStatusLine extends StatelessWidget {
       ),
       null => (
         Icons.schedule_rounded,
-        'Codes are valid for 2 minutes.',
+        'Codes are valid for 1 minute.',
         BambooInk.ink700,
         FontWeight.w400,
       ),

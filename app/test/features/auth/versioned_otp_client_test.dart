@@ -11,7 +11,7 @@ Map<String, Object?> challengeBody() => {
   'version': 2,
   'challenge_id': challengeId,
   'code_length': 6,
-  'expires_in': 120,
+  'expires_in': 60,
 };
 http.Response response(Object value, [int status = 200]) =>
     http.Response(jsonEncode(value), status);
@@ -136,7 +136,7 @@ void main() {
       'person@example.test',
       deviceId: 'device-1',
     );
-    now = now.add(const Duration(seconds: 120));
+    now = now.add(const Duration(seconds: 60));
     await expectLater(
       api.verifyEmailOtp(
         'person@example.test',

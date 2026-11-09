@@ -10,6 +10,7 @@ const {
   ActiveOtpError,
 } = require('../middleware/rateLimitMiddleware');
 const { TEST_OTP_CODE, isTestOtpIdentifier } = require('../utils/testOtp');
+const { OTP_LIFETIME_SECONDS } = require('../utils/otpLifetime');
 // === SECURITY HARDENING: FIELD-LEVEL ENCRYPTION ===
 const { encryptPhoneNumber } = require('../utils/fieldEncryption');
 const { phoneLookupHash } = require('../utils/encryptedPhoneSearch');
@@ -28,14 +29,17 @@ const { randomInt, randomUUID, createHash } = require('node:crypto');
 // second, explicit opt-in that itself defaults OFF means a deploy has to
 // get TWO things wrong (not set NODE_ENV=production AND explicitly set
 // ALLOW_TEST_OTP=true) before this bypass can be live, instead of one.
-// === ADDED FOR 2-MIN OTP VALIDITY & NO-RESEND ===
-// OTP validity changed from 10 minutes to 2 minutes (120 seconds)
-const OTP_TTL_SECONDS = parseInt(process.env.OTP_TTL_SECONDS || '120', 10); // 2 minutes
+// A code is valid for one minute (see utils/otpLifetime.js). The legacy
+// OTP_TTL_SECONDS setting can only shorten it, never lengthen it past that.
+const OTP_TTL_SECONDS = Math.min(
+  OTP_LIFETIME_SECONDS,
+  parseInt(process.env.OTP_TTL_SECONDS || String(OTP_LIFETIME_SECONDS), 10) || OTP_LIFETIME_SECONDS,
+);
 const OTP_EXPIRY_MS = OTP_TTL_SECONDS * 1000;
 const MAX_OTP_ATTEMPTS = Number(process.env.OTP_VERIFY_MAX_ATTEMPTS || process.env.OTP_MAX_ATTEMPTS || 5);
 const OTP_TYPES = new Set(['phone', 'email']);
 const OTP_PURPOSES = new Set(['signin', 'recovery', 'replacement']);
-const V2_TTL_SECONDS = 120;
+const V2_TTL_SECONDS = OTP_LIFETIME_SECONDS;
 const V2_MAX_ATTEMPTS = 5;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 

@@ -458,14 +458,13 @@ test('legacy validate-token preserves the active-user payload after authoritativ
     valid: true,
     payload: {
       sub: 'user-1', role: 'user', user_type: null,
-      token_version: 2, high_assurance: true, is_guest: false,
+      token_version: 2, high_assurance: true,
     },
   });
 });
 
-test('legacy validate-token rejects guest and inactive, deleted, revoked, wrong-device sessions', async t => {
+test('legacy validate-token rejects inactive, deleted, revoked, wrong-device sessions', async t => {
   const cases = [
-    { name: 'guest token', tokenClaims: { sub: 'guest-1', is_guest: true }, currentSession: { valid: true, subject: 'guest-1', guest: true, session: { active: true, revoked: false } } },
     { name: 'inactive account', currentSession: { valid: false, subject: 'user-1', session: { active: false, revoked: true, revocation: 'account_inactive' } } },
     { name: 'deleted account', currentSession: { valid: false, subject: 'user-1', session: { active: false, revoked: true, revocation: 'account_deleted' } } },
     { name: 'revoked token', currentSession: { valid: false, subject: 'user-1', session: { active: false, revoked: true, revocation: 'token_version_changed' } } },
@@ -764,7 +763,7 @@ test('v2 OTP request requires stable device and returns only six-digit challenge
   const bad=await h.post('v2/request-email-otp',{email:'version2@example.com'});assert.equal(bad.status,400);
   const response=await h.post('v2/request-email-otp',{email:'version2@example.com',device_id:'device-v2'});
   assert.equal(response.status,200);assert.deepEqual(Object.keys(response.body).sort(),['challenge_id','code_length','expires_in','ok','version']);
-  assert.equal(response.body.code_length,6);assert.equal(response.body.expires_in,120);assert.match(response.body.challenge_id,/^[a-f0-9-]{36}$/);
+  assert.equal(response.body.code_length,6);assert.equal(response.body.expires_in,60);assert.match(response.body.challenge_id,/^[a-f0-9-]{36}$/);
   assert.equal(h.userQueries.length,0,'request cannot expose pre-proof account state');
   assert.equal(h.mailCount,1);
   const duplicate=await h.request('version2@example.com');assert.equal(duplicate.status,429,'legacy shares the same active identifier claim');

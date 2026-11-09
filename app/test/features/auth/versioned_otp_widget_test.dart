@@ -30,7 +30,7 @@ void main() {
                     'version': 2,
                     'challenge_id': 'bc3f590c-b3c9-412c-98eb-1be64946cb70',
                     'code_length': 6,
-                    'expires_in': 120,
+                    'expires_in': 60,
                   },
           ),
           busy ? 429 : 200,

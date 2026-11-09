@@ -41,8 +41,8 @@ async function sendOtpSms(toPhone, code) {
   }
 
   // === ADDED FOR 2-MIN OTP VALIDITY & NO-RESEND ===
-  // OTP validity changed to 2 minutes
-  const messageBody = `Your verification code is ${code}. It will expire in 2 minutes.`;
+  // OTP validity is one minute (utils/otpLifetime.js)
+  const messageBody = `Your verification code is ${code}. It will expire in 1 minute.`;
 
   const msgConfig = {
     body: messageBody,

@@ -152,6 +152,7 @@ app.use('/auth/v2',require('./routes/versionedOtpRoutes').createVersionedOtpRout
 app.use('/auth', authRoutes);
 app.use('/users', userRoutes);
 app.use('/users/me/recovery-contact', require('./routes/recoveryContactRoutes'));
+app.use('/users/me/phone', require('./routes/phoneClaimRoutes'));
 app.use('/internal', internalRoutes);
 app.post('/internal/account/deletion/apply', (req,res,next)=>{
   if(!internalRoutes.serviceAuthenticated(req))return res.status(typeof config.authInternalServiceSecret==='string'&&Buffer.byteLength(config.authInternalServiceSecret)>=32?401:503).json({error:'Unauthorized service'});

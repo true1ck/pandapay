@@ -20,6 +20,7 @@ const { OtpCapacityError, BUSY_CODE, respondOtpCapacityUnavailable } = require('
 const { encryptPhoneNumber, decryptPhoneNumber } = require('../utils/fieldEncryption');
 const { preparePhoneSearchParams, phoneLookupHash } = require('../utils/encryptedPhoneSearch');
 const { maskEmail, maskPhone, maskPhonePrefix } = require('../utils/recoveryContacts');
+const { OTP_LIFETIME_SECONDS } = require('../utils/otpLifetime');
 
 const router = express.Router();
 const fingerprint = value => createHash('sha256').update(value || '').digest('hex');
@@ -145,7 +146,7 @@ async function requestReplacement(req, res, versioned = false) {
       await discard();
       return res.status(503).json({ error: 'Unable to send the verification code. Your contact has not been changed.' });
     }
-    const expiresIn = versioned ? Math.max(0, V2_TTL_SECONDS - Math.ceil((Date.now() - issuedAt) / 1000)) : 120;
+    const expiresIn = versioned ? Math.max(0, V2_TTL_SECONDS - Math.ceil((Date.now() - issuedAt) / 1000)) : OTP_LIFETIME_SECONDS;
     if (!delivery?.success || expiresIn < 1) {
       await discard();
       if (delivery?.code === BUSY_CODE) return respondOtpCapacityUnavailable(res);

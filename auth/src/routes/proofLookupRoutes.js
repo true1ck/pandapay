@@ -20,7 +20,7 @@ function validContact(contact, channel) {
 }
 
 function validSession(proof) {
-  return proof?.valid === true && proof.token_valid === true && proof.guest === false &&
+  return proof?.valid === true && proof.token_valid === true &&
     UUID.test(proof.subject || '') && proof.session?.active === true && proof.session?.revoked === false &&
     typeof proof.device_id === 'string' && Buffer.byteLength(proof.device_id) >= 1 &&
     Buffer.byteLength(proof.device_id) <= 255 && !/[\u0000-\u001f\u007f]/.test(proof.device_id);

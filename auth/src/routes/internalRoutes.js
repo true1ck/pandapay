@@ -48,12 +48,13 @@ router.post('/session/verify', async (req, res) => {
       valid: false,
       subject: null,
       session: { active: false, revoked: false, expires_at: null, revocation: null },
-      guest: false,
       auth_proof: { channel: null, verified_at: null },
       verified_contacts: {
         email: { verified: false, value: null },
         phone: { verified: false, value: null },
       },
+      claimed_contacts: { phone: { claimed: false, value: null } },
+      phone_gate: { required: false, satisfied: false },
     });
   }
 });
