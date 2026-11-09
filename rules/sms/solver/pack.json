@@ -1,0 +1,1214 @@
+{
+  "schema": "pandapay.sms.solver/1",
+  "version": 2,
+  "params": {
+    "accept": 0.8,
+    "maxCueDistance": 8,
+    "directionMargin": 2,
+    "roleGap": 5,
+    "partyMaxWords": 5
+  },
+  "lexicons": {
+    "debit": [
+      {
+        "p": "debited",
+        "kind": "bank"
+      },
+      {
+        "p": "deducted",
+        "kind": "bank"
+      },
+      {
+        "p": "auto-debited",
+        "kind": "bank"
+      },
+      {
+        "p": "autodebited",
+        "kind": "bank"
+      },
+      {
+        "p": "withdrawn",
+        "kind": "bank"
+      },
+      "spent",
+      "charged",
+      {
+        "p": "paid",
+        "kind": "directional"
+      },
+      {
+        "p": "sent",
+        "kind": "directional"
+      },
+      {
+        "p": "transferred",
+        "kind": "directional"
+      },
+      "deduction of",
+      "cash withdrawal",
+      "withdrawal of",
+      "purchase of",
+      "swiped",
+      "has been used",
+      "was used",
+      "is used",
+      "transaction|txn * done|made|completed",
+      "dr",
+      "purchase|purchases <amt>"
+    ],
+    "credit": [
+      "credited",
+      "deposited",
+      "refunded",
+      "credit alert",
+      "you have received",
+      "you received",
+      "received from",
+      "received in",
+      "received into",
+      "recd",
+      "rcvd",
+      "cr",
+      "you got",
+      "you have got"
+    ],
+    "billerReceived": [
+      "we have received",
+      "we received",
+      "payment of <amt> * received",
+      "received your"
+    ],
+    "negator": [
+      "will",
+      "shall",
+      "would",
+      "not",
+      "never",
+      "unable",
+      "cannot",
+      "if",
+      "once",
+      "be",
+      "can",
+      "may",
+      "could",
+      "should",
+      "get",
+      "earn",
+      "win",
+      "request",
+      "requested"
+    ],
+    "failed": [
+      "failed",
+      "declined",
+      "unsuccessful",
+      "could not be processed",
+      "has been rejected",
+      "was rejected",
+      "not successful",
+      "not * debited|charged|deducted",
+      "returned unpaid",
+      "bounced",
+      "dishonoured",
+      "dishonored",
+      "could not be credited",
+      "could not be debited",
+      "could not be completed",
+      "not * credited",
+      "unable to process",
+      "could not",
+      "couldn't",
+      "was not successful",
+      "is not successful",
+      "not approved",
+      "not authorised",
+      "not authorized",
+      "could not be * done|made|completed|processed"
+    ],
+    "scheduled": [
+      "will * debited|charged|deducted|auto-debited|credited",
+      "auto debit will",
+      "auto-debit will",
+      "autopay * scheduled",
+      "is scheduled",
+      "standing instruction",
+      "will renew",
+      "renews on",
+      "renewing on",
+      "next charge",
+      "next debit"
+    ],
+    "notice": [
+      "you requested",
+      "has requested",
+      "requested * from",
+      "collect request",
+      "payable on delivery",
+      "cash on delivery",
+      "booking is confirmed",
+      "order is confirmed",
+      "has been blocked",
+      "pre-authorisation",
+      "pre-authorization",
+      "pre-auth",
+      "has been shipped",
+      "dispatched",
+      "out for delivery",
+      "order has been placed",
+      "total spends",
+      "this month",
+      "will be blocked",
+      "will mature",
+      "has been delivered",
+      "fund requested",
+      "requested by",
+      "requested money",
+      "money through",
+      "requests money"
+    ],
+    "promo": [
+      "pre-approved",
+      "pre approved",
+      "congratulations",
+      "congrats",
+      "you have won",
+      "lucky draw",
+      "claim",
+      "apply now",
+      "use code",
+      "coupon",
+      "offer valid",
+      "t&c",
+      "limited period",
+      "limited time",
+      "click here",
+      "click to",
+      "exclusive offer",
+      "get flat",
+      "cashback on",
+      "earn rewards",
+      "offer",
+      "download the app",
+      "hurry",
+      "last day",
+      "avail",
+      "eligible for",
+      "you are eligible"
+    ],
+    "billDue": [
+      "is due",
+      "due on",
+      "due by",
+      "due date",
+      "total due",
+      "minimum due",
+      "min due",
+      "amount due",
+      "payment due",
+      "payable by",
+      "statement * generated",
+      "statement for",
+      "bill of",
+      "due amount",
+      "overdue",
+      "is payable",
+      "kindly pay",
+      "please pay",
+      "pay * before|by",
+      "late fee",
+      "late payment",
+      "renew * by|before",
+      "expires on",
+      "expiring on",
+      "due for renewal"
+    ],
+    "generated": [
+      "generated",
+      "is ready",
+      "is available",
+      "has been issued",
+      "new bill",
+      "e-statement"
+    ],
+    "paidReceipt": [
+      "has been paid",
+      "was paid",
+      "been paid",
+      "payment successful",
+      "paid successfully",
+      "successfully paid",
+      "thank you for * payment",
+      "thanks for * payment",
+      "payment confirmation",
+      "receipt",
+      "e-bill|ebill|invoice * payment|paid|received",
+      "has been renewed",
+      "was renewed",
+      "renewed successfully",
+      "successfully renewed",
+      "is renewed",
+      "bill paid",
+      "was already paid",
+      "already paid",
+      "has already been paid",
+      "already settled"
+    ],
+    "billNoun": [
+      "bill",
+      "bills",
+      "e-bill",
+      "ebill",
+      "invoice",
+      "statement",
+      "premium",
+      "membership",
+      "subscription",
+      "plan",
+      "policy",
+      "consumer",
+      "wellness",
+      "gym",
+      "renewal",
+      "dues",
+      "installment",
+      "emi",
+      "tuition",
+      "rent",
+      "electricity",
+      "water",
+      "gas",
+      "broadband",
+      "postpaid",
+      "insurance",
+      "loan"
+    ],
+    "recurring": [
+      "subscription",
+      "renewal",
+      "renewed",
+      "renews",
+      "auto-renew",
+      "auto-renewal",
+      "autopay",
+      "auto-pay",
+      "mandate",
+      "membership",
+      "recurring",
+      "monthly",
+      "annual",
+      "yearly",
+      "per month",
+      "every month",
+      "per year",
+      "e-mandate",
+      "standing instruction"
+    ],
+    "mandateSetup": [
+      "mandate created",
+      "mandate registered",
+      "mandate set up",
+      "mandate setup",
+      "mandate request",
+      "e-mandate",
+      "autopay * set up|activated|enabled|registered",
+      "auto-pay * set up|activated|enabled|registered",
+      "enrolled * autopay",
+      "registered for autopay",
+      "approve * mandate",
+      "auto debit * activated|enabled|registered",
+      "subscription * activated|started",
+      "subscribed to",
+      "you have subscribed",
+      "mandate * * created|registered|activated|enabled|approved|setup",
+      "autopay * * created|registered|activated|enabled"
+    ],
+    "mandateEnd": [
+      {
+        "p": "mandate|autopay|auto-pay|subscription|membership * * cancelled|canceled|revoked|stopped|deactivated|terminated|unsubscribed|removed",
+        "kind": "revoked"
+      },
+      {
+        "p": "you have unsubscribed",
+        "kind": "revoked"
+      },
+      {
+        "p": "cancellation of * * mandate|subscription|autopay",
+        "kind": "revoked"
+      },
+      {
+        "p": "mandate|autopay|auto-pay|subscription|membership * * expired|lapsed",
+        "kind": "expired"
+      },
+      {
+        "p": "mandate|autopay|auto-pay|subscription * * paused|suspended",
+        "kind": "paused"
+      },
+      {
+        "p": "mandate|autopay|auto-pay|subscription * * resumed|reactivated",
+        "kind": "resumed"
+      }
+    ],
+    "frequency": [
+      {
+        "p": "every month",
+        "kind": "monthly"
+      },
+      {
+        "p": "monthly",
+        "kind": "monthly"
+      },
+      {
+        "p": "per month",
+        "kind": "monthly"
+      },
+      {
+        "p": "each month",
+        "kind": "monthly"
+      },
+      {
+        "p": "a month",
+        "kind": "monthly"
+      },
+      {
+        "p": "every year",
+        "kind": "yearly"
+      },
+      {
+        "p": "yearly",
+        "kind": "yearly"
+      },
+      {
+        "p": "annual",
+        "kind": "yearly"
+      },
+      {
+        "p": "annually",
+        "kind": "yearly"
+      },
+      {
+        "p": "per year",
+        "kind": "yearly"
+      },
+      {
+        "p": "a year",
+        "kind": "yearly"
+      },
+      {
+        "p": "quarterly",
+        "kind": "quarterly"
+      },
+      {
+        "p": "every quarter",
+        "kind": "quarterly"
+      },
+      {
+        "p": "weekly",
+        "kind": "weekly"
+      },
+      {
+        "p": "every week",
+        "kind": "weekly"
+      },
+      {
+        "p": "per week",
+        "kind": "weekly"
+      },
+      {
+        "p": "daily",
+        "kind": "daily"
+      },
+      {
+        "p": "every day",
+        "kind": "daily"
+      },
+      {
+        "p": "one time",
+        "kind": "once"
+      },
+      {
+        "p": "one-time",
+        "kind": "once"
+      },
+      {
+        "p": "once",
+        "kind": "once"
+      }
+    ],
+    "dateRole": [
+      {
+        "p": "due on",
+        "role": "due"
+      },
+      {
+        "p": "due by",
+        "role": "due"
+      },
+      {
+        "p": "due date",
+        "role": "due"
+      },
+      {
+        "p": "due",
+        "role": "due"
+      },
+      {
+        "p": "pay by|before|on",
+        "role": "due"
+      },
+      {
+        "p": "payable by|on",
+        "role": "due"
+      },
+      {
+        "p": "on or before",
+        "role": "due"
+      },
+      {
+        "p": "last date",
+        "role": "due"
+      },
+      {
+        "p": "expires on",
+        "role": "due"
+      },
+      {
+        "p": "expiring on",
+        "role": "due"
+      },
+      {
+        "p": "renew by|before",
+        "role": "due"
+      },
+      {
+        "p": "generated on",
+        "role": "statement"
+      },
+      {
+        "p": "statement date",
+        "role": "statement"
+      },
+      {
+        "p": "bill date",
+        "role": "statement"
+      },
+      {
+        "p": "billed on",
+        "role": "statement"
+      },
+      {
+        "p": "issued on",
+        "role": "statement"
+      },
+      {
+        "p": "statement dated",
+        "role": "statement"
+      },
+      {
+        "p": "dated",
+        "role": "statement"
+      },
+      {
+        "p": "invoice date",
+        "role": "statement"
+      },
+      {
+        "p": "paid on",
+        "role": "paid"
+      },
+      {
+        "p": "received on",
+        "role": "paid"
+      },
+      {
+        "p": "debited on",
+        "role": "paid"
+      },
+      {
+        "p": "credited on",
+        "role": "paid"
+      },
+      {
+        "p": "for the period",
+        "role": "period"
+      },
+      {
+        "p": "statement period",
+        "role": "period"
+      },
+      {
+        "p": "billing period",
+        "role": "period"
+      },
+      {
+        "p": "period",
+        "role": "period"
+      }
+    ],
+    "relativeDay": [
+      {
+        "p": "today",
+        "kind": "0"
+      },
+      {
+        "p": "tomorrow",
+        "kind": "1"
+      }
+    ],
+    "purposeCue": [
+      {
+        "p": "salary",
+        "kind": "salary"
+      },
+      {
+        "p": "interest",
+        "kind": "interest"
+      },
+      {
+        "p": "refund|refunded|refunds",
+        "kind": "refund"
+      },
+      {
+        "p": "cashback",
+        "kind": "cashback"
+      },
+      {
+        "p": "atm",
+        "kind": "atm"
+      },
+      {
+        "p": "emi",
+        "kind": "emi"
+      },
+      {
+        "p": "fee|fees|charges",
+        "kind": "fee"
+      },
+      {
+        "p": "dividend",
+        "kind": "dividend"
+      },
+      {
+        "p": "reversal|reversed",
+        "kind": "reversal"
+      },
+      {
+        "p": "bill|bills|premium|recharge|electricity|broadband|insurance",
+        "kind": "bill_payment"
+      },
+      {
+        "p": "tax|tds",
+        "kind": "tax"
+      },
+      {
+        "p": "running account settlement",
+        "kind": "investment"
+      },
+      {
+        "p": "settled your account",
+        "kind": "investment"
+      },
+      {
+        "p": "payout",
+        "kind": "investment"
+      }
+    ],
+    "mandateRefCue": [
+      "mandate id",
+      "mandate ref",
+      "mandate reference",
+      "umrn",
+      "mandate no",
+      "mandate number"
+    ],
+    "billerStop": [
+      "your",
+      "the",
+      "a",
+      "an",
+      "new",
+      "latest",
+      "e-bill",
+      "ebill",
+      "electricity",
+      "water",
+      "gas",
+      "mobile",
+      "postpaid",
+      "broadband",
+      "credit",
+      "card",
+      "insurance",
+      "loan",
+      "health",
+      "life",
+      "policy",
+      "dear",
+      "customer",
+      "monthly",
+      "total",
+      "current",
+      "this",
+      "my",
+      "statement",
+      "payment",
+      "pending",
+      "unpaid",
+      "outstanding",
+      "and",
+      "of",
+      "for"
+    ],
+    "merchantCue": [
+      "for",
+      "to",
+      "of",
+      "at",
+      "towards",
+      "with",
+      "from"
+    ],
+    "loanWord": [
+      "loan",
+      "emi"
+    ],
+    "completionOther": [
+      "successful",
+      "successfully",
+      "completed",
+      "allotted"
+    ],
+    "debitIntent": [
+      "recharge",
+      "premium",
+      "toll",
+      "bill payment",
+      "emi",
+      "neft|imps|rtgs|upi of",
+      "transfer of",
+      "payment|transfer|txn|transaction of"
+    ],
+    "holdForReview": [
+      "disbursed",
+      "sanctioned",
+      "reversal",
+      "reversed",
+      "chargeback",
+      "dispute"
+    ],
+    "security": [
+      "otp",
+      "one time password",
+      "cvv",
+      "pin",
+      "password"
+    ],
+    "amountRole": [
+      {
+        "p": "avl bal",
+        "role": "balance"
+      },
+      {
+        "p": "avl balance",
+        "role": "balance"
+      },
+      {
+        "p": "avail bal",
+        "role": "balance"
+      },
+      {
+        "p": "available bal",
+        "role": "balance"
+      },
+      {
+        "p": "available balance",
+        "role": "balance"
+      },
+      {
+        "p": "closing balance",
+        "role": "balance"
+      },
+      {
+        "p": "current balance",
+        "role": "balance"
+      },
+      {
+        "p": "clear balance",
+        "role": "balance"
+      },
+      {
+        "p": "ledger balance",
+        "role": "balance"
+      },
+      {
+        "p": "wallet balance",
+        "role": "balance"
+      },
+      {
+        "p": "balance",
+        "role": "balance",
+        "w": 0.8
+      },
+      {
+        "p": "bal",
+        "role": "balance",
+        "w": 0.8
+      },
+      {
+        "p": "avl lmt",
+        "role": "credit_avail"
+      },
+      {
+        "p": "avl limit",
+        "role": "credit_avail"
+      },
+      {
+        "p": "avail limit",
+        "role": "credit_avail"
+      },
+      {
+        "p": "available limit",
+        "role": "credit_avail"
+      },
+      {
+        "p": "available credit",
+        "role": "credit_avail"
+      },
+      {
+        "p": "credit limit available",
+        "role": "credit_avail"
+      },
+      {
+        "p": "available margin",
+        "role": "credit_avail"
+      },
+      {
+        "p": "credit limit",
+        "role": "credit_limit",
+        "w": 0.9
+      },
+      {
+        "p": "total due",
+        "role": "due_total"
+      },
+      {
+        "p": "total amount due",
+        "role": "due_total"
+      },
+      {
+        "p": "amount due",
+        "role": "due_total"
+      },
+      {
+        "p": "total payable",
+        "role": "due_total"
+      },
+      {
+        "p": "amount payable",
+        "role": "due_total"
+      },
+      {
+        "p": "due amount",
+        "role": "due_total"
+      },
+      {
+        "p": "bill of",
+        "role": "due_total",
+        "w": 0.9
+      },
+      {
+        "p": "minimum due",
+        "role": "due_min"
+      },
+      {
+        "p": "min due",
+        "role": "due_min"
+      },
+      {
+        "p": "minimum amount due",
+        "role": "due_min"
+      },
+      {
+        "p": "minimum payment",
+        "role": "due_min"
+      },
+      {
+        "p": "fee of",
+        "role": "fee"
+      },
+      {
+        "p": "charges of",
+        "role": "fee"
+      },
+      {
+        "p": "maintain",
+        "role": "ignore"
+      },
+      {
+        "p": "up to",
+        "role": "ignore"
+      },
+      {
+        "p": "upto",
+        "role": "ignore"
+      },
+      {
+        "p": "worth",
+        "role": "ignore"
+      }
+    ],
+    "cardPayment": [
+      "card <mask> payment of|received",
+      {
+        "p": "received * towards|against|for|on your? credit? card",
+        "cue": true
+      },
+      "credit card bill",
+      "credit card dues",
+      "card bill payment"
+    ],
+    "ownTransfer": [
+      "own account",
+      "own accounts",
+      "own a/c",
+      "self transfer",
+      "between your accounts",
+      "self"
+    ],
+    "walletTopup": [
+      {
+        "p": "added to your wallet",
+        "cue": true
+      },
+      {
+        "p": "added to wallet",
+        "cue": true
+      },
+      {
+        "p": "added to your prepaid",
+        "cue": true
+      },
+      {
+        "p": "added to your trading",
+        "cue": true
+      },
+      {
+        "p": "added to your demat",
+        "cue": true
+      },
+      {
+        "p": "funds * added",
+        "cue": true
+      },
+      {
+        "p": "money added",
+        "cue": true
+      },
+      {
+        "p": "topped up",
+        "cue": true
+      },
+      {
+        "p": "top-up|topup successful",
+        "cue": true
+      },
+      {
+        "p": "add money request * * successful|completed",
+        "cue": true
+      }
+    ],
+    "investment": [
+      {
+        "p": "sip",
+        "cue": true
+      },
+      {
+        "p": "units",
+        "cue": true
+      },
+      {
+        "p": "nav",
+        "cue": true
+      },
+      {
+        "p": "mutual fund",
+        "cue": true
+      },
+      {
+        "p": "folio",
+        "cue": true
+      }
+    ],
+    "maskOtherDebit": [
+      "to",
+      "towards",
+      "into",
+      "beneficiary"
+    ],
+    "maskOtherCredit": [
+      "from",
+      "by",
+      "sender"
+    ],
+    "ownMarker": [
+      "your",
+      "my"
+    ],
+    "payeeDebit": [
+      "to",
+      "at",
+      "towards",
+      "info"
+    ],
+    "payeeCredit": [
+      "from",
+      "by",
+      "info"
+    ],
+    "partyStop": [
+      "on",
+      "via",
+      "using",
+      "ref",
+      "utr",
+      "avl",
+      "avail",
+      "bal",
+      "balance",
+      "txn",
+      "transaction",
+      "if",
+      "not",
+      "call",
+      "from",
+      "to",
+      "for",
+      "dated",
+      "at",
+      "in",
+      "through",
+      "with",
+      "and",
+      "is",
+      "has",
+      "was",
+      "thank",
+      "thanks",
+      "dear",
+      "your",
+      "imps",
+      "neft",
+      "rtgs",
+      "info",
+      "limit",
+      "vide",
+      "by",
+      "will",
+      "it",
+      "you",
+      "the",
+      "kindly",
+      "pls",
+      "please",
+      "sms",
+      "click",
+      "visit",
+      "total",
+      "remaining",
+      "available",
+      "bill",
+      "payment",
+      "successful",
+      "ref",
+      "no"
+    ],
+    "partyLead": [
+      "vpa",
+      "upi",
+      "id",
+      "payee",
+      "merchant",
+      "beneficiary",
+      "dr",
+      "cr",
+      "p2m",
+      "p2a",
+      "neft",
+      "imps",
+      "rtgs",
+      "payment"
+    ],
+    "nonParty": [
+      "your",
+      "a/c",
+      "account",
+      "card",
+      "wallet",
+      "bank",
+      "the",
+      "you",
+      "my",
+      "atm",
+      "branch",
+      "self",
+      "own",
+      "ur",
+      "acct"
+    ],
+    "instrumentKind": [
+      {
+        "p": "credit card",
+        "kind": "credit_card"
+      },
+      {
+        "p": "debit card",
+        "kind": "debit_card"
+      },
+      {
+        "p": "prepaid card",
+        "kind": "prepaid_card"
+      },
+      {
+        "p": "card",
+        "kind": "card"
+      },
+      {
+        "p": "cards",
+        "kind": "card"
+      },
+      {
+        "p": "a/c",
+        "kind": "bank"
+      },
+      {
+        "p": "account",
+        "kind": "bank"
+      },
+      {
+        "p": "acct",
+        "kind": "bank"
+      },
+      {
+        "p": "savings",
+        "kind": "bank"
+      },
+      {
+        "p": "account number|no",
+        "kind": "bank"
+      },
+      {
+        "p": "a/c no",
+        "kind": "bank"
+      },
+      {
+        "p": "wallet",
+        "kind": "wallet"
+      },
+      {
+        "p": "your number",
+        "kind": "phone"
+      },
+      {
+        "p": "mobile|phone",
+        "kind": "phone"
+      },
+      {
+        "p": "mobile|phone number",
+        "kind": "phone"
+      }
+    ],
+    "rail": [
+      {
+        "p": "upi",
+        "kind": "upi"
+      },
+      {
+        "p": "imps",
+        "kind": "imps"
+      },
+      {
+        "p": "neft",
+        "kind": "neft"
+      },
+      {
+        "p": "rtgs",
+        "kind": "rtgs"
+      },
+      {
+        "p": "cheque",
+        "kind": "cheque"
+      },
+      {
+        "p": "nach",
+        "kind": "nach"
+      },
+      {
+        "p": "atm",
+        "kind": "cash"
+      },
+      {
+        "p": "cdm",
+        "kind": "cash"
+      },
+      {
+        "p": "pos",
+        "kind": "card"
+      },
+      {
+        "p": "ecom",
+        "kind": "card"
+      },
+      {
+        "p": "fastag",
+        "kind": "wallet"
+      },
+      "mandate",
+      "emi",
+      "sip",
+      "ach",
+      "recharge",
+      "premium",
+      "toll"
+    ],
+    "nonMoneyUnit": [
+      "points",
+      "point",
+      "coins",
+      "miles",
+      "stars"
+    ],
+    "futureMarker": [
+      "will",
+      "shall",
+      "would",
+      "when",
+      "if",
+      "whenever"
+    ],
+    "conditional": [
+      "when you",
+      "if you",
+      "on spending",
+      "once you",
+      "after you",
+      "when you spend",
+      "on spend",
+      "on purchase",
+      "request",
+      "requested"
+    ],
+    "undo": [
+      "refunded",
+      "reversed",
+      "reversal",
+      "cancelled",
+      "canceled",
+      "returned",
+      "waived"
+    ],
+    "reminderWord": [
+      "reminder",
+      "kindly"
+    ]
+  }
+}

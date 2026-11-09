@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay/data/local/response_cache.dart';
 import 'package:pandapay/app/design/app_theme.dart';
 import 'package:pandapay/data/api_exception.dart';
 import 'package:pandapay/data/catalogue_repository.dart' show SpendCategory;
@@ -59,63 +61,23 @@ class _ThrowingMerchantSearchRepository implements MerchantSearchRepository {
 /// In-memory stand-in for UserCardsRepository.logTransaction so the
 /// save+pop+Undo flow can be exercised without a real HTTP client.
 class _FakeUserCardsRepository extends UserCardsRepository {
-  String? savedCategoryId;
-  String? savedUserCategoryId;
+  /// Quick add is local first: Save writes the phone's outbox, so what was
+  /// saved is read back from there.
+  final AppDatabase db = openInMemoryForTesting();
+
+  String? get savedCategoryId => _outbox('category_id');
+  String? get savedUserCategoryId => _outbox('user_category_id');
+
+  String? _outbox(String column) {
+    final rows = db.db.select('SELECT * FROM transaction_outbox_entries');
+    return rows.isEmpty ? null : rows.last[column] as String?;
+  }
 
   _FakeUserCardsRepository()
     : super(apiBaseUrl: 'http://localhost', accessToken: 't');
 
   @override
-  Future<String> logTransaction({
-    String? userCardId,
-    required Money amount,
-    String? categoryId,
-    String? userCategoryId,
-    String? merchantName,
-    String? merchantVpa,
-    String? mcc,
-    DateTime? occurredAt,
-    String? note,
-    String? rail,
-    TxnInstrument instrument = TxnInstrument.creditCard,
-    TxnEntryKind entryKind = TxnEntryKind.spend,
-    String? clientMutationId,
-  }) async {
-    savedCategoryId = categoryId;
-    savedUserCategoryId = userCategoryId;
-    return 'fake-txn-id';
-  }
-
-  @override
   Future<void> ignoreTransaction(String id, {required String reason}) async {}
-}
-
-class _LostResponseUserCardsRepository extends UserCardsRepository {
-  final List<String?> mutationIds = [];
-
-  _LostResponseUserCardsRepository()
-    : super(apiBaseUrl: 'http://localhost', accessToken: 't');
-
-  @override
-  Future<String> logTransaction({
-    String? userCardId,
-    required Money amount,
-    String? categoryId,
-    String? userCategoryId,
-    String? merchantName,
-    String? merchantVpa,
-    String? mcc,
-    DateTime? occurredAt,
-    String? note,
-    String? rail,
-    TxnInstrument instrument = TxnInstrument.creditCard,
-    TxnEntryKind entryKind = TxnEntryKind.spend,
-    String? clientMutationId,
-  }) async {
-    mutationIds.add(clientMutationId);
-    if (mutationIds.length == 1) throw ApiException('response lost');
-    return 'same-server-transaction';
-  }
 }
 
 /// Save stays in the sticky footer while the transaction form scrolls.
@@ -339,6 +301,10 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          cacheNamespaceProvider.overrideWithValue('legacy'),
+          responseCacheProvider.overrideWith(
+            (ref) async => ResponseCache(repository.db),
+          ),
           userCardsProvider.overrideWith((ref) async => const [card]),
           userCardsRepositoryProvider.overrideWithValue(repository),
           categoriesProvider.overrideWith(
@@ -1016,67 +982,6 @@ void main() {
       // Real undo now (POST /transactions/:id/ignore, reason: 'reversal') —
       // no longer the old "can't undo yet" placeholder message.
       expect(find.text('Undone.'), findsOneWidget);
-    },
-  );
-
-  testWidgets(
-    'retrying an unchanged save reuses its client mutation identity',
-    (tester) async {
-      const card = UserCard(
-        id: 'card-1',
-        cardProductId: 'product-1',
-        cardName: 'Test Card',
-        isDefault: true,
-      );
-      final repo = _LostResponseUserCardsRepository();
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            userCardsProvider.overrideWith((ref) async => const [card]),
-            userCardsRepositoryProvider.overrideWithValue(repo),
-            categoriesProvider.overrideWith((ref) async => const []),
-            merchantSearchRepositoryProvider.overrideWithValue(
-              _EmptyMerchantSearchRepository(),
-            ),
-            isOnlineProvider.overrideWith((ref) => Stream.value(true)),
-          ],
-          child: MaterialApp(
-            home: Builder(
-              builder: (context) => Scaffold(
-                body: ElevatedButton(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) =>
-                          const QuickAddScreen(initialUserCardId: 'card-1'),
-                    ),
-                  ),
-                  child: const Text('open quick add'),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('open quick add'));
-      await tester.pumpAndSettle();
-      await tester.enterText(_amountField, '250');
-      await _selectCreditCard(tester, 'Test Card');
-
-      await tester.tap(await _saveButton(tester));
-      await tester.pumpAndSettle();
-      expect(repo.mutationIds, hasLength(1));
-
-      // Let the first attempt's error snackbar clear so it does not cover the
-      // bottom-of-form Save button during the retry.
-      await tester.pump(const Duration(seconds: 5));
-      await tester.pumpAndSettle();
-      await tester.tap(await _saveButton(tester));
-      await tester.pumpAndSettle();
-      expect(repo.mutationIds, hasLength(2));
-      expect(repo.mutationIds.first, isNotNull);
-      expect(repo.mutationIds.last, repo.mutationIds.first);
     },
   );
 }

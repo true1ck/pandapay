@@ -128,6 +128,25 @@ RulesSource readRulesFolder(
   });
   lists['merchantAliases']!.sort((a, b) => '${(a as Map)['alias']}'.compareTo('${(b as Map)['alias']}'));
 
+  // The evidence solver's vocabulary lives beside the rules folder
+  // (`rules/sms/solver/pack.json`), not inside it, because every other json in
+  // the rules folder is read as a rule. Absent for any folder without one.
+  Map<String, Object?>? solverPack;
+  final packFile = File('${root.path}/../solver/pack.json');
+  if (packFile.existsSync()) {
+    try {
+      final decoded = jsonDecode(packFile.readAsStringSync());
+      if (decoded is Map<String, Object?>) {
+        solverPack = decoded;
+        files.add('../solver/pack.json');
+      } else {
+        problems.add('../solver/pack.json: expected an object');
+      }
+    } on FormatException catch (e) {
+      problems.add('../solver/pack.json: not valid JSON (${e.message})');
+    }
+  }
+
   final created = (meta['createdAt'] as String?) ?? createdAt;
   final bundle = <String, Object?>{
     'schema': 'pandapay.sms.rules/2',
@@ -139,6 +158,7 @@ RulesSource readRulesFolder(
     'minEngineVersion': meta['minEngineVersion'] ?? minEngineVersion,
     'taxonomyVersion': meta['taxonomyVersion'] ?? 1,
     ...lists,
+    if (solverPack != null) 'solverPack': solverPack,
     'signature': null,
   };
   return RulesSource(bundle: bundle, files: files, problems: problems);

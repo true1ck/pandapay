@@ -82,6 +82,15 @@ class SmsTransactionActions {
     });
   }
 
+  /// Sets one category on several stored SMS transactions in one local write.
+  /// This is what bulk "Set category" uses: the server has no `v2:` ids.
+  void setCategory(Iterable<TransactionEntry> entries, String category) =>
+      controller.apply(
+        items: [for (final e in entries) _item(e)],
+        kind: CorrectionKind.wrongCategory,
+        corrected: {'category': category},
+      );
+
   /// The event type the ledger holds for [original], which tells a card bill
   /// from a transfer between the person's accounts (both display as "Transfer").
   EventType? storedType(TransactionEntry original) => original.eventId == null

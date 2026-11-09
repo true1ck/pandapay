@@ -1,4 +1,6 @@
+import 'dart:async';
 import '../sms_v2/similar/similar_changes.dart';
+import '../sync/sync_engine.dart';
 import '../sms_v2/similar/similar_offer_sheet.dart';
 import '../sms_v2/ui/review_controller.dart';
 import '../sms_v2/ui/transaction_actions.dart';
@@ -302,7 +304,15 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         }
         return;
       }
-      setState(() => _error = userFacingErrorMessage(e));
+      // Keep the real cause in the log: the on-screen copy is deliberately
+      // generic for anything that is not a validation message.
+      debugPrint('Edit transaction save failed: $e');
+      final locked = e.toString().contains('database is locked');
+      setState(
+        () => _error = locked
+            ? 'The phone is busy reading your messages. Wait a moment and save again.'
+            : userFacingErrorMessage(e),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -319,7 +329,9 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         ? (offline
               ? 'Saved on this phone. It will sync when you are back online.'
               : 'Saved on this phone. Syncing in the background.')
-        : 'Saved.';
+        : (offline
+              ? 'Saved on this phone. It will sync when you are back online.'
+              : 'Saved. Syncing in the background.');
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(text)));
@@ -434,6 +446,29 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       return;
     }
 
+    // Local first: a plain edit is saved on the phone and sent by the sync
+    // queue. The save never waits on the network, and the list already shows
+    // the change because the entity reader overlays queued edits. A
+    // self-transfer decision needs the server's own checks, and a row that
+    // only exists as a queued quick-add has no server id yet, so those keep
+    // the direct call below.
+    if (_selfTransfer == null &&
+        _clearedSelfTransfer == null &&
+        !widget.transactionId.startsWith('local')) {
+      final fields = _changedServerFields(original, amount);
+      if (fields.isNotEmpty) {
+        final queue = await ref.read(syncQueueProvider.future);
+        queue.enqueueUpdate(
+          entity: 'transactions',
+          entityId: widget.transactionId,
+          fields: fields,
+        );
+        ref.invalidate(pendingSyncCountProvider);
+        unawaited(ref.read(syncEngineProvider).sync());
+      }
+      return;
+    }
+
     final repo = ref.read(userCardsRepositoryProvider);
     if (repo == null) {
       throw const AuthenticationUnavailableException();
@@ -462,6 +497,37 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
             },
       rail: _rail,
     );
+  }
+
+  /// Only the fields the person actually changed, in the names the sync API
+  /// accepts. Sending an untouched field would give it a fresh clock and could
+  /// overwrite a newer edit made on another device.
+  Map<String, Object?> _changedServerFields(
+    TransactionEntry? original,
+    double amount,
+  ) {
+    final merchant = _merchantController.text.trim();
+    return {
+      if (original == null || original.amount != Money.fromRupees(amount))
+        'amount_inr': amount,
+      if (original == null || original.occurredAt != _occurredAt)
+        'occurred_at': _occurredAt?.toIso8601String(),
+      if (original == null || original.categoryId != _categoryId) ...{
+        'category_id': categoryIdForServer(_categoryId),
+        'user_category_id': userCategoryIdForServer(_categoryId),
+      },
+      if (original == null || (original.merchantName ?? '') != merchant)
+        'merchant_name': merchant.isEmpty ? null : merchant,
+      if (original == null || original.userCardId != _userCardId)
+        'user_card_id': _userCardId,
+      if (_instrument != null &&
+          (original == null || original.instrument != _instrument))
+        'instrument': _instrument!.wireValue,
+      if (original == null || original.entryKind != _entryKind)
+        'entry_kind': _entryKind.wireValue,
+      if (original == null || original.rail != _rail)
+        'rail': _railWireValue(_rail),
+    };
   }
 
   /// Asks about the other transactions that look the same, one change at a

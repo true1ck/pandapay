@@ -3,6 +3,7 @@ import '../sms_v2/ui/transaction_actions.dart';
 import '../sms_v2/ui/why_sheet.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
+import '../sync/sync_engine.dart';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
@@ -265,7 +266,23 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     _loadSplits();
   }
 
+  /// Phone-only SMS payments carry ids like `v2:<hash>` until they sync; the
+  /// private-split endpoint only knows server UUIDs, so there is nothing to
+  /// load (and nothing to fail) for them yet.
+  bool get _hasServerId =>
+      !widget.entry.id.startsWith('v2:') && !widget.entry.id.startsWith('local');
+
   Future<void> _loadSplits() async {
+    if (!_hasServerId) {
+      if (mounted) {
+        setState(() {
+          _loadingSplits = false;
+          _splitLoadError = null;
+          _splits = const [];
+        });
+      }
+      return;
+    }
     try {
       final store = await ref.read(splitRepositoryProvider.future);
       if (!mounted) return;
@@ -434,6 +451,23 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     if (repo == null) return;
     final previous = _note;
     setState(() => _note = note.isEmpty ? null : note);
+    // Local first: queue the note and return. The sync queue carries it to the
+    // server, and the entity reader already shows queued edits. Phone-only ids
+    // (`v2:`, `local`) have no server row to patch, so they keep the old path.
+    final id = widget.entry.id;
+    if (!id.startsWith('v2:') && !id.startsWith('local')) {
+      final queue = await ref.read(syncQueueProvider.future);
+      queue.enqueueUpdate(
+        entity: 'transactions',
+        entityId: id,
+        fields: {'note': note.isEmpty ? null : note},
+      );
+      ref.invalidate(pendingSyncCountProvider);
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(transactionDetailProvider(id));
+      unawaited(ref.read(syncEngineProvider).sync());
+      return;
+    }
     try {
       await repo.updateTransactionNote(
         widget.entry.id,
@@ -570,6 +604,16 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
 
   Future<void> _showSplitSheet() async {
     if (_savingSplits) return;
+    if (!_hasServerId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Private allocations open once this payment has synced. You can still share it with people.',
+          ),
+        ),
+      );
+      return;
+    }
     // A detail row can be opened before the one-time split read has settled.
     // Finish that read before opening the editor so an existing split is not
     // accidentally presented as a new split and then overwritten.

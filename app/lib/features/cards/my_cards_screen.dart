@@ -1,3 +1,4 @@
+import 'dart:async';
 import '../settings/feedback_support_screen.dart';
 import 'package:flutter/material.dart';
 import '../../app/design/bamboo_components.dart';
@@ -8,6 +9,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../sync/sync_engine.dart';
 import '../../app/router.dart';
 import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart' show SpendCategory;
@@ -236,9 +238,14 @@ class MyCardsScreen extends ConsumerWidget {
                           for (final c in reordered) c.id,
                         ]);
                       } else {
-                        await repo.reorderCards([
-                          for (final c in reordered) c.id,
-                        ]);
+                        // Local first: the new order shows at once and the
+                        // sync queue sends it to the server in the background.
+                        final localFirst = await ref.read(
+                          localFirstCardsProvider.future,
+                        );
+                        localFirst.reorder([for (final c in reordered) c.id]);
+                        ref.invalidate(pendingSyncCountProvider);
+                        unawaited(ref.read(syncEngineProvider).sync());
                       }
                     } catch (e) {
                       if (context.mounted) {

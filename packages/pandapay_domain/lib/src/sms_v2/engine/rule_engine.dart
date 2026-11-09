@@ -8,6 +8,8 @@ import '../contract/fact.dart';
 import '../contract/interfaces.dart';
 import '../contract/json_util.dart';
 import '../contract/rule_bundle.dart';
+import '../solver/evidence_solver.dart';
+import '../solver/solver_facts.dart';
 import '../template/skeleton.dart';
 import 'compiled_bundle.dart';
 import 'transforms.dart';
@@ -18,6 +20,13 @@ class EngineStats {
   int matched = 0;
   int ignored = 0;
   int unknown = 0;
+
+  /// Tier 2 (the evidence solver): readings accepted into facts, readings it
+  /// was not sure of (left for review), and accepted readings that could not be
+  /// written as valid facts.
+  int solverAccepted = 0;
+  int solverCandidates = 0;
+  int solverRejected = 0;
 
   /// Unknown results by reason (`no_rule_matched`, `rule_emitted_invalid`,
   /// `bundle_refused`, `engine_error`).
@@ -34,6 +43,7 @@ class EngineStats {
 
   void reset() {
     messages = matched = ignored = unknown = maskDateOverlaps = 0;
+    solverAccepted = solverCandidates = solverRejected = 0;
     unknownReasons.clear();
     ruleHits.clear();
     invalidEmits.clear();
@@ -44,6 +54,9 @@ class EngineStats {
         'matched': matched,
         'ignored': ignored,
         'unknown': unknown,
+        'solverAccepted': solverAccepted,
+        'solverCandidates': solverCandidates,
+        'solverRejected': solverRejected,
         'unknownReasons': {...unknownReasons},
         'ruleHits': {...ruleHits},
         'maskDateOverlaps': maskDateOverlaps,
@@ -216,10 +229,71 @@ class RuleEngine implements SmsInterpreter {
           winnerId: id,
         );
       }
+      // 3. Tier 2: no rule matched, so read the message by its evidence. Only an
+      // accepted reading becomes facts; anything less stays unknown and goes to
+      // review / the AI drafter exactly as before.
+      final solved = _solve(cb, message, brand, hash, appVersion);
+      if (solved != null) return solved;
       return unknown('no_rule_matched');
     } catch (e) {
       return unknown('engine_error', detail: '$e');
     }
+  }
+
+  // ---- tier 2 ----
+
+  EngineOutcome? _solve(CompiledBundle cb, SmsMessage msg, String brand, String hash, String appVersion) {
+    final solver = cb.solver;
+    if (solver == null) return null;
+    final SolverDecision decision;
+    try {
+      decision = solver.solve(msg.body, observedAt: msg.observedAt);
+    } on Object {
+      return null;
+    }
+    if (!decision.accepted) {
+      stats.solverCandidates++;
+      return null;
+    }
+    final SolverFactResult? built;
+    try {
+      built = SolverFacts.build(
+        decision,
+        sourceKey: msg.sourceKey,
+        observedAt: msg.observedAt,
+        issuerSlug: cb.sendersByBrand[brand]?.issuerSlug,
+        packVersion: solver.pack.version,
+        bundleVersion: cb.bundle.bundleVersion,
+        engineVersion: engineVersion,
+        appVersion: appVersion,
+        refine: (facts) => _applyCounterpartyPurposes(facts, cb),
+      );
+    } on Object {
+      stats.solverRejected++;
+      return null;
+    }
+    if (built == null) {
+      stats.solverRejected++;
+      return null;
+    }
+    final id = built.ruleId;
+    stats.ruleHits[id] = (stats.ruleHits[id] ?? 0) + 1;
+    if (built.ignored) {
+      stats.ignored++;
+    } else {
+      stats.matched++;
+    }
+    stats.solverAccepted++;
+    return EngineOutcome(
+      InterpretResult(
+        outcome: built.ignored ? InterpretOutcome.ignored : InterpretOutcome.matched,
+        facts: built.facts,
+        ruleId: id,
+        ruleVersion: solver.pack.version,
+        templateHash: hash,
+      ),
+      winnerId: id,
+    );
   }
 
   // ---- info fact for an ignore rule ----

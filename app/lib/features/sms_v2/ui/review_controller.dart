@@ -31,11 +31,17 @@ class ReviewController {
     required this.namespace,
     required this.bundle,
     this.hasConsent = false,
+    this.categoryIdBySlug = const {},
   });
   final FinancialStore financial;
   final String namespace;
   final RuleBundle bundle;
   final bool hasConsent;
+
+  /// Maps category slugs to the account's category ids. Without it a
+  /// correction rewrites the stored row with a null `categoryId`, which drops
+  /// the transaction out of every category filter.
+  final Map<String, String> categoryIdBySlug;
 
   void apply({
     required Iterable<LocalReviewItem> items,
@@ -48,6 +54,7 @@ class ReviewController {
       financial: financial,
       namespace: namespace,
       bundle: bundle,
+      categoryIdBySlug: categoryIdBySlug,
     );
     financial.batch(() {
       db.execute('SAVEPOINT sms_review_group');
@@ -381,6 +388,7 @@ Future<ReviewController> smsReviewController(WidgetRef ref) async {
     namespace: namespace,
     bundle: bundle,
     hasConsent: hasConsent,
+    categoryIdBySlug: runtime?.categoryIdBySlug ?? const {},
   );
 }
 
