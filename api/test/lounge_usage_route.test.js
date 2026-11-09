@@ -120,3 +120,34 @@ test('database failures return the stable API error and do not log exception con
   assert.deepEqual(logged, [['POST /lounge-usage failed']]);
 });
 
+
+test('a queued visit with a client mutation id uses the idempotent insert and the same id', async () => {
+  const { INSERT_OWNED_LOUNGE_USAGE_IDEMPOTENT_SQL } = require('../src/lounge_usage_route');
+  const MUTATION = '50000000-0000-4000-8000-000000000005';
+  const calls = [];
+  const handler = createLoungeUsagePostHandler({
+    withUserClient: async (_profileId, callback) =>
+      callback({ query: async (...args) => { calls.push(args); return { rows: [row] }; } }),
+    logger: { error() { assert.fail('success should not log'); } },
+  });
+  const res = responseDouble();
+  await handler(request({
+    userCardId: CARD, benefitId: BENEFIT, usedOn: '2026-10-21', clientMutationId: MUTATION,
+  }), res);
+  assert.equal(res.statusCode, 201);
+  assert.equal(calls[0][0], INSERT_OWNED_LOUNGE_USAGE_IDEMPOTENT_SQL);
+  assert.deepEqual(calls[0][1], [PROFILE, CARD, BENEFIT, '2026-10-21', null, MUTATION]);
+});
+
+test('the idempotent insert returns the stored visit when the id was already used', () => {
+  const { INSERT_OWNED_LOUNGE_USAGE_IDEMPOTENT_SQL: sql } = require('../src/lounge_usage_route');
+  assert.match(sql, /ON CONFLICT \(profile_id, client_mutation_id\) WHERE client_mutation_id IS NOT NULL\s+DO NOTHING/);
+  assert.match(sql, /client_mutation_id = \$6::uuid\s+AND NOT EXISTS \(SELECT 1 FROM inserted\)/);
+});
+
+test('a malformed client mutation id is rejected', () => {
+  assert.deepEqual(
+    validateBody({ userCardId: CARD, benefitId: BENEFIT, usedOn: '2026-10-21', clientMutationId: 'not-a-uuid' }),
+    { error: 'invalid_request' },
+  );
+});

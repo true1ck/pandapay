@@ -1,3 +1,4 @@
+import 'package:uuid/uuid.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -5,6 +6,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../data/local_first/pending_overlays.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
@@ -282,9 +284,26 @@ class _ProgramCard extends ConsumerWidget {
     );
     if (result == null) return;
     try {
-      await ref
-          .read(userCardsRepositoryProvider)!
-          .adjustPointsBalance(userCard.id, newBalance: result);
+      // Local first: show the corrected total at once and let the command
+      // outbox send it. A newer correction for the same card replaces a queued
+      // one, since the latest balance is the one the person means.
+      final mutationId = const Uuid().v4();
+      await queueCommand(
+        ref,
+        kind: OverlayCommand.pointsAdjust,
+        target: userCard.id,
+        payload: {
+          'userCardId': userCard.id,
+          'newBalance': result,
+          'clientMutationId': mutationId,
+        },
+      );
+      final cache = await ref.read(responseCacheProvider.future);
+      cache.financialStore.patchCard(
+        ref.read(cacheNamespaceProvider),
+        userCard.id,
+        {'total_points_earned': result},
+      );
       ref.invalidate(userCardsProvider);
       ref.invalidate(pointsLedgerProvider(userCard.id));
     } catch (e) {

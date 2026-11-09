@@ -2332,12 +2332,14 @@ class UserCardsRepository {
     required double newBalance,
     DateTime? expiresOn,
     String? reason,
+    String? clientMutationId,
   }) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/user-cards/$userCardId/points-adjustment'),
       headers: _headers,
       body: jsonEncode({
         'newBalance': newBalance,
+        'clientMutationId': ?clientMutationId,
         if (expiresOn != null) 'expiresOn': _dateOnly(expiresOn),
         if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
       }),
@@ -2372,11 +2374,13 @@ class UserCardsRepository {
     required String benefitId,
     required DateTime usedOn,
     String? airport,
+    String? clientMutationId,
   }) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/lounge-usage'),
       headers: _headers,
       body: jsonEncode({
+        'clientMutationId': ?clientMutationId,
         'userCardId': userCardId,
         'benefitId': benefitId,
         'usedOn': _dateOnly(usedOn),

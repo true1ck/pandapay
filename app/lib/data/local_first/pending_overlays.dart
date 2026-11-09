@@ -1,5 +1,6 @@
 import 'package:pandapay_domain/pandapay_domain.dart';
 import '../spend_reports_repository.dart';
+import '../user_cards_repository.dart' show LoungeVisit;
 import 'command_outbox.dart';
 
 /// Command kinds that change what the Budgets and Subscriptions screens show.
@@ -9,7 +10,11 @@ abstract final class OverlayCommand {
   static const recurringDismiss = 'recurring_dismiss';
   static const recurringUpdate = 'recurring_update';
 
+  static const loungeVisit = 'lounge_visit';
+  static const pointsAdjust = 'points_adjust';
+
   static const budgetKinds = {budgetDelete, budgetSave};
+  static const loungeKinds = {loungeVisit};
   static const recurringKinds = {recurringDismiss, recurringUpdate};
 }
 
@@ -122,3 +127,23 @@ RecurringSeries _edited(RecurringSeries s, Map<String, Object?> p) {
     isUserEdited: true,
   );
 }
+
+/// Shows queued lounge visits on top of the server list, so a visit you just
+/// logged counts towards the free-visit quota straight away. Each queued visit
+/// has a placeholder id; the real row replaces it once the server has stored it.
+List<LoungeVisit> overlayLounge(
+  List<LoungeVisit> base,
+  List<PendingCommand> pending,
+) => [
+  ...base,
+  for (final c in pending)
+    if (c.kind == OverlayCommand.loungeVisit)
+      LoungeVisit(
+        id: 'pending:${c.target}',
+        userCardId: c.payload['userCardId'] as String,
+        benefitId: c.payload['benefitId'] as String,
+        usedOn: DateTime.parse(c.payload['usedOn'] as String),
+        airport: c.payload['airport'] as String?,
+        loggedManually: true,
+      ),
+];

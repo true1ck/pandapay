@@ -2740,6 +2740,20 @@ Map<String, CommandHandler> commandHandlersFor(
   ),
   OutboxCommand.restoreTransaction: (p) =>
       repo.restoreTransaction(p['id'] as String),
+  // Both carry a client mutation id the server uses to ignore a repeat, so a
+  // lost reply cannot count a visit or a correction twice.
+  OverlayCommand.loungeVisit: (p) => repo.logLoungeVisit(
+    userCardId: p['userCardId'] as String,
+    benefitId: p['benefitId'] as String,
+    usedOn: DateTime.parse(p['usedOn'] as String),
+    airport: p['airport'] as String?,
+    clientMutationId: p['clientMutationId'] as String,
+  ),
+  OverlayCommand.pointsAdjust: (p) => repo.adjustPointsBalance(
+    p['userCardId'] as String,
+    newBalance: (p['newBalance'] as num).toDouble(),
+    clientMutationId: p['clientMutationId'] as String,
+  ),
   if (spend != null) ...{
     // Deleting something the server no longer has is already done.
     OverlayCommand.budgetDelete: (p) =>
@@ -2802,6 +2816,9 @@ final outboxFlushProvider = Provider<void>((ref) {
         final cache = await ref.read(responseCacheProvider.future);
         await cache.clear(_scopedCacheKey(ref, 'budgets'));
         await cache.clear(_scopedCacheKey(ref, 'recurring_report'));
+        await cache.clear(_scopedCacheKey(ref, 'lounge_usage'));
+        ref.invalidate(loungeUsageServerProvider);
+        ref.invalidate(userCardsProvider);
         ref.read(commandOutboxRevisionProvider.notifier).state++;
         ref.invalidate(budgetsServerProvider);
         ref.invalidate(recurringReportServerProvider);
@@ -3298,7 +3315,15 @@ final emergencyContactsProvider = FutureProvider<EmergencyContactsResult>((
 
 /// Task E6: lounge visits are owner-scoped server-side; empty (not an
 /// error) when signed out, same pattern as userCardsProvider.
+/// Lounge visits with queued ones shown on top (see [overlayLounge]).
 final loungeUsageProvider = FutureProvider<List<LoungeVisit>>((ref) async {
+  ref.watch(commandOutboxRevisionProvider);
+  final base = await ref.watch(loungeUsageServerProvider.future);
+  final commands = await ref.watch(commandOutboxProvider.future);
+  return overlayLounge(base, commands.pendingOf(OverlayCommand.loungeKinds));
+});
+
+final loungeUsageServerProvider = FutureProvider<List<LoungeVisit>>((ref) async {
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return const [];
   final cache = await _cacheOrNull(ref);

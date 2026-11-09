@@ -2802,10 +2802,21 @@ app.get('/user-cards/:id/points-ledger', requireAuth, async (req, res) => {
  * rather than introducing a second mutable total that could drift from it.
  */
 app.post('/user-cards/:id/points-adjustment', requireAuth, async (req, res) => {
-  const { newBalance, expiresOn, reason } = req.body || {};
+  const { newBalance, expiresOn, reason, clientMutationId } = req.body || {};
   const target = Number(newBalance);
   if (!Number.isFinite(target)) {
     return res.status(400).json({ error: 'newBalance must be a number' });
+  }
+  // Optional. A queued correction sends the same id on every delivery, so a
+  // repeat after a lost reply returns the row already stored instead of adding
+  // a second ledger row.
+  const mutationId = clientMutationId === undefined || clientMutationId === null
+    ? null
+    : (typeof clientMutationId === 'string'
+        && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientMutationId)
+        ? clientMutationId : undefined);
+  if (mutationId === undefined) {
+    return res.status(400).json({ error: 'clientMutationId must be a uuid' });
   }
   try {
     const result = await withUserClient(req.userId, async (client) => {
@@ -2814,6 +2825,15 @@ app.post('/user-cards/:id/points-adjustment', requireAuth, async (req, res) => {
         [req.params.id, req.userId]
       );
       if (owns.rows.length === 0) return null;
+
+      if (mutationId) {
+        const prior = await client.query(
+          `SELECT id, delta_points, reason, state, expires_on, occurred_at
+             FROM points_ledger WHERE profile_id = $1 AND client_mutation_id = $2`,
+          [req.userId, mutationId]
+        );
+        if (prior.rows.length > 0) return prior.rows[0];
+      }
 
       const currentLedgerSum = await client.query(
         `SELECT COALESCE(SUM(delta_points), 0) AS total FROM points_ledger WHERE user_card_id = $1`,
@@ -2826,10 +2846,10 @@ app.post('/user-cards/:id/points-adjustment', requireAuth, async (req, res) => {
         ? reason.trim().slice(0, 160)
         : 'manual correction';
       const inserted = await client.query(
-        `INSERT INTO points_ledger (profile_id, user_card_id, delta_points, reason, state, expires_on, occurred_at)
-         VALUES ($1, $2, $3, $4, 'estimated', $5, now())
+        `INSERT INTO points_ledger (profile_id, user_card_id, delta_points, reason, state, expires_on, occurred_at, client_mutation_id)
+         VALUES ($1, $2, $3, $4, 'estimated', $5, now(), $6)
          RETURNING id, delta_points, reason, state, expires_on, occurred_at`,
-        [req.userId, req.params.id, delta, adjustmentReason, expiresOn || null]
+        [req.userId, req.params.id, delta, adjustmentReason, expiresOn || null, mutationId]
       );
       return inserted.rows[0];
     });
