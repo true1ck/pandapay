@@ -29,7 +29,7 @@ function parseUsedOn(value) {
 }
 
 function validateBody(body) {
-  const { userCardId, benefitId, usedOn, airport } = body || {};
+  const { userCardId, benefitId, usedOn, airport, clientMutationId } = body || {};
   if (typeof userCardId !== 'string' || !UUID_RE.test(userCardId) ||
       typeof benefitId !== 'string' || !UUID_RE.test(benefitId)) {
     return { error: 'invalid_request' };
@@ -43,11 +43,18 @@ function validateBody(body) {
   if (normalizedAirport.length > MAX_AIRPORT_LENGTH || /[\u0000-\u001f\u007f]/.test(normalizedAirport)) {
     return { error: 'invalid_request' };
   }
+  // Optional. A queued visit sends the same id every time it is delivered, so a
+  // repeat after a lost reply finds the visit that is already stored.
+  if (clientMutationId !== undefined && clientMutationId !== null &&
+      (typeof clientMutationId !== 'string' || !UUID_RE.test(clientMutationId))) {
+    return { error: 'invalid_request' };
+  }
   return {
     userCardId,
     benefitId,
     usedOn: usedOnDate,
     airport: normalizedAirport || null,
+    clientMutationId: clientMutationId || null,
   };
 }
 
@@ -69,6 +76,36 @@ const INSERT_OWNED_LOUNGE_USAGE_SQL = `
     FROM eligible
   RETURNING id, user_card_id, benefit_id, used_on, airport, logged_manually, created_at`;
 
+// Same insert, but a repeat of the same client_mutation_id returns the stored
+// visit instead of adding another. The insert and the lookup are one statement.
+const INSERT_OWNED_LOUNGE_USAGE_IDEMPOTENT_SQL = `
+  WITH eligible AS (
+    SELECT uc.id AS user_card_id, b.id AS benefit_id
+      FROM user_cards uc
+      JOIN card_benefits b
+        ON b.id = $3
+       AND b.card_product_id = uc.card_product_id
+     WHERE uc.id = $2
+       AND uc.profile_id = $1
+       AND uc.is_archived = false
+     FOR UPDATE OF uc
+  ), inserted AS (
+    INSERT INTO lounge_usage
+      (profile_id, user_card_id, benefit_id, used_on, airport, logged_manually, client_mutation_id)
+    SELECT $1, eligible.user_card_id, eligible.benefit_id, $4, $5, true, $6::uuid
+      FROM eligible
+    ON CONFLICT (profile_id, client_mutation_id) WHERE client_mutation_id IS NOT NULL
+    DO NOTHING
+    RETURNING id, user_card_id, benefit_id, used_on, airport, logged_manually, created_at
+  )
+  SELECT * FROM inserted
+  UNION ALL
+  SELECT id, user_card_id, benefit_id, used_on, airport, logged_manually, created_at
+    FROM lounge_usage
+   WHERE profile_id = $1
+     AND client_mutation_id = $6::uuid
+     AND NOT EXISTS (SELECT 1 FROM inserted)`;
+
 function createLoungeUsagePostHandler({ withUserClient, logger = console } = {}) {
   if (typeof withUserClient !== 'function') throw new TypeError('withUserClient is required');
   return async function postLoungeUsage(req, res) {
@@ -79,9 +116,15 @@ function createLoungeUsagePostHandler({ withUserClient, logger = console } = {})
     const input = validateBody(req.body);
     if (input.error) return res.status(400).json({ error: input.error });
     try {
-      const result = await withUserClient(profileId, (client) => client.query(
-        INSERT_OWNED_LOUNGE_USAGE_SQL,
-        [profileId, input.userCardId, input.benefitId, input.usedOn, input.airport],
+      const result = await withUserClient(profileId, (client) => (
+        input.clientMutationId
+          ? client.query(INSERT_OWNED_LOUNGE_USAGE_IDEMPOTENT_SQL, [
+              profileId, input.userCardId, input.benefitId, input.usedOn,
+              input.airport, input.clientMutationId,
+            ])
+          : client.query(INSERT_OWNED_LOUNGE_USAGE_SQL, [
+              profileId, input.userCardId, input.benefitId, input.usedOn, input.airport,
+            ])
       ));
       if (!result.rows.length) return res.status(404).json({ error: 'not_found' });
       return res.status(201).json({ loungeUsage: result.rows[0] });
@@ -94,6 +137,7 @@ function createLoungeUsagePostHandler({ withUserClient, logger = console } = {})
 
 module.exports = {
   INSERT_OWNED_LOUNGE_USAGE_SQL,
+  INSERT_OWNED_LOUNGE_USAGE_IDEMPOTENT_SQL,
   MAX_AIRPORT_LENGTH,
   createLoungeUsagePostHandler,
   parseUsedOn,

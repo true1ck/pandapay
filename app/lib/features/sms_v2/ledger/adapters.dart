@@ -15,6 +15,7 @@ String _instrumentKey(v2.Fact f) => [
 String _name(v2.Fact f) => f is v2.MandateFact
     ? f.merchantName ?? f.counterparty?.name ?? 'Unknown service'
     : f.counterparty?.name ?? f.counterparty?.vpa ?? 'Unknown service';
+
 /// One subscription per service. A cancellation or failure notice often omits
 /// the card or account, so the instrument must not split a service's history.
 String _seriesKey(v2.Fact f) => normalizeMerchantText(_name(f));
@@ -142,8 +143,7 @@ List<RecurringSeries> subscriptionsFromLedger(
                       f.status == v2.AttemptStatus.scheduled &&
                       f.dueAt != null &&
                       f.dueAt!.isAfter(now) &&
-                      (last == null ||
-                          f.dueAt!.isAfter(last.$1.occurredAt)) &&
+                      (last == null || f.dueAt!.isAfter(last.$1.occurredAt)) &&
                       _seriesKey(f) == group.key,
                 )
                 .toList()
@@ -215,10 +215,19 @@ List<RecurringSeries> subscriptionsFromLedger(
 }
 
 class _BillRecord {
-  const _BillRecord(this.fact, this.paidMinor, this.lastPayment);
+  const _BillRecord(
+    this.fact,
+    this.paidMinor,
+    this.lastPayment, [
+    this.receiptAt,
+  ]);
   final v2.BillDueFact fact;
   final int paidMinor;
   final v2.Event? lastPayment;
+
+  /// When a biller's payment receipt, chained to this bill by consumer number
+  /// and amount, says it was paid (no ledger event stands behind it).
+  final DateTime? receiptAt;
   int? get dueMinor =>
       _amount(fact, v2.AmountRole.dueTotal) ??
       _amount(fact, v2.AmountRole.dueMinimum);
@@ -267,6 +276,15 @@ List<_BillRecord> _billRecords(
   for (final event in payments) {
     remaining[event.eventId] = event.amountMinor;
   }
+  final receipts = byId.values
+      .whereType<v2.MovementFact>()
+      .where(
+        (f) =>
+            f.evidenceOnly == true &&
+            f.purpose == v2.MovementPurpose.billPayment &&
+            f.direction == v2.Direction.debit,
+      )
+      .toList();
   final result = <_BillRecord>[];
   for (final cycle in cycles) {
     cycle.sort((a, b) => a.effectiveAt.compareTo(b.effectiveAt));
@@ -352,9 +370,68 @@ List<_BillRecord> _billRecords(
       last = event;
       if (paid >= due) break;
     }
-    result.add(_BillRecord(combined, paid, last));
+    DateTime? receiptAt;
+    if (paid == 0 && due != null) {
+      receiptAt = _chainedReceipt(
+        receipts,
+        combined,
+        due,
+        start,
+        nextStatement,
+        cycles.where((c) => !identical(c, cycle)),
+      );
+    }
+    result.add(
+      _BillRecord(
+        combined,
+        receiptAt == null ? paid : due ?? paid,
+        last,
+        receiptAt,
+      ),
+    );
   }
   return result;
+}
+
+/// The longest run of 6+ digits in a name: the biller's consumer number.
+String? _consumerNo(String? name) {
+  String? best;
+  for (final m in RegExp(r'\d{6,}').allMatches(name ?? '')) {
+    if (best == null || m.group(0)!.length > best.length) best = m.group(0);
+  }
+  return best;
+}
+
+/// A biller's `payment of X for CONSUMER_NO` receipt that settles this bill.
+/// The chain: same amount, inside the bill's cycle, and either the same consumer
+/// number or (when the bill never printed one) no other bill that could take it.
+DateTime? _chainedReceipt(
+  List<v2.MovementFact> receipts,
+  v2.BillDueFact bill,
+  int due,
+  DateTime start,
+  DateTime? nextStatement,
+  Iterable<List<v2.BillDueFact>> otherCycles,
+) {
+  final billNo = _consumerNo(bill.billerName);
+  final limit = nextStatement ?? start.add(const Duration(days: 75));
+  DateTime? found;
+  for (final r in receipts) {
+    if (_amount(r, v2.AmountRole.posted) != due) continue;
+    final at = r.effectiveAt;
+    if (at.isBefore(start) || !at.isBefore(limit)) continue;
+    final no = _consumerNo(r.counterparty?.name);
+    if (no != null && billNo != null && no != billNo) continue;
+    if (no == null || billNo == null) {
+      // No shared number: only chain when the amount singles out this bill.
+      final rival = otherCycles.any(
+        (c) => c.any((o) => _amount(o, v2.AmountRole.dueTotal) == due),
+      );
+      if (rival) continue;
+    }
+    if (found == null || at.isAfter(found)) found = at;
+  }
+  return found;
 }
 
 List<Commitment> billsFromFacts(
@@ -383,7 +460,7 @@ Commitment _commitment(
     identifier: bill.instrument?.maskDigits,
     cadence: CommitmentCadence.oneTime,
     status: record.paid ? CommitmentStatus.paid : CommitmentStatus.due,
-    paidOn: record.lastPayment?.occurredAt,
+    paidOn: record.lastPayment?.occurredAt ?? record.receiptAt,
     linkedTransactionId: record.lastPayment == null
         ? null
         : transactionIdByEvent[record.lastPayment!.eventId] ??

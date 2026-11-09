@@ -200,7 +200,31 @@
       "last day",
       "avail",
       "eligible for",
-      "you are eligible"
+      "you are eligible",
+      "loan offer",
+      "instant loan",
+      "loan of up to",
+      "loan up to",
+      "apply * loan",
+      "need money",
+      "salary is",
+      "per day",
+      "passed our review",
+      "now hiring",
+      "vacancy",
+      "work from home",
+      "recharge now",
+      "recharge plan",
+      "plan has expired",
+      "plan is expiring",
+      "plan expires",
+      "plan expired",
+      "retention charges",
+      "रिचार्ज",
+      "प्लान",
+      "zaroorat",
+      "paayein",
+      "apply karein"
     ],
     "billDue": [
       "is due",
@@ -258,7 +282,8 @@
       "was already paid",
       "already paid",
       "has already been paid",
-      "already settled"
+      "already settled",
+      "processed payment of"
     ],
     "billNoun": [
       "bill",
@@ -732,11 +757,7 @@
       "reversal",
       "reversed",
       "chargeback",
-      "dispute",
-      {
-        "p": "loan|loans",
-        "kind": "credit"
-      }
+      "dispute"
     ],
     "security": [
       "otp",

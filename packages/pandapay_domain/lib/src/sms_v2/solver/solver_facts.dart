@@ -238,12 +238,9 @@ class SolverFacts {
           debit,
           validPurpose(d.purpose) ? d.purpose : null,
         );
-        purpose ??= debit
-            ? 'purchase'
-            : ((r == 'upi' || r == 'imps' || r == 'neft' || r == 'rtgs') &&
-                      d.party != null
-                  ? 'p2p'
-                  : 'unknown');
+        // A credit with no stated reason is money in (a transfer, a loan paid
+        // out, a wallet credit). Marking it unknown would hide it from the books.
+        purpose ??= debit ? 'purchase' : 'p2p';
         facts.add(
           envelope(
             'movement',
@@ -284,10 +281,17 @@ class SolverFacts {
             instrumentJson: instrument(),
             counterpartyJson:
                 counterparty() ??
-                (d.billerName == null
+                (d.billerName == null && d.consumerRef == null
                     ? null
                     : {
-                        'name': d.billerName,
+                        // The consumer number rides in the name ("<biller> <number>"),
+                        // the way biller-side scheduled-payment notices print it, so
+                        // a payment and its bill share one key (the contract has no
+                        // field for it).
+                        'name': [
+                          d.billerName,
+                          d.consumerRef,
+                        ].whereType<String>().join(' '),
                         'vpa': null,
                         'kind': null,
                         'accountMask': null,
@@ -482,6 +486,12 @@ class SolverFacts {
             attrs: {'direction': 'debit', 'purpose': 'transfer', 'rail': 'wallet'},
             amounts: [posted(minor)],
             instrumentJson: instrument(),
+            counterpartyJson: {
+              'name': null,
+              'vpa': null,
+              'kind': 'own',
+              'accountMask': null,
+            },
           ),
         );
       case SolverRead.holdRelease:

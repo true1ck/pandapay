@@ -6,9 +6,9 @@ credit 50000 wallet_topup: Your add money request of Rs 500 to Freecharge wallet
 credit 50000 wallet_topup: Your add money request of Rs 500 to MobiKwik wallet was successful.
 credit 50000 wallet_topup: Your add money request of Rs 500 to Paytm Wallet was successful.
 credit 50000 wallet_topup: Your add money request of Rs 500 to PhonePe Wallet was successful.
-credit 550 unknown: ICICI Bank Account XX1234 credited:Rs. 5.50 on 09-Sep-26. Info ACH*SAMPLE LTD EMI 2025-26*IN3.
+credit 550 p2p: ICICI Bank Account XX1234 credited:Rs. 5.50 on 09-Sep-26. Info ACH*SAMPLE LTD EMI 2025-26*IN3.
 credit 7510 investment: As per a SEBI mandate, we have settled your account and credited Rs. 75.10 to your bank. Team Acme
-credit 900000 unknown: Upstox: Funds of Rs 9,000.00 were transferred to your bank account.
+credit 900000 p2p: Upstox: Funds of Rs 9,000.00 were transferred to your bank account.
 debit 10000 purchase: Dear Cardmember, your transaction of INR 100.00 at EXAMPLE STORE with Example Bank Credit Card ending 1234 was successful.
 debit 12000 purchase: Your payment of Rs 120 from Pluxee card ending 1234 was successful.
 debit 1500000 purchase: Rs 15,000.00 transferred from your account via IMPS to RAVI KUMAR on 12-11-26. Ref 432198765000.

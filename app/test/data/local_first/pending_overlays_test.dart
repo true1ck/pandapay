@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/local_first/command_outbox.dart';
 import 'package:pandapay/data/local_first/pending_overlays.dart';
 import 'package:pandapay/data/spend_reports_repository.dart';
+import 'package:pandapay/data/user_cards_repository.dart' show LoungeVisit;
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 BudgetStatus _budget(String id, {double amount = 1000, double spent = 400}) =>
@@ -111,6 +112,35 @@ void main() {
       expect(out.series.single.isUserEdited, isTrue);
       expect(out.totalAnnual, out.series.single.annualCost);
       expect(out.totalAnnual.paise, greaterThan(a.annualCost.paise));
+    });
+  });
+
+  group('lounge visits', () {
+    test('a queued visit is counted straight away with a placeholder id', () {
+      final stored = LoungeVisit(
+        id: 'v1',
+        userCardId: 'card',
+        benefitId: 'benefit',
+        usedOn: DateTime(2026, 10, 1),
+        loggedManually: true,
+      );
+      final out = overlayLounge([stored], [
+        const PendingCommand(
+          kind: OverlayCommand.loungeVisit,
+          target: 'm1',
+          payload: {
+            'userCardId': 'card',
+            'benefitId': 'benefit',
+            'usedOn': '2026-11-09',
+            'airport': 'BLR',
+          },
+        ),
+      ]);
+
+      expect(out, hasLength(2));
+      expect(out.last.id, 'pending:m1');
+      expect(out.last.airport, 'BLR');
+      expect(out.last.usedOn, DateTime(2026, 11, 9));
     });
   });
 }

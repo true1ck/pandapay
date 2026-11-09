@@ -1,3 +1,4 @@
+import 'package:uuid/uuid.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -6,6 +7,7 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/display_text.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../data/local_first/pending_overlays.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
 import 'grouped_insight_screen.dart';
@@ -353,13 +355,23 @@ class _LoungeTile extends ConsumerWidget {
                 final repo = ref.read(userCardsRepositoryProvider);
                 if (repo == null) return;
                 try {
-                  await repo.logLoungeVisit(
-                    userCardId: userCard.id,
-                    benefitId: benefit.id,
-                    usedOn: pickedDate,
-                    airport: airportController.text.trim().isEmpty
-                        ? null
-                        : airportController.text.trim(),
+                  // Local first: the visit counts at once and the command
+                  // outbox sends it. The id lets the server ignore a repeat.
+                  final mutationId = const Uuid().v4();
+                  await queueCommand(
+                    ref,
+                    kind: OverlayCommand.loungeVisit,
+                    target: mutationId,
+                    payload: {
+                      'userCardId': userCard.id,
+                      'benefitId': benefit.id,
+                      'usedOn':
+                          '${pickedDate.year.toString().padLeft(4, '0')}-${pickedDate.month.toString().padLeft(2, '0')}-${pickedDate.day.toString().padLeft(2, '0')}',
+                      'airport': airportController.text.trim().isEmpty
+                          ? null
+                          : airportController.text.trim(),
+                      'clientMutationId': mutationId,
+                    },
                   );
                   ref.invalidate(loungeUsageProvider);
                   if (sheetContext.mounted) Navigator.of(sheetContext).pop();
