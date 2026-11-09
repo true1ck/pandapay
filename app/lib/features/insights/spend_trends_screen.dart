@@ -139,14 +139,26 @@ List<_PayeeGroup> _groupByPayee(
   }).toList()..sort((a, b) => b.totalPaise.compareTo(a.totalPaise));
 }
 
-/// Rows for the same calendar period as the aggregate report. The report
-/// endpoint remains the source of truth for totals; this companion request
-/// only supplies the transaction-level rows needed by expandable details.
+/// Rows for the same calendar period and data source as the aggregate report.
+/// Ledger-backed reports use their local snapshot for expandable details too;
+/// reports without v2 data retain the API/offline-cache read path.
 final spendPeriodTransactionsProvider =
     FutureProvider.family<List<TransactionEntry>, SpendReportQuery>((
       ref,
       query,
     ) async {
+      if (ref.watch(smsV2ReportingEnabledProvider)) {
+        final model = await ref.watch(smsV2LedgerReadModelProvider.future);
+        final (from, to) = reportBounds(query, ref.watch(clockProvider).now());
+        return model.transactions
+            .where(
+              (entry) =>
+                  entry.status == 'active' &&
+                  !entry.occurredAt.isBefore(from) &&
+                  entry.occurredAt.isBefore(to),
+            )
+            .toList();
+      }
       final repo = ref.watch(userCardsRepositoryProvider);
       if (repo == null) return const [];
 
@@ -1260,7 +1272,9 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
     if (_ledgerReportCache != null) return _ledgerReportCache;
     final model = ref.read(smsV2LedgerReadModelProvider).valueOrNull;
     if (model == null) return null;
-    if (widget.transactionDetailsLoading) {
+    // Unfiltered totals and breakdowns must use the whole ledger snapshot.
+    // A partial or empty companion result cannot narrow the aggregate report.
+    if (!_filtersActive || widget.transactionDetailsLoading) {
       return _ledgerReportCache = model.spendReport(
         widget.query,
         ref.read(clockProvider).now(),
@@ -1693,11 +1707,16 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
     final series = _seriesFor(report);
     final multiMonth = _spansMultipleCalendarMonths(widget.query);
     final categoryEntries = _transactionsForCategory;
-    final showFilteredLoading =
-        _filtersActive &&
+    final showBreakdownLoading =
         widget.transactionDetailsLoading &&
-        _spendEntries.isEmpty;
-    final tagGroups = _tab == _SpendingTab.tags && !showFilteredLoading
+        _spendEntries.isEmpty &&
+        (_filtersActive ||
+            _tab == _SpendingTab.tags ||
+            (categoryRows.isEmpty &&
+                merchantRows.isEmpty &&
+                cardRows.isEmpty &&
+                instrumentRows.isEmpty));
+    final tagGroups = _tab == _SpendingTab.tags && !showBreakdownLoading
         ? projectSpendingTags(
             _visibleEntries,
             tagsFor: _tagsFor,
@@ -1769,7 +1788,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
         ),
       ),
       (context) => const SizedBox(height: AppSpace.md),
-      if (showFilteredLoading)
+      if (showBreakdownLoading)
         (context) => const Padding(
           padding: EdgeInsets.symmetric(vertical: AppSpace.xl),
           child: Center(child: CircularProgressIndicator()),
