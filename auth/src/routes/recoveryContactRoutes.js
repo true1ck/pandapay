@@ -21,6 +21,7 @@ const { encryptPhoneNumber, decryptPhoneNumber } = require('../utils/fieldEncryp
 const { preparePhoneSearchParams, phoneLookupHash } = require('../utils/encryptedPhoneSearch');
 const { maskEmail, maskPhone, maskPhonePrefix } = require('../utils/recoveryContacts');
 const { OTP_LIFETIME_SECONDS } = require('../utils/otpLifetime');
+const { canonicalEmail, isDisposableEmail } = require('../utils/emailIdentity');
 
 const router = express.Router();
 const fingerprint = value => createHash('sha256').update(value || '').digest('hex');
@@ -107,7 +108,7 @@ function normalize(value, channel) {
 
 async function contactAvailable(value, channel, userId) {
   const query = channel === 'email'
-    ? ['SELECT id FROM users WHERE lower(email) = $1 AND deleted = FALSE AND id <> $2', [value, userId]]
+    ? ['SELECT id FROM users WHERE email_canonical = $1 AND deleted = FALSE AND id <> $2', [canonicalEmail(value) || value, userId]]
     : ['SELECT id FROM users WHERE phone_lookup_hash = $1 AND deleted = FALSE AND id <> $2',
       [...preparePhoneSearchParams(value), userId]];
   return (await db.query(...query)).rows.length === 0;
@@ -119,6 +120,7 @@ async function requestReplacement(req, res, versioned = false) {
     const channel = req.user.recovery_channel === 'email' ? 'phone' : 'email';
     const value = normalize(req.body.identifier, channel);
     if (!value) return res.status(400).json({ error: `Enter a valid new ${channel === 'phone' ? 'phone number with country code' : 'email address'}.` });
+    if (channel === 'email' && isDisposableEmail(value)) return res.status(400).json({ error: 'Please use your regular email address, not a temporary one.', code: 'email_not_allowed' });
     if (channel === 'phone' ? !config.enablePhoneOtp : !config.enableEmailOtp) {
       return res.status(403).json({ error: `${channel === 'phone' ? 'SMS' : 'Email'} verification is currently unavailable. Your linked contact has not been changed.` });
     }

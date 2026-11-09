@@ -61,7 +61,7 @@ async function harness(t, {
   enumerationAdmission = null, failEnumerationAdmission = false,
   googleVerificationError = null, googleResolve = null,
   otpCapacityError = false, providerBusy = false,
-  overrideV2Verification = false,
+  overrideV2Verification = false, mailboxUsers = {},
 } = {}) {
   const rows = [];
   abuseStore ||= createMemoryRateLimitStore();
@@ -138,7 +138,12 @@ async function harness(t, {
       }
       if (sql.includes('FROM users')) {
         userQueries.push({ sql, args });
-        if (sql.includes('WHERE lower(email) = $1')) return { rows: [] };
+        if (sql.includes('email_canonical = $1 AND deleted = FALSE LIMIT 1')) {
+          return { rows: Object.hasOwn(mailboxUsers, args[0]) ? [{ '?column?': 1 }] : [] };
+        }
+        if (sql.includes('WHERE email_canonical = $1')) {
+          return { rows: Object.hasOwn(mailboxUsers, args[0]) ? [{ ...mailboxUsers[args[0]] }] : [] };
+        }
         if (identityUser && sql.includes('WHERE id = $1')) {
           return { rows: identityUser.id === args[0] ? [{ ...identityUser }] : [] };
         }
@@ -815,3 +820,51 @@ for (const versioned of [false, true]) for (const channel of ['email', 'phone'])
     assert.equal(retry.status, 503); assert.equal(retry.body.code, BUSY_CODE); assert.equal(h.rows.length, 2);
   });
 }
+
+test('a throwaway-mail address cannot start an account, but one that already has an account can still sign in', async t => {
+  const h = await harness(t, { mailboxUsers: { 'old@mailinator.com': { id: 'old-1', email: 'old@mailinator.com', name: 'Old', role: 'user', token_version: 1 } } });
+  const refused = await h.request('fresh@mailinator.com');
+  assert.equal(refused.status, 400);
+  assert.equal(refused.body.code, 'email_not_allowed');
+  assert.match(refused.body.error, /regular email address/);
+  assert.equal(h.mailCount, 0, 'no email is sent to a throwaway address');
+  assert.equal(h.rows.length, 0, 'no code is created');
+  const sub = await h.request('Fresh@Sub.Mailinator.com');
+  assert.equal(sub.status, 400, 'a subdomain of a throwaway service is refused too');
+  const existing = await h.request('old@mailinator.com');
+  assert.equal(existing.status, 200, 'an existing account keeps working');
+  assert.equal(h.mailCount, 1);
+  const normal = await h.request('person@gmail.com');
+  assert.equal(normal.status, 200);
+});
+
+test('signing in with a dotted or +tagged form of a Gmail address finds the same account, never a new one', async t => {
+  const existing = { id: 'gm-1', email: 'john@gmail.com', phone_number: null, phone_lookup_hash: null, is_phone_verified: false,
+    is_email_verified: true, name: 'John', role: 'user', token_version: 1 };
+  const h = await harness(t, { mailboxUsers: { 'john@gmail.com': existing } });
+  for (const typed of ['jo.hn+offer@gmail.com', 'JOHN@googlemail.com', 'j.o.h.n@gmail.com']) {
+    const r = await h.post('verify-email-otp', { email: typed, code: '1234', device_id: 'alias-test-device' });
+    assert.equal(r.status, 200, typed);
+    assert.equal(r.body.user.id, 'gm-1', typed);
+    assert.equal(r.body.is_new_account, false, typed);
+  }
+  assert.equal(h.userWrites.some(w => w.sql.startsWith('INSERT INTO users')), false, 'no second account was created');
+  const lookups = h.userQueries.filter(q => q.sql.includes('WHERE email_canonical = $1'));
+  assert.deepEqual([...new Set(lookups.map(q => q.args[0]))], ['john@gmail.com']);
+});
+
+test('a new account is refused when its address is a throwaway one, even if a code was somehow accepted', async t => {
+  const h = await harness(t);
+  const r = await h.post('verify-email-otp', { email: 'x@guerrillamail.com', code: '1234', device_id: 'throwaway-device' });
+  assert.equal(r.status, 400);
+  assert.equal(r.body.code, 'email_not_allowed');
+  assert.equal(h.userWrites.some(w => w.sql.startsWith('INSERT INTO users')), false);
+});
+
+test('aliases of one mailbox share a single code-request budget, so +tags cannot multiply it', async t => {
+  const h = await harness(t);
+  assert.equal((await h.request('a.b@gmail.com')).status, 200);
+  const second = await h.request('ab+1@gmail.com');
+  assert.equal(second.status, 429, 'the second alias is held by the first one\'s active code');
+  assert.equal(h.mailCount, 1);
+});

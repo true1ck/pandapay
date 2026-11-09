@@ -1,6 +1,7 @@
 'use strict';
 
 const { createHash } = require('node:crypto');
+const { canonicalEmail } = require('../utils/emailIdentity');
 const { newAccountsPaused, CODE: REGISTRATION_PAUSED, MESSAGE: REGISTRATION_PAUSED_MESSAGE } = require('./newAccountAdmission');
 
 class GoogleIdentityError extends Error {
@@ -97,7 +98,7 @@ async function resolveGoogleAccount({ pool, googleUser, deviceInfo = {}, linking
         [user.id, googleUser.googleId],
       );
     } else {
-      const existing = await client.query('SELECT id FROM public.users WHERE lower(email) = $1 AND deleted = FALSE', [email]);
+      const existing = await client.query('SELECT id FROM public.users WHERE email_canonical = $1 AND deleted = FALSE', [canonicalEmail(email) || email]);
       if (existing.rows.length) throw accountLinkRequired();
       if (googleUser.emailAuthoritative !== true) {
         throw new GoogleIdentityError('GOOGLE_EMAIL_PROOF_REQUIRED', 409,

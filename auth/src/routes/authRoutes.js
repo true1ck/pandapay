@@ -3,6 +3,7 @@ const { safeErrorCode } = require('../utils/safeErrorCode');
 const express = require('express');
 const crypto = require('crypto');
 const db = require('../db');
+const { canonicalEmail, isDisposableEmail } = require('../utils/emailIdentity');
 const config = require('../config');
 const auth = require('../middleware/authMiddleware');
 const { sendOtpSms } = require('../services/smsService');
@@ -724,6 +725,18 @@ router.post(
         const normalizedEmail = email.trim().toLowerCase();
         const normalizedPhone = phone_number ? normalizePhone(phone_number) : null;
 
+        // A throwaway-mail address cannot start an account. One that already has an
+        // account may still sign in, so only the "no such account" case is refused.
+        if (isDisposableEmail(normalizedEmail)) {
+          const existingMailbox = await db.query(
+            'SELECT 1 FROM users WHERE email_canonical = $1 AND deleted = FALSE LIMIT 1',
+            [canonicalEmail(normalizedEmail) || normalizedEmail]
+          );
+          if (existingMailbox.rows.length === 0) {
+            return { error: 'Please use your regular email address, not a temporary one.', status: 400, code: 'email_not_allowed' };
+          }
+        }
+
         const enumerationCheck = await detectAndLogEnumeration(clientIp, normalizedEmail, req.headers['user-agent'], 'email');
 
         if (enumerationCheck.isEnumeration) {
@@ -809,7 +822,7 @@ router.post(
       });
 
       if (result.capacityBusy) return respondOtpCapacityUnavailable(res);
-      if (result.error) return res.status(result.status || 500).json({ error: result.error });
+      if (result.error) return res.status(result.status || 500).json({ error: result.error, ...(result.code ? { code: result.code } : {}) });
       return res.json(requestSuccess(req,result));
     } catch (err) {
       logAuthError('request-email-otp failed', err);
@@ -887,11 +900,14 @@ router.post(
 
       // Resolve the verified email first. A phone supplied in this request is
       // only a claim; it cannot be added to or used to select an account.
+      // The mailbox, not the exact text typed: john@gmail.com and jo.hn+x@gmail.com
+      // are one account, so adding a dot or a +tag never makes a second one.
+      const mailbox = canonicalEmail(normalizedEmail) || normalizedEmail;
       const foundByEmail = await db.query(
         `SELECT id, email, phone_number, phone_lookup_hash, is_phone_verified,
                 is_email_verified, name, role, COALESCE(token_version, 1) as token_version
-         FROM users WHERE lower(email) = $1 AND deleted = FALSE`,
-        [normalizedEmail]
+         FROM users WHERE email_canonical = $1 AND deleted = FALSE`,
+        [mailbox]
       );
 
       const foundByPhone = hasPhone
@@ -944,6 +960,9 @@ router.post(
           return res.status(400).json({ error: 'Invalid or expired code' });
         }
         if (newAccountsPaused()) return respondPaused(res);
+        if (isDisposableEmail(normalizedEmail)) {
+          return res.status(400).json({ error: 'Please use your regular email address, not a temporary one.', code: 'email_not_allowed' });
+        }
         const newUserResult = await db.query(
           `INSERT INTO users (email, language, timezone, is_email_verified)
            VALUES ($1, $2, $3, TRUE)
@@ -1040,7 +1059,7 @@ router.post(
       if (err instanceof OtpCapacityError) return respondOtpCapacityUnavailable(res);
       if (isRateLimitStorageError(err)) return respondAbuseStoreUnavailable(res);
       await otpVerifyDelay();
-      if (err.code === '23505' && err.constraint === 'uq_users_active_email_lower') {
+      if (err.code === '23505' && (err.constraint === 'uq_users_active_email_lower' || err.constraint === 'uq_users_live_email_canonical')) {
         return res.status(409).json({ error: 'An account with this email already exists. Please sign in instead.' });
       }
       return res.status(500).json({ error: 'Internal server error' });
@@ -1175,7 +1194,7 @@ router.post(
         return res.status(503).json({ error: 'Google authentication is temporarily unavailable.', code: err.code });
       }
       logAuthError('google login failed', err);
-      if (err.code === '23505' && err.constraint === 'uq_users_active_email_lower') {
+      if (err.code === '23505' && (err.constraint === 'uq_users_active_email_lower' || err.constraint === 'uq_users_live_email_canonical')) {
         return res.status(409).json({ error: 'An account with this email already exists. Please sign in instead.' });
       }
       return res.status(500).json({ error: 'Internal server error' });

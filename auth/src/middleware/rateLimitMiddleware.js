@@ -10,6 +10,7 @@ const {
   createRateLimitStore,
 } = require('../services/authAbuseStore');
 const { OTP_LIFETIME_SECONDS } = require('../utils/otpLifetime');
+const { canonicalEmail } = require('../utils/emailIdentity');
 const rateLimitStore = createRateLimitStore();
 
 function logRateLimitError(event, error) {
@@ -223,7 +224,7 @@ async function checkActiveOtpForEmail(req, res, next) {
     const { email } = req.body;
     if (!email) return next();
 
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = canonicalEmail(email) || email.trim().toLowerCase();
     const activeOtpKey = `otp_active:email:${normalizedEmail}:${otpPurpose(req)}`;
     const hasActiveOtp = await exists(activeOtpKey);
 
@@ -249,7 +250,7 @@ async function rateLimitRequestOtpByEmail(req, res, next) {
     const { email } = req.body;
     if (!email) return next();
 
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = canonicalEmail(email) || email.trim().toLowerCase();
 
     // Check 10-minute limit
     const purpose = otpPurpose(req);
@@ -363,7 +364,7 @@ async function rateLimitVerifyOtpByEmail(req, res, next) {
     const { email } = req.body;
     if (!email) return next();
 
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = canonicalEmail(email) || email.trim().toLowerCase();
     const key = `otp_verify_failed:email:${normalizedEmail}:${otpPurpose(req)}:hour`;
     const count = await getCounter(key);
 
@@ -388,7 +389,9 @@ async function rateLimitVerifyOtpByEmail(req, res, next) {
  */
 async function markActiveOtp(identifier, ttlSeconds, requestId = '1', purpose = 'signin') {
   const isEmail = identifier.includes('@');
-  let normalized = identifier.trim().toLowerCase();
+  let normalized = identifier.includes('@')
+    ? (canonicalEmail(identifier) || identifier.trim().toLowerCase())
+    : identifier.trim().toLowerCase();
   
   if (!isEmail) {
     normalized = normalizePhoneForOtp(identifier);
@@ -405,7 +408,9 @@ async function markActiveOtp(identifier, ttlSeconds, requestId = '1', purpose = 
 async function clearActiveOtp(identifier, requestId, purpose = 'signin') {
   if (!requestId) return;
   const isEmail = identifier.includes('@');
-  let normalized = identifier.trim().toLowerCase();
+  let normalized = identifier.includes('@')
+    ? (canonicalEmail(identifier) || identifier.trim().toLowerCase())
+    : identifier.trim().toLowerCase();
   if (!isEmail) {
     normalized = normalizePhoneForOtp(identifier);
     if (!normalized) return;
@@ -426,7 +431,9 @@ async function clearActiveOtp(identifier, requestId, purpose = 'signin') {
  */
 async function incrementFailedVerify(identifier, purpose = 'signin') {
   const isEmail = identifier.includes('@');
-  let normalized = identifier.trim().toLowerCase();
+  let normalized = identifier.includes('@')
+    ? (canonicalEmail(identifier) || identifier.trim().toLowerCase())
+    : identifier.trim().toLowerCase();
   
   if (!isEmail) {
     normalized = normalizePhoneForOtp(identifier);

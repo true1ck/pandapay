@@ -1,0 +1,19 @@
+[
+  ["John.Doe+promo@Gmail.com", "johndoe@gmail.com"],
+  ["j.o.h.n@googlemail.com", "john@gmail.com"],
+  ["a+b+c@gmail.com", "a@gmail.com"],
+  ["  Mixed.Case@GMAIL.com  ", "mixedcase@gmail.com"],
+  ["x.y@outlook.com", "x.y@outlook.com"],
+  ["x.y+tag@outlook.com", "x.y@outlook.com"],
+  ["Someone+1@Hotmail.co.in", "someone@hotmail.co.in"],
+  ["user+t@icloud.com", "user@icloud.com"],
+  ["user+t@proton.me", "user@proton.me"],
+  ["user+t@customdomain.in", "user+t@customdomain.in"],
+  ["us.er@customdomain.in", "us.er@customdomain.in"],
+  [" Mixed@Example.COM ", "mixed@example.com"],
+  ["+only@gmail.com", "+only@gmail.com"],
+  ["...@gmail.com", "...@gmail.com"],
+  ["name@yahoo.com", "name@yahoo.com"],
+  ["na.me+x@yahoo.com", "na.me+x@yahoo.com"],
+  ["plain@gmail.com", "plain@gmail.com"]
+]
