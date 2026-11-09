@@ -22,6 +22,28 @@ class LanguagePack {
     required this.currencyWords,
     required this.currencySymbols,
     required this.foreignCurrencies,
+    required this.monthNames,
+    required this.weekdayNames,
+    required this.ordinalWords,
+    required this.todayWords,
+    required this.yesterdayWords,
+    required this.lastWords,
+    required this.thisWords,
+    required this.nextWords,
+    required this.pastWords,
+    required this.agoWords,
+    required this.unitWords,
+    required this.partOfDayWords,
+    required this.beforeWords,
+    required this.sinceWords,
+    required this.rangeStartWords,
+    required this.rangeJoinWords,
+    required this.monthPrepositions,
+    required this.financialWords,
+    required this.fyWords,
+    required this.ofWords,
+    required this.theWords,
+    required this.timePhrases,
   });
 
   /// `en`, `hi`, ...
@@ -61,4 +83,40 @@ class LanguagePack {
 
   /// Foreign currency word or symbol -> ISO code.
   final Map<String, String> foreignCurrencies;
+
+  /// january..december and short forms -> 1..12.
+  final Map<String, int> monthNames;
+
+  /// monday..sunday -> 1..7 (Monday is 1).
+  final Map<String, int> weekdayNames;
+
+  /// first..twentieth, thirtieth -> 1..30; "twenty first" is built from a
+  /// tens word plus a single-digit ordinal.
+  final Map<String, int> ordinalWords;
+  final Set<String> todayWords;
+  final Set<String> yesterdayWords;
+  final Set<String> lastWords;
+  final Set<String> thisWords;
+  final Set<String> nextWords;
+
+  /// "past" and "previous" style words that mean a rolling window.
+  final Set<String> pastWords;
+  final Set<String> agoWords;
+
+  /// day, days, week, weeks, month, quarter, year -> canonical unit.
+  final Map<String, String> unitWords;
+  final Set<String> partOfDayWords;
+  final Set<String> beforeWords;
+  final Set<String> sinceWords;
+  final Set<String> rangeStartWords;
+  final Set<String> rangeJoinWords;
+  final Set<String> monthPrepositions;
+  final Set<String> financialWords;
+  final Set<String> fyWords;
+  final Set<String> ofWords;
+  final Set<String> theWords;
+
+  /// Fixed multi-word phrases by meaning: `allTime`, `yearToDate`,
+  /// `monthToDate`.
+  final Map<String, List<List<String>>> timePhrases;
 }

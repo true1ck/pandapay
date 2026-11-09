@@ -42,6 +42,17 @@ class NumberSpan {
 
 enum _Prev { none, small, digits, hundred, magnitude }
 
+/// The number that starts exactly at [index], if any. Date reading uses this
+/// for "three days ago" and "last 30 days".
+NumberSpan? numberAt(
+  List<Token> tokens,
+  int index,
+  LanguagePack pack, {
+  Set<int> claimed = const {},
+}) => index < tokens.length && !claimed.contains(index)
+    ? _parseRun(tokens, index, pack, claimed)
+    : null;
+
 /// Finds every number in [tokens] that is not in [claimed] (tokens already
 /// owned by dates or times). Words and digits are read by the same small
 /// grammar, so "two lakh fifty thousand" and "2.5 lakh" are handled alike.
