@@ -247,11 +247,11 @@ class VoiceActionParser {
     };
     final lower = e.text.toLowerCase();
     final clean = e.cleanText.toLowerCase();
-    final words = _words(clean);
+    final words = splitWords(clean);
     final amount = e.foreign ? null : e.amount?.value;
-    final instrument = _instrument(lower, pack, e.kind);
-    final cardMatch = _resolveCard(lower, cards, e.cardDigits);
-    final merchantRead = _merchant(
+    final instrument = resolveInstrument(lower, pack, e.kind);
+    final cardMatch = resolveCard(lower, cards, e.cardDigits);
+    final merchantRead = resolveMerchant(
       clean,
       words,
       pack,
@@ -260,7 +260,7 @@ class VoiceActionParser {
       incoming:
           e.kind == EntryKind.moneyIn || e.kind == EntryKind.refund,
     );
-    final category = _category(words, categories, pack, merchantRead.slug);
+    final category = resolveCategory(words, categories, pack, merchantRead.slug);
     final issues = <String>[];
 
     if (e.foreign) {
@@ -429,23 +429,23 @@ class VoiceActionParser {
     if (tags.isEmpty) return const [];
     final matched = <String>[];
     for (final tag in tags) {
-      final name = _words(tag.name.toLowerCase());
-      if (name.isNotEmpty && _hasPhrase(words, name)) matched.add(tag.id);
+      final name = splitWords(tag.name.toLowerCase());
+      if (name.isNotEmpty && hasPhrase(words, name)) matched.add(tag.id);
     }
     return matched;
   }
 
   // ---- instrument and card -----------------------------------------------------------
 
-  static TxnInstrument _instrument(
+  static TxnInstrument resolveInstrument(
     String lower,
     LanguagePack pack,
     EntryKind kind,
   ) {
-    final words = _words(lower);
+    final words = splitWords(lower);
     bool any(String key) =>
         (pack.instrumentWords[key] ?? const <String>[]).any(
-          (phrase) => _hasPhrase(words, _words(phrase)),
+          (phrase) => hasPhrase(words, splitWords(phrase)),
         );
     if (any('credit')) return TxnInstrument.creditCard;
     if (any('debit')) return TxnInstrument.debitCard;
@@ -457,7 +457,65 @@ class VoiceActionParser {
         : TxnInstrument.creditCard;
   }
 
-  static ({UserCard? card, bool ambiguous}) _resolveCard(
+  /// The instrument the words name, or null when none is named. Questions
+  /// need this: "by UPI" is a filter, silence is not "credit card".
+  static TxnInstrument? statedInstrument(String lower, LanguagePack pack) {
+    final words = splitWords(lower);
+    bool any(String key) =>
+        (pack.instrumentWords[key] ?? const <String>[]).any(
+          (phrase) => hasPhrase(words, splitWords(phrase)),
+        );
+    if (any('credit')) return TxnInstrument.creditCard;
+    if (any('debit')) return TxnInstrument.debitCard;
+    if (any('cash')) return TxnInstrument.cash;
+    if (any('upi')) return TxnInstrument.upiBank;
+    if (any('wallet')) return TxnInstrument.wallet;
+    return null;
+  }
+
+  /// Every wallet card the words point at. A nickname, last four digits or
+  /// the full name pick one card; a lone issuer or product word ("hdfc",
+  /// "swiggy") picks every card that carries it, so "my HDFC bill" can cover
+  /// both HDFC cards.
+  static List<UserCard> matchCards(
+    List<String> words,
+    List<UserCard> cards, {
+    String? digits,
+  }) {
+    final exact = <UserCard>[];
+    for (final card in cards) {
+      final last4 = card.last4;
+      if (last4 != null && (last4 == digits || words.contains(last4))) {
+        exact.add(card);
+        continue;
+      }
+      final nick = card.nickname;
+      if (nick != null && nick.trim().isNotEmpty) {
+        final nw = splitWords(nick);
+        if (nw.isNotEmpty && hasPhrase(words, nw)) {
+          exact.add(card);
+          continue;
+        }
+      }
+      final full = splitWords(card.cardName);
+      if (full.length >= 2 && hasPhrase(words, full)) exact.add(card);
+    }
+    if (exact.isNotEmpty) return exact;
+
+    final scored = <({UserCard card, int score})>[];
+    for (final card in cards) {
+      final own = splitWords('${card.nickname ?? ''} ${card.cardName}')
+          .where((w) => w.length > 2 && !_genericCardWord(w))
+          .toSet();
+      final score = own.where(words.contains).length;
+      if (score > 0) scored.add((card: card, score: score));
+    }
+    if (scored.isEmpty) return const [];
+    final best = scored.map((s) => s.score).reduce((a, b) => a > b ? a : b);
+    return [for (final s in scored) if (s.score == best) s.card];
+  }
+
+  static ({UserCard? card, bool ambiguous}) resolveCard(
     String text,
     List<UserCard> cards,
     String? digits,
@@ -482,7 +540,7 @@ class VoiceActionParser {
 
     final scored = <({UserCard card, int score})>[];
     for (final card in cards) {
-      final words = _words(
+      final words = splitWords(
         '${card.nickname ?? ''} ${card.cardName}',
       ).where((word) => word.length > 2 && !_genericCardWord(word));
       final score = words.where(text.contains).length;
@@ -499,7 +557,7 @@ class VoiceActionParser {
   }
 
   static bool _containsPhrase(String text, String phrase) {
-    final words = _words(
+    final words = splitWords(
       phrase,
     ).where((word) => word.length > 2 && !_genericCardWord(word)).toList();
     return words.length >= 2 && words.every(text.contains);
@@ -518,13 +576,13 @@ class VoiceActionParser {
 
   // ---- words --------------------------------------------------------------------
 
-  static List<String> _words(String text) => text
+  static List<String> splitWords(String text) => text
       .toLowerCase()
       .split(cachedRegExp(r"[^a-z0-9&]+"))
       .where((word) => word.isNotEmpty)
       .toList();
 
-  static bool _hasPhrase(List<String> words, List<String> phrase) {
+  static bool hasPhrase(List<String> words, List<String> phrase) {
     if (phrase.isEmpty || phrase.length > words.length) return false;
     outer:
     for (var start = 0; start + phrase.length <= words.length; start++) {
@@ -538,7 +596,7 @@ class VoiceActionParser {
 
   // ---- merchant -----------------------------------------------------------------
 
-  static ({String? name, String? slug}) _merchant(
+  static ({String? name, String? slug}) resolveMerchant(
     String clean,
     List<String> words,
     LanguagePack pack,
@@ -549,8 +607,8 @@ class VoiceActionParser {
     // The user's own merchants, longest match first.
     String? own;
     for (final name in knownMerchants) {
-      final nameWords = _words(name);
-      if (nameWords.isEmpty || !_hasPhrase(words, nameWords)) continue;
+      final nameWords = splitWords(name);
+      if (nameWords.isEmpty || !hasPhrase(words, nameWords)) continue;
       if (own == null || name.length > own.length) own = name;
     }
     if (own != null) return (name: own, slug: null);
@@ -563,21 +621,21 @@ class VoiceActionParser {
     final phrase = _objectPhrase(words, pack, incoming: incoming);
     if (phrase == null) return (name: null, slug: null);
     // A bare category word ("on groceries") is the category, not a merchant.
-    final phraseWords = _words(phrase);
+    final phraseWords = splitWords(phrase);
     for (final entry in pack.categoryTerms.entries) {
       if (entry.value.any(
-        (t) => _words(t).join(' ') == phraseWords.join(' '),
+        (t) => splitWords(t).join(' ') == phraseWords.join(' '),
       )) {
         return (name: null, slug: null);
       }
     }
     for (final c in categories) {
       final names = [c.name, c.slug, ...c.matchTerms];
-      if (names.any((n) => _words(n).join(' ') == phraseWords.join(' '))) {
+      if (names.any((n) => splitWords(n).join(' ') == phraseWords.join(' '))) {
         return (name: null, slug: null);
       }
     }
-    return (name: _titleCase(phrase), slug: null);
+    return (name: titleCase(phrase), slug: null);
   }
 
   /// What was bought or paid for: the words after "buy", "bought", "on",
@@ -657,13 +715,13 @@ class VoiceActionParser {
   static bool _isInstrumentPhrase(List<String> words, LanguagePack pack) {
     for (final phrases in pack.instrumentWords.values) {
       for (final phrase in phrases) {
-        if (_hasPhrase(words, _words(phrase))) return true;
+        if (hasPhrase(words, splitWords(phrase))) return true;
       }
     }
     return words.contains('card') || words.contains('cards');
   }
 
-  static String _titleCase(String value) => value
+  static String titleCase(String value) => value
       .trim()
       .split(cachedRegExp(r'\s+'))
       .where((word) => word.isNotEmpty)
@@ -674,7 +732,7 @@ class VoiceActionParser {
 
   // ---- category -------------------------------------------------------------------
 
-  static SpendCategory? _category(
+  static SpendCategory? resolveCategory(
     List<String> words,
     List<SpendCategory> categories,
     LanguagePack pack,
@@ -694,8 +752,8 @@ class VoiceActionParser {
     for (final c in categories) {
       final names = <String>[c.name, if (!c.isCustom) c.slug, ...c.matchTerms];
       for (final n in names) {
-        final nw = _words(n);
-        if (nw.isEmpty || !_hasPhrase(words, nw)) continue;
+        final nw = splitWords(n);
+        if (nw.isEmpty || !hasPhrase(words, nw)) continue;
         final length = nw.join(' ').length;
         if (length > bestLength) {
           best = c;
@@ -709,7 +767,7 @@ class VoiceActionParser {
       if (c != null) return c;
     }
     for (final entry in pack.categoryTerms.entries) {
-      if (entry.value.any((t) => _hasPhrase(words, _words(t)))) {
+      if (entry.value.any((t) => hasPhrase(words, splitWords(t)))) {
         final c = bySlug(entry.key);
         if (c != null) return c;
       }

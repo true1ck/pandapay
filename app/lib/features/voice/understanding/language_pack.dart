@@ -85,6 +85,7 @@ class LanguagePack {
     required this.instrumentWords,
     required this.determiners,
     required this.phraseStops,
+    required this.questionCues,
   });
 
   /// `en`, `hi`, ...
@@ -216,4 +217,9 @@ class LanguagePack {
 
   /// Words that end an object phrase ("using", "with", "and").
   final Set<String> phraseStops;
+
+  /// What a question is about -> phrases that point at it. A longer phrase
+  /// counts for more: `bestCard`, `bills`, `caps`, `points`, `moneyIn`,
+  /// `top`, `compare`, `spend`.
+  final Map<String, List<List<String>>> questionCues;
 }
