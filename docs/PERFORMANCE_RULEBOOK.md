@@ -113,7 +113,7 @@ flutter build apk --profile --flavor dev --build-name 1.1.0 --build-number <high
 adb install -r -d build/app/outputs/flutter-apk/app-dev-profile.apk
 ```
 
-Build from the branch you ship (`latest-dev`), not from a feature branch with an older
+Build from the branch you ship (`master`), not from a feature branch with an older
 `pubspec.yaml` version: it will show "Update required" and every number you take is
 meaningless.
 

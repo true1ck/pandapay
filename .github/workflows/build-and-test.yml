@@ -17,7 +17,7 @@ name: Build and test
 
 on:
   push:
-    # latest-dev is deliberately absent: a latest-dev push runs this workflow
+    # prod is deliberately absent: a prod push runs this workflow
     # through deploy-prod.yml (workflow_call) so the deploy can wait on it.
     # Listing it here too would run every test twice.
     branches: [main, master]
@@ -329,12 +329,12 @@ jobs:
     # the push gate needs every validation, including the integration smoke
     # test and anonymization audit, before publishing a deployable image.
     needs: [api, flutter, app-test, app-bundle, smoke, anonymization-audit, security-recovery]
-    # A latest-dev push is a production deploy, and the production host builds
+    # A prod push is a production deploy, and the production host builds
     # its own images from source (deploy/deploy.sh), never pulling these. Skip
     # this job there so the deploy does not wait an extra minute on an image
     # nothing uses. master pushes and pull requests still build (and on master
     # push) these images exactly as before.
-    if: github.ref != 'refs/heads/latest-dev'
+    if: github.ref != 'refs/heads/prod'
     # Needed to push to GHCR under GITHUB_TOKEN — this repo's default token
     # permissions may be read-only, so this is explicit rather than assumed.
     permissions:

@@ -343,7 +343,19 @@ void main() {
       await pullOne(h.whole);
       final instruments = InstrumentStore(database.db, namespace: 'target').list();
       expect(instruments, isNotEmpty);
-      final victim = instruments.first;
+      // A rename only shows on a card that some transaction is shown under. Which
+      // instrument comes first depends on the sample drawn, and one seen only in
+      // a balance message has no transaction to rename, so pick a card in use.
+      final shown = {
+        for (final row in database.db.select(
+          "SELECT DISTINCT json_extract(payload,'\$.card_name') AS n FROM financial_entities WHERE namespace='target' AND entity='transactions'",
+        ))
+          row['n'],
+      };
+      final victim = instruments.firstWhere(
+        (i) => shown.contains(i.displayName),
+        orElse: () => instruments.first,
+      );
 
       // lastSeen / evidence move on every new message of a known card.
       final touch = _empty('instrument-seen');

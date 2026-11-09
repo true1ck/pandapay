@@ -1,11 +1,11 @@
-# Deploys latest-dev to the production backend after tests pass.
+# Deploys the `prod` branch to the production backend after tests pass.
 #
 # Before this, production was a COPIED DIRECTORY on the host — not a git
-# checkout — so nothing on the server moved when master did. It had drifted
+# checkout — so nothing on the server moved when the branch did. It had drifted
 # five migrations behind (stopped at 0035) and nobody could tell by looking,
 # because there was no commit on the box to compare against.
 #
-# The deploy only accepts the exact current master tip, refuses server
+# The deploy only accepts the exact current prod tip, refuses server
 # rollback/divergent ancestry, then runs migrations, rebuilds, restarts and
 # health-checks. Replaying the same tip is idempotent.
 #
@@ -19,7 +19,7 @@
 #
 # Note `workflow_run` always runs the workflow file from the DEFAULT branch,
 # so edits to this file only take effect once merged to master.
-# Manual dispatch is also master-only and verifies a successful Build and test
+# Manual dispatch is also prod-only and verifies a successful Build and test
 # run for the exact commit through the Actions API before any SSH setup/deploy.
 #
 # WHAT IT WILL NOT DO
@@ -35,17 +35,18 @@ on:
   workflow_run:
     workflows: ["Build and test"]
     types: [completed]
-    branches: [latest-dev]
-  # latest-dev deploys itself on every push. `workflow_run` cannot do this:
+    branches: [prod]
+  # prod deploys itself on every push (master is the integration branch and
+  # never deploys). `workflow_run` cannot do this:
   # GitHub always runs a workflow_run workflow from the DEFAULT branch's copy
-  # of the file, so a latest-dev edit never fires it. A `push` trigger does use
+  # of the file, so a prod edit never fires it. A `push` trigger does use
   # the pushed branch's own file, so this run first calls "Build and test" as a
   # reusable workflow (the `test` job) and `deploy` waits for it to pass.
   push:
-    branches: [latest-dev]
+    branches: [prod]
   # Manual run, e.g. to redeploy the current commit after a server change, or
-  # to ship latest-dev: `gh workflow run deploy-prod.yml --ref latest-dev`.
-  # Only latest-dev is accepted (see the first step below).
+  # to ship prod: `gh workflow run deploy-prod.yml --ref prod`.
+  # Only prod is accepted (see the first step below).
   workflow_dispatch:
 
 # Never let two deploys interleave: they would fight over the same working
@@ -62,11 +63,11 @@ permissions:
   packages: write
 
 jobs:
-  # Push to latest-dev only: run the full test gate inside this workflow. On
+  # Push to prod only: run the full test gate inside this workflow. On
   # the other triggers the tests already ran (or are checked via the API
   # below), so this job is skipped.
   test:
-    name: Build and test (latest-dev push)
+    name: Build and test (prod push)
     if: github.event_name == 'push'
     uses: ./.github/workflows/build-and-test.yml
     secrets: inherit
@@ -109,9 +110,9 @@ jobs:
             DEPLOY_BRANCH="$RUN_BRANCH"
           fi
           case "$DEPLOY_BRANCH" in
-            latest-dev) ;;
+            prod) ;;
             *)
-              echo "FATAL: refusing to deploy branch '$DEPLOY_BRANCH'; only latest-dev is allowed" >&2
+              echo "FATAL: refusing to deploy branch '$DEPLOY_BRANCH'; only prod is allowed" >&2
               exit 1
               ;;
           esac
@@ -204,10 +205,6 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SMS_AI_WORKER_DB_PASSWORD: ${{ secrets.SMS_AI_WORKER_DB_PASSWORD }}
           SMS_AI_WORKER_DATABASE_URL: ${{ secrets.SMS_AI_WORKER_DATABASE_URL }}
-          SMS_V2_AI_MODEL: ${{ secrets.SMS_V2_AI_MODEL }}
-          SMS_V2_AI_TPM: ${{ secrets.SMS_V2_AI_TPM }}
-          SMS_V2_AI_INPUT_USD_PER_MILLION: ${{ secrets.SMS_V2_AI_INPUT_USD_PER_MILLION }}
-          SMS_V2_AI_OUTPUT_USD_PER_MILLION: ${{ secrets.SMS_V2_AI_OUTPUT_USD_PER_MILLION }}
         run: |
           test -n "$NOTIFICATION_SERVICE_URL"
           test -n "$NOTIFICATION_SERVICE_API_KEY"
@@ -217,7 +214,7 @@ jobs:
             if [ -n "$GOOGLE_PLACES_API_KEY" ]; then
               printf 'export GOOGLE_PLACES_API_KEY=%q\n' "$GOOGLE_PLACES_API_KEY"
             fi
-            for name in GEMINI_API_KEY SMS_AI_WORKER_DB_PASSWORD SMS_AI_WORKER_DATABASE_URL SMS_V2_AI_MODEL SMS_V2_AI_TPM SMS_V2_AI_INPUT_USD_PER_MILLION SMS_V2_AI_OUTPUT_USD_PER_MILLION; do
+            for name in GEMINI_API_KEY SMS_AI_WORKER_DB_PASSWORD SMS_AI_WORKER_DATABASE_URL; do
               if [ -n "${!name}" ]; then
                 printf 'export %s=%q\n' "$name" "${!name}"
               fi

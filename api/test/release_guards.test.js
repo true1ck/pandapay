@@ -86,8 +86,8 @@ test('old per-message AI worker settings are gone, and the Gemini key reaches on
   for (const file of ['deploy/deploy.sh', '.github/workflows/deploy-prod.yml']) {
     assert.doesNotMatch(read(file), /echo[^\n]*GEMINI_API_KEY/, file);
   }
-  // The private overlay passes the key too (the admin host's own worker).
-  assert.match(read('deploy/admin/compose.private.yml'), /GEMINI_API_KEY: '\$\{GEMINI_API_KEY:\?\}'/);
+  // The admin host is started on demand and never runs the drafts worker, so it gets no key.
+  assert.doesNotMatch(read('deploy/admin/compose.private.yml'), /GEMINI_|sms-v2-template-worker/);
 });
 
 test('a migration drops the account_recovery schema, so a database cannot keep the escrow tables', () => {

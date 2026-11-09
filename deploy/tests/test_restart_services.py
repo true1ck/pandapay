@@ -83,7 +83,7 @@ class SequentialRolloutTest(unittest.TestCase):
 
     def test_ai_worker_is_skipped_unless_every_setting_is_present(self):
         partial = "".join(line for line in AI_ENV.splitlines(True)
-                          if not line.startswith("SMS_V2_AI_TPM="))
+                          if not line.startswith("SMS_AI_WORKER_DATABASE_URL="))
         quoted_empty = AI_ENV.replace("GEMINI_API_KEY=synthetic-gemini-key", 'GEMINI_API_KEY=""')
         for env_content in ("", partial, quoted_empty):
             result, commands = self.rollout(ENV_CONTENT=env_content)

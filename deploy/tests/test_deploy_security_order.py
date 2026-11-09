@@ -206,7 +206,7 @@ class DeploySecurityOrderTest(unittest.TestCase):
         return next(i for i, command in enumerate(commands) if predicate(command))
 
     def test_ai_worker_is_not_built_without_every_setting(self):
-        partial = "".join(line for line in AI_ENV.splitlines(True) if not line.startswith("SMS_V2_AI_TPM="))
+        partial = "".join(line for line in AI_ENV.splitlines(True) if not line.startswith("SMS_AI_WORKER_DATABASE_URL="))
         for extra in ("", partial):
             result, commands, _ = self.run_deploy(EXTRA_ENV=extra)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -418,8 +418,9 @@ class DeploySecurityOrderTest(unittest.TestCase):
         self.assertIn('current_tip_sha" != "$SHA"', workflow[gate:deploy])
         # Only allow-listed branches may deploy, and the server is told which
         # ref the SHA must be the exact tip of.
-        self.assertIn("latest-dev) ;;", workflow)
-        self.assertNotIn("master|latest-dev", workflow)
+        self.assertIn("prod) ;;", workflow)
+        self.assertNotIn("master|prod", workflow)
+        self.assertNotIn("latest-dev", workflow)
         self.assertIn('"$SHA" "$DEPLOY_BRANCH"', workflow[deploy:])
 
     def test_partial_service_start_is_stopped_when_readiness_fails(self):
