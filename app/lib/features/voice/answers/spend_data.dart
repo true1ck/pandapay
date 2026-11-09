@@ -51,10 +51,8 @@ class LedgerSpendSource implements SpendDataSource {
   }
 
   @override
-  SpendReport report(DateTime from, DateTime to) => model.spendReport(
-    SpendReportQuery.custom(from: from, to: to),
-    now,
-  );
+  SpendReport report(DateTime from, DateTime to) =>
+      model.spendReport(SpendReportQuery.custom(from: from, to: to), now);
 
   @override
   Iterable<TransactionEntry> get transactions => model.transactions;

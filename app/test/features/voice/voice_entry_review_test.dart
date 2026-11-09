@@ -41,7 +41,8 @@ VoiceActionDraft draftOf(String text) => VoiceActionParser.parseMany(
 ).first;
 
 class _Harness {
-  _Harness(this.draft) : editor = VoiceDraftEditor(draft)..initKindAlternative();
+  _Harness(this.draft)
+    : editor = VoiceDraftEditor(draft)..initKindAlternative();
 
   final VoiceActionDraft draft;
   final VoiceDraftEditor editor;
@@ -168,7 +169,10 @@ void main() {
   ) async {
     final h = _Harness(draftOf('got 500 from amazon'));
     await show(tester, h);
-    expect(find.text('Is this money you received, or a refund?'), findsOneWidget);
+    expect(
+      find.text('Is this money you received, or a refund?'),
+      findsOneWidget,
+    );
     // The kind chips let the user fix it directly too.
     await tester.tap(find.widgetWithText(ChoiceChip, 'Refund'));
     await tester.pump();
@@ -213,7 +217,9 @@ void main() {
     expect(find.text('Fill in below'), findsNothing);
   });
 
-  testWidgets('points redemption shows points and needs a card', (tester) async {
+  testWidgets('points redemption shows points and needs a card', (
+    tester,
+  ) async {
     final h = _Harness(draftOf('redeemed 5000 points on my axis atlas card'));
     await show(tester, h);
     expect(find.text('Points redemption details'), findsOneWidget);

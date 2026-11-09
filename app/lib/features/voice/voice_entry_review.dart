@@ -149,7 +149,9 @@ class VoiceEntryReview extends StatelessWidget {
               initialValue: _moneyInHow.containsKey(editor.instrument)
                   ? editor.instrument
                   : TxnInstrument.other,
-              decoration: const InputDecoration(labelText: 'How it reached you'),
+              decoration: const InputDecoration(
+                labelText: 'How it reached you',
+              ),
               items: [
                 for (final e in _moneyInHow.entries)
                   DropdownMenuItem(value: e.key, child: Text(e.value)),
@@ -447,7 +449,9 @@ class _FollowUpCardState extends State<_FollowUpCard> {
                 visualDensity: VisualDensity.compact,
                 onPressed: widget.listening ? null : widget.onListen,
                 icon: Icon(
-                  widget.listening ? Icons.graphic_eq_rounded : Icons.mic_rounded,
+                  widget.listening
+                      ? Icons.graphic_eq_rounded
+                      : Icons.mic_rounded,
                   color: BambooInk.jade,
                 ),
               ),

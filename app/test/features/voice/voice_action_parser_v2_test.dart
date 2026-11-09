@@ -39,10 +39,7 @@ void main() {
       final d = parse('spent 250 on groceries yesterday').single;
       expect(d.occurredAt, DateTime(2026, 11, 10, 12));
       expect(d.heard.map((h) => h.label), contains('Date'));
-      expect(
-        d.heard.firstWhere((h) => h.label == 'Date').shown,
-        'Yesterday',
-      );
+      expect(d.heard.firstWhere((h) => h.label == 'Date').shown, 'Yesterday');
     });
 
     test('today keeps "now" so the saved time is the real time', () {

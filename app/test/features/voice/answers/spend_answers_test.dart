@@ -205,7 +205,10 @@ void main() {
         earliest: since,
         reports: {nov: report(spend: 250000, count: 4)},
       );
-      expect(answer('how much did I spend this month', s).headline, '₹2,50,000');
+      expect(
+        answer('how much did I spend this month', s).headline,
+        '₹2,50,000',
+      );
     });
   });
 
@@ -313,7 +316,10 @@ void main() {
           ),
         },
       );
-      expect(answer('how much did I spend by upi this month', s).headline, '₹5,000');
+      expect(
+        answer('how much did I spend by upi this month', s).headline,
+        '₹5,000',
+      );
     });
   });
 
@@ -322,19 +328,66 @@ void main() {
       final s = FakeSource(
         earliest: since,
         transactions: [
-          txn('1', 500, DateTime(2026, 11, 3), categoryId: 'dining-id', cardId: 'amex'),
-          txn('2', 700, DateTime(2026, 11, 8), categoryId: 'dining-id', cardId: 'amex'),
-          txn('3', 900, DateTime(2026, 11, 8), categoryId: 'dining-id', cardId: 'other'),
-          txn('4', 300, DateTime(2026, 11, 9), categoryId: 'fuel-id', cardId: 'amex'),
-          txn('5', 100, DateTime(2026, 10, 9), categoryId: 'dining-id', cardId: 'amex'),
-          txn('6', 600, DateTime(2026, 11, 9), categoryId: 'dining-id', cardId: 'amex', status: 'deleted'),
-          txn('7', 800, DateTime(2026, 11, 9), categoryId: 'dining-id', cardId: 'amex', kind: TxnEntryKind.income),
+          txn(
+            '1',
+            500,
+            DateTime(2026, 11, 3),
+            categoryId: 'dining-id',
+            cardId: 'amex',
+          ),
+          txn(
+            '2',
+            700,
+            DateTime(2026, 11, 8),
+            categoryId: 'dining-id',
+            cardId: 'amex',
+          ),
+          txn(
+            '3',
+            900,
+            DateTime(2026, 11, 8),
+            categoryId: 'dining-id',
+            cardId: 'other',
+          ),
+          txn(
+            '4',
+            300,
+            DateTime(2026, 11, 9),
+            categoryId: 'fuel-id',
+            cardId: 'amex',
+          ),
+          txn(
+            '5',
+            100,
+            DateTime(2026, 10, 9),
+            categoryId: 'dining-id',
+            cardId: 'amex',
+          ),
+          txn(
+            '6',
+            600,
+            DateTime(2026, 11, 9),
+            categoryId: 'dining-id',
+            cardId: 'amex',
+            status: 'deleted',
+          ),
+          txn(
+            '7',
+            800,
+            DateTime(2026, 11, 9),
+            categoryId: 'dining-id',
+            cardId: 'amex',
+            kind: TxnEntryKind.income,
+          ),
         ],
       );
       final a = answer('how much on dining with my amex this month', s);
       expect(a.headline, '₹1,200');
       expect(a.title, 'Dining · Amex · this month');
-      expect(a.evidence, 'Calculated from 2 transactions on this phone, 1 Nov to 30 Nov.');
+      expect(
+        a.evidence,
+        'Calculated from 2 transactions on this phone, 1 Nov to 30 Nov.',
+      );
       expect(a.comparison, '₹1,100 more than last month (1100%)');
     });
   });
@@ -393,7 +446,11 @@ void main() {
       );
       final a = answer('where did I spend the most this month', s);
       expect(a.headline, 'Dining · ₹12,400');
-      expect(a.rows.take(3).map((r) => r.label), ['Dining', 'Groceries', 'Fuel']);
+      expect(a.rows.take(3).map((r) => r.label), [
+        'Dining',
+        'Groceries',
+        'Fuel',
+      ]);
       expect(a.rows.last.label, 'At bigbasket');
       expect(
         a.spoken,

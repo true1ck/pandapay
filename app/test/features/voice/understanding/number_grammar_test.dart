@@ -4,8 +4,7 @@ import '../../../../lib/features/voice/understanding/en_pack.dart';
 import '../../../../lib/features/voice/understanding/number_grammar.dart';
 import '../../../../lib/features/voice/understanding/tokens.dart';
 
-List<NumberSpan> numbers(String text) =>
-    findNumbers(tokenize(text), enPack);
+List<NumberSpan> numbers(String text) => findNumbers(tokenize(text), enPack);
 
 void main() {
   group('tokenizer', () {
@@ -184,7 +183,9 @@ void main() {
         if (h > 0) parts.add('${units[h]} hundred');
         if (r > 0) {
           if (h > 0) parts.add('and');
-          parts.add(r < 20 ? units[r] : '${tens[r ~/ 10]} ${units[r % 10]}'.trim());
+          parts.add(
+            r < 20 ? units[r] : '${tens[r ~/ 10]} ${units[r % 10]}'.trim(),
+          );
         }
         return parts.join(' ');
       }

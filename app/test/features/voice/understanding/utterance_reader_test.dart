@@ -203,9 +203,7 @@ void main() {
     });
 
     test('a date said first covers every entry', () {
-      final e = read(
-        'yesterday i spent 250 on lunch and 300 on fuel',
-      ).entries;
+      final e = read('yesterday i spent 250 on lunch and 300 on fuel').entries;
       expect(e.map((x) => x.date?.from), [
         DateTime(2026, 11, 10),
         DateTime(2026, 11, 10),
@@ -221,9 +219,7 @@ void main() {
     });
 
     test('a date in the middle belongs to its own entry', () {
-      final e = read(
-        'spent 250 on lunch yesterday and 300 on fuel',
-      ).entries;
+      final e = read('spent 250 on lunch yesterday and 300 on fuel').entries;
       expect(e[0].date?.from, DateTime(2026, 11, 10));
       expect(e[1].date, isNull);
     });
@@ -274,8 +270,14 @@ void main() {
         kindOf('transferred 5000 to my savings account'),
         EntryKind.transfer,
       );
-      expect(kindOf('paid my credit card bill of 12000'), EntryKind.billPayment);
-      expect(kindOf('paid the HDFC card statement 8000'), EntryKind.billPayment);
+      expect(
+        kindOf('paid my credit card bill of 12000'),
+        EntryKind.billPayment,
+      );
+      expect(
+        kindOf('paid the HDFC card statement 8000'),
+        EntryKind.billPayment,
+      );
     });
 
     test('a utility bill is a normal spend', () {
@@ -291,7 +293,9 @@ void main() {
       final a = read('spent 50 dollars in Dubai').entries.single.amount!;
       expect(a.value, 50);
       expect(a.currencyCode, 'USD');
-      final b = read('paid 30 euros for a museum ticket').entries.single.amount!;
+      final b = read(
+        'paid 30 euros for a museum ticket',
+      ).entries.single.amount!;
       expect(b.currencyCode, 'EUR');
       final c = read(r'spent $12 on coffee').entries.single.amount!;
       expect(c.currencyCode, 'USD');

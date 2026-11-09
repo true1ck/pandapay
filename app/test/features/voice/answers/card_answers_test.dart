@@ -9,15 +9,19 @@ final now = DateTime(2026, 11, 11, 15, 30);
 void main() {
   group('bills', () {
     test('one unpaid bill, said plainly', () {
-      final a = const BillsAnswerer().answer([
-        BillLine(
-          cardName: 'HDFC Swiggy',
-          dueDate: DateTime(2026, 11, 15),
-          amountDue: 12340,
-          outstanding: 12340,
-          minimumDue: 620,
-        ),
-      ], now, cardsNamed: true);
+      final a = const BillsAnswerer().answer(
+        [
+          BillLine(
+            cardName: 'HDFC Swiggy',
+            dueDate: DateTime(2026, 11, 15),
+            amountDue: 12340,
+            outstanding: 12340,
+            minimumDue: 620,
+          ),
+        ],
+        now,
+        cardsNamed: true,
+      );
       expect(a.headline, '₹12,340');
       expect(a.title, 'Bills · HDFC Swiggy');
       expect(
@@ -39,7 +43,11 @@ void main() {
           dueDate: DateTime(2026, 11, 14),
           outstanding: 12340,
         ),
-        BillLine(cardName: 'Axis Atlas', isPaid: true, dueDate: DateTime(2026, 11, 9)),
+        BillLine(
+          cardName: 'Axis Atlas',
+          isPaid: true,
+          dueDate: DateTime(2026, 11, 9),
+        ),
       ], now);
       expect(a.headline, '₹17,340');
       expect(a.comparison, 'Next due: HDFC Swiggy on Sat 14 Nov');
@@ -74,16 +82,22 @@ void main() {
 
     test('a card with no bill yet is named, not skipped', () {
       final a = const BillsAnswerer().answer([
-        BillLine(cardName: 'Amex', dueDate: DateTime(2026, 11, 20), outstanding: 5000),
+        BillLine(
+          cardName: 'Amex',
+          dueDate: DateTime(2026, 11, 20),
+          outstanding: 5000,
+        ),
         const BillLine(cardName: 'Axis Atlas', hasBill: false),
       ], now);
       expect(a.coverageNote, 'No bill found yet for Axis Atlas.');
     });
 
     test('no bill for anything', () {
-      final a = const BillsAnswerer().answer([
-        const BillLine(cardName: 'Axis Atlas', hasBill: false),
-      ], now, cardsNamed: true);
+      final a = const BillsAnswerer().answer(
+        [const BillLine(cardName: 'Axis Atlas', hasBill: false)],
+        now,
+        cardsNamed: true,
+      );
       expect(a.status, AnswerStatus.noData);
       expect(a.evidence, contains('haven’t found a bill'));
     });
@@ -160,10 +174,7 @@ void main() {
     });
 
     test('cards with no caps', () {
-      expect(
-        const CapsAnswerer().answer(const []).status,
-        AnswerStatus.noData,
-      );
+      expect(const CapsAnswerer().answer(const []).status, AnswerStatus.noData);
     });
 
     test('buttons lead to Caps and Milestones', () {
@@ -243,7 +254,10 @@ void main() {
     });
 
     test('no amount said: a default, shown', () {
-      final a = const BestCardAnswerer().answer(ranked, categoryName: 'Groceries');
+      final a = const BestCardAnswerer().answer(
+        ranked,
+        categoryName: 'Groceries',
+      );
       expect(a.coverageNote, contains('₹1,000'));
       expect(a.title, 'Best card · Groceries · ₹1,000');
     });

@@ -94,7 +94,12 @@ void main() {
     check('last week', d(2026, 11, 2), d(2026, 11, 8), TimeSpanKind.week);
     check('this month', d(2026, 11, 1), d(2026, 11, 30), TimeSpanKind.month);
     check('last month', d(2026, 10, 1), d(2026, 10, 31), TimeSpanKind.month);
-    check('this quarter', d(2026, 10, 1), d(2026, 12, 31), TimeSpanKind.quarter);
+    check(
+      'this quarter',
+      d(2026, 10, 1),
+      d(2026, 12, 31),
+      TimeSpanKind.quarter,
+    );
     check('last quarter', d(2026, 7, 1), d(2026, 9, 30), TimeSpanKind.quarter);
     check('this year', d(2026, 1, 1), d(2026, 12, 31), TimeSpanKind.year);
     check('last year', d(2025, 1, 1), d(2025, 12, 31), TimeSpanKind.year);

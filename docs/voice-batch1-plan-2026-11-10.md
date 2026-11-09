@@ -247,3 +247,50 @@ Then one device build with a 30-phrase read-aloud and question checklist on your
 - Spoken replies only when the question was asked by voice.
 - Default period for a question with no period is this month, shown as a chip you can change.
 - Answers to unsupported questions never guess a number.
+
+---
+
+## 12. Build status, 2026-11-10
+
+**Built on `dev`, local commits, not pushed, not run on a phone.** All ten steps of section 9 are done except the device checkpoint.
+
+### What exists
+
+- `app/lib/features/voice/understanding/`: tokenizer, English language pack, number grammar, date and period grammar, filler and repeated-word cleanup, the role solver and entry reader.
+- `voice_action_parser.dart`: reads entries through the reader, then adds merchants, categories, instrument, cards and tags from the user's data. `voice_format.dart` holds shared wording.
+- `follow_up/`: the two-question planner, answer reading, refund candidates.
+- `answers/`: the question reader, the spend-family answerer (reads `LedgerReadModel.spendReport`, the Spending screen's own call), bills, caps, points and best-card answerers, the answer card, a service that gathers data from the app's providers, and button routes.
+- `voice_input_sheet.dart`, `voice_entry_review.dart`, `voice_draft_editor.dart`: on-device recognition with a typed box, contextual phrases, kind chips, "heard as" chips, a date field, follow-up cards, answer view, spoken replies.
+- `voice_speaker.dart`, `voice_settings.dart`: on-device text-to-speech (new plugin `flutter_tts`) and Settings > Voice > "Speak answers" (on by default).
+- Activity accepts a `q` search parameter, so "Show transactions" works for a merchant.
+
+### Measured
+
+| Measure | Before | After |
+|---|---|---|
+| English spends exactly right (30 baseline phrases) | 11 (37%) | all, in the holdout |
+| Silent wrong amounts (same phrases) | 4 | 0 |
+| Wrongly logged as spends (10 must-not-log phrases) | 3 | 0 |
+| Understanding time per sentence (debug VM) | n/a | about 0.15 ms |
+
+- **Generated phrases** (about 5,500 per run, fixed seeds, number forms, word orders, dates, instruments, fillers, repeated words): single spends 2,500 of 2,500, lists 800 of 800, money in and refunds, foreign amounts, never-a-spend 400 of 400, questions 1,500 of 1,500, wrong amounts 0.
+- **Natural holdout** (129 phrases written after the rules, plus the baseline phrases): **first run** spends 67 of 69, money in 12 of 12, foreign 7 of 7, refused 9 of 11, questions 28 of 30. After general fixes: 69, 12, 7, 11 and 30. The holdout was not blind in the strict sense, since the same person wrote the rules; no rule was written for a single phrase.
+- **Generator findings fixed in the engine:** fillers inside numbers and phrases, repeated words, a number from 1990 to 2100 after "for" or "of" read as a year, large plain numbers in lists, "paid me" also counting as spending.
+- **Holdout findings fixed in the engine:** "got" alone outweighing spend, a plural noun making the next number a quantity in a list without separators, an amount between "sent" and "to" breaking a transfer cue, a card called "HDFC Swiggy" swallowing the merchant "Swiggy", and "balance" alone meaning points.
+- 374 voice tests, the performance guard tests, and `flutter analyze` with no errors across the app.
+
+### Changes from the plan
+
+- **Foreign amounts** are saved as an ordinary rupee spend with the foreign amount in the note. They will not appear on the Foreign payments screen.
+- **Refunds** copy the chosen purchase's category, card and shop and note the purchase; there is no link field. Whether the ledger nets a manual refund against the original purchase's category is still to be checked on real data.
+- **Milestones:** the caps answer is complete; milestone questions get the caps answer and an "Open Milestones" button.
+- **Spend questions with two or more filters** (for example dining on the Amex) add up the matching transactions on the phone and say so, instead of reading one report row.
+- **Moved up from batch 2:** "heard as" chips and the date field.
+
+### Not verified, and what could still fail
+
+- **Nothing has run on a phone.** Recognition accuracy for Indian-English accents, `onDevice: true` on the owner's iPhone and an Android phone, and `contextualPhrases` taking effect are all unmeasured (V0 was skipped).
+- **Text-to-speech** is a new native plugin: first build runs `pod install`; behaviour with the silent switch, and the Android "voice installed" check, need a device.
+- **Answers on real data** were tested on fixtures, not on a live ledger. Bills, caps, points and best card read the app's providers; their wiring compiles but has not been exercised end to end.
+- **A voice entry and its bank message** may duplicate each other; not yet investigated.
+- A 30-phrase read-aloud and question checklist on both phones is the next step.

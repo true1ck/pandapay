@@ -558,7 +558,9 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
             );
       _refundCache[i] = (key: key, list: list);
     }
-    return [for (final c in list) FollowUpChoice(c.transactionId, c.label(_now))];
+    return [
+      for (final c in list) FollowUpChoice(c.transactionId, c.label(_now)),
+    ];
   }
 
   FollowUp? _followUpFor(int i, List<UserCard> cards) {
@@ -669,7 +671,9 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
             if (c != null) {
               _applyChoice(i, f, c);
             } else {
-              setState(() => _error = 'I didn’t catch which one. Tap an option.');
+              setState(
+                () => _error = 'I didn’t catch which one. Tap an option.',
+              );
             }
           }
         },
@@ -875,8 +879,12 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
         answer: _answer!,
         onAction: _openAction,
         onAskAnother: _resetToRecord,
-        spoken: _answer!.status == AnswerStatus.ok ? (_speaking ?? false) : null,
-        onToggleSpeech: _answer!.status == AnswerStatus.ok ? _toggleSpeech : null,
+        spoken: _answer!.status == AnswerStatus.ok
+            ? (_speaking ?? false)
+            : null,
+        onToggleSpeech: _answer!.status == AnswerStatus.ok
+            ? _toggleSpeech
+            : null,
       ),
       if (_error != null) ...[
         const SizedBox(height: 8),
@@ -1011,7 +1019,13 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
         _quote(_transcriptBuffer.text),
         const SizedBox(height: 16),
         for (var index = 0; index < _drafts.length; index++) ...[
-          _entryEditor(_drafts[index], _editors[index], cards, categories, index),
+          _entryEditor(
+            _drafts[index],
+            _editors[index],
+            cards,
+            categories,
+            index,
+          ),
           if (index + 1 < _drafts.length) const Divider(height: 32),
         ],
         if (_error != null) ...[

@@ -10,7 +10,12 @@ import 'spend_data.dart';
 import 'voice_answer.dart';
 
 class _Total {
-  const _Total(this.rupees, this.count, {this.rewards = 0, this.combined = false});
+  const _Total(
+    this.rupees,
+    this.count, {
+    this.rewards = 0,
+    this.combined = false,
+  });
 
   final double rupees;
   final int count;
@@ -67,16 +72,20 @@ class SpendAnswerer {
 
   static bool _merchantMatches(String label, String merchant) {
     final l = _norm(label);
-    final wanted = _norm(merchant)
-        .split(' ')
-        .where((w) => w.length > 2)
-        .toList();
+    final wanted = _norm(
+      merchant,
+    ).split(' ').where((w) => w.length > 2).toList();
     if (wanted.isEmpty) return l.contains(_norm(merchant));
     final have = l.split(' ').toSet();
     return wanted.every(have.contains);
   }
 
-  _Total _total(VoiceQuestion q, SpendDataSource s, DateTime from, DateTime to) {
+  _Total _total(
+    VoiceQuestion q,
+    SpendDataSource s,
+    DateTime from,
+    DateTime to,
+  ) {
     if (q.filterCount >= 2) return _fromTransactions(q, s, from, to);
     final r = s.report(from, to);
     double sum(Iterable<SpendBreakdownRow> rows) =>
@@ -86,7 +95,10 @@ class SpendAnswerer {
     if (q.category != null) {
       final c = q.category!;
       final rows = (c.parentCategoryId == null ? r.byCategory : r.bySubcategory)
-          .where((row) => row.categoryId == c.id || _norm(row.label) == _norm(c.name))
+          .where(
+            (row) =>
+                row.categoryId == c.id || _norm(row.label) == _norm(c.name),
+          )
           .toList();
       return _Total(sum(rows), count(rows));
     }
@@ -220,7 +232,11 @@ class SpendAnswerer {
     return '$n, $range. Same figures as the Spending screen.';
   }
 
-  List<AnswerAction> _actions(VoiceQuestion q, TimeSpan p, {bool spendOnly = true}) {
+  List<AnswerAction> _actions(
+    VoiceQuestion q,
+    TimeSpan p, {
+    bool spendOnly = true,
+  }) {
     final c = q.category;
     return [
       AnswerAction(
@@ -251,14 +267,19 @@ class SpendAnswerer {
     final cur = _total(q, s, p.from, p.to);
     final prevSpan = PeriodWords.previous(p);
     final prev =
-        prevSpan != null && !prevSpan.from.isBefore(earliest.subtract(const Duration(days: 1)))
+        prevSpan != null &&
+            !prevSpan.from.isBefore(earliest.subtract(const Duration(days: 1)))
         ? _total(q, s, prevSpan.from, prevSpan.to)
         : null;
     final label = PeriodWords.label(p, now);
     final filter = _filterName(q);
     final comparison = prev == null
         ? null
-        : _comparison(cur.rupees, prev.rupees, PeriodWords.previousLabel(p, now));
+        : _comparison(
+            cur.rupees,
+            prev.rupees,
+            PeriodWords.previousLabel(p, now),
+          );
     final amount = VoiceFormat.rupees(cur.rupees);
     final what = filter == null
         ? 'spending'
@@ -290,7 +311,8 @@ class SpendAnswerer {
             : 'on those cards',
       );
     }
-    if (q.instrument != null) parts.add('by ${q.instrument!.label.toLowerCase()}');
+    if (q.instrument != null)
+      parts.add('by ${q.instrument!.label.toLowerCase()}');
     return parts.isEmpty ? '' : ' ${parts.join(' ')}';
   }
 
@@ -306,19 +328,20 @@ class SpendAnswerer {
     final now = s.now;
     final r = s.report(p.from, p.to);
     final label = PeriodWords.label(p, now);
-    final cats = [...r.byCategory]..sort((a, b) => b.total.paise.compareTo(a.total.paise));
-    final merchants = [...r.byMerchant]..sort((a, b) => b.total.paise.compareTo(a.total.paise));
+    final cats = [...r.byCategory]
+      ..sort((a, b) => b.total.paise.compareTo(a.total.paise));
+    final merchants = [...r.byMerchant]
+      ..sort((a, b) => b.total.paise.compareTo(a.total.paise));
     final topCats = cats.where((c) => c.total.paise > 0).take(3).toList();
-    final topMerchants = merchants.where((c) => c.total.paise > 0).take(3).toList();
+    final topMerchants = merchants
+        .where((c) => c.total.paise > 0)
+        .take(3)
+        .toList();
     if (topCats.isEmpty) {
       return VoiceAnswer(
         title: 'Biggest spending · $label',
         headline: VoiceFormat.rupees(0),
-        evidence: _evidence(
-          _Total(0, 0),
-          p,
-          now,
-        ),
+        evidence: _evidence(_Total(0, 0), p, now),
         coverageNote: _coverage(earliest, p, now),
         spoken: 'I found no spending ${when(label)}.',
         actions: _actions(q, p),
@@ -371,7 +394,8 @@ class SpendAnswerer {
     final label = PeriodWords.label(p, now);
     final prevSpan = PeriodWords.previous(p);
     final prev =
-        prevSpan != null && !prevSpan.from.isBefore(earliest.subtract(const Duration(days: 1)))
+        prevSpan != null &&
+            !prevSpan.from.isBefore(earliest.subtract(const Duration(days: 1)))
         ? s.report(prevSpan.from, prevSpan.to).income.total.rupees
         : null;
     final amount = VoiceFormat.rupees(r.income.total.rupees);
@@ -398,7 +422,10 @@ class SpendAnswerer {
           to: p.to,
           spendOnly: false,
         ),
-        const AnswerAction(AnswerActionKind.spendTrends, 'Open Spending trends'),
+        const AnswerAction(
+          AnswerActionKind.spendTrends,
+          'Open Spending trends',
+        ),
       ],
       spoken: r.income.total.paise == 0
           ? 'I found no money coming in ${when(label)}.'

@@ -14,7 +14,8 @@ VoiceAnswer sample({String? coverage}) => VoiceAnswer(
     AnswerRow('Dining', '₹4,200', detail: '9 transactions'),
     AnswerRow('Groceries', '₹3,000', detail: '7 transactions'),
   ],
-  evidence: '16 transactions, 1 Nov to 30 Nov. Same figures as the Spending screen.',
+  evidence:
+      '16 transactions, 1 Nov to 30 Nov. Same figures as the Spending screen.',
   coverageNote: coverage,
   actions: [
     AnswerAction(
@@ -53,7 +54,10 @@ void main() {
     expect(find.text('₹4,200'), findsWidgets);
     expect(find.text('₹300 more than last month (8%)'), findsOneWidget);
     expect(find.text('Groceries'), findsOneWidget);
-    expect(find.textContaining('Same figures as the Spending screen'), findsOneWidget);
+    expect(
+      find.textContaining('Same figures as the Spending screen'),
+      findsOneWidget,
+    );
     expect(find.byIcon(Icons.warning_amber_rounded), findsNothing);
 
     await tester.tap(find.text('Show transactions'));
@@ -71,7 +75,8 @@ void main() {
       host(
         VoiceAnswerCard(
           answer: sample(
-            coverage: 'History on this phone starts Thu 5 Nov, so earlier spending isn’t included.',
+            coverage:
+                'History on this phone starts Thu 5 Nov, so earlier spending isn’t included.',
           ),
           onAction: (_) {},
           onAskAnother: () {},

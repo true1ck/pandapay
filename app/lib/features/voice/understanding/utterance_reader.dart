@@ -1,4 +1,5 @@
 import 'date_grammar.dart';
+import 'disfluency.dart';
 import 'en_pack.dart';
 import 'language_pack.dart';
 import 'number_grammar.dart';
@@ -45,9 +46,7 @@ class _Anchor {
 }
 
 class _Group {
-  _Group(this.anchor)
-    : firstStart = anchor.num.start,
-      lastEnd = anchor.num.end;
+  _Group(this.anchor) : firstStart = anchor.num.start, lastEnd = anchor.num.end;
 
   _Anchor anchor;
   int firstStart;
@@ -61,7 +60,8 @@ class _Group {
 }
 
 class _Run {
-  _Run(this.p, this.source, this.now) : tokens = tokenize(source);
+  _Run(this.p, this.source, this.now)
+    : tokens = cleanTokens(tokenize(source), p);
 
   final LanguagePack p;
   final String source;
@@ -74,9 +74,8 @@ class _Run {
   List<bool> inNum = [];
   final List<({int start, int end, String digits})> cardRuns = [];
 
-  String w(int k) => k >= 0 && k < tokens.length && tokens[k].isWord
-      ? tokens[k].text
-      : '';
+  String w(int k) =>
+      k >= 0 && k < tokens.length && tokens[k].isWord ? tokens[k].text : '';
   bool isFiller(int k) => w(k).isNotEmpty && p.fillers.contains(w(k));
 
   Understanding execute() {
@@ -205,10 +204,7 @@ class _Run {
         final single = n.span.length == 1 && tokens[k].isNumber;
         final raw = single ? tokens[k].text : '';
         final v = n.span.value;
-        if (single &&
-            digits.isEmpty &&
-            raw.length == 4 &&
-            !raw.contains('.')) {
+        if (single && digits.isEmpty && raw.length == 4 && !raw.contains('.')) {
           digits.write(raw);
           picked.add(idx);
           runStart = k;
@@ -241,6 +237,27 @@ class _Run {
       !p.notPlural.contains(word) &&
       !word.endsWith('ss') &&
       p.pluralSuffixes.any(word.endsWith);
+
+  /// The number at [a] is introduced like a quantity: it starts the sentence
+  /// or follows a verb, preposition, conjunction or determiner, not a name.
+  bool _introducesQuantity(int a) {
+    var k = a - 1;
+    while (k >= 0 && tokens[k].isSymbol) {
+      k--;
+    }
+    if (k < 0) return true;
+    final t = tokens[k];
+    if (!t.isWord) return true;
+    final x = t.text;
+    return p.amountLeadVerbs.contains(x) ||
+        p.amountLeadPrepositions.contains(x) ||
+        p.objectPrepositions.contains(x) ||
+        p.conjunctions.contains(x) ||
+        p.determiners.contains(x) ||
+        p.pronouns.contains(x) ||
+        p.currencyWords.contains(x) ||
+        const {'of', 'had', 'have', 'get', 'got', 'only', 'about'}.contains(x);
+  }
 
   void _classify(_Num n) {
     final s = n.span;
@@ -336,7 +353,10 @@ class _Run {
         quantityLike = true;
       } else if (_looksPlural(nextW) &&
           !p.pointsWords.contains(nextW) &&
-          !p.foreignCurrencies.containsKey(nextW)) {
+          !p.foreignCurrencies.containsKey(nextW) &&
+          _introducesQuantity(a)) {
+        // "2 coffees" is a quantity, but in "bread 45 eggs 80" the number
+        // follows a name, so "eggs" belongs to the next item.
         score -= 3;
         quantityLike = true;
       }
@@ -366,7 +386,31 @@ class _Run {
 
   // ---- anchors, corrections, entries -----------------------------------------
 
+  /// An unlikely-looking number that sits in the same frame as a likely one
+  /// is read as an amount too: in "6,950 for rent and 500000 for movie
+  /// tickets" both numbers are followed by "for", so a plain six-digit number
+  /// is still money. Only numbers of ten or more qualify, and quantities
+  /// never do.
+  void _boostParallelAmounts() {
+    bool framed(_Num n) {
+      var k = n.end;
+      while (k < tokens.length && p.currencyWords.contains(w(k))) {
+        k++;
+      }
+      return p.listFramePrepositions.contains(w(k));
+    }
+
+    final sure = nums.where((n) => n.role == _Role.amount && n.score >= 1.0);
+    if (!sure.any(framed)) return;
+    for (final n in nums) {
+      if (n.role != _Role.amount || n.score >= 1.0 || n.score < -2.5) continue;
+      if (n.span.value < 10 || !framed(n)) continue;
+      n.score = 1.0;
+    }
+  }
+
   List<_Anchor> _chooseAnchors() {
+    _boostParallelAmounts();
     final amounts = nums
         .where((n) => n.role == _Role.amount && n.score >= 1.0)
         .toList();
@@ -596,17 +640,50 @@ class _Run {
     final scores = <String, double>{'spend': 0.5};
     void add(String kind, double weight) =>
         scores[kind] = (scores[kind] ?? 0) + weight;
-    for (final cue in p.kindCues) {
-      for (var k = rs; k + cue.words.length <= re; k++) {
+    // Cue words are matched over the words of the entry with the numbers and
+    // currency words taken out, so "sent 5000 to" still reads as "sent to".
+    final seq = <String>[
+      for (var k = rs; k < re; k++)
+        if (tokens[k].isWord &&
+            !inNum[k] &&
+            !p.currencyWords.contains(tokens[k].text))
+          tokens[k].text,
+    ];
+    // Longest cue first: "paid me" uses up "paid", so it does not also count
+    // as spending.
+    final used = List<bool>.filled(seq.length, false);
+    final cues = [...p.kindCues]
+      ..sort((a, b) => b.words.length.compareTo(a.words.length));
+    for (final cue in cues) {
+      for (var k = 0; k + cue.words.length <= seq.length; k++) {
         var ok = true;
         for (var j = 0; j < cue.words.length; j++) {
-          if (w(k + j) != cue.words[j]) {
+          if (used[k + j] || seq[k + j] != cue.words[j]) {
             ok = false;
             break;
           }
         }
-        if (ok) add(cue.kind, cue.weight);
+        if (!ok) continue;
+        // Only a phrase uses up its words. A single word like "got" is
+        // evidence for several kinds at once.
+        if (cue.words.length > 1) {
+          for (var j = 0; j < cue.words.length; j++) {
+            used[k + j] = true;
+          }
+        }
+        add(cue.kind, cue.weight);
       }
+    }
+    // "for 1800" says something was paid for; money received comes "from".
+    if (anchor != null && !anchor.isPoints) {
+      var k = anchor.num.start - 1;
+      while (k >= rs &&
+          (tokens[k].isSymbol ||
+              p.currencyWords.contains(w(k)) ||
+              p.hedgeWords.contains(w(k)))) {
+        k--;
+      }
+      if (k >= rs && w(k) == 'for') add('spend', 1.5);
     }
     var billNear = false;
     for (var k = rs; k < re; k++) {

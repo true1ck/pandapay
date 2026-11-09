@@ -25,6 +25,9 @@ const LanguagePack enPack = LanguagePack(
     'okay',
     'ok',
     'panda',
+    'so',
+    'well',
+    'yeah',
   },
   numberUnits: {
     'zero': 0,
@@ -572,7 +575,15 @@ const LanguagePack enPack = LanguagePack(
   cardWords: {'card', 'cards', 'cc'},
   statementWords: {'statement'},
   conjunctions: {'and', 'then', 'also', 'plus', 'next', 'after'},
-  addCardVerbs: {'add', 'adding', 'create', 'open', 'apply', 'link', 'register'},
+  addCardVerbs: {
+    'add',
+    'adding',
+    'create',
+    'open',
+    'apply',
+    'link',
+    'register',
+  },
   addCardMiddle: {
     'a',
     'an',
@@ -772,6 +783,17 @@ const LanguagePack enPack = LanguagePack(
     'credit': ['credit card'],
     'wallet': ['wallet'],
   },
+  listFramePrepositions: {'on', 'for', 'at'},
+  hedgeWords: {
+    'about',
+    'around',
+    'nearly',
+    'almost',
+    'roughly',
+    'approximately',
+    'only',
+    'just',
+  },
   questionCues: {
     'bestCard': [
       ['which', 'card'],
@@ -808,7 +830,6 @@ const LanguagePack enPack = LanguagePack(
       ['point'],
       ['reward', 'points'],
       ['rewards'],
-      ['balance'],
     ],
     'moneyIn': [
       ['came', 'in'],

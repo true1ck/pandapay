@@ -138,13 +138,7 @@ class _TimeReader {
       if (p.sinceWords.contains(word)) {
         final inner = single(i + 1);
         if (inner != null) {
-          return span(
-            i,
-            inner.endToken,
-            inner.from,
-            today,
-            TimeSpanKind.since,
-          );
+          return span(i, inner.endToken, inner.from, today, TimeSpanKind.since);
         }
       }
       if (p.rangeStartWords.contains(word)) {
@@ -334,13 +328,7 @@ class _TimeReader {
     switch (unit) {
       case 'week':
         final start = addDays(monday(today), -7 * back);
-        return span(
-          i,
-          i + 2,
-          start,
-          addDays(start, 6),
-          TimeSpanKind.week,
-        );
+        return span(i, i + 2, start, addDays(start, 6), TimeSpanKind.week);
       case 'month':
         final first = addMonths(DateTime(today.year, today.month), -back);
         return span(
@@ -351,10 +339,7 @@ class _TimeReader {
           TimeSpanKind.month,
         );
       case 'quarter':
-        final qStart = DateTime(
-          today.year,
-          ((today.month - 1) ~/ 3) * 3 + 1,
-        );
+        final qStart = DateTime(today.year, ((today.month - 1) ~/ 3) * 3 + 1);
         final first = addMonths(qStart, -3 * back);
         final end = addMonths(first, 2);
         return span(
@@ -523,9 +508,8 @@ class _TimeReader {
     final m = p.monthNames[w(k)];
     if (m == null) return null;
     final y = yearAt(k + 1);
-    final named = modifier.isNotEmpty ||
-        y != null ||
-        isW(k - 1, p.monthPrepositions);
+    final named =
+        modifier.isNotEmpty || y != null || isW(k - 1, p.monthPrepositions);
     if (!named) return null;
     int year;
     var back = false;
@@ -550,14 +534,16 @@ class _TimeReader {
   TimeSpan? yearOnly(int i) {
     final y = yearAt(i);
     if (y == null) return null;
+    // "in 2025" and "year 2025" are years. "for 2000" and "of 2000" are
+    // amounts, and so is any number followed by a currency word.
     final prev = w(i - 1);
-    if (!(p.monthPrepositions.contains(prev) || prev == 'year')) return null;
-    return span(
-      i,
-      i + 1,
-      DateTime(y),
-      DateTime(y, 12, 31),
-      TimeSpanKind.year,
-    );
+    if (!(prev == 'in' || prev == 'during' || prev == 'year')) return null;
+    final next = w(i + 1);
+    if (next.isNotEmpty &&
+        (p.unitWords.containsKey(next) || next == 'rupees' || next == 'rs')) {
+      return null;
+    }
+    if (y > today.year) return null;
+    return span(i, i + 1, DateTime(y), DateTime(y, 12, 31), TimeSpanKind.year);
   }
 }

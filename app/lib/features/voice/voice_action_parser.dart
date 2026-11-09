@@ -19,7 +19,13 @@ enum VoiceActionType {
 }
 
 /// Why a sentence was recognized but not turned into an entry.
-enum VoiceNotice { addCard, cardBillPayment, transfer, nothingFound, nothingHeard }
+enum VoiceNotice {
+  addCard,
+  cardBillPayment,
+  transfer,
+  nothingFound,
+  nothingHeard,
+}
 
 /// One conversion Panda made, shown so the user can see where a value came
 /// from: `₹250 ← "two fifty"`.
@@ -245,7 +251,7 @@ class VoiceActionParser {
       EntryKind.pointsRedemption => VoiceActionType.pointsRedemption,
       _ => VoiceActionType.expense,
     };
-    final lower = e.text.toLowerCase();
+    final lower = _undisfluent(e.text.toLowerCase(), pack);
     final clean = e.cleanText.toLowerCase();
     final words = splitWords(clean);
     final amount = e.foreign ? null : e.amount?.value;
@@ -257,10 +263,14 @@ class VoiceActionParser {
       pack,
       knownMerchants,
       categories,
-      incoming:
-          e.kind == EntryKind.moneyIn || e.kind == EntryKind.refund,
+      incoming: e.kind == EntryKind.moneyIn || e.kind == EntryKind.refund,
     );
-    final category = resolveCategory(words, categories, pack, merchantRead.slug);
+    final category = resolveCategory(
+      words,
+      categories,
+      pack,
+      merchantRead.slug,
+    );
     final issues = <String>[];
 
     if (e.foreign) {
@@ -413,6 +423,20 @@ class VoiceActionParser {
     );
   }
 
+  /// The words with fillers and doubled words taken out, so "google uh pay"
+  /// and "my my amex" read as "google pay" and "my amex".
+  static String _undisfluent(String lower, LanguagePack pack) {
+    final out = <String>[];
+    for (final w in splitWords(lower)) {
+      if (pack.fillers.contains(w)) continue;
+      final isNumber =
+          pack.numberUnits.containsKey(w) || pack.numberTens.containsKey(w);
+      if (out.isNotEmpty && out.last == w && !isNumber) continue;
+      out.add(w);
+    }
+    return out.join(' ');
+  }
+
   static String _plain(double v) =>
       v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(2);
 
@@ -443,10 +467,9 @@ class VoiceActionParser {
     EntryKind kind,
   ) {
     final words = splitWords(lower);
-    bool any(String key) =>
-        (pack.instrumentWords[key] ?? const <String>[]).any(
-          (phrase) => hasPhrase(words, splitWords(phrase)),
-        );
+    bool any(String key) => (pack.instrumentWords[key] ?? const <String>[]).any(
+      (phrase) => hasPhrase(words, splitWords(phrase)),
+    );
     if (any('credit')) return TxnInstrument.creditCard;
     if (any('debit')) return TxnInstrument.debitCard;
     if (any('cash')) return TxnInstrument.cash;
@@ -461,10 +484,9 @@ class VoiceActionParser {
   /// need this: "by UPI" is a filter, silence is not "credit card".
   static TxnInstrument? statedInstrument(String lower, LanguagePack pack) {
     final words = splitWords(lower);
-    bool any(String key) =>
-        (pack.instrumentWords[key] ?? const <String>[]).any(
-          (phrase) => hasPhrase(words, splitWords(phrase)),
-        );
+    bool any(String key) => (pack.instrumentWords[key] ?? const <String>[]).any(
+      (phrase) => hasPhrase(words, splitWords(phrase)),
+    );
     if (any('credit')) return TxnInstrument.creditCard;
     if (any('debit')) return TxnInstrument.debitCard;
     if (any('cash')) return TxnInstrument.cash;
@@ -478,6 +500,14 @@ class VoiceActionParser {
   /// "swiggy") picks every card that carries it, so "my HDFC bill" can cover
   /// both HDFC cards.
   static List<UserCard> matchCards(
+    List<String> words,
+    List<UserCard> cards, {
+    String? digits,
+  }) => matchCardsDetailed(words, cards, digits: digits).cards;
+
+  /// Like [matchCards], and says whether the match was exact (a nickname,
+  /// last digits or the full name) or only shared a loose word.
+  static ({List<UserCard> cards, bool exact}) matchCardsDetailed(
     List<String> words,
     List<UserCard> cards, {
     String? digits,
@@ -500,19 +530,25 @@ class VoiceActionParser {
       final full = splitWords(card.cardName);
       if (full.length >= 2 && hasPhrase(words, full)) exact.add(card);
     }
-    if (exact.isNotEmpty) return exact;
+    if (exact.isNotEmpty) return (cards: exact, exact: true);
 
     final scored = <({UserCard card, int score})>[];
     for (final card in cards) {
-      final own = splitWords('${card.nickname ?? ''} ${card.cardName}')
-          .where((w) => w.length > 2 && !_genericCardWord(w))
-          .toSet();
+      final own = splitWords(
+        '${card.nickname ?? ''} ${card.cardName}',
+      ).where((w) => w.length > 2 && !_genericCardWord(w)).toSet();
       final score = own.where(words.contains).length;
       if (score > 0) scored.add((card: card, score: score));
     }
-    if (scored.isEmpty) return const [];
+    if (scored.isEmpty) return (cards: const <UserCard>[], exact: false);
     final best = scored.map((s) => s.score).reduce((a, b) => a > b ? a : b);
-    return [for (final s in scored) if (s.score == best) s.card];
+    return (
+      cards: [
+        for (final s in scored)
+          if (s.score == best) s.card,
+      ],
+      exact: false,
+    );
   }
 
   static ({UserCard? card, bool ambiguous}) resolveCard(

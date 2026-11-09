@@ -94,7 +94,10 @@ class VoiceAnswerCard extends StatelessWidget {
                           if (r.detail != null && r.detail!.isNotEmpty)
                             Text(
                               r.detail!,
-                              style: BambooFonts.ui(12, color: BambooInk.ink500),
+                              style: BambooFonts.ui(
+                                12,
+                                color: BambooInk.ink500,
+                              ),
                             ),
                         ],
                       ),

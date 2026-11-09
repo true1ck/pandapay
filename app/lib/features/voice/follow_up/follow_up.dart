@@ -1,4 +1,5 @@
 import '../../../data/cached_regexp.dart';
+import '../understanding/disfluency.dart';
 import '../understanding/en_pack.dart';
 import '../understanding/language_pack.dart';
 import '../understanding/number_grammar.dart';
@@ -98,21 +99,26 @@ class FollowUpPlanner {
     if (s.kindAlternative != null && todo(FollowUpSlot.kind)) {
       return FollowUp(
         slot: FollowUpSlot.kind,
-        question: s.type == VoiceActionType.moneyIn ||
-                s.kindAlternative == VoiceActionType.moneyIn
+        question:
+            {
+              s.type,
+              s.kindAlternative,
+            }.containsAll({VoiceActionType.moneyIn, VoiceActionType.refund})
             ? 'Is this money you received, or a refund?'
             : 'What kind of entry is this?',
         choices: [
           FollowUpChoice(s.type.name, kindLabel(s.type)),
-          FollowUpChoice(s.kindAlternative!.name, kindLabel(s.kindAlternative!)),
+          FollowUpChoice(
+            s.kindAlternative!.name,
+            kindLabel(s.kindAlternative!),
+          ),
         ],
       );
     }
     if (s.foreignCurrency != null &&
         s.amount == null &&
         todo(FollowUpSlot.rupeeAmount)) {
-      final spoken =
-          '${s.foreignCurrency} ${_plain(s.foreignAmount)}'.trim();
+      final spoken = '${s.foreignCurrency} ${_plain(s.foreignAmount)}'.trim();
       return FollowUp(
         slot: FollowUpSlot.rupeeAmount,
         question: 'How much was that in rupees?',
@@ -192,7 +198,7 @@ class FollowUpAnswers {
 
   /// The first number in [text]: "about 4,200 rupees", "forty two hundred".
   static double? number(String text, {LanguagePack pack = enPack}) {
-    final tokens = tokenize(text);
+    final tokens = cleanTokens(tokenize(text), pack);
     final spans = findNumbers(tokens, pack);
     for (final s in spans) {
       if (s.value > 0) return s.value;

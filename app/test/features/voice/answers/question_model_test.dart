@@ -14,7 +14,11 @@ const categories = [
   SpendCategory(id: 'groceries-id', slug: 'groceries', name: 'Groceries'),
   SpendCategory(id: 'bills-id', slug: 'bills', name: 'Bills'),
   SpendCategory(id: 'fuel-id', slug: 'fuel', name: 'Fuel'),
-  SpendCategory(id: 'entertainment-id', slug: 'entertainment', name: 'Entertainment'),
+  SpendCategory(
+    id: 'entertainment-id',
+    slug: 'entertainment',
+    name: 'Entertainment',
+  ),
 ];
 
 UserCard card(String id, String name, {String? nick, String? last4}) =>
@@ -28,7 +32,12 @@ UserCard card(String id, String name, {String? nick, String? last4}) =>
     );
 
 final cards = [
-  card('amex', 'American Express Platinum Travel Card', nick: 'Amex', last4: '1007'),
+  card(
+    'amex',
+    'American Express Platinum Travel Card',
+    nick: 'Amex',
+    last4: '1007',
+  ),
   card('hs', 'HDFC Swiggy Credit Card', last4: '4521'),
   card('hr', 'HDFC Regalia Gold Credit Card', last4: '9090'),
   card('axis', 'Axis Atlas Credit Card', last4: '3344'),

@@ -3,7 +3,14 @@ import 'tokens.dart';
 
 /// What one spoken or typed entry is. Transfers and card-bill payments are
 /// recognized so they can be explained, but they are not logged by voice.
-enum EntryKind { spend, moneyIn, refund, pointsRedemption, transfer, billPayment }
+enum EntryKind {
+  spend,
+  moneyIn,
+  refund,
+  pointsRedemption,
+  transfer,
+  billPayment,
+}
 
 extension EntryKindX on EntryKind {
   bool get loggable =>

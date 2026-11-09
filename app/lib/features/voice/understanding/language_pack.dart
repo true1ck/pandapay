@@ -86,6 +86,8 @@ class LanguagePack {
     required this.determiners,
     required this.phraseStops,
     required this.questionCues,
+    required this.listFramePrepositions,
+    required this.hedgeWords,
   });
 
   /// `en`, `hi`, ...
@@ -222,4 +224,13 @@ class LanguagePack {
   /// counts for more: `bestCard`, `bills`, `caps`, `points`, `moneyIn`,
   /// `top`, `compare`, `spend`.
   final Map<String, List<List<String>>> questionCues;
+
+  /// Words that follow an amount in a list of entries ("250 for lunch, 300
+  /// for fuel"). An unlikely-looking number in the same frame as a likely
+  /// one is read as an amount too.
+  final Set<String> listFramePrepositions;
+
+  /// Words that soften an amount ("about 1800") and carry no meaning of
+  /// their own.
+  final Set<String> hedgeWords;
 }

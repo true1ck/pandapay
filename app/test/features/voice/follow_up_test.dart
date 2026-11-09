@@ -200,8 +200,20 @@ void main() {
       spend('c', 500, DateTime(2026, 10, 20), merchant: 'Amazon Pay'),
       spend('d', 300, DateTime(2026, 10, 25), merchant: 'Amazon'),
       spend('e', 2499, DateTime(2026, 5, 1), merchant: 'Amazon'),
-      spend('f', 800, DateTime(2026, 11, 8), merchant: 'Amazon', status: 'deleted'),
-      spend('g', 800, DateTime(2026, 11, 8), merchant: 'Amazon', kind: TxnEntryKind.income),
+      spend(
+        'f',
+        800,
+        DateTime(2026, 11, 8),
+        merchant: 'Amazon',
+        status: 'deleted',
+      ),
+      spend(
+        'g',
+        800,
+        DateTime(2026, 11, 8),
+        merchant: 'Amazon',
+        kind: TxnEntryKind.income,
+      ),
     ];
 
     test('same shop, at least the refunded amount, recent, active', () {
@@ -226,7 +238,12 @@ void main() {
 
     test('a different shop is not offered', () {
       expect(
-        RefundCandidates.find(history, now: now, merchant: 'Myntra', amount: 100),
+        RefundCandidates.find(
+          history,
+          now: now,
+          merchant: 'Myntra',
+          amount: 100,
+        ),
         isEmpty,
       );
     });

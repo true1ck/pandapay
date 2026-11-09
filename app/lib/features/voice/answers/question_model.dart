@@ -1,6 +1,8 @@
 import '../../../data/catalogue_repository.dart' show SpendCategory;
+import '../../../data/flashtext_merchant_extractor.dart';
 import '../../../data/user_cards_repository.dart' show TxnInstrument, UserCard;
 import '../understanding/date_grammar.dart';
+import '../understanding/disfluency.dart';
 import '../understanding/en_pack.dart';
 import '../understanding/language_pack.dart';
 import '../understanding/number_grammar.dart';
@@ -92,7 +94,7 @@ class QuestionReader {
     List<String> knownMerchants = const [],
   }) {
     final source = text.trim();
-    final tokens = tokenize(source);
+    final tokens = cleanTokens(tokenize(source), pack);
     final times = findTimeSpans(tokens, pack, now);
     final claimed = {
       for (final s in times)
@@ -210,7 +212,8 @@ class QuestionReader {
       for (var k = 0; k < tokens.length; k++)
         if (tokens[k].isNumber && !claimed.contains(k)) tokens[k].text,
     ];
-    final cardMatches = VoiceActionParser.matchCards(cardInput, cards);
+    final detailed = VoiceActionParser.matchCardsDetailed(cardInput, cards);
+    var cardMatches = detailed.cards;
     final onlyCard =
         kind == QuestionKind.billsDue ||
         kind == QuestionKind.capsLeft ||
@@ -218,9 +221,21 @@ class QuestionReader {
     if (onlyCard) {
       return make(cardMatches: cardMatches);
     }
+    // "on swiggy" means the merchant, even when a card is called "HDFC
+    // Swiggy", unless the person says "card" or names it fully.
+    if (cardMatches.isNotEmpty && !detailed.exact) {
+      final saysCard = words.contains('card') || words.contains('cards');
+      final brand = FlashTextMerchantExtractor.defaultExtractor.extractFirst(
+        words.join(' '),
+      );
+      if (brand != null && (kind == QuestionKind.bestCard || !saysCard)) {
+        cardMatches = const [];
+      }
+    }
 
     final cardWords = {
-      for (final c in cardMatches) ...VoiceActionParser.splitWords('${c.nickname ?? ''} ${c.cardName}'),
+      for (final c in cardMatches)
+        ...VoiceActionParser.splitWords('${c.nickname ?? ''} ${c.cardName}'),
     };
     final nameWords = [
       for (final w in words)

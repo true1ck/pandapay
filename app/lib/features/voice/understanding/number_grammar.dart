@@ -111,8 +111,7 @@ NumberSpan? _parseRun(
           pack.magnitudeWords.containsKey(t.text));
   bool numberish(int k) =>
       free(k) && (tokens[k].isNumber || isSmallWord(tokens[k]));
-  bool isUnderTen(Token t) =>
-      t.isWord && (pack.numberUnits[t.text] ?? 99) < 10;
+  bool isUnderTen(Token t) => t.isWord && (pack.numberUnits[t.text] ?? 99) < 10;
 
   loop:
   while (free(j)) {

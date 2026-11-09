@@ -109,7 +109,11 @@ class VoiceAnswerService {
     final name = _name(card);
     final out = <CapLine>[];
     if (product.isV2Shaped) {
-      for (final p in capProgressesFor(product: product, owned: card, now: now)) {
+      for (final p in capProgressesFor(
+        product: product,
+        owned: card,
+        now: now,
+      )) {
         if (p.isUnknown) continue;
         final used = p.consumed ?? 0;
         final remaining = (p.amount - used).clamp(0, p.amount).toDouble();
@@ -140,7 +144,8 @@ class VoiceAnswerService {
         CapLine(
           cardName: name,
           label: cap.label,
-          remaining: '${VoiceFormat.rupees((limit - used).clamp(0, limit).toDouble())} left',
+          remaining:
+              '${VoiceFormat.rupees((limit - used).clamp(0, limit).toDouble())} left',
           used: '${VoiceFormat.rupees(used)} / ${VoiceFormat.rupees(limit)}',
           reset: 'resets each ${cap.period.name}',
           ratio: (used / limit).clamp(0.0, 1.0),
@@ -162,16 +167,20 @@ class VoiceAnswerService {
       // The same figure the card screen shows: the saved balance, else what
       // has been earned so far. A card with neither is "unknown", not zero.
       final saved = card.pointsBalance;
-      final points = saved ?? (card.totalPointsEarned > 0 ? card.totalPointsEarned : null);
+      final points =
+          saved ?? (card.totalPointsEarned > 0 ? card.totalPointsEarned : null);
       DateTime? expiry;
       final ledger = ref.read(pointsLedgerProvider(card.id)).valueOrNull;
       if (ledger != null) {
         final today = DateTime(now.year, now.month, now.day);
-        final upcoming = ledger
-            .where((e) => e.expiresOn != null && !e.expiresOn!.isBefore(today))
-            .map((e) => e.expiresOn!)
-            .toList()
-          ..sort();
+        final upcoming =
+            ledger
+                .where(
+                  (e) => e.expiresOn != null && !e.expiresOn!.isBefore(today),
+                )
+                .map((e) => e.expiresOn!)
+                .toList()
+              ..sort();
         if (upcoming.isNotEmpty) expiry = upcoming.first;
       }
       lines.add(
@@ -208,7 +217,8 @@ class VoiceAnswerService {
         status: AnswerStatus.notReady,
       );
     }
-    final wallet = ref.read(userCardsProvider).valueOrNull ?? const <UserCard>[];
+    final wallet =
+        ref.read(userCardsProvider).valueOrNull ?? const <UserCard>[];
     String nameOf(CardProduct product) {
       for (final c in wallet) {
         if (c.cardProductId == product.id) return _name(c);
@@ -245,8 +255,10 @@ String routeFor(AnswerAction a) {
         if (a.spendOnly) 'spendOnly': 'true',
         if (a.query != null && a.query!.isNotEmpty) 'q': a.query!,
       };
-      return Uri(path: AppRoute.activity, queryParameters: q.isEmpty ? null : q)
-          .toString();
+      return Uri(
+        path: AppRoute.activity,
+        queryParameters: q.isEmpty ? null : q,
+      ).toString();
     case AnswerActionKind.spendTrends:
       return AppRoute.spendTrends;
     case AnswerActionKind.paymentsDue:

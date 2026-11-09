@@ -114,10 +114,7 @@ class PeriodWords {
           DateTime(p.from.year - 1, 12, 31),
         );
       case TimeSpanKind.financialYear:
-        return make(
-          DateTime(p.from.year - 1, 4),
-          DateTime(p.from.year, 3, 31),
-        );
+        return make(DateTime(p.from.year - 1, 4), DateTime(p.from.year, 3, 31));
       case TimeSpanKind.rolling:
       case TimeSpanKind.since:
       case TimeSpanKind.toDate:

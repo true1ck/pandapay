@@ -109,11 +109,9 @@ class BillsAnswerer {
 
   static String _relative(DateTime due, DateTime now) {
     final today = DateTime(now.year, now.month, now.day);
-    final days = (DateTime(due.year, due.month, due.day)
-                .difference(today)
-                .inHours /
-            24)
-        .round();
+    final days =
+        (DateTime(due.year, due.month, due.day).difference(today).inHours / 24)
+            .round();
     if (days == 0) return 'today';
     if (days == 1) return 'tomorrow';
     if (days > 1) return 'in $days days';
@@ -194,7 +192,8 @@ class BillsAnswerer {
       final when = l.dueDate == null
           ? 'with no due date I can read yet'
           : 'due ${VoiceFormat.day(l.dueDate!, now)}, ${_relative(l.dueDate!, now)}';
-      spoken = 'Your ${l.cardName} bill is ${VoiceFormat.rupees(l.owed!)}, $when.';
+      spoken =
+          'Your ${l.cardName} bill is ${VoiceFormat.rupees(l.owed!)}, $when.';
     } else {
       headline = VoiceFormat.rupees(total);
       final first = unpaid.first;
@@ -315,7 +314,9 @@ class PointsAnswerer {
     return VoiceAnswer(
       title: 'Points · ${single ? known.first.cardName : 'your cards'}',
       headline: '${_points(total)} points',
-      comparison: value > 0 ? 'About ${VoiceFormat.rupees(value)} in value' : null,
+      comparison: value > 0
+          ? 'About ${VoiceFormat.rupees(value)} in value'
+          : null,
       rows: [
         for (final l in known)
           AnswerRow(l.cardName, '${_points(l.points!)} pts', detail: detail(l)),
@@ -362,17 +363,15 @@ class BestCardAnswerer {
     final backup = usable.length > 1 ? usable[1] : null;
     final used = amount ?? defaultAmount;
     final where = merchant ?? categoryName;
-    final what = [
-      ?where,
-      VoiceFormat.rupees(used),
-    ].join(' · ');
+    final what = [?where, VoiceFormat.rupees(used)].join(' · ');
     final earn = top.expectedValue > 0
         ? 'You’d earn about ${VoiceFormat.rupees(top.expectedValue)}.'
         : '';
     final spoken =
         'Use your ${top.cardName} for ${VoiceFormat.rupees(used)}'
-        '${where == null ? '' : ' at $where'}. $earn'
-        '${backup == null ? '' : ' Backup: ${backup.cardName}.'}'.trim();
+                '${where == null ? '' : ' at $where'}. $earn'
+                '${backup == null ? '' : ' Backup: ${backup.cardName}.'}'
+            .trim();
     return VoiceAnswer(
       title: 'Best card · $what',
       headline: top.cardName,
