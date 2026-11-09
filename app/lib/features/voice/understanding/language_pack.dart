@@ -1,3 +1,14 @@
+/// One piece of evidence for what kind of entry a clause is: the words
+/// [words] (adjacent, in order) add [weight] to [kind] (`spend`, `income`,
+/// `refund` or `transfer`).
+class Cue {
+  const Cue(this.kind, this.words, this.weight);
+
+  final String kind;
+  final List<String> words;
+  final double weight;
+}
+
 /// Everything that depends on the spoken language lives in a pack: word
 /// tables only. The roles, scoring and solver in this folder are
 /// language-neutral, so adding Hindi or Marathi later means writing a pack
@@ -44,6 +55,32 @@ class LanguagePack {
     required this.ofWords,
     required this.theWords,
     required this.timePhrases,
+    required this.kindCues,
+    required this.amountLeadVerbs,
+    required this.amountLeadPrepositions,
+    required this.objectPrepositions,
+    required this.questionStarters,
+    required this.correctionStrong,
+    required this.correctionWeak,
+    required this.correctionPhrases,
+    required this.correctionConnectors,
+    required this.quantityUnits,
+    required this.notPlural,
+    required this.pluralSuffixes,
+    required this.pointsWords,
+    required this.pointsRedeemVerbs,
+    required this.billWords,
+    required this.cardWords,
+    required this.statementWords,
+    required this.conjunctions,
+    required this.addCardVerbs,
+    required this.addCardMiddle,
+    required this.addCardBlockers,
+    required this.cardEndingWords,
+    required this.digitConnectors,
+    required this.dayPrefixWords,
+    required this.percentWords,
+    required this.pronouns,
   });
 
   /// `en`, `hi`, ...
@@ -119,4 +156,48 @@ class LanguagePack {
   /// Fixed multi-word phrases by meaning: `allTime`, `yearToDate`,
   /// `monthToDate`.
   final Map<String, List<List<String>>> timePhrases;
+
+  /// Evidence for spend, money in, refund and transfer.
+  final List<Cue> kindCues;
+
+  /// Verbs and nouns that introduce an amount ("spent", "salary").
+  final Set<String> amountLeadVerbs;
+
+  /// Words that introduce an amount only when they sit right before it.
+  final Set<String> amountLeadPrepositions;
+
+  /// Words after an amount that introduce what it was for ("on", "at").
+  final Set<String> objectPrepositions;
+  final Set<String> questionStarters;
+  final Set<String> correctionStrong;
+  final Set<String> correctionWeak;
+  final List<List<String>> correctionPhrases;
+
+  /// Words that may sit between a correction cue and the new value.
+  final Set<String> correctionConnectors;
+
+  /// Nouns that mean a quantity rather than money ("3 people", "2 kg").
+  final Set<String> quantityUnits;
+
+  /// Words that end in a plural suffix but are not plural nouns.
+  final Set<String> notPlural;
+  final List<String> pluralSuffixes;
+  final Set<String> pointsWords;
+  final Set<String> pointsRedeemVerbs;
+  final Set<String> billWords;
+  final Set<String> cardWords;
+  final Set<String> statementWords;
+  final Set<String> conjunctions;
+  final Set<String> addCardVerbs;
+  final Set<String> addCardMiddle;
+
+  /// Words that show a sentence is logging a spend, not adding a card.
+  final Set<String> addCardBlockers;
+  final Set<String> cardEndingWords;
+  final Set<String> digitConnectors;
+
+  /// Words that may come before a bare ordinal day ("on the 3rd").
+  final Set<String> dayPrefixWords;
+  final Set<String> percentWords;
+  final Set<String> pronouns;
 }

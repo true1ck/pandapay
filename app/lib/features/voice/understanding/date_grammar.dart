@@ -461,7 +461,7 @@ class _TimeReader {
         return resolveDayMonth(i, y != null ? k + 2 : k + 1, first.value, m, y);
       }
       // "on the 3rd", "the third": day of the current or previous month.
-      if (first.ordinal && (t[i].isNumber || isW(i - 1, p.theWords))) {
+      if (first.ordinal && (i == 0 || isW(i - 1, p.dayPrefixWords))) {
         return dayOfMonth(i, first.end, first.value);
       }
       return null;
