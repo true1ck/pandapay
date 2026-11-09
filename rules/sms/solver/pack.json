@@ -160,7 +160,12 @@
       "this month",
       "will be blocked",
       "will mature",
-      "has been delivered"
+      "has been delivered",
+      "fund requested",
+      "requested by",
+      "requested money",
+      "money through",
+      "requests money"
     ],
     "promo": [
       "pre-approved",
@@ -594,6 +599,18 @@
       {
         "p": "tax|tds",
         "kind": "tax"
+      },
+      {
+        "p": "running account settlement",
+        "kind": "investment"
+      },
+      {
+        "p": "settled your account",
+        "kind": "investment"
+      },
+      {
+        "p": "payout",
+        "kind": "investment"
       }
     ],
     "mandateRefCue": [
@@ -1163,7 +1180,10 @@
     "futureMarker": [
       "will",
       "shall",
-      "would"
+      "would",
+      "when",
+      "if",
+      "whenever"
     ],
     "conditional": [
       "when you",

@@ -195,6 +195,7 @@ class SolverFacts {
       'p2p',
       'card_payment',
       'wallet_topup',
+      'investment',
       'unknown',
     };
     const debitPurposes = {

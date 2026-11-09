@@ -340,6 +340,42 @@ void main() {
     );
   });
 
+  // Found by replaying a real inbox (counts only). The wording here is invented;
+  // only the structure is the real one.
+  group('structures found on a real inbox', () {
+    test('a payout "transferred Rs X to your bank account" is money coming back from investments, not a debit', () {
+      final d = _solve('Dear Client, We have transferred Rs 9,000.00 to your bank account No 123456789 as a part of running account settlement vide Ref No CMS123456.');
+      expect(d.read, SolverRead.credit);
+      final m = _facts(d).facts.single as MovementFact;
+      expect(m.direction, Direction.credit);
+      expect(m.purpose, MovementPurpose.investment);
+    });
+
+    test('an offer that says "when your loan is credited" is a promotion, not income', () {
+      final d = _solve('Hi Sam, special Loan offer on your recent Pay Later a/c XX1234 transaction! Get a Rs 250 gift voucher when your loan is credited! The offer is valid only till today!');
+      expect(d.countsInTotals, isFalse);
+    });
+
+    test('a collect request is not an upcoming debit or a bill', () {
+      for (final body in [
+        'Fund requested by Sam. On Approval, Rs 500 will be debited. Click to pay https://pay.example/x',
+        'Sam has requested money through ExamplePay. On approval, Rs 500 will be debited from your Bank Account-Example Bank.',
+      ]) {
+        final d = _solve(body);
+        expect(d.read, SolverRead.info, reason: body);
+        expect(d.countsInTotals, isFalse, reason: body);
+      }
+    });
+
+    test('a card spend in the "Spent Rs X Card no. XX1234 ... Avl Limit" layout is counted', () {
+      final d = _solve('Spent Rs 450.00 Example Bank Card no. XX1234 09-11-26 12:30:11 IST SAMPLE SHOP Avl Limit: Rs 80,000.00 Not you? SMS BLOCK 1234 to 9999');
+      expect(d.read, SolverRead.debit);
+      expect(d.accepted, isTrue);
+      expect(d.minor, 45000);
+      expect(d.mask, '1234');
+    });
+  });
+
   group('financial messages with no printed amount are never ignored', () {
     test('completed money wording without an amount goes to review', () {
       expect(

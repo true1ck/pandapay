@@ -300,7 +300,8 @@ class _Run {
       if (h.entry.kind != 'directional') return false;
       // "transferred to your own account X from Y" is an own transfer, handled below.
       if (hits('ownTransfer').isNotEmpty) return false;
-      final i = h.end;
+      var i = h.end;
+      if (i < toks.length && toks[i].kind == TokKind.amt) i++;
       if (i + 1 >= toks.length || toks[i].kind != TokKind.word) return false;
       final w = toks[i].lower;
       if (w != 'to' && w != 'into') return false;
@@ -546,6 +547,13 @@ class _Run {
         billCues.isNotEmpty ? billCues.first : generated.first,
         paid.isNotEmpty,
       );
+    }
+
+    // "Fund requested by X. On approval, Rs 500 will be debited": someone is
+    // asking you for money. Nothing is scheduled and nothing is owed yet.
+    if (notice.any((n) => _s(n).toLowerCase().contains('request'))) {
+      reasons.add('a money request, not a scheduled debit: "${_s(notice.firstWhere((n) => _s(n).toLowerCase().contains('request')))}"');
+      return _done(SolverRead.info, SolverVerdict.accept, 1);
     }
 
     // A debit that is going to happen.
@@ -893,6 +901,14 @@ class _Run {
     }
     if (rail) score += 0.05;
     if (cue.how == 'implied') score -= 0.05;
+
+    // "get a voucher when your loan is credited! offer valid till today": a
+    // promotion that merely contains the word. Only a bank-voice alert (a bank
+    // verb with the account named) is trusted to carry an offer footer.
+    if ((kind == SolverRead.debit || kind == SolverRead.credit) && !bankVoice && hits('promo').isNotEmpty) {
+      conflict = true;
+      reasons.add('promotional wording beside the cue: "${_s(hits('promo').first)}"');
+    }
 
     // A reminder nudges; it does not report an event ("Reminder: Rs X was paid ... by 20-11").
     if ((kind == SolverRead.debit || kind == SolverRead.credit) &&

@@ -215,3 +215,26 @@ The owner decided to integrate directly (two users, not published). Security har
 3. The review queue will carry the wording the pack does not know yet (abbreviations, unusual layouts, regional wording). That is by design; the Gemini draft loop and pack growth shrink it.
 4. A "paid + new bill in one message" statement goes to review; handling it as two facts is a possible later improvement.
 5. IPO/one-time mandate holds are sent to review rather than read as `hold` facts.
+
+## 11. Real-inbox replay, 9 Nov 2026 (counts only)
+
+The owner's phone (wireless debugging) was read **read-only**: 6,019 inbox messages exported to a private folder outside the repository and replayed on the computer with `tools/sms_rules_cli/tool/solver_replay.dart`. Nothing was installed on the phone. The tool prints counts and redacted layouts only and refuses an export path inside the repo. The app's intake gate is approximated (numeric senders and security wording skipped: 225 and 876 messages), so 4,918 messages were considered.
+
+| | |
+| --- | --- |
+| Existing rules matched | 1,982 |
+| Existing rules ignored | 1,872 |
+| Rules left unknown | 1,064 |
+| **Rule-matched messages whose result changed with the solver present** | **0** |
+| Solver accepted (of the 1,064) | 889 |
+| Still unknown, for review / Gemini | 175 |
+| Solver accepted, by kind | 573 non-financial notices, 181 promotions, 86 debits, 21 receipts, 10 credits, 8 bills, 8 mandates, 2 failed |
+| Money the solver would newly count | 86 debits, 10 credits |
+
+Findings from reading the redacted layouts of everything it would count:
+- About 60 of the 86 debits are one real card-spend layout that the existing rules did not match (the "Spent Rs X <bank> Card no. XX1234 ... Avl Limit" layout). They are correct spends that were previously not counted at all.
+- Three real mistakes, now fixed by general rules and pinned by tests: a broker payout "transferred Rs X to your bank account" read as a debit (it is money back from investments, as the broker rules read it); a loan promotion "get a voucher when your loan is credited" read as income (a cue after "when" or "if" is now a promise, and promotional wording beside a cue needs a bank-voice alert); a money request "Fund requested by X. On approval Rs X will be debited" read as an upcoming debit (now a notice).
+- The largest group the solver would silently ignore (573 notices) was checked layout by layout: orders, deliveries, prescriptions, marketing, security notices, a few amount-less acknowledgements. No financial message with an amount was among the top 45 layouts.
+- The 8 bills are real utility and card bills with due dates, correctly read.
+
+This is a check of the real pipeline's behaviour on one person's inbox, not an accuracy figure: nobody has labelled these messages. The remaining unknowns by sender (Axis, NSE, and a few billers) are the next pack-growth targets.
