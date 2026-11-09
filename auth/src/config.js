@@ -120,6 +120,10 @@ module.exports = {
   requirePhoneAtSignup: phoneGateRequired(),
   allowedPhoneCountries: parseAllowedCountries(process.env.PHONE_ALLOWED_COUNTRIES),
   // One reminder email, 7 days after sign-up, to accounts with no recovery email.
+  // Where auth/ reaches api/ for the one recovery question about cards, and the
+  // public address that goes into the "cancel" and "freeze" links in recovery emails.
+  productApiInternalBaseUrl: (process.env.PRODUCT_API_INTERNAL_URL || '').replace(/\/$/, '') || null,
+  authPublicBaseUrl: (process.env.AUTH_PUBLIC_BASE_URL || '').replace(/\/$/, '') || null,
   recoveryReminderEmailsEnabled: retirementFlag(process.env.RECOVERY_REMINDER_EMAILS_ENABLED, 'RECOVERY_REMINDER_EMAILS_ENABLED'),
 };
 

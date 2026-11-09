@@ -358,6 +358,11 @@ services:
       PHONE_ALLOWED_COUNTRIES: "${PHONE_ALLOWED_COUNTRIES:-IN}"
       # One reminder email, 7 days after sign-up, to accounts with no recovery email.
       RECOVERY_REMINDER_EMAILS_ENABLED: "${RECOVERY_REMINDER_EMAILS_ENABLED:-false}"
+      # Account recovery (docs/RECOVERY_FLOW_DESIGN_2026-11-09.md). The card question
+      # goes to api/ on the private network; the stop links in recovery emails need
+      # the address people can reach auth/ at from outside.
+      PRODUCT_API_INTERNAL_URL: http://api:4000
+      AUTH_PUBLIC_BASE_URL: "${AUTH_PUBLIC_BASE_URL:-}"
     ports:
       - "127.0.0.1:3210:3210"
 

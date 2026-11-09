@@ -194,6 +194,7 @@ services:
       JWT_ACCESS_SECRET: dev_access_secret_change_me
       AUTH_INTERNAL_SERVICE_SECRET: dev_internal_service_secret_change_me_32_bytes
       JWT_REFRESH_SECRET: dev_refresh_secret_change_me
+      PRODUCT_API_INTERNAL_URL: http://api:4000
       PHONE_LOOKUP_HMAC_KEY: dev_phone_lookup_hmac_key_change_me_32_bytes
       JWT_ACCESS_TTL: 15m
       JWT_REFRESH_TTL: 90d

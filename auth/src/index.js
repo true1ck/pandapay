@@ -148,12 +148,15 @@ app.post('/auth/v2/account-status',createProofLookupHandler({
     return {...proof,device_id:claims.device_id};
   },
 }));
+const accountRecoveryRoutes = require('./routes/accountRecoveryRoutes');
+app.use('/auth/recovery', accountRecoveryRoutes.publicRouter);
 app.use('/auth/v2',require('./routes/versionedOtpRoutes').createVersionedOtpRouter({legacyRouter:authRoutes}));
 app.use('/auth', authRoutes);
 app.use('/users', userRoutes);
 app.use('/users/me/recovery-contact', require('./routes/recoveryContactRoutes'));
 app.use('/users/me/phone', require('./routes/phoneClaimRoutes'));
 app.use('/users/me/recovery-email', require('./routes/recoveryEmailRoutes'));
+app.use('/users/me/recovery-pending', accountRecoveryRoutes.pendingRouter);
 app.use('/internal', internalRoutes);
 app.post('/internal/account/deletion/apply', (req,res,next)=>{
   if(!internalRoutes.serviceAuthenticated(req))return res.status(typeof config.authInternalServiceSecret==='string'&&Buffer.byteLength(config.authInternalServiceSecret)>=32?401:503).json({error:'Unauthorized service'});
