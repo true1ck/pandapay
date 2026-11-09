@@ -2,39 +2,29 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/data/phone_api.dart';
 import 'package:pandapay/data/recovery_api.dart';
+import 'package:pandapay/data/recovery_email_api.dart';
 import 'package:pandapay/features/settings/email_phone_screen.dart';
 
-/// Regression: the Phone row used to be read from api/'s `profiles.phone_number`,
-/// which is only written on the email-OTP *sign-up* path — so the row appeared
-/// or vanished depending on how the account was first created. It now comes
-/// from the auth service's recovery-status (`phone_hint` / `phone_verified`),
-/// the same source the recovery banner already trusted.
+/// The Phone row comes from the auth service (the number typed at sign-up, or an
+/// older verified one), never from api/'s profiles row. The Recovery email section
+/// and its banner come from the recovery-email status.
 void main() {
-  RecoveryStatus status({
-    bool phoneVerified = false,
-    bool emailVerified = true,
-    bool hasBackupChannel = true,
-    String? phoneHint,
-  }) {
-    return RecoveryStatus(
-      phoneVerified: phoneVerified,
-      emailVerified: emailVerified,
-      hasBackupChannel: hasBackupChannel,
-      phoneHint: phoneHint,
-    );
-  }
-
   Future<void> pump(
     WidgetTester tester, {
     Map<String, dynamic>? profile,
+    PhoneStatus? phone,
     RecoveryStatus? recovery,
+    RecoveryEmailStatus? recoveryEmail,
   }) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           profileProvider.overrideWith((ref) async => profile),
+          phoneStatusProvider.overrideWith((ref) async => phone),
           recoveryStatusProvider.overrideWith((ref) async => recovery),
+          recoveryEmailStatusProvider.overrideWith((ref) async => recoveryEmail),
         ],
         child: const MaterialApp(home: EmailPhoneScreen()),
       ),
@@ -42,61 +32,81 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('verified phone from auth: shows the masked hint and a Verified badge', (tester) async {
-    await pump(
-      tester,
-      profile: {'id': 'p1'}, // no phone_number in the profiles row at all
-      recovery: status(phoneVerified: true, phoneHint: '+91•••••••3210'),
-    );
+  PhoneStatus typed(String hint) => PhoneStatus(
+    claimed: true,
+    verified: false,
+    required: true,
+    needsPhone: false,
+    phoneHint: hint,
+  );
 
-    expect(find.text('+91•••••••3210'), findsOneWidget);
-    expect(find.text('Verified'), findsOneWidget); // phone only — email absent below
-    expect(
-      find.textContaining('confirmed by a code we sent to it'),
-      findsOneWidget,
-    );
+  testWidgets('a number typed at sign-up shows masked, as not verified, with how to change it', (tester) async {
+    await pump(tester, profile: {'id': 'p1'}, phone: typed('+91 •••• 3210'));
+    expect(find.text('+91 •••• 3210'), findsOneWidget);
+    expect(find.text('Not verified'), findsOneWidget);
+    expect(find.textContaining('tie this account to one number'), findsOneWidget);
+    expect(find.textContaining('Contact support to change it'), findsOneWidget);
   });
 
-  testWidgets('linked but unverified phone: hint shows with an Unverified badge', (tester) async {
+  testWidgets('an older verified phone shows as Verified', (tester) async {
     await pump(
       tester,
       profile: {'id': 'p1'},
-      recovery: status(
-        phoneVerified: false,
-        hasBackupChannel: false,
+      recovery: const RecoveryStatus(
+        phoneVerified: true,
+        emailVerified: true,
+        hasBackupChannel: true,
         phoneHint: '+91•••••••3210',
       ),
     );
-
     expect(find.text('+91•••••••3210'), findsOneWidget);
-    expect(find.text('Unverified'), findsOneWidget);
-    expect(find.textContaining('linked but not proven'), findsOneWidget);
+    expect(find.text('Verified'), findsOneWidget);
+    expect(find.textContaining('Confirmed by a code we sent to it'), findsOneWidget);
   });
 
-  testWidgets('no phone anywhere: Not on file, no badge, sign-up prompt', (tester) async {
-    await pump(
-      tester,
-      profile: {'id': 'p1', 'email': 'sujaykurtikar2@gmail.com'},
-      recovery: status(hasBackupChannel: false),
-    );
-
-    expect(find.text('Not on file'), findsOneWidget); // the Phone row; Email row shows the address
-    // No phone badge at all (the lone "Verified" belongs to the Email row).
-    expect(find.text('Unverified'), findsNothing);
-    expect(
-      find.textContaining('Add one at sign-up'),
-      findsOneWidget,
-    );
+  testWidgets('no phone anywhere: says so plainly and shows no badge', (tester) async {
+    await pump(tester, profile: {'id': 'p1', 'email': 'person@example.com'});
+    expect(find.text('Not on file'), findsOneWidget);
+    expect(find.text('Not verified'), findsNothing);
+    expect(find.text('No phone number is saved on this account.'), findsOneWidget);
   });
 
-  testWidgets('recovery still loading: falls back to the profiles phone as Unverified', (tester) async {
-    await pump(
-      tester,
-      profile: {'id': 'p1', 'phone_number': '+919876543210'},
-      recovery: null,
-    );
-
+  testWidgets('while the phone status loads, the profiles phone is a fallback shown as not verified', (tester) async {
+    await pump(tester, profile: {'id': 'p1', 'phone_number': '+919876543210'});
     expect(find.text('+919876543210'), findsOneWidget);
-    expect(find.text('Unverified'), findsOneWidget);
+    expect(find.text('Not verified'), findsOneWidget);
+  });
+
+  testWidgets('no recovery email: a banner and an Add button explain the risk', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await pump(
+      tester,
+      profile: {'id': 'p1', 'email': 'person@example.com'},
+      recoveryEmail: const RecoveryEmailStatus(hasRecoveryEmail: false),
+    );
+    expect(find.text('No way back if you lose your email'), findsOneWidget);
+    expect(find.text('Not added'), findsOneWidget);
+    expect(find.text('Add a recovery email'), findsNWidgets(2), reason: 'the banner button and the card button');
+    expect(find.text('Remove recovery email'), findsNothing);
+  });
+
+  testWidgets('with a recovery email: the masked address, Change and Remove, and no banner', (tester) async {
+    await pump(
+      tester,
+      profile: {'id': 'p1', 'email': 'person@example.com'},
+      recoveryEmail: const RecoveryEmailStatus(hasRecoveryEmail: true, hint: 'b•••@outlook.com'),
+    );
+    expect(find.text('No way back if you lose your email'), findsNothing);
+    expect(find.text('b•••@outlook.com'), findsOneWidget);
+    expect(find.text('Added'), findsOneWidget);
+    expect(find.text('Change recovery email'), findsOneWidget);
+    expect(find.text('Remove recovery email'), findsOneWidget);
+  });
+
+  testWidgets('an older server or a failed lookup shows no recovery email section and no alarm', (tester) async {
+    await pump(tester, profile: {'id': 'p1', 'email': 'person@example.com'});
+    expect(find.text('Recovery email'.toUpperCase()), findsNothing);
+    expect(find.text('No way back if you lose your email'), findsNothing);
   });
 }

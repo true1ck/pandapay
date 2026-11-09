@@ -19,6 +19,7 @@ import '../settings/feedback_support_screen.dart';
 import '../settings/legal_screen.dart';
 import 'account_recovery_screen.dart';
 import 'phone_gate_provider.dart';
+import 'recovery_email_reminder.dart';
 import 'phone_input.dart';
 import 'auth_feedback.dart';
 
@@ -392,6 +393,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // the sign-in: an older server, a lock that is off, or no network just
       // leaves the gate closed.
       await _settlePhone(container, tokens.accessToken);
+      if (_isSignUp) {
+        try {
+          await container.read(recoveryEmailReminderStoreProvider).markSignUp(DateTime.now());
+        } catch (_) {
+          // The reminder clock is a nicety; sign-up never waits on it.
+        }
+      }
 
       // Setting the token swaps this screen out of the tree, which disposes
       // this State and its `ref`. Keep the provider container, which outlives

@@ -31,6 +31,7 @@ import '../features/activity/transaction_detail_screen.dart';
 import '../features/auth/add_phone_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/phone_gate_provider.dart';
+import '../features/auth/recovery_email_reminder.dart';
 import '../features/auth/invite_link_screen.dart';
 import '../features/auth/product_activation_screen.dart';
 import '../features/cards/benefit_detail_screen.dart';
@@ -1322,6 +1323,8 @@ class _AppShellState extends ConsumerState<_AppShell> {
       // returns. Same "read once from the shell" reasoning as
       // sessionKeepAliveProvider above.
       ref.watch(cacheLifecycleProvider);
+      // Recovery email reminders (1 hour, 1 day, 3 days, 7 days after sign-up).
+      ref.watch(recoveryEmailReminderLifecycleProvider);
       ref.watch(sharedExpensesLifecycleProvider);
       ref.watch(outboxFlushProvider);
       // Plan Phase 1.1: on each sign-in, pull the account's preference blob

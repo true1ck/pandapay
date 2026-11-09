@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/features/auth/recovery_email_reminder.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/bills_projection_api.dart';
 import 'package:pandapay/data/past_bill_receipts.dart';
@@ -88,6 +89,12 @@ TransactionEntry _txn({
 
 /// Pumps [screen] and settles. Any layout assert or overflow inside fails
 /// the test here, which is the point.
+/// The hub shows a recovery-email nudge once the account is an hour old; in these
+/// smoke tests there is no server to ask, so the nudge is switched off.
+final _hubOverrides = <Override>[
+  recoveryEmailNudgeProvider.overrideWith((ref) async => false),
+];
+
 Future<void> _pump(
   WidgetTester tester,
   Widget screen, {
@@ -248,7 +255,11 @@ void main() {
 
   group('SettingsHubScreen (design 20)', () {
     testWidgets('renders all four groups', (tester) async {
-      await _pump(tester, const SettingsHubScreen());
+      await _pump(
+        tester,
+        const SettingsHubScreen(),
+        overrides: _hubOverrides,
+      );
       for (final group in const [
         'SECURITY',
         'NOTIFICATIONS',
@@ -268,7 +279,11 @@ void main() {
     testWidgets('names the preferences row distinctly from the You inbox row', (
       tester,
     ) async {
-      await _pump(tester, const SettingsHubScreen());
+      await _pump(
+        tester,
+        const SettingsHubScreen(),
+        overrides: _hubOverrides,
+      );
       // The bug this screen exists to fix: two rows both called
       // "Notifications" going to different places.
       expect(find.text('Notification settings'), findsOneWidget);
@@ -280,6 +295,7 @@ void main() {
         tester,
         const SettingsHubScreen(),
         size: const Size(320, 640),
+        overrides: _hubOverrides,
       );
       expect(find.text('SECURITY'), findsOneWidget);
     });

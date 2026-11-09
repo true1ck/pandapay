@@ -73,6 +73,8 @@ import '../data/pending_bills.dart';
 import '../data/past_bill_receipts.dart';
 import '../data/premium_reminders.dart';
 import '../data/recovery_api.dart';
+import '../data/phone_api.dart';
+import '../data/recovery_email_api.dart';
 import '../data/referral_repository.dart';
 import '../data/spend_by_category_repository.dart';
 import '../data/spend_reports_repository.dart';
@@ -696,6 +698,47 @@ final recoveryStatusProvider = FutureProvider.autoDispose<RecoveryStatus?>((
   } catch (error) {
     if (isAuthenticationFailure(error)) return null;
     rethrow;
+  }
+});
+
+/// The recovery email (a second address that can get a person back in). Null
+/// while signed out. Points at `authBaseUrl`.
+final recoveryEmailApiProvider = Provider<RecoveryEmailApi?>((ref) {
+  final token = _stableSessionToken(ref);
+  if (token == null) return null;
+  return RecoveryEmailApi(
+    authBaseUrl: _authBaseUrl,
+    accessToken: token,
+    client: ref.read(authenticatedHttpClientProvider),
+  );
+});
+
+/// Whether this account has a recovery email. Null while signed out, on an older
+/// server without the route, or on any failure: screens treat null as "unknown"
+/// and stay quiet rather than show an alarm that then disappears.
+final recoveryEmailStatusProvider =
+    FutureProvider.autoDispose<RecoveryEmailStatus?>((ref) async {
+      final api = ref.watch(recoveryEmailApiProvider);
+      if (api == null) return null;
+      try {
+        return await api.status();
+      } catch (_) {
+        return null;
+      }
+    });
+
+/// The phone on this account (typed in at sign-up), for the Email & phone screen.
+/// Null while signed out, on an older server, or on failure.
+final phoneStatusProvider = FutureProvider.autoDispose<PhoneStatus?>((ref) async {
+  final token = _stableSessionToken(ref);
+  if (token == null) return null;
+  try {
+    return await ref
+        .read(authApiProvider)
+        .phoneApiFor(token, client: ref.read(authenticatedHttpClientProvider))
+        .status();
+  } catch (_) {
+    return null;
   }
 });
 

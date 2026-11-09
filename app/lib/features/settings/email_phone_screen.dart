@@ -5,7 +5,9 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/recovery_email_api.dart';
 import 'feedback_support_screen.dart';
+import 'recovery_email_screen.dart';
 
 /// Design 22 "Email & phone" — the two identifiers the account is reachable
 /// on, each with its verification state and a way to change it.
@@ -42,6 +44,8 @@ class EmailPhoneScreen extends ConsumerWidget {
     // endpoint already knows the real state; use it, and keep the profile
     // value only as a fallback while that call is in flight.
     final recovery = ref.watch(recoveryStatusProvider).valueOrNull;
+    final phone = ref.watch(phoneStatusProvider).valueOrNull;
+    final recoveryEmail = ref.watch(recoveryEmailStatusProvider).valueOrNull;
 
     return Scaffold(
       backgroundColor: BambooInk.paper,
@@ -63,15 +67,19 @@ class EmailPhoneScreen extends ConsumerWidget {
             final email = (data?['email'] as String?)?.trim();
             final profilePhone = (data?['phone_number'] as String?)?.trim();
 
-            final phoneHint = recovery?.phoneHint;
+            final typedHint = phone?.phoneHint;
+            final phoneHint = typedHint != null && typedHint.isNotEmpty
+                ? typedHint
+                : recovery?.phoneHint;
             final hasPhone = (phoneHint != null && phoneHint.isNotEmpty) ||
                 profilePhone?.isNotEmpty == true;
-            final phoneVerified = recovery?.phoneVerified == true;
+            final phoneVerified =
+                phone?.verified == true || recovery?.phoneVerified == true;
 
             return ListView(
               padding: const EdgeInsets.fromLTRB(20, AppSpace.md, 20, 30),
               children: [
-                const _RecoveryBanner(),
+                _RecoveryEmailBanner(status: recoveryEmail),
                 const _SectionLabel('Phone'),
                 _IdentifierCard(
                   value: phoneHint?.isNotEmpty == true
@@ -79,31 +87,46 @@ class EmailPhoneScreen extends ConsumerWidget {
                       : (profilePhone?.isNotEmpty == true ? profilePhone! : 'Not on file'),
                   badge: hasPhone
                       ? _Badge(
-                          phoneVerified ? 'Verified' : 'Unverified',
+                          phoneVerified ? 'Verified' : 'Not verified',
                           verified: phoneVerified,
                         )
                       : null,
                   note: !hasPhone
-                      ? 'Add one at sign-up to let PandaPay match bank SMS to your cards.'
+                      ? 'No phone number is saved on this account.'
                       : phoneVerified
-                          ? 'Used to match bank SMS to your cards, and confirmed by a code we sent to it.'
-                          : 'Used to match bank SMS to your cards. We have never sent a code to it, '
-                              'so it is linked but not proven.',
+                          ? 'Confirmed by a code we sent to it. Contact support to change it.'
+                          : 'Saved when you signed up, to tie this account to one number. It is not '
+                              'verified and can’t be changed here. Contact support to change it.',
                 ),
                 const SizedBox(height: AppSpace.xl),
                 const _SectionLabel('Email'),
                 _IdentifierCard(
                   value: email?.isNotEmpty == true ? email! : 'Not on file',
                   badge: email?.isNotEmpty == true ? const _Badge('Verified', verified: true) : null,
-                  note: 'Sign-in codes, statements and account recovery all go here.',
+                  note: 'Your sign-in codes and statements go here.',
                   action: email?.isNotEmpty == true
                       ? _ChangeAction(currentEmail: email!)
                       : null,
                 ),
+                if (recoveryEmail != null) ...[
+                  const SizedBox(height: AppSpace.xl),
+                  const _SectionLabel('Recovery email'),
+                  _IdentifierCard(
+                    value: recoveryEmail.hasRecoveryEmail
+                        ? (recoveryEmail.hint ?? 'Added')
+                        : 'Not added',
+                    badge: recoveryEmail.hasRecoveryEmail
+                        ? const _Badge('Added', verified: true)
+                        : null,
+                    note: 'Gets you back in if you lose your sign-in email. It is never used to '
+                        'sign in, and adding or changing it needs a code at both addresses.',
+                    action: _RecoveryEmailActions(status: recoveryEmail),
+                  ),
+                ],
                 const SizedBox(height: AppSpace.xl),
                 Text(
-                  'Changing either one sends a confirmation code to the old address first, so '
-                  'losing access to an account takes more than losing one device.',
+                  'Your sign-in email is changed by support, after you confirm from the old '
+                  'address. A recovery email is the way back in if you lose it.',
                   style: BambooFonts.ui(12.5, color: BambooInk.ink500, height: 1.55),
                 ),
               ],
@@ -115,20 +138,18 @@ class EmailPhoneScreen extends ConsumerWidget {
   }
 }
 
-/// Plan Phase 1.3. Shown only when the account genuinely has no second way
-/// in — a permanent banner that every user sees becomes furniture, and this
-/// one needs to be read.
-class _RecoveryBanner extends ConsumerWidget {
-  const _RecoveryBanner();
+/// Shown only when the account has no recovery email. PandaPay signs in with a code
+/// and has no password, so a lost sign-in email is a lost account unless there is
+/// a second way back in. A permanent banner everyone sees becomes furniture, so
+/// this appears only when there is something to do. Silent while loading and on
+/// error: a network hiccup must not flash an alarm that then disappears.
+class _RecoveryEmailBanner extends StatelessWidget {
+  final RecoveryEmailStatus? status;
+  const _RecoveryEmailBanner({required this.status});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final status = ref.watch(recoveryStatusProvider).valueOrNull;
-    // Silent while loading and on error: a network hiccup must not flash an
-    // alarming "you could lose your account" message that then disappears.
-    if (status == null || status.hasBackupChannel) return const SizedBox.shrink();
-
-    final missing = status.missingChannel == 'email' ? 'email address' : 'phone number';
+  Widget build(BuildContext context) {
+    if (status == null || status!.hasRecoveryEmail) return const SizedBox.shrink();
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpace.xl),
       padding: const EdgeInsets.all(AppSpace.lg),
@@ -146,7 +167,7 @@ class _RecoveryBanner extends ConsumerWidget {
               const SizedBox(width: AppSpace.sm),
               Expanded(
                 child: Text(
-                  'No backup way to sign in',
+                  'No way back if you lose your email',
                   style: BambooFonts.heading(14.5, color: BambooInk.ink900),
                 ),
               ),
@@ -154,29 +175,90 @@ class _RecoveryBanner extends ConsumerWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            // States the actual consequence. "Improve your account security"
-            // would be true and useless; this is what is actually at stake,
-            // and it is the reason someone will act on it.
-            'PandaPay signs you in with a one-time code — there is no password. Right now that '
-            'code can only reach one place, so if you lose it you lose access to your cards and '
-            'spending history. Add a verified $missing as a second way in.',
+            'PandaPay signs you in with a one-time code and has no password. If you lose '
+            'access to your sign-in email you lose your cards and spending history. Add a '
+            'recovery email as a second way back in.',
             style: BambooFonts.ui(12.5, color: BambooInk.ink500, height: 1.5),
           ),
           const SizedBox(height: AppSpace.md),
           OutlinedButton(
             onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const FeedbackSupportScreen()),
+              MaterialPageRoute(builder: (_) => const RecoveryEmailScreen()),
             ),
-            // Routes to support rather than opening an add-channel form,
-            // for the same reason "Change email" below does: auth/ has no
-            // add-and-verify-second-channel endpoint yet, and a form that
-            // silently fails is worse than one that says where to go. When
-            // that endpoint lands this becomes the natural place to hang it.
-            child: Text('Add a $missing'),
+            child: const Text('Add a recovery email'),
           ),
         ],
       ),
     );
+  }
+}
+
+/// Add, change or remove the recovery email.
+class _RecoveryEmailActions extends ConsumerWidget {
+  final RecoveryEmailStatus status;
+  const _RecoveryEmailActions({required this.status});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final style = OutlinedButton.styleFrom(
+      foregroundColor: BambooInk.ink900,
+      backgroundColor: BambooInk.paperMuted,
+      minimumSize: const Size.fromHeight(46),
+      side: const BorderSide(color: BambooInk.hairlineOnPaper),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      textStyle: BambooFonts.ui(14, weight: FontWeight.w700),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        OutlinedButton(
+          style: style,
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => RecoveryEmailScreen(changing: status.hasRecoveryEmail),
+            ),
+          ),
+          child: Text(status.hasRecoveryEmail ? 'Change recovery email' : 'Add a recovery email'),
+        ),
+        if (status.hasRecoveryEmail)
+          TextButton(
+            onPressed: () => _remove(context, ref),
+            style: TextButton.styleFrom(foregroundColor: BambooInk.clay),
+            child: const Text('Remove recovery email'),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _remove(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: BambooInk.paper,
+        title: Text('Remove recovery email?', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+        content: Text(
+          'You’ll have no way back in if you lose your sign-in email. We’ll email your '
+          'sign-in address to let you know.',
+          style: BambooFonts.ui(13.5, color: BambooInk.ink500, height: 1.5),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Keep it')),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Remove', style: TextStyle(color: BambooInk.clay)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(recoveryEmailApiProvider)?.remove();
+      ref.invalidate(recoveryEmailStatusProvider);
+    } catch (error) {
+      // For example: removing needs a recent sign-in code. The server says so plainly.
+      messenger.showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
+    }
   }
 }
 
