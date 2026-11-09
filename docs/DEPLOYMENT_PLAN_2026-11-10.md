@@ -240,7 +240,7 @@ All schema changes are additive, so old code still runs on the new schema.
     with Sujay before pushing `prod`.
   - **Duplicate mailboxes: none.** Migration 0016 will pass on today's data. Run the preflight
     again just before Phase D, because new sign-ups can change it.
-  - Server `.env`: `AUTH_PUBLIC_BASE_URL` is **not set** (add it before Phase D);
+  - Server `.env`: `AUTH_PUBLIC_BASE_URL` was not set, and **was added on 10 Nov** (`https://auth.pandapath.site`, one line appended; the file was backed up first to `/home/ubuntu/pandapay-secrets/env-backup/`; nothing else changed, and it takes effect only at the next deploy);
     `AUTH_RUNTIME_ROLE` is not set (production runs auth as the table owner, so the
     recovery-table grant fix has no effect there; it is harmless); `REQUIRE_PHONE_AT_SIGNUP`,
     `DEVICE_ACCOUNT_LIMIT` and `RECOVERY_REMINDER_EMAILS_ENABLED` are not set, so the compose
