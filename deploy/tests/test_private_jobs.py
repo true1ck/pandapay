@@ -28,21 +28,16 @@ class PrivateJobsTest(unittest.TestCase):
         # The rule job never needs the AI key.
         self.assertNotIn('GEMINI_', body)
 
-    def test_template_worker_runs_on_the_private_host(self):
-        body = service(PRIVATE, 'sms-v2-template-worker')
-        self.assertIsNotNone(body)
-        self.assertIn('src/sms_v2/jobs/template_worker_main.js', body)
-        self.assertIn('restart: unless-stopped', body)
-        self.assertIn('profiles: [admin]', body)
-        self.assertIn('networks: [admin_private]', body)
-        for key in ('GEMINI_API_KEY', 'SMS_V2_AI_MODEL', 'SMS_V2_AI_TPM', 'SMS_V2_JOB_ADMIN_ID',
-                    'SMS_V2_AI_INPUT_USD_PER_MILLION', 'SMS_V2_AI_OUTPUT_USD_PER_MILLION'):
-            self.assertIn(key, body)
-        # The AI worker never signs rule sets.
-        self.assertNotIn('SMS_RULES_SIGNING_KEY', body)
+    def test_template_worker_is_hosted_on_the_backend_not_the_private_host(self):
+        # The AI drafts worker runs continuously in docker-compose.prod.yml. The
+        # admin stack is started only when someone needs it, so it never carries
+        # the worker or the Gemini key.
+        self.assertIsNone(service(PRIVATE, 'sms-v2-template-worker'))
+        self.assertNotIn('GEMINI_', PRIVATE)
+        self.assertIn('sms-v2-template-worker', PUBLIC)
 
     def test_jobs_are_hardened_like_admin_api(self):
-        for name in ('sms-v2-rule-jobs', 'sms-v2-template-worker'):
+        for name in ('sms-v2-rule-jobs',):
             body = service(PRIVATE, name)
             for line in ('read_only: true', 'cap_drop: [ALL]', 'security_opt: [no-new-privileges:true]',
                          'NODE_ENV: production', "DB_SSL: 'true'"):

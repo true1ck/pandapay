@@ -5,6 +5,9 @@
 // Every key here has a row in the console's Settings tab: GET
 // /admin/sms/v2/settings returns exactly listSettings(), so a setting cannot
 // exist without a console row.
+// Used when neither the console nor the host names a model.
+const DEFAULT_AI_MODEL = 'gemini-3.5-flash-lite';
+
 const SETTINGS = Object.freeze({
   templates_per_user_per_day: { type: 'int', default: 50, min: 1, max: 500, env: 'SMS_V2_UNKNOWN_TEMPLATES_PER_DAY' },
   corrections_per_user_per_day: { type: 'int', default: 200, min: 1, max: 2000, env: 'SMS_V2_CORRECTIONS_PER_DAY' },
@@ -17,7 +20,7 @@ const SETTINGS = Object.freeze({
   intake_enabled: { type: 'bool', default: true }, // false: phones' layouts and signals are refused with 503 learning_paused
   ai_enabled: { type: 'bool', default: true },
   ai_merchant_suggestions_enabled: { type: 'bool', default: false },
-  ai_model: { type: 'model', default: null }, // null = SMS_V2_AI_MODEL
+  ai_model: { type: 'model', default: null }, // null = SMS_V2_AI_MODEL, else DEFAULT_AI_MODEL
   ai_rpm: { type: 'int', default: 30, min: 1, ceilingEnv: 'SMS_V2_AI_RPM' },
   ai_tpm: { type: 'int', default: 100000, min: 1000, ceilingEnv: 'SMS_V2_AI_TPM' },
   ai_temperature: { type: 'number', default: 0.1, min: 0, max: 1 },
@@ -43,7 +46,7 @@ class SettingError extends Error {
 }
 
 function allowedModels(env) {
-  return String(env.SMS_V2_AI_MODELS_ALLOWED || env.SMS_V2_AI_MODEL || '')
+  return String(env.SMS_V2_AI_MODELS_ALLOWED || env.SMS_V2_AI_MODEL || DEFAULT_AI_MODEL)
     .split(',').map((s) => s.trim()).filter(Boolean);
 }
 
@@ -161,7 +164,7 @@ async function intakeOpen(security, req) {
 }
 
 module.exports = {
-  SETTINGS, PUBLIC_KEYS, USER_LIMIT_KEYS, SettingError,
+  DEFAULT_AI_MODEL, SETTINGS, PUBLIC_KEYS, USER_LIMIT_KEYS, SettingError,
   validateSetting, mergeSettings, listSettings, storedSettings, readSettings, readPublicSettings,
   clearSettingsCache, ceilingOf, intakeOpen,
 };

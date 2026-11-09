@@ -206,7 +206,7 @@ class DeploySecurityOrderTest(unittest.TestCase):
         return next(i for i, command in enumerate(commands) if predicate(command))
 
     def test_ai_worker_is_not_built_without_every_setting(self):
-        partial = "".join(line for line in AI_ENV.splitlines(True) if not line.startswith("SMS_V2_AI_TPM="))
+        partial = "".join(line for line in AI_ENV.splitlines(True) if not line.startswith("SMS_AI_WORKER_DATABASE_URL="))
         for extra in ("", partial):
             result, commands, _ = self.run_deploy(EXTRA_ENV=extra)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

@@ -209,13 +209,16 @@ text. Rule signing and publishing stay on the private admin host
 (`deploy/admin/compose.private.yml`, `sms-v2-rule-jobs`); the worker only
 drafts, and an admin approval publishes.
 
-It is built, fenced and started (last, non-fatally) only when ALL of these are
+It is built, fenced and started (last, non-fatally) only when ALL THREE of these are
 present and non-empty in the host's `.env`: `GEMINI_API_KEY` (billing-enabled,
-paid tier), `SMS_AI_WORKER_DB_PASSWORD` (32+ characters, distinct),
-`SMS_AI_WORKER_DATABASE_URL` (login `sms_ai_worker`, same password),
-`SMS_V2_AI_MODEL`, `SMS_V2_AI_TPM`, `SMS_V2_AI_INPUT_USD_PER_MILLION`,
-`SMS_V2_AI_OUTPUT_USD_PER_MILLION`. The deploy workflow forwards each from the
-same-named GitHub secret when set. With any missing, the release is unchanged.
+paid tier), `SMS_AI_WORKER_DB_PASSWORD` (32+ characters, distinct) and
+`SMS_AI_WORKER_DATABASE_URL` (login `sms_ai_worker`, same password). The deploy
+workflow forwards each from the same-named GitHub secret when set. With any
+missing, the release is unchanged and the deploy log says which worker was
+skipped. The model, rate limits, temperature, answer length and budget are
+the console's Settings tab (stored in the database); `SMS_V2_AI_MODEL`,
+`SMS_V2_AI_TPM` and the prices are optional ceilings/fallbacks, and
+`SMS_V2_VALIDATION_TIMEOUT_MS` (default 10000) bounds one draft's check.
 `db-migrate` creates the `sms_ai_worker` login from its password; the login can
 only read the template queue, active rules and AI settings, update the worker's
 own columns on queued/working templates, and ask two aggregate functions
