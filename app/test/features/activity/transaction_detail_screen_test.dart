@@ -8,6 +8,7 @@ import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/api_exception.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/response_cache.dart';
+import 'package:pandapay/data/local/sync_queue.dart';
 import 'package:pandapay/data/local/sms_intake_repository.dart';
 import 'package:pandapay/features/sms_import/sms_background_queue.dart';
 import 'package:pandapay/data/transaction_tags_repository.dart';
@@ -448,7 +449,16 @@ void main() {
         status: 'active',
       ),
     );
-    await _pump(tester, repo: repo);
+    final noteDb = openInMemoryForTesting();
+    addTearDown(noteDb.close);
+    await _pump(
+      tester,
+      repo: repo,
+      extraOverrides: [
+        cacheNamespaceProvider.overrideWithValue('user:test'),
+        responseCacheProvider.overrideWith((ref) async => ResponseCache(noteDb)),
+      ],
+    );
 
     final addNote = find.text('Add a note');
     await tester.ensureVisible(addNote);
@@ -458,7 +468,10 @@ void main() {
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
-    expect(repo.lastNote, 'Bought for the office');
+    // Local first: the note is queued for sync and the API is not called.
+    final queued = SyncQueue(noteDb, namespace: 'user:test').pending();
+    expect(queued.single.payload, {'note': 'Bought for the office'});
+    expect(repo.lastNote, isNull);
     expect(find.text('Bought for the office'), findsOneWidget);
   });
 

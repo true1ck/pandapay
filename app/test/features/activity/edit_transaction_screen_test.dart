@@ -10,6 +10,7 @@ import 'package:pandapay/data/api_exception.dart';
 import 'package:pandapay/data/auth_api.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/response_cache.dart';
+import 'package:pandapay/data/local/sync_queue.dart';
 import 'package:pandapay/data/local/sms_intake_repository.dart';
 import 'package:pandapay/data/token_store.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
@@ -81,6 +82,14 @@ class _SuccessfulRefreshCoordinator extends SessionRefreshCoordinator {
   Future<String?> refresh({String? expectedAccessToken}) async => 'new-token';
 }
 
+AppDatabase? _lastDb;
+
+/// The one queued change for [namespace], i.e. what the save will send.
+Map<String, Object?>? _queued(AppDatabase db, String namespace) {
+  final pending = SyncQueue(db, namespace: namespace).pending();
+  return pending.isEmpty ? null : pending.single.payload;
+}
+
 Future<void> _pump(
   WidgetTester tester, {
   required _FakeUserCardsRepository repo,
@@ -105,9 +114,16 @@ Future<void> _pump(
           ],
         )
       : null;
+  // A plain save is local first: it queues the change on the phone's own
+  // database. Every pump gets one so the screen can resolve its queue.
+  final db = openInMemoryForTesting();
+  addTearDown(db.close);
+  _lastDb = db;
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        cacheNamespaceProvider.overrideWithValue('user:test'),
+        responseCacheProvider.overrideWith((ref) async => ResponseCache(db)),
         userCardsRepositoryProvider.overrideWithValue(repo),
         userCardsProvider.overrideWith((ref) async => cards),
         categoriesProvider.overrideWith((ref) async => const []),
@@ -220,8 +236,11 @@ void main() {
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
-    expect(repo.lastEditArgs?['merchantName'], 'Renamed merchant');
-    expect(repo.lastEditArgs?['instrument'], isNull);
+    final queued = _queued(_lastDb!, 'user:test');
+    expect(queued?['merchant_name'], 'Renamed merchant');
+    // Only what changed is sent, so an unknown payment method stays unset.
+    expect(queued?.containsKey('instrument'), isFalse);
+    expect(repo.editCalls, 0, reason: 'a plain edit must not wait on the API');
   });
 
   testWidgets('rejects non-finite amounts before saving', (tester) async {
@@ -329,12 +348,14 @@ void main() {
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
-    expect(repo.lastEditArgs?['id'], 't1');
-    expect(repo.lastEditArgs?['amountInr'], 2000.0);
-    expect(repo.lastEditArgs?['merchantName'], 'New Merchant');
+    final queued = _queued(_lastDb!, 'user:test');
+    expect(queued?['amount_inr'], 2000.0);
+    expect(queued?['merchant_name'], 'New Merchant');
+    expect(queued?.containsKey('category_id'), isFalse);
+    expect(repo.editCalls, 0);
   });
 
-  testWidgets('retries an SMS edit once after a successful auth refresh', (
+  testWidgets('an edit on a synced SMS row is queued without calling the API', (
     tester,
   ) async {
     final database = openInMemoryForTesting();
@@ -382,7 +403,8 @@ void main() {
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
-    expect(repo.editCalls, 2);
+    expect(repo.editCalls, 0, reason: 'the save never waits on the API');
+    expect(_queued(database, namespace)?['merchant_name'], 'Correct Store');
   });
 
   testWidgets('a normal SMS edit saves and leaves the editor', (
@@ -425,15 +447,13 @@ void main() {
     );
     await tester.enterText(find.widgetWithText(TextField, 'Amount (₹)'), '555');
     await tester.tap(find.text('Save'));
-    await tester.pump();
-    expect(repo.editCalls, 1);
     await tester.pumpAndSettle();
 
-    expect(repo.editCalls, 1);
-    expect(repo.lastEditArgs?['amountInr'], 555.0);
+    expect(repo.editCalls, 0);
+    expect(_queued(database, namespace)?['amount_inr'], 555.0);
     expect(find.byType(EditTransactionScreen), findsNothing);
     expect(
-      find.text('Saved.'),
+      find.textContaining('Saved'),
       findsOneWidget,
       reason: 'Save must always say it worked; closing silently looked like nothing happened',
     );
@@ -499,8 +519,9 @@ void main() {
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
-    expect(repo.lastEditArgs?['amountInr'], 95000.0);
-    expect(repo.lastEditArgs?['entryKind'], TxnEntryKind.income);
-    expect(repo.lastEditArgs?['instrument'], TxnInstrument.upiBank);
+    final queued = _queued(_lastDb!, 'user:test');
+    expect(queued?['amount_inr'], 95000.0);
+    // The kind was not touched, so it is not re-sent.
+    expect(queued?.containsKey('entry_kind'), isFalse);
   });
 }

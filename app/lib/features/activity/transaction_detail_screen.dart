@@ -3,6 +3,7 @@ import '../sms_v2/ui/transaction_actions.dart';
 import '../sms_v2/ui/why_sheet.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
+import '../sync/sync_engine.dart';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
@@ -450,6 +451,23 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     if (repo == null) return;
     final previous = _note;
     setState(() => _note = note.isEmpty ? null : note);
+    // Local first: queue the note and return. The sync queue carries it to the
+    // server, and the entity reader already shows queued edits. Phone-only ids
+    // (`v2:`, `local`) have no server row to patch, so they keep the old path.
+    final id = widget.entry.id;
+    if (!id.startsWith('v2:') && !id.startsWith('local')) {
+      final queue = await ref.read(syncQueueProvider.future);
+      queue.enqueueUpdate(
+        entity: 'transactions',
+        entityId: id,
+        fields: {'note': note.isEmpty ? null : note},
+      );
+      ref.invalidate(pendingSyncCountProvider);
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(transactionDetailProvider(id));
+      unawaited(ref.read(syncEngineProvider).sync());
+      return;
+    }
     try {
       await repo.updateTransactionNote(
         widget.entry.id,
