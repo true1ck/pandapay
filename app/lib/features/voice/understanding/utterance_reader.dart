@@ -732,7 +732,7 @@ class _Run {
       }
     }
 
-    final dateSource = date == null ? null : date.text(source, tokens);
+    final dateSource = date?.text(source, tokens);
     return EntryReading(
       tokenStart: rs,
       tokenEnd: re,
