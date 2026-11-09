@@ -10,6 +10,15 @@
 !auth/src/utils/encryptedPhoneSearch.js
 !auth/src/utils/dbTls.js
 !auth/src/utils/safeErrorCode.js
+!auth/src/utils/emailIdentity.js
+!auth/src/utils/recoveryContacts.js
+!auth/src/utils/claimedPhone.js
+!auth/src/utils/phoneGate.js
+!auth/src/data/
+!auth/src/data/disposableEmailDomains.js
+!auth/src/services/
+!auth/src/services/phoneClaim.js
+!auth/src/services/deviceAccountLimit.js
 !auth/db/
 !auth/db/pandapay-auth/
 !auth/db/pandapay-auth/init.sql
