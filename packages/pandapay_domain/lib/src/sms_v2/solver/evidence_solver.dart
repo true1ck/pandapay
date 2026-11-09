@@ -86,6 +86,7 @@ class SolverDecision {
     this.frequency,
     this.oneTime,
     this.mandateRef,
+    this.consumerRef,
     this.recurring = false,
     this.ownMasks = const [],
     this.attemptStatus,
@@ -143,6 +144,10 @@ class SolverDecision {
   final String? frequency;
   final bool? oneTime;
   final String? mandateRef;
+
+  /// The biller's customer / consumer number a bill payment names ("for XX1234567").
+  /// Used to chain the payment to the bill it settles.
+  final String? consumerRef;
 
   /// The wording marks this as a recurring charge (subscription, renewal, autopay).
   final bool recurring;
@@ -1114,6 +1119,7 @@ class _Run {
       frequency: freq.$1,
       oneTime: freq.$2,
       mandateRef: mandateRef,
+      consumerRef: kind == SolverRead.billReceipt ? _consumerRef() : null,
       recurring: recur,
       ownMasks: kind == SolverRead.ownTransfer ? _ownMasks() : const [],
       billerName: kind == SolverRead.billReceipt ? _billerName() : null,
@@ -1181,6 +1187,24 @@ class _Run {
     if (recurring) return 'subscription';
     if (hits('billNoun').isNotEmpty) return 'bill';
     return 'other';
+  }
+
+  /// A long number right after "for" ("payment of INR 927 for XX60008413407"):
+  /// the biller's consumer number, digits only.
+  String? _consumerRef() {
+    final id = RegExp(r'^(?:[xX*]{1,8})?(\d{6,})$');
+    for (var i = 0; i + 1 < toks.length; i++) {
+      if (toks[i].kind != TokKind.word || toks[i].lower != 'for') continue;
+      var j = i + 1;
+      // "for XX1234567" may be tokenised as the mask letters, then the number.
+      final m = id.firstMatch(toks[j].text);
+      if (m != null) return m.group(1);
+      if (j + 1 < toks.length && RegExp(r'^[xX*]+$').hasMatch(toks[j].text)) {
+        final n = RegExp(r'^(\d{6,})$').firstMatch(toks[j + 1].text);
+        if (n != null) return n.group(1);
+      }
+    }
+    return null;
   }
 
   String? _mandateRef() {

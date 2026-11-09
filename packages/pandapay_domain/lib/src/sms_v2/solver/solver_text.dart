@@ -69,6 +69,9 @@ final RegExp _tokenRe = RegExp(
           r'|(?<word>(?<![A-Za-z])a/c(?![A-Za-z])|[A-Za-z]+(?:[\-'
           "'"
           r'][A-Za-z]+)*)'
+          // Indian scripts (Devanagari to Malayalam): a run of letters and marks is one
+          // word, so a pack can name a word in any of them.
+          r'|(?<word2>[ऀ-ൿ]+)'
           r'|(?<punct>[.!?;])',
   caseSensitive: false,
 );

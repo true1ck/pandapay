@@ -229,6 +229,19 @@ void main() {
       },
     );
 
+    test('"processed payment of X for <consumer no>" is a bill payment receipt', () {
+      final d = _solve(
+        'Processed payment of INR 927.00 for XX60008413407 with ref no. HGAMP00AA10663603336. Click https://ccm.example/x and get instant cashback - Newbnk',
+      );
+      expect(d.read, SolverRead.billReceipt);
+      expect(d.minor, 92700);
+      expect(d.consumerRef, '60008413407');
+      final m = _facts(d).facts.single as MovementFact;
+      expect(m.purpose, MovementPurpose.billPayment);
+      expect(m.evidenceOnly, isTrue);
+      expect(m.counterparty?.name, contains('60008413407'));
+    });
+
     test('a card bill payment received is a card payment, not income', () {
       final d = _solve(
         'Payment of Rs 23,540.00 has been received towards your card ending 4410. Thank you.',
@@ -536,10 +549,10 @@ void main() {
       expect(d.read, SolverRead.walletTopup);
     });
 
-    test('a credit that mentions a loan may be a disbursal, so it is reviewed; a loan EMI debit still counts', () {
+    test('a loan paid out to the wallet is money in; a loan EMI debit still counts', () {
       final credit = _solve('Dear Customer, Amount of Rs 20,000 has been received by your wallet A/c. Check it https://x.example Sample Loans');
-      expect(credit.countsInTotals, isFalse);
-      expect(credit.accepted, isFalse);
+      expect(credit.countsInTotals, isTrue);
+      expect(credit.debitDirection, isFalse);
       final emi = _solve('Your EMI of Rs 4,500.00 for loan A/c LN8812 has been debited from your account XX3345 on 05-11-2026.');
       expect(emi.countsInTotals, isTrue);
     });
@@ -557,6 +570,25 @@ void main() {
       final m = _facts(d).facts.single as MovementFact;
       expect(m.direction, Direction.credit);
       expect(m.purpose, MovementPurpose.investment);
+    });
+
+    test('ads are filtered: loan offers, job ads, recharge-plan notices in any language', () {
+      for (final body in [
+        'Sample Finance: Paison ki zaroorat hai? Aaj hi apply karein aur paayein Rs 50,000 ka instant loan! https://x.example',
+        'Congrats! You have passed our review, Salary is 25000Rs/day. Please contact https://x.example',
+        'Dear Sample Job Alert: Now hiring, work from home, salary is Rs 30,000 per month. Apply https://x.example',
+        'आपला रिचार्ज प्लान 12-11-2026 रोजी समाप्त होत आहे! प्लान नाव: Rs 299 रिचार्ज करा https://x.example',
+        'आपल्या जिओ नंबर 9800000000 चा 90 दिवसांपासून कोणताही वापर होत नसल्यामुळे Rs 20.00 आपल्या टॉप-अप बॅलेन्स मधून कमी करण्यात आले आहेत. कृपया वैध प्लॅनने रिचार्ज करा',
+      ]) {
+        final d = _solve(body);
+        expect(d.countsInTotals, isFalse, reason: body);
+        expect(d.read, SolverRead.promo, reason: body);
+      }
+      // A real bank debit keeps counting even when it mentions a loan.
+      expect(
+        _solve('Your EMI of Rs 4,500.00 for loan A/c LN8812 has been debited from your account XX3345 on 05-11-2026.').countsInTotals,
+        isTrue,
+      );
     });
 
     test('an offer that says "when your loan is credited" is a promotion, not income', () {

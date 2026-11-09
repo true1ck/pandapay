@@ -150,6 +150,71 @@ void main() {
     expect(rows.single.lifecycleStatus, 'failed_payment');
     expect(rows.single.annualCost.paise, 0);
   });
+  group('a biller receipt chained to its bill by consumer number and amount', () {
+    BillDueFact bill(String name, {String due = '2026-11-20', String stmt = '2026-11-05'}) =>
+        fixture('bill_due.total_only', changes: {
+          'instrument': null,
+          'amounts': [
+            {'role': 'due_total', 'minor': 92700, 'unit': 'INR'},
+          ],
+          'attrs': {'dueDate': due, 'statementDate': stmt, 'billerName': name},
+          'observedAt': '2026-11-05T00:00:00Z',
+          'occurredAt': null,
+        }) as BillDueFact;
+    MovementFact receipt(String name, {int minor = 92700, String at = '2026-11-09T06:00:00Z'}) =>
+        fixture('movement.card_spend', changes: {
+          'instrument': null,
+          'counterparty': {'name': name, 'vpa': null, 'kind': null, 'accountMask': null},
+          'amounts': [
+            {'role': 'posted', 'minor': minor, 'unit': 'INR'},
+          ],
+          'attrs': {
+            'direction': 'debit',
+            'purpose': 'bill_payment',
+            'rail': 'unknown',
+            'evidenceOnly': true,
+          },
+          'observedAt': at,
+          'occurredAt': null,
+        }) as MovementFact;
+
+    test('same number and amount: the bill is paid on the receipt date', () {
+      final rows = billsFromFacts([
+        bill('STATE ELECTRICITY 60008413407'),
+        receipt('Bill 60008413407'),
+      ], const []);
+      expect(rows.single.status.name, 'paid');
+      expect(rows.single.paidOn, DateTime.utc(2026, 11, 9, 6));
+    });
+
+    test('a different number or amount never settles it', () {
+      expect(
+        billsFromFacts([
+          bill('STATE ELECTRICITY 60008413407'),
+          receipt('Bill 60099999999'),
+        ], const []).single.status.name,
+        'due',
+      );
+      expect(
+        billsFromFacts([
+          bill('STATE ELECTRICITY 60008413407'),
+          receipt('Bill 60008413407', minor: 50000),
+        ], const []).single.status.name,
+        'due',
+      );
+    });
+
+    test('a bill that printed no number is settled when the amount singles it out', () {
+      expect(
+        billsFromFacts([bill('ALEGRA POWER'), receipt('Bill 60008413407')], const [])
+            .single
+            .status
+            .name,
+        'paid',
+      );
+    });
+  });
+
   test('a bill is paid only by a matching instrument and a later payment', () {
     final bill = fixture('bill_due.total_only') as BillDueFact;
     final payment = fixture(
