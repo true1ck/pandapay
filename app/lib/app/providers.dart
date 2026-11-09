@@ -56,6 +56,7 @@ import '../data/local/sms_intake_repository.dart';
 import '../data/local/sms_import_store.dart';
 import '../data/local/sync_queue.dart';
 import '../data/local_first/local_first_cards.dart';
+import '../data/local_first/command_outbox.dart';
 import '../data/local/duplicate_resolution_outbox.dart';
 import '../data/local/transaction_outbox_repository.dart';
 import '../data/local/transaction_attachments_repository.dart';
@@ -642,7 +643,10 @@ final pendingRecoveryStatusProvider = FutureProvider<Map<String, int>>((
         ]) +
         count('duplicate_resolution_outbox', 'namespace=? AND attempts>=5', [
           namespace,
-        ]),
+        ]) +
+        // Commands the server refused (for example ignoring a transaction it
+        // no longer has) stay visible here instead of failing silently.
+        count('command_outbox', 'namespace=? AND parked=1', [namespace]),
     'legacy':
         count('sync_pending_changes', "namespace='legacy'", []) +
         count('transaction_outbox_entries', "namespace='legacy'", []) +
@@ -2575,12 +2579,35 @@ final pendingOutboxCountProvider = FutureProvider<int>((ref) async {
   final duplicateOutbox = await ref.watch(
     duplicateResolutionOutboxRepositoryProvider.future,
   );
-  return items.length + duplicateOutbox.pendingCount;
+  final commands = await ref.watch(commandOutboxProvider.future);
+  return items.length + duplicateOutbox.pendingCount + commands.pendingCount;
 });
 
 /// Flushes the outbox the moment connectivity comes back — read once from
 /// _AppShell alongside cacheLifecycleProvider/sessionKeepAliveProvider so
 /// it runs for the app's whole lifetime, not just while Home is visible.
+/// Queued server commands (ignore / restore ...). See [CommandOutbox].
+final commandOutboxProvider = FutureProvider<CommandOutbox>((ref) async {
+  final namespace = ref.watch(cacheNamespaceProvider);
+  final cache = await ref.watch(responseCacheProvider.future);
+  return CommandOutbox(cache.financialStore.database, namespace: namespace);
+});
+
+/// Command kinds the outbox knows how to send. Each must be safe to repeat.
+abstract final class OutboxCommand {
+  static const ignoreTransaction = 'ignore_transaction';
+  static const restoreTransaction = 'restore_transaction';
+}
+
+Map<String, CommandHandler> commandHandlersFor(UserCardsRepository repo) => {
+  OutboxCommand.ignoreTransaction: (p) => repo.ignoreTransaction(
+    p['id'] as String,
+    reason: p['reason'] as String,
+  ),
+  OutboxCommand.restoreTransaction: (p) =>
+      repo.restoreTransaction(p['id'] as String),
+};
+
 /// Bump to ask [outboxFlushProvider] to send queued quick-adds now. A save
 /// writes the outbox and bumps this; it never waits for the delivery.
 final outboxFlushRequestProvider = StateProvider<int>((ref) => 0);
@@ -2599,13 +2626,15 @@ final outboxFlushProvider = Provider<void>((ref) {
       final outbox = await ref.read(outboxRepositoryProvider.future);
       if (disposed || outbox.namespace != namespace) return;
       final sent = await outbox.flush(repo);
+      final commands = await ref.read(commandOutboxProvider.future);
+      final commandsSent = await commands.flush(commandHandlersFor(repo));
       final duplicateOutbox = await ref.read(
         duplicateResolutionOutboxRepositoryProvider.future,
       );
       final duplicateSent = await duplicateOutbox.flush(repo);
       if (!disposed &&
           ref.read(cacheNamespaceProvider) == namespace &&
-          (sent > 0 || duplicateSent > 0)) {
+          (sent > 0 || duplicateSent > 0 || commandsSent > 0)) {
         ref.invalidate(pendingOutboxCountProvider);
         ref.invalidate(transactionsProvider);
         ref.invalidate(utilizationTransactionsProvider);

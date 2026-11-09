@@ -105,6 +105,23 @@ CREATE TABLE IF NOT EXISTS duplicate_resolution_outbox (
 CREATE INDEX IF NOT EXISTS idx_duplicate_resolution_outbox_pending
   ON duplicate_resolution_outbox(namespace, created_at);
 
+-- General "tell the server later" commands (ignore / restore a transaction ...).
+-- See lib/data/local_first/command_outbox.dart.
+CREATE TABLE IF NOT EXISTS command_outbox (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  namespace TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  target TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  next_attempt_at INTEGER NOT NULL DEFAULT 0,
+  parked INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_command_outbox_ns
+  ON command_outbox(namespace, parked, id);
+
 -- Receipt/bill files are private device attachments by default. The database
 -- stores metadata and the application-documents path; raw files are never
 -- uploaded as a side effect of viewing or editing a transaction.

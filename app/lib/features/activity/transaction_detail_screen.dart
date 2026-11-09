@@ -728,13 +728,29 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       }
       final repo = ref.read(userCardsRepositoryProvider);
       if (repo == null) throw StateError('Account is unavailable.');
-      // Server first: hiding the row locally before the server confirms it
-      // leaves a "deleted" row that still exists server-side, so it never
-      // shows in Deleted transactions and cannot be restored.
-      await repo.ignoreTransaction(widget.entry.id, reason: reason);
-
       final namespace = ref.read(cacheNamespaceProvider);
       final cache = await ref.read(responseCacheProvider.future);
+      // Local first. The row is hidden on the phone at once and the server is
+      // told through the command outbox, which retries until it accepts. The
+      // server reverses the rewards and caps, so this is a queued command
+      // rather than a field edit. A quick-add that was never delivered has no
+      // server row: taking it back from the outbox is the whole job.
+      final id = widget.entry.id;
+      const localPrefix = 'local-outbox:';
+      if (id.startsWith(localPrefix)) {
+        final outbox = await ref.read(outboxRepositoryProvider.future);
+        outbox.cancel(id.substring(localPrefix.length));
+      } else {
+        final commands = await ref.read(commandOutboxProvider.future);
+        commands.enqueue(
+          kind: OutboxCommand.ignoreTransaction,
+          target: id,
+          payload: {'id': id, 'reason': reason},
+          cancels: const [OutboxCommand.restoreTransaction],
+        );
+        ref.read(outboxFlushRequestProvider.notifier).state++;
+        ref.invalidate(pendingOutboxCountProvider);
+      }
       if (deleting) {
         cache.financialStore.markInactive(namespace, widget.entry.id);
       } else {
@@ -824,7 +840,18 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       }
       final repo = ref.read(userCardsRepositoryProvider);
       if (repo == null) throw StateError('Account is unavailable.');
-      await repo.restoreTransaction(widget.entry.id);
+      // Local first, same as ignoring: show it back at once, tell the server
+      // through the command outbox. Restoring right after ignoring, before
+      // either was sent, cancels both.
+      final commands = await ref.read(commandOutboxProvider.future);
+      commands.enqueue(
+        kind: OutboxCommand.restoreTransaction,
+        target: widget.entry.id,
+        payload: {'id': widget.entry.id},
+        cancels: const [OutboxCommand.ignoreTransaction],
+      );
+      ref.read(outboxFlushRequestProvider.notifier).state++;
+      ref.invalidate(pendingOutboxCountProvider);
 
       final namespace = ref.read(cacheNamespaceProvider);
       final cache = await ref.read(responseCacheProvider.future);
