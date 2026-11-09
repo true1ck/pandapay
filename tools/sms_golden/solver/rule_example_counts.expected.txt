@@ -1,0 +1,20 @@
+credit 1234500 card_payment: Reminder! Your Sample Card ending 1234 payment of Rs.12,345.00 was received on 20/11/26.
+credit 300000 card_payment: Statement for ICICI Bank Credit Card XX1234 dated 12-Oct-26 is generated. Payment of Rs 3,000.00 received, thank you.
+credit 300000 card_payment: Your Axis Bank Credit Card XX4321 e-statement generated on 12-10-26. Payment of Rs 3,000.00 received. Thank you.
+credit 300000 card_payment: Your credit card XX4321 payment of INR 3000 was received on 20-Oct-2026.
+credit 50000 wallet_topup: Your add money request of Rs 500 to Freecharge wallet was successful.
+credit 50000 wallet_topup: Your add money request of Rs 500 to MobiKwik wallet was successful.
+credit 50000 wallet_topup: Your add money request of Rs 500 to Paytm Wallet was successful.
+credit 50000 wallet_topup: Your add money request of Rs 500 to PhonePe Wallet was successful.
+credit 550 unknown: ICICI Bank Account XX1234 credited:Rs. 5.50 on 09-Sep-26. Info ACH*SAMPLE LTD EMI 2025-26*IN3.
+credit 7510 unknown: As per a SEBI mandate, we have settled your account and credited Rs. 75.10 to your bank. Team Acme
+credit 900000 unknown: Upstox: Funds of Rs 9,000.00 were transferred to your bank account.
+debit 10000 purchase: Dear Cardmember, your transaction of INR 100.00 at EXAMPLE STORE with Example Bank Credit Card ending 1234 was successful.
+debit 12000 purchase: Your payment of Rs 120 from Pluxee card ending 1234 was successful.
+debit 1500000 purchase: Rs 15,000.00 transferred from your account via IMPS to RAVI KUMAR on 12-11-26. Ref 432198765000.
+debit 200 purchase: INR 2.00 txn of INR 2.00 was successful for ICICI Bank Credit Card XX1234.
+debit 200 purchase: INR 2.00 txn of INR 2.00 was successful for ICICI Bank Debit Card XX1234.
+debit 250000 bill_payment: Premium Rs. 2500 for LIC policy no 123456789 has been debited on 25-10-2026.
+debit 31000 purchase: Spent Rs.310 From HDFC Bank Card x8406 At QUALITY FUEL STATION On 2026-04-07:21:41:16 Bal Rs.135317.02 Not You? Call 18002586161
+debit 50000 purchase: UPI txn of Rs 500.00 successful from your A/c XX1234 on 22-10-26
+debit 500000 purchase: Sent Rs.5000.00 From Example Bank A/c *1234 To RAVI KUMAR On 05/11/26 Ref 432198765432

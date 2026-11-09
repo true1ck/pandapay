@@ -1,0 +1,217 @@
+# SMS generalized solver: analysis and plan
+
+**Status:** plan only. Nothing here is built. Written 9 Nov 2026 after reading the SMS v2 code, `SMS_V2_STATUS.md` and `docs/sms-pipeline-v2/security-audit-2026-11.md`.
+**Labels used below:** **[verified]** = read in code or docs. **[hypothesis]** = believed, to be measured in Phase 0.
+
+## 1. Why this exists
+
+Different users hold different banks (one person has 4 or 5 accounts, the next person has 4 or 5 other banks). We cannot hand-write a rule per bank per layout, and banks change wording without notice. The product needs a second tier that reads a message the way a person does, instead of recognising a known layout.
+
+Two constraints from the owner:
+1. **Generalised**: works on unseen banks and unseen wording.
+2. **Not reverse-engineerable**: the know-how must not be extractable from the app. Rules come from the server, only to registered, attested installs.
+
+## 2. How the pipeline works today **[verified]**
+
+```
+SMS -> triage gate (keyword lists compiled into the app)
+    -> sender normalisation (+ sender registry)
+    -> rule engine: first matching regex rule by priority; rules scoped to sender brand or "*"
+    -> facts -> linker (link rules) -> events -> ledger / projections
+    unknown -> redacted skeleton -> server AI worker (Gemini) drafts a rule -> admin approves -> next signed bundle
+    still unresolved -> Needs review
+```
+
+- The signed bundle (Ed25519) has 1,099 rules and is served from `GET /sms/v2/rules` with attestation, entitlement and rate checks. Cohorts: all, 25%, 5%, testers. The bundle shipped inside the app is empty (`baseline_bundle.json`, version 0, no rules).
+- "Generalization" today means `rules/sms/v2/generalization/*`: regex rules with sender `*`, each a **wording guess for one layout**. A single layout becomes about 6 rules (credit/debit/none times the `-B` variant). This is still template matching with a wider net, not reading.
+- The linker joins facts into events with legs. It has 11 link rules (IPO, mandate charge, card bill, wallet top-up, fee, refund, own transfer, receipt, duplicates). `billDue` exists as a fact type.
+
+## 3. Gap inventory
+
+| # | Gap | Evidence | Why it breaks a new user |
+|---|---|---|---|
+| G1 | **Matching is per layout.** An unseen phrasing matches nothing (`no_rule_matched`). | [verified] engine and GENZ notes ("wording guess") | Every new bank or reworded alert is a hole until a rule ships. |
+| G2 | **Rule count explodes.** Variants multiply (direction x instrument x A/B). | [verified] GENZ table | Bundle growth, slower matching, shadowing risk, hard to lint. |
+| G3 | **Triage vocabulary is hard-coded in the app** (`sms_gate_filter.dart`, `sms_text_hint.dart`, `intake_gate.dart` lifecycle regex, `template/vocabulary.dart`, `redact.dart`). | [verified] | (a) A transaction with unfamiliar wording never reaches the engine; the status doc already records 43 real messages dropped this way. (b) The vocabulary is readable from the binary, which defeats goal 2. |
+| G4 | **Sender-dependent resolution.** Issuer and instrument kind come from the sender registry; unregistered handles lose that. The status doc lists 7 unregistered handles. Normalisation only strips `XX-` and `-S/-T/-P/-G`. | [verified] | New banks and new DLT headers. |
+| G5 | **Gate vetoes by sender shape.** Senders that look like a contact name or end in `-P` are rejected. | [verified] `intake_gate.dart` | Some banks and brokers send transactional text on promotional headers. [hypothesis] |
+| G6 | **No story state beyond pairs.** Link rules join two or three legs. A bill with reminders, a payment, a failed or overdue notice has no lifecycle object. | [verified] 11 link rules, no obligation entity. How `billDue` is projected: [hypothesis], check first. | Reminders after payment stay "open"; the same story shows up as several unrelated items. |
+| G7 | **Multi-account users.** Instrument resolution relies on masks and the seeded instruments. Mask formats vary (`XX1234`, `ending 1234`, `A/c *1234`, 3-digit, 6-digit). | [verified] mask regex in `skeleton.dart`; real coverage [hypothesis] | The 4 to 5 accounts per person is the normal case, so wrong instrument attribution is common. |
+| G8 | **Language.** Hindi, Marathi, Hinglish and other regional alerts. | [hypothesis] | Only English wording is covered by rules and gate. |
+| G9 | **Counterparty extraction** depends on each layout. Person vs merchant vs VPA vs own name. | [verified] partial (`person_name.dart`, merchant aliases) | New banks put the payee in new positions. |
+| G10 | **Long or split SMS**, concatenated parts, forwarded or quoted text. | [hypothesis] | Amount and instrument can land in different parts. |
+| G11 | **Phone-side ReDoS exposure.** Signed bundles are not re-linted on the phone and there is no match timeout (LO-14, open). | [verified] security audit | Any new pattern pack widens this surface. The solver must not use unbounded user-facing regex. |
+| G12 | **No measurement of "why not matched".** Engine records `unknownReasons`, but there is no per-sender-family view of gate-dropped vs unmatched vs matched-unknown-purpose. | [verified] stats exist, report [hypothesis] | We cannot rank gaps or prove the solver helps. |
+
+## 4. Design: the evidence solver (tier 2)
+
+### 4.1 Position in the flow
+
+```
+safety gate (OTP/PIN/credentials dropped; stays in the binary, fail closed)
+  -> tier 1: existing rules (FROZEN, always first, untouched)
+  -> only if tier 1 says no_rule_matched (or the gate rejected a bank-like sender):
+       tier 2: evidence solver
+         accept     -> same Fact objects, same validation, same linker
+         candidate  -> AI worker (redacted layout) -> admin-approved rule -> becomes tier 1 or a pack update
+         reject     -> ignored, with a stored reason code
+  -> Needs review
+```
+
+Rules for the boundary:
+- Tier 2 never sees a message tier 1 matched. Enforced in the engine, not by convention.
+- Solver facts carry `provenance: solver`, `solverVersion`, per-field confidence, and a **confidence cap below any specific rule**. When a specific rule later covers the layout, "Refresh rules and re-sort" replaces the solver result.
+- Gemini never decides a single message and never receives raw text; it drafts rules from redacted layouts, as today. Every Gemini rule an admin approves removes a future Gemini call.
+
+### 4.2 How a message is read (the puzzle)
+
+A person decides in this order, and so does the solver:
+
+1. **Triage**: money, bill/obligation, balance info, promo, security, or other.
+2. **Direction and completion**: did money actually move? ("debited", "spent", "credited", "received", "paid") versus not yet or not at all ("will be", "request", "failed", "declined", "if", "offer").
+3. **Amount and its role**: paid amount vs available balance vs limit vs minimum due vs total due, from the cue words next to each number.
+4. **Instrument**: masked account or card, wallet, UPI handle, matched against the user's known instruments.
+5. **Counterparty**: the noun phrase after the payee cue (`to`, `at`, `towards`, `from`, `by`, `info`), a VPA, or a biller.
+6. **Date and reference**; the received time is the fallback.
+7. **Type**: rail and purpose (UPI, IMPS, NEFT, ATM, POS, EMI, mandate, refund, bill, SIP).
+8. **Verify**: single consistent direction, amount is not a balance, not conditional, not promotional, mask belongs to a known instrument (boost), balance arithmetic when a previous balance is known.
+
+Decision per message:
+- **Auto-accept** needs all of: a completed-movement cue, one clear paid amount, one direction, and an instrument or counterparty. Everything else is a **candidate**.
+- Priority of failure modes: a false count corrupts totals; a miss only costs a review. The thresholds favour the miss. The current standard is **0 false counts**, and tier 2 must keep it.
+
+### 4.3 What lives in the app and what comes from the server
+
+| In the binary (cheap to reveal) | In the signed `solverPack` from the server (the know-how) |
+|---|---|
+| Tokenizer, windowing, scoring arithmetic, verification plumbing, fact emit | Cue lexicons (direction, completion, balance, limit, payee, rail, biller, language packs) |
+| The OTP/PIN safety gate and nothing else | Triage lexicon (replaces the hard-coded keyword lists, G3) |
+| | Detector weights, thresholds, per-family accept rules |
+| | Sender and issuer hints, mask grammar variants |
+
+The kernel does nothing without a pack. The pack is a new signed section of the existing bundle (same signature, same cohorts, same rollback, same hourly re-sign), gated by `minEngineVersion`. A separate kill switch turns tier 2 off without touching tier 1.
+Detectors use bounded token and window matching, not user-facing regex with unbounded quantifiers, so G11 does not grow.
+
+## 5. Protecting the rules (goal 2) **[verified]** state, then actions
+
+Already in place: Ed25519 signed bundles; empty baseline in the binary; `/sms/v2/rules` requires login, attestation, entitlement and rate limit; stored pre-signed copy only, fail closed; release builds obfuscated; per-profile and per-installation counters.
+
+Gaps against the goal:
+- **S1**: attestation `monitor` mode admits callers with no token at half limits, by design (LO-10). A script with a registered account can still download the bundle. Action: move `/sms/v2/rules` and the pack to `enforce` once the testers' devices attest.
+- **S2**: the hard-coded vocabulary in the binary (G3). Action: Phase 2.
+- **S3**: unknown whether the downloaded bundle is encrypted at rest on the phone. Receipts are (`PPRC`), the bundle was not found encrypted. Action: wrap it with a Keystore/Keychain-held key; decrypt into memory only.
+- **S4**: AI-drafted provisional rules are delivered by sync and are not covered by the bundle signature (security audit). Action: sign them, or fold them into the signed pack.
+- **S5**: no leak tracing. Action: per-account **canary entries** (harmless decoy cue words or decoy rules unique per account), so a leaked copy identifies its source.
+- **S6**: no anomaly detection on rule fetches. Action: alert on many accounts per device, per IP or per attestation, and on abnormal fetch frequency.
+- **S7**: repo-side exposure. `rules/` and golden fixtures live in git. Action: confirm they are never packaged into any app asset or public image, and keep the real sample private.
+
+Honest limit: a determined person with a registered, attested, rooted device can eventually extract what the phone can read. These steps raise the cost, force registration, and make leaks traceable. The durable advantage is the learning loop and the corpus behind it, not the secrecy of one pack version, so the pack should be refreshed often.
+
+## 6. Phases
+
+**Phase 0: measure (no behaviour change).**
+- Replay harness classifies every message: gate-dropped, no_rule_matched, rule_emitted_invalid, matched-with-unknown purpose, matched. Output per sender family. This produces the real gap list for G1, G3, G4, G5, G12.
+- Build a **synthetic cross-bank corpus** (top issuers, wallets, brokers, billers, telcos; reordered, abbreviated, Hinglish variants). We do not own other users' banks, so this stands in for them. A held-out part is never used to author the pack.
+- Verify G6: how `billDue` and reminders are projected today.
+- Done when: a ranked gap table exists and a baseline recall/precision is recorded.
+
+**Phase 1: schema and kernel, shadow mode.**
+- Add `solverPack` to the bundle schema and the Dart kernel. Tier 2 runs and logs the decision; it changes nothing.
+- Differential test: every message tier 1 matches produces byte-identical output with the solver on or off.
+- Done when: shadow decisions on the replay and synthetic corpora meet the accept gate in section 7.
+
+**Phase 2: triage lexicon to the server.**
+- Move the keyword gate vocabulary into the pack; keep only the OTP/PIN safety check in the binary. Fix G5 (bank-like senders get one pass).
+- Done when: the 43-message class of gate drops is recovered and no promo or OTP leaks into review.
+
+**Phase 3: enable auto-accept (testers, then 5%, 25%, all).**
+- Candidates go to the AI worker and then review. Every correction feeds learning signals and the pack.
+- Done when: the live false-count metric stays at 0 across a full cohort step.
+
+**Phase 4: chains and the tree.**
+- Add an **obligation** object (instrument + billing cycle + counterparty) with a small state machine: bill, reminder, payment, failed, overdue, closed. Reminders attach to it; a settlement closes it; stale reminders close.
+- The tree stays a **read model** over events and obligations: instruments and counterparties as roots, chains as branches, spending, bills, splits and subscriptions as views. Splits link by suggestion only, confirmed by the user.
+- Deliberately generic and designed from the Phase 0 gap table, not from one product (cards are one lifecycle of several: utilities, insurance, EMI, subscriptions).
+
+**Phase 5: security actions S1 to S7**, in parallel from Phase 1.
+
+## 7. Gates (every phase)
+
+- Golden gate and rules lint stay green; **no row that is correct today becomes wrong**.
+- False counts: **0** on the existing corpora; solver auto-accept precision is held to at least 99% on the synthetic held-out set before any cohort sees it.
+- Differential identity for tier-1-matched messages.
+- Performance: per-message budget measured with `test/performance_guards_test.dart` and the Android smoke script; the solver runs off the UI isolate, uses `cachedRegExp`, and does no whole-history reads. Chain lookups use indexed instrument + date-window queries.
+- Kill switch per tier; rollback by bundle version.
+
+## 8. Open questions for the owner
+
+1. **Auto-count or hold?** Should a solver "accept" count in totals immediately (shown as "guessed", editable), or wait for one tap of confirmation? Recommendation: count only the strict accept set, hold everything else.
+2. **Languages**: is English + Hinglish enough for the first release, or must Hindi/Marathi script be in scope?
+3. **Own-account detection**: can we rely on the profile name and the user's registered instruments to recognise "to my own account"?
+4. **Attestation `enforce`**: is it acceptable to enforce on `/sms/v2/rules` before the wider tester group is on attested builds? (Closes S1, but unattested testers stop receiving rules.)
+5. **Synthetic corpus**: are you comfortable with me authoring synthetic layouts for other banks from public knowledge of how they phrase alerts, flagged as wording guesses (as in the GENZ notes)?
+
+## 9. Progress, 9 Nov 2026 (Phase 0 done, Phase 1 kernel built, offline only)
+
+Security work is deferred by the owner; the pack currently lives in the repo (`rules/sms/solver/pack.json`) and is **not** in any signed bundle, and nothing in the app calls the solver yet. Tier 1 is untouched (all new files; no existing file changed).
+
+**Built**
+- `packages/pandapay_domain/lib/src/sms_v2/solver/`: `solver_text.dart` (typed tokens, phrase matcher), `solver_pack.dart` (pack model and validation), `evidence_solver.dart` (the solver). Public entry: `lib/sms_v2_solver.dart`.
+- `rules/sms/solver/pack.json`: the vocabulary (26 lexicons). Kept outside `rules/sms/v2` so the existing bundle builder never reads it.
+- `tools/sms_rules_cli/tool/solver_baseline.dart` (what tier 1 does), `solver_eval.dart` (scores the solver, splits out the messages tier 1 did not match), `solver_bench.dart`.
+- Synthetic corpora in `tools/sms_golden/solver/`: `held_out.jsonl` (60), `blind_1.jsonl` (47), `blind_2.jsonl` (40). Invented messages only, labelled by hand.
+- `packages/pandapay_domain/test/sms_v2/solver/solver_test.dart`: 29 tests (text layer, phrases, pack validation, safety properties, hostile input, all three corpora with zero false counts).
+
+**Measured**
+- Tier 1 on the varied held-out set: 17 of 40 money messages left unmatched (`no_rule_matched`). This set is deliberately varied wording, so it overstates the gap on a real inbox (the 6-month replay in `SMS_V2_STATUS.md` found about 11 real gaps in 649 transactions); it shows what a new bank or reworded alert looks like.
+- Solver speed: about 0.3 ms per message after warm-up (JIT). It only runs on messages tier 1 did not match.
+- **Honest first pass on fresh wording (`blind_2`, scored before any tuning to it), messages tier 1 did not match (22):** 7 auto-accepted, 15 sent to review, **1 false count** (a transfer between two of the user's own accounts read as a spend). After a general fix plus vocabulary growth the same set is clean (18 accepted, 4 to review, 0 false counts), but that set is now tuned against and cannot be quoted as accuracy.
+- The earlier blind set (`blind_1`) found two critical errors on its first pass: a card bill payment read as a purchase (would double-count spending) and a person-to-person credit read as a wallet top-up (income hidden). Both are now fixed by general rules, not message patches: a biller receiving a payment on the user's card is a card payment; wording that points the other way from a stated credit is not trusted; two of the user's own accounts in one message is an own transfer.
+
+**What the numbers do and do not say**
+- All three sets have now been tuned against. They are regression gates (zero false counts, zero silent misses), not accuracy claims. A fresh set (`blind_3`) must be written before any accuracy figure is quoted.
+- Safety held across rounds, but recall on unseen wording is limited by vocabulary: the review queue shrinks as the pack grows. Each new blind set found about 4 to 8 new wording families (abbreviations such as "Recd" and "Dr.", noun forms such as "Fuel purchase Rs 2,000", notices such as "is scheduled").
+- Design choice that paid off: accepting a non-money reading needs positive evidence (a cue), and an amount with no known cue goes to review. That is why no round produced a silent drop.
+
+**Known gaps in the solver itself**
+- Counterparty names: 12 of 13 on right counts in the last blind set; slash narrations and "for ... - NAME" styles are fragile.
+- Loan disbursals, reversals and disputes are always review-only by design.
+- Foreign-currency spends are accepted only when the INR amount is printed.
+- English only. No multi-part SMS reassembly.
+- `billerReceived` ("payment received") is the riskiest phrase family: it is ambiguous between "the biller got your payment" and "you got paid". It is now anchored on "payment of <amount> ... received".
+
+**Not done yet (next steps, in order)**
+1. Fact output: convert an accepted decision into the real `Fact` types (needs a new provenance engine value `solver`, a contract and schema change, and the server contract tests).
+2. Shadow mode in the app: run the solver after tier 1 on `no_rule_matched`, log the decision, change nothing; add the pack to the bundle schema and builder (signed section, minimum engine version, kill switch).
+3. Real-data replay: run the 6-month private corpus through the harness (counts only) to size the real gaps and check for false counts. Needs `SMS_PRIVATE_DIR`; I have not used any private data.
+4. Triage lexicon move (Phase 2) and the obligation lifecycle (Phase 4).
+5. Pack lint on the server (phrase safety, duplicate and shadowing checks), and a `blind_3` set.
+6. Pre-existing: `hardcoded_logic_guard_test.dart` fails on Windows because of path separators in its allow-list (it reports only existing files); worth fixing separately.
+
+## 10. Integration, 9 Nov 2026 (decision: no shadow mode, integrated directly)
+
+The owner decided to integrate directly (two users, not published). Security hardening stays deferred. Nothing is committed yet.
+
+**What now exists end to end**
+- **Where it runs:** inside `RuleEngine.interpretDetailed`, after every rule and ignore rule has failed (`no_rule_matched`). A message a rule matches never reaches it. The solver returns facts with engine `rules` and rule id `SOLVER-<READ>` (no contract change needed), confidence capped at 0.9, so everything downstream (instruments, linker, ledger, bills, review, sync, stats) treats it like a rule reading.
+- **Where the vocabulary lives:** `rules/sms/solver/pack.json`, shipped as one optional signed section `solverPack` of the rule bundle (schema, Dart model, server bundle parts, CLI build). A bundle without a pack is byte-identical to before (`toJson` omits the key). Bundles that carry a pack need engine 2.4.0 (`meta.json` and `smsEngineVersion` bumped); older apps refuse such a bundle and keep their current one.
+- **Kill switch:** `params.enabled: false` in the pack, or any pack that fails to load, turns the solver off without refusing the bundle.
+- **Reads, and the fact each becomes:** counted spend/income → `movement`; a bank debit alert is the real debit; a biller's receipt, e-bill or renewal notice → `movement` with `evidenceOnly` (never counted by itself, same policy as the existing receipt rules); card bill payment → credit leg `card_payment` (not income); own transfer; wallet top-up; investment; bill or statement or reminder → `bill_due` with total, minimum, due date and statement date; upcoming debit → `attempt` (scheduled, with the date); mandate created/revoked/expired/paused → `mandate` with phase, frequency and merchant; subscription charge → movement plus a `mandate`; failed payment → `attempt`; balance → `balance_snapshot`; promotions, OTP/security and order notices → `info` (ignored).
+- **Dates:** printed in any common form, Indian order; "due today/tomorrow" is read against the message's arrival day; a date with no year is placed ahead of the message.
+
+**Findings from the tests (all fixed by general rules)**
+- A card bill payment read as a purchase; a person's credit read as a wallet top-up; a transfer between two of the user's own accounts read as a spend.
+- Stress test on the repo's own rule examples (including the negative examples rule authors wrote as traps): a promise ("Get Rs 150 cashback credited when you spend Rs 5,000") counted as income; "will be Dr. ... and Cr. ..." read as a credit; "request" messages read as events; a one-time (IPO-style) mandate debit counted as a spend; "transferred to your bank account" read as a debit; "already paid" read as a debit; a security footer swallowing a real notice; a failed-payment notice with no amount ignored instead of reviewed (the golden set records that as a product decision). Each now has a rule and a test.
+- A golden gate that failed (ignore precision 0.973 vs 0.995) was the solver ignoring that failed-payment notice; fixed and the gate is green again.
+
+**Proof that existing behaviour is untouched**
+- `tools/sms_rules_cli/test/solver_integration_test.dart`: every rule example (2,376) and every golden message (284) produces byte-identical outcomes and facts with and without the pack; the full release gate (`tool/check_pipeline.dart`) passes with the pack in the bundle.
+- A reviewed snapshot (`tools/sms_golden/solver/rule_example_counts.expected.txt`): the 20 rule-example messages the solver would count as money, each checked by hand. Any change to that set fails the test and must be reviewed.
+- Corpora (all invented): `held_out`, `blind_1`, `blind_2` (dev sets now), `bills_subs_dev`, `non_financial` (30 promos, OTPs, offers, notices): zero false counts, zero silent misses, zero wrong facts on all of them. These are regression gates, not accuracy claims.
+
+**Open items**
+1. Emulator verification and a real-phone replay (counts only) are the remaining checks before this is trusted on real inboxes.
+2. A fresh, never-tuned corpus is still needed for an honest accuracy figure.
+3. The review queue will carry the wording the pack does not know yet (abbreviations, unusual layouts, regional wording). That is by design; the Gemini draft loop and pack growth shrink it.
+4. A "paid + new bill in one message" statement goes to review; handling it as two facts is a possible later improvement.
+5. IPO/one-time mandate holds are sent to review rather than read as `hold` facts.

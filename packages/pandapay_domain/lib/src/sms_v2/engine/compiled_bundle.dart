@@ -1,5 +1,7 @@
 import '../contract/enums.dart';
 import '../contract/rule_bundle.dart';
+import '../solver/evidence_solver.dart';
+import '../solver/solver_pack.dart';
 import 'sender.dart';
 import 'transforms.dart';
 
@@ -17,7 +19,7 @@ import 'transforms.dart';
 /// (a markup fee and the transaction it was charged on, CCR-005). An older
 /// linker would join such a rule on its parameters alone, so the bundle that
 /// ships it requires 2.3.0.
-const String smsEngineVersion = '2.3.0';
+const String smsEngineVersion = '2.4.0';
 
 /// Why a bundle cannot be used.
 class BundleRefusedException implements Exception {
@@ -220,6 +222,8 @@ class CompiledBundle {
     this.generic,
     this.purposes,
     this.sendersByBrand,
+    this.solver,
+    this.solverError,
   );
 
   /// Validates [bundle] and builds the matcher. Throws [BundleRefusedException]
@@ -300,6 +304,21 @@ class CompiledBundle {
       }
     }
 
+    // The solver vocabulary is optional. A pack that does not load switches the
+    // solver off (recorded in [solverError]); it never refuses the whole bundle,
+    // so a bad pack can never take the signed rules down with it.
+    EvidenceSolver? solver;
+    String? solverError;
+    final pack = bundle.solverPack;
+    if (pack != null) {
+      try {
+        final parsed = SolverPack.fromJson(pack);
+        if (parsed.params.enabled) solver = EvidenceSolver(parsed);
+      } on FormatException catch (e) {
+        solverError = e.message;
+      }
+    }
+
     return CompiledBundle._(
       bundle,
       List.unmodifiable(ignores),
@@ -307,6 +326,8 @@ class CompiledBundle {
       List.unmodifiable(generic),
       List.unmodifiable(purposes),
       {for (final s in bundle.senders) s.brand: s},
+      solver,
+      solverError,
     );
   }
 
@@ -318,6 +339,12 @@ class CompiledBundle {
   final List<CompiledRule> generic;
   final List<CompiledPurpose> purposes;
   final Map<String, SenderEntry> sendersByBrand;
+
+  /// Tier 2: the evidence solver, or null when the bundle carries no usable pack.
+  final EvidenceSolver? solver;
+
+  /// Why the bundle's solver pack was not loaded, if it was not.
+  final String? solverError;
 
   /// Rules to try for [brand], already merged with generic rules and sorted by
   /// priority descending, then id.
