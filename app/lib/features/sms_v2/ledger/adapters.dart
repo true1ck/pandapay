@@ -220,6 +220,7 @@ class _BillRecord {
     this.paidMinor,
     this.lastPayment, [
     this.receiptAt,
+    this.superseded = false,
   ]);
   final v2.BillDueFact fact;
   final int paidMinor;
@@ -228,6 +229,11 @@ class _BillRecord {
   /// When a biller's payment receipt, chained to this bill by consumer number
   /// and amount, says it was paid (no ledger event stands behind it).
   final DateTime? receiptAt;
+
+  /// A later statement for the same card / biller exists. If this one is unpaid it
+  /// is no longer a bill to pay: the newer statement carries whatever is owed
+  /// (the old balance plus later spend), or the user settled this one elsewhere.
+  final bool superseded;
   int? get dueMinor =>
       _amount(fact, v2.AmountRole.dueTotal) ??
       _amount(fact, v2.AmountRole.dueMinimum);
@@ -339,6 +345,18 @@ List<_BillRecord> _billRecords(
             .toList()
           ..sort();
     final nextStatement = nextStarts.firstOrNull;
+    final superseded = cycles.any(
+      (other) =>
+          !identical(other, cycle) &&
+          _billIdentity(other.first) == _billIdentity(fact) &&
+          other.first.dueDate.compareTo(fact.dueDate) > 0 &&
+          other
+              .map(_statementAt)
+              .reduce((a, b) => a.isBefore(b) ? a : b)
+              .isAfter(start) &&
+          // A guess (an inferred reminder) never retires a real statement.
+          other.any((f) => f.confidence >= 0.7),
+    );
     var paid = 0;
     v2.Event? last;
     for (final event in payments) {
@@ -387,6 +405,7 @@ List<_BillRecord> _billRecords(
         receiptAt == null ? paid : due ?? paid,
         last,
         receiptAt,
+        superseded,
       ),
     );
   }
@@ -459,7 +478,14 @@ Commitment _commitment(
     dueOn: DateTime.parse(bill.dueDate),
     identifier: bill.instrument?.maskDigits,
     cadence: CommitmentCadence.oneTime,
-    status: record.paid ? CommitmentStatus.paid : CommitmentStatus.due,
+    // An unpaid statement that a newer one replaced is kept in history but is no
+    // longer something to pay: its payment was not seen in SMS (it may have been
+    // settled elsewhere, or it is carried inside the newer statement).
+    status: record.paid
+        ? CommitmentStatus.paid
+        : record.superseded
+        ? CommitmentStatus.paymentNotDetected
+        : CommitmentStatus.due,
     paidOn: record.lastPayment?.occurredAt ?? record.receiptAt,
     linkedTransactionId: record.lastPayment == null
         ? null
@@ -813,7 +839,8 @@ List<SmsBillRow> smsBillRowsFromFacts(
           sawFailedAttempt: false,
           state: bill.status == CommitmentStatus.paid
               ? SmsBillState.linked
-              : bill.dueOn.isBefore(DateTime(now.year, now.month, now.day))
+              : bill.status == CommitmentStatus.paymentNotDetected ||
+                    bill.dueOn.isBefore(DateTime(now.year, now.month, now.day))
               ? SmsBillState.paymentNotDetected
               : SmsBillState.pending,
           linkedTxnId: bill.linkedTransactionId,

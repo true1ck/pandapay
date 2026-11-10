@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:pandapay_domain/sms_v2.dart';
+import 'package:pandapay_domain/sms_v2_solver.dart';
 import 'package:pandapay_domain/sms_v2_ledger.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:crypto/crypto.dart';
@@ -105,11 +106,33 @@ class SmsV2Pipeline {
         final review = <ReviewItem>[];
         final incoming = <Fact>[];
         for (final message in unique.values) {
-          final outcome = engine.interpretDetailed(
+          var outcome = engine.interpretDetailed(
             message,
             bundle,
             appVersion: appVersion,
           );
+          // A bill reminder with an amount but no due date borrows it from the one
+          // earlier statement it can only be about; otherwise it stays as it was.
+          final pending = outcome.pendingBill;
+          if (pending != null) {
+            final completed = _completeBillFromHistory(
+              message,
+              pending,
+              incoming,
+            );
+            if (completed != null) {
+              outcome = EngineOutcome(
+                InterpretResult(
+                  outcome: InterpretOutcome.matched,
+                  facts: [completed],
+                  ruleId: completed.provenance.ruleId,
+                  ruleVersion: pending.packVersion,
+                  templateHash: outcome.result.templateHash,
+                ),
+                winnerId: completed.provenance.ruleId,
+              );
+            }
+          }
           final result = outcome.result;
           final provisional = bundle.rules.any(
             (rule) =>
@@ -262,6 +285,45 @@ class SmsV2Pipeline {
         'facts': upload,
       }, backfill: backfill);
     }
+  }
+
+  /// The statement a date-less reminder belongs to, from the facts stored in the
+  /// history window and the ones read earlier in this same chunk. Null unless
+  /// exactly one statement fits ([matchEarlierBill]).
+  Fact? _completeBillFromHistory(
+    SmsMessage message,
+    PendingBill pending,
+    List<Fact> incoming,
+  ) {
+    final d = pending.decision;
+    final minor = d.minor;
+    if (minor == null) return null;
+    final byId = <String, BillDueFact>{
+      for (final f in _facts.billDuesSince(
+        message.observedAt.subtract(kBillHistoryWindow),
+      ))
+        f.factId: f,
+      for (final f in incoming.whereType<BillDueFact>()) f.factId: f,
+    };
+    final match = matchEarlierBill(
+      minor: minor,
+      at: message.observedAt,
+      history: byId.values,
+      mask: d.mask,
+      issuerSlug: pending.issuerSlug,
+      billerName: d.billerName,
+    );
+    if (match == null) return null;
+    return completeBillFromHistory(
+      d,
+      match,
+      sourceKey: message.sourceKey,
+      observedAt: message.observedAt,
+      packVersion: pending.packVersion,
+      bundleVersion: pending.bundleVersion,
+      engineVersion: pending.engineVersion,
+      appVersion: pending.appVersion,
+    );
   }
 
   ReviewItem _templateReview(SmsMessage message, InterpretResult result) =>

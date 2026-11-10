@@ -774,11 +774,14 @@ class _Run {
     }
     if (due == null) {
       reasons.add('bill without a readable due date');
+      // The account is kept so a caller with history can match the statement.
+      final undatedMask = _mask(null, totalIdx ?? mins.first);
       return _done(
         SolverRead.billDue,
         SolverVerdict.candidate,
         0.5,
         amount: counted,
+        mask: undatedMask,
         statementDate: statement,
       );
     }

@@ -190,6 +190,111 @@ void main() {
     expect(bills.map((b) => b.dueDate).toSet(), {'2026-11-20'});
   });
 
+  group('a reminder with an amount but no due date', () {
+    const statementText =
+        'Your credit card statement for card ending 4410 is generated. Total amount due Rs 23,540.00, minimum amount due Rs 1,177.00, payment due date 20-Nov-2026.';
+    String nudge(String amount, {String card = '4410'}) =>
+        'Reminder: your credit card bill of Rs $amount for card ending $card is due. Pay on or before the due date to avoid late charges.';
+
+    List<BillDueFact> bills() =>
+        FactStore(db.db, namespace: _ns).all().whereType<BillDueFact>().toList();
+    int openReviews() => db.db.select(
+      "SELECT count(*) c FROM v2_review_items WHERE namespace=? AND status='open'",
+      [_ns],
+    ).first['c'] as int;
+
+    test('borrows the due date of the one statement it can only be about, as an inference', () {
+      pipeline.process(sms(statementText));
+      final m = sms(nudge('23,540'));
+      pipeline.process(m);
+      final fact = factsOf(m).whereType<BillDueFact>().single;
+      expect(fact.dueDate, '2026-11-20');
+      expect(fact.instrument?.maskDigits, '4410');
+      expect(fact.confidence, lessThan(0.7));
+      expect(fact.provenance.ruleId, 'SOLVER-BILL-DUE-INFERRED');
+      // It joins the statement's cycle: still one bill, still the statement's amount.
+      final rows = billsFromFacts(FactStore(db.db, namespace: _ns).all(), const []);
+      expect(rows, hasLength(1));
+      expect(rows.single.amount!.paise, 2354000);
+      // A person is asked to confirm the inference.
+      expect(openReviews(), greaterThan(0));
+    });
+
+    test('the minimum amount is matched to the statement minimum', () {
+      pipeline.process(sms(statementText));
+      final m = sms(nudge('1,177'));
+      pipeline.process(m);
+      expect(factsOf(m).whereType<BillDueFact>().single.amount(AmountRole.dueMinimum)!.minor, 117700);
+      expect(billsFromFacts(FactStore(db.db, namespace: _ns).all(), const []).single.amount!.paise, 2354000);
+    });
+
+    test('an amount that matches nothing on the statement stays unresolved', () {
+      pipeline.process(sms(statementText));
+      final m = sms(nudge('9,999'));
+      pipeline.process(m);
+      expect(factsOf(m), isEmpty);
+      expect(bills(), hasLength(1));
+    });
+
+    test('another card is never borrowed from', () {
+      pipeline.process(sms(statementText));
+      final m = sms(nudge('23,540', card: '7788'));
+      pipeline.process(m);
+      expect(factsOf(m), isEmpty);
+    });
+
+    const emiBill =
+        'Dear Customer, your EMI of Rs 4,500.00 for loan A/c XX3345 is due on 05-12-2026. Please maintain sufficient balance in your account.';
+    const emiNudge =
+        'Dear customer, paying your EMI of Rs 4,500.00 on or before the due date helps in avoiding penalty charges. Please maintain sufficient balance in your bank account to honour your payment on your due date.';
+
+    test('an EMI nudge borrows the due date of the one earlier EMI bill of that sender and amount', () {
+      pipeline.process(sms(emiBill, sender: 'VM-SAMPLF-S'));
+      final m = sms(emiNudge, sender: 'VM-SAMPLF-S');
+      pipeline.process(m);
+      final fact = factsOf(m).whereType<BillDueFact>().single;
+      expect(fact.dueDate, '2026-12-05');
+      expect(fact.confidence, lessThan(0.7));
+      expect(billsFromFacts(FactStore(db.db, namespace: _ns).all(), const []), hasLength(1));
+    });
+
+    test('an EMI nudge from another sender, or for another amount, borrows nothing', () {
+      pipeline.process(sms(emiBill, sender: 'VM-SAMPLF-S'));
+      final other = sms(emiNudge, sender: 'VM-OTHERB-S');
+      pipeline.process(other);
+      expect(factsOf(other), isEmpty);
+      final amount = sms(emiNudge.replaceAll('4,500.00', '7,000.00'), sender: 'VM-SAMPLF-S');
+      pipeline.process(amount);
+      expect(factsOf(amount), isEmpty);
+    });
+
+    test('two loans with the same EMI amount are ambiguous', () {
+      pipeline.process(sms(emiBill, sender: 'VM-SAMPLF-S'));
+      pipeline.process(
+        sms(emiBill.replaceAll('XX3345', 'XX9911').replaceAll('05-12-2026', '10-12-2026'), sender: 'VM-SAMPLF-S'),
+      );
+      final m = sms(emiNudge, sender: 'VM-SAMPLF-S');
+      pipeline.process(m);
+      expect(factsOf(m), isEmpty);
+    });
+
+    test('with no statement on file there is nothing to borrow', () {
+      final m = sms(nudge('23,540'));
+      pipeline.process(m);
+      expect(factsOf(m), isEmpty);
+    });
+
+    test('two statements with the same amount are ambiguous, so it stays unresolved', () {
+      pipeline.process(sms(statementText));
+      pipeline.process(
+        sms(statementText.replaceAll('20-Nov-2026', '20-Dec-2026')),
+      );
+      final m = sms(nudge('23,540'));
+      pipeline.process(m);
+      expect(factsOf(m), isEmpty);
+    });
+  });
+
   test('a message a rule matches is read by the rule, never by the solver', () {
     final b = bundle();
     final example = b.rules.first.examples.first;

@@ -65,8 +65,38 @@ class EngineStats {
 }
 
 /// An [InterpretResult] with the detail the frozen result type has no room for.
+/// A bill reminder the solver read (amount, maybe account) but that prints no due
+/// date. It is unresolved here; a caller with the account's history may complete
+/// it with `matchEarlierBill` and `completeBillFromHistory`.
+class PendingBill {
+  const PendingBill({
+    required this.decision,
+    required this.issuerSlug,
+    required this.packVersion,
+    required this.bundleVersion,
+    required this.engineVersion,
+    required this.appVersion,
+  });
+
+  final SolverDecision decision;
+  final String? issuerSlug;
+  final int packVersion;
+  final int bundleVersion;
+  final String engineVersion;
+  final String appVersion;
+}
+
 class EngineOutcome {
-  const EngineOutcome(this.result, {this.reason, this.winnerId, this.detail});
+  const EngineOutcome(
+    this.result, {
+    this.reason,
+    this.winnerId,
+    this.detail,
+    this.pendingBill,
+  });
+
+  /// Set when the message is a bill reminder with an amount and no due date.
+  final PendingBill? pendingBill;
 
   final InterpretResult result;
 
@@ -269,6 +299,34 @@ class RuleEngine implements SmsInterpreter {
     }
     if (!decision.accepted) {
       stats.solverCandidates++;
+      if (decision.read == SolverRead.billDue &&
+          decision.dueDate == null &&
+          decision.minor != null &&
+          decision.unit == 'INR') {
+        // Unresolved for now, but the amount and account are known: a caller
+        // with history can still complete it. It counts as unknown exactly as
+        // before, so a caller that ignores this stays unchanged.
+        stats.unknown++;
+        stats.unknownReasons['no_rule_matched'] =
+            (stats.unknownReasons['no_rule_matched'] ?? 0) + 1;
+        return EngineOutcome(
+          InterpretResult(
+            outcome: InterpretOutcome.unknown,
+            facts: const [],
+            templateHash: hash,
+          ),
+          reason: 'no_rule_matched',
+          pendingBill: PendingBill(
+            decision: decision,
+            issuerSlug:
+                cb.sendersByBrand[brand]?.issuerSlug ?? _plainIssuerSlug(brand),
+            packVersion: solver.pack.version,
+            bundleVersion: cb.bundle.bundleVersion,
+            engineVersion: engineVersion,
+            appVersion: appVersion,
+          ),
+        );
+      }
       return null;
     }
     final SolverFactResult? built;
