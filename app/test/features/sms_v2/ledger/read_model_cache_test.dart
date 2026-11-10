@@ -207,9 +207,9 @@ void main() {
 
   group('review count', () {
     test('equals the length of the full review list', () async {
-      // Ten uncategorised purchases at one merchant (>= 2 prompts the user),
-      // two confirmed cards with an unresolved card-bill payment, and open
-      // review rows of two kinds.
+      // Ten purchases filed under Other at one merchant (already sorted into
+      // Spending, so they are never asked about), two confirmed cards with an
+      // unresolved card-bill payment, and open review rows of two kinds.
       final dataset = Dataset(10, merchant: 'UNKNOWNSHOP')..open();
       addTearDown(dataset.close);
       dataset.seed();
@@ -282,10 +282,10 @@ void main() {
         'bill_target',
         'template',
         'link',
-        'category',
       });
+      expect(items.any((i) => i.kind == 'category'), isFalse);
       expect(count, items.length);
-      expect(count, 1 + 2 + 10);
+      expect(count, 1 + 2);
       expect(await container.read(needsReviewCountProvider.future), items.length);
 
       // Resolving an item notifies no revision; screens invalidate the list,

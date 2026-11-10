@@ -413,7 +413,9 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
                       ),
                     ButtonSegment(
                       value: 3,
-                      label: Text('Auto (${settled?.auto.length ?? 0})'),
+                      label: Text(
+                        'AI auto-resolved (${settled?.auto.length ?? 0})',
+                      ),
                     ),
                     ButtonSegment(
                       value: 4,

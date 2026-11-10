@@ -72,6 +72,12 @@ class ReviewCandidates {
   final List<CategoryPromptCandidate> categoryPrompts;
 }
 
+/// Needs review lists only what is not sorted yet. A purchase the app already
+/// filed under Spending (even as "Other") is sorted, so the "What is this
+/// merchant?" question is not raised there; the person can still change the
+/// category from the transaction itself. Set to true to bring the question back.
+const bool kAskMerchantQuestions = false;
+
 ReviewCandidates reviewCandidates(
   LedgerReadModel model, {
   required int minimumOccurrences,
@@ -79,7 +85,8 @@ ReviewCandidates reviewCandidates(
 }) {
   final factsById = model.factsById;
   final merchantEvents = <String, List<Event>>{};
-  for (final event in model.snapshot().events) {
+  for (final event
+      in kAskMerchantQuestions ? model.snapshot().events : const <Event>[]) {
     final decision = model.ledger.categoryByEvent[event.eventId];
     if (event.type != EventType.purchase ||
         decision?.source == CategorySource.user ||

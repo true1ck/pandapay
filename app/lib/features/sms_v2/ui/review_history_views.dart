@@ -21,14 +21,41 @@ import 'screen_parts.dart';
 const settledWindow = Duration(days: 90);
 const settledMaxRows = 200;
 
+/// Who read a transaction without asking.
+enum SettledSource {
+  /// A signed shared rule.
+  rule,
+
+  /// The on-device reader that works from the wording of the message.
+  onDevice,
+
+  /// A rule Gemini drafted for this message format.
+  ai,
+}
+
+/// Names the source from the ids of the rules that read the message. A rule
+/// Gemini drafted has an id starting `AI-`; the on-device reader's start
+/// `SOLVER-`. (Neither is stamped as a different engine, so the id is the only
+/// trace.)
+SettledSource settledSourceOf(Iterable<String> ruleIds) {
+  final ids = ruleIds.toList();
+  if (ids.any((id) => id.startsWith('AI-'))) return SettledSource.ai;
+  if (ids.any((id) => id.startsWith('SOLVER-'))) return SettledSource.onDevice;
+  return SettledSource.rule;
+}
+
 /// One transaction the app settled, and who settled it.
 class SettledItem {
   const SettledItem({
     required this.entry,
     required this.byUser,
     required this.how,
+    this.source = SettledSource.rule,
     this.confidence,
   });
+
+  /// Which reader settled it (meaningful when [byUser] is false).
+  final SettledSource source;
 
   final TransactionEntry entry;
 
@@ -44,7 +71,7 @@ class SettledItem {
 class SettledLists {
   const SettledLists({this.auto = const [], this.history = const []});
 
-  /// Read by rules or the AI without asking, newest first.
+  /// Filed by a Gemini-drafted rule without asking, newest first.
   final List<SettledItem> auto;
 
   /// Settled or changed by the person, newest first.
@@ -73,18 +100,39 @@ SettledLists settledLists(
       (f) => f.provenance.engine != Engine.user,
       orElse: () => facts.first,
     );
-    final usedAi = facts.any((f) => f.provenance.engine == Engine.ai);
+    final ruleIds = [
+      for (final f in facts)
+        if (f.provenance.engine != Engine.user) f.provenance.ruleId,
+    ];
+    final reader = settledSourceOf(ruleIds);
+    // An AI rule that only exists on this phone has not been checked by
+    // PandaPay yet (its id carries a ':local:' suffix).
+    final unverified = ruleIds.any(
+      (id) => id.startsWith('AI-') && id.contains(':local:'),
+    );
     final item = SettledItem(
       entry: entry,
       byUser: byUser,
+      source: reader,
       confidence: machine.confidence,
       how: byUser
           ? 'You confirmed or edited this'
-          : usedAi
-          ? 'Read by an AI rule'
-          : 'Read by a rule',
+          : switch (reader) {
+              SettledSource.ai =>
+                unverified
+                    ? 'Read by a Gemini AI rule, not yet verified'
+                    : 'Read by a Gemini AI rule, verified',
+              SettledSource.onDevice => 'Read by the on-device reader',
+              SettledSource.rule => 'Read by a rule',
+            },
     );
-    (byUser ? history : auto).add(item);
+    // Rules and the on-device reader sort quietly: they are not listed. Only
+    // what the person changed (History) or what Gemini filed (AI auto-resolved).
+    if (byUser) {
+      history.add(item);
+    } else if (reader == SettledSource.ai) {
+      auto.add(item);
+    }
   }
   int newest(SettledItem a, SettledItem b) =>
       b.entry.occurredAt.compareTo(a.entry.occurredAt);
@@ -157,11 +205,11 @@ final aiUnreadCountProvider = FutureProvider<int>((ref) async {
   return (row.first['n'] as num).toInt();
 });
 
-/// The Auto-resolved and History tabs share this list.
+/// The AI auto-resolved and History tabs share this list.
 class SettledList extends ConsumerWidget {
   const SettledList({super.key, required this.history});
 
-  /// True for the History tab, false for Auto-resolved.
+  /// True for the History tab, false for AI auto-resolved.
   final bool history;
 
   @override
@@ -178,7 +226,7 @@ class SettledList extends ConsumerWidget {
           return SmsEmpty(
             history
                 ? 'Nothing settled by you yet. Messages you confirm or fix appear here, so you can change them again.'
-                : 'Nothing read automatically yet. Messages the app understood without asking appear here, so you can check them.',
+                : 'Nothing filed by Gemini yet. Messages Gemini AI sorted without asking appear here, so you can correct a wrong guess.',
             icon: history ? Icons.history_rounded : Icons.auto_awesome_outlined,
           );
         }
@@ -200,7 +248,7 @@ class SettledList extends ConsumerWidget {
                 ? BambooNote(
                     history
                         ? 'Things you confirmed or fixed, last 90 days. Open one to change it again.'
-                        : 'Read by the app without asking you, last 90 days. Open one if it is wrong.',
+                        : 'Filed by Gemini AI without asking you, last 90 days. Open one if it is wrong.',
                     icon: Icons.info_outline_rounded,
                   )
                 : SettledCard(item: items[i - 1]),
@@ -285,7 +333,11 @@ class SettledCard extends ConsumerWidget {
               Icon(
                 item.byUser
                     ? Icons.person_outline_rounded
-                    : Icons.auto_awesome_outlined,
+                    : switch (item.source) {
+                        SettledSource.ai => Icons.auto_awesome_outlined,
+                        SettledSource.onDevice => Icons.smartphone_rounded,
+                        SettledSource.rule => Icons.rule_rounded,
+                      },
                 size: 16,
                 color: BambooInk.ink500,
               ),

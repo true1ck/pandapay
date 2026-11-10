@@ -20,7 +20,7 @@ String _hex(String seed) => seed.codeUnits
     .padRight(64, '0')
     .substring(0, 64);
 
-Fact _fact(String id, String source, String engine) {
+Fact _fact(String id, String source, String engine, {String? ruleId}) {
   final j =
       (jsonDecode(
                 File(
@@ -33,6 +33,7 @@ Fact _fact(String id, String source, String engine) {
   j['sourceKey'] = source;
   final prov = (j['provenance'] as Map).cast<String, Object?>();
   prov['engine'] = engine;
+  if (ruleId != null) prov['ruleId'] = ruleId;
   j['provenance'] = prov;
   return Fact.fromJson(j);
 }
@@ -53,25 +54,50 @@ TransactionEntry _entry(String id, String source, DateTime at) =>
 void main() {
   final now = DateTime(2026, 11, 10);
 
-  test('rules and AI readings are Auto; user facts are History', () {
+  test(
+    'only Gemini reads are AI auto-resolved; user facts are History; rule reads show nowhere',
+    () {
+      final lists = settledLists(
+        [
+          _entry('a', 'sa', DateTime(2026, 11, 8)),
+          _entry('b', 'sb', DateTime(2026, 11, 9)),
+          _entry('c', 'sc', DateTime(2026, 11, 7)),
+        ],
+        {
+          'sa': [_fact('fa', 'sa', 'rules')],
+          'sb': [_fact('fb1', 'sb', 'rules'), _fact('fb2', 'sb', 'user')],
+          'sc': [_fact('fc', 'sc', 'rules', ruleId: 'AI-abc123')],
+        },
+        now: now,
+      );
+      expect(lists.history.map((i) => i.entry.id), ['b']);
+      expect(lists.history.single.byUser, isTrue);
+      // Rule reads are silent; only the Gemini one (c) is listed.
+      expect(lists.auto.map((i) => i.entry.id), ['c']);
+      expect(lists.auto.single.how, 'Read by a Gemini AI rule, verified');
+      expect(lists.auto.single.source, SettledSource.ai);
+    },
+  );
+
+  test('the reader is named from the rule ids', () {
+    expect(settledSourceOf(['BNK-HDFC-01']), SettledSource.rule);
+    expect(settledSourceOf(['SOLVER-REFINED']), SettledSource.onDevice);
+    expect(
+      settledSourceOf(['GEN-DEBIT-01', 'AI-9f:local:ab']),
+      SettledSource.ai,
+    );
+    expect(settledSourceOf(const []), SettledSource.rule);
+  });
+
+  test('an AI rule that exists only on this phone is not yet verified', () {
     final lists = settledLists(
-      [
-        _entry('a', 'sa', DateTime(2026, 11, 8)),
-        _entry('b', 'sb', DateTime(2026, 11, 9)),
-        _entry('c', 'sc', DateTime(2026, 11, 7)),
-      ],
+      [_entry('u', 'su', DateTime(2026, 11, 8))],
       {
-        'sa': [_fact('fa', 'sa', 'rules')],
-        'sb': [_fact('fb1', 'sb', 'rules'), _fact('fb2', 'sb', 'user')],
-        'sc': [_fact('fc', 'sc', 'ai')],
+        'su': [_fact('fu', 'su', 'rules', ruleId: 'AI-abc:local:def')],
       },
       now: now,
     );
-    expect(lists.history.map((i) => i.entry.id), ['b']);
-    expect(lists.history.single.byUser, isTrue);
-    expect(lists.auto.map((i) => i.entry.id), ['a', 'c']);
-    expect(lists.auto.last.how, 'Read by an AI rule');
-    expect(lists.auto.first.how, 'Read by a rule');
+    expect(lists.auto.single.how, 'Read by a Gemini AI rule, not yet verified');
   });
 
   test('old, unsourced and non-v2 transactions are left out', () {
@@ -107,7 +133,7 @@ void main() {
     ];
     final facts = {
       for (var i = 0; i < settledMaxRows + 20; i++)
-        's$i': [_fact('f$i', 's$i', 'rules')],
+        's$i': [_fact('f$i', 's$i', 'rules', ruleId: 'AI-cap$i')],
     };
     final lists = settledLists(entries, facts, now: now);
     expect(lists.auto.length, settledMaxRows);
@@ -245,6 +271,54 @@ void main() {
         expect(await container.read(aiUnreadCountProvider.future), 2);
       },
     );
+  });
+
+  testWidgets(
+    'the AI auto-resolved tab lists the Gemini items with a plain note',
+    (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            settledListsProvider.overrideWith(
+              (ref) async => SettledLists(
+                auto: [
+                  SettledItem(
+                    entry: _entry('g', 'sg', DateTime(2026, 11, 8)),
+                    byUser: false,
+                    source: SettledSource.ai,
+                    how: 'Read by a Gemini AI rule, verified',
+                  ),
+                ],
+              ),
+            ),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(body: SettledList(history: false)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Filed by Gemini AI'), findsOneWidget);
+      expect(find.text('Shop g'), findsOneWidget);
+      expect(find.text('Read by a Gemini AI rule, verified'), findsOneWidget);
+    },
+  );
+
+  testWidgets('an empty AI tab says what will appear there', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          settledListsProvider.overrideWith(
+            (ref) async => const SettledLists(),
+          ),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(body: SettledList(history: false)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Nothing filed by Gemini yet'), findsOneWidget);
   });
 
   testWidgets('the AI header stays hidden with nothing to report', (
