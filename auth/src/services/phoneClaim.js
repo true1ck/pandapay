@@ -9,7 +9,7 @@ const { parseClaimedPhone } = require('../utils/claimedPhone');
 const { phoneLookupHash } = require('../utils/encryptedPhoneSearch');
 const { encryptPhoneNumber, decryptPhoneNumber } = require('../utils/fieldEncryption');
 const { maskPhone } = require('../utils/recoveryContacts');
-const { phoneGateRequiredFor } = require('../utils/phoneGate');
+const { phoneGateRequired } = require('../utils/phoneGate');
 
 const STATUS_BY_CODE = Object.freeze({
   phone_invalid: 400,
@@ -39,7 +39,7 @@ function hintFor(storedPhone) {
  */
 async function getPhoneClaimStatus({ query, userId, env = process.env }) {
   const { rows } = await query(
-    `SELECT claimed_phone_enc, phone_number, is_phone_verified, created_at
+    `SELECT claimed_phone_enc, phone_number, is_phone_verified
        FROM users WHERE id = $1 AND deleted = FALSE AND is_active = TRUE`,
     [userId],
   );
@@ -47,7 +47,7 @@ async function getPhoneClaimStatus({ query, userId, env = process.env }) {
   if (!user) throw new PhoneClaimError('account_unavailable');
   const claimed = Boolean(user.claimed_phone_enc);
   const verified = Boolean(user.phone_number) && user.is_phone_verified === true;
-  const required = phoneGateRequiredFor(user.created_at, env);
+  const required = phoneGateRequired(env);
   return {
     claimed,
     verified,

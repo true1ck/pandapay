@@ -3,7 +3,7 @@
 const db = require('../db');
 const { verifyAccessToken } = require('./accessTokenVerification');
 const { decryptPhoneNumber } = require('../utils/fieldEncryption');
-const { phoneGateRequiredFor } = require('../utils/phoneGate');
+const { phoneGateRequired } = require('../utils/phoneGate');
 
 async function verifyCurrentSession(token, executor = db) {
   const payload = verifyAccessToken(token);
@@ -28,7 +28,7 @@ async function verifyCurrentSession(token, executor = db) {
   try {
     const result = await executor.query(
       `SELECT id, email, phone_number, is_email_verified, is_phone_verified, claimed_phone_enc,
-              is_active, deleted, created_at, COALESCE(token_version, 1) AS token_version
+              is_active, deleted, COALESCE(token_version, 1) AS token_version
          FROM users WHERE id = $1`,
       [payload.sub],
     );
@@ -103,7 +103,7 @@ async function verifyCurrentSession(token, executor = db) {
     },
     phone_on_file: { present: typeof phoneOnFile === 'string' && phoneOnFile !== '', value: phoneOnFile || null },
     phone_gate: {
-      required: phoneGateRequiredFor(user?.created_at),
+      required: phoneGateRequired(),
       satisfied: claimedPhone || verifiedPhone,
     },
   };
