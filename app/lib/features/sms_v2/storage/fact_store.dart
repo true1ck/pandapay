@@ -80,6 +80,17 @@ ON CONFLICT(namespace, fact_id) DO NOTHING
       if (f is BillDueFact) f,
   ];
 
+  /// Money movements seen since [from], oldest first (the observed-time index
+  /// bounds the read to the window).
+  List<MovementFact> movementsSince(DateTime from) => [
+    for (final f in _read(
+      "fact_type = 'movement' AND observed_at >= ?",
+      [_timestamp(from)],
+      indexedBy: 'idx_v2_facts_observed',
+    ))
+      if (f is MovementFact) f,
+  ];
+
   Fact? get(String factId) => _read('fact_id = ?', [factId]).firstOrNull;
 
   Map<String, String> instrumentIdsSince(DateTime from) => {

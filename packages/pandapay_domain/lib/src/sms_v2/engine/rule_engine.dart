@@ -86,6 +86,27 @@ class PendingBill {
   final String appVersion;
 }
 
+/// A refund or reversal the solver read (amount, credit) but that names no
+/// account. A caller with history may still link it to the one earlier spend of
+/// that amount ([PendingBill] is the same idea for a bill with no due date).
+class PendingRefund {
+  const PendingRefund({
+    required this.decision,
+    required this.issuerSlug,
+    required this.packVersion,
+    required this.bundleVersion,
+    required this.engineVersion,
+    required this.appVersion,
+  });
+
+  final SolverDecision decision;
+  final String? issuerSlug;
+  final int packVersion;
+  final int bundleVersion;
+  final String engineVersion;
+  final String appVersion;
+}
+
 class EngineOutcome {
   const EngineOutcome(
     this.result, {
@@ -93,7 +114,11 @@ class EngineOutcome {
     this.winnerId,
     this.detail,
     this.pendingBill,
+    this.pendingRefund,
   });
+
+  /// Set when the message is a refund with an amount and no account.
+  final PendingRefund? pendingRefund;
 
   /// Set when the message is a bill reminder with an amount and no due date.
   final PendingBill? pendingBill;
@@ -317,6 +342,33 @@ class RuleEngine implements SmsInterpreter {
           ),
           reason: 'no_rule_matched',
           pendingBill: PendingBill(
+            decision: decision,
+            issuerSlug:
+                cb.sendersByBrand[brand]?.issuerSlug ?? _plainIssuerSlug(brand),
+            packVersion: solver.pack.version,
+            bundleVersion: cb.bundle.bundleVersion,
+            engineVersion: engineVersion,
+            appVersion: appVersion,
+          ),
+        );
+      }
+      if (decision.read == SolverRead.credit &&
+          (decision.purpose == 'refund' || decision.purpose == 'reversal') &&
+          decision.minor != null &&
+          decision.unit == 'INR' &&
+          decision.mask == null &&
+          decision.instrumentKind == null) {
+        stats.unknown++;
+        stats.unknownReasons['no_rule_matched'] =
+            (stats.unknownReasons['no_rule_matched'] ?? 0) + 1;
+        return EngineOutcome(
+          InterpretResult(
+            outcome: InterpretOutcome.unknown,
+            facts: const [],
+            templateHash: hash,
+          ),
+          reason: 'no_rule_matched',
+          pendingRefund: PendingRefund(
             decision: decision,
             issuerSlug:
                 cb.sendersByBrand[brand]?.issuerSlug ?? _plainIssuerSlug(brand),

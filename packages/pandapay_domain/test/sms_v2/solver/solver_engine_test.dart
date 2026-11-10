@@ -591,6 +591,15 @@ void main() {
       );
     });
 
+    test('a refund "transferred ... will be credited" is money coming back, never a debit', () {
+      final d = _solve('Sample Refund Processed: Refund of Rs 540.00 for CHAI POINT is successfully transferred and will be credited to your account by 12-Nov-2026 06:00PM.');
+      expect(d.debitDirection, isNot(true));
+      expect(d.countsInTotals && d.debitDirection == true, isFalse);
+      // A bank alert that names the account is still a debit, whatever it says.
+      final bank = _solve('Rs 540.00 debited from A/c XX1234 on 05-11-2026 towards refund reversal to MERCHANT. Avl Bal Rs 9,000.00');
+      expect(bank.debitDirection, isTrue);
+    });
+
     test('an offer that says "when your loan is credited" is a promotion, not income', () {
       final d = _solve('Hi Sam, special Loan offer on your recent Pay Later a/c XX1234 transaction! Get a Rs 250 gift voucher when your loan is credited! The offer is valid only till today!');
       expect(d.countsInTotals, isFalse);

@@ -295,6 +295,75 @@ void main() {
     });
   });
 
+  group('a refund that names no account', () {
+    SmsMessage spend(String day, {String merchant = 'CHAI POINT', String card = '5678'}) {
+      counter++;
+      return SmsMessage(
+        sender: 'VM-HDFCBK-S',
+        body: 'Rs.540.00 spent on HDFC Bank Card x$card at $merchant on 01-11-26',
+        sourceKey: counter.toRadixString(16).padLeft(64, '0'),
+        observedAt: DateTime.parse('${day}T06:00:00Z'),
+      );
+    }
+
+    SmsMessage refund({String merchant = 'CHAI POINT', String amount = '540.00', String day = '2026-11-05'}) {
+      counter++;
+      return SmsMessage(
+        sender: 'VM-NEWPAY-S',
+        body: 'Refund for order $merchant of Rs $amount is successfully processed to your Sample Payment Wallet.',
+        sourceKey: counter.toRadixString(16).padLeft(64, '0'),
+        observedAt: DateTime.parse('${day}T06:00:00Z'),
+      );
+    }
+
+    List<Fact> movements(SmsMessage m) => factsOf(m).whereType<MovementFact>().toList();
+
+    test('links to the one earlier spend of that amount, as an inference, and is not a debit', () {
+      pipeline.process(spend('2026-11-01'));
+      final m = refund();
+      pipeline.process(m);
+      final fact = movements(m).single as MovementFact;
+      expect(fact.direction, Direction.credit);
+      expect(fact.purpose, MovementPurpose.refund);
+      expect(fact.confidence, lessThan(0.7));
+      expect(fact.provenance.ruleId, 'SOLVER-REFUND-INFERRED');
+      final rows = transactions();
+      expect(rows.where((t) => t.entryKind.name == 'spend'), hasLength(1));
+      expect(rows.where((t) => t.entryKind.name == 'refund'), hasLength(1));
+    });
+
+    test('with no earlier spend it stays unresolved', () {
+      final m = refund();
+      pipeline.process(m);
+      expect(factsOf(m), isEmpty);
+    });
+
+    test('two earlier spends of that amount are ambiguous', () {
+      pipeline.process(spend('2026-11-01'));
+      pipeline.process(spend('2026-11-02', card: '1111'));
+      final m = refund();
+      pipeline.process(m);
+      expect(factsOf(m), isEmpty);
+    });
+
+    test('a spend at an unrelated merchant is not the original', () {
+      pipeline.process(spend('2026-11-01', merchant: 'PETROL STATION'));
+      final m = refund();
+      pipeline.process(m);
+      expect(factsOf(m), isEmpty);
+    });
+
+    test('a different amount, or a spend older than 90 days, is not the original', () {
+      pipeline.process(spend('2026-11-01'));
+      final other = refund(amount: '999.00');
+      pipeline.process(other);
+      expect(factsOf(other), isEmpty);
+      final old = refund(day: '2027-03-10');
+      pipeline.process(old);
+      expect(factsOf(old), isEmpty);
+    });
+  });
+
   test('a message a rule matches is read by the rule, never by the solver', () {
     final b = bundle();
     final example = b.rules.first.examples.first;

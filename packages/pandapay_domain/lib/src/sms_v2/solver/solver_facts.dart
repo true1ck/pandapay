@@ -99,9 +99,15 @@ class SolverFacts {
     required String engineVersion,
     required String appVersion,
     void Function(List<Map<String, Object?>> facts)? refine,
+    bool forceAccept = false,
+    double? confidenceCap,
+    String? ruleIdOverride,
   }) {
-    if (!d.accepted) return null;
-    final ruleId = ruleIdFor(d);
+    // [forceAccept] writes a reading the solver itself was unsure of, once history
+    // has confirmed the missing piece; [confidenceCap] then keeps it below the
+    // review bar so a person is asked.
+    if (!d.accepted && !forceAccept) return null;
+    final ruleId = ruleIdOverride ?? ruleIdFor(d);
 
     Map<String, Object?>? instrument({String? kindOverride}) {
       final kind = kindOverride ?? d.instrumentKind;
@@ -162,9 +168,11 @@ class SolverFacts {
           'appVersion': appVersion,
         },
         'evidence': <Object?>[],
-        'confidence': d.score > kSolverMaxConfidence
-            ? kSolverMaxConfidence
-            : d.score,
+        'confidence': [
+          d.score,
+          kSolverMaxConfidence,
+          ?confidenceCap,
+        ].reduce((a, b) => a < b ? a : b),
       };
     }
 

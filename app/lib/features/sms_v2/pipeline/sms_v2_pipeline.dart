@@ -113,6 +113,22 @@ class SmsV2Pipeline {
           );
           // A bill reminder with an amount but no due date borrows it from the one
           // earlier statement it can only be about; otherwise it stays as it was.
+          final pendingRefund = outcome.pendingRefund;
+          if (pendingRefund != null) {
+            final linked = _linkRefundToSpend(message, pendingRefund, incoming);
+            if (linked != null) {
+              outcome = EngineOutcome(
+                InterpretResult(
+                  outcome: InterpretOutcome.matched,
+                  facts: linked.facts,
+                  ruleId: linked.ruleId,
+                  ruleVersion: pendingRefund.packVersion,
+                  templateHash: outcome.result.templateHash,
+                ),
+                winnerId: linked.ruleId,
+              );
+            }
+          }
           final pending = outcome.pendingBill;
           if (pending != null) {
             final completed = _completeBillFromHistory(
@@ -285,6 +301,45 @@ class SmsV2Pipeline {
         'facts': upload,
       }, backfill: backfill);
     }
+  }
+
+  /// A refund with no account, accepted as an inference when exactly one earlier
+  /// spend of that amount can be the original ([matchEarlierSpend]).
+  SolverFactResult? _linkRefundToSpend(
+    SmsMessage message,
+    PendingRefund pending,
+    List<Fact> incoming,
+  ) {
+    final d = pending.decision;
+    final minor = d.minor;
+    if (minor == null) return null;
+    final byId = <String, MovementFact>{
+      for (final f in _facts.movementsSince(
+        message.observedAt.subtract(kRefundHistoryWindow),
+      ))
+        f.factId: f,
+      for (final f in incoming.whereType<MovementFact>()) f.factId: f,
+    };
+    final original = matchEarlierSpend(
+      minor: minor,
+      at: message.observedAt,
+      history: byId.values,
+      text: message.body,
+    );
+    if (original == null) return null;
+    return SolverFacts.build(
+      d,
+      sourceKey: message.sourceKey,
+      observedAt: message.observedAt,
+      issuerSlug: pending.issuerSlug,
+      packVersion: pending.packVersion,
+      bundleVersion: pending.bundleVersion,
+      engineVersion: pending.engineVersion,
+      appVersion: pending.appVersion,
+      forceAccept: true,
+      confidenceCap: kRefundInferredConfidence,
+      ruleIdOverride: 'SOLVER-REFUND-INFERRED',
+    );
   }
 
   /// The statement a date-less reminder belongs to, from the facts stored in the

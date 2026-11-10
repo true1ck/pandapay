@@ -19,6 +19,45 @@ String _name(v2.Fact f) => f is v2.MandateFact
 /// One subscription per service. A cancellation or failure notice often omits
 /// the card or account, so the instrument must not split a service's history.
 String _seriesKey(v2.Fact f) => normalizeMerchantText(_name(f));
+/// "issuer|digits" of a fact's instrument, or '' when it names none.
+String _instKey(v2.Fact f) {
+  final i = f.instrument;
+  if (i?.issuerSlug == null || i?.maskDigits == null) return '';
+  return '${i!.issuerSlug}|${i.maskDigits}';
+}
+
+/// One service seen under two names ("SPOTIFY" and "SPOTIFY SI", "NETFLIX" and
+/// "NETFLIX INDIA") is one subscription: the shorter name is the service, the
+/// longer one adds words to it. They merge only when they run on the same
+/// instrument, or when either does not name an instrument at all, so two
+/// different services that merely share a first word stay apart.
+Map<String, String> _canonicalSeries(
+  Iterable<String> keys,
+  Map<String, String> instrumentOf,
+) {
+  final sorted = keys.toList()
+    ..sort((a, b) {
+      final byLength = a.length.compareTo(b.length);
+      return byLength != 0 ? byLength : a.compareTo(b);
+    });
+  final canon = <String, String>{};
+  for (final k in sorted) {
+    var target = k;
+    for (final c in sorted) {
+      if (c == k) break;
+      if (canon[c] != c || !k.startsWith('$c ')) continue;
+      final a = instrumentOf[c] ?? '';
+      final b = instrumentOf[k] ?? '';
+      if (a.isEmpty || b.isEmpty || a == b) {
+        target = c;
+        break;
+      }
+    }
+    canon[k] = target;
+  }
+  return canon;
+}
+
 Map<String, v2.Fact> _facts(Iterable<v2.Fact> facts) => {
   for (final f in facts) f.factId: f,
 };
@@ -98,12 +137,44 @@ List<RecurringSeries> subscriptionsFromLedger(
     groups.putIfAbsent(key, () => []);
     charges.putIfAbsent(key, () => []).add((e, f));
   }
+  // The same service under two names is one subscription.
+  final groupInstrument = <String, String>{
+    for (final g in groups.entries)
+      g.key: [
+        ...g.value,
+        ...?charges[g.key]?.map((c) => c.$2),
+      ].map(_instKey).firstWhere((k) => k.isNotEmpty, orElse: () => ''),
+  };
+  final canon = _canonicalSeries(groups.keys, groupInstrument);
+  String keyOf(v2.Fact f) {
+    final own = _seriesKey(f);
+    final known = canon[own];
+    if (known != null) return known;
+    final inst = _instKey(f);
+    for (final c in canon.values.toSet()) {
+      if (!own.startsWith('$c ')) continue;
+      final g = groupInstrument[c] ?? '';
+      if (g.isEmpty || inst.isEmpty || g == inst) return c;
+    }
+    return own;
+  }
+
+  final mergedGroups = <String, List<v2.Fact>>{};
+  for (final g in groups.entries) {
+    mergedGroups.putIfAbsent(canon[g.key]!, () => []).addAll(g.value);
+  }
+  final mergedCharges = <String, List<(v2.Event, v2.MovementFact)>>{};
+  for (final c in charges.entries) {
+    mergedCharges
+        .putIfAbsent(canon[c.key] ?? c.key, () => [])
+        .addAll(c.value);
+  }
   final result = <RecurringSeries>[];
-  for (final group in groups.entries) {
+  for (final group in mergedGroups.entries) {
     final mandates = group.value.whereType<v2.MandateFact>().toList()
       ..sort((a, b) => a.effectiveAt.compareTo(b.effectiveAt));
     final latest = mandates.lastOrNull;
-    final paid = charges[group.key] ?? [];
+    final paid = mergedCharges[group.key] ?? [];
     paid.sort((a, b) => a.$1.occurredAt.compareTo(b.$1.occurredAt));
     final anchor = latest ?? paid.last.$2;
     final intervals =
@@ -128,7 +199,7 @@ List<RecurringSeries> subscriptionsFromLedger(
             .where(
               (f) =>
                   f.status == v2.AttemptStatus.failed &&
-                  _seriesKey(f) == group.key,
+                  keyOf(f) == group.key,
             )
             .toList()
           ..sort((a, b) => a.effectiveAt.compareTo(b.effectiveAt));
@@ -144,7 +215,7 @@ List<RecurringSeries> subscriptionsFromLedger(
                       f.dueAt != null &&
                       f.dueAt!.isAfter(now) &&
                       (last == null || f.dueAt!.isAfter(last.$1.occurredAt)) &&
-                      _seriesKey(f) == group.key,
+                      keyOf(f) == group.key,
                 )
                 .toList()
               ..sort((a, b) => a.dueAt!.compareTo(b.dueAt!)))
@@ -179,7 +250,13 @@ List<RecurringSeries> subscriptionsFromLedger(
     result.add(
       RecurringSeries(
         id: 'v2:${group.key}',
-        displayName: _name(anchor),
+        // The plain service name, not a longer variant a later notice used.
+        displayName: _name(
+          [
+            ...group.value,
+            ...paid.map((c) => c.$2),
+          ].firstWhere((f) => _seriesKey(f) == group.key, orElse: () => anchor),
+        ),
         typicalAmount: Money.fromPaise(amount ?? 0),
         amountKnown: amount != null,
         cadenceDays: cadence,
@@ -210,8 +287,94 @@ List<RecurringSeries> subscriptionsFromLedger(
       ),
     );
   }
+  result.addAll(_patternSubscriptions(byId, events, mergedGroups.keys, now));
   result.sort((a, b) => a.displayName.compareTo(b.displayName));
   return result;
+}
+
+/// Subscriptions that never sent a mandate message: the same merchant charged the
+/// same amount on a steady monthly (or weekly) rhythm at least three times. It is
+/// flagged as detected by pattern, not confirmed by a mandate, so the screen can
+/// say so. A person, an own account, an EMI or a bill (whose amount moves) is
+/// never read this way, and a service that already has a mandate is not repeated.
+Iterable<RecurringSeries> _patternSubscriptions(
+  Map<String, v2.Fact> byId,
+  Iterable<v2.Event> events,
+  Iterable<String> mandateKeys,
+  DateTime now,
+) sync* {
+  final byMerchant = <String, List<(v2.Event, v2.MovementFact)>>{};
+  for (final e in events.where(
+    (e) => e.type == v2.EventType.purchase && _usable(e),
+  )) {
+    final f = moneyFactForEvent(e, byId);
+    if (f == null || f.evidenceOnly == true) continue;
+    final cp = f.counterparty;
+    if (cp?.kind == v2.CounterpartyKind.person ||
+        cp?.kind == v2.CounterpartyKind.own) {
+      continue;
+    }
+    final name = cp?.name;
+    if (name == null || name.trim().isEmpty) continue;
+    final key = normalizeMerchantText(name);
+    if (key.isEmpty) continue;
+    byMerchant.putIfAbsent('$key|${_instKey(f)}', () => []).add((e, f));
+  }
+  final known = mandateKeys.toList();
+  for (final entry in byMerchant.entries) {
+    final merchant = entry.key.split('|').first;
+    if (known.any(
+      (k) => k == merchant || merchant.startsWith('$k ') || k.startsWith('$merchant '),
+    )) {
+      continue;
+    }
+    // The commonest amount, charged at least three times.
+    final byAmount = <int, List<(v2.Event, v2.MovementFact)>>{};
+    for (final c in entry.value) {
+      final a = _amount(c.$2, v2.AmountRole.posted);
+      if (a != null && a > 0) byAmount.putIfAbsent(a, () => []).add(c);
+    }
+    final run =
+        (byAmount.values.toList()
+              ..sort((a, b) => b.length.compareTo(a.length)))
+            .firstOrNull;
+    if (run == null || run.length < 3) continue;
+    run.sort((a, b) => a.$1.occurredAt.compareTo(b.$1.occurredAt));
+    final gaps = [
+      for (var i = 1; i < run.length; i++)
+        run[i].$1.occurredAt.difference(run[i - 1].$1.occurredAt).inDays,
+    ];
+    final monthly = gaps.every((d) => d >= 26 && d <= 35);
+    final weekly = gaps.every((d) => d >= 6 && d <= 8);
+    if (!monthly && !weekly) continue;
+    final cadence = (List.of(gaps)..sort())[gaps.length ~/ 2];
+    final last = run.last;
+    final next = _next(last.$1.occurredAt, cadence);
+    final amount = _amount(last.$2, v2.AmountRole.posted)!;
+    final lapsed = now.isAfter(next.add(Duration(days: cadence)));
+    yield RecurringSeries(
+      id: 'v2:pattern:${entry.key}',
+      displayName: _name(last.$2),
+      typicalAmount: Money.fromPaise(amount),
+      amountKnown: true,
+      cadenceDays: cadence,
+      occurrenceCount: run.length,
+      annualCost: Money.fromPaise((amount * (monthly ? 12 : 52)).round()),
+      autopayLimit: null,
+      lastSeenOn: last.$1.occurredAt,
+      nextExpectedOn: lapsed ? null : next,
+      startDate: run.first.$1.occurredAt,
+      endDate: null,
+      lifecycleStatus: lapsed ? 'lapsed' : 'active',
+      autopayStatus: 'unknown',
+      isMandate: false,
+      mandateReference: null,
+      sourceKey: last.$2.sourceKey,
+      detectionSource: 'sms_v2_pattern',
+      cadenceConfirmed: true,
+      setupConfirmed: false,
+    );
+  }
 }
 
 class _BillRecord {

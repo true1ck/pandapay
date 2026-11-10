@@ -879,7 +879,25 @@ class _Run {
       if (c.debit != cue.debit) other = math.min(other, _dist(c, amtIdx));
     }
     final ambiguous = other < (1 << 30) && other - bestD < p.directionMargin;
-    final debitDir = cue.debit;
+    // "Refund of Rs X ... transferred / processed": the money comes BACK, however
+    // the verb reads. Only a bank alert that names the account is trusted as a
+    // real debit.
+    // The refund word must sit right before the amount ("Refund of Rs X"); a
+    // later "will be refunded if cancelled" about a debit is a promise, not this.
+    final comesBack = hits('purposeCue').any(
+      (h) =>
+          (h.entry.kind == 'refund' || h.entry.kind == 'reversal') &&
+          h.end <= amtIdx &&
+          amtIdx - h.end <= 3 &&
+          same(h.start, amtIdx),
+    );
+    final realBankDebit =
+        cue.debit && cue.bank && _mask(true, amtIdx) != null;
+    final flipped = cue.debit && comesBack && !realBankDebit;
+    final debitDir = flipped ? false : cue.debit;
+    if (flipped) {
+      reasons.add('refund / reversal wording: a credit, not a debit');
+    }
 
     final ownT = hits('ownTransfer');
     final wallet = hits('walletTopup');
