@@ -181,7 +181,7 @@ void main() {
   group('SMS evidence privacy notes', () {
     const present = 'The original SMS stays on this phone and is never sent to PandaPay.';
     const missing =
-        'The original SMS isn\'t on this phone. The details above came from it when it was first read.';
+        'The original SMS isn\'t on this phone (it holds 0 saved messages). The details above came from it when it was first read.';
 
     Future<void> pumpEvidence(
       WidgetTester tester, {

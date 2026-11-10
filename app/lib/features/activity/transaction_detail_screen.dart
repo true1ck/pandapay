@@ -186,10 +186,11 @@ final transactionDetailProvider =
       }
     });
 
-final _capturedSmsProvider = FutureProvider.family<SmsIntakeEntry?, String>((
-  ref,
-  sourceKey,
-) async {
+// autoDispose: a miss must not be remembered for as long as the app stays
+// open. The first look can come before an import has saved the message, and a
+// cached "not found" would then hide it after the import finishes.
+final _capturedSmsProvider = FutureProvider.autoDispose
+    .family<SmsIntakeEntry?, String>((ref, sourceKey) async {
   if (sourceKey.isEmpty) return null;
   final namespace = ref.read(cacheNamespaceProvider);
   if (namespace == 'signed-out') return null;
@@ -197,6 +198,18 @@ final _capturedSmsProvider = FutureProvider.family<SmsIntakeEntry?, String>((
   return SmsIntakeRepository(
     cache.financialStore.database,
   ).capturedById(namespace, sourceKey);
+});
+
+/// How many original messages this phone holds for the signed-in account. Shown
+/// only when one is missing, so it is clear whether none are saved at all or
+/// just this one.
+final _savedSmsCountProvider = FutureProvider.autoDispose<int>((ref) async {
+  final namespace = ref.read(cacheNamespaceProvider);
+  if (namespace == 'signed-out') return 0;
+  final cache = await ref.read(responseCacheProvider.future);
+  return SmsIntakeRepository(
+    cache.financialStore.database,
+  ).counts(namespace).captured;
 });
 
 extension _TransactionFirstOrNull on Iterable<TransactionEntry> {
@@ -1957,9 +1970,13 @@ class _SmsEvidenceSection extends ConsumerWidget {
     // Rows made by the v2 pipeline carry the message key on the row itself
     // and have no observations list, so fall back to it.
     final messageKey = sms?.sourceKey ?? entry.sourceKey;
-    final captured = messageKey == null || messageKey.isEmpty
+    final capturedLookup = messageKey == null || messageKey.isEmpty
         ? null
-        : ref.watch(_capturedSmsProvider(messageKey)).valueOrNull;
+        : ref.watch(_capturedSmsProvider(messageKey));
+    final captured = capturedLookup?.valueOrNull;
+    final savedCount = captured == null
+        ? ref.watch(_savedSmsCountProvider).valueOrNull
+        : null;
     final received = (sms?.observedAt ?? entry.smsReceivedAt)?.toLocal();
     final receivedLabel = received == null
         ? 'Received time unavailable'
@@ -2040,7 +2057,9 @@ class _SmsEvidenceSection extends ConsumerWidget {
             Text(
               captured != null
                   ? 'The original SMS stays on this phone and is never sent to PandaPay.'
-                  : 'The original SMS isn\'t on this phone. The details above came from it when it was first read.',
+                  : 'The original SMS isn\'t on this phone'
+                        '${savedCount == null ? '' : ' (it holds $savedCount saved ${savedCount == 1 ? 'message' : 'messages'})'}. '
+                        'The details above came from it when it was first read.',
               style: BambooFonts.ui(11.5, color: BambooInk.ink500),
             ),
           ],
