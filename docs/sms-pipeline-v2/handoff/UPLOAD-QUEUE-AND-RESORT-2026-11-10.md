@@ -32,6 +32,10 @@
 - The server's event merge (`event_leg_role_conflict`, `event_status_transition_invalid`) still refuses an event whose legs were read differently by a newer engine. That is a design decision for the server's merge rule (accept a reading from a newer engine version?), not a bug fix. The reasons now written down will show how many records it affects.
 - Learning signals and unknown templates still refuse a brand outside `A-Z0-9{1,32}`, because the brand is inside the template hash. The phone already never sends those.
 
-## Checks
+## Checks (merged tree, 10 Nov 2026)
 
-See the commit message and the final report for the run results.
+- Domain 2,259 pass. Rules CLI golden gate (294 cases, 64 scenarios) ok, regex parity 0 mismatches, console golden copy unchanged. Rules CLI tests 421 pass, 1 known failure (`ignore_examples_test`, fails on a clean HEAD).
+- App: full suite 1 failure (a storage failure was being swallowed by the new per-spend isolation; fixed, the isolation now only catches the check refusals), then `test/features/sms_v2` and `insights` 1,013 pass. New tests: batch splitting and quarantine (facts_upload_test), preview then Apply (learning_loop_phone_test), resend of set-aside messages, report wording, upload brand and year bounds (domain).
+- Server: `facts_route.test.js` 18 pass; whole suite 2,253 pass, 5 `shared_expenses_*` files fail on a missing local module (`libphonenumber-js/min`), unrelated.
+- Not run on a real phone: the new refresh sheet (preview, Apply) and the one-time resend. Build 146 has the performance guards' test green, but `perf_smoke_android.sh` was not run; the preview copies the database in memory on the UI isolate, as the history-update screen already does.
+- iOS builds need the Podfile change in this commit set under Xcode 27.
