@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 
 import '../contract/currency.dart';
+import '../contract/enums.dart';
 import '../contract/errors.dart';
 import '../contract/fact.dart';
 import '../contract/interfaces.dart';
@@ -25,6 +26,10 @@ class EngineStats {
   /// was not sure of (left for review), and accepted readings that could not be
   /// written as valid facts.
   int solverAccepted = 0;
+
+  /// A generic catch-all rule's plain debit/credit that the solver enriched with
+  /// a merchant, a purpose or a mandate.
+  int solverRefined = 0;
   int solverCandidates = 0;
   int solverRejected = 0;
 
@@ -271,6 +276,27 @@ class RuleEngine implements SmsInterpreter {
           stats.invalidEmits[id] = (stats.invalidEmits[id] ?? 0) + 1;
           return unknown('rule_emitted_invalid', winner: id, detail: '$id: $e');
         }
+        // A generic catch-all rule reads "debited from A/c ..." but keeps no
+        // purpose or merchant. The solver may enrich THAT and nothing else.
+        if (id.startsWith('GEN-')) {
+          final refined = _refineGeneric(cb, facts, message, brand, appVersion);
+          if (refined != null) {
+            stats.solverRefined++;
+            stats.matched++;
+            stats.ruleHits['SOLVER-REFINED'] =
+                (stats.ruleHits['SOLVER-REFINED'] ?? 0) + 1;
+            return EngineOutcome(
+              InterpretResult(
+                outcome: InterpretOutcome.matched,
+                facts: refined,
+                ruleId: 'SOLVER-REFINED',
+                ruleVersion: cb.solver!.pack.version,
+                templateHash: hash,
+              ),
+              winnerId: 'SOLVER-REFINED',
+            );
+          }
+        }
         stats.matched++;
         stats.ruleHits[id] = (stats.ruleHits[id] ?? 0) + 1;
         return EngineOutcome(
@@ -296,6 +322,86 @@ class RuleEngine implements SmsInterpreter {
   }
 
   // ---- tier 2 ----
+
+  /// Enriches a generic catch-all rule's reading, never replaces it: the rule's
+  /// amount, direction, account and date stay; only a missing purpose, merchant
+  /// and mandate come from the solver, and only when the solver independently read
+  /// the same amount in the same direction. Anything else returns null and the
+  /// rule's own facts stand exactly as before.
+  List<Fact>? _refineGeneric(
+    CompiledBundle cb,
+    List<Fact> facts,
+    SmsMessage msg,
+    String brand,
+    String appVersion,
+  ) {
+    final solver = cb.solver;
+    if (solver == null) return null;
+    final movements = facts.whereType<MovementFact>().toList();
+    if (movements.length != 1) return null;
+    final m = movements.single;
+    if (m.purpose != MovementPurpose.unknown || m.evidenceOnly == true) {
+      return null;
+    }
+    final posted = m.amounts.where((a) => a.role == AmountRole.posted);
+    if (posted.isEmpty) return null;
+    try {
+      final d = solver.solve(
+        msg.body,
+        observedAt: msg.observedAt,
+        senderBrand: brand,
+        senderKind: cb.sendersByBrand[brand]?.issuerKind.wire,
+      );
+      if (!d.accepted ||
+          (d.read != SolverRead.debit && d.read != SolverRead.credit) ||
+          d.evidenceOnly ||
+          d.unit != 'INR' ||
+          d.minor != posted.first.minor ||
+          d.debitDirection != (m.direction == Direction.debit)) {
+        return null;
+      }
+      final adds =
+          (d.purpose != null && d.purpose != 'unknown') ||
+          d.party != null ||
+          d.recurring ||
+          d.mandateRef != null;
+      if (!adds) return null;
+      final built = SolverFacts.build(
+        d,
+        sourceKey: msg.sourceKey,
+        observedAt: msg.observedAt,
+        issuerSlug:
+            m.instrument?.issuerSlug ??
+            cb.sendersByBrand[brand]?.issuerSlug ??
+            _plainIssuerSlug(brand),
+        packVersion: solver.pack.version,
+        bundleVersion: cb.bundle.bundleVersion,
+        engineVersion: engineVersion,
+        appVersion: appVersion,
+        ruleIdOverride: 'SOLVER-REFINED',
+      );
+      if (built == null || built.ignored) return null;
+      final out = <Fact>[];
+      for (final f in built.facts) {
+        final json = f.toJson();
+        // The rule's own account and date win over the solver's.
+        if (f is MovementFact || f is MandateFact) {
+          if (m.instrument != null) json['instrument'] = m.instrument!.toJson();
+        }
+        if (f is MovementFact && m.occurredAt != null) {
+          json['occurredAt'] = formatUtc(m.occurredAt!);
+        }
+        out.add(Fact.fromJson(json));
+      }
+      // Anything else the rule found (a balance, say) is kept.
+      for (final f in facts) {
+        if (f is! MovementFact) out.add(f);
+      }
+      return out;
+    } on Object {
+      return null;
+    }
+  }
 
   /// An issuer identity for a sender the registry does not know: its header in
   /// plain lower case ("NEWBNK" -> "newbnk"). Bills and card payments from the same

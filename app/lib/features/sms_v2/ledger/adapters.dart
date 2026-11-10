@@ -876,8 +876,13 @@ class IpoApplication {
     this.platform,
     this.appliedAt,
     this.updatedAt,
+    this.noAllotmentNoticeAt,
   });
   final String eventId, company, status;
+
+  /// When an exchange / registrar "no allotment" notice arrived for this
+  /// application (matched only when it can be about no other open one).
+  final DateTime? noAllotmentNoticeAt;
   final int blockedMinor, investedMinor, releasedMinor;
 
   /// When the money was blocked, and when the application last changed.
@@ -941,6 +946,40 @@ List<IpoApplication> ipoApplications(
       ),
     );
   }
+  // A "no allotment" notice names no company the contract can carry, so it joins an
+  // application only when exactly ONE application is still waiting (blocked, not
+  // older than 60 days at the notice). Otherwise it stays an activity-only notice.
+  final notices = byId.values
+      .whereType<v2.InfoFact>()
+      .where((f) => kIpoNoAllotmentRules.contains(f.provenance.ruleId))
+      .map((f) => f.effectiveAt)
+      .toList()
+    ..sort();
+  for (final notice in notices) {
+    final waiting = [
+      for (var i = 0; i < result.length; i++)
+        if (result[i].status == 'blocked' &&
+            result[i].appliedAt != null &&
+            !result[i].appliedAt!.isAfter(notice) &&
+            notice.difference(result[i].appliedAt!).inDays <= 60)
+          i,
+    ];
+    if (waiting.length != 1) continue;
+    final a = result[waiting.single];
+    result[waiting.single] = IpoApplication(
+      eventId: a.eventId,
+      company: a.company,
+      status: a.status,
+      blockedMinor: a.blockedMinor,
+      investedMinor: a.investedMinor,
+      releasedMinor: a.releasedMinor,
+      accountMask: a.accountMask,
+      platform: a.platform,
+      appliedAt: a.appliedAt,
+      updatedAt: a.updatedAt,
+      noAllotmentNoticeAt: notice,
+    );
+  }
   result.sort(
     (a, b) => (b.appliedAt ?? b.updatedAt ?? DateTime.utc(1900)).compareTo(
       a.appliedAt ?? a.updatedAt ?? DateTime.utc(1900),
@@ -948,6 +987,9 @@ List<IpoApplication> ipoApplications(
   );
   return result;
 }
+
+/// Rule ids (from the shipped rule bundle) whose info fact means "no allotment".
+const kIpoNoAllotmentRules = {'INV-IPO-NOALLOT-01'};
 
 RecurringReport recurringReportFromLedger(
   Iterable<v2.Fact> facts,

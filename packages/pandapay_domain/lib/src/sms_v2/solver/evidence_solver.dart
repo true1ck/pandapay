@@ -368,6 +368,9 @@ class _Run {
       for (final h in credit) _Cue(h.start, h.end, false, 'credit'),
       for (final h in biller) _Cue(h.start, h.end, true, 'biller'),
       for (final h in paidReceipt) _Cue(h.start, h.end, true, 'receipt'),
+      // "Your deposit of Rs X was processed": the provider confirms money it took.
+      for (final h in hits('investment'))
+        if (h.entry.kind == 'confirm') _Cue(h.start, h.end, true, 'receipt'),
     ];
     // "Recharge ... successful": a purpose that means money out, completed by a
     // word with no direction of its own. Always offered; the nearest cue wins.
@@ -998,6 +1001,12 @@ class _Run {
     // never counts as money on its own. A bank-voice alert (a bank verb with the
     // account named) is the real debit and is not a receipt.
     final bankVoice = cue.bank && mask != null;
+    // A provider's confirmation of a deposit / purchase is evidence of money out,
+    // not a second debit: the bank's own alert (when there is one) is the debit.
+    if (kind == SolverRead.investment && cue.how == 'receipt' && !bankVoice) {
+      evidenceOnly = true;
+      reasons.add('investment confirmation: evidence only, never counted by itself');
+    }
     // A phrase that explicitly says a payment was received / already paid / has a
     // receipt is a receipt by itself; a plain "paid" needs a bill word beside it.
     final explicitReceipt = cue.how == 'biller' || cue.how == 'receipt';

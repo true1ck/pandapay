@@ -58,6 +58,7 @@ void main() {
     () {
       var checked = 0;
       final differences = <String>[];
+      final refined = <String>[];
       for (final rule in withPack.rules) {
         for (final ex in rule.examples) {
           final msg = SmsMessage(
@@ -75,7 +76,17 @@ void main() {
           checked++;
           if (a.result.outcome != InterpretOutcome.unknown &&
               _signature(a) != _signature(b)) {
-            differences.add('${rule.id}: ${ex.body}');
+            // The only permitted change: a generic catch-all rule's plain reading
+            // enriched by the solver (same amount and direction, purpose and
+            // merchant added). A specific rule's result must never change.
+            final enriched =
+                (a.winnerId ?? '').startsWith('GEN-') &&
+                b.winnerId == 'SOLVER-REFINED';
+            if (enriched) {
+              refined.add('${rule.id}: ${ex.body}');
+            } else {
+              differences.add('${rule.id}: ${ex.body}');
+            }
           }
         }
       }
@@ -85,6 +96,12 @@ void main() {
         isEmpty,
         reason: 'a rule-matched message changed:\n${differences.join('\n')}',
       );
+      // Reviewed: these autopay debits were plain unknown-purpose debits.
+      expect(refined.map((e) => e.split(':').first).toSet(), {
+        'MND-UPCOMING-01',
+        'MND-UPCOMING-01-INV',
+        'MND-UPCOMING-90',
+      });
     },
   );
 

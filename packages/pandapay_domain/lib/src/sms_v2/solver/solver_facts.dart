@@ -400,6 +400,7 @@ class SolverFacts {
               'direction': 'debit',
               'purpose': 'investment',
               'rail': rail(null),
+              if (d.evidenceOnly) 'evidenceOnly': true,
             },
             amounts: [posted(minor)],
             instrumentJson: instrument(),

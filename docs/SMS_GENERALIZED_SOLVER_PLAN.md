@@ -312,3 +312,10 @@ One mechanism, three uses. The engine returns the unresolved reading with what i
 - Three or more equal charges at one merchant on a steady monthly or weekly rhythm, with no mandate message, are listed under Possible subscriptions (a review candidate): never counted in totals, never reminded about, never duplicated when a mandate exists.
 - IPO lifecycles (apply, allot, partial, not allotted, same-amount IPOs, company-less messages, UPI-mandate route) are covered by tests on the real rules.
 - Known limit: wording only the generic "debited from A/c" rule matches carries no merchant or purpose, so it never reaches the solver and cannot join a mandate.
+
+## 17. Generic-rule refinement, IPO notice, deposits (done)
+
+- A generic catch-all rule (id starts `GEN-`) that read a plain debit or credit with purpose unknown may be enriched by the solver, and only when the solver independently read the SAME amount in the SAME direction and has something to add (a purpose, a merchant, a mandate or recurring wording). The rule's account and date are kept. A specific rule's result is never changed: the integration test fails on any other change and lists the reviewed set of enriched rule examples.
+- An exchange "no allotment" notice appears on the one IPO application still waiting (blocked, not older than 60 days); with two waiting it is not guessed onto either.
+- A provider's confirmation ("deposit of Rs X was processed", "fixed deposit of Rs X has been created") is read as evidence-only investment. The existing receipt link joins it to the same-amount bank debit within 72 hours; with no debit it is never counted and the receipt sweep asks later.
+- Not measured on the real inbox yet: the phone was not reachable for wireless debugging.

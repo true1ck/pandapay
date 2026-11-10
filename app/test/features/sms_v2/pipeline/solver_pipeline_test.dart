@@ -295,6 +295,32 @@ void main() {
     });
   });
 
+  group('a deposit confirmation', () {
+    const confirm = 'Hi Ravi, your deposit of Rs 5,000.00 was processed successfully. - Sample Savings';
+    int events() => EventStore(db.db, namespace: _ns).listSince(DateTime.utc(1900)).length;
+
+    test('joins the one bank debit of that amount and adds no second spend', () {
+      pipeline.process(
+        sms('Rs 5,000.00 debited from A/c XX1234 on 05-Nov-26 via UPI to SAMPLE SAVINGS. Avl Bal Rs 20,000.00', sender: 'VM-HDFCBK-S'),
+      );
+      final before = events();
+      final m = sms(confirm, sender: 'VM-SAMPL-S');
+      pipeline.process(m);
+      final fact = factsOf(m).whereType<MovementFact>().single;
+      expect(fact.evidenceOnly, isTrue);
+      expect(fact.purpose, MovementPurpose.investment);
+      expect(events(), before, reason: 'the confirmation joined the debit');
+      expect(transactions().where((t) => t.entryKind.name == 'spend' || t.entryKind.name == 'transfer'), hasLength(1));
+    });
+
+    test('with no matching debit it is never counted (the receipt sweep asks later)', () {
+      final m = sms(confirm, sender: 'VM-SAMPL-S');
+      pipeline.process(m);
+      expect(transactions(), isEmpty);
+      expect(factsOf(m).whereType<MovementFact>().single.evidenceOnly, isTrue);
+    });
+  });
+
   group('a refund that names no account', () {
     SmsMessage spend(String day, {String merchant = 'CHAI POINT', String card = '5678'}) {
       counter++;

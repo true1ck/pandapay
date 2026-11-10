@@ -83,6 +83,46 @@ void main() {
     expect(apps.single.status, 'released');
   });
 
+  test('a no-allotment notice is shown on the one application still waiting', () {
+    send('VM-HDFCBK-S', block, '2026-11-22');
+    send(
+      'VM-BSEIND-S',
+      'BSE: Dear Investor, No allotment for your IPO application no. 1234567. Blocked funds will be released by your bank within 3 working days.',
+      '2026-11-29',
+    );
+    final a = applications().single;
+    expect(a.status, 'blocked');
+    expect(a.noAllotmentNoticeAt, isNotNull);
+  });
+
+  test('with two applications waiting the notice is not guessed onto either', () {
+    send('VM-HDFCBK-S', block, '2026-11-22');
+    send(
+      'VM-HDFCBK-S',
+      'Rs.14,250.00 has been blocked in your A/c XX1234 towards ASBA application for SWIGGY LIMITED IPO on 23-11-26. -HDFC Bank',
+      '2026-11-23',
+    );
+    send(
+      'VM-BSEIND-S',
+      'BSE: Dear Investor, No allotment for your IPO application no. 1234567. Blocked funds will be released by your bank within 3 working days.',
+      '2026-11-29',
+    );
+    expect(applications().every((a) => a.noAllotmentNoticeAt == null), isTrue);
+  });
+
+  test('a released application does not show a notice line', () {
+    send('VM-HDFCBK-S', block, '2026-11-22');
+    send('VM-HDFCBK-S', release, '2026-11-30');
+    send(
+      'VM-BSEIND-S',
+      'BSE: Dear Investor, No allotment for your IPO application no. 1234567. Blocked funds will be released by your bank within 3 working days.',
+      '2026-11-29',
+    );
+    final a = applications().single;
+    expect(a.status, 'released');
+    expect(a.noAllotmentNoticeAt, isNull);
+  });
+
   test('a "no allotment" exchange notice alone creates no application', () {
     send(
       'VM-BSEIND-S',

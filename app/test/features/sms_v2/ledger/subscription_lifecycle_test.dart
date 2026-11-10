@@ -184,6 +184,38 @@ void main() {
     expect(s.typicalAmount.paise, 11900);
   });
 
+  test('autopay debits in wording only the generic debit rule matches still join the mandate', () {
+    send(
+      'VM-NEWBNK-S',
+      'AutoPay mandate set up for NETFLIX of Rs 649.00 monthly from your A/c XX1234. UMN nflx123@okhdfc',
+      '2026-08-01',
+    );
+    for (final (d, day) in [
+      ('05-Aug-26', '2026-08-05'),
+      ('05-Sep-26', '2026-09-05'),
+      ('05-Oct-26', '2026-10-05'),
+    ]) {
+      send(
+        'VM-NEWBNK-S',
+        'Rs 649.00 debited from A/c XX1234 on $d towards NETFLIX AutoPay. UMN nflx123@okhdfc',
+        day,
+      );
+    }
+    final s = subs().single;
+    expect(s.displayName, 'NETFLIX');
+    expect(s.occurrenceCount, 3);
+    expect(s.typicalAmount.paise, 64900);
+    expect(s.isMandate, isTrue);
+  });
+
+  test('a plain debit that mentions no subscription is left exactly as the rule read it', () {
+    send('VM-NEWBNK-S', 'Rs 250.00 debited from A/c XX1234 on 05-Aug-26. Avl Bal Rs 9,000.00', '2026-08-05');
+    final facts = FactStore(db.db, namespace: _ns).all().whereType<MovementFact>();
+    expect(facts, hasLength(1));
+    expect(facts.single.provenance.ruleId, startsWith('GEN-'));
+    expect(subs(), isEmpty);
+  });
+
   group('no mandate message: found by pattern, and flagged as such', () {
     void spend(String merchant, String amount, String d, String day) => send(
       'VM-HDFCBK-S',
