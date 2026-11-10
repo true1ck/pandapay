@@ -204,3 +204,35 @@ test('the number held for an account is reported for Split even when it was neve
   const inactive = await run({ phone_number: 'enc:+917030445936', is_active: false });
   assert.deepEqual(inactive.phone_on_file, { present: false, value: null }, 'no number for a revoked session');
 });
+
+test('with a start date, only accounts created on or after it must add a phone', async () => {
+  const { phoneGateRequiredFor } = require('../src/utils/phoneGate');
+  const on = { REQUIRE_PHONE_AT_SIGNUP: 'true', PHONE_GATE_NEW_ACCOUNTS_FROM: '2026-11-11T00:00:00Z' };
+  assert.equal(phoneGateRequiredFor('2026-10-20T00:00:00Z', on), false, 'an older account is never locked out');
+  assert.equal(phoneGateRequiredFor('2026-11-10T23:59:59Z', on), false);
+  assert.equal(phoneGateRequiredFor('2026-11-11T00:00:00Z', on), true, 'the start moment itself is included');
+  assert.equal(phoneGateRequiredFor(new Date('2026-12-01T10:00:00Z'), on), true, 'a Date from the database works');
+  assert.equal(phoneGateRequiredFor(undefined, on), false, 'an account of unknown age is not locked');
+  assert.equal(phoneGateRequiredFor('2026-12-01T00:00:00Z', { PHONE_GATE_NEW_ACCOUNTS_FROM: '2026-11-11T00:00:00Z' }), false, 'nothing is required while the lock itself is off');
+  const all = { REQUIRE_PHONE_AT_SIGNUP: 'true' };
+  assert.equal(phoneGateRequiredFor('2020-01-01T00:00:00Z', all), true, 'no start date keeps the old every-account behaviour');
+  assert.equal(phoneGateRequiredFor('2020-01-01T00:00:00Z', { ...all, PHONE_GATE_NEW_ACCOUNTS_FROM: '' }), true);
+  assert.throws(() => phoneGateRequiredFor('2026-12-01T00:00:00Z', { ...all, PHONE_GATE_NEW_ACCOUNTS_FROM: 'soon' }), /ISO date/);
+});
+
+test('the session tells an old account no phone is needed and a new one that it is', async () => {
+  const prior = { gate: process.env.REQUIRE_PHONE_AT_SIGNUP, from: process.env.PHONE_GATE_NEW_ACCOUNTS_FROM };
+  process.env.REQUIRE_PHONE_AT_SIGNUP = 'true';
+  process.env.PHONE_GATE_NEW_ACCOUNTS_FROM = '2026-11-11T00:00:00Z';
+  try {
+    const old = await sessionService().verifyCurrentSession(token(), { async query() { return { rows: [userRow({ created_at: new Date('2026-10-20T00:00:00Z') })] }; } });
+    assert.deepEqual(old.phone_gate, { required: false, satisfied: false });
+    const fresh = await sessionService().verifyCurrentSession(token(), { async query() { return { rows: [userRow({ created_at: new Date('2026-11-12T09:00:00Z') })] }; } });
+    assert.deepEqual(fresh.phone_gate, { required: true, satisfied: false });
+    const withPhone = await sessionService().verifyCurrentSession(token(), { async query() { return { rows: [userRow({ created_at: new Date('2026-11-12T09:00:00Z'), claimed_phone_enc: 'enc:+917030445936' })] }; } });
+    assert.deepEqual(withPhone.phone_gate, { required: true, satisfied: true });
+  } finally {
+    if (prior.gate === undefined) delete process.env.REQUIRE_PHONE_AT_SIGNUP; else process.env.REQUIRE_PHONE_AT_SIGNUP = prior.gate;
+    if (prior.from === undefined) delete process.env.PHONE_GATE_NEW_ACCOUNTS_FROM; else process.env.PHONE_GATE_NEW_ACCOUNTS_FROM = prior.from;
+  }
+});

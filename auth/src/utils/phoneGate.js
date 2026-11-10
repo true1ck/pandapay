@@ -11,4 +11,17 @@ function phoneGateRequired(env = process.env) {
   return value === 'true';
 }
 
-module.exports = { phoneGateRequired };
+// PHONE_GATE_NEW_ACCOUNTS_FROM (an ISO date or time) narrows the lock to accounts created on or
+// after that moment, so turning it on never locks out people who signed up before. Empty means
+// the lock applies to every account, as before. An account whose age is unknown is not locked.
+function phoneGateRequiredFor(createdAt, env = process.env) {
+  if (!phoneGateRequired(env)) return false;
+  const from = env.PHONE_GATE_NEW_ACCOUNTS_FROM;
+  if (from === undefined || from === '') return true;
+  const cutoff = Date.parse(from);
+  if (Number.isNaN(cutoff)) throw new Error('PHONE_GATE_NEW_ACCOUNTS_FROM must be an ISO date');
+  const created = createdAt ? new Date(createdAt).getTime() : NaN;
+  return Number.isNaN(created) ? false : created >= cutoff;
+}
+
+module.exports = { phoneGateRequired, phoneGateRequiredFor };
