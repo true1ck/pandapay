@@ -4,6 +4,7 @@ import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/app/design/widgets.dart';
@@ -122,6 +123,7 @@ Future<void> _pump(
   required _FakeUserCardsRepository repo,
   required List<UserCard> cards,
   ActivityScreen activityScreen = const ActivityScreen(),
+  List<Override> overrides = const [],
 }) async {
   final router = GoRouter(
     initialLocation: '/',
@@ -146,6 +148,7 @@ Future<void> _pump(
         userCardsRepositoryProvider.overrideWithValue(repo),
         userCardsProvider.overrideWith((ref) async => cards),
         categoriesProvider.overrideWith((ref) async => const []),
+        ...overrides,
       ],
       child: MaterialApp.router(routerConfig: router),
     ),
@@ -154,9 +157,7 @@ Future<void> _pump(
 }
 
 void main() {
-  testWidgets('keeps prior rows during a transaction refresh', (
-    tester,
-  ) async {
+  testWidgets('keeps prior rows during a transaction refresh', (tester) async {
     final row = _txn(
       id: 'steady-row',
       amount: Money.fromRupees(250),
@@ -308,63 +309,93 @@ void main() {
     expect(find.text('2 txns'), findsOneWidget);
   });
 
-  testWidgets('sorts the list from the Sort button and shows each row\'s date', (
-    tester,
-  ) async {
-    final now = DateTime.now();
-    final repo = _FakeUserCardsRepository([
-      _txn(id: 't1', amount: Money.fromRupees(500), occurredAt: now, merchantName: 'Zeta Shop'),
-      _txn(id: 't2', amount: Money.fromRupees(9000), occurredAt: now.subtract(const Duration(days: 1)), merchantName: 'Alpha Shop'),
-      _txn(id: 't3', amount: Money.fromRupees(40), occurredAt: now.subtract(const Duration(days: 1)), merchantName: 'Mid Shop'),
-    ]);
-    await _pump(
-      tester,
-      repo: repo,
-      cards: const [],
-      activityScreen: ActivityScreen(
-        initialFrom: now.subtract(const Duration(days: 1)),
-        initialTo: now,
-      ),
-    );
-    double top(String name) => tester.getTopLeft(find.text(name)).dy;
+  testWidgets(
+    'sorts the list from the Sort button and shows each row\'s date',
+    (tester) async {
+      final now = DateTime.now();
+      final repo = _FakeUserCardsRepository([
+        _txn(
+          id: 't1',
+          amount: Money.fromRupees(500),
+          occurredAt: now,
+          merchantName: 'Zeta Shop',
+        ),
+        _txn(
+          id: 't2',
+          amount: Money.fromRupees(9000),
+          occurredAt: now.subtract(const Duration(days: 1)),
+          merchantName: 'Alpha Shop',
+        ),
+        _txn(
+          id: 't3',
+          amount: Money.fromRupees(40),
+          occurredAt: now.subtract(const Duration(days: 1)),
+          merchantName: 'Mid Shop',
+        ),
+      ]);
+      await _pump(
+        tester,
+        repo: repo,
+        cards: const [],
+        activityScreen: ActivityScreen(
+          initialFrom: now.subtract(const Duration(days: 1)),
+          initialTo: now,
+        ),
+      );
+      double top(String name) => tester.getTopLeft(find.text(name)).dy;
 
-    // Default: newest first, grouped by day.
-    expect(find.text('Today'), findsOneWidget);
-    expect(top('Zeta Shop'), lessThan(top('Alpha Shop')));
-    expect(find.byKey(const Key('activity-sort-chip')), findsNothing);
+      // Default: newest first, grouped by day.
+      expect(find.text('Today'), findsOneWidget);
+      expect(top('Zeta Shop'), lessThan(top('Alpha Shop')));
+      expect(find.text('Newest'), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('activity-sort-button')));
-    await tester.pumpAndSettle();
-    expect(find.text('Sort activity'), findsOneWidget);
-    for (final label in ['Newest first', 'Oldest first', 'Highest amount', 'Lowest amount', 'Merchant A to Z']) {
-      expect(find.text(label), findsOneWidget);
-    }
+      await tester.tap(find.byKey(const Key('activity-sort-button')));
+      await tester.pumpAndSettle();
+      expect(find.text('Sort activity'), findsOneWidget);
+      for (final label in [
+        'Newest first',
+        'Oldest first',
+        'Highest amount',
+        'Lowest amount',
+        'Merchant A to Z',
+      ]) {
+        expect(find.text(label), findsOneWidget);
+      }
 
-    await tester.tap(find.byKey(const Key('activity-sort-highestAmount')));
-    await tester.pumpAndSettle();
-    // Flat list, biggest first, no day headings, a chip says what is applied.
-    expect(find.text('Today'), findsNothing);
-    expect(top('Alpha Shop'), lessThan(top('Zeta Shop')));
-    expect(top('Zeta Shop'), lessThan(top('Mid Shop')));
-    expect(find.byKey(const Key('activity-sort-chip')), findsOneWidget);
-    expect(find.textContaining('Today ·'), findsOneWidget, reason: 'the row for today shows its own date');
-    expect(find.textContaining('Yesterday ·'), findsNWidgets(2));
+      await tester.tap(find.byKey(const Key('activity-sort-highestAmount')));
+      await tester.pumpAndSettle();
+      // Flat list, biggest first, no day headings; the Sort button says so.
+      expect(find.text('Today'), findsNothing);
+      expect(top('Alpha Shop'), lessThan(top('Zeta Shop')));
+      expect(top('Zeta Shop'), lessThan(top('Mid Shop')));
+      expect(find.text('Highest'), findsOneWidget);
+      expect(
+        find.textContaining('Today ·'),
+        findsOneWidget,
+        reason: 'the row for today shows its own date',
+      );
+      expect(find.textContaining('Yesterday ·'), findsNWidgets(2));
 
-    await tester.tap(find.byKey(const Key('activity-sort-button')));
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byKey(const Key('activity-sort-merchantAz')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('activity-sort-merchantAz')));
-    await tester.pumpAndSettle();
-    expect(top('Alpha Shop'), lessThan(top('Mid Shop')));
-    expect(top('Mid Shop'), lessThan(top('Zeta Shop')));
+      await tester.tap(find.byKey(const Key('activity-sort-button')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(const Key('activity-sort-merchantAz')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('activity-sort-merchantAz')));
+      await tester.pumpAndSettle();
+      expect(top('Alpha Shop'), lessThan(top('Mid Shop')));
+      expect(top('Mid Shop'), lessThan(top('Zeta Shop')));
 
-    // The chip's x puts it back to newest first with the day headings.
-    await tester.tap(find.byTooltip('Back to newest first'));
-    await tester.pumpAndSettle();
-    expect(find.text('Today'), findsOneWidget);
-    expect(find.byKey(const Key('activity-sort-chip')), findsNothing);
-  });
+      // Choosing newest first again brings the day headings back.
+      await tester.tap(find.byKey(const Key('activity-sort-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('activity-sort-newest')));
+      await tester.pumpAndSettle();
+      expect(find.text('Today'), findsOneWidget);
+      expect(find.text('Newest'), findsOneWidget);
+    },
+  );
 
   testWidgets('does not count a credit-card bill payment as spending', (
     tester,
@@ -411,10 +442,9 @@ void main() {
     expect(find.text('Money out'), findsOneWidget);
     expect(find.text('+₹9,000'), findsOneWidget);
     expect(find.text('−₹1,250'), findsOneWidget);
-    // Each arrow appears twice: once in the summary strip's badge and once on
-    // the matching transaction row's tile.
-    expect(find.byIcon(Icons.arrow_downward_rounded), findsNWidgets(2));
-    expect(find.byIcon(Icons.arrow_upward_rounded), findsNWidgets(2));
+    // The slim summary strip has no arrows of its own; each row's tile has one.
+    expect(find.byIcon(Icons.arrow_downward_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.arrow_upward_rounded), findsOneWidget);
   });
 
   testWidgets('compacts large summary totals to keep both metrics visible', (
@@ -656,17 +686,11 @@ void main() {
       ]);
       await _pump(tester, repo: repo, cards: const []);
 
-      await tester.tap(find.text('Filters'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('This month').last);
+      await tester.tap(find.byKey(const Key('activity-period-button')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('This week'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('1 matching transaction'), findsOneWidget);
-
-      await tester.tap(find.text('Show results'));
-      await tester.pumpAndSettle();
       expect(find.text('Received today'), findsOneWidget);
       expect(find.text('Previous week'), findsNothing);
       expect(find.text('+₹900'), findsOneWidget);
@@ -815,7 +839,9 @@ void main() {
       await tester.tap(find.text('Investments'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Show results'));
+      // The button says how many transactions the choices will show.
+      expect(find.text('Show 2 transactions'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('activity-filters-apply')));
       await tester.pumpAndSettle();
 
       expect(find.text('Zerodha'), findsOneWidget);
@@ -913,24 +939,26 @@ void main() {
       expect(find.text('Restaurant'), findsOneWidget);
       expect(find.text('Supermarket'), findsOneWidget);
 
-      // 2. Set filter (Once set kar)
-      await tester.tap(find.text('Filters'));
+      // 2. Set a filter: Category is a dropdown that opens a multi-select
+      await tester.tap(find.byKey(const Key('activity-filters-button')));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('All categories'));
+      await tester.tap(find.byKey(const Key('activity-filter-categories')));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Dining'));
+      await tester.tap(find.byKey(const Key('activity-pick-dining')));
+      await tester.tap(find.byKey(const Key('activity-pick-done')));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Show results'));
+      await tester.tap(find.byKey(const Key('activity-filters-apply')));
       await tester.pumpAndSettle();
 
       expect(find.text('Restaurant'), findsOneWidget);
       expect(find.text('Supermarket'), findsNothing);
 
-      // Verify Clear chip is rendered first and visible
-      expect(find.text('Clear'), findsOneWidget);
+      // One Clear all, and a chip for the category with its own x
+      expect(find.text('Clear all'), findsOneWidget);
+      expect(find.byKey(const Key('activity-filters-count')), findsOneWidget);
 
       // 3. Back go
       await tester.tap(find.byType(BackButton));
@@ -945,30 +973,262 @@ void main() {
       await tester.tap(find.text('Go Activity from Other'));
       await tester.pumpAndSettle();
 
-      // Entering anew should start fresh with no leftover filter
-      expect(find.text('Restaurant'), findsOneWidget);
-      expect(find.text('Supermarket'), findsOneWidget);
-
-      // 5. Now set filter again and unset via Clear chip
-      await tester.tap(find.text('Filters'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('All categories'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Dining'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Show results'));
-      await tester.pumpAndSettle();
-
+      // Coming back keeps the filter: it stays until Clear all.
       expect(find.text('Restaurant'), findsOneWidget);
       expect(find.text('Supermarket'), findsNothing);
+      expect(find.text('Clear all'), findsOneWidget);
 
-      // Tap Clear chip directly (it is at index 0, so never scrolled off-screen)
-      await tester.tap(find.text('Clear'));
+      // 5. Clear all puts everything back
+      await tester.tap(find.text('Clear all'));
       await tester.pumpAndSettle();
 
       expect(find.text('Restaurant'), findsOneWidget);
       expect(find.text('Supermarket'), findsOneWidget);
-      expect(find.text('Clear'), findsNothing);
+      expect(find.text('Clear all'), findsNothing);
     },
   );
+
+  group('redesigned header: search suggestions, merchants and filters', () {
+    List<TransactionEntry> shops() {
+      final now = DateTime.now();
+      return [
+        _txn(
+          id: 'a1',
+          amount: Money.fromRupees(100),
+          occurredAt: now,
+          merchantName: 'Swiggy',
+        ),
+        _txn(
+          id: 'a2',
+          amount: Money.fromRupees(300),
+          occurredAt: now,
+          merchantName: 'Swiggy',
+        ),
+        _txn(
+          id: 'b1',
+          amount: Money.fromRupees(250),
+          occurredAt: now,
+          merchantName: 'Zomato',
+        ),
+        _txn(
+          id: 'c1',
+          amount: Money.fromRupees(40),
+          occurredAt: now,
+          merchantName: 'Swish Mart',
+        ),
+        _txn(
+          id: 'd1',
+          amount: Money.fromRupees(900),
+          occurredAt: now,
+          merchantName: 'Blinkit',
+        ),
+      ];
+    }
+
+    testWidgets(
+      'typing suggests merchants with counts, and several can be added',
+      (tester) async {
+        final semantics = tester.ensureSemantics();
+        await _pump(
+          tester,
+          repo: _FakeUserCardsRepository(shops()),
+          cards: const [],
+          overrides: [
+            transactionsProvider.overrideWith((ref) async => shops()),
+          ],
+        );
+
+        await tester.tap(find.byKey(const Key('activity-search-field')));
+        await tester.pumpAndSettle();
+        // Nothing typed yet: your merchants, most used first, with how many.
+        expect(
+          find.byKey(const Key('activity-search-suggestions')),
+          findsOneWidget,
+        );
+        expect(find.text('2 transactions'), findsOneWidget);
+        expect(find.text('Cancel'), findsOneWidget);
+
+        await tester.enterText(
+          find.byKey(const Key('activity-search-field')),
+          'sw',
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('activity-suggest-Swiggy')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('activity-suggest-Swish Mart')),
+          findsOneWidget,
+        );
+        expect(find.byKey(const Key('activity-suggest-Zomato')), findsNothing);
+        expect(find.byKey(const Key('activity-suggest-notes')), findsOneWidget);
+
+        // Add two merchants, one after the other.
+        await tester.tap(find.byKey(const Key('activity-suggest-Swiggy')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('activity-suggest-Zomato')));
+        await tester.pumpAndSettle();
+        expect(find.text('Done'), findsOneWidget);
+        await tester.tap(find.byKey(const Key('activity-search-done')));
+        await tester.pumpAndSettle();
+
+        // The list shows only those two merchants, each with a chip to remove it.
+        expect(
+          find.byKey(const Key('activity-search-suggestions')),
+          findsNothing,
+        );
+        expect(find.text('Blinkit'), findsNothing);
+        expect(find.text('Swish Mart'), findsNothing);
+        expect(find.bySemanticsLabel(RegExp('Remove Swiggy')), findsOneWidget);
+        expect(find.bySemanticsLabel(RegExp('Remove Zomato')), findsOneWidget);
+        expect(find.byKey(const Key('activity-filters-count')), findsOneWidget);
+
+        await tester.tap(find.bySemanticsLabel(RegExp('Remove Zomato')));
+        await tester.pumpAndSettle();
+        expect(find.bySemanticsLabel(RegExp('Remove Zomato')), findsNothing);
+        expect(find.text('Zomato'), findsNothing);
+        expect(find.text('Swiggy'), findsWidgets);
+
+        await tester.tap(find.text('Clear all'));
+        await tester.pumpAndSettle();
+        expect(find.text('Blinkit'), findsOneWidget);
+        expect(find.text('Clear all'), findsNothing);
+        semantics.dispose();
+      },
+    );
+
+    testWidgets(
+      'the Filters sheet picks merchants from a dropdown and counts live',
+      (tester) async {
+        await _pump(
+          tester,
+          repo: _FakeUserCardsRepository(shops()),
+          cards: const [],
+        );
+
+        await tester.tap(find.byKey(const Key('activity-filters-button')));
+        await tester.pumpAndSettle();
+        expect(find.text('Show 5 transactions'), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('activity-filter-merchants')));
+        await tester.pumpAndSettle();
+        // Searchable, with a count beside each merchant.
+        await tester.enterText(
+          find.byKey(const Key('activity-pick-search')),
+          'zom',
+        );
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('activity-pick-Zomato')), findsOneWidget);
+        expect(find.byKey(const Key('activity-pick-Swiggy')), findsNothing);
+        await tester.enterText(
+          find.byKey(const Key('activity-pick-search')),
+          '',
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('activity-pick-Swiggy')));
+        await tester.tap(find.byKey(const Key('activity-pick-Zomato')));
+        await tester.pumpAndSettle();
+        expect(find.text('Done, 2 selected'), findsOneWidget);
+        await tester.tap(find.byKey(const Key('activity-pick-done')));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Swiggy, Zomato'), findsOneWidget);
+        expect(find.text('Show 3 transactions'), findsOneWidget);
+
+        // An amount range narrows it further, and the button follows.
+        await tester.enterText(
+          find.byKey(const Key('activity-amount-min')),
+          '150',
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Show 2 transactions'), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('activity-filters-apply')));
+        await tester.pumpAndSettle();
+        expect(find.text('Blinkit'), findsNothing);
+        expect(find.text('Zomato'), findsWidgets);
+        expect(find.text('From ₹150'), findsOneWidget);
+        // Merchants and amount are two kinds of filter.
+        expect(find.text('2'), findsOneWidget);
+      },
+    );
+
+    testWidgets('Reset in the sheet clears every choice but not the period', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        repo: _FakeUserCardsRepository(shops()),
+        cards: const [],
+      );
+      await tester.tap(find.byKey(const Key('activity-filters-button')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('activity-amount-max')),
+        '50',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Show 1 transaction'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('activity-filters-reset')));
+      await tester.pumpAndSettle();
+      expect(find.text('Show 5 transactions'), findsOneWidget);
+    });
+
+    testWidgets('a saved view comes back on a fresh start', (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'activity_view_v1':
+            '{"type":"all","datePreset":"allTime","merchants":["Zomato"],"sort":"highestAmount"}',
+      });
+      final semantics = tester.ensureSemantics();
+      await _pump(
+        tester,
+        repo: _FakeUserCardsRepository(shops()),
+        cards: const [],
+        overrides: [transactionsProvider.overrideWith((ref) async => shops())],
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Highest'), findsOneWidget);
+      expect(find.text('All time'), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp('Remove Zomato')), findsOneWidget);
+      expect(find.text('Blinkit'), findsNothing);
+      expect(find.text('Zomato'), findsWidgets);
+      semantics.dispose();
+    });
+
+    testWidgets('a change is saved for next time, without the search text', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({});
+      await _pump(
+        tester,
+        repo: _FakeUserCardsRepository(shops()),
+        cards: const [],
+      );
+
+      await tester.tap(find.byKey(const Key('activity-sort-button')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(const Key('activity-sort-merchantAz')),
+      );
+      await tester.tap(find.byKey(const Key('activity-sort-merchantAz')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('activity-search-field')),
+        'zom',
+      );
+      await tester.pumpAndSettle();
+
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      final saved = (await SharedPreferences.getInstance()).getString(
+        'activity_view_v1',
+      );
+      expect(saved, isNotNull);
+      expect(saved, contains('"sort":"merchantAz"'));
+      expect(saved, isNot(contains('zom')));
+    });
+  });
 }

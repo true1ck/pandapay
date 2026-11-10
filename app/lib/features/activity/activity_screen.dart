@@ -1,11 +1,13 @@
 import 'package:pandapay_domain/sms_v2.dart' show Totals;
 import '../sms_v2/ledger/providers.dart';
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/category_picker.dart';
 
@@ -177,8 +179,9 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   Future<void> _openFilterSheet(
     BuildContext context,
     ActivityFilter filter,
-    List<TransactionEntry> entries,
-  ) async {
+    List<TransactionEntry> entries, {
+    Set<String> foreignTransactionIds = const {},
+  }) async {
     final cards = ref.read(userCardsProvider).valueOrNull ?? const [];
     final tagRepo = ref.read(transactionTagsProvider);
     final tags = tagRepo?.allTags ?? const [];
@@ -202,6 +205,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       builder: (sheetContext) => _ActivityFilterSheet(
         initial: filter,
         entries: entries,
+        foreignTransactionIds: foreignTransactionIds,
         cards: cards,
         tags: tags,
         categories: resolvedCategories,
@@ -221,8 +225,8 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 
   final Set<String> _selectedIds = {};
   bool _selecting = false;
-  bool _foreignOnly = false;
   bool _isBulkOperating = false;
+  String? _lastSavedView;
   late bool _initialFilterReady = !_hasInitialFilter;
 
   bool get _hasInitialFilter =>
@@ -240,12 +244,46 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     if (_hasInitialFilter) {
       _applyInitialFilterAfterBuild();
     } else {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        ref.read(_activityFilterProvider.notifier).state =
-            _activityMonthFilter();
-      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _restoreSavedView());
     }
+  }
+
+  /// Brings back the view the person left: filters, merchants and sort order.
+  /// Coming back to the page in the same session keeps what is on screen; a
+  /// fresh start, or a visit after a drill-down from another screen, reads the
+  /// saved view, and with none saved starts on this month.
+  Future<void> _restoreSavedView() async {
+    if (!mounted || ref.read(_activityViewRestoredProvider)) return;
+    ref.read(_activityViewRestoredProvider.notifier).state = true;
+    final saved = await _loadActivityView();
+    if (!mounted) return;
+    ref.read(_activityFilterProvider.notifier).state =
+        saved?.filter ?? _activityMonthFilter();
+    ref.read(_activitySortProvider.notifier).state =
+        saved?.sort ?? ActivitySort.newest;
+  }
+
+  void _saveViewIfChanged() {
+    final json = _activityViewToJson(
+      ref.read(_activityFilterProvider),
+      ref.read(_activitySortProvider),
+    );
+    if (json == _lastSavedView) return;
+    _lastSavedView = json;
+    unawaited(
+      _saveActivityView(
+        ref.read(_activityFilterProvider),
+        ref.read(_activitySortProvider),
+      ),
+    );
+  }
+
+  @override
+  void deactivate() {
+    // Leaving the page (a transaction, another tab, back) must not leave the
+    // keyboard open over whatever comes next.
+    FocusManager.instance.primaryFocus?.unfocus();
+    super.deactivate();
   }
 
   @override
@@ -265,11 +303,10 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       if (_hasInitialFilter) {
         _applyInitialFilterAfterBuild();
       } else {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          ref.read(_activityFilterProvider.notifier).state =
-              _activityMonthFilter();
-        });
+        ref.read(_activityViewRestoredProvider.notifier).state = false;
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _restoreSavedView(),
+        );
       }
     }
   }
@@ -277,6 +314,9 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   void _applyInitialFilterAfterBuild() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      // This filter belongs to the screen that sent the person here. The next
+      // plain visit goes back to their own saved view.
+      ref.read(_activityViewRestoredProvider.notifier).state = false;
       final hasInitialDate =
           widget.initialFrom != null || widget.initialTo != null;
       final defaultMonth = _activityMonthFilter();
@@ -740,6 +780,19 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 
     final filter = ref.watch(_activityFilterProvider);
     final sort = ref.watch(_activitySortProvider);
+    final searching = ref.watch(_activitySearchActiveProvider);
+    if (!_hasInitialFilter) {
+      // Keep the view for the next visit, but not a filter that another screen
+      // sent the person here with.
+      ref.listen<ActivityFilter>(
+        _activityFilterProvider,
+        (_, _) => _saveViewIfChanged(),
+      );
+      ref.listen<ActivitySort>(
+        _activitySortProvider,
+        (_, _) => _saveViewIfChanged(),
+      );
+    }
     final transactions = ref.watch(activityTransactionsProvider);
     final tagRepository = ref.watch(transactionTagsProvider);
     final foreign =
@@ -774,9 +827,11 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     final pendingForeign = foreign
         .where((payment) => payment.isPending)
         .toList();
-    final previewForeign = _foreignOnly
+    // The banner says how many are waiting; the rows only show when the
+    // Foreign currency filter is on.
+    final previewForeign = filter.foreignOnly
         ? pendingForeign
-        : pendingForeign.take(3).toList();
+        : const <ForeignPayment>[];
 
     return AppBackground(
       child: Column(
@@ -793,372 +848,399 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                 Row(
                   children: [
                     const Expanded(child: _SearchField()),
-                    const SizedBox(width: AppSpace.xs),
-                    IconButton(
-                      key: const Key('activity-sort-button'),
-                      tooltip: 'Sort: ${sort.label}',
-                      color: sort == ActivitySort.newest
-                          ? null
-                          : BambooInk.jade,
-                      onPressed: () => _openSortSheet(context, sort),
-                      icon: const Icon(Icons.swap_vert_rounded),
-                    ),
-                    IconButton(
-                      tooltip: 'Select transactions',
-                      onPressed: _selecting || _isBulkOperating
-                          ? null
-                          : () => setState(() => _selecting = true),
-                      icon: const Icon(Icons.checklist),
-                    ),
-                    IconButton(
-                      tooltip: 'Deleted transactions',
-                      color: BambooInk.clayInk,
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const DeletedTransactionsScreen(),
+                    if (!searching) ...[
+                      const SizedBox(width: AppSpace.xs),
+                      PopupMenuButton<String>(
+                        key: const Key('activity-more-menu'),
+                        tooltip: 'More',
+                        icon: const Icon(Icons.more_horiz_rounded),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
                         ),
+                        onSelected: (value) {
+                          if (value == 'select' &&
+                              !_selecting &&
+                              !_isBulkOperating) {
+                            setState(() => _selecting = true);
+                          } else if (value == 'deleted') {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    const DeletedTransactionsScreen(),
+                              ),
+                            );
+                          }
+                        },
+                        itemBuilder: (_) => [
+                          PopupMenuItem(
+                            value: 'select',
+                            enabled: !_selecting && !_isBulkOperating,
+                            child: const ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(Icons.checklist),
+                              title: Text('Select transactions'),
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'deleted',
+                            child: ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(Icons.history),
+                              title: Text('Deleted transactions'),
+                            ),
+                          ),
+                        ],
                       ),
-                      icon: const Icon(Icons.history),
-                    ),
+                    ],
                   ],
                 ),
-                const SizedBox(height: AppSpace.sm),
-                _SpendPeriodAndFilterBar(
-                  filter: filter,
-                  onOpenPeriod: () => _openPeriodSheet(context, filter),
-                  onOpenFilters: () => _openFilterSheet(
-                    context,
-                    filter,
-                    transactions.valueOrNull ?? const [],
+                if (!searching) ...[
+                  const SizedBox(height: AppSpace.sm),
+                  _ActivityControlRow(
+                    filter: filter,
+                    sort: sort,
+                    onOpenPeriod: () => _openPeriodSheet(context, filter),
+                    onOpenFilters: () => _openFilterSheet(
+                      context,
+                      filter,
+                      ref.read(transactionsProvider).valueOrNull ??
+                          transactions.valueOrNull ??
+                          const [],
+                      foreignTransactionIds: foreignByTransaction.keys.toSet(),
+                    ),
+                    onOpenSort: () => _openSortSheet(context, sort),
                   ),
-                ),
-                const SizedBox(height: AppSpace.xs),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Wrap(
-                    spacing: AppSpace.xs,
-                    children: [
-                      FilterChip(
-                        key: const Key('activity-foreign-filter'),
-                        avatar: const Icon(Icons.currency_exchange, size: 16),
-                        label: const Text('Foreign currency'),
-                        selected: _foreignOnly,
-                        onSelected: (selected) => setState(() {
-                          _foreignOnly = selected;
-                          _selecting = false;
-                          _selectedIds.clear();
-                        }),
-                      ),
-                      if (sort != ActivitySort.newest)
-                        InputChip(
-                          key: const Key('activity-sort-chip'),
-                          avatar: Icon(_activitySortIcon(sort), size: 16),
-                          label: Text(sort.label),
-                          onPressed: () => _openSortSheet(context, sort),
-                          onDeleted: () =>
-                              ref.read(_activitySortProvider.notifier).state =
-                                  ActivitySort.newest,
-                          deleteButtonTooltipMessage: 'Back to newest first',
-                        ),
-                    ],
-                  ),
-                ),
-                if (filter.hasClearableFilters) ...[
-                  const SizedBox(height: AppSpace.xs),
-                  _ActiveFilterBadgesRow(filter: filter),
+                  if (filter.hasClearableFilters && _hasChips(filter)) ...[
+                    const SizedBox(height: AppSpace.xs),
+                    _ActiveChipsRow(filter: filter),
+                  ],
                 ],
               ],
             ),
           ),
           Expanded(
-            child: transactions.when(
-              // Explicit refreshes keep the list stable. Account/filter
-              // dependency changes still enter loading below.
-              skipLoadingOnRefresh: true,
-              skipLoadingOnReload: false,
-              // See my_cards_screen.dart for why a list-shaped skeleton
-              // rather than a centred spinner.
-              loading: () => const Padding(
-                padding: EdgeInsets.symmetric(horizontal: AppSpace.lg),
-                child: SkeletonList(count: 5),
-              ),
-              error: (err, _) => ErrorState(
-                message: userFacingErrorMessage(err),
-                onRetry: () => ref.invalidate(activityTransactionsProvider),
-              ),
-              data: (allEntries) {
-                final entries = _foreignOnly
-                    ? allEntries
-                          .where(
-                            (entry) =>
-                                foreignByTransaction.containsKey(entry.id),
-                          )
-                          .toList()
-                    : allEntries;
-                if (entries.isEmpty && previewForeign.isEmpty) {
-                  return RefreshIndicator(
-                    onRefresh: () async {
-                      ref.invalidate(activityTransactionsProvider);
-                      ref.invalidate(transactionsProvider);
-                      try {
-                        await ref.read(activityTransactionsProvider.future);
-                      } catch (_) {}
-                    },
-                    child: LayoutBuilder(
-                      builder: (context, constraints) => SingleChildScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            minHeight: constraints.maxHeight,
-                          ),
-                          child: EmptyState(
-                            icon: Icons.receipt_long_outlined,
-                            title: _foreignOnly
-                                ? 'No foreign payments in this period'
-                                : filter.hasClearableFilters
-                                ? 'No activity matches these filters'
-                                : 'No activity this month',
-                            message: filter.isActive
-                                ? null
-                                : 'Transactions you log from the Cards tab show up here.',
-                          ),
-                        ),
-                      ),
+            child: searching
+                ? const _SearchSuggestions()
+                : transactions.when(
+                    // Explicit refreshes keep the list stable. Account/filter
+                    // dependency changes still enter loading below.
+                    skipLoadingOnRefresh: true,
+                    skipLoadingOnReload: false,
+                    // See my_cards_screen.dart for why a list-shaped skeleton
+                    // rather than a centred spinner.
+                    loading: () => const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: AppSpace.lg),
+                      child: SkeletonList(count: 5),
                     ),
-                  );
-                }
-                final v2Enabled = ref.watch(smsV2ReportingEnabledProvider);
-                final ledgerState = v2Enabled
-                    ? ref.watch(smsV2LedgerReadModelProvider)
-                    : null;
-                final ledgerModel = ledgerState?.valueOrNull;
-                if (v2Enabled && ledgerModel == null) {
-                  return Center(
-                    child: ledgerState!.hasError
-                        ? Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Text('Couldn’t load activity totals.'),
-                              TextButton(
-                                onPressed: () => ref.invalidate(
-                                  smsV2LedgerReadModelProvider,
-                                ),
-                                child: const Text('Retry'),
-                              ),
-                            ],
-                          )
-                        : const CircularProgressIndicator(),
-                  );
-                }
-                final projection = _projectionCache.resolve(
-                  entries,
-                  scope: (
-                    ref.read(cacheNamespaceProvider),
-                    token,
-                    filter,
-                    v2Enabled,
-                    sort,
-                  ),
-                  ledgerTotals: ledgerModel?.totalsForTransactions(entries),
-                  sort: sort,
-                );
-                final visibleSelected = projection.visibleSelectedCount(
-                  _selectedIds,
-                );
-                final selectionOffset = _selecting ? 1 : 0;
-
-                return Column(
-                  children: [
-                    Expanded(
-                      child: RefreshIndicator(
-                        onRefresh: () async {
-                          ref.invalidate(activityTransactionsProvider);
-                          ref.invalidate(transactionsProvider);
-                          try {
-                            await ref.read(activityTransactionsProvider.future);
-                          } catch (_) {}
-                        },
-                        child: ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(
-                            AppSpace.lg,
-                            AppSpace.lg,
-                            AppSpace.lg,
-                            0,
-                          ),
-                          itemCount:
-                              projection.rows.length +
-                              selectionOffset +
-                              (pendingForeign.isEmpty
-                                  ? 0
-                                  : previewForeign.length + 1),
-                          itemBuilder: (context, index) {
-                            final foreignOffset = pendingForeign.isEmpty
-                                ? 0
-                                : previewForeign.length + 1;
-                            if (foreignOffset > 0 && index == 0) {
-                              return Padding(
-                                padding: const EdgeInsets.only(
-                                  bottom: AppSpace.sm,
-                                ),
-                                child: ForeignPaymentSummaryCard(
-                                  payments: pendingForeign,
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder: (_) => ForeignPaymentsScreen(
-                                        from: filter.from,
-                                        to: filter.to,
-                                      ),
+                    error: (err, _) => ErrorState(
+                      message: userFacingErrorMessage(err),
+                      onRetry: () =>
+                          ref.invalidate(activityTransactionsProvider),
+                    ),
+                    data: (allEntries) {
+                      final entries = filter.foreignOnly
+                          ? allEntries
+                                .where(
+                                  (entry) => foreignByTransaction.containsKey(
+                                    entry.id,
+                                  ),
+                                )
+                                .toList()
+                          : allEntries;
+                      if (entries.isEmpty && previewForeign.isEmpty) {
+                        return RefreshIndicator(
+                          onRefresh: () async {
+                            ref.invalidate(activityTransactionsProvider);
+                            ref.invalidate(transactionsProvider);
+                            try {
+                              await ref.read(
+                                activityTransactionsProvider.future,
+                              );
+                            } catch (_) {}
+                          },
+                          child: LayoutBuilder(
+                            builder: (context, constraints) =>
+                                SingleChildScrollView(
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      minHeight: constraints.maxHeight,
+                                    ),
+                                    child: EmptyState(
+                                      icon: Icons.receipt_long_outlined,
+                                      title: filter.foreignOnly
+                                          ? 'No foreign payments in this period'
+                                          : filter.hasClearableFilters
+                                          ? 'No activity matches these filters'
+                                          : 'No activity this month',
+                                      message: filter.isActive
+                                          ? null
+                                          : 'Transactions you log from the Cards tab show up here.',
                                     ),
                                   ),
                                 ),
-                              );
-                            }
-                            if (index < foreignOffset) {
-                              final payment = previewForeign[index - 1];
-                              return Padding(
-                                padding: const EdgeInsets.only(
-                                  bottom: AppSpace.sm,
-                                ),
-                                child: ForeignPaymentTile(
-                                  payment: payment,
-                                  onTap: () =>
-                                      openForeignPayment(context, payment),
-                                ),
-                              );
-                            }
-                            index -= foreignOffset;
-                            final row = _selecting && index == 0
-                                ? const ActivityListRow.selection()
-                                : projection.rows[index - selectionOffset];
-                            switch (row.kind) {
-                              case ActivityRowKind.selection:
-                                return Padding(
-                                  padding: const EdgeInsets.only(
-                                    bottom: AppSpace.sm,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      _SelectionCountChip(
-                                        count: visibleSelected,
-                                        onCancel: _isBulkOperating
-                                            ? null
-                                            : () => setState(() {
-                                                _selecting = false;
-                                                _selectedIds.clear();
-                                              }),
+                          ),
+                        );
+                      }
+                      final v2Enabled = ref.watch(
+                        smsV2ReportingEnabledProvider,
+                      );
+                      final ledgerState = v2Enabled
+                          ? ref.watch(smsV2LedgerReadModelProvider)
+                          : null;
+                      final ledgerModel = ledgerState?.valueOrNull;
+                      if (v2Enabled && ledgerModel == null) {
+                        return Center(
+                          child: ledgerState!.hasError
+                              ? Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text(
+                                      'Couldn’t load activity totals.',
+                                    ),
+                                    TextButton(
+                                      onPressed: () => ref.invalidate(
+                                        smsV2LedgerReadModelProvider,
                                       ),
-                                      const Spacer(),
-                                      TextButton(
-                                        onPressed: _isBulkOperating
-                                            ? null
-                                            : () => setState(() {
-                                                if (visibleSelected ==
-                                                    entries.length) {
-                                                  _selectedIds.clear();
-                                                } else {
-                                                  _selectedIds.addAll(
-                                                    entries.map((e) => e.id),
-                                                  );
-                                                }
-                                              }),
-                                        child: Text(
-                                          visibleSelected == entries.length
-                                              ? 'Deselect all'
-                                              : 'Select all',
+                                      child: const Text('Retry'),
+                                    ),
+                                  ],
+                                )
+                              : const CircularProgressIndicator(),
+                        );
+                      }
+                      final projection = _projectionCache.resolve(
+                        entries,
+                        scope: (
+                          ref.read(cacheNamespaceProvider),
+                          token,
+                          filter,
+                          v2Enabled,
+                          sort,
+                        ),
+                        ledgerTotals: ledgerModel?.totalsForTransactions(
+                          entries,
+                        ),
+                        sort: sort,
+                      );
+                      final visibleSelected = projection.visibleSelectedCount(
+                        _selectedIds,
+                      );
+                      final selectionOffset = _selecting ? 1 : 0;
+
+                      return Column(
+                        children: [
+                          Expanded(
+                            child: RefreshIndicator(
+                              onRefresh: () async {
+                                ref.invalidate(activityTransactionsProvider);
+                                ref.invalidate(transactionsProvider);
+                                try {
+                                  await ref.read(
+                                    activityTransactionsProvider.future,
+                                  );
+                                } catch (_) {}
+                              },
+                              child: ListView.builder(
+                                padding: const EdgeInsets.fromLTRB(
+                                  AppSpace.lg,
+                                  AppSpace.lg,
+                                  AppSpace.lg,
+                                  0,
+                                ),
+                                itemCount:
+                                    projection.rows.length +
+                                    selectionOffset +
+                                    (pendingForeign.isEmpty
+                                        ? 0
+                                        : previewForeign.length + 1),
+                                itemBuilder: (context, index) {
+                                  final foreignOffset = pendingForeign.isEmpty
+                                      ? 0
+                                      : previewForeign.length + 1;
+                                  if (foreignOffset > 0 && index == 0) {
+                                    return Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: AppSpace.sm,
+                                      ),
+                                      child: _ForeignBanner(
+                                        payments: pendingForeign,
+                                        onTap: () => Navigator.of(context).push(
+                                          MaterialPageRoute<void>(
+                                            builder: (_) =>
+                                                ForeignPaymentsScreen(
+                                                  from: filter.from,
+                                                  to: filter.to,
+                                                ),
+                                          ),
                                         ),
                                       ),
-                                    ],
-                                  ),
-                                );
-                              case ActivityRowKind.summary:
-                                return Padding(
-                                  padding: const EdgeInsets.only(
-                                    bottom: AppSpace.lg,
-                                  ),
-                                  child: _SummaryCard(
-                                    totalIncoming: row.totalIncoming!,
-                                    totalOutgoing: row.totalOutgoing!,
-                                    count: row.activeCount!,
-                                  ),
-                                );
-                              case ActivityRowKind.dayHeader:
-                                return Padding(
-                                  padding: const EdgeInsets.only(
-                                    bottom: AppSpace.sm,
-                                  ),
-                                  child: Text(
-                                    _dayLabel(row.day!),
-                                    style: BambooFonts.heading(
-                                      13,
-                                      color: BambooInk.ink500,
-                                    ),
-                                  ),
-                                );
-                              case ActivityRowKind.transaction:
-                                final entry = row.entry!;
-                                return Padding(
-                                  padding: const EdgeInsets.only(
-                                    bottom: AppSpace.sm,
-                                  ),
-                                  child: _TransactionTile(
-                                    entry,
-                                    showDate: !sort.groupsByDay,
-                                    foreignPayment:
-                                        foreignByTransaction[entry.id],
-                                    selecting: _selecting,
-                                    selected: _selectedIds.contains(entry.id),
-                                    tagNames:
-                                        (tagRepository?.tagsForTransaction(
-                                                  entry.id,
-                                                  fallback: entry.tags,
-                                                ) ??
-                                                entry.tags)
-                                            .map((tag) => tag.name)
-                                            .toList(),
-                                    onTap: () {
-                                      if (_selecting) {
-                                        if (!_isBulkOperating) {
-                                          setState(() {
-                                            if (!_selectedIds.remove(
-                                              entry.id,
-                                            )) {
-                                              _selectedIds.add(entry.id);
+                                    );
+                                  }
+                                  if (index < foreignOffset) {
+                                    final payment = previewForeign[index - 1];
+                                    return Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: AppSpace.sm,
+                                      ),
+                                      child: ForeignPaymentTile(
+                                        payment: payment,
+                                        onTap: () => openForeignPayment(
+                                          context,
+                                          payment,
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                  index -= foreignOffset;
+                                  final row = _selecting && index == 0
+                                      ? const ActivityListRow.selection()
+                                      : projection.rows[index -
+                                            selectionOffset];
+                                  switch (row.kind) {
+                                    case ActivityRowKind.selection:
+                                      return Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: AppSpace.sm,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            _SelectionCountChip(
+                                              count: visibleSelected,
+                                              onCancel: _isBulkOperating
+                                                  ? null
+                                                  : () => setState(() {
+                                                      _selecting = false;
+                                                      _selectedIds.clear();
+                                                    }),
+                                            ),
+                                            const Spacer(),
+                                            TextButton(
+                                              onPressed: _isBulkOperating
+                                                  ? null
+                                                  : () => setState(() {
+                                                      if (visibleSelected ==
+                                                          entries.length) {
+                                                        _selectedIds.clear();
+                                                      } else {
+                                                        _selectedIds.addAll(
+                                                          entries.map(
+                                                            (e) => e.id,
+                                                          ),
+                                                        );
+                                                      }
+                                                    }),
+                                              child: Text(
+                                                visibleSelected ==
+                                                        entries.length
+                                                    ? 'Deselect all'
+                                                    : 'Select all',
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    case ActivityRowKind.summary:
+                                      return Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: AppSpace.lg,
+                                        ),
+                                        child: _SummaryCard(
+                                          totalIncoming: row.totalIncoming!,
+                                          totalOutgoing: row.totalOutgoing!,
+                                          count: row.activeCount!,
+                                        ),
+                                      );
+                                    case ActivityRowKind.dayHeader:
+                                      return Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: AppSpace.sm,
+                                        ),
+                                        child: Text(
+                                          _dayLabel(row.day!),
+                                          style: BambooFonts.heading(
+                                            13,
+                                            color: BambooInk.ink500,
+                                          ),
+                                        ),
+                                      );
+                                    case ActivityRowKind.transaction:
+                                      final entry = row.entry!;
+                                      return Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: AppSpace.sm,
+                                        ),
+                                        child: _TransactionTile(
+                                          entry,
+                                          showDate: !sort.groupsByDay,
+                                          foreignPayment:
+                                              foreignByTransaction[entry.id],
+                                          selecting: _selecting,
+                                          selected: _selectedIds.contains(
+                                            entry.id,
+                                          ),
+                                          tagNames:
+                                              (tagRepository
+                                                          ?.tagsForTransaction(
+                                                            entry.id,
+                                                            fallback:
+                                                                entry.tags,
+                                                          ) ??
+                                                      entry.tags)
+                                                  .map((tag) => tag.name)
+                                                  .toList(),
+                                          onTap: () {
+                                            if (_selecting) {
+                                              if (!_isBulkOperating) {
+                                                setState(() {
+                                                  if (!_selectedIds.remove(
+                                                    entry.id,
+                                                  )) {
+                                                    _selectedIds.add(entry.id);
+                                                  }
+                                                });
+                                              }
+                                            } else {
+                                              FocusManager.instance.primaryFocus
+                                                  ?.unfocus();
+                                              context.push(
+                                                '/activity/${entry.id}',
+                                                extra: entry,
+                                              );
                                             }
-                                          });
-                                        }
-                                      } else {
-                                        context.push(
-                                          '/activity/${entry.id}',
-                                          extra: entry,
-                                        );
-                                      }
-                                    },
-                                    onLongPress: _selecting || _isBulkOperating
-                                        ? null
-                                        : () => setState(() {
-                                            _selecting = true;
-                                            _selectedIds.add(entry.id);
-                                          }),
-                                  ),
-                                );
-                              case ActivityRowKind.spacer:
-                                return const SizedBox(height: AppSpace.sm);
-                            }
-                          },
-                        ),
-                      ),
-                    ),
-                    if (_selecting)
-                      _BulkActionBar(
-                        selectedCount: visibleSelected,
-                        isBusy: _isBulkOperating,
-                        onEdit: () => _openBulkEditSheet(entries),
-                        onDelete: () => _bulkDelete(entries),
-                      ),
-                  ],
-                );
-              },
-            ),
+                                          },
+                                          onLongPress:
+                                              _selecting || _isBulkOperating
+                                              ? null
+                                              : () => setState(() {
+                                                  _selecting = true;
+                                                  _selectedIds.add(entry.id);
+                                                }),
+                                        ),
+                                      );
+                                    case ActivityRowKind.spacer:
+                                      return const SizedBox(
+                                        height: AppSpace.sm,
+                                      );
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
+                          if (_selecting)
+                            _BulkActionBar(
+                              selectedCount: visibleSelected,
+                              isBusy: _isBulkOperating,
+                              onEdit: () => _openBulkEditSheet(entries),
+                              onDelete: () => _bulkDelete(entries),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -1259,13 +1341,27 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 /// value class over a StateProvider, same shape as other multi-field
 /// filter state in this app (none yet reused a common pattern, kept local).
 class ActivityFilter {
-  final String? cardId;
-  final String? categoryId;
-  final String? categoryLabel;
+  /// Cards or accounts to show. Empty means all.
+  final Set<String> cardIds;
+
+  /// Categories to show, by id (a sub-category counts under its parent) or, when
+  /// a screen only knows the name, by label. Both empty means all.
+  final Set<String> categoryIds;
+  final Set<String> categoryLabels;
+
+  /// Merchant names to show, matched without regard to case. Empty means all.
+  final Set<String> merchants;
   final Set<String> tagIds;
   final bool untagged;
   final DateTime? from;
   final DateTime? to;
+
+  /// Smallest and largest amount to show, in paise. Null means no limit.
+  final int? amountMinPaise;
+  final int? amountMaxPaise;
+
+  /// Only payments made in another currency.
+  final bool foreignOnly;
 
   /// Free-text search over merchant name and note, matched server-side
   /// (`GET /transactions?q=`). Client-side filtering would only ever have
@@ -1276,71 +1372,142 @@ class ActivityFilter {
   final _ActivityTypeFilter type;
   final _ActivityDatePreset datePreset;
 
-  const ActivityFilter({
-    this.cardId,
-    this.categoryId,
-    this.categoryLabel,
+  ActivityFilter({
+    String? cardId,
+    Set<String> cardIds = const {},
+    String? categoryId,
+    String? categoryLabel,
+    Set<String> categoryIds = const {},
+    Set<String> categoryLabels = const {},
+    this.merchants = const {},
     this.tagIds = const {},
     this.untagged = false,
     this.from,
     this.to,
+    this.amountMinPaise,
+    this.amountMaxPaise,
+    this.foreignOnly = false,
     this.query,
     this.type = _ActivityTypeFilter.all,
     this.datePreset = _ActivityDatePreset.allTime,
-  });
+  }) : cardIds = {?cardId, ...cardIds},
+       categoryIds = {?categoryId, ...categoryIds},
+       categoryLabels = {?categoryLabel, ...categoryLabels};
+
+  /// The one card or category chosen, for the server request and for screens
+  /// that only understand a single choice. Null when none or several.
+  String? get cardId => cardIds.length == 1 ? cardIds.first : null;
+  String? get categoryId => categoryIds.length == 1 && categoryLabels.isEmpty
+      ? categoryIds.first
+      : null;
+
+  /// How many kinds of filter are on, for the badge on the Filters button.
+  int get activeSectionCount =>
+      (hasTypeFilter ? 1 : 0) +
+      (merchants.isNotEmpty ? 1 : 0) +
+      (categoryIds.isNotEmpty || categoryLabels.isNotEmpty ? 1 : 0) +
+      (cardIds.isNotEmpty ? 1 : 0) +
+      (tagIds.isNotEmpty || untagged ? 1 : 0) +
+      (amountMinPaise != null || amountMaxPaise != null ? 1 : 0) +
+      (foreignOnly ? 1 : 0);
 
   bool get isActive =>
-      cardId != null ||
-      categoryId != null ||
-      categoryLabel != null ||
-      tagIds.isNotEmpty ||
-      untagged ||
+      activeSectionCount > 0 ||
       from != null ||
       to != null ||
-      (query != null && query!.isNotEmpty) ||
-      hasTypeFilter;
+      (query != null && query!.isNotEmpty);
 
   /// The current month is the default scope, so it should not by itself show
   /// the Clear chip. Any other selected filter or date preset remains clearable.
   bool get hasClearableFilters =>
-      cardId != null ||
-      categoryId != null ||
-      categoryLabel != null ||
-      tagIds.isNotEmpty ||
-      untagged ||
+      activeSectionCount > 0 ||
       (query != null && query!.isNotEmpty) ||
-      hasTypeFilter ||
       datePreset != _ActivityDatePreset.thisMonth;
 
   bool get hasTypeFilter => type != _ActivityTypeFilter.all;
 
+  /// Whether [entry] passes the choices that are made on the phone (the rest,
+  /// date and search, may also have been applied by the server).
+  bool matchesLocally(TransactionEntry entry) {
+    if (!type.matches(entry)) return false;
+    if (cardIds.isNotEmpty && !cardIds.contains(entry.userCardId)) return false;
+    if (categoryIds.isNotEmpty || categoryLabels.isNotEmpty) {
+      final byId =
+          categoryIds.contains(entry.categoryId) ||
+          categoryIds.contains(entry.parentCategoryId);
+      final byLabel = categoryLabels.any(
+        (label) =>
+            label.trim().toLowerCase() ==
+            entry.categoryLabel.trim().toLowerCase(),
+      );
+      if (!byId && !byLabel) return false;
+    }
+    if (merchants.isNotEmpty) {
+      final key = _merchantKey(entry.merchantName);
+      if (key == null || !merchants.any((m) => _merchantKey(m) == key)) {
+        return false;
+      }
+    }
+    if (amountMinPaise != null && entry.amount.paise < amountMinPaise!) {
+      return false;
+    }
+    if (amountMaxPaise != null && entry.amount.paise > amountMaxPaise!) {
+      return false;
+    }
+    return true;
+  }
+
   ActivityFilter copyWith({
     String? Function()? cardId,
+    Set<String>? cardIds,
     String? Function()? categoryId,
     String? Function()? categoryLabel,
+    Set<String>? categoryIds,
+    Set<String>? categoryLabels,
+    Set<String>? merchants,
     Set<String>? tagIds,
     bool? untagged,
     DateTime? Function()? from,
     DateTime? Function()? to,
+    int? Function()? amountMinPaise,
+    int? Function()? amountMaxPaise,
+    bool? foreignOnly,
     String? Function()? query,
     _ActivityTypeFilter? type,
     _ActivityDatePreset? datePreset,
   }) {
     return ActivityFilter(
-      cardId: cardId != null ? cardId() : this.cardId,
-      categoryId: categoryId != null ? categoryId() : this.categoryId,
-      categoryLabel: categoryLabel != null
-          ? categoryLabel()
-          : this.categoryLabel,
+      cardIds: cardIds ?? (cardId != null ? {?cardId()} : this.cardIds),
+      categoryIds:
+          categoryIds ??
+          (categoryId != null ? {?categoryId()} : this.categoryIds),
+      categoryLabels:
+          categoryLabels ??
+          (categoryLabel != null ? {?categoryLabel()} : this.categoryLabels),
+      merchants: merchants ?? this.merchants,
       tagIds: tagIds ?? this.tagIds,
       untagged: untagged ?? this.untagged,
       from: from != null ? from() : this.from,
       to: to != null ? to() : this.to,
+      amountMinPaise: amountMinPaise != null
+          ? amountMinPaise()
+          : this.amountMinPaise,
+      amountMaxPaise: amountMaxPaise != null
+          ? amountMaxPaise()
+          : this.amountMaxPaise,
+      foreignOnly: foreignOnly ?? this.foreignOnly,
       query: query != null ? query() : this.query,
       type: type ?? this.type,
       datePreset: datePreset ?? this.datePreset,
     );
   }
+}
+
+/// The key two spellings of one merchant share: trimmed and lower-cased. Null
+/// for a row with no merchant, which no merchant filter matches.
+String? _merchantKey(String? name) {
+  final key = name?.trim().toLowerCase();
+  return key == null || key.isEmpty ? null : key;
 }
 
 ActivityFilter _activityMonthFilter([DateTime? now]) {
@@ -1361,6 +1528,133 @@ final _activityFilterProvider = StateProvider<ActivityFilter>(
 final _activitySortProvider = StateProvider<ActivitySort>(
   (ref) => ActivitySort.newest,
 );
+
+/// Whether this session already loaded the saved view. A drill-down from
+/// another screen sets its own filter and clears this, so the next plain visit
+/// goes back to the person's saved view instead of the drill-down.
+final _activityViewRestoredProvider = StateProvider<bool>((ref) => false);
+
+/// True while the search box has focus: the list gives way to suggestions.
+final _activitySearchActiveProvider = StateProvider<bool>((ref) => false);
+
+/// What is typed in the search box right now, before the short wait that sends
+/// it to the server. Suggestions follow this.
+final _activitySearchDraftProvider = StateProvider<String>((ref) => '');
+
+const _activityViewKey = 'activity_view_v1';
+const _activityRecentKey = 'activity_recent_searches_v1';
+
+/// What is kept between visits: every filter and the sort order, but not the
+/// search text. A relative period (this month) is saved as its name and worked
+/// out again on load, so it never goes stale.
+String _activityViewToJson(ActivityFilter f, ActivitySort sort) => jsonEncode({
+  'type': f.type.name,
+  'datePreset': f.datePreset.name,
+  if (f.datePreset == _ActivityDatePreset.custom) ...{
+    'from': f.from?.toIso8601String(),
+    'to': f.to?.toIso8601String(),
+  },
+  'cardIds': f.cardIds.toList(),
+  'categoryIds': f.categoryIds.toList(),
+  'categoryLabels': f.categoryLabels.toList(),
+  'merchants': f.merchants.toList(),
+  'tagIds': f.tagIds.toList(),
+  'untagged': f.untagged,
+  'amountMin': f.amountMinPaise,
+  'amountMax': f.amountMaxPaise,
+  'foreignOnly': f.foreignOnly,
+  'sort': sort.name,
+});
+
+({ActivityFilter filter, ActivitySort sort})? _activityViewFromJson(
+  String raw,
+  DateTime now,
+) {
+  try {
+    final j = (jsonDecode(raw) as Map).cast<String, Object?>();
+    Set<String> strings(String key) => {
+      for (final v in (j[key] as List? ?? const [])) '$v',
+    };
+    final preset = _ActivityDatePreset.values.firstWhere(
+      (v) => v.name == j['datePreset'],
+      orElse: () => _ActivityDatePreset.thisMonth,
+    );
+    final range = preset.range(now);
+    final custom = preset == _ActivityDatePreset.custom;
+    return (
+      filter: ActivityFilter(
+        type: _ActivityTypeFilter.values.firstWhere(
+          (v) => v.name == j['type'],
+          orElse: () => _ActivityTypeFilter.all,
+        ),
+        datePreset: preset,
+        from: custom ? DateTime.tryParse('${j['from']}') : range?.start,
+        to: custom ? DateTime.tryParse('${j['to']}') : range?.end,
+        cardIds: strings('cardIds'),
+        categoryIds: strings('categoryIds'),
+        categoryLabels: strings('categoryLabels'),
+        merchants: strings('merchants'),
+        tagIds: strings('tagIds'),
+        untagged: j['untagged'] == true,
+        amountMinPaise: (j['amountMin'] as num?)?.toInt(),
+        amountMaxPaise: (j['amountMax'] as num?)?.toInt(),
+        foreignOnly: j['foreignOnly'] == true,
+      ),
+      sort: ActivitySort.values.firstWhere(
+        (v) => v.name == j['sort'],
+        orElse: () => ActivitySort.newest,
+      ),
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<void> _saveActivityView(ActivityFilter f, ActivitySort sort) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_activityViewKey, _activityViewToJson(f, sort));
+  } catch (_) {
+    // Saving the view is a convenience; the screen works without it.
+  }
+}
+
+Future<({ActivityFilter filter, ActivitySort sort})?>
+_loadActivityView() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_activityViewKey);
+    return raw == null ? null : _activityViewFromJson(raw, DateTime.now());
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<List<String>> _loadRecentSearches() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList(_activityRecentKey) ?? const [];
+  } catch (_) {
+    return const [];
+  }
+}
+
+Future<void> _rememberSearch(String text) async {
+  final clean = text.trim();
+  if (clean.length < 2) return;
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final recent = [
+      clean,
+      ...(prefs.getStringList(_activityRecentKey) ?? const []).where(
+        (r) => r.toLowerCase() != clean.toLowerCase(),
+      ),
+    ].take(8).toList();
+    await prefs.setStringList(_activityRecentKey, recent);
+  } catch (_) {
+    // Recent searches are a convenience.
+  }
+}
 
 IconData _activitySortIcon(ActivitySort sort) => switch (sort) {
   ActivitySort.newest => Icons.arrow_downward_rounded,
@@ -1417,14 +1711,7 @@ final activityTransactionsProvider = FutureProvider<List<TransactionEntry>>((
   return unique.values
       .where(
         (entry) =>
-            filter.type.matches(entry) &&
-            (filter.cardId == null || entry.userCardId == filter.cardId) &&
-            (filter.categoryId == null ||
-                entry.categoryId == filter.categoryId ||
-                entry.parentCategoryId == filter.categoryId) &&
-            (filter.categoryLabel == null ||
-                filter.categoryLabel!.trim().toLowerCase() ==
-                    entry.categoryLabel.trim().toLowerCase()) &&
+            filter.matchesLocally(entry) &&
             selection.matches(
               entry,
               tags:
@@ -1540,6 +1827,10 @@ IconData _typeIcon(_ActivityTypeFilter type) => switch (type) {
 /// D1's search box. Debounced, because every keystroke would otherwise be
 /// a round trip — and the ILIKE behind it scans, so a burst of them on a
 /// long history is exactly the query you don't want to fire six times.
+/// One tap group for the search box and the suggestions under it, so a tap on a
+/// suggestion does not count as "outside" and close the keyboard first.
+final Object _searchTapGroup = Object();
+
 class _SearchField extends ConsumerStatefulWidget {
   const _SearchField();
 
@@ -1549,31 +1840,52 @@ class _SearchField extends ConsumerStatefulWidget {
 
 class _SearchFieldState extends ConsumerState<_SearchField> {
   final _controller = TextEditingController();
+  final _focus = FocusNode();
   Timer? _debounce;
 
   @override
   void initState() {
     super.initState();
     _controller.text = ref.read(_activityFilterProvider).query ?? '';
+    _focus.addListener(_onFocus);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(_activitySearchDraftProvider.notifier).state = _controller.text;
+      ref.read(_activitySearchActiveProvider.notifier).state = _focus.hasFocus;
+    });
   }
 
   @override
   void dispose() {
     _debounce?.cancel();
+    _focus.removeListener(_onFocus);
+    _focus.dispose();
     _controller.dispose();
     super.dispose();
   }
 
+  void _onFocus() {
+    if (!mounted) return;
+    ref.read(_activitySearchActiveProvider.notifier).state = _focus.hasFocus;
+    if (!_focus.hasFocus) unawaited(_rememberSearch(_controller.text));
+  }
+
+  void _setQuery(String value) {
+    final trimmed = value.trim();
+    ref
+        .read(_activityFilterProvider.notifier)
+        .update(
+          (f) => f.copyWith(query: () => trimmed.isEmpty ? null : trimmed),
+        );
+  }
+
   void _onChanged(String value) {
+    ref.read(_activitySearchDraftProvider.notifier).state = value;
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 350), () {
-      final trimmed = value.trim();
-      ref
-          .read(_activityFilterProvider.notifier)
-          .update(
-            (f) => f.copyWith(query: () => trimmed.isEmpty ? null : trimmed),
-          );
-    });
+    _debounce = Timer(
+      const Duration(milliseconds: 350),
+      () => _setQuery(value),
+    );
     // Rebuild for the clear button's visibility, which shouldn't wait on
     // the debounce.
     setState(() {});
@@ -1582,115 +1894,371 @@ class _SearchFieldState extends ConsumerState<_SearchField> {
   void _clear() {
     _debounce?.cancel();
     _controller.clear();
-    ref
-        .read(_activityFilterProvider.notifier)
-        .update((f) => f.copyWith(query: () => null));
+    ref.read(_activitySearchDraftProvider.notifier).state = '';
+    _setQuery('');
     setState(() {});
+  }
+
+  void _finish() {
+    _debounce?.cancel();
+    _setQuery(_controller.text);
+    _focus.unfocus();
   }
 
   @override
   Widget build(BuildContext context) {
+    // The query can be set from elsewhere (a suggestion, Clear all, a voice
+    // answer); keep the box in step with it.
     ref.listen<String?>(_activityFilterProvider.select((f) => f.query), (
       _,
       next,
     ) {
       final incoming = next ?? '';
-      if (_controller.text != incoming) {
+      if (_controller.text.trim() != incoming) {
         _controller.text = incoming;
+        ref.read(_activitySearchDraftProvider.notifier).state = incoming;
         setState(() {});
       }
     });
+    ref.listen<String>(_activitySearchDraftProvider, (_, next) {
+      if (_controller.text != next) {
+        // Changed from outside (a suggestion was chosen): a search typed a
+        // moment ago must not land afterwards and undo it.
+        _debounce?.cancel();
+        _controller.text = next;
+        setState(() {});
+      }
+    });
+    final active = ref.watch(_activitySearchActiveProvider);
+    final hasMerchants = ref.watch(
+      _activityFilterProvider.select((f) => f.merchants.isNotEmpty),
+    );
 
-    return TextField(
-      controller: _controller,
-      onChanged: _onChanged,
-      textInputAction: TextInputAction.search,
-      // Tapping anywhere outside the field (or pressing Search) closes the keyboard.
-      onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-      onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-      style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-      decoration: InputDecoration(
-        hintText: 'Search merchant or note',
-        prefixIcon: const Icon(
-          Icons.search_rounded,
-          size: 20,
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            key: const Key('activity-search-field'),
+            controller: _controller,
+            focusNode: _focus,
+            groupId: _searchTapGroup,
+            onChanged: _onChanged,
+            textInputAction: TextInputAction.search,
+            // Tapping anywhere outside the field and its suggestions (or
+            // pressing Search) closes the keyboard.
+            onTapOutside: (_) => _focus.unfocus(),
+            onSubmitted: (_) => _finish(),
+            style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+            decoration: InputDecoration(
+              hintText: 'Search merchants or notes',
+              prefixIcon: const Icon(
+                Icons.search_rounded,
+                size: 20,
+                color: BambooInk.ink500,
+              ),
+              suffixIcon: _controller.text.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: 'Clear search',
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        size: 18,
+                        color: BambooInk.ink500,
+                      ),
+                      onPressed: _clear,
+                    ),
+              isDense: true,
+            ),
+          ),
+        ),
+        if (active)
+          TextButton(
+            key: const Key('activity-search-done'),
+            onPressed: _finish,
+            style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
+            child: Text(
+              _controller.text.trim().isEmpty && !hasMerchants
+                  ? 'Cancel'
+                  : 'Done',
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Every merchant on the phone with how many transactions it has, most used
+/// first. One pass per list snapshot.
+final _merchantStatsCache = Expando<List<({String name, int count})>>(
+  'activityMerchantStats',
+);
+
+List<({String name, int count})> _merchantStats(List<TransactionEntry> all) {
+  final cached = _merchantStatsCache[all];
+  if (cached != null) return cached;
+  final counts = <String, ({String name, int count})>{};
+  for (final entry in all) {
+    final key = _merchantKey(entry.merchantName);
+    if (key == null) continue;
+    final seen = counts[key];
+    counts[key] = (
+      name: seen?.name ?? entry.merchantName!.trim(),
+      count: (seen?.count ?? 0) + 1,
+    );
+  }
+  final result = counts.values.toList()
+    ..sort((a, b) {
+      final byCount = b.count.compareTo(a.count);
+      return byCount != 0
+          ? byCount
+          : a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+  return _merchantStatsCache[all] = List.unmodifiable(result);
+}
+
+final _recentSearchesProvider = FutureProvider.autoDispose<List<String>>(
+  (ref) => _loadRecentSearches(),
+);
+
+/// What shows while the search box has focus: merchants that match what is
+/// typed (tap to add several), recent searches, and a way to search notes.
+class _SearchSuggestions extends ConsumerWidget {
+  const _SearchSuggestions();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final draft = ref.watch(_activitySearchDraftProvider).trim();
+    final filter = ref.watch(_activityFilterProvider);
+    final all = ref.watch(transactionsProvider).valueOrNull ?? const [];
+    final recent = ref.watch(_recentSearchesProvider).valueOrNull ?? const [];
+    final stats = _merchantStats(all);
+    final needle = draft.toLowerCase();
+    final selected = {for (final m in filter.merchants) _merchantKey(m)};
+    final matches = needle.isEmpty
+        ? stats.take(6).toList()
+        : (stats.where((m) => m.name.toLowerCase().contains(needle)).toList()
+                ..sort((a, b) {
+                  final aStart = a.name.toLowerCase().startsWith(needle);
+                  final bStart = b.name.toLowerCase().startsWith(needle);
+                  if (aStart != bStart) return aStart ? -1 : 1;
+                  return b.count.compareTo(a.count);
+                }))
+              .take(8)
+              .toList();
+
+    void toggle(String name) {
+      final key = _merchantKey(name);
+      ref.read(_activityFilterProvider.notifier).update((f) {
+        final next = {...f.merchants};
+        final had = next.any((m) => _merchantKey(m) == key);
+        next.removeWhere((m) => _merchantKey(m) == key);
+        if (!had) next.add(name);
+        // The words typed found this merchant; the list now follows the
+        // merchants chosen, not the typed text as well.
+        return f.copyWith(merchants: next, query: () => null);
+      });
+      ref.read(_activitySearchDraftProvider.notifier).state = '';
+    }
+
+    Widget header(String text) => Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.lg,
+        AppSpace.md,
+        AppSpace.lg,
+        2,
+      ),
+      child: Text(
+        text,
+        style: BambooFonts.ui(
+          12,
+          weight: FontWeight.w700,
           color: BambooInk.ink500,
         ),
-        suffixIcon: _controller.text.isEmpty
-            ? null
-            : IconButton(
-                tooltip: 'Clear search',
-                icon: const Icon(
-                  Icons.close_rounded,
-                  size: 18,
+      ),
+    );
+
+    // Tapping a suggestion must not move focus off the search box: that would
+    // close the list after the first merchant, and several are the point.
+    return TapRegion(
+      groupId: _searchTapGroup,
+      child: ExcludeFocus(
+        child: ListView(
+          key: const Key('activity-search-suggestions'),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
+          children: [
+            header(needle.isEmpty ? 'Your merchants' : 'Merchants'),
+            if (matches.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpace.lg,
+                  vertical: AppSpace.sm,
+                ),
+                child: Text(
+                  'No merchant matches “$draft”.',
+                  style: BambooFonts.ui(13.5, color: BambooInk.ink500),
+                ),
+              ),
+            for (final m in matches)
+              ListTile(
+                key: Key('activity-suggest-${m.name}'),
+                dense: true,
+                title: Text(
+                  m.name,
+                  style: BambooFonts.ui(
+                    14,
+                    weight: FontWeight.w600,
+                    color: BambooInk.ink900,
+                  ),
+                ),
+                subtitle: Text(
+                  '${m.count} ${m.count == 1 ? 'transaction' : 'transactions'}',
+                  style: BambooFonts.ui(12, color: BambooInk.ink500),
+                ),
+                trailing: selected.contains(_merchantKey(m.name))
+                    ? const Icon(
+                        Icons.check_circle_rounded,
+                        color: BambooInk.jade,
+                      )
+                    : const Icon(
+                        Icons.add_circle_outline_rounded,
+                        color: BambooInk.jade,
+                      ),
+                onTap: () => toggle(m.name),
+              ),
+            if (draft.isNotEmpty)
+              ListTile(
+                key: const Key('activity-suggest-notes'),
+                dense: true,
+                leading: const Icon(
+                  Icons.search_rounded,
                   color: BambooInk.ink500,
                 ),
-                onPressed: _clear,
+                title: Text(
+                  'Search notes for “$draft”',
+                  style: BambooFonts.ui(14, color: BambooInk.ink900),
+                ),
+                onTap: () {
+                  ref
+                      .read(_activityFilterProvider.notifier)
+                      .update((f) => f.copyWith(query: () => draft));
+                  unawaited(_rememberSearch(draft));
+                  FocusManager.instance.primaryFocus?.unfocus();
+                },
               ),
-        isDense: true,
+            if (needle.isEmpty && recent.isNotEmpty) ...[
+              header('Recent searches'),
+              for (final r in recent)
+                ListTile(
+                  key: Key('activity-recent-$r'),
+                  dense: true,
+                  leading: const Icon(
+                    Icons.history_rounded,
+                    color: BambooInk.ink500,
+                  ),
+                  title: Text(
+                    r,
+                    style: BambooFonts.ui(14, color: BambooInk.ink900),
+                  ),
+                  onTap: () {
+                    ref.read(_activitySearchDraftProvider.notifier).state = r;
+                    ref
+                        .read(_activityFilterProvider.notifier)
+                        .update((f) => f.copyWith(query: () => r));
+                    FocusManager.instance.primaryFocus?.unfocus();
+                  },
+                ),
+            ],
+            const SizedBox(height: AppSpace.xl),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _SpendPeriodAndFilterBar extends StatelessWidget {
+bool _hasChips(ActivityFilter f) => f.activeSectionCount > 0;
+
+String _sortShortLabel(ActivitySort sort) => switch (sort) {
+  ActivitySort.newest => 'Newest',
+  ActivitySort.oldest => 'Oldest',
+  ActivitySort.highestAmount => 'Highest',
+  ActivitySort.lowestAmount => 'Lowest',
+  ActivitySort.merchantAz => 'A to Z',
+};
+
+/// The three controls under the search box: period, Filters and Sort. Equal
+/// width, so the row looks the same whatever is chosen.
+class _ActivityControlRow extends StatelessWidget {
   final ActivityFilter filter;
+  final ActivitySort sort;
   final VoidCallback onOpenPeriod;
   final VoidCallback onOpenFilters;
+  final VoidCallback onOpenSort;
 
-  const _SpendPeriodAndFilterBar({
+  const _ActivityControlRow({
     required this.filter,
+    required this.sort,
     required this.onOpenPeriod,
     required this.onOpenFilters,
+    required this.onOpenSort,
   });
 
   @override
   Widget build(BuildContext context) {
-    final filtersActive = filter.hasClearableFilters;
-    final periodLabel = _dateFilterLabel(filter);
-
+    final count = filter.activeSectionCount;
     return Row(
       children: [
         Expanded(
-          child: OutlinedButton.icon(
-            onPressed: onOpenPeriod,
-            icon: const Icon(Icons.calendar_month_rounded, size: 18),
-            label: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: Text(periodLabel, overflow: TextOverflow.ellipsis),
-                ),
-                const SizedBox(width: 4),
-                const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
-              ],
-            ),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: BambooInk.ink900,
-              side: const BorderSide(color: BambooInk.hairlineOnPaper),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              minimumSize: const Size(0, 44),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-              ),
-            ),
+          child: _ControlPill(
+            key: const Key('activity-period-button'),
+            icon: Icons.calendar_month_rounded,
+            label: _dateFilterLabel(filter),
+            trailing: const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+            onTap: onOpenPeriod,
           ),
         ),
-        const SizedBox(width: AppSpace.sm),
-        OutlinedButton.icon(
-          onPressed: onOpenFilters,
-          icon: const Icon(Icons.tune_rounded, size: 18),
-          label: Text(filtersActive ? 'Filters ·' : 'Filters'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: filtersActive ? BambooInk.jade : BambooInk.ink900,
-            side: BorderSide(
-              color: filtersActive ? BambooInk.jade : BambooInk.hairlineOnPaper,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            minimumSize: const Size(0, 44),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-            ),
+        const SizedBox(width: AppSpace.xs),
+        Expanded(
+          child: _ControlPill(
+            key: const Key('activity-filters-button'),
+            icon: Icons.tune_rounded,
+            label: 'Filters',
+            highlighted: count > 0,
+            trailing: count == 0
+                ? null
+                : Container(
+                    key: const Key('activity-filters-count'),
+                    constraints: const BoxConstraints(minWidth: 18),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 1,
+                    ),
+                    decoration: BoxDecoration(
+                      color: BambooInk.jade,
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: Text(
+                      '$count',
+                      textAlign: TextAlign.center,
+                      style: BambooFonts.ui(
+                        11,
+                        weight: FontWeight.w700,
+                        color: BambooInk.onSlate,
+                      ),
+                    ),
+                  ),
+            onTap: onOpenFilters,
+          ),
+        ),
+        const SizedBox(width: AppSpace.xs),
+        Expanded(
+          child: _ControlPill(
+            key: const Key('activity-sort-button'),
+            icon: Icons.swap_vert_rounded,
+            label: _sortShortLabel(sort),
+            highlighted: sort != ActivitySort.newest,
+            trailing: const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+            onTap: onOpenSort,
           ),
         ),
       ],
@@ -1698,115 +2266,496 @@ class _SpendPeriodAndFilterBar extends StatelessWidget {
   }
 }
 
-class _ActiveFilterBadgesRow extends ConsumerWidget {
-  final ActivityFilter filter;
-  const _ActiveFilterBadgesRow({required this.filter});
+class _ControlPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Widget? trailing;
+  final bool highlighted;
+  final VoidCallback onTap;
+
+  const _ControlPill({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.trailing,
+    this.highlighted = false,
+  });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final cards = ref.watch(userCardsProvider).valueOrNull ?? const [];
-    final card = filter.cardId != null
-        ? cards.cast<UserCard?>().firstWhere(
-            (c) => c?.id == filter.cardId,
-            orElse: () => null,
-          )
-        : null;
-    final cardTitle = card?.nickname?.isNotEmpty == true
-        ? card!.nickname!
-        : (card?.cardName ?? 'Card');
-
-    return SizedBox(
-      height: 38,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: _FilterChipButton(
-              label: 'Clear',
-              active: false,
-              icon: Icons.close_rounded,
-              onTap: () => ref.read(_activityFilterProvider.notifier).state =
-                  _activityMonthFilter(),
-            ),
-          ),
-          if (filter.type != _ActivityTypeFilter.all)
-            _badge(
-              label: filter.type.label,
-              onRemove: () => ref
-                  .read(_activityFilterProvider.notifier)
-                  .update(
-                    (current) =>
-                        current.copyWith(type: _ActivityTypeFilter.all),
-                  ),
-            ),
-          if (filter.categoryId != null || filter.categoryLabel != null)
-            _badge(
-              label: filter.categoryLabel ?? 'Category',
-              onRemove: () => ref
-                  .read(_activityFilterProvider.notifier)
-                  .update(
-                    (current) => current.copyWith(
-                      categoryId: () => null,
-                      categoryLabel: () => null,
-                    ),
-                  ),
-            ),
-          if (filter.cardId != null)
-            _badge(
-              label: cardTitle,
-              onRemove: () => ref
-                  .read(_activityFilterProvider.notifier)
-                  .update((current) => current.copyWith(cardId: () => null)),
-            ),
-          if (filter.tagIds.isNotEmpty || filter.untagged)
-            _badge(
-              label: filter.untagged
-                  ? 'Untagged'
-                  : '${filter.tagIds.length} tags',
-              onRemove: () => ref
-                  .read(_activityFilterProvider.notifier)
-                  .update(
-                    (current) =>
-                        current.copyWith(tagIds: const {}, untagged: false),
-                  ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _badge({required String label, required VoidCallback onRemove}) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: ActionChip(
-        avatar: const Icon(
-          Icons.close_rounded,
-          size: 15,
-          color: BambooInk.onSlate,
-        ),
-        label: Text(label),
-        backgroundColor: BambooInk.slate,
-        side: BorderSide.none,
-        visualDensity: VisualDensity.compact,
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        labelStyle: BambooFonts.ui(
-          12,
-          weight: FontWeight.w600,
-          color: BambooInk.onSlate,
-        ),
-        shape: RoundedRectangleBorder(
+  Widget build(BuildContext context) {
+    final color = highlighted ? BambooInk.jade : BambooInk.ink900;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.pill),
+      child: Container(
+        height: 42,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(
+            color: highlighted ? BambooInk.jade : BambooInk.hairlineOnPaper,
+          ),
         ),
-        onPressed: onRemove,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 17, color: color),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                style: BambooFonts.ui(
+                  13,
+                  weight: FontWeight.w600,
+                  color: color,
+                ),
+              ),
+            ),
+            if (trailing != null) ...[const SizedBox(width: 3), trailing!],
+          ],
+        ),
       ),
     );
   }
 }
 
+/// One chip per choice made in Filters, each with its own ✕, and one Clear all.
+class _ActiveChipsRow extends ConsumerWidget {
+  final ActivityFilter filter;
+  const _ActiveChipsRow({required this.filter});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cards = ref.watch(userCardsProvider).valueOrNull ?? const [];
+    final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
+    void update(ActivityFilter Function(ActivityFilter) change) =>
+        ref.read(_activityFilterProvider.notifier).update(change);
+
+    String cardName(String id) {
+      final card = cards.cast<UserCard?>().firstWhere(
+        (c) => c?.id == id,
+        orElse: () => null,
+      );
+      if (card == null) return 'Card';
+      return card.nickname?.isNotEmpty == true ? card.nickname! : card.cardName;
+    }
+
+    String categoryName(String id) {
+      final category = categories.cast<SpendCategory?>().firstWhere(
+        (c) => c?.id == id,
+        orElse: () => null,
+      );
+      return category?.name ?? 'Category';
+    }
+
+    final chips = <Widget>[
+      if (filter.type != _ActivityTypeFilter.all)
+        _FilterValueChip(
+          label: filter.type.label,
+          onRemove: () =>
+              update((f) => f.copyWith(type: _ActivityTypeFilter.all)),
+        ),
+      for (final merchant in filter.merchants)
+        _FilterValueChip(
+          label: merchant,
+          onRemove: () => update(
+            (f) => f.copyWith(
+              merchants: {...f.merchants}
+                ..removeWhere((m) => _merchantKey(m) == _merchantKey(merchant)),
+            ),
+          ),
+        ),
+      for (final id in filter.categoryIds)
+        _FilterValueChip(
+          label: categoryName(id),
+          onRemove: () => update(
+            (f) => f.copyWith(categoryIds: {...f.categoryIds}..remove(id)),
+          ),
+        ),
+      for (final label in filter.categoryLabels)
+        _FilterValueChip(
+          label: label,
+          onRemove: () => update(
+            (f) => f.copyWith(
+              categoryLabels: {...f.categoryLabels}..remove(label),
+            ),
+          ),
+        ),
+      for (final id in filter.cardIds)
+        _FilterValueChip(
+          label: cardName(id),
+          onRemove: () =>
+              update((f) => f.copyWith(cardIds: {...f.cardIds}..remove(id))),
+        ),
+      if (filter.tagIds.isNotEmpty || filter.untagged)
+        _FilterValueChip(
+          label: filter.untagged
+              ? 'Untagged'
+              : '${filter.tagIds.length} ${filter.tagIds.length == 1 ? 'tag' : 'tags'}',
+          onRemove: () =>
+              update((f) => f.copyWith(tagIds: const {}, untagged: false)),
+        ),
+      if (filter.amountMinPaise != null || filter.amountMaxPaise != null)
+        _FilterValueChip(
+          label: _amountRangeLabel(
+            filter.amountMinPaise,
+            filter.amountMaxPaise,
+          ),
+          onRemove: () => update(
+            (f) => f.copyWith(
+              amountMinPaise: () => null,
+              amountMaxPaise: () => null,
+            ),
+          ),
+        ),
+      if (filter.foreignOnly)
+        _FilterValueChip(
+          label: 'Foreign currency',
+          onRemove: () => update((f) => f.copyWith(foreignOnly: false)),
+        ),
+    ];
+
+    return SizedBox(
+      height: 34,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          for (final chip in chips)
+            Padding(padding: const EdgeInsets.only(right: 6), child: chip),
+          TextButton(
+            key: const Key('activity-clear-all'),
+            onPressed: () {
+              ref.read(_activityFilterProvider.notifier).state =
+                  _activityMonthFilter();
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: BambooInk.jade,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              textStyle: BambooFonts.ui(13, weight: FontWeight.w700),
+            ),
+            child: const Text('Clear all'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _amountRangeLabel(int? minPaise, int? maxPaise) {
+  String rupees(int paise) => Money.fromPaise(paise).format(hidePaise: true);
+  if (minPaise != null && maxPaise != null) {
+    return '${rupees(minPaise)} to ${rupees(maxPaise)}';
+  }
+  return minPaise != null
+      ? 'From ${rupees(minPaise)}'
+      : 'Up to ${rupees(maxPaise!)}';
+}
+
+class _FilterValueChip extends StatelessWidget {
+  final String label;
+  final VoidCallback onRemove;
+  const _FilterValueChip({required this.label, required this.onRemove});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: BambooInk.wash,
+      shape: const StadiumBorder(),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onRemove,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 8, 0),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 160),
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: BambooFonts.ui(
+                    12.5,
+                    weight: FontWeight.w600,
+                    color: BambooInk.ink900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Semantics(
+                label: 'Remove $label',
+                child: const Icon(
+                  Icons.close_rounded,
+                  size: 15,
+                  color: BambooInk.ink700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One line that says foreign payments are waiting for their INR amount, where
+/// the old card and three rows pushed the list off the screen.
+class _ForeignBanner extends StatelessWidget {
+  final List<ForeignPayment> payments;
+  final VoidCallback onTap;
+  const _ForeignBanner({required this.payments, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final estimated = payments
+        .where((p) => p.direction != 'refund')
+        .fold<int>(0, (sum, p) => sum + (p.estimatedInr?.paise ?? 0));
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        key: const Key('activity-foreign-banner'),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: BambooInk.warningBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: BambooInk.warningBorder),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.currency_exchange,
+              size: 17,
+              color: BambooInk.ink900,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                estimated > 0
+                    ? '${payments.length} foreign ${payments.length == 1 ? 'payment' : 'payments'} awaiting INR · about ${Money.fromPaise(estimated).format(hidePaise: true)}'
+                    : '${payments.length} foreign ${payments.length == 1 ? 'payment' : 'payments'} awaiting INR',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: BambooFonts.ui(
+                  12.5,
+                  weight: FontWeight.w600,
+                  color: BambooInk.ink900,
+                ),
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: BambooInk.ink500,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PickOption {
+  final String id;
+  final String label;
+  final int? count;
+  const _PickOption(this.id, this.label, [this.count]);
+}
+
+/// A long list in one place: search it, tick any number, press Done.
+Future<Set<String>?> _pickMany(
+  BuildContext context, {
+  required String title,
+  required String searchHint,
+  required List<_PickOption> options,
+  required Set<String> selected,
+}) => showModalBottomSheet<Set<String>>(
+  context: context,
+  isScrollControlled: true,
+  useSafeArea: true,
+  showDragHandle: true,
+  backgroundColor: BambooInk.paper,
+  shape: const RoundedRectangleBorder(
+    borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+  ),
+  builder: (_) => _MultiSelectSheet(
+    title: title,
+    searchHint: searchHint,
+    options: options,
+    selected: selected,
+  ),
+);
+
+class _MultiSelectSheet extends StatefulWidget {
+  final String title;
+  final String searchHint;
+  final List<_PickOption> options;
+  final Set<String> selected;
+  const _MultiSelectSheet({
+    required this.title,
+    required this.searchHint,
+    required this.options,
+    required this.selected,
+  });
+
+  @override
+  State<_MultiSelectSheet> createState() => _MultiSelectSheetState();
+}
+
+class _MultiSelectSheetState extends State<_MultiSelectSheet> {
+  late final Set<String> _picked = {...widget.selected};
+  String _needle = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final needle = _needle.trim().toLowerCase();
+    final shown = [
+      for (final o in widget.options)
+        if (needle.isEmpty || o.label.toLowerCase().contains(needle)) o,
+    ];
+    return SafeArea(
+      top: false,
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.8,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.lg,
+                0,
+                AppSpace.lg,
+                AppSpace.xs,
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    widget.title,
+                    style: BambooFonts.heading(20, color: BambooInk.ink900),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    key: const Key('activity-pick-clear'),
+                    onPressed: _picked.isEmpty
+                        ? null
+                        : () => setState(_picked.clear),
+                    style: TextButton.styleFrom(
+                      foregroundColor: BambooInk.jade,
+                    ),
+                    child: const Text('Clear'),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpace.lg,
+                vertical: AppSpace.xs,
+              ),
+              child: TextField(
+                key: const Key('activity-pick-search'),
+                onChanged: (v) => setState(() => _needle = v),
+                decoration: InputDecoration(
+                  hintText: widget.searchHint,
+                  prefixIcon: const Icon(
+                    Icons.search_rounded,
+                    size: 20,
+                    color: BambooInk.ink500,
+                  ),
+                  isDense: true,
+                ),
+              ),
+            ),
+            Expanded(
+              child: shown.isEmpty
+                  ? Center(
+                      child: Text(
+                        'Nothing matches.',
+                        style: BambooFonts.ui(14, color: BambooInk.ink500),
+                      ),
+                    )
+                  : ListView(
+                      children: [
+                        for (final o in shown)
+                          CheckboxListTile(
+                            key: Key('activity-pick-${o.id}'),
+                            dense: true,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            activeColor: BambooInk.jade,
+                            value: _picked.contains(o.id),
+                            onChanged: (v) => setState(() {
+                              v == true
+                                  ? _picked.add(o.id)
+                                  : _picked.remove(o.id);
+                            }),
+                            title: Text(
+                              o.label,
+                              style: BambooFonts.ui(
+                                14,
+                                color: BambooInk.ink900,
+                              ),
+                            ),
+                            secondary: o.count == null
+                                ? null
+                                : Text(
+                                    '${o.count}',
+                                    style: BambooFonts.ui(
+                                      12.5,
+                                      color: BambooInk.ink500,
+                                    ),
+                                  ),
+                          ),
+                      ],
+                    ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.lg,
+                AppSpace.sm,
+                AppSpace.lg,
+                AppSpace.sm,
+              ),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  key: const Key('activity-pick-done'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: BambooInk.slate,
+                    foregroundColor: BambooInk.lime,
+                    minimumSize: const Size.fromHeight(50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  onPressed: () => Navigator.of(context).pop(_picked),
+                  child: Text(
+                    _picked.isEmpty
+                        ? 'Done'
+                        : 'Done, ${_picked.length} selected',
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The one place for every choice. Short lists are chips; a long list is a row
+/// that opens a searchable multi-select. Nothing changes until Show.
 class _ActivityFilterSheet extends StatefulWidget {
   final ActivityFilter initial;
+
+  /// Every transaction on the phone, so the options and the count do not shrink
+  /// to what the current filters already show.
   final List<TransactionEntry> entries;
+  final Set<String> foreignTransactionIds;
   final List<UserCard> cards;
   final List<TransactionTag> tags;
   final List<SpendCategory> categories;
@@ -1818,6 +2767,7 @@ class _ActivityFilterSheet extends StatefulWidget {
     required this.cards,
     required this.tags,
     required this.categories,
+    this.foreignTransactionIds = const {},
     this.totalForEntries,
   });
 
@@ -1826,28 +2776,82 @@ class _ActivityFilterSheet extends StatefulWidget {
 }
 
 class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
+  /// Up to this many options show as chips; more become a dropdown row.
+  static const _chipLimit = 6;
+
   late _ActivityTypeFilter _type = widget.initial.type;
-  late _ActivityDatePreset _datePreset = widget.initial.datePreset;
-  late DateTime? _from = widget.initial.from;
-  late DateTime? _to = widget.initial.to;
-  late String? _cardId = widget.initial.cardId;
-  late String? _categoryId = widget.initial.categoryId;
-  late String? _categoryLabel = widget.initial.categoryLabel;
+  late Set<String> _merchants = {...widget.initial.merchants};
+  late Set<String> _categoryIds = {...widget.initial.categoryIds};
+  late Set<String> _categoryLabels = {...widget.initial.categoryLabels};
+  late Set<String> _cardIds = {...widget.initial.cardIds};
   late Set<String> _tagIds = {...widget.initial.tagIds};
   late bool _untagged = widget.initial.untagged;
+  late bool _foreign = widget.initial.foreignOnly;
+  late final TextEditingController _min = TextEditingController(
+    text: _rupeesText(widget.initial.amountMinPaise),
+  );
+  late final TextEditingController _max = TextEditingController(
+    text: _rupeesText(widget.initial.amountMaxPaise),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    // A category only known by name (from a drill-down) becomes the same
+    // category in the list, so it can be unticked there.
+    for (final label in {..._categoryLabels}) {
+      final match = widget.categories.cast<SpendCategory?>().firstWhere(
+        (c) =>
+            c != null &&
+            c.name.trim().toLowerCase() == label.trim().toLowerCase(),
+        orElse: () => null,
+      );
+      if (match != null) {
+        _categoryIds.add(match.id);
+        _categoryLabels.remove(label);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _min.dispose();
+    _max.dispose();
+    super.dispose();
+  }
+
+  static String _rupeesText(int? paise) => paise == null
+      ? ''
+      : (paise % 100 == 0
+            ? '${paise ~/ 100}'
+            : (paise / 100).toStringAsFixed(2));
+
+  static int? _parsePaise(String text) {
+    final value = double.tryParse(text.replaceAll(',', '').trim());
+    return value == null || value < 0 ? null : (value * 100).round();
+  }
+
+  ActivityFilter get _draft => widget.initial.copyWith(
+    type: _type,
+    merchants: _merchants,
+    categoryIds: _categoryIds,
+    categoryLabels: _categoryLabels,
+    cardIds: _cardIds,
+    tagIds: _tagIds,
+    untagged: _untagged,
+    amountMinPaise: () => _parsePaise(_min.text),
+    amountMaxPaise: () => _parsePaise(_max.text),
+    foreignOnly: _foreign,
+  );
 
   List<TransactionEntry> get _matchingEntries {
+    final draft = _draft;
+    final from = draft.from;
+    final to = draft.to;
+    final query = draft.query?.trim().toLowerCase();
     return widget.entries.where((entry) {
-      if (_type != _ActivityTypeFilter.all && !_type.matches(entry)) {
-        return false;
-      }
-      if (_cardId != null && entry.userCardId != _cardId) return false;
-      if (_categoryId != null &&
-          entry.categoryId != _categoryId &&
-          entry.parentCategoryId != _categoryId) {
-        return false;
-      }
-      if (_categoryLabel != null && entry.categoryName != _categoryLabel) {
+      if (!draft.matchesLocally(entry)) return false;
+      if (_foreign && !widget.foreignTransactionIds.contains(entry.id)) {
         return false;
       }
       final entryTagIds = entry.tags.map((t) => t.id).toSet();
@@ -1855,81 +2859,169 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
       if (_tagIds.isNotEmpty && !entryTagIds.any(_tagIds.contains)) {
         return false;
       }
-      if (_from != null && entry.occurredAt.isBefore(_from!)) return false;
-      if (_to != null &&
-          !entry.occurredAt.isBefore(
-            DateTime(_to!.year, _to!.month, _to!.day + 1),
-          )) {
+      if (from != null && entry.occurredAt.isBefore(from)) return false;
+      if (to != null &&
+          !entry.occurredAt.isBefore(DateTime(to.year, to.month, to.day + 1))) {
         return false;
+      }
+      if (query != null && query.isNotEmpty) {
+        final text = '${entry.merchantName ?? ''} ${entry.note ?? ''}'
+            .toLowerCase();
+        if (!text.contains(query)) return false;
       }
       return true;
     }).toList();
   }
 
-  Money get _matchingTotal {
-    final totals = widget.totalForEntries?.call(_matchingEntries);
-    if (totals != null) return Money.fromPaise(totals.spendMinor);
-    return _matchingEntries
-        .where(
-          (e) => e.status == 'active' && e.entryKind != TxnEntryKind.income,
-        )
-        .fold<Money>(const Money.zero(), (sum, e) => sum + e.amount);
-  }
-
   void _reset() {
-    final def = _activityMonthFilter();
     setState(() {
-      _type = def.type;
-      _datePreset = def.datePreset;
-      _from = def.from;
-      _to = def.to;
-      _cardId = def.cardId;
-      _categoryId = def.categoryId;
-      _categoryLabel = def.categoryLabel;
-      _tagIds = {...def.tagIds};
-      _untagged = def.untagged;
+      _type = _ActivityTypeFilter.all;
+      _merchants = {};
+      _categoryIds = {};
+      _categoryLabels = {};
+      _cardIds = {};
+      _tagIds = {};
+      _untagged = false;
+      _foreign = false;
+      _min.clear();
+      _max.clear();
     });
   }
 
-  String get _currentDateLabel {
-    if (_datePreset != _ActivityDatePreset.allTime) {
-      if (_datePreset != _ActivityDatePreset.custom ||
-          _from != null ||
-          _to != null) {
-        return _datePreset == _ActivityDatePreset.custom
-            ? '${_shortDateLabel(_from)} – ${_shortDateLabel(_to)}'
-            : _datePreset.label;
+  String _names(Iterable<String> names, String empty) {
+    final list = names.toList();
+    if (list.isEmpty) return empty;
+    if (list.length <= 2) return list.join(', ');
+    return '${list.take(2).join(', ')} +${list.length - 2}';
+  }
+
+  String _cardName(UserCard c) =>
+      c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName;
+
+  Future<void> _pickMerchants() async {
+    final options = [
+      for (final m in _merchantStats(widget.entries))
+        _PickOption(m.name, m.name, m.count),
+    ];
+    // A merchant already chosen that is no longer in the list still shows.
+    for (final m in _merchants) {
+      if (!options.any((o) => _merchantKey(o.id) == _merchantKey(m))) {
+        options.insert(0, _PickOption(m, m));
       }
     }
-    return _datePreset.label;
-  }
-
-  String? get _selectedCardName {
-    if (_cardId == null) return null;
-    final c = widget.cards.cast<UserCard?>().firstWhere(
-      (c) => c?.id == _cardId,
-      orElse: () => null,
+    final picked = await _pickMany(
+      context,
+      title: 'Merchants',
+      searchHint: 'Search merchants',
+      options: options,
+      selected: _merchants,
     );
-    if (c == null) return null;
-    return c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName;
+    if (picked != null && mounted) setState(() => _merchants = picked);
   }
 
-  String? get _selectedCategoryName {
-    if (_categoryId != null) {
-      final c = widget.categories.cast<SpendCategory?>().firstWhere(
-        (cat) => cat?.id == _categoryId,
-        orElse: () => null,
-      );
-      if (c != null) return c.name;
+  Future<void> _pickCategories() async {
+    final counts = <String, int>{};
+    for (final e in widget.entries) {
+      final id = e.parentCategoryId ?? e.categoryId;
+      if (id != null) counts.update(id, (n) => n + 1, ifAbsent: () => 1);
     }
-    return _categoryLabel;
+    final picked = await _pickMany(
+      context,
+      title: 'Category',
+      searchHint: 'Search categories',
+      options: [
+        for (final c in widget.categories.where((c) => !c.isSubcategory))
+          _PickOption(c.id, c.name, counts[c.id]),
+      ],
+      selected: _categoryIds,
+    );
+    if (picked != null && mounted) setState(() => _categoryIds = picked);
   }
+
+  Future<void> _pickCards() async {
+    final picked = await _pickMany(
+      context,
+      title: 'Account or card',
+      searchHint: 'Search cards and accounts',
+      options: [for (final c in widget.cards) _PickOption(c.id, _cardName(c))],
+      selected: _cardIds,
+    );
+    if (picked != null && mounted) setState(() => _cardIds = picked);
+  }
+
+  Future<void> _pickTags() async {
+    final picked = await _pickMany(
+      context,
+      title: 'Tags',
+      searchHint: 'Search tags',
+      options: [for (final t in widget.tags) _PickOption(t.id, t.name)],
+      selected: _tagIds,
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _tagIds = picked;
+        if (picked.isNotEmpty) _untagged = false;
+      });
+    }
+  }
+
+  Widget _chips<T>({
+    required Iterable<(String, String)> options,
+    required Set<String> selected,
+    required void Function(String id, bool on) onChanged,
+  }) => Wrap(
+    spacing: AppSpace.sm,
+    runSpacing: AppSpace.sm,
+    children: [
+      for (final (id, label) in options)
+        _typePill(
+          label: label,
+          selected: selected.contains(id),
+          onTap: () => setState(() => onChanged(id, !selected.contains(id))),
+        ),
+    ],
+  );
 
   @override
   Widget build(BuildContext context) {
-    final topLevelCategories = widget.categories
-        .where((c) => !c.isSubcategory)
-        .toList();
+    final categoryNames = [
+      for (final id in _categoryIds)
+        widget.categories
+                .cast<SpendCategory?>()
+                .firstWhere((c) => c?.id == id, orElse: () => null)
+                ?.name ??
+            'Category',
+      ..._categoryLabels,
+    ];
+    final cardNames = [
+      for (final c in widget.cards)
+        if (_cardIds.contains(c.id)) _cardName(c),
+    ];
+    final tagNames = [
+      for (final t in widget.tags)
+        if (_tagIds.contains(t.id)) t.name,
+    ];
+    final matching = _matchingEntries.length;
+
+    Widget dropdown({
+      required Key key,
+      required String value,
+      required bool filled,
+      required VoidCallback onTap,
+    }) => _selectionField(
+      key: key,
+      child: Text(
+        value,
+        overflow: TextOverflow.ellipsis,
+        style: BambooFonts.ui(
+          14,
+          weight: filled ? FontWeight.w600 : FontWeight.w400,
+          color: filled ? BambooInk.ink900 : BambooInk.ink500,
+        ),
+      ),
+      trailing: const Icon(Icons.keyboard_arrow_down_rounded),
+      onTap: onTap,
+    );
 
     return SafeArea(
       top: false,
@@ -1939,6 +3031,35 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
         ),
         child: Column(
           children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.lg,
+                0,
+                AppSpace.lg,
+                AppSpace.md,
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    'Filters',
+                    style: BambooFonts.heading(22, color: BambooInk.ink900),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    key: const Key('activity-filters-reset'),
+                    onPressed: _reset,
+                    style: TextButton.styleFrom(
+                      foregroundColor: BambooInk.jade,
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+                    ),
+                    child: const Text('Reset'),
+                  ),
+                ],
+              ),
+            ),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(
@@ -1950,135 +3071,6 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Text(
-                          'Filter activity',
-                          style: BambooFonts.heading(
-                            22,
-                            color: BambooInk.ink900,
-                          ),
-                        ),
-                        const Spacer(),
-                        TextButton(
-                          onPressed: _reset,
-                          style: TextButton.styleFrom(
-                            foregroundColor: BambooInk.jade,
-                            padding: EdgeInsets.zero,
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            textStyle: BambooFonts.ui(
-                              15,
-                              weight: FontWeight.w700,
-                            ),
-                          ),
-                          child: const Text('Reset'),
-                        ),
-                      ],
-                    ),
-                    Text(
-                      'Applies across all activity views',
-                      style: BambooFonts.ui(14, color: BambooInk.ink500),
-                    ),
-                    const SizedBox(height: AppSpace.xl),
-
-                    const _FilterLabel('Date range'),
-                    const SizedBox(height: AppSpace.xs),
-                    _selectionField(
-                      icon: Icons.calendar_today_outlined,
-                      label: _currentDateLabel,
-                      trailing: const Icon(Icons.keyboard_arrow_down_rounded),
-                      onTap: () async {
-                        final picked =
-                            await showModalBottomSheet<_ActivityDatePreset>(
-                              context: context,
-                              showDragHandle: true,
-                              builder: (sheetContext) => SafeArea(
-                                child: SingleChildScrollView(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: AppSpace.sm,
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                          AppSpace.lg,
-                                          AppSpace.sm,
-                                          AppSpace.lg,
-                                          AppSpace.xs,
-                                        ),
-                                        child: Text(
-                                          'Activity period',
-                                          style: BambooFonts.heading(
-                                            17,
-                                            color: BambooInk.ink900,
-                                          ),
-                                        ),
-                                      ),
-                                      for (final preset
-                                          in _ActivityDatePreset.values)
-                                        ListTile(
-                                          leading: Icon(
-                                            _datePresetIcon(preset),
-                                            color: preset == _datePreset
-                                                ? BambooInk.jade
-                                                : BambooInk.ink500,
-                                          ),
-                                          title: Text(
-                                            preset.label,
-                                            style: BambooFonts.ui(
-                                              14,
-                                              weight: FontWeight.w600,
-                                              color: BambooInk.ink900,
-                                            ),
-                                          ),
-                                          selected: preset == _datePreset,
-                                          selectedTileColor:
-                                              BambooInk.paperMuted,
-                                          onTap: () => Navigator.of(
-                                            sheetContext,
-                                          ).pop(preset),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                        if (picked == null || !mounted) return;
-                        if (picked == _ActivityDatePreset.custom) {
-                          final now = DateTime.now();
-                          final firstDate = DateTime(now.year - 5, 1, 1);
-                          final lastDate = DateTime(now.year + 1, 12, 31);
-                          if (!context.mounted) return;
-                          final range = await showDateRangePicker(
-                            context: context,
-                            firstDate: firstDate,
-                            lastDate: lastDate,
-                            initialDateRange: _from != null && _to != null
-                                ? DateTimeRange(start: _from!, end: _to!)
-                                : null,
-                          );
-                          if (range != null && mounted) {
-                            setState(() {
-                              _from = range.start;
-                              _to = range.end;
-                              _datePreset = _ActivityDatePreset.custom;
-                            });
-                          }
-                          return;
-                        }
-                        final range = picked.range(DateTime.now());
-                        setState(() {
-                          _from = range?.start;
-                          _to = range?.end;
-                          _datePreset = picked;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: AppSpace.xl),
-
                     const _FilterLabel('Transaction type'),
                     const SizedBox(height: AppSpace.xs),
                     Wrap(
@@ -2094,170 +3086,140 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
                           ),
                       ],
                     ),
-                    const SizedBox(height: AppSpace.xl),
+                    const SizedBox(height: AppSpace.lg),
+
+                    const _FilterLabel('Merchants'),
+                    const SizedBox(height: AppSpace.xs),
+                    dropdown(
+                      key: const Key('activity-filter-merchants'),
+                      value: _names(_merchants, 'Any merchant'),
+                      filled: _merchants.isNotEmpty,
+                      onTap: _pickMerchants,
+                    ),
+                    const SizedBox(height: AppSpace.lg),
 
                     const _FilterLabel('Category'),
                     const SizedBox(height: AppSpace.xs),
-                    _selectionField(
-                      icon: Icons.shopping_bag_outlined,
-                      child: _selectedCategoryName == null
-                          ? Text(
-                              'All categories',
-                              style: BambooFonts.ui(
-                                14,
-                                color: BambooInk.ink500,
-                              ),
-                            )
-                          : _valueChip(
-                              _selectedCategoryName!,
-                              onRemove: () => setState(() {
-                                _categoryId = null;
-                                _categoryLabel = null;
-                              }),
-                            ),
-                      trailing: _selectedCategoryName == null
-                          ? const Icon(Icons.keyboard_arrow_down_rounded)
-                          : null,
-                      onTap: () async {
-                        final picked =
-                            await showModalBottomSheet<
-                              ({bool all, String? id, String? name})
-                            >(
-                              context: context,
-                              showDragHandle: true,
-                              builder: (sheetContext) => SafeArea(
-                                child: ListView(
-                                  shrinkWrap: true,
-                                  children: [
-                                    ListTile(
-                                      title: const Text('All categories'),
-                                      selected:
-                                          _categoryId == null &&
-                                          _categoryLabel == null,
-                                      onTap: () => Navigator.of(
-                                        sheetContext,
-                                      ).pop((all: true, id: null, name: null)),
-                                    ),
-                                    for (final c in topLevelCategories)
-                                      ListTile(
-                                        title: Text(c.name),
-                                        selected: c.id == _categoryId,
-                                        onTap: () =>
-                                            Navigator.of(sheetContext).pop((
-                                              all: false,
-                                              id: c.id,
-                                              name: c.name,
-                                            )),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            );
-                        if (picked == null || !mounted) return;
-                        setState(() {
-                          _categoryId = picked.all ? null : picked.id;
-                          _categoryLabel = picked.all ? null : picked.name;
-                        });
-                      },
+                    dropdown(
+                      key: const Key('activity-filter-categories'),
+                      value: _names(categoryNames, 'All categories'),
+                      filled: categoryNames.isNotEmpty,
+                      onTap: _pickCategories,
                     ),
-                    const SizedBox(height: AppSpace.xl),
+                    const SizedBox(height: AppSpace.lg),
 
                     const _FilterLabel('Account or card'),
                     const SizedBox(height: AppSpace.xs),
-                    _selectionField(
-                      icon: Icons.credit_card_outlined,
-                      child: _selectedCardName == null
-                          ? Text(
-                              'All cards & accounts',
-                              style: BambooFonts.ui(
-                                14,
-                                color: BambooInk.ink500,
-                              ),
-                            )
-                          : _valueChip(
-                              _selectedCardName!,
-                              onRemove: () => setState(() => _cardId = null),
-                            ),
-                      trailing: _selectedCardName == null
-                          ? const Icon(Icons.keyboard_arrow_down_rounded)
-                          : null,
-                      onTap: () async {
-                        final picked =
-                            await showModalBottomSheet<
-                              ({bool all, String? id})
-                            >(
-                              context: context,
-                              showDragHandle: true,
-                              builder: (sheetContext) => SafeArea(
-                                child: ListView(
-                                  shrinkWrap: true,
-                                  children: [
-                                    ListTile(
-                                      title: const Text('All cards & accounts'),
-                                      selected: _cardId == null,
-                                      onTap: () => Navigator.of(
-                                        sheetContext,
-                                      ).pop((all: true, id: null)),
-                                    ),
-                                    for (final c in widget.cards)
-                                      ListTile(
-                                        title: Text(
-                                          c.nickname?.isNotEmpty == true
-                                              ? c.nickname!
-                                              : c.cardName,
-                                        ),
-                                        selected: c.id == _cardId,
-                                        onTap: () => Navigator.of(
-                                          sheetContext,
-                                        ).pop((all: false, id: c.id)),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            );
-                        if (picked == null || !mounted) return;
-                        setState(() => _cardId = picked.all ? null : picked.id);
-                      },
-                    ),
-                    const SizedBox(height: AppSpace.xl),
+                    if (widget.cards.length <= _chipLimit)
+                      _chips<String>(
+                        options: [
+                          for (final c in widget.cards) (c.id, _cardName(c)),
+                        ],
+                        selected: _cardIds,
+                        onChanged: (id, on) =>
+                            on ? _cardIds.add(id) : _cardIds.remove(id),
+                      )
+                    else
+                      dropdown(
+                        key: const Key('activity-filter-cards'),
+                        value: _names(cardNames, 'All cards and accounts'),
+                        filled: cardNames.isNotEmpty,
+                        onTap: _pickCards,
+                      ),
+                    const SizedBox(height: AppSpace.lg),
 
                     const _FilterLabel('Tags'),
                     const SizedBox(height: AppSpace.xs),
                     Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
+                      spacing: AppSpace.sm,
+                      runSpacing: AppSpace.sm,
                       children: [
-                        FilterChip(
-                          label: const Text('Untagged'),
+                        _typePill(
+                          label: 'Untagged',
                           selected: _untagged,
-                          onSelected: (val) => setState(() {
-                            _untagged = val;
-                            if (val) _tagIds.clear();
+                          onTap: () => setState(() {
+                            _untagged = !_untagged;
+                            if (_untagged) _tagIds.clear();
                           }),
                         ),
-                        for (final tag in widget.tags)
-                          FilterChip(
-                            label: Text(tag.name),
-                            selected: _tagIds.contains(tag.id),
-                            onSelected: (val) => setState(() {
-                              _untagged = false;
-                              val
-                                  ? _tagIds.add(tag.id)
-                                  : _tagIds.remove(tag.id);
-                            }),
-                          ),
+                        if (widget.tags.length <= _chipLimit)
+                          for (final tag in widget.tags)
+                            _typePill(
+                              label: tag.name,
+                              selected: _tagIds.contains(tag.id),
+                              onTap: () => setState(() {
+                                _untagged = false;
+                                _tagIds.contains(tag.id)
+                                    ? _tagIds.remove(tag.id)
+                                    : _tagIds.add(tag.id);
+                              }),
+                            ),
                       ],
                     ),
+                    if (widget.tags.length > _chipLimit) ...[
+                      const SizedBox(height: AppSpace.sm),
+                      dropdown(
+                        key: const Key('activity-filter-tags'),
+                        value: _names(tagNames, 'Any tag'),
+                        filled: tagNames.isNotEmpty,
+                        onTap: _pickTags,
+                      ),
+                    ],
+                    const SizedBox(height: AppSpace.lg),
+
+                    const _FilterLabel('Amount'),
                     const SizedBox(height: AppSpace.xs),
-                    Text(
-                      'Matches any selected tag across categories.',
-                      style: BambooFonts.ui(12, color: BambooInk.ink500),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            key: const Key('activity-amount-min'),
+                            controller: _min,
+                            onChanged: (_) => setState(() {}),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: const InputDecoration(
+                              hintText: 'Min',
+                              prefixText: '₹ ',
+                              isDense: true,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpace.sm),
+                        Expanded(
+                          child: TextField(
+                            key: const Key('activity-amount-max'),
+                            controller: _max,
+                            onChanged: (_) => setState(() {}),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: const InputDecoration(
+                              hintText: 'Max',
+                              prefixText: '₹ ',
+                              isDense: true,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpace.sm),
+                    SwitchListTile(
+                      key: const Key('activity-foreign-switch'),
+                      contentPadding: EdgeInsets.zero,
+                      activeThumbColor: BambooInk.jade,
+                      title: Text(
+                        'Foreign currency only',
+                        style: BambooFonts.ui(14, color: BambooInk.ink900),
+                      ),
+                      value: _foreign,
+                      onChanged: (v) => setState(() => _foreign = v),
                     ),
                   ],
                 ),
               ),
             ),
-
             Container(
               padding: EdgeInsets.fromLTRB(
                 AppSpace.lg,
@@ -2274,29 +3236,10 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text.rich(
-                    TextSpan(
-                      style: BambooFonts.ui(14, color: BambooInk.ink900),
-                      children: [
-                        TextSpan(
-                          text:
-                              '${_matchingEntries.length} matching ${_matchingEntries.length == 1 ? 'transaction' : 'transactions'} · ',
-                        ),
-                        TextSpan(
-                          text: _matchingTotal.format(hidePaise: true),
-                          style: BambooFonts.ui(
-                            14,
-                            weight: FontWeight.w700,
-                            color: BambooInk.ink900,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: AppSpace.md),
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(
+                      key: const Key('activity-filters-apply'),
                       style: FilledButton.styleFrom(
                         backgroundColor: BambooInk.lime,
                         foregroundColor: BambooInk.slate,
@@ -2306,21 +3249,10 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
                           borderRadius: BorderRadius.circular(16),
                         ),
                       ),
-                      onPressed: () {
-                        final result = widget.initial.copyWith(
-                          type: _type,
-                          datePreset: _datePreset,
-                          from: () => _from,
-                          to: () => _to,
-                          cardId: () => _cardId,
-                          categoryId: () => _categoryId,
-                          categoryLabel: () => _categoryLabel,
-                          tagIds: _tagIds,
-                          untagged: _untagged,
-                        );
-                        Navigator.of(context).pop(result);
-                      },
-                      child: const Text('Show results'),
+                      onPressed: () => Navigator.of(context).pop(_draft),
+                      child: Text(
+                        'Show $matching ${matching == 1 ? 'transaction' : 'transactions'}',
+                      ),
                     ),
                   ),
                   TextButton(
@@ -2359,12 +3291,14 @@ class _FilterLabel extends StatelessWidget {
 }
 
 Widget _selectionField({
+  Key? key,
   IconData? icon,
   String? label,
   Widget? child,
   Widget? trailing,
   VoidCallback? onTap,
 }) => InkWell(
+  key: key,
   onTap: onTap,
   borderRadius: BorderRadius.circular(16),
   child: Container(
@@ -2437,39 +3371,6 @@ Widget _typePill({
   ),
 );
 
-Widget _valueChip(String label, {VoidCallback? onRemove}) => Container(
-  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-  decoration: BoxDecoration(
-    color: BambooInk.paperMuted,
-    borderRadius: BorderRadius.circular(12),
-    border: Border.all(color: BambooInk.hairlineOnPaper),
-  ),
-  child: Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Text(
-        label,
-        style: BambooFonts.ui(
-          13,
-          weight: FontWeight.w600,
-          color: BambooInk.ink900,
-        ),
-      ),
-      if (onRemove != null) ...[
-        const SizedBox(width: 4),
-        GestureDetector(
-          onTap: onRemove,
-          child: const Icon(
-            Icons.close_rounded,
-            size: 16,
-            color: BambooInk.ink500,
-          ),
-        ),
-      ],
-    ],
-  ),
-);
-
 String _dateFilterLabel(ActivityFilter filter) {
   if (filter.datePreset != _ActivityDatePreset.allTime) {
     if (filter.datePreset != _ActivityDatePreset.custom ||
@@ -2514,45 +3415,6 @@ IconData _datePresetIcon(_ActivityDatePreset preset) => switch (preset) {
   _ActivityDatePreset.custom => Icons.tune_rounded,
 };
 
-class _FilterChipButton extends StatelessWidget {
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-  final IconData? icon;
-  const _FilterChipButton({
-    required this.label,
-    required this.active,
-    required this.onTap,
-    this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 0),
-      child: ActionChip(
-        avatar: icon != null
-            ? Icon(
-                icon,
-                size: 16,
-                color: active ? BambooInk.onSlate : BambooInk.ink700,
-              )
-            : null,
-        label: Text(label, overflow: TextOverflow.ellipsis),
-        backgroundColor: active ? BambooInk.slate : BambooInk.paperMuted,
-        side: BorderSide.none,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-        labelStyle: BambooFonts.ui(
-          13,
-          weight: FontWeight.w600,
-          color: active ? BambooInk.onSlate : BambooInk.ink900,
-        ),
-        onPressed: onTap,
-      ),
-    );
-  }
-}
-
 class _SummaryCard extends StatelessWidget {
   final Money totalIncoming;
   final Money totalOutgoing;
@@ -2574,14 +3436,9 @@ class _SummaryCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
-          _SummaryBadge(
-            icon: Icons.arrow_downward_rounded,
-            color: BambooInk.jade,
-          ),
-          const SizedBox(width: AppSpace.sm),
           Expanded(
             child: _SummaryMetric(
               label: 'Money in',
@@ -2590,12 +3447,7 @@ class _SummaryCard extends StatelessWidget {
               color: BambooInk.jade,
             ),
           ),
-          Container(width: 1, height: 30, color: BambooInk.hairlineOnPaper),
-          const SizedBox(width: AppSpace.sm),
-          _SummaryBadge(
-            icon: Icons.arrow_upward_rounded,
-            color: BambooInk.clay,
-          ),
+          Container(width: 1, height: 28, color: BambooInk.hairlineOnPaper),
           const SizedBox(width: AppSpace.sm),
           Expanded(
             child: _SummaryMetric(
@@ -2616,26 +3468,6 @@ class _SummaryCard extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _SummaryBadge extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-
-  const _SummaryBadge({required this.icon, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 30,
-      height: 30,
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        shape: BoxShape.circle,
-      ),
-      child: Icon(icon, size: 16, color: color),
     );
   }
 }

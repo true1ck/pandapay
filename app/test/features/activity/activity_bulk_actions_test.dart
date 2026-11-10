@@ -133,13 +133,16 @@ void main() {
 
     await _pump(tester, repo: repo);
 
-    // Initial state: "Select transactions" button is visible
-    expect(find.byTooltip('Select transactions'), findsOneWidget);
+    // Initial state: Select is one of the choices in the More menu
+    expect(find.byKey(const Key('activity-more-menu')), findsOneWidget);
     expect(selectionBadges, findsNothing);
     expect(find.text('0 selected'), findsNothing);
 
-    // Tap to enter selection mode
-    await tester.tap(find.byTooltip('Select transactions'));
+    // Open the menu and choose it to enter selection mode
+    await tester.tap(find.byKey(const Key('activity-more-menu')));
+    await tester.pumpAndSettle();
+    expect(find.text('Deleted transactions'), findsOneWidget);
+    await tester.tap(find.text('Select transactions'));
     await tester.pumpAndSettle();
 
     // Now in selection mode
@@ -159,7 +162,7 @@ void main() {
     await tester.tap(find.byTooltip('Cancel selection'));
     await tester.pumpAndSettle();
 
-    expect(find.byTooltip('Select transactions'), findsOneWidget);
+    expect(find.byKey(const Key('activity-more-menu')), findsOneWidget);
     expect(selectionBadges, findsNothing);
   });
 
