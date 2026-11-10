@@ -143,6 +143,10 @@ async function fetchCurrentSession(token, fetchImpl = globalThis.fetch) {
         ? { claimed: true, value: result.claimed_contacts.phone.value }
         : { claimed: false, value: null },
     },
+    // The number held for the account, verified or not. Older auth/ sends nothing (no number).
+    phoneOnFile: typeof result?.phone_on_file?.value === 'string' && result.phone_on_file.value
+      ? { value: result.phone_on_file.value }
+      : { value: null },
     // Set by auth/ when the phone lock is switched on. An older auth/ sends nothing,
     // which means "not required", so deploy order does not matter.
     phoneGate: {

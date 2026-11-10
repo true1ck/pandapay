@@ -332,7 +332,7 @@ String sharedInviteIssueMessage(Object error) {
     'settle_first' =>
       'Settle up and clear any waiting expenses before leaving.',
     'phone_not_verified' =>
-      'Verify your mobile number in your profile to use phone invites.',
+      'Add your mobile number to your profile to use phone invites.',
     'invitation_unavailable' =>
       'This invite has expired or is no longer available.',
     'network_unavailable' =>

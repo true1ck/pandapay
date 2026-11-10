@@ -58,6 +58,17 @@ async function verifyCurrentSession(token, executor = db) {
   // when REQUIRE_PHONE_AT_SIGNUP is on; a verified phone also satisfies it.
   const claimedPhone = active && Boolean(user?.claimed_phone_enc);
   const verifiedPhone = active && Boolean(user?.phone_number) && user.is_phone_verified === true;
+  // The number we hold for this account, whether or not it was ever confirmed by a code.
+  // Split uses it only to find a friend by the number you already have for them.
+  let phoneOnFile = null;
+  if (active) {
+    try {
+      if (user?.phone_number) phoneOnFile = decryptPhoneNumber(user.phone_number);
+      else if (user?.claimed_phone_enc) phoneOnFile = decryptPhoneNumber(user.claimed_phone_enc);
+    } catch (_) {
+      phoneOnFile = null;
+    }
+  }
 
   return {
     ...base,
@@ -90,6 +101,7 @@ async function verifyCurrentSession(token, executor = db) {
         value: claimedPhone ? decryptPhoneNumber(user.claimed_phone_enc) : null,
       },
     },
+    phone_on_file: { present: typeof phoneOnFile === 'string' && phoneOnFile !== '', value: phoneOnFile || null },
     phone_gate: {
       required: phoneGateRequired(),
       satisfied: claimedPhone || verifiedPhone,

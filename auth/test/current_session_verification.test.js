@@ -181,3 +181,26 @@ test('a disabled account exposes no claimed number and is not satisfied', async 
   assert.deepEqual(result.claimed_contacts, { phone: { claimed: false, value: null } });
   assert.deepEqual(result.phone_gate, { required: true, satisfied: false });
 });
+
+test('the number held for an account is reported for Split even when it was never verified', async () => {
+  const { verifyCurrentSession } = sessionService();
+  const row = (extra) => ({
+    id: 'user-1', email: 'friend@example.com', phone_number: null, is_email_verified: true,
+    is_phone_verified: false, is_active: true, deleted: false, token_version: 2, ...extra,
+  });
+  const run = (extra) => verifyCurrentSession(token(), {
+    async query(sql) {
+      if (sql.includes('FROM users')) return { rows: [row(extra)] };
+      throw new Error('Unexpected SQL');
+    },
+  });
+  const unverified = await run({ phone_number: 'enc:+917030445936' });
+  assert.deepEqual(unverified.phone_on_file, { present: true, value: '+917030445936' });
+  assert.equal(unverified.verified_contacts.phone.verified, false, 'it is still not reported as verified');
+  assert.equal(unverified.verified_contacts.phone.value, null);
+  const typedOnly = await run({ claimed_phone_enc: 'enc:+919876543210' });
+  assert.deepEqual(typedOnly.phone_on_file, { present: true, value: '+919876543210' });
+  assert.deepEqual(await run({}).then((r) => r.phone_on_file), { present: false, value: null });
+  const inactive = await run({ phone_number: 'enc:+917030445936', is_active: false });
+  assert.deepEqual(inactive.phone_on_file, { present: false, value: null }, 'no number for a revoked session');
+});

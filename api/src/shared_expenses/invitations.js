@@ -22,6 +22,28 @@ function verifiedPhoneHash(secret,contacts) {
   if(contacts?.phone?.verified!==true||typeof contacts.phone.value!=='string')return null;
   return phoneHash(secret,contacts.phone.value);
 }
+/**
+ * The number a person can be found by: a verified one first, else a typed one, else whatever
+ * number the account holds. Nobody confirms numbers by code today, so requiring that would make
+ * every lookup miss. Returns null when there is no usable number.
+ */
+function sessionPhone(session) {
+  const contacts=session?.verifiedContacts;
+  const candidates=[
+    contacts?.phone?.verified===true?contacts.phone.value:null,
+    session?.claimedContacts?.phone?.claimed===true?session.claimedContacts.phone.value:null,
+    session?.phoneOnFile?.value,
+  ];
+  for(const value of candidates) {
+    if(typeof value!=='string'||!value)continue;
+    try {return normalizePhone(value);}catch(_){/* not a usable number; try the next */}
+  }
+  return null;
+}
+function sessionPhoneHash(secret,session) {
+  const phone=sessionPhone(session);
+  return phone?phoneHash(secret,phone):null;
+}
 function inviteCredentials(secret,actor,id) {
   uuid(actor,'actorId');uuid(id,'invitationId');
   const token=crypto.createHmac('sha256',key(secret)).update(`pandapay:split-invite:v1:${actor}:${id}`).digest('base64url');
@@ -49,7 +71,7 @@ function createDirectoryToucher({withUserClient,secret,ttlMs=24*3600*1000,retryM
   const seen=new Map();
   return function touch(req) {
     try {
-      const hash=verifiedPhoneHash(secret,req.verifiedSession?.verifiedContacts);
+      const hash=sessionPhoneHash(secret,req.verifiedSession);
       if(!hash||!req.userId)return Promise.resolve(false);
       const prior=seen.get(req.userId);
       if(prior&&prior.hash===hash&&now()-prior.at<ttlMs)return Promise.resolve(false);
@@ -97,7 +119,7 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
     const b=req.body;record(b,['invitationId','contextId','memberId'],'$','INVALID_INPUT',['phoneNumber']);
     for(const field of ['invitationId','contextId','memberId'])uuid(b[field],field);
     const target=b.phoneNumber==null?null:phoneHash(secret,b.phoneNumber);
-    if(target&&target===verifiedPhoneHash(secret,req.verifiedSession?.verifiedContacts))return res.status(400).json({error:'invitation_self'});
+    if(target&&target===sessionPhoneHash(secret,req.verifiedSession))return res.status(400).json({error:'invitation_self'});
     const creds=inviteCredentials(secret,req.userId,b.invitationId);
     const result=await withUserClient(req.userId,async client=>{
       const payload={invitationId:b.invitationId,contextId:b.contextId,memberId:b.memberId,targetPhoneHash:target,tokenHash:creds.tokenHash};
@@ -126,8 +148,10 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
   route('/shared-expenses/invitations/claim',async(req,res)=>{
     const b=req.body;record(b,['token','operationId'],'$','INVALID_INPUT',['sharePhone']);uuid(b.operationId,'operationId');
     if(Object.hasOwn(b,'sharePhone')&&typeof b.sharePhone!=='boolean')fail('INVALID_INPUT','sharePhone');
-    const hash=tokenHash(b.token),phone=verifiedPhoneHash(secret,req.verifiedSession?.verifiedContacts);
-    const e164=phone?normalizePhone(req.verifiedSession.verifiedContacts.phone.value):null;
+    // The hash decides whether this invite is theirs (any number we hold). The number itself is only
+    // shared with the owner when it is a verified one the person agreed to share.
+    const hash=tokenHash(b.token),phone=sessionPhoneHash(secret,req.verifiedSession);
+    const e164=verifiedPhoneHash(secret,req.verifiedSession?.verifiedContacts)?normalizePhone(req.verifiedSession.verifiedContacts.phone.value):null;
     const last4=e164?e164.slice(-4):null;
     const on=phoneOn();
     // Consent is only recorded when the feature is on. No verified phone => 'none'. A missing sharePhone
@@ -199,7 +223,7 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
     const result=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.respond_invitation($1::uuid,$2::boolean,$3::uuid,$4::text) AS result',[b.invitationId,b.approve,b.operationId,requestHash(b)])).rows[0].result);
     res.json(result);
   });
-  const own=(req)=>verifiedPhoneHash(secret,req.verifiedSession?.verifiedContacts);
+  const own=(req)=>sessionPhoneHash(secret,req.verifiedSession);
   const touch=createDirectoryToucher({withUserClient,secret});
   // Register everyone's verified phone as soon as they use the app at all, so a person
   // who has installed and signed in is findable and can receive invites without ever
@@ -306,7 +330,8 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
       const rh=requestHash({invitationId:b.invitationId,action:path});
       const result=await withUserClient(req.userId,async client=>{
         const sql=path==='accept'?'SELECT shared_expenses.claim_invitation_by_id($1::uuid,$2::text,$3::text,$4::uuid,$5::text) AS result':'SELECT shared_expenses.decline_invitation($1::uuid,$2::text,$3::uuid,$4::text) AS result';
-        const params=path==='accept'?[b.invitationId,phone,normalizePhone(req.verifiedSession.verifiedContacts.phone.value).slice(-4),b.operationId,rh]:[b.invitationId,phone,b.operationId,rh];
+        const verifiedNumber=verifiedPhoneHash(secret,req.verifiedSession?.verifiedContacts)?normalizePhone(req.verifiedSession.verifiedContacts.phone.value):null;
+        const params=path==='accept'?[b.invitationId,phone,verifiedNumber?verifiedNumber.slice(-4):null,b.operationId,rh]:[b.invitationId,phone,b.operationId,rh];
         return (await client.query(sql,params)).rows[0].result;
       });
       const {audienceKey,...publicResult}=result;
@@ -325,4 +350,4 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
     res.json(phoneOn()?result:{...result,items:stripPhone(result.items)});
   }));
 }
-module.exports={normalizePhone,inviteCredentials,groupLinkCredentials,verifiedPhoneHash,registerInvitationRoutes,createDirectoryToucher,maskName};
+module.exports={normalizePhone,sessionPhone,sessionPhoneHash,inviteCredentials,groupLinkCredentials,verifiedPhoneHash,registerInvitationRoutes,createDirectoryToucher,maskName};

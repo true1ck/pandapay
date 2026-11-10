@@ -163,3 +163,69 @@ test('a signed-in person is registered by any authenticated request, without ope
   await new Promise((r) => setImmediate(r));
   assert.equal(writes.length, 1);
 });
+
+// People are found by the number we hold for them. Nobody confirms numbers by code, so no number is "verified".
+const onFileOnly = { verifiedContacts: { phone: { verified: false, value: null }, email: { verified: true, value: 'friend@example.com' } }, claimedContacts: { phone: { claimed: false, value: null } }, phoneOnFile: { value: '+917030445936' } };
+function onFileRig(responder) {
+  const routes = {}, queries = [];
+  const app = { get: (p, ...h) => { routes['GET ' + p] = h[h.length - 1]; }, post: (p, ...h) => { routes['POST ' + p] = h[h.length - 1]; } };
+  const withUserClient = async (_u, fn) => fn({ query: async (sql, args) => { queries.push([sql, args]); if (/register_phone/.test(sql)) return { rows: [{ result: {} }] }; return { rows: [{ result: responder(sql, args) }] }; } });
+  require('../src/shared_expenses/invitations').registerInvitationRoutes(app, { protect: (fn) => [fn], withUserClient, sendError() {}, secret, androidPackageId: 'x' });
+  const call = async (key, req) => { const out = {}; const res = { status(c) { out.code = c; return res; }, json(b) { out.body = b; return res; } }; await routes[key](req, res); return out; };
+  return { call, queries };
+}
+
+test('the number to match is the verified one, else a typed one, else the number on file', () => {
+  const { sessionPhone, sessionPhoneHash } = require('../src/shared_expenses/invitations');
+  assert.equal(sessionPhone(onFileOnly), '+917030445936');
+  assert.equal(sessionPhone({ ...onFileOnly, phoneOnFile: { value: '7030445936' } }), '+917030445936', 'a bare ten digit number is read as Indian');
+  assert.equal(sessionPhone({ ...onFileOnly, claimedContacts: { phone: { claimed: true, value: '+919999900000' } } }), '+919999900000', 'typed beats on file');
+  assert.equal(sessionPhone({ ...onFileOnly, verifiedContacts: { phone: { verified: true, value: '+918888800000' } } }), '+918888800000', 'verified beats typed');
+  assert.equal(sessionPhone({ verifiedContacts: {}, phoneOnFile: { value: 'garbage' } }), null, 'an unusable number is ignored, never thrown');
+  assert.equal(sessionPhone({ verifiedContacts: {} }), null);
+  assert.equal(sessionPhoneHash(secret, onFileOnly), verifiedPhoneHash(secret, { phone: { verified: true, value: '+917030445936' } }), 'same hash whether or not it was verified');
+});
+
+test('a person whose number is only on file is registered, found by that number and sees invites', async () => {
+  const { createDirectoryToucher } = require('../src/shared_expenses/invitations');
+  const want = verifiedPhoneHash(secret, { phone: { verified: true, value: '+917030445936' } });
+  const rig = onFileRig((sql) => {
+    if (/lookup_phone/.test(sql)) return { found: true, self: false, displayName: 'Chandresh Kerkar', existingContextId: null };
+    if (/list_my_invitations/.test(sql)) return { items: [{ invitationId: id, inviterName: 'Sujay K' }] };
+    return { status: 'awaiting_owner' };
+  });
+  // Another person types his number: the lookup hashes it the same way.
+  const lookup = await rig.call('POST /shared-expenses/directory/lookup', { userId: actor, body: { phoneNumber: '70304 45936' }, verifiedSession: { verifiedContacts: {} } });
+  assert.equal(lookup.body.found, true);
+  assert.equal(rig.queries[0][1][0], want);
+  // He opens the app: his inbox is matched on the number on file.
+  const inbox = await rig.call('GET /shared-expenses/invitations/inbox', { userId: actor, query: {}, verifiedSession: onFileOnly });
+  assert.equal(inbox.body.items.length, 1);
+  assert.equal(rig.queries.find(([sql]) => /list_my_invitations/.test(sql))[1][0], want);
+  // And can accept: no verified number, so no number suffix is stored.
+  const accept = await rig.call('POST /shared-expenses/invitations/accept', { userId: actor, body: { invitationId: id, operationId: id }, verifiedSession: onFileOnly });
+  assert.equal(accept.body.status, 'awaiting_owner');
+  const claim = rig.queries.find(([sql]) => /claim_invitation_by_id/.test(sql));
+  assert.equal(claim[1][1], want);
+  assert.equal(claim[1][2], null);
+  // His app registers him in the directory on any request.
+  const writes = [];
+  const touch = createDirectoryToucher({ withUserClient: async (u, fn) => fn({ query: async (sql, a) => { writes.push(a[0]); return { rows: [{ result: {} }] }; } }), secret });
+  assert.equal(await touch({ userId: actor, verifiedSession: onFileOnly }), true);
+  assert.equal(writes[0], want);
+});
+
+test('your own number on file is refused as an invite target, and no number means no registration', async () => {
+  const { createDirectoryToucher } = require('../src/shared_expenses/invitations');
+  const ctx = '33333333-3333-4333-8333-333333333333', member = '44444444-4444-4444-8444-444444444444';
+  const rig = onFileRig(() => ({ invitationId: id, contextId: ctx, memberId: member, status: 'open' }));
+  const self = await rig.call('POST /shared-expenses/invitations', { userId: actor, body: { invitationId: id, contextId: ctx, memberId: member, phoneNumber: '+91 70304 45936' }, verifiedSession: onFileOnly });
+  assert.equal(self.code, 400);
+  assert.equal(self.body.error, 'invitation_self');
+  let calls = 0;
+  const touch = createDirectoryToucher({ withUserClient: async () => { calls++; return {}; }, secret });
+  assert.equal(await touch({ userId: actor, verifiedSession: { verifiedContacts: {}, phoneOnFile: { value: null } } }), false);
+  assert.equal(calls, 0);
+  const none = await rig.call('GET /shared-expenses/invitations/inbox', { userId: actor, query: {}, verifiedSession: { verifiedContacts: {} } });
+  assert.equal(none.body.items.length, 0, 'an account with no number simply has no invites');
+});

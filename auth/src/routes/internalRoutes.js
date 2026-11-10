@@ -54,6 +54,7 @@ router.post('/session/verify', async (req, res) => {
         phone: { verified: false, value: null },
       },
       claimed_contacts: { phone: { claimed: false, value: null } },
+      phone_on_file: { present: false, value: null },
       phone_gate: { required: false, satisfied: false },
     });
   }
