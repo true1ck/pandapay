@@ -1,0 +1,52 @@
+{
+  "id": "cbsgen:sbi_style_tax_refund_is_income",
+  "templateHash": "2b7e9c04ef01aeb9b8e17059c953a3ee2160cd7fc3e2075bba063ac32ed817ee",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "BG-CBSSBI-S",
+      "body": "Your A/C XXXXX123456 has credit for ITDTAX REFUND 2026-27 ACRPN123 of Rs 22,584.00 on 29/10/26. Avl Bal Rs 1,04,079.26.-SBI",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "tax",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 2258400
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "123456",
+          "issuerSlug": "sbi"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "minor": 10407926
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "123456",
+          "issuerSlug": "sbi"
+        }
+      }
+    ]
+  },
+  "note": "An income tax refund is money in (purpose tax), not a shop refund.",
+  "origin": "cbs-generalization"
+}

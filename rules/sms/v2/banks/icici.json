@@ -6088,7 +6088,7 @@
   },
   {
     "id": "ICICI-ACCT-DEBIT-CHEQUE-CLEARING",
-    "version": 1,
+    "version": 2,
     "family": "cheque",
     "senders": [
       "ICICIB",
@@ -6218,9 +6218,9 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "review-2y",
-    "updatedAt": "2026-11-07T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   },
   {
     "id": "ICICI-ACCT-CREDIT-DIVIDEND-ACH",

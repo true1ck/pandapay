@@ -1,0 +1,52 @@
+{
+  "id": "cbsgen:india_post_account_credit",
+  "templateHash": "ce77eec2addc9f831138567db1b9bb84ffd26c54deed14c1c478b77a890b6f5d",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "BT-DOPBNK-G",
+      "body": "Account  No. XXXXXX3456 CREDIT with amount Rs. 19858.00 on 27-10-2026. Balance: Rs.139858.00. [IN0000003]",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "p2p",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 1985800
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "3456",
+          "issuerSlug": "indiapost"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "minor": 13985800
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "3456",
+          "issuerSlug": "indiapost"
+        }
+      }
+    ]
+  },
+  "note": "India Post 'Account No. CREDIT with amount' layout: only the debit had a rule, which left credits unread.",
+  "origin": "cbs-generalization"
+}

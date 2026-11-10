@@ -16,7 +16,7 @@
         "factType": "movement",
         "attrs": {
           "direction": "credit",
-          "purpose": "unknown",
+          "purpose": "p2p",
           "rail": "unknown"
         },
         "amounts": [
@@ -32,6 +32,6 @@
       }
     ]
   },
-  "note": "India Post Payments Bank credit with no stated source is read but not counted as income.",
+  "note": "India Post Payments Bank credit with no stated source. Since 10 Nov 2026 it is counted as money in (a credit with no stated reason used to be typed unknown and left out of the ledger without asking).",
   "origin": "review-2y"
 }

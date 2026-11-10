@@ -1,6 +1,6 @@
 {
   "schema": "pandapay.sms.solver/1",
-  "version": 2,
+  "version": 3,
   "params": {
     "accept": 0.8,
     "maxCueDistance": 8,
@@ -55,11 +55,26 @@
       "transaction|txn * done|made|completed",
       "dr",
       "purchase|purchases <amt>",
-      "credit of <amt> using pay later"
+      "credit of <amt> using pay later",
+      "a debit of <amt>",
+      "debit of <amt> from",
+      "wdl",
+      "nikala gaya",
+      "nikale gaye",
+      "kata gaya",
+      "kat gaya",
+      "debit hua",
+      "debit kiya gaya"
     ],
     "credit": [
-      "credited",
-      "deposited",
+      {
+        "p": "credited",
+        "kind": "bank"
+      },
+      {
+        "p": "deposited",
+        "kind": "bank"
+      },
       "refunded",
       "credit alert",
       "you have received",
@@ -74,7 +89,17 @@
       "you have got",
       "received <amt>",
       "received by your",
-      "processed to your"
+      "processed to your",
+      "a credit of <amt>",
+      "deposit of <amt>",
+      "cash deposit of",
+      "credit of <amt> to|in|into",
+      "added to your? a/c|account|acct",
+      "jama hua",
+      "jama kiya",
+      "jama ho gaya",
+      "credit hua",
+      "credit kiya gaya"
     ],
     "billerReceived": [
       "we have received",
@@ -198,7 +223,6 @@
       "download the app",
       "hurry",
       "last day",
-      "avail",
       "eligible for",
       "you are eligible",
       "loan offer",
@@ -224,7 +248,12 @@
       "प्लान",
       "zaroorat",
       "paayein",
-      "apply karein"
+      "apply karein",
+      "to avail",
+      "avail now",
+      "avail of",
+      "avail this|the|your|our|flat|upto|exciting|exclusive|special|instant",
+      "avail offer|offers|benefits|discount|cashback|loan|emi"
     ],
     "billDue": [
       "is due",
@@ -352,7 +381,8 @@
       "subscribed to",
       "you have subscribed",
       "mandate * * created|registered|activated|enabled|approved|setup",
-      "autopay * * created|registered|activated|enabled"
+      "autopay * * created|registered|activated|enabled",
+      "mandate * * * * registered|created|activated|approved"
     ],
     "mandateEnd": [
       {
@@ -757,7 +787,21 @@
       "reversal",
       "reversed",
       "chargeback",
-      "dispute"
+      "dispute",
+      "sent for clearing",
+      "sent for collection",
+      "under clearing",
+      "subject to realisation|realization",
+      "on realisation|realization",
+      "after realisation|realization",
+      "beware",
+      "fake",
+      "scam",
+      "messages saying",
+      "do not respond",
+      "on hold",
+      "reply yes",
+      "under review"
     ],
     "security": [
       "otp",
@@ -1125,7 +1169,21 @@
       "self",
       "own",
       "ur",
-      "acct"
+      "acct",
+      "cheque",
+      "chq",
+      "clearing",
+      "cash",
+      "transfer",
+      "collection",
+      "withdrawal",
+      "deposit",
+      "towards",
+      "emi",
+      "loan",
+      "charges",
+      "interest",
+      "salary"
     ],
     "instrumentKind": [
       {

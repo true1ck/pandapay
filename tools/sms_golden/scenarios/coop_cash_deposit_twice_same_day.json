@@ -1,0 +1,47 @@
+{
+  "id": "coop_cash_deposit_twice_same_day",
+  "description": "Two identical cash deposits on one day, an hour apart, count twice.",
+  "messages": [
+    {
+      "sender": "VA-SDCCBK-S",
+      "body": "Your A/c No.40000/XXXXX913 has been credited by Rs.150000.00 on 03/11/2026 by Cash. Available Bal is Rs.150000.00. THE SAMPLE DISTRICT CO-OPERATIVE BANK LTD",
+      "observedAt": "2026-11-03T05:00:00Z"
+    },
+    {
+      "sender": "VA-SDCCBK-S",
+      "body": "Your A/c No.40000/XXXXX913 has been credited by Rs.150000.00 on 03/11/2026 by Cash. Available Bal is Rs.300000.00. THE SAMPLE DISTRICT CO-OPERATIVE BANK LTD",
+      "observedAt": "2026-11-03T06:00:00Z"
+    }
+  ],
+  "expect": {
+    "events": [
+      {
+        "type": "p2p_in",
+        "legRoles": [
+          "credit_leg"
+        ]
+      },
+      {
+        "type": "p2p_in",
+        "legRoles": [
+          "credit_leg"
+        ]
+      }
+    ],
+    "totals": {
+      "from": "2026-10-31T18:30:00Z",
+      "to": "2026-11-30T18:30:00Z",
+      "spendMinor": 0,
+      "incomeMinor": 30000000,
+      "investmentMinor": 0,
+      "transactionCount": 2
+    }
+  },
+  "knownInstruments": [
+    {
+      "kind": "bank_account",
+      "issuerSlug": "sindhudurg_dcc",
+      "maskDigits": "913"
+    }
+  ]
+}

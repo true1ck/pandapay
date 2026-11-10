@@ -1,0 +1,47 @@
+{
+  "id": "coop_cheque_debit_same_amount_twice",
+  "description": "Two cleared cheques of the same amount on different days count twice.",
+  "messages": [
+    {
+      "sender": "VA-SDCCBK-S",
+      "body": "Your A/c No.40000/XXXXX998 has been debited by Rs.20116.00 on 03/11/2026 by Clearing Cheque No 100001. Available Bal is Rs.600000.00. THE SAMPLE DISTRICT CO-OPERATIVE BANK LTD",
+      "observedAt": "2026-11-03T05:00:00Z"
+    },
+    {
+      "sender": "VA-SDCCBK-S",
+      "body": "Your A/c No.40000/XXXXX998 has been debited by Rs.20116.00 on 05/11/2026 by Clearing Cheque No 100002. Available Bal is Rs.580000.00. THE SAMPLE DISTRICT CO-OPERATIVE BANK LTD",
+      "observedAt": "2026-11-05T05:00:00Z"
+    }
+  ],
+  "expect": {
+    "events": [
+      {
+        "type": "purchase",
+        "legRoles": [
+          "debit_leg"
+        ]
+      },
+      {
+        "type": "purchase",
+        "legRoles": [
+          "debit_leg"
+        ]
+      }
+    ],
+    "totals": {
+      "from": "2026-10-31T18:30:00Z",
+      "to": "2026-11-30T18:30:00Z",
+      "spendMinor": 4023200,
+      "incomeMinor": 0,
+      "investmentMinor": 0,
+      "transactionCount": 2
+    }
+  },
+  "knownInstruments": [
+    {
+      "kind": "bank_account",
+      "issuerSlug": "sindhudurg_dcc",
+      "maskDigits": "998"
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "id": "cbsgen:india_post_account_debit_counted",
+  "templateHash": "0fa2cb6bdfd9946c236ff92600b0e096ee6c12b140c62da561702693b75a4a39",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "BT-DOPBNK-G",
+      "body": "Account No. XXXXXX3456 DEBIT with amount Rs. 2000.00 on 28-10-2026. Balance: Rs.137858.00. [IN0000004]",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "transfer",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 200000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "3456",
+          "issuerSlug": "indiapost"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "minor": 13785800
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "3456",
+          "issuerSlug": "indiapost"
+        }
+      }
+    ]
+  },
+  "note": "The older IPPB debit rule typed this 'unknown', which the ledger does not count.",
+  "origin": "cbs-generalization"
+}

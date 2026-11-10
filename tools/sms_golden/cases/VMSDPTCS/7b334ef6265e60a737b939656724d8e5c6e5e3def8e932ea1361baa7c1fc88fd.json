@@ -1,0 +1,52 @@
+{
+  "id": "cbsgen:society_credit_info_by_collection",
+  "templateHash": "7b334ef6265e60a737b939656724d8e5c6e5e3def8e932ea1361baa7c1fc88fd",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VMSDPTCS",
+      "body": "Dear Customer, Your A/c 8412 has been credited with INR 2,000.00 in SANCHIT On 03-Oct-26. Info: By Collection Avbl Bal is INR 26,000.00. For Dispute - Call 9000000000 - Sample Teachers Co.Op.Credit Society Ltd.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "p2p",
+          "rail": "cash"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 200000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "8412",
+          "issuerSlug": "sindhudurg_teachers_society"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "minor": 2600000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "8412",
+          "issuerSlug": "sindhudurg_teachers_society"
+        }
+      }
+    ]
+  },
+  "note": "Credit society wording: account type after the amount and the mode after 'Info:'.",
+  "origin": "cbs-generalization"
+}

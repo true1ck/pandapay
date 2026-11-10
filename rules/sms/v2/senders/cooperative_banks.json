@@ -1,0 +1,20 @@
+[
+  {
+    "brand": "SDCCBK",
+    "issuerSlug": "sindhudurg_dcc",
+    "issuerKind": "bank",
+    "aliases": [
+      "JXSDCCBKS",
+      "SDCCBKS",
+      "VASDCCBKS"
+    ]
+  },
+  {
+    "brand": "SDPTCS",
+    "issuerSlug": "sindhudurg_teachers_society",
+    "issuerKind": "bank",
+    "aliases": [
+      "VMSDPTCS"
+    ]
+  }
+]
