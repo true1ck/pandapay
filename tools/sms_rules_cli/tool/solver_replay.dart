@@ -44,6 +44,8 @@ void main(List<String> args) {
 
   var total = 0, skippedNumeric = 0, skippedSecurity = 0, considered = 0;
   var ruleMatched = 0, ruleIgnored = 0, ruleMatchedChanged = 0;
+  var refinedGeneric = 0;
+  final refinedLayouts = <String>[];
   var tier1Unknown = 0, solverAccepted = 0, stillUnknown = 0;
   final bySolverRule = <String, int>{};
   final unknownBySender = <String, int>{};
@@ -75,7 +77,25 @@ void main(List<String> args) {
       final same = jsonEncode([for (final f in a.result.facts) f.toJson()]) ==
               jsonEncode([for (final f in b.result.facts) f.toJson()]) &&
           a.winnerId == b.winnerId;
-      if (!same) ruleMatchedChanged++;
+      if (!same) {
+        // The one permitted change: a generic catch-all rule enriched by the solver.
+        if ((a.winnerId ?? '').startsWith('GEN-') &&
+            b.winnerId == 'SOLVER-REFINED') {
+          refinedGeneric++;
+          final red = redactSms(
+            sender: sender,
+            body: body,
+            observedAt: at,
+            options: SmsRedactionOptions(
+              salt: 'replay-${DateTime.now().microsecondsSinceEpoch}',
+              merchantCatalogue: {},
+            ),
+          );
+          refinedLayouts.add(smsSkeleton(red.body));
+        } else {
+          ruleMatchedChanged++;
+        }
+      }
       continue;
     }
     tier1Unknown++;
@@ -130,6 +150,10 @@ void main(List<String> args) {
   stdout.writeln('  considered: $considered   (replay took ${sw.elapsedMilliseconds} ms, both engines)');
   stdout.writeln('tier 1 (existing rules): matched $ruleMatched, ignored $ruleIgnored, unknown $tier1Unknown');
   stdout.writeln('  rule-matched messages whose result changed with the solver present: $ruleMatchedChanged   (must be 0)');
+  stdout.writeln('  generic catch-all readings enriched by the solver: $refinedGeneric');
+  for (final l in refinedLayouts) {
+    stdout.writeln('    enriched layout: $l');
+  }
   stdout.writeln('of the $tier1Unknown unknown: solver accepted $solverAccepted, still unknown (review / Gemini) $stillUnknown');
   for (final e in (bySolverRule.entries.toList()..sort((a, b) => b.value.compareTo(a.value)))) {
     stdout.writeln('  ${e.key.padRight(22)} ${e.value}');

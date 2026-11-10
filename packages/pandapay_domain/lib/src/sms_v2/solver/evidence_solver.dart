@@ -558,6 +558,12 @@ class _Run {
     final declined = _s(cue).toLowerCase().contains('declin');
     final amt = eligible.isEmpty ? null : toks[eligible.first];
     final m = _mask(true, eligible.isEmpty ? null : eligible.first);
+    // A report or an application status mentions cards and credit without being a
+    // payment: nothing to review when no amount is printed.
+    if ((amt == null || amt.unit != 'INR') && hits('nonMoneyUnit').isNotEmpty) {
+      reasons.add('a failed notice about a report or application, not a payment');
+      return _done(SolverRead.info, SolverVerdict.accept, 1);
+    }
     if ((amt == null || amt.unit != 'INR') && hits('financialWord').isEmpty) {
       // "We couldn't deliver your package": a failure of something that is not a
       // payment. Nothing financial to review.
@@ -836,7 +842,7 @@ class _Run {
   ) {
     if (amts.isEmpty) {
       if (hits('nonMoneyUnit').isNotEmpty) {
-        reasons.add('completed wording about points or coins, not money');
+        reasons.add('wording about points, a report or an application, not money');
         return _done(SolverRead.info, SolverVerdict.accept, 1);
       }
       // Receipt-style or purpose-only wording ("we acknowledge the receipt of your

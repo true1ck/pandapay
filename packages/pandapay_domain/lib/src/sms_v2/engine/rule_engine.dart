@@ -555,9 +555,11 @@ class RuleEngine implements SmsInterpreter {
           d.debitDirection != (m.direction == Direction.debit)) {
         return null;
       }
+      // A debit gains from a merchant name; a credit is enriched only by a real
+      // purpose (a payer word alone, "by CASH", is not an improvement).
       final adds =
           (d.purpose != null && d.purpose != 'unknown') ||
-          d.party != null ||
+          (d.party != null && d.debitDirection == true) ||
           d.recurring ||
           d.mandateRef != null;
       if (!adds) return null;
