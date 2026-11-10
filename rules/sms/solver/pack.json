@@ -1,6 +1,6 @@
 {
   "schema": "pandapay.sms.solver/1",
-  "version": 3,
+  "version": 4,
   "params": {
     "accept": 0.8,
     "maxCueDistance": 8,
