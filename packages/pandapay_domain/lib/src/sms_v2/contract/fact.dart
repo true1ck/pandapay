@@ -59,6 +59,10 @@ final class FactEnvelope {
       );
 }
 
+/// A reading below this is shown to the person for confirmation; the app asks
+/// at the same value. At or above it the reading is acted on without asking.
+const double kConfidentRead = 0.7;
+
 /// One thing a message states. Facts never decide totals; the linker and
 /// ledger do.
 sealed class Fact extends JsonValue {

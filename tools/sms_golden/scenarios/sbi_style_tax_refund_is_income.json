@@ -1,0 +1,36 @@
+{
+  "id": "sbi_style_tax_refund_is_income",
+  "description": "An income tax refund credit is money in, not a card or shop refund.",
+  "messages": [
+    {
+      "sender": "BG-CBSSBI-S",
+      "body": "Your A/C XXXXX915254 has credit for ITDTAX REFUND 2026-27 ACRPN123 of Rs 22,584.00 on 03/11/26. Avl Bal Rs 1,04,079.26.-SBI",
+      "observedAt": "2026-11-03T05:00:00Z"
+    }
+  ],
+  "expect": {
+    "events": [
+      {
+        "type": "income",
+        "legRoles": [
+          "credit_leg"
+        ]
+      }
+    ],
+    "totals": {
+      "from": "2026-10-31T18:30:00Z",
+      "to": "2026-11-30T18:30:00Z",
+      "spendMinor": 0,
+      "incomeMinor": 2258400,
+      "investmentMinor": 0,
+      "transactionCount": 1
+    }
+  },
+  "knownInstruments": [
+    {
+      "kind": "bank_account",
+      "issuerSlug": "sbi",
+      "maskDigits": "915254"
+    }
+  ]
+}

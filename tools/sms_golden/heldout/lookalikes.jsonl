@@ -1,0 +1,88 @@
+{"id": "N00|future", "kind": "future", "sender": "VM-SMPLCB-S", "body": "Your A/c XX1234 will be debited by Rs.5000.00 on 14/08/2026 towards EMI. Maintain sufficient balance."}
+{"id": "N01|future", "kind": "future", "sender": "AD-SMPUCB-T", "body": "Rs 12,500.00 will be credited to your A/c XXXXX731 within 2 working days."}
+{"id": "N02|future", "kind": "future", "sender": "JX-SMPGRB-S", "body": "Dear Customer, your A/c No.40000/XXXXX731 is scheduled to be debited with Rs.2500.00 on 14-Aug-26 for standing instruction."}
+{"id": "N03|future", "kind": "future", "sender": "VM-SMPLCB-S", "body": "EMI of Rs.8,450.00 for loan a/c XX9087 is due on 05/09/2026. It will be debited from A/c XX1234."}
+{"id": "N04|future", "kind": "future", "sender": "AD-SMPUCB-T", "body": "Your FD of Rs.1,00,000 in A/c XX1234 will mature on 14/08/2026 and proceeds will be credited to your account."}
+{"id": "N05|future", "kind": "future", "sender": "JX-SMPGRB-S", "body": "Annual maintenance charges of Rs.590 will be debited from your A/c XX1234 on 01/09/2026."}
+{"id": "N06|failed", "kind": "failed", "sender": "VM-SMPLCB-S", "body": "Your A/c XX1234 could not be debited by Rs.5000.00 on 14/08/2026 due to insufficient balance."}
+{"id": "N07|failed", "kind": "failed", "sender": "AD-SMPUCB-T", "body": "Transaction of Rs.5000.00 from A/c XX1234 on 14/08/2026 has failed. Amount, if debited, will be reversed."}
+{"id": "N08|failed", "kind": "failed", "sender": "JX-SMPGRB-S", "body": "Debit of Rs 12,500.00 from your A/c XXXXX731 declined on 14-Aug-26. Reason: limit exceeded."}
+{"id": "N09|failed", "kind": "failed", "sender": "VM-SMPLCB-S", "body": "NEFT of Rs.25000 from A/c XX1234 to SAMPLE TRADERS was unsuccessful. Ref SAMP123456."}
+{"id": "N10|failed", "kind": "failed", "sender": "AD-SMPUCB-T", "body": "Your request to transfer Rs.5000.00 from A/c XX1234 is rejected."}
+{"id": "N11|failed", "kind": "failed", "sender": "JX-SMPGRB-S", "body": "ECS/NACH debit of Rs.3,500.00 on A/c XX1234 returned unpaid on 14/08/2026. Charges applicable."}
+{"id": "N12|pending", "kind": "pending", "sender": "VM-SMPLCB-S", "body": "We have received your request to debit Rs.5000.00 from A/c XX1234. It will be processed shortly."}
+{"id": "N13|pending", "kind": "pending", "sender": "AD-SMPUCB-T", "body": "Cheque no 123456 for Rs.20,000.00 deposited in A/c XX1234 on 14/08/2026 is sent for clearing. Amount will be credited on realisation."}
+{"id": "N14|pending", "kind": "pending", "sender": "JX-SMPGRB-S", "body": "Your NEFT request of Rs.25000 to SAMPLE TRADERS is under process. Ref SAMP123456."}
+{"id": "N15|pending", "kind": "pending", "sender": "VM-SMPLCB-S", "body": "Refund of Rs.499.00 has been initiated and will be credited to your A/c XX1234 in 5-7 working days."}
+{"id": "N16|pending", "kind": "pending", "sender": "AD-SMPUCB-T", "body": "Rs.5000.00 has been put on hold in your A/c XX1234 on 14/08/2026 against lien."}
+{"id": "N17|pending", "kind": "pending", "sender": "JX-SMPGRB-S", "body": "Amount of Rs.15000.00 blocked in your A/c XX1234 for IPO application SAMPLE LTD."}
+{"id": "N18|info", "kind": "info", "sender": "VM-SMPLCB-S", "body": "Your A/c XX1234 available balance is Rs.52,500.50 as on 14/08/2026."}
+{"id": "N19|info", "kind": "info", "sender": "AD-SMPUCB-T", "body": "Avl Bal in A/c XXXXX731 is INR 1,04,079.26 on 14-Aug-26. Sample Bank"}
+{"id": "N20|info", "kind": "info", "sender": "JX-SMPGRB-S", "body": "Monthly summary for A/c XX1234: total credits Rs.50,000.00, total debits Rs.42,000.00 in Jul 2026."}
+{"id": "N21|info", "kind": "info", "sender": "VM-SMPLCB-S", "body": "Your A/c XX1234 has not maintained minimum balance of Rs.5000. Charges of Rs.150 are applicable."}
+{"id": "N22|info", "kind": "info", "sender": "AD-SMPUCB-T", "body": "Interest rate on your SB A/c XX1234 revised to 3.5% p.a. w.e.f. 14/08/2026."}
+{"id": "N23|info", "kind": "info", "sender": "JX-SMPGRB-S", "body": "Cheque no 123456 of Rs.20,000.00 issued from A/c XX1234 has been returned unpaid."}
+{"id": "N24|info", "kind": "info", "sender": "VM-SMPLCB-S", "body": "Your credit limit on card XX4321 is Rs.2,00,000. Available limit Rs.1,50,000."}
+{"id": "N25|info", "kind": "info", "sender": "AD-SMPUCB-T", "body": "Mandate for Rs.5000.00 on A/c XX1234 towards SAMPLE MUTUAL FUND is registered successfully."}
+{"id": "N26|info", "kind": "info", "sender": "JX-SMPGRB-S", "body": "Dear Customer, e-statement of A/c XX1234 for the period ending 31-Jul-26 has been sent to your email."}
+{"id": "N27|info", "kind": "info", "sender": "VM-SMPLCB-S", "body": "Your account XX1234 KYC is due. Update before 14/08/2026 to avoid debit freeze."}
+{"id": "N28|info", "kind": "info", "sender": "AD-SMPUCB-T", "body": "Loan of Rs.2,00,000 has been sanctioned against your A/c XX1234. Visit branch to complete formalities."}
+{"id": "N29|promo", "kind": "promo", "sender": "JX-SMPGRB-S", "body": "Get a personal loan up to Rs.5,00,000 credited to your A/c in 10 minutes. Apply now."}
+{"id": "N30|promo", "kind": "promo", "sender": "VM-SMPLCB-S", "body": "Congratulations! Cashback of up to Rs.500 will be credited on your first UPI payment from A/c XX1234."}
+{"id": "N31|promo", "kind": "promo", "sender": "AD-SMPUCB-T", "body": "Pre-approved offer: Rs.3,00,000 can be credited to your account XX1234 instantly. T&C apply."}
+{"id": "N32|promo", "kind": "promo", "sender": "JX-SMPGRB-S", "body": "Open an FD with Rs.10,000 from your A/c XX1234 and earn 7.5% interest."}
+{"id": "N33|promo", "kind": "promo", "sender": "VM-SMPLCB-S", "body": "Pay your premium of Rs.4500 from A/c XX1234 and get Rs.200 cashback."}
+{"id": "N34|otp", "kind": "otp", "sender": "AD-SMPUCB-T", "body": "OTP 482913 to debit Rs.5000.00 from A/c XX1234. Valid for 5 minutes. Do not share."}
+{"id": "N35|otp", "kind": "otp", "sender": "JX-SMPGRB-S", "body": "Never share OTP. Bank never asks. Your A/c XX1234 was accessed on 14/08/2026."}
+{"id": "N36|otp", "kind": "otp", "sender": "VM-SMPLCB-S", "body": "123456 is your OTP for transaction of INR 12,500.00 at SAMPLE SHOP from A/c XX1234."}
+{"id": "N37|due", "kind": "due", "sender": "AD-SMPUCB-T", "body": "Premium of Rs.4500.00 towards Policy 000123456 is due on 14/08/2026."}
+{"id": "N38|due", "kind": "due", "sender": "JX-SMPGRB-S", "body": "Your loan A/c XX9087 EMI of Rs.8,450.00 is overdue. Pay immediately to avoid charges."}
+{"id": "N39|due", "kind": "due", "sender": "VM-SMPLCB-S", "body": "Minimum amount due Rs.2,500 and total due Rs.48,200 on card XX4321 by 20-Aug-26."}
+{"id": "N40|due", "kind": "due", "sender": "AD-SMPUCB-T", "body": "Locker rent of Rs.1500 for A/c XX1234 is due. Kindly pay at the branch."}
+{"id": "N41|other", "kind": "other", "sender": "JX-SMPGRB-S", "body": "If Rs.5000.00 is debited from your A/c XX1234 without your consent, call 1800000000."}
+{"id": "N42|other", "kind": "other", "sender": "VM-SMPLCB-S", "body": "Beware of fraud: messages saying Rs.10,000 credited to your A/c by mistake are fake."}
+{"id": "N43|other", "kind": "other", "sender": "AD-SMPUCB-T", "body": "Dear Customer, to activate A/c XX1234 credit Rs.1000 minimum balance at any branch."}
+{"id": "NB00", "kind": "b", "sender": "VK-SMPMCB-S", "body": "Your A/c XX5521 will be credited with Rs 45,000 salary on 1st of next month."}
+{"id": "NB01", "kind": "b", "sender": "BZ-SMPNSB-T", "body": "Standing instruction for Rs.5000 from A/c XX5521 to SAMPLE STORES is set up successfully."}
+{"id": "NB02", "kind": "b", "sender": "JD-SMPSFB-S", "body": "Dear customer, your request for cheque book for A/c XX5521 is processed. Charges Rs 100 may apply."}
+{"id": "NB03", "kind": "b", "sender": "CPSMPRRBS", "body": "Bill of Rs 1,250.00 for consumer no 123456 is generated. Due date 20-09-2026."}
+{"id": "NB04", "kind": "b", "sender": "TM-SMPBNK-S", "body": "Your UPI mandate of Rs 999 for SAMPLE OTT is created successfully."}
+{"id": "NB05", "kind": "b", "sender": "VK-SMPMCB-S", "body": "You have a pending collect request of Rs.500 from sample@upi. Approve in app."}
+{"id": "NB06", "kind": "b", "sender": "BZ-SMPNSB-T", "body": "Rs 5000 will be auto-debited from A/c XX5521 on 05/10/2026 for SIP."}
+{"id": "NB07", "kind": "b", "sender": "JD-SMPSFB-S", "body": "Limit of Rs 50,000 set for UPI transactions on A/c XX5521."}
+{"id": "NB08", "kind": "b", "sender": "CPSMPRRBS", "body": "Your loan application for Rs 3,00,000 is approved. Amount will be disbursed to A/c XX5521."}
+{"id": "NB09", "kind": "b", "sender": "TM-SMPBNK-S", "body": "Reminder: Recharge of Rs 299 expires tomorrow."}
+{"id": "NB10", "kind": "b", "sender": "VK-SMPMCB-S", "body": "Unable to process debit of Rs 2,500 from A/c XX5521. Please retry."}
+{"id": "NB11", "kind": "b", "sender": "BZ-SMPNSB-T", "body": "Txn of Rs 1,200.00 on card ending 4321 at SAMPLE STORE was declined."}
+{"id": "NB12", "kind": "b", "sender": "JD-SMPSFB-S", "body": "Dear Customer, your A/c XX5521 has been credited with 500 reward points."}
+{"id": "NB13", "kind": "b", "sender": "CPSMPRRBS", "body": "IPO: Rs 15,000 blocked in A/c XX5521 for SAMPLE LTD application."}
+{"id": "NB14", "kind": "b", "sender": "TM-SMPBNK-S", "body": "Your refund request of Rs 499 has been received."}
+{"id": "NB15", "kind": "b", "sender": "VK-SMPMCB-S", "body": "E-mandate for Rs.2000 monthly towards SAMPLE INSURANCE is approved on A/c XX5521."}
+{"id": "NB16", "kind": "b", "sender": "BZ-SMPNSB-T", "body": "Total outstanding on your card ending 4321 is Rs 23,456.00. Minimum due Rs 1,200."}
+{"id": "NB17", "kind": "b", "sender": "JD-SMPSFB-S", "body": "Your A/c XX5521 balance is below Rs 1000. Credit funds to avoid charges."}
+{"id": "NB18", "kind": "b", "sender": "CPSMPRRBS", "body": "Cheque no 654321 for Rs 12,000 presented on A/c XX5521 could not be cleared."}
+{"id": "NB19", "kind": "b", "sender": "TM-SMPBNK-S", "body": "Rs 2,000 cashback can be credited to your A/c XX5521 on recharge of Rs 599. Offer valid till 30 Sep."}
+{"id": "NB20", "kind": "b", "sender": "VK-SMPMCB-S", "body": "Your FD no 12345 of Rs 50,000 is renewed for 12 months at 7.1%."}
+{"id": "NB21", "kind": "b", "sender": "BZ-SMPNSB-T", "body": "KYC for A/c XX5521 pending. Debit transactions of above Rs 10,000 will be restricted."}
+{"id": "NB22", "kind": "b", "sender": "JD-SMPSFB-S", "body": "Dear Customer, Rs 350.00 is the charge for SMS alerts on A/c XX5521 per quarter."}
+{"id": "NB23", "kind": "b", "sender": "CPSMPRRBS", "body": "UPI payment of Rs 780 to sample@okbank is pending. Check status after some time."}
+{"id": "NC00", "kind": "c", "sender": "VD-SMPPCB-S", "body": "Your A/c XX8163 would be debited Rs 500 for non-maintenance of balance."}
+{"id": "NC01", "kind": "c", "sender": "AX-SMPZSB-T", "body": "Cheque of Rs 9,000 in favour of SAMPLE DAIRY issued from A/c XX8163 is stopped as requested."}
+{"id": "NC02", "kind": "c", "sender": "JK-SMPPAY-S", "body": "Dear Customer, deposit Rs 2,000 in A/c XX8163 to keep it active."}
+{"id": "NC03", "kind": "c", "sender": "TDSMPCCSS", "body": "Loan EMI of Rs 7,200 for A/c XX8163 is due on 05/10/2026."}
+{"id": "NC04", "kind": "c", "sender": "BP-SMPBNK-G", "body": "ATM withdrawal limit for A/c XX8163 is Rs 25,000 per day."}
+{"id": "NC05", "kind": "c", "sender": "VD-SMPPCB-S", "body": "Your A/c XX8163 can be credited with Rs 6,000 under the scheme after eKYC."}
+{"id": "NC06", "kind": "c", "sender": "AX-SMPZSB-T", "body": "Card XX4321: transaction of Rs 4,300 at SAMPLE STORE is on hold. Reply YES to confirm."}
+{"id": "NC07", "kind": "c", "sender": "JK-SMPPAY-S", "body": "Interest of Rs 320 will be credited to A/c XX8163 at quarter end."}
+{"id": "NC08", "kind": "c", "sender": "TDSMPCCSS", "body": "Dear Customer, your A/c XX8163 has been debit frozen. Contact branch."}
+{"id": "NC09", "kind": "c", "sender": "BP-SMPBNK-G", "body": "Your request to stop cheque 123456 of Rs 5,000 is accepted."}
+{"id": "NC10", "kind": "c", "sender": "VD-SMPPCB-S", "body": "Rs 3,000 is payable for locker of A/c XX8163 by 30/09/2026."}
+{"id": "NC11", "kind": "c", "sender": "AX-SMPZSB-T", "body": "Auto-debit of Rs 1,499 for SAMPLE OTT failed on A/c XX8163."}
+{"id": "NC12", "kind": "c", "sender": "JK-SMPPAY-S", "body": "Refund of Rs 899 for order 12345 is being processed."}
+{"id": "NC13", "kind": "c", "sender": "TDSMPCCSS", "body": "Balance in A/c XX8163 is Rs 12,400 as of 21/09/2026 18:00."}
+{"id": "NC14", "kind": "c", "sender": "BP-SMPBNK-G", "body": "Use UPI from A/c XX8163 and win cashback up to Rs 250."}
+{"id": "NC15", "kind": "c", "sender": "VD-SMPPCB-S", "body": "PIN for card XX4321 generated. Do not share. Txn limit Rs 40,000."}
+{"id": "NC16", "kind": "c", "sender": "AX-SMPZSB-T", "body": "Your SIP of Rs 5,000 in SAMPLE FUND is registered. First debit on 05/10/2026."}
+{"id": "NC17", "kind": "c", "sender": "JK-SMPPAY-S", "body": "Transfer of Rs 10,000 to ANITA S is scheduled for 05/10/2026."}
+{"id": "NC18", "kind": "c", "sender": "TDSMPCCSS", "body": "Dear Customer, Rs 15,000 loan top-up is available on A/c XX8163. Give a missed call."}
+{"id": "NC19", "kind": "c", "sender": "BP-SMPBNK-G", "body": "Your A/c XX8163 was not debited for Rs 2,340.00 due to a technical issue."}

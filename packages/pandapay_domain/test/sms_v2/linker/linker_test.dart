@@ -1165,9 +1165,14 @@ void main() {
         ),
         'p2p_out[debit_leg]',
       ),
+      // A confident reading with no stated reason is still money that moved.
       (
         debit('unknown', 50000, at: '2026-11-01T07:00:00Z', inst: hdfcAcct),
-        'unknown[debit_leg]',
+        'purchase[debit_leg]',
+      ),
+      (
+        credit('unknown', 50000, at: '2026-11-01T07:00:00Z', inst: hdfcAcct),
+        'p2p_in[credit_leg]',
       ),
       (
         debit(
@@ -1183,6 +1188,18 @@ void main() {
     for (final (f, want) in cases) {
       test(want, () => expect(shapes(linkAll([f])), [want]));
     }
+
+    test('an unsure reading with no stated reason stays unknown (the person is asked)', () {
+      Fact unsure(Fact f) => Fact.fromJson({...f.toJson(), 'confidence': 0.6});
+      expect(
+        shapes(linkAll([unsure(debit('unknown', 50000, at: '2026-11-01T07:00:00Z', inst: hdfcAcct))])),
+        ['unknown[debit_leg]'],
+      );
+      expect(
+        shapes(linkAll([unsure(credit('unknown', 50000, at: '2026-11-01T07:00:00Z', inst: hdfcAcct))])),
+        ['unknown[credit_leg]'],
+      );
+    });
 
     test(
       'attempts, rewards, balances, receipts on credits and non-IPO holds make no event',

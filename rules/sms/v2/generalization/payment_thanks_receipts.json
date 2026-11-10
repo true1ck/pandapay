@@ -1,0 +1,64 @@
+[
+  {
+    "id": "GENZ-INS-PAYMENT-THANKS",
+    "version": 1,
+    "family": "bill_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 552,
+    "match": {
+      "pattern": "\\bthank\\s+you\\s+for\\s+(?:your\\s+|the\\s+)?(?:premium\\s+)?(?:payment|remittance)\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:towards|for|against)\\s+(?:your\\s+)?(?:[a-z]{1,15}\\s)?(?:[a-z]{1,15}\\s)?(?:policy|premium)\\b(?:[\\s\\S]{0,300}?\\b(?:regards|sincerely)[,:\\s-]{0,5}(?<biller>[a-z][a-z .&'-]{3,60}?)\\s{0,5}$)?",
+      "flags": "i",
+      "rejectAny": [
+        "not received",
+        "failed",
+        "bounced",
+        "dishonour",
+        " due"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "bill_payment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "nameFrom": "biller",
+          "transforms": [
+            "upperTrim"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "CP-SAMPLEI-S",
+        "body": "We thank you for your payment of Rs. 4500.00 towards your Policy Number 000123456. You can now download your premium receipt any time anywhere by clicking to https://example.invalid/r/abc Regards, Sample Life Insurance",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-SAMPLEB-S",
+        "body": "We thank you for your payment of Rs. 4500.00 towards your Policy Number 000123456 regards Sample Life Insurance. Your payment failed.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "cbs-generalization",
+    "updatedAt": "2026-11-10T00:00:00Z"
+  }
+]

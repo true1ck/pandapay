@@ -1,0 +1,52 @@
+{
+  "id": "cbsgen:coop_debit_clearing_cheque",
+  "templateHash": "5062cf5c413a0ab726c3b376d7d9933728b4f56f88a3eac098d9b9efb8835edc",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "SDCCBKS",
+      "body": "Your A/c No.40000/XXXXX731 has been debited by Rs.20116.00 on 14/10/2026 by Clearing Cheque No 100001. Available Bal is Rs.601444.99. THE SAMPLE DISTRICT CO-OPERATIVE BANK LTD",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "cheque"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 2011600
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "731",
+          "issuerSlug": "sindhudurg_dcc"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "minor": 60144499
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "731",
+          "issuerSlug": "sindhudurg_dcc"
+        }
+      }
+    ]
+  },
+  "note": "Cleared cheque debit.",
+  "origin": "cbs-generalization"
+}

@@ -83,15 +83,25 @@
   },
   {
     "id": "BRK-DEMAT-NSDL-DEBIT-01",
-    "version": 1,
+    "version": 2,
     "family": "demat",
     "senders": [
       "*"
     ],
     "priority": 520,
     "match": {
-      "pattern": "\\d+\\s+[a-z0-9 .&-]+?\\s+(?:debited\\s+from\\s+your\\s+(?:nsdl\\s+)?a/c|has\\s+been\\s+blocked\\s+for\\s+debiting\\s+from\\s+your\\s+(?:nsdl\\s+)?a/c)\\s*[*x]*\\d{2,16}",
-      "flags": "i"
+      "pattern": "\\d+\\s+(?!(?:has|have|is|was|been|got)\\s)[a-z0-9 .&-]+?\\s+(?:debited\\s+from\\s+your\\s+(?:nsdl\\s+)?a/c|has\\s+been\\s+blocked\\s+for\\s+debiting\\s+from\\s+your\\s+(?:nsdl\\s+)?a/c)\\s*[*x]*\\d{2,16}",
+      "flags": "i",
+      "requireAll": [
+        "nsdl"
+      ],
+      "rejectAny": [
+        "avail bal",
+        "available bal",
+        "avl bal",
+        "inr ",
+        "₹"
+      ]
     },
     "emit": [
       {
@@ -114,11 +124,16 @@
         "sender": "VM-NSDLDP-S",
         "body": "On 05/11/26, 140 ACME LIMITED credited to your a/c xxxx1234 on request..NSDL",
         "expectFactTypes": []
+      },
+      {
+        "sender": "VM-SAMPLEB-S",
+        "body": "Dear Customer, Rs 12,500.00 has been debited from your A/c XX1234 on 14/08/26. Avl Bal INR 1,04,079.26. SAMPLE CO-OP BANK",
+        "expectFactTypes": []
       }
     ],
     "status": "active",
     "createdBy": "lane-i",
-    "updatedAt": "2026-11-05T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   },
   {
     "id": "BRK-DEMAT-NSDL-CREDIT-01",

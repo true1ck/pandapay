@@ -1,0 +1,52 @@
+{
+  "id": "cbsgen:coop_credit_cash",
+  "templateHash": "b01c4bdde0dc6674391d61cf9fa7b41f55e3c6126a48a7dfcd6eea79df72840e",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VASDCCBKS",
+      "body": "Your A/c No.40000/XXXXX731 has been credited by Rs.150000.00 on 14/10/2026 by Cash. Available Bal is Rs.243506.84. THE SAMPLE DISTRICT CO-OPERATIVE BANK LTD",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "p2p",
+          "rail": "cash"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 15000000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "731",
+          "issuerSlug": "sindhudurg_dcc"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "minor": 24350684
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "731",
+          "issuerSlug": "sindhudurg_dcc"
+        }
+      }
+    ]
+  },
+  "note": "Same layout, a cash deposit, sender header without dashes.",
+  "origin": "cbs-generalization"
+}

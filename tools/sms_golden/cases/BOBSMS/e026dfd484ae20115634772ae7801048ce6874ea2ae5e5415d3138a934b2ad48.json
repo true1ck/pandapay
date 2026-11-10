@@ -16,7 +16,7 @@
         "factType": "movement",
         "attrs": {
           "direction": "debit",
-          "purpose": "unknown",
+          "purpose": "p2p",
           "rail": "neft"
         },
         "amounts": [
@@ -33,6 +33,6 @@
       }
     ]
   },
-  "note": "Dr./Cr. abbreviation style.",
+  "note": "Dr./Cr. abbreviation style. Since 10 Nov 2026 a confident movement with no stated reason is typed by the evidence reader and counted (it used to be typed unknown and left out of the ledger).",
   "origin": "lane-q"
 }

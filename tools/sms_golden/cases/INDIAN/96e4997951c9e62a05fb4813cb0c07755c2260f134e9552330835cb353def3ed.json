@@ -16,7 +16,7 @@
         "factType": "movement",
         "attrs": {
           "direction": "credit",
-          "purpose": "unknown",
+          "purpose": "p2p",
           "rail": "imps"
         },
         "amounts": [
@@ -28,6 +28,6 @@
       }
     ]
   },
-  "note": "Dr./Cr. abbreviation style on an unregistered handle (INDIAN). Note: Bank of Baroda IMPS credits with a 12-digit reference are read as UPI p2p by the existing BOB-UPI-CREDIT rule; see the handoff.",
+  "note": "Dr./Cr. abbreviation style on an unregistered handle (INDIAN). Note: Bank of Baroda IMPS credits with a 12-digit reference are read as UPI p2p by the existing BOB-UPI-CREDIT rule; see the handoff. Since 10 Nov 2026 a confident movement with no stated reason is typed by the evidence reader and counted (it used to be typed unknown and left out of the ledger).",
   "origin": "lane-q"
 }

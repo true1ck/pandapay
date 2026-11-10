@@ -1611,6 +1611,11 @@ class _Run {
         continue;
       final role = e.legs.firstWhere((l) => l.factId == g.factId).role;
       if (role != LegRole.debitLeg && role != LegRole.charge) continue;
+      // A notice with a different reference (another NEFT number, another order
+      // id) is another payment of the same amount, not a second notice for this
+      // one. Without this, the same amount paid on three days in a row left the
+      // last two debits without their notice and gave the first one all three.
+      if (_holdsConflictingReceipt(e, f)) continue;
       byEvent[eventId] = _Cand.event(eventId, g, role);
     }
     if (byEvent.isEmpty) return; // [reviewReceipts] decides later
@@ -1638,6 +1643,17 @@ class _Run {
     );
   }
 
+  /// True when [e] already holds a receipt that names a different reference
+  /// than [receipt] does (same reference key, different value): the two
+  /// notices are about two payments.
+  bool _holdsConflictingReceipt(Event e, MovementFact receipt) => e.legs.any((l) {
+    if (l.role != LegRole.duplicateNotice) return false;
+    final held = facts[l.factId];
+    return held is MovementFact &&
+        held.evidenceOnly == true &&
+        _conflictingRefs(receipt, held);
+  });
+
   /// A receipt with no funding debit and no event, in arrival order.
   List<MovementFact> _unpaidReceipts() => [
     for (final f in facts.values)
@@ -1661,6 +1677,11 @@ class _Run {
           g.evidenceOnly != true &&
           g.sourceKey != r.sourceKey &&
           _within(r, g, rule.join.windowHours)) {
+        // A debit whose event already holds a notice with another reference is
+        // that notice's payment, not this one's.
+        final eventId = eventOfFact[g.factId];
+        final held = eventId == null ? null : events[eventId];
+        if (held != null && _holdsConflictingReceipt(held, r)) continue;
         return true;
       }
     }
@@ -1879,7 +1900,13 @@ class _Run {
             debit
                 ? (_isOwnDebit(f) ? EventType.ownTransfer : EventType.p2pOut)
                 : (_isOwnCredit(f) ? EventType.ownTransfer : EventType.p2pIn),
-          MovementPurpose.unknown => EventType.unknown,
+          // Money that moved, read with confidence but with no stated reason,
+          // is still money that moved: out is spending, in is money in. Typed
+          // "unknown" it stayed out of the ledger and nobody was asked. An unsure
+          // reading stays unknown; the person is asked about that one.
+          MovementPurpose.unknown => f.confidence >= kConfidentRead
+              ? (debit ? EventType.purchase : EventType.p2pIn)
+              : EventType.unknown,
         };
         return (type: type, role: role, status: done);
       case HoldFact():

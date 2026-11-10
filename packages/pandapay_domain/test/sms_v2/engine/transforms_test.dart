@@ -118,5 +118,36 @@ void main() {
       expect(normalizeSenderBrand('VM-HDFCCC-S', senders).brand, 'HDFCBK');
       expect(normalizeSenderBrand('VM-OTHER-S', senders).brand, 'OTHER');
     });
+
+    group('headers handed over without their dashes', () {
+      final registry = [
+        SenderEntry(brand: 'SDCCBK', issuerSlug: 'sdccbk', issuerKind: IssuerKind.bank, aliases: ['OLDCBK']),
+        SenderEntry(brand: 'SDPTCS', issuerSlug: 'sdptcs', issuerKind: IssuerKind.bank),
+        SenderEntry(brand: 'JKBANK', issuerSlug: 'jkb', issuerKind: IssuerKind.bank),
+      ];
+      test('operator prefix, category suffix, or both are cut when the rest is registered', () {
+        expect(normalizeSenderBrand('VASDCCBKS', registry).brand, 'SDCCBK'); // prefix and suffix
+        expect(normalizeSenderBrand('JXSDCCBKS', registry).brand, 'SDCCBK');
+        expect(normalizeSenderBrand('ADSDCCBKT', registry).brand, 'SDCCBK'); // never listed anywhere
+        expect(normalizeSenderBrand('VMSDPTCS', registry).brand, 'SDPTCS'); // prefix only
+        expect(normalizeSenderBrand('SDCCBKS', registry).brand, 'SDCCBK'); // suffix only
+        expect(normalizeSenderBrand('VAOLDCBKS', registry).brand, 'SDCCBK'); // through an alias
+        expect(normalizeSenderBrand('va-sdccbks', registry).brand, 'SDCCBK'); // dash prefix, glued suffix
+        expect(normalizeSenderBrand('VASDCCBKS (smsft_fi)', registry).brand, 'SDCCBK');
+        expect(normalizeSenderBrand('VASDCCBKS (smsft_fi)', registry).iosFilter, 'smsft_fi');
+      });
+      test('a registered brand or alias is never cut, and an unknown header is left alone', () {
+        expect(normalizeSenderBrand('JKBANK', registry).brand, 'JKBANK');
+        expect(normalizeSenderBrand('SDCCBK', registry).brand, 'SDCCBK');
+        expect(normalizeSenderBrand('VASOMEBNKS', registry).brand, 'VASOMEBNKS');
+        expect(normalizeSenderBrand('VASDCCBKS').brand, 'VASDCCBKS'); // no registry: no guess
+        expect(normalizeSenderBrand('VA-SOMEBNK-S', registry).brand, 'SOMEBNK');
+      });
+      test('what is left must still be a plausible brand', () {
+        // "ABCS" would cut to the 2-letter "CS": too short to be a brand.
+        final tiny = [SenderEntry(brand: 'CS', issuerSlug: 'cs', issuerKind: IssuerKind.bank)];
+        expect(normalizeSenderBrand('ABCS', tiny).brand, 'ABCS');
+      });
+    });
   });
 }

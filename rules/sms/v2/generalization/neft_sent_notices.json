@@ -1,0 +1,266 @@
+[
+  {
+    "id": "NEFT-SENT-NOTICE-COMBO",
+    "version": 1,
+    "family": "bill_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 352,
+    "match": {
+      "pattern": "\\b(?:neft\\s*/\\s*rtgs|rtgs\\s*/\\s*neft)\\s+(?:txn|transaction|transfer|payment|remittance)\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:successfully\\s+)?(?:sent|transferred|remitted)\\s+to\\s+(?:(?<ifsc>[a-z]{4}0[a-z0-9]{6})\\s*-\\s*)?(?:(?<bpre>[a-z0-9]{1,26}?)(?<bacc>\\d{4})\\s*-\\s*)?(?<payee>[a-z][a-z0-9 .&'/()-]{1,60}?)\\s+(?:with|vide|having)\\s+(?:ref(?:erence)?|utr|txn|transaction)\\b\\s*(?:no\\.?|number|id)?\\s*[:\\-]?\\s*(?<ref_txnId>[a-z0-9]{6,30})",
+      "flags": "i",
+      "rejectAny": [
+        "fail",
+        "declin",
+        "reject",
+        "return",
+        "revers",
+        "will be",
+        "pending",
+        "initiated"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "p2p",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "nameFrom": "payee",
+          "transforms": [
+            "sanitizeNarration"
+          ],
+          "accountMaskFrom": "bacc"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VA-SDCCBK-S",
+        "body": "Your NEFT/RTGS Txn of Rs.25000 has been sent to SAMP0000123-CURR000123456-SAMPLE TRADERS with Ref no: SAMP52026110100001  THE SAMPLE DISTRICT CO-OPERATIVE BANK LTD",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-SAMPLEB-S",
+        "body": "Your NEFT/RTGS Txn of Rs.25000 could not be sent to SAMP0000123-CURR000123456-SAMPLE TRADERS with Ref no: SAMP52026110100001  THE SAMPLE DISTRICT CO-OPERATIVE BANK LTD",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "cbs-generalization",
+    "updatedAt": "2026-11-10T00:00:00Z"
+  },
+  {
+    "id": "NEFT-SENT-NOTICE-NEFT",
+    "version": 1,
+    "family": "bill_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 350,
+    "match": {
+      "pattern": "\\bneft\\s+(?:txn|transaction|transfer|payment|remittance)\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:successfully\\s+)?(?:sent|transferred|remitted)\\s+to\\s+(?:(?<ifsc>[a-z]{4}0[a-z0-9]{6})\\s*-\\s*)?(?:(?<bpre>[a-z0-9]{1,26}?)(?<bacc>\\d{4})\\s*-\\s*)?(?<payee>[a-z][a-z0-9 .&'/()-]{1,60}?)\\s+(?:with|vide|having)\\s+(?:ref(?:erence)?|utr|txn|transaction)\\b\\s*(?:no\\.?|number|id)?\\s*[:\\-]?\\s*(?<ref_neftUtr>[a-z0-9]{6,30})",
+      "flags": "i",
+      "rejectAny": [
+        "fail",
+        "declin",
+        "reject",
+        "return",
+        "revers",
+        "will be",
+        "pending",
+        "initiated"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "p2p",
+          "rail": "neft",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "nameFrom": "payee",
+          "transforms": [
+            "sanitizeNarration"
+          ],
+          "accountMaskFrom": "bacc"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VA-SDCCBK-S",
+        "body": "Your NEFT Txn of Rs.25000 has been sent to SAMP0000123-CURR000123456-SAMPLE TRADERS with Ref no: SAMP52026110100001  THE SAMPLE DISTRICT CO-OPERATIVE BANK LTD",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-SAMPLEB-S",
+        "body": "Your NEFT Txn of Rs.25000 could not be sent to SAMP0000123-CURR000123456-SAMPLE TRADERS with Ref no: SAMP52026110100001  THE SAMPLE DISTRICT CO-OPERATIVE BANK LTD",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "cbs-generalization",
+    "updatedAt": "2026-11-10T00:00:00Z"
+  },
+  {
+    "id": "NEFT-SENT-NOTICE-RTGS",
+    "version": 1,
+    "family": "bill_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 350,
+    "match": {
+      "pattern": "\\brtgs\\s+(?:txn|transaction|transfer|payment|remittance)\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:successfully\\s+)?(?:sent|transferred|remitted)\\s+to\\s+(?:(?<ifsc>[a-z]{4}0[a-z0-9]{6})\\s*-\\s*)?(?:(?<bpre>[a-z0-9]{1,26}?)(?<bacc>\\d{4})\\s*-\\s*)?(?<payee>[a-z][a-z0-9 .&'/()-]{1,60}?)\\s+(?:with|vide|having)\\s+(?:ref(?:erence)?|utr|txn|transaction)\\b\\s*(?:no\\.?|number|id)?\\s*[:\\-]?\\s*(?<ref_rtgsUtr>[a-z0-9]{6,30})",
+      "flags": "i",
+      "rejectAny": [
+        "fail",
+        "declin",
+        "reject",
+        "return",
+        "revers",
+        "will be",
+        "pending",
+        "initiated"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "p2p",
+          "rail": "rtgs",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "nameFrom": "payee",
+          "transforms": [
+            "sanitizeNarration"
+          ],
+          "accountMaskFrom": "bacc"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VA-SDCCBK-S",
+        "body": "Your RTGS Txn of Rs.25000 has been sent to SAMP0000123-CURR000123456-SAMPLE TRADERS with Ref no: SAMP52026110100001  THE SAMPLE DISTRICT CO-OPERATIVE BANK LTD",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-SAMPLEB-S",
+        "body": "Your RTGS Txn of Rs.25000 could not be sent to SAMP0000123-CURR000123456-SAMPLE TRADERS with Ref no: SAMP52026110100001  THE SAMPLE DISTRICT CO-OPERATIVE BANK LTD",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "cbs-generalization",
+    "updatedAt": "2026-11-10T00:00:00Z"
+  },
+  {
+    "id": "NEFT-SENT-NOTICE-IMPS",
+    "version": 1,
+    "family": "bill_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 350,
+    "match": {
+      "pattern": "\\bimps\\s+(?:txn|transaction|transfer|payment|remittance)\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:successfully\\s+)?(?:sent|transferred|remitted)\\s+to\\s+(?:(?<ifsc>[a-z]{4}0[a-z0-9]{6})\\s*-\\s*)?(?:(?<bpre>[a-z0-9]{1,26}?)(?<bacc>\\d{4})\\s*-\\s*)?(?<payee>[a-z][a-z0-9 .&'/()-]{1,60}?)\\s+(?:with|vide|having)\\s+(?:ref(?:erence)?|utr|txn|transaction)\\b\\s*(?:no\\.?|number|id)?\\s*[:\\-]?\\s*(?<ref_impsRef>[a-z0-9]{6,30})",
+      "flags": "i",
+      "rejectAny": [
+        "fail",
+        "declin",
+        "reject",
+        "return",
+        "revers",
+        "will be",
+        "pending",
+        "initiated"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "p2p",
+          "rail": "imps",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "nameFrom": "payee",
+          "transforms": [
+            "sanitizeNarration"
+          ],
+          "accountMaskFrom": "bacc"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VA-SDCCBK-S",
+        "body": "Your IMPS Txn of Rs.25000 has been sent to SAMP0000123-CURR000123456-SAMPLE TRADERS with Ref no: SAMP52026110100001  THE SAMPLE DISTRICT CO-OPERATIVE BANK LTD",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-SAMPLEB-S",
+        "body": "Your IMPS Txn of Rs.25000 could not be sent to SAMP0000123-CURR000123456-SAMPLE TRADERS with Ref no: SAMP52026110100001  THE SAMPLE DISTRICT CO-OPERATIVE BANK LTD",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "cbs-generalization",
+    "updatedAt": "2026-11-10T00:00:00Z"
+  }
+]

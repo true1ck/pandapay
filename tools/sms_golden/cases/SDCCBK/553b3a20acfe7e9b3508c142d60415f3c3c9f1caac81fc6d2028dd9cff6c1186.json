@@ -1,0 +1,38 @@
+{
+  "id": "cbsgen:neft_sent_notice_is_evidence",
+  "templateHash": "553b3a20acfe7e9b3508c142d60415f3c3c9f1caac81fc6d2028dd9cff6c1186",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VA-SDCCBK-S",
+      "body": "Your NEFT/RTGS Txn of Rs.25000 has been sent to SAMP0000123-CURR000123456-SAMPLE TRADERS with Ref no: SAMP52026110100001  THE SAMPLE DISTRICT CO-OPERATIVE BANK LTD",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "p2p",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 2500000
+          }
+        ],
+        "counterparty": {
+          "name": "SAMPLE TRADERS",
+          "accountMask": "3456"
+        }
+      }
+    ]
+  },
+  "note": "The 'sent' notice is a second report of a payment the bank also debits; evidence only so it never counts twice.",
+  "origin": "cbs-generalization"
+}

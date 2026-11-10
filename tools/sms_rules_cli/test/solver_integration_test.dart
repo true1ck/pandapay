@@ -1,7 +1,18 @@
-// The promise of tier 2: it only ever runs when NO rule matched, so every
-// message a rule already reads must come out byte-identical with or without
-// the solver pack in the bundle. This test proves it on every rule example in
-// the repo bundle and on every golden-case message, so it cannot regress.
+// The promise of the two tiers. A rule that is sure of what it read is never
+// second-guessed: every such message comes out byte-identical with or without
+// the solver pack in the bundle. The evidence reader (tier 2) may change a
+// rule-matched message in exactly two ways, both checked here on every rule
+// example and every golden-case message so neither can widen unnoticed:
+//
+// 0. refined: a generic catch-all rule's reading enriched with purpose and
+//    merchant by the solver (the rule's own account and date are kept).
+// 1. corroborated: the rule's one movement was unsure (confidence below
+//    kConfidentRead, or no stated purpose). The evidence reader read the same
+//    direction, amount and account, so the same rule's facts are kept and only
+//    the purpose, the rail and the confidence change.
+// 2. overruled: a rule for any sender (`*`) called the message information
+//    only (info or balance), and the evidence reader accepts a completed money
+//    movement in it. A wide information rule must not swallow a real debit.
 import 'dart:convert';
 import 'dart:io';
 
@@ -14,6 +25,54 @@ String _signature(EngineOutcome o) => jsonEncode({
   'rule': o.winnerId,
   'facts': [for (final f in o.result.facts) f.toJson()],
 });
+
+bool _countable(Fact f) => f is MovementFact && f.evidenceOnly != true;
+
+Map<String, Object?> _withoutTyping(Fact f) {
+  final j = Map<String, Object?>.of(f.toJson())..remove('confidence');
+  if (f is MovementFact) {
+    j['attrs'] = Map<String, Object?>.of(j['attrs'] as Map<String, Object?>)
+      ..remove('purpose')
+      ..remove('rail');
+  }
+  return j;
+}
+
+/// 'refined', 'corroborated' or 'overruled' when the difference between the
+/// reading without the pack ([bare]) and with it ([full]) is one the promise
+/// allows; null when it is not.
+String? _allowedDifference(EngineOutcome bare, EngineOutcome full, RuleBundle bundle) {
+  // A generic catch-all rule's plain reading enriched by the solver (same
+  // amount and direction, purpose and merchant added).
+  if ((bare.winnerId ?? '').startsWith('GEN-') && full.winnerId == 'SOLVER-REFINED') {
+    return 'refined';
+  }
+  final before = bare.result.facts, after = full.result.facts;
+  final mine = before.where(_countable).toList();
+  final unsure = mine.length == 1 &&
+      (mine.single.confidence < kConfidentRead ||
+          (mine.single as MovementFact).purpose == MovementPurpose.unknown);
+  if (unsure &&
+      full.winnerId == bare.winnerId &&
+      before.length == after.length &&
+      after.every((f) => f.confidence >= kConfidentRead)) {
+    var same = true;
+    for (var i = 0; i < before.length; i++) {
+      if (jsonEncode(_withoutTyping(before[i])) != jsonEncode(_withoutTyping(after[i]))) same = false;
+    }
+    if (same) return 'corroborated';
+  }
+  final rule = bundle.rules.where((r) => r.id == bare.winnerId).firstOrNull;
+  final informationOnly = rule != null &&
+      rule.senders.contains('*') &&
+      before.every((f) => f is InfoFact || f is BalanceSnapshotFact);
+  if (informationOnly &&
+      (full.winnerId ?? '').startsWith('SOLVER-') &&
+      after.where(_countable).length == 1) {
+    return 'overruled';
+  }
+  return null;
+}
 
 void main() {
   late RuleBundle withPack;
@@ -54,10 +113,12 @@ void main() {
   );
 
   test(
-    'every rule example reads identically with and without the solver pack',
+    'a rule example changes with the solver pack only by corroboration',
     () {
       var checked = 0;
       final differences = <String>[];
+      final allowed = <String, int>{};
+      final overruled = <String>[];
       final refined = <String>[];
       for (final rule in withPack.rules) {
         for (final ex in rule.examples) {
@@ -76,16 +137,13 @@ void main() {
           checked++;
           if (a.result.outcome != InterpretOutcome.unknown &&
               _signature(a) != _signature(b)) {
-            // The only permitted change: a generic catch-all rule's plain reading
-            // enriched by the solver (same amount and direction, purpose and
-            // merchant added). A specific rule's result must never change.
-            final enriched =
-                (a.winnerId ?? '').startsWith('GEN-') &&
-                b.winnerId == 'SOLVER-REFINED';
-            if (enriched) {
-              refined.add('${rule.id}: ${ex.body}');
-            } else {
+            final why = _allowedDifference(a, b, withPack);
+            if (why == null) {
               differences.add('${rule.id}: ${ex.body}');
+            } else {
+              allowed[why] = (allowed[why] ?? 0) + 1;
+              if (why == 'overruled') overruled.add('${a.winnerId} -> ${b.winnerId}: ${ex.body}');
+              if (why == 'refined') refined.add('${rule.id}: ${ex.body}');
             }
           }
         }
@@ -94,9 +152,17 @@ void main() {
       expect(
         differences,
         isEmpty,
-        reason: 'a rule-matched message changed:\n${differences.join('\n')}',
+        reason: 'a rule-matched message changed in a way the promise does not allow:\n${differences.join('\n')}',
       );
-      // Reviewed: these autopay debits were plain unknown-purpose debits.
+      // An information rule losing to a money reading changes what lands in
+      // people's totals. Each such example is a rule author's own trap (a message
+      // their rule must not read), reviewed by hand; a new one needs the same.
+      expect(overruled, isEmpty, reason: overruled.join('\n'));
+      // The weak last-resort rules and the rules that could not name a purpose
+      // are the ones corroborated. Zero would mean the second opinion is off.
+      expect(allowed['corroborated'] ?? 0, greaterThan(20));
+      // Reviewed: these autopay debits were plain unknown-purpose debits that a
+      // generic catch-all rule read and the solver enriched.
       expect(refined.map((e) => e.split(':').first).toSet(), {
         'MND-UPCOMING-01',
         'MND-UPCOMING-01-INV',
@@ -106,7 +172,7 @@ void main() {
   );
 
   test(
-    'every golden-case message reads identically with and without the solver pack',
+    'a golden-case message a rule reads changes with the solver pack only as the promise allows',
     () {
       final dir = Directory('../sms_golden/cases');
       var checked = 0;
@@ -131,8 +197,13 @@ void main() {
             appVersion: '2.0.0',
           );
           checked++;
-          if (_signature(a) != _signature(b))
+          // A golden message no rule reads must not start depending on the
+          // evidence reader either: only a rule-matched one may differ.
+          if (_signature(a) != _signature(b) &&
+              (a.result.outcome == InterpretOutcome.unknown ||
+                  _allowedDifference(a, b, withPack) == null)) {
             differences.add('${c['id']}: ${m['body']}');
+          }
         }
       }
       expect(checked, greaterThan(250));
@@ -140,7 +211,7 @@ void main() {
         differences,
         isEmpty,
         reason:
-            'the solver changed a golden message:\n${differences.join('\n')}',
+            'the solver changed a golden message in a way the promise does not allow:\n${differences.join('\n')}',
       );
     },
   );

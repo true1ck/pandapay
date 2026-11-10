@@ -1,0 +1,22 @@
+{
+  "id": "insurer_thanks_receipt_alone",
+  "description": "An insurer's payment thank-you never counts by itself.",
+  "messages": [
+    {
+      "sender": "CP-SAMPLEI-S",
+      "body": "We thank you for your payment of Rs. 7993.77 towards your Policy Number 000123456. You can now download your premium receipt any time anywhere by clicking to https://example.invalid/r/abc Regards, Sample Life Insurance",
+      "observedAt": "2026-11-03T05:00:00Z"
+    }
+  ],
+  "expect": {
+    "events": [],
+    "totals": {
+      "from": "2026-10-31T18:30:00Z",
+      "to": "2026-11-30T18:30:00Z",
+      "spendMinor": 0,
+      "incomeMinor": 0,
+      "investmentMinor": 0,
+      "transactionCount": 0
+    }
+  }
+}

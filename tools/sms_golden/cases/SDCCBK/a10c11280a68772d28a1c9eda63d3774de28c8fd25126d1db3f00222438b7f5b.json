@@ -1,0 +1,52 @@
+{
+  "id": "cbsgen:coop_credit_transfer_branch_mask",
+  "templateHash": "a10c11280a68772d28a1c9eda63d3774de28c8fd25126d1db3f00222438b7f5b",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VA-SDCCBK-S",
+      "body": "Your A/c No.40000/XXXXX731 has been credited by Rs.123000.00 on 14/10/2026 by Transfer. Available Bal is Rs.223456.50. THE SAMPLE DISTRICT CO-OPERATIVE BANK LTD",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "transfer",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 12300000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "731",
+          "issuerSlug": "sindhudurg_dcc"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "minor": 22345650
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "731",
+          "issuerSlug": "sindhudurg_dcc"
+        }
+      }
+    ]
+  },
+  "note": "Co-operative bank credit with a branch/masked account number (40000/XXXXX731) and the mode 'Transfer'. Counted as money in.",
+  "origin": "cbs-generalization"
+}

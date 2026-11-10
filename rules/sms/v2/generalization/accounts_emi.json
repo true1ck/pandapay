@@ -1,7 +1,7 @@
 [
   {
     "id": "GENZ-ACCT-CR-ABBREV-NEFT",
-    "version": 1,
+    "version": 2,
     "family": "neft_credit",
     "senders": [
       "*"
@@ -137,13 +137,13 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-05T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   },
   {
     "id": "GENZ-ACCT-CR-ABBREV-NEFT-B",
-    "version": 1,
+    "version": 2,
     "family": "neft_credit",
     "senders": [
       "*"
@@ -299,13 +299,13 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-05T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   },
   {
     "id": "GENZ-ACCT-DR-ABBREV-NEFT",
-    "version": 1,
+    "version": 2,
     "family": "neft_debit",
     "senders": [
       "*"
@@ -441,13 +441,13 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-05T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   },
   {
     "id": "GENZ-ACCT-DR-ABBREV-NEFT-B",
-    "version": 1,
+    "version": 2,
     "family": "neft_debit",
     "senders": [
       "*"
@@ -603,13 +603,13 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-05T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   },
   {
     "id": "GENZ-ACCT-CR-ABBREV-IMPS",
-    "version": 1,
+    "version": 2,
     "family": "imps_credit",
     "senders": [
       "*"
@@ -745,13 +745,13 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-05T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   },
   {
     "id": "GENZ-ACCT-CR-ABBREV-IMPS-B",
-    "version": 1,
+    "version": 2,
     "family": "imps_credit",
     "senders": [
       "*"
@@ -907,13 +907,13 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-05T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   },
   {
     "id": "GENZ-ACCT-DR-ABBREV-IMPS",
-    "version": 1,
+    "version": 2,
     "family": "imps_debit",
     "senders": [
       "*"
@@ -1049,13 +1049,13 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-05T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   },
   {
     "id": "GENZ-ACCT-DR-ABBREV-IMPS-B",
-    "version": 1,
+    "version": 2,
     "family": "imps_debit",
     "senders": [
       "*"
@@ -1211,13 +1211,13 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-05T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   },
   {
     "id": "GENZ-ACCT-CR-ABBREV-RTGS",
-    "version": 1,
+    "version": 2,
     "family": "rtgs_credit",
     "senders": [
       "*"
@@ -1353,13 +1353,13 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-05T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   },
   {
     "id": "GENZ-ACCT-CR-ABBREV-RTGS-B",
-    "version": 1,
+    "version": 2,
     "family": "rtgs_credit",
     "senders": [
       "*"
@@ -1515,13 +1515,13 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-05T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   },
   {
     "id": "GENZ-ACCT-DR-ABBREV-RTGS",
-    "version": 1,
+    "version": 2,
     "family": "rtgs_debit",
     "senders": [
       "*"
@@ -1657,13 +1657,13 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-05T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   },
   {
     "id": "GENZ-ACCT-DR-ABBREV-RTGS-B",
-    "version": 1,
+    "version": 2,
     "family": "rtgs_debit",
     "senders": [
       "*"
@@ -1819,13 +1819,13 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-05T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   },
   {
     "id": "GENZ-ACCT-CR-ABBREV-UPI",
-    "version": 1,
+    "version": 2,
     "family": "upi_credit",
     "senders": [
       "*"
@@ -1961,13 +1961,13 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-05T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   },
   {
     "id": "GENZ-ACCT-CR-ABBREV-UPI-B",
-    "version": 1,
+    "version": 2,
     "family": "upi_credit",
     "senders": [
       "*"
@@ -2123,13 +2123,13 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-05T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   },
   {
     "id": "GENZ-ACCT-DR-ABBREV-UPI",
-    "version": 1,
+    "version": 2,
     "family": "upi_debit",
     "senders": [
       "*"
@@ -2265,13 +2265,13 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-05T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   },
   {
     "id": "GENZ-ACCT-DR-ABBREV-UPI-B",
-    "version": 1,
+    "version": 2,
     "family": "upi_debit",
     "senders": [
       "*"
@@ -2427,13 +2427,13 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-05T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   },
   {
     "id": "GENZ-ACCT-CR-ABBREV-PLAIN",
-    "version": 1,
+    "version": 2,
     "family": "acct_credit",
     "senders": [
       "*"
@@ -2569,13 +2569,13 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-05T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   },
   {
     "id": "GENZ-ACCT-CR-ABBREV-PLAIN-B",
-    "version": 1,
+    "version": 2,
     "family": "acct_credit",
     "senders": [
       "*"
@@ -2731,13 +2731,13 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-05T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   },
   {
     "id": "GENZ-ACCT-DR-ABBREV-PLAIN",
-    "version": 1,
+    "version": 2,
     "family": "acct_debit",
     "senders": [
       "*"
@@ -2873,13 +2873,13 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-05T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   },
   {
     "id": "GENZ-ACCT-DR-ABBREV-PLAIN-B",
-    "version": 1,
+    "version": 2,
     "family": "acct_debit",
     "senders": [
       "*"
@@ -3035,9 +3035,9 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-05T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   },
   {
     "id": "GENZ-EMI-DEBITED-FROM-ACCT",

@@ -881,7 +881,7 @@
   },
   {
     "id": "SBI-ACCOUNT-UPI-CREDIT-FOR",
-    "version": 1,
+    "version": 2,
     "family": "bank_credit",
     "senders": [
       "CBSSBI",
@@ -944,8 +944,8 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "lane-b",
-    "updatedAt": "2026-11-05T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   }
 ]

@@ -12,6 +12,7 @@ import '../contract/rule_bundle.dart';
 import '../solver/evidence_solver.dart';
 import '../solver/solver_facts.dart';
 import '../template/skeleton.dart';
+import 'account_token.dart';
 import 'compiled_bundle.dart';
 import 'transforms.dart';
 
@@ -33,6 +34,14 @@ class EngineStats {
   int solverCandidates = 0;
   int solverRejected = 0;
 
+  /// A rule's unsure reading (low confidence, or no stated purpose) that the
+  /// evidence reader read the same way, so it was counted without asking.
+  int solverCorroborated = 0;
+
+  /// A wildcard rule called the message information only, but the evidence
+  /// reader found a completed money movement in it; the movement was kept.
+  int solverOverruledInfo = 0;
+
   /// Unknown results by reason (`no_rule_matched`, `rule_emitted_invalid`,
   /// `bundle_refused`, `engine_error`).
   final Map<String, int> unknownReasons = {};
@@ -49,6 +58,7 @@ class EngineStats {
   void reset() {
     messages = matched = ignored = unknown = maskDateOverlaps = 0;
     solverAccepted = solverCandidates = solverRejected = 0;
+    solverCorroborated = solverOverruledInfo = 0;
     unknownReasons.clear();
     ruleHits.clear();
     invalidEmits.clear();
@@ -62,6 +72,8 @@ class EngineStats {
         'solverAccepted': solverAccepted,
         'solverCandidates': solverCandidates,
         'solverRejected': solverRejected,
+        'solverCorroborated': solverCorroborated,
+        'solverOverruledInfo': solverOverruledInfo,
         'unknownReasons': {...unknownReasons},
         'ruleHits': {...ruleHits},
         'maskDateOverlaps': maskDateOverlaps,
@@ -152,6 +164,27 @@ class _BundleSlot {
   final BundleRefusedException? error;
 }
 
+/// The confidence of a rule's unsure reading once the evidence reader has read
+/// the message the same way: above [kConfidentRead], below any specific rule.
+const double _corroboratedConfidence = 0.75;
+
+/// What [RuleEngine._secondOpinion] decided.
+class _SecondOpinion {
+  const _SecondOpinion(this.facts, {this.ruleId, this.overruled = false});
+
+  final List<Fact> facts;
+
+  /// The evidence reading's id, when it replaced the rule's reading.
+  final String? ruleId;
+
+  /// True when an information-only rule was overruled by a money movement.
+  final bool overruled;
+}
+
+/// Mask characters and the digits shown after them, right behind a captured
+/// run of leading digits.
+final RegExp _maskTail = RegExp(r'[xX*•●]{2,}[\s\-]?(\d{2,6})(?!\d)');
+
 const List<String> _defaultDateFormats = [
   'dd-MM-yyyy',
   'dd-MM-yy',
@@ -204,13 +237,31 @@ class RuleEngine implements SmsInterpreter {
 
   /// Like [interpret], with the reason for an unknown result and the winning
   /// rule id.
-  EngineOutcome interpretDetailed(SmsMessage message, RuleBundle bundle, {required String appVersion}) {
+  EngineOutcome interpretDetailed(SmsMessage original, RuleBundle bundle, {required String appVersion}) {
     stats.messages++;
     var hash = '';
     try {
-      hash = smsTemplateHash(smsTemplateBrand(message.sender), smsSkeleton(message.body));
+      hash = smsTemplateHash(smsTemplateBrand(original.sender), smsSkeleton(original.body));
     } catch (_) {
       // Leave the hash empty; the result is unknown anyway.
+    }
+    // Rules and the evidence reader see the account number without a branch
+    // code in front of it. Same length, so evidence spans still point into the
+    // original text. The template hash above is of the text as received.
+    var message = original;
+    try {
+      final readable = blankBranchPrefixes(original.body);
+      if (!identical(readable, original.body) && readable != original.body) {
+        message = SmsMessage(
+          sender: original.sender,
+          body: readable,
+          observedAt: original.observedAt,
+          sourceKey: original.sourceKey,
+          iosFilter: original.iosFilter,
+        );
+      }
+    } catch (_) {
+      // Read the text as received.
     }
     EngineOutcome unknown(String reason, {String? winner, String? detail}) {
       stats.unknown++;
@@ -277,7 +328,8 @@ class RuleEngine implements SmsInterpreter {
           return unknown('rule_emitted_invalid', winner: id, detail: '$id: $e');
         }
         // A generic catch-all rule reads "debited from A/c ..." but keeps no
-        // purpose or merchant. The solver may enrich THAT and nothing else.
+        // purpose or merchant. The solver may enrich THAT (purpose, merchant,
+        // recurring mandate) and nothing else.
         if (id.startsWith('GEN-')) {
           final refined = _refineGeneric(cb, facts, message, brand, appVersion);
           if (refined != null) {
@@ -296,6 +348,32 @@ class RuleEngine implements SmsInterpreter {
               winnerId: 'SOLVER-REFINED',
             );
           }
+        }
+        // Two readers are better than one. A rule that is not sure, or that
+        // calls a message "information only", is checked against the evidence
+        // reader before its reading stands. (What the refinement above could
+        // not enrich still gets its confidence and purpose from here.)
+        final second = _secondOpinion(c.rule, facts, cb, message, brand, appVersion);
+        if (second != null && second.overruled) {
+          final sid = second.ruleId!;
+          stats.matched++;
+          stats.solverOverruledInfo++;
+          stats.ruleHits[sid] = (stats.ruleHits[sid] ?? 0) + 1;
+          return EngineOutcome(
+            InterpretResult(
+              outcome: InterpretOutcome.matched,
+              facts: second.facts,
+              ruleId: sid,
+              ruleVersion: cb.solver!.pack.version,
+              templateHash: hash,
+            ),
+            winnerId: sid,
+            detail: 'overruled $id',
+          );
+        }
+        if (second != null) {
+          facts = second.facts;
+          stats.solverCorroborated++;
         }
         stats.matched++;
         stats.ruleHits[id] = (stats.ruleHits[id] ?? 0) + 1;
@@ -320,6 +398,123 @@ class RuleEngine implements SmsInterpreter {
       return unknown('engine_error', detail: '$e');
     }
   }
+
+  // ---- a second opinion on an unsure rule ----
+
+  /// Checks a rule's reading against the evidence reader in two cases, and
+  /// returns the reading to use, or null to keep the rule's own.
+  ///
+  /// 1. The rule is not sure: its one money movement is below [kConfidentRead]
+  ///    (so the person would be asked), or it could not say what the money was
+  ///    for (so the ledger would not count it). When the evidence reader accepts
+  ///    the same direction and amount on the same account, both readers agree:
+  ///    the rule's facts are kept, the missing purpose and rail are filled in and
+  ///    the reading is confident. When they disagree nothing changes and the
+  ///    person is asked, as before.
+  /// 2. A rule for any sender called the message information only (an `info`
+  ///    or a balance), but the evidence reader accepts a completed money
+  ///    movement in it. A wide information rule must not swallow a real debit,
+  ///    so the movement is used (and a balance the rule read for the same
+  ///    account is kept).
+  ///
+  /// A rule scoped to its own senders and sure of itself is never second-guessed.
+  _SecondOpinion? _secondOpinion(
+    Rule rule,
+    List<Fact> facts,
+    CompiledBundle cb,
+    SmsMessage msg,
+    String brand,
+    String appVersion,
+  ) {
+    if (cb.solver == null) return null;
+    final mine = [
+      for (final f in facts)
+        if (f is MovementFact && f.evidenceOnly != true) f,
+    ];
+    final unsure = mine.length == 1 &&
+        (mine.single.confidence < kConfidentRead || mine.single.purpose == MovementPurpose.unknown);
+    final informationOnly = rule.senders.contains('*') &&
+        facts.every((f) => f is InfoFact || f is BalanceSnapshotFact);
+    if (!unsure && !informationOnly) return null;
+
+    final read = _solverRead(cb, msg, brand, appVersion, count: false).built;
+    if (read == null || read.ignored) return null;
+    final theirs = [
+      for (final f in read.facts)
+        if (f is MovementFact && f.evidenceOnly != true) f,
+    ];
+    if (theirs.length != 1) return null;
+    final other = theirs.single;
+
+    if (informationOnly) {
+      return _SecondOpinion(
+        [
+          ...read.facts,
+          for (final f in facts)
+            if (f is BalanceSnapshotFact &&
+                _masksAgree(f.instrument?.maskDigits, other.instrument?.maskDigits))
+              f,
+        ],
+        ruleId: read.ruleId,
+        overruled: true,
+      );
+    }
+
+    final own = mine.single;
+    final a = own.amount(AmountRole.posted), b = other.amount(AmountRole.posted);
+    if (own.direction != other.direction ||
+        a == null ||
+        b == null ||
+        a.minor != b.minor ||
+        a.unit != b.unit ||
+        !_masksAgree(own.instrument?.maskDigits, other.instrument?.maskDigits)) {
+      return null;
+    }
+    try {
+      return _SecondOpinion([
+        for (final f in facts) _confirmed(f, f == own ? other : null),
+      ]);
+    } on Object {
+      return null; // keep the rule's own reading
+    }
+  }
+
+  /// [f] with at least [_corroboratedConfidence]; for the movement the evidence
+  /// reader agreed with ([agreed]), an unknown purpose or rail takes theirs.
+  static Fact _confirmed(Fact f, MovementFact? agreed) {
+    final json = Map<String, Object?>.of(f.toJson());
+    if (f.confidence < _corroboratedConfidence) json['confidence'] = _corroboratedConfidence;
+    if (agreed != null) {
+      final attrs = Map<String, Object?>.of(json['attrs'] as Map<String, Object?>);
+      if (attrs['rail'] == Rail.unknown.wire && agreed.rail != Rail.unknown) {
+        attrs['rail'] = agreed.rail.wire;
+      }
+      if (attrs['purpose'] == MovementPurpose.unknown.wire && agreed.purpose != MovementPurpose.unknown) {
+        // NEFT, RTGS and IMPS carry money between accounts: with no merchant
+        // named, a transfer to or from someone, not a shop purchase.
+        const transferRails = {'neft', 'rtgs', 'imps'};
+        attrs['purpose'] = transferRails.contains(attrs['rail']) && agreed.purpose == MovementPurpose.purchase
+            ? MovementPurpose.p2p.wire
+            : agreed.purpose.wire;
+      }
+      json['attrs'] = attrs;
+      // The weakest rules read no account at all ("Rs 60 credited | account no
+      // XXXX2057 | ..."). The evidence reader found one in the same message.
+      final theirs = agreed.instrument;
+      if (json['instrument'] == null && theirs?.maskDigits != null) {
+        json['instrument'] = theirs!.toJson();
+      }
+    }
+    final out = Fact.fromJson(json);
+    final v = out.validate();
+    if (!v.ok) throw ContractException(v.errors);
+    return out;
+  }
+
+  /// Two printed account endings are the same account when either is missing
+  /// or one ends with the other ("1234" and "234").
+  static bool _masksAgree(String? a, String? b) =>
+      a == null || b == null || a.endsWith(b) || b.endsWith(a);
 
   // ---- tier 2 ----
 
@@ -416,9 +611,18 @@ class RuleEngine implements SmsInterpreter {
     return slug.length < 3 || RegExp(r'^\d+$').hasMatch(slug) ? null : slug;
   }
 
-  EngineOutcome? _solve(CompiledBundle cb, SmsMessage msg, String brand, String hash, String appVersion) {
+  /// The evidence reader's reading of [msg]: the accepted reading as facts
+  /// (null when it is not sure or cannot be written as valid facts) and the
+  /// decision it came from. [count] decides whether the tier 2 counters move.
+  ({SolverFactResult? built, SolverDecision? decision}) _solverRead(
+    CompiledBundle cb,
+    SmsMessage msg,
+    String brand,
+    String appVersion, {
+    required bool count,
+  }) {
     final solver = cb.solver;
-    if (solver == null) return null;
+    if (solver == null) return (built: null, decision: null);
     final SolverDecision decision;
     try {
       decision = solver.solve(
@@ -428,10 +632,41 @@ class RuleEngine implements SmsInterpreter {
         senderKind: cb.sendersByBrand[brand]?.issuerKind.wire,
       );
     } on Object {
-      return null;
+      return (built: null, decision: null);
     }
     if (!decision.accepted) {
-      stats.solverCandidates++;
+      if (count) stats.solverCandidates++;
+      return (built: null, decision: decision);
+    }
+    final SolverFactResult? built;
+    try {
+      built = SolverFacts.build(
+        decision,
+        sourceKey: msg.sourceKey,
+        observedAt: msg.observedAt,
+        issuerSlug: cb.sendersByBrand[brand]?.issuerSlug ?? _plainIssuerSlug(brand),
+        packVersion: solver.pack.version,
+        bundleVersion: cb.bundle.bundleVersion,
+        engineVersion: engineVersion,
+        appVersion: appVersion,
+        refine: (facts) => _applyCounterpartyPurposes(facts, cb),
+      );
+    } on Object {
+      if (count) stats.solverRejected++;
+      return (built: null, decision: decision);
+    }
+    if (built == null && count) stats.solverRejected++;
+    return (built: built, decision: decision);
+  }
+
+  EngineOutcome? _solve(CompiledBundle cb, SmsMessage msg, String brand, String hash, String appVersion) {
+    final solver = cb.solver;
+    if (solver == null) return null;
+    final read = _solverRead(cb, msg, brand, appVersion, count: true);
+    final built = read.built;
+    if (built == null) {
+      final decision = read.decision;
+      if (decision == null || decision.accepted) return null;
       if (decision.read == SolverRead.billDue &&
           decision.dueDate == null &&
           decision.minor != null &&
@@ -487,27 +722,6 @@ class RuleEngine implements SmsInterpreter {
           ),
         );
       }
-      return null;
-    }
-    final SolverFactResult? built;
-    try {
-      built = SolverFacts.build(
-        decision,
-        sourceKey: msg.sourceKey,
-        observedAt: msg.observedAt,
-        issuerSlug: cb.sendersByBrand[brand]?.issuerSlug ?? _plainIssuerSlug(brand),
-        packVersion: solver.pack.version,
-        bundleVersion: cb.bundle.bundleVersion,
-        engineVersion: engineVersion,
-        appVersion: appVersion,
-        refine: (facts) => _applyCounterpartyPurposes(facts, cb),
-      );
-    } on Object {
-      stats.solverRejected++;
-      return null;
-    }
-    if (built == null) {
-      stats.solverRejected++;
       return null;
     }
     final id = built.ruleId;
@@ -690,6 +904,14 @@ class RuleEngine implements SmsInterpreter {
         if (maskGroup != null) {
           raw = ctx.group(maskGroup);
           if (raw != null) {
+            // "12XXXXXX89": some banks show the first and the last digits. The
+            // pattern caught the first run; what identifies the account is the
+            // run after the mask characters.
+            final at = ctx.span(maskGroup);
+            if (at != null) {
+              final tail = _maskTail.matchAsPrefix(ctx.body, at.$2);
+              if (tail != null) raw = tail.group(1)!;
+            }
             var d = digitsOnly(raw);
             maskLength = d.length;
             if (d.length > 6) d = d.substring(d.length - 4);

@@ -81,7 +81,7 @@
   {
     "id": "CPP-CHEQ",
     "vpaPattern": "^cheq[\\w.-]*@",
-    "namePattern": "^CHEQ(?: DIGITAL)?",
+    "namePattern": "^CHEQ\\b(?: DIGITAL)?",
     "purpose": "card_payment",
     "targetInstrument": {
       "kind": "credit_card"

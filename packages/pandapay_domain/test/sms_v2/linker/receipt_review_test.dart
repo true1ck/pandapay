@@ -488,4 +488,89 @@ void main() {
       );
     });
   });
+
+  group('the same amount paid again and again', () {
+    // Each payment sends a notice with its own reference and a debit alert.
+    MovementFact notice(String at, String utr, {int minor = 40000000}) => debit(
+      'p2p',
+      minor,
+      at: at,
+      evidenceOnly: true,
+      references: {'neftUtr': utr},
+      sourceKey: 'notice-$utr',
+    );
+    MovementFact alert(String at, {int minor = 40000000}) =>
+        debit('p2p', minor, at: at, inst: hdfcAcct, sourceKey: 'alert-$at');
+
+    int noticesOn(Event e, Map<String, Fact> byId) => e.legs
+        .where(
+          (l) =>
+              l.role == LegRole.duplicateNotice &&
+              (byId[l.factId] as MovementFact).evidenceOnly == true,
+        )
+        .length;
+
+    test('three payments on three days: three events, one notice each, counted three times', () {
+      final facts = <Fact>[
+        notice('2026-11-03T05:00:00Z', 'U1'),
+        alert('2026-11-03T05:01:00Z'),
+        notice('2026-11-04T05:00:00Z', 'U2'),
+        alert('2026-11-04T05:01:00Z'),
+        notice('2026-11-05T05:00:00Z', 'U3'),
+        alert('2026-11-05T05:01:00Z'),
+      ];
+      final r = _run(facts);
+      final byId = {for (final f in facts) f.factId: f};
+      expect(r.events, hasLength(3));
+      for (final e in r.events) {
+        expect(noticesOn(e, byId), 1);
+      }
+      expect(_moneyOf(r.events, facts), 3 * 40000000);
+      expect(r.review.ambiguous, isEmpty);
+    });
+
+    test('all three notices first, then the three alerts: still one notice each', () {
+      final facts = <Fact>[
+        notice('2026-11-03T05:00:00Z', 'U1'),
+        notice('2026-11-04T05:00:00Z', 'U2'),
+        notice('2026-11-05T05:00:00Z', 'U3'),
+        alert('2026-11-03T05:01:00Z'),
+        alert('2026-11-04T05:01:00Z'),
+        alert('2026-11-05T05:01:00Z'),
+      ];
+      final r = _run(facts);
+      final byId = {for (final f in facts) f.factId: f};
+      expect(r.events, hasLength(3));
+      expect(r.events.map((e) => noticesOn(e, byId)), everyElement(1));
+      expect(_moneyOf(r.events, facts), 3 * 40000000);
+    });
+
+    test('two notices with the same reference are one payment told twice', () {
+      final facts = <Fact>[
+        alert('2026-11-03T05:01:00Z'),
+        notice('2026-11-03T05:02:00Z', 'U1'),
+        notice('2026-11-03T05:03:00Z', 'U1'),
+      ];
+      final r = _run(facts);
+      final byId = {for (final f in facts) f.factId: f};
+      expect(r.events, hasLength(1));
+      expect(noticesOn(r.events.single, byId), 2);
+      expect(_moneyOf(r.events, facts), 40000000);
+    });
+
+    test('a notice for a payment whose alert never came does not hide behind the first payment', () {
+      final facts = <Fact>[
+        notice('2026-11-03T05:00:00Z', 'U1'),
+        alert('2026-11-03T05:01:00Z'),
+        notice('2026-11-04T05:00:00Z', 'U2'), // its alert is missing
+      ];
+      final r = _run(facts, now: DateTime.utc(2026, 11, 12, 6, 30));
+      final byId = {for (final f in facts) f.factId: f};
+      expect(r.events, hasLength(1));
+      expect(noticesOn(r.events.single, byId), 1);
+      // The unpaid second notice is from this month and old enough: one question, no money.
+      expect(r.review.ambiguous, hasLength(1));
+      expect(_moneyOf(r.events, facts), 40000000);
+    });
+  });
 }

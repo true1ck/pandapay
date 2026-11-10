@@ -34789,7 +34789,7 @@
   },
   {
     "id": "GEN-BALANCE-ASOF",
-    "version": 1,
+    "version": 2,
     "family": "balance",
     "senders": [
       "*"
@@ -34808,7 +34808,14 @@
         "transferred",
         "paid",
         "declined",
-        "failed"
+        "failed",
+        " cr.",
+        " dr.",
+        " cr ",
+        " dr ",
+        "deposit",
+        "withdrawal",
+        "wdl"
       ]
     },
     "emit": [
@@ -34997,11 +35004,16 @@
         "sender": "VM-UCOBNK-S",
         "body": "Your A/c XX9876 available balance has been updated.",
         "expectFactTypes": []
+      },
+      {
+        "sender": "VM-SAMPLEB-S",
+        "body": "INR 2,50,000.00 Cr. to SB A/c XXXX7712 on 14-Aug-26. Avl Bal Rs 9,800.00. Sample Bank",
+        "expectFactTypes": []
       }
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   },
   {
     "id": "GEN-BALANCE-ASOF-CARD",
@@ -35593,7 +35605,7 @@
   },
   {
     "id": "GEN-REFUND-NOMASK",
-    "version": 3,
+    "version": 4,
     "family": "refund",
     "senders": [
       "*"
@@ -35607,7 +35619,12 @@
         "will be credited",
         "will be refunded",
         "to be credited",
-        "yet to be"
+        "yet to be",
+        "being processed",
+        "is being",
+        "under process",
+        "in process",
+        "in progress"
       ]
     },
     "emit": [
@@ -35733,11 +35750,16 @@
         "expectFactTypes": [
           "movement"
         ]
+      },
+      {
+        "sender": "VM-SAMPLEB-S",
+        "body": "Refund of Rs 899 for order 12345 is being processed.",
+        "expectFactTypes": []
       }
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-05T00:00:00Z"
+    "updatedAt": "2026-11-10T00:00:00Z"
   },
   {
     "id": "GEN-CARD-CREDIT-LAST",

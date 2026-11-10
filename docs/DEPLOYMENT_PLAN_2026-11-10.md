@@ -1,286 +1,175 @@
-# Deployment plan: account lock, recovery, device check, reward gate
+# Deployment plan and status: account lock, recovery, device check, reward gate
 
-Written 10 Nov 2026. Nothing in this plan has been run against production. Every step that
-changes production says **needs your OK**; nothing below is done for you.
+First written 10 Nov 2026; rewritten the same night (about 02:30 IST) to match what has
+actually happened. Each step that changes production says **needs your OK**.
 
 Background: `ACCOUNT_LOCK_AND_RECOVERY_ROLLOUT_2026-11-09.md` (what each switch does),
 `EMAIL_PHONE_LOCK_PLAN_2026-11-09.md`, `RECOVERY_FLOW_DESIGN_2026-11-09.md`.
 
-## 1. Where things stand
+## 1. Status board
 
-> **Update, 10 Nov 01:35 IST. Read this first; the table below is from earlier.**
-> Sujay merged `origin/dev` into `dev` and pushed `2f4d704` to both `origin/dev` and
-> `origin/prod`. That commit contains my lock, recovery and device-check work (auth
-> migrations 0015 to 0018 included) but **not** the reward gate. My commits had reached
-> `origin/dev` without my pushing them, through a merge made under your name at 00:48 that I
-> did not run. The push started the deploy run `42688467981` at 01:28. You asked me to
-> cancel it; it was cancelled while still in the test phase, **before the deploy job ran**.
-> I then checked the server read-only: it is still on `a575b29` (Sujay's earlier successful
-> deploy), api and auth healthy, auth ledger still at `9001`, so **production was not
-> touched**.
->
-> The run's "Security migrations and encrypted PostgreSQL recovery" job had already failed:
-> my change to `googleIdentity.js` needs the `email_canonical` column from migration 0016,
-> and the Google identity fixture's schema did not have it. That job gates every deploy, so
-> until it is fixed any push to `prod` is blocked in CI. The fix is a small test-schema
-> change, committed on local `dev` as "fix(ci): apply migration 0016 in the Google identity
-> fixture", and `security_remaining_postgres.py` passes in full locally. **It is not pushed.**
->
-> Consequence for this plan: the candidate branch `integrate-2026-11-10` is out of date.
-> What is still missing from `origin/prod` is the CI fix, the renumbered reward gate and the
-> docs. Phase A now means: rebuild the candidate as `origin/prod` + those three, re-test,
-> then continue at Phase C.
+| Phase | What | State |
+|---|---|---|
+| A | Re-integrate and re-test | **Done, in a different way than planned.** Sujay's merges carried my work into `origin/dev` and `origin/prod`; the tests were re-run on the result (section 4). |
+| B | Read-only server checks | **Done** 10 Nov. No duplicate mailboxes; `AUTH_PUBLIC_BASE_URL` was added to the server `.env`. |
+| C | Push to `master` (CI only) | **Not done.** `origin/master` is at `37723c9`, far behind `dev`. Optional; see section 7. |
+| D | Deploy the backend | **Done.** Sujay's push of `8577492` deployed successfully at 01:40 IST. Auth migrations 0015 to 0018 are applied; all new switches are off. A second run for `d267fdb` (app-only changes, same server code) was pushed at 02:17 IST at your request. |
+| E | Build and ship the apps | **In progress.** Build `1.0.18+144` (commit `772240c`, local): iPhone compile running; Play internal not yet published. |
+| F | Raise minimum version, switch the lock on | Not started. Needs the build on every phone first. |
+| G | Device-limit enforcement, reward gate | Not started. Decisions. |
 
+**Production now:** server checkout at `8577492` (before the second run finishes), api and
+auth healthy, auth ledger at `0018_account_recovery`, 14 live accounts,
+`app_status.min_supported_version = 1.0.17`.
 
-| Thing | State |
+## 2. How it got here (10 Nov, IST)
+
+| Time | Event |
 |---|---|
-| Production (`origin/prod`) | `666a943`, deployed by Sujay on 10 Nov. It is **16 commits ahead of `origin/master`** and has none of the lock, recovery or gate work. |
-| Last prod deploy runs | The four most recent "Deploy to production" runs (including `666a943`) are **red**, all at the same last step: "Smoke test authenticated nearby discovery API" ends in a `TimeoutError`. The deploy and the health check before it passed, and all test jobs were green. The last fully green deploy was `2dc55be` (9 Nov, 17:23 UTC). Treat this as an existing nearby-places timeout, not as a failed deploy, and expect the same red end on the next one. |
-| `origin/dev` (Sujay) | `17fa49b`, four commits ahead of prod. |
-| My work | Local `dev`: 19 commits that `origin/dev` lacks, none pushed. The reward gate is one more commit on `claude/goofy-burnell-b2b60e`. |
-| **Release candidate** | Local branch `integrate-2026-11-10`: my work + all of `origin/dev` + `origin/prod` + the reward gate, with the gate's migration renumbered. Merges were clean. Not pushed. |
+| 00:48 | A merge of `origin/dev` into local `dev` is made under your name (not by me). My unpushed commits reach `origin/dev` and then `origin/prod` through Sujay's merges. |
+| 01:28 | Push of `2f4d704` to `prod` starts a deploy run. Its "Security migrations" test job fails (a test schema lacked migration 0016's column, caused by my Google identity change). |
+| 01:31 | You asked me to cancel it. Cancelled during the tests, **before the deploy job ran**. Production was checked read-only and untouched. |
+| about 01:40 | Sujay pushes `8577492` (the test fixed there too). Deploy **succeeds**; migrations 0015 to 0018 apply on production data. |
+| 02:17 | At your request I fast-forwarded `prod` to `d267fdb` (voice and Sujay's later commits; app and docs only). That run re-deploys the same server code. |
 
-**Why the candidate exists.** Pushing my `dev` straight to `prod` would have been refused
-(prod is not an ancestor of it) and a forced push would have thrown away Sujay's 16
-production commits. The candidate contains everything production has, so `prod` can be
-fast-forwarded to it.
-
-## 2. What planning found, and what was fixed
-
-Each of these would have broken a deploy or a feature. All are fixed and committed.
+## 3. Problems found while planning (all fixed)
 
 | # | Problem | Fix |
 |---|---|---|
-| 1 | Production had moved on (see above). | Candidate branch merges it in. |
-| 2 | **Migration 0016** (one account per mailbox) stops mid-deploy if two live accounts already share a mailbox (for example `a.b@gmail.com` and `ab@gmail.com`). That is inside the maintenance window, with the writers stopped. | The deploy's read-only gate (`auditContactUniqueness.js --require-unique`, which runs before any downtime) now counts these. Rehearsed: it reports them and exits 2. Also `auth/scripts/preflight_email_canonical.sql` lists them by domain and id for use by hand. |
-| 3 | The `db-migrate` image copies only a few `auth/src` files. The audit now imports `emailIdentity`, so in that image it would crash and **block every deploy**; the support tools could not load either. | Seven files added to `db/migrate/Dockerfile` and its allow-list. The image was built with Docker and the scripts loaded from it. A test fails on the old Dockerfile. |
-| 4 | New table `recovery_attempts` had no grant for a separate `AUTH_RUNTIME_ROLE`, so every recovery call would be refused. My real-database tests ran as the owner login and hid it. | `runtimePermissions.js` grants select, insert, update (not delete) when 0018 is applied. Tested. |
-| 5 | `account_recovery_unit.test.js` would **fail in CI**: it loaded the real config at import and passed locally only because of a developer `.env`. | Config is now read lazily. The whole auth suite passes with the `.env` set aside, as CI runs it. |
-| 6 | The reward gate migration was numbered `20261117030000`, before `20261118010000` which production already applied. | Renumbered `20261118020000` (file, SQL test, CI step, docs). |
-| 7 | The app compares **version names**, not build numbers, when forcing an upgrade. Every build so far is `1.0.17`, so the new build cannot be told apart from old ones. | The new build must be `1.0.18` (step 6). |
+| 1 | Production had moved on from `master` (Sujay's commits). | Everything now flows through `dev` and `prod`; `master` lags. |
+| 2 | Migration 0016 (one account per mailbox) stops mid-deploy if two live accounts share a mailbox. | The deploy's read-only gate (`auditContactUniqueness.js`, before any downtime) now counts them; `auth/scripts/preflight_email_canonical.sql` lists them by hand. Production had none. |
+| 3 | The `db-migrate` image lacked files the new audit and support tools import; it would have blocked every deploy. | Seven files added to `db/migrate/Dockerfile` and its allow-list; a test builds the image's file set. Image built with Docker and checked. |
+| 4 | `recovery_attempts` had no grant for a separate `AUTH_RUNTIME_ROLE`. | `runtimePermissions.js` grants it. (Production has no such role set, so it is harmless there.) |
+| 5 | An auth unit test passed only with a developer `.env`; CI has none. | Config is read lazily; the suite passes with the `.env` set aside. |
+| 6 | The reward-gate migration was numbered before one already applied. | Renumbered `20261118020000` on its branch. |
+| 7 | The app compares version **names**, not build numbers, to force an upgrade. | The new build is `1.0.18`. |
+| 8 | The Google identity test schema lacked migration 0016's `email_canonical` column; it failed the security job that gates every deploy. | Fixed by me (`d818d10`) and by Sujay (`8577492`). The security script passes in full. |
 
-## 3. What has been proven, and how
+## 4. What has been proven, and how
 
 | Check | Result |
 |---|---|
-| Auth tests, candidate, no `.env` (as CI) | 475 pass, 0 fail |
-| API tests, candidate, clean `npm ci`, no env | 2306 pass, 32 skipped (need a database), 0 fail |
-| CI "PostgreSQL-backed suites" run locally on the candidate (product migrations incl. Sujay's and the gate, 50+ SQL assertion scripts incl. the renumbered gate test, fixtures) all 53 steps pass on a fresh cluster (including the renumbered gate test and the shared-expense suites) |
-| Five lock/recovery database fixtures on a throwaway no-locale cluster (`scripts/test_auth_lock_recovery_postgres.sh`) | all pass |
-| **Upgrade rehearsal**: real migration runner, database at the pre-recovery state with users, then 0015 to 0018 with a separate runtime login | 5 of 5 users kept, canonical emails filled, runtime login can insert but not delete on the new table |
-| **Duplicate rehearsal**: two accounts on one Gmail mailbox | stops at 0016 (0015 applied); after closing one, a rerun finishes 0016 to 0018 |
-| Deploy audit against those databases | duplicates found: exit 2; clean: exit 0 |
-| `db-migrate` image built and scripts loaded in it | yes |
-| App tests, candidate | 3357 pass, 11 skipped, 1 fail (not mine, section 8) |
+| Auth tests, no `.env` (as CI) | 478 pass |
+| API tests, clean `npm ci`, no env | 2306 pass, 32 skipped, 0 fail |
+| CI database job (product migrations, 50+ SQL scripts, fixtures), local, fresh cluster | all 53 steps pass |
+| Five lock/recovery database fixtures (`scripts/test_auth_lock_recovery_postgres.sh`) | all pass |
+| Upgrade and duplicate rehearsals with the real migration runner | pass; duplicates stop at 0016 and a rerun finishes |
+| `db-migrate` image built; audit and support scripts load in it | yes |
+| **The real deploy of `8577492`** | succeeded; ledger shows 0017 and 0018 |
+| App tests on latest `dev` (voice included), local | 3716 pass, 11 skipped, 1 fail: `quick_add_shared_test.dart` overflows by 2.8 px on a Mac; passes on CI |
+| CI on `d267fdb`: API and auth, database suites, security migrations, end-to-end smoke, anonymization audit, Flutter and console | green when last read (02:25 IST); the 8 app shards and the prod bundle were still running |
 
-**Not proven, and cannot be from here:** real email delivery, the stop link through nginx,
-the migration runner with the production TLS certificate on the Supabase pooler, anything on
-the iPhone or Play, and behaviour on production data. Each has a check below.
+**Not proven:** real email delivery, the stop link through nginx, the phone and Play
+builds, and the recovery and phone flows on a real device.
 
-## 4. Decisions you need to make first
+## 5. SQL and settings needed separately
 
-1. **Include the reward gate in this release?** It adds a product-database migration that
-   replaces one reward function. With the setting at 0 (its default) the function answers
-   exactly as before (checked against the old one on a 19-answer scenario, and its 36 SQL
-   tests pass). Recommended: yes. Alternative: leave the branch out of the candidate and ship later.
-2. **Who pushes, and when.** Sujay pushes to `dev` and `prod`, and a push to `prod` deploys.
-   Tell him you are about to push `prod`, and do not both push. The deploy workflow queues
-   rather than interleaves and refuses a deploy if the tested commit is no longer the tip.
-3. **Version name for the app: `1.0.18`.** Needed to force the upgrade.
+**No SQL is pending.** The deploy applies migrations by itself, and I compared every
+migration file in the repo with the production ledgers (read-only):
 
-## 5. Plan, in order
+- Auth: 19 files, 19 applied.
+- Product: 194 files, 193 applied. The one not applied, `0013_cron_jobs.sql`, is skipped on
+  purpose by the migrator (it needs the `pg_cron` extension); it has been that way since August.
+- The reward-gate migration is **not** in the repo's deployed branch; it lives on
+  `claude/goofy-burnell-b2b60e`, off by default (decision, section 8).
+- Voice needs no server setting and no SQL: it runs on the phone, with the phone's own
+  speech and voices. It does need the microphone and speech permissions, which both apps
+  already declare.
 
-Rollback for each phase is in section 7.
+**Manual SQL, later, and not now:**
 
-### Phase A. Re-integrate and re-test (about 1 hour; local)
-
-Sujay may have pushed since. Right before pushing:
-
-```bash
-git fetch origin
-git checkout integrate-2026-11-10
-git merge origin/dev origin/prod          # resolve anything new; stop and ask if it conflicts
-cd auth && NODE_ENV=test npm test          # expect all pass, with no .env present
-cd ../api && NODE_ENV=test npm test
-cd .. && bash scripts/test_auth_lock_recovery_postgres.sh
-cd app && flutter analyze && flutter test
+```sql
+UPDATE app_status SET min_supported_version = '1.0.18' WHERE id = true;   -- Phase F1
 ```
 
-Pass means: no failures. The api package `libphonenumber-js` must be installed
-(`npm ci`), otherwise five shared-expense files fail for that reason alone.
-
-### Phase B. Read-only checks on the server (about 10 minutes; needs your OK to connect)
+Do not run it until the iPhone and every tester have `1.0.18`; until then it would lock them
+out with an "update required" screen. Run it with:
 
 ```bash
 srv() { ssh -i "PEM_PandaPay/ssh-key-2026-08-01 (3).key" -o IdentitiesOnly=yes ubuntu@140.245.223.86 "$@"; }
-
-# 1. Duplicate mailboxes. Expect zero rows. Prints domains and ids, never an address.
-srv "docker exec -i pandapay-prod-backup-1 sh -c 'psql \"\$AUTH_DATABASE_URL\"'" < auth/scripts/preflight_email_canonical.sql
-
-# 2. Which settings exist in the server .env. Prints 1 or 0, never a value.
-srv 'cd /home/ubuntu/apps/pandapay && for k in AUTH_PUBLIC_BASE_URL AUTH_RUNTIME_ROLE REQUIRE_PHONE_AT_SIGNUP DEVICE_ACCOUNT_LIMIT; do printf "%s: " $k; grep -c "^$k=." .env; done; printf "secret 32+ chars: "; grep -c "^AUTH_INTERNAL_SERVICE_SECRET=.\{32,\}" .env'
+srv "docker exec -i pandapay-prod-backup-1 sh -c 'psql \"\$PRODUCT_DATABASE_URL\"'" < min_version.sql
 ```
 
-- Duplicates found: close or merge all but one account in each group (support decision), rerun.
-- `AUTH_PUBLIC_BASE_URL` is 0: add `AUTH_PUBLIC_BASE_URL=https://auth.pandapath.site` to the
-  server `.env` (no trailing slash). Without it recovery works but the emails have no "stop
-  this" link. **Needs your OK** (it edits the server).
-- `AUTH_RUNTIME_ROLE` is 1: the grant fix from section 2 matters; otherwise it does not.
-- The secret check must print 1.
+**Server `.env` settings (not SQL):** `AUTH_PUBLIC_BASE_URL` is set (10 Nov, backed up
+first). `REQUIRE_PHONE_AT_SIGNUP`, `RECOVERY_REMINDER_EMAILS_ENABLED` and
+`DEVICE_ACCOUNT_LIMIT_ENFORCE` are unset, so they default to off. Changing one means
+editing `.env` and redeploying with `gh workflow run deploy-prod.yml --ref prod`.
 
-### Phase C. Push to `master` (CI only; needs your OK)
+## 6. Remaining plan
 
-```bash
-git checkout master && git merge --ff-only integrate-2026-11-10   # or merge it, if master has moved
-git push origin master
-```
+### Phase E. Apps (in progress)
 
-A push to `master` runs "Build and test" and publishes images; it deploys nothing. Wait for
-all jobs green: security migrations, API and auth, PostgreSQL-backed suites, App shards 1 to 8,
-Prod bundle, Container images, End-to-end smoke. Do not go on if any is red.
+Build `1.0.18+144` from commit `772240c`, made on top of `d267fdb` and not pushed.
 
-### Phase D. Deploy the backend (needs your OK; the step with downtime)
-
-```bash
-git push origin master:prod        # fast-forward; deploys production
-```
-
-The workflow runs the tests again, then `deploy/deploy.sh`, which: builds images; runs the
-read-only migration and contact audits **before any downtime** (this is where a duplicate
-mailbox now stops it safely); stops auth, api and the workers; takes a paired encrypted
-backup; applies migrations (auth 0015 to 0018, product `20261118020000` and Sujay's);
-restarts and waits for `/ready` on both services. Expect a few minutes of downtime and
-up to the 30-minute window as the limit.
-
-State afterwards: **every switch off.** Today's app builds keep working unchanged. New
-behaviour on the server only: email aliases collapse to one account, throwaway domains
-are refused at sign-up, the recovery endpoints exist, the device check logs.
-
-**Expect the workflow to end red** at "Smoke test authenticated nearby discovery API" (see
-section 1; it has timed out on every recent deploy). What matters is that "Deploy" and
-"Verify production is healthy" before it are green. If either of those is red, stop and use
-section 7.
-
-Verify (no secrets, one harmless row):
-
-```bash
-curl -fsS https://api.pandapath.site/ready && curl -fsS https://auth.pandapath.site/ready
-# Recovery answers the same for a made-up account: expect ok:true, a code_length of 6.
-curl -s -X POST https://auth.pandapath.site/auth/recovery/start -H 'content-type: application/json' \
-  -d '{"lost_email":"nobody@example.com","phone":"+919999999999","fact":"4821","device_id":"plan-check-0001"}'
-# The card question must refuse a caller without the secret: expect 401, or 404 if nginx hides it. Never 200.
-curl -s -o /dev/null -w '%{http_code}\n' -X POST https://api.pandapath.site/internal/recovery/card-fact
-```
-
-Then confirm a normal sign-in still works with the current iPhone build (143).
-
-### Phase E. Build and test the apps (about half a day; needs your OK to publish)
-
-1. Set the version in `app/pubspec.yaml` to `1.0.18+144` and commit it on `master`
-   (docs-only pushes need `[skip ci]`; this is not docs-only).
-2. iPhone: the three-step recipe in memory `ios-device-build-and-install-recipe` with
-   `--build-name=1.0.18 --build-number=144`; install over the old app, never delete it.
-3. Android: `scripts/fastlane.sh exec fastlane android internal build_number:144`.
-4. Test on the iPhone, with the server still on the old switches:
+1. iPhone: the three-step recipe in memory `ios-device-build-and-install-recipe`
+   (config, `xcodebuild`, `devicectl install` over the old app; never delete the app).
+2. Android testers: `scripts/fastlane.sh exec fastlane android internal build_number:144`
+   (the Play internal track was at 143). **Publishing needs your OK**, which you gave on 10 Nov.
+3. Test on the iPhone, with the lock switches still off:
    - Sign up with a new email: phone box shown, number saved, not asked again.
    - Settings, Email & phone: add a recovery email (two codes), remove it, add it again.
-   - Sign out. "Need help signing in?" then both paths: with a recovery email (code, new
+   - Sign out. "Need help signing in?" with both paths: with a recovery email (code, new
      email and code, signed in, other device signed out) and "I don't have a recovery
      email" (24-hour notice, come back, finish).
-   - A wrong phone or wrong card digits gives the same message as a wrong code.
+   - A wrong phone or card digits gives the same message as a wrong code.
    - While a recovery is waiting, Settings on a second signed-in device shows the red card
      and its button cancels; the email link shows a button, and pressing it cancels.
    - Check the emails really arrive and the stop link opens (this proves nginx and SMTP).
+   - Try voice: speak or type a spend, ask a question, hear the answer.
 
-Do not go on until all of that works.
+Do not go on until that works.
 
-### Phase F. Make the new build the minimum, then lock (days later; each needs your OK)
+### Phase F. Minimum version, then the lock (days later; each needs your OK)
 
-Wait until almost every active install has the new build (watch builds in use).
+1. Raise the minimum version (section 5).
+2. `REQUIRE_PHONE_AT_SIGNUP=true` and redeploy. The 14 live accounts are asked for a phone at
+   next open. Watch for 403 `phone_required` that does not clear, and for "number already
+   used" (release with `recovery_support.js release-phone`).
+3. `RECOVERY_REMINDER_EMAILS_ENABLED=true` and redeploy (sends 25 at a time).
 
-1. Raise the minimum version. Save as `min_version.sql`: 
-   `UPDATE app_status SET min_supported_version = '1.0.18' WHERE id = true;`
-   ```bash
-   srv "docker exec -i pandapay-prod-backup-1 sh -c 'psql \"\$PRODUCT_DATABASE_URL\"'" < min_version.sql
-   ```
-   Old builds then show the "update required" screen. Check on an old install if you have one.
-2. Set `REQUIRE_PHONE_AT_SIGNUP=true` in the server `.env`, then redeploy the current
-   commit: `gh workflow run deploy-prod.yml --ref prod`. Existing accounts are asked for a
-   phone at next open. Watch for 403 `phone_required` that does not clear, and for support
-   contacts about "number already used" (release with `recovery_support.js release-phone`).
-3. Set `RECOVERY_REMINDER_EMAILS_ENABLED=true` and redeploy. Every account older than 7
-   days with no recovery email is due at once; it sends 25 at a time.
+### Phase G. Later decisions
 
-### Phase G. Device check, then the reward gate (a week later; decisions)
+1. Read what the log-only device check recorded (`account_clusters.js flags`, `devices`);
+   if it shows real abuse, set `DEVICE_ACCOUNT_LIMIT_ENFORCE=true`.
+2. The reward gate stays off until you decide.
 
-1. Read what the log-only check recorded:
-   `node auth/scripts/account_clusters.js flags` and `devices` (run them inside the
-   `db-migrate` image with the compose `run --rm` form, so the encryption settings are present).
-   If the flagged numbers look like real abuse and not families sharing a phone, set
-   `DEVICE_ACCOUNT_LIMIT_ENFORCE=true` and redeploy.
-2. The reward gate stays at 0. Turning it on is its own decision: see the section the gate's
-   session added to the rollout guide (how to switch on, who would be held, what to watch).
+## 7. Branches
 
-## 6. Who does what and where your OK is needed
+- `origin/dev` = `origin/prod` = `d267fdb` (after the 02:17 push). Build commit `772240c`
+  (version bump) is local on `dev`, not pushed. Pushing it to `prod` would redeploy the
+  server for a one-line app change; push it to `dev` only, or fold it into the next real push.
+- `origin/master` is `37723c9`. Memory says builds come from `master`; it is far behind.
+  Pushing `dev` to `master` runs the full CI without deploying anything and brings it level.
+  Needs your OK.
 
-| Step | You | Me |
-|---|---|---|
-| A. re-integrate and test | say go | do |
-| B. server checks | OK to connect | run the three read-only commands |
-| C. push `master` | OK | push |
-| D. push `prod` | OK, tell Sujay | push, watch, run the checks |
-| E. builds | OK to publish to Play | build, install, you test the phone |
-| F. minimum version, flags | OK each | edit and redeploy |
-| G. enforce, gate | decide | edit |
+## 8. Decisions open
 
-## 7. If something goes wrong
+1. **Reward gate** (`claude/goofy-burnell-b2b60e`, off by default): include in a later deploy?
+2. **Push `dev` to `master`** so the build rule is satisfied again.
+3. **Who pushes `prod`.** Sujay pushes there too; a push deploys. Say so before pushing.
 
-All schema changes are additive, so old code still runs on the new schema.
+## 9. If something goes wrong
+
+All schema changes are additive, so old code still runs on the new schema. The last
+verified-good production commit before tonight's work was `a575b29`; since 01:40 it is
+`8577492`.
 
 | Where | What happens | What to do |
 |---|---|---|
-| B finds duplicate mailboxes | nothing yet | close or merge them; rerun |
-| D: audit stops the deploy | nothing changed, no downtime | fix the accounts it names by count; rerun |
-| D: migration fails inside the window | the deploy script restores the writers it stopped and reports; the paired backup exists | read the failing step; do not edit applied SQL; fix forward |
-| D: unhealthy after deploy | `/ready` fails | point `prod` back to `666a943` (a forced push, **your decision**) and let it redeploy; the data stays |
-| E: app problem | only testers have it | do not raise the minimum; fix and rebuild |
-| F1 locks out old builds by mistake | people see "update required" | set `min_supported_version` back to `1.0.17` |
-| F2 phone lock causes trouble | people stuck on the phone screen | set `REQUIRE_PHONE_AT_SIGNUP=false` and redeploy; no data is lost |
-| G enforcement refuses real people | 403 `DEVICE_ACCOUNT_LIMIT` | set `DEVICE_ACCOUNT_LIMIT_ENFORCE=false` and redeploy |
+| Deploy audit stops a deploy | nothing changed, no downtime | fix the accounts it counts; rerun |
+| Migration fails inside the window | the deploy script restores the writers it stopped; a paired backup exists | read the failing step; do not edit applied SQL; fix forward |
+| Unhealthy after a deploy | `/ready` fails | point `prod` back to `8577492` (a forced push, **your decision**) and let it redeploy; data stays |
+| App problem | only you and testers have it | do not raise the minimum; fix and rebuild |
+| F1 locks out old builds | "update required" | set `min_supported_version` back to `1.0.17` |
+| F2 phone lock causes trouble | stuck on the phone screen | `REQUIRE_PHONE_AT_SIGNUP=false` and redeploy |
+| G enforcement refuses real people | 403 `DEVICE_ACCOUNT_LIMIT` | `DEVICE_ACCOUNT_LIMIT_ENFORCE=false` and redeploy |
 
-## 8. Still open
+A deploy run usually ends red at "Smoke test authenticated nearby discovery API" (a timeout
+that has hit several recent runs). Only "Deploy" and "Verify production is healthy" before
+it matter. The run for `8577492` ended green.
 
-- One app test fails on my Mac: `quick_add_shared_test.dart`, "sharing fits 320dp and 2x
-  text without obscuring the amount" (a row overflows by 2.8 pixels). It fails the same way
-  on `origin/dev` alone, so it is not from this work. CI is not affected: all eight app test
-  shards passed on Sujay's `prod` push, so it looks font-dependent on macOS. If CI on
-  `master` shows it red, that is Sujay's test to fix, not a reason to hold the release.
-- The analyzer reports 116 informational notes and no errors or warnings, the same count
-  as before the merge.
-- **Phase B was run on 10 Nov** (read-only: queries inside `BEGIN READ ONLY` / a transaction
-  that is rolled back, and a count of which settings exist; no values printed, nothing changed):
-  - Production checkout is at `666a943` and api, auth, rewards worker and the AI worker were
-    healthy. They had been up only about 20 minutes, so a deploy had just happened. Check
-    with Sujay before pushing `prod`.
-  - **Duplicate mailboxes: none.** Migration 0016 will pass on today's data. Run the preflight
-    again just before Phase D, because new sign-ups can change it.
-  - Server `.env`: `AUTH_PUBLIC_BASE_URL` was not set, and **was added on 10 Nov** (`https://auth.pandapath.site`, one line appended; the file was backed up first to `/home/ubuntu/pandapay-secrets/env-backup/`; nothing else changed, and it takes effect only at the next deploy);
-    `AUTH_RUNTIME_ROLE` is not set (production runs auth as the table owner, so the
-    recovery-table grant fix has no effect there; it is harmless); `REQUIRE_PHONE_AT_SIGNUP`,
-    `DEVICE_ACCOUNT_LIMIT` and `RECOVERY_REMINDER_EMAILS_ENABLED` are not set, so the compose
-    defaults (off, 3, off) apply; `AUTH_INTERNAL_SERVICE_SECRET` is at least 32 characters.
-  - Auth ledger newest is `9001_active_contact_uniqueness`, then `0014_approved_browser_enrollment`:
-    exactly the state the upgrade rehearsal started from. 0015 to 0018 are not applied.
-  - Product ledger newest is `20261118010000_shared_expenses_enable_runtime_flags.sql`; the
-    reward gate is not applied. `app_status.min_supported_version` is `1.0.17`, maintenance off.
-  - **Scale: 14 live accounts**, none without an email, 4 with a phone number on file. So
-    "every existing account must add a phone at next open" affects 14 people, and the whole
-    forced-upgrade and lock sequence can be done by hand with them.
-- Not yet run by anyone: the rest of Phase D onwards (anything that changes production, and the
-  phone, email and nginx checks).
-
-## 9. What stays unbuilt
+## 10. What stays unbuilt
 
 Play Integrity and App Attest (need your credentials), the 14-day expiry of an unused phone
 claim (needs an "activated" signal from the product database), background reminder
-notifications, and enforcement of the device limit (wait for the numbers).
+notifications, and device-limit enforcement (wait for the numbers).
