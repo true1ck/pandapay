@@ -1,6 +1,7 @@
 // SMS pipeline v2 rule engine: one pure-Dart engine for the phone, the admin
 // console and the rules CLI.
 
+export 'account_token.dart';
 export 'bundle_lint.dart';
 export 'compiled_bundle.dart';
 export 'lint.dart';

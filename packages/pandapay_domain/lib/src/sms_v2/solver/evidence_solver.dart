@@ -464,7 +464,19 @@ class _Run {
           c.how == 'biller' ||
           c.how == 'kind',
     );
-    if (cues.isEmpty || (!hasHardCue && _strongDue().isNotEmpty)) {
+    // A noun is not an event. "Mandate for Rs 5,000 towards X MUTUAL FUND is
+    // registered" names an investment but no verb says money moved: when the only
+    // cues are such kind words and the message is a mandate being set up or
+    // ended, the mandate reading decides, not a movement.
+    final verbCue = cues.any(
+      (c) => c.how == 'debit' || c.how == 'credit' || c.how == 'biller',
+    );
+    final mandateOnly = cues.isNotEmpty &&
+        !verbCue &&
+        (hits('mandateSetup').isNotEmpty || hits('mandateEnd').isNotEmpty);
+    if (cues.isEmpty ||
+        mandateOnly ||
+        (!hasHardCue && _strongDue().isNotEmpty)) {
       final r = _notCompleted(amts, role, eligible, payable);
       if (r != null) return r;
     }
