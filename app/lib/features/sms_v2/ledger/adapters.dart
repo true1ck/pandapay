@@ -406,15 +406,35 @@ class _BillRecord {
   bool get paid => dueMinor != null && paidMinor >= dueMinor!;
 }
 
-bool _sameInstrument(v2.Fact a, v2.Fact b) =>
-    a.instrument?.issuerSlug != null &&
-    a.instrument?.issuerSlug == b.instrument?.issuerSlug &&
-    a.instrument?.maskDigits == b.instrument?.maskDigits &&
-    (a.instrument?.kind == null ||
-        b.instrument?.kind == null ||
-        a.instrument!.kind == b.instrument!.kind);
+/// A card or account known only by its kind and last digits: the sender is not in
+/// the registry, so no issuer could be named.
+bool _digitsOnly(v2.Fact f) =>
+    f.instrument?.issuerSlug == null &&
+    f.instrument?.maskDigits != null &&
+    f.instrument?.kind != null;
+
+bool _sameInstrument(v2.Fact a, v2.Fact b) {
+  final x = a.instrument;
+  final y = b.instrument;
+  if (x?.issuerSlug != null && y?.issuerSlug != null) {
+    return x!.issuerSlug == y!.issuerSlug &&
+        x.maskDigits == y.maskDigits &&
+        (x.kind == null || y.kind == null || x.kind == y.kind);
+  }
+  // One side has no issuer (an unregistered sender's message): the kind and last
+  // digits must both be known and equal.
+  if (x == null || y == null) return false;
+  return x.maskDigits != null &&
+      x.kind != null &&
+      x.maskDigits == y.maskDigits &&
+      x.kind == y.kind &&
+      (x.issuerSlug == null || y.issuerSlug == null);
+}
+
 String _billIdentity(v2.BillDueFact f) => f.instrument?.issuerSlug != null
     ? _instrumentKey(f)
+    : _digitsOnly(f)
+    ? 'anon|${f.instrument!.kind!.wire}|${f.instrument!.maskDigits}'
     : normalizeMerchantText(f.billerName ?? 'unknown:${f.factId}');
 DateTime _statementAt(v2.BillDueFact f) => f.statementDate == null
     ? f.effectiveAt
@@ -539,7 +559,7 @@ List<_BillRecord> _billRecords(
           .where(
             (f) =>
                 f.evidenceOnly != true &&
-                (fact.instrument?.issuerSlug != null
+                (fact.instrument?.issuerSlug != null || _digitsOnly(fact)
                     ? _sameInstrument(f, fact)
                     : fact.billerName != null &&
                           normalizeMerchantText(f.counterparty?.name ?? '') ==

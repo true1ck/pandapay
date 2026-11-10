@@ -245,7 +245,7 @@ void main() {
       );
       await show(tester, SmsLedgerScreen.subscriptions, model);
       expect(find.text('Active'), findsOneWidget);
-      expect(find.text('NETFLIX'), findsOneWidget);
+      expect(find.text('Netflix'), findsOneWidget);
       expect(find.text('₹649.00'), findsOneWidget);
       expect(find.byType(ListTile), findsOneWidget);
       expect(text('TATA'), findsNothing);
@@ -270,7 +270,7 @@ void main() {
         ],
       );
       await show(tester, SmsLedgerScreen.subscriptions, model);
-      expect(find.text('NETFLIX'), findsOneWidget);
+      expect(find.text('Netflix'), findsOneWidget);
       expect(find.text('Active'), findsNothing);
       expect(find.text('Past and interrupted'), findsOneWidget);
       expect(text('cancelled'), findsOneWidget);
@@ -292,7 +292,7 @@ void main() {
         ],
       );
       await show(tester, SmsLedgerScreen.subscriptions, model);
-      expect(find.text('NETFLIX'), findsOneWidget);
+      expect(find.text('Netflix'), findsOneWidget);
       expect(text('failed payment'), findsOneWidget);
       final totals = model.snapshot().totals(
         DateTime.utc(2026, 10, 31, 18, 30),

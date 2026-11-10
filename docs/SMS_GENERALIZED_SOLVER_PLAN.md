@@ -323,3 +323,13 @@ One mechanism, three uses. The engine returns the unresolved reading with what i
 ## 18. Real-inbox measurement, 10 Nov 2026 (counts only, export deleted)
 
 Phone read read-only (6,019 messages). Through the app's real intake gate: 935 sensitive dropped, 2,507 dropped by the gate, 2,577 reach the engine. End to end through the real pipeline (history chain included): 16 messages have no reading at all (was 20), 1 refund inference waits for confirmation, 42 are low-confidence readings of the existing rules (unchanged by this work), 44 event questions and 3 instrument questions are the existing ones. At engine level the unresolved count went 73 -> 51 and the money counted did not change (100 debits, 18 credits), the strict invariant held (0 changed rule results), and 1 generic autopay debit was enriched. Credits are enriched only by a real purpose; a payer word alone ("by CASH") is not an improvement. Credit reports and card-application status notices are ignored as non-money.
+
+## 19. Cross-screen audit, 10 Nov 2026
+
+Every screen reads the one ledger read model; the risk is two screens each re-deriving a list. Inventory and result:
+- **Bills:** the commitments list, the SMS bill rows and the per-card ledger are all built from one `_billRecords`, so status, amount and due date agree by construction. Tested together (`views_agree_test.dart`). Home, Cards, the calendar, notifications and the voice answers read the card ledger's latest statement.
+- **Subscriptions:** there were TWO lists with different rules. The main Subscriptions screen filtered (not-a-subscription names, possible-subscription split, canonical service names); the SMS ledger's list did not (it showed raw rows, "NETFLIX" instead of "Netflix", and would have shown pattern-found candidates as subscriptions). Both now call `buildSubscriptionView` (`features/insights/subscription_view.dart`).
+- **IPO:** the IPO screen and the instrument detail's holds both read `ipoApplications`; one source.
+- **Money in:** the Money-in screen and the transactions' income agree (tested).
+- **A real gap found by the audit:** rule-read bills from a sender the registry does not know carry the card's last digits but no issuer. Their identity was unique per message, so a newer statement never replaced an older one and a payment never matched. A card is now recognised by kind and last digits when the issuer is unknown (two different issuers with the same last four would merge; accepted, one in ten thousand per pair).
+- **Hidden by design, not changed:** the Payments Due screen keeps the SMS bills and scheduled-payments sections switched off (`_showSmsBills`, `_showScheduledPayments`), so bills of category other/rent/education/tax are not listed there.
