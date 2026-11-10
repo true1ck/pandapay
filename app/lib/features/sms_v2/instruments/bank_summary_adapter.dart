@@ -25,14 +25,35 @@ typedef ManualBalances = Map<String, ({Money balance, DateTime updatedAt})>;
 /// - A balance the user typed in ([manualBalances]) replaces the SMS balance
 ///   and sets `isBalanceManuallySet`, exactly as the current projection does.
 ///   An account with a manual balance and no instrument is added, as today.
+/// True when [account] is really a card: another instrument of the same bank
+/// is a credit card ending in the same digits. A message about a credit card
+/// (rewards, limit, statement) can be read as a bank account, and one number
+/// cannot be both, so the card wins and the "account" is not listed.
+bool isShadowedByCard(Instrument account, Iterable<Instrument> instruments) {
+  final mask = account.maskDigits;
+  if (account.kind != InstrumentKind.bankAccount || mask == null) return false;
+  String last4(String m) => m.length > 4 ? m.substring(m.length - 4) : m;
+  return instruments.any(
+    (c) =>
+        c.kind == InstrumentKind.creditCard &&
+        c.status != InstrumentStatus.rejected &&
+        c.status != InstrumentStatus.archived &&
+        c.issuerSlug == account.issuerSlug &&
+        c.maskDigits != null &&
+        last4(c.maskDigits!) == last4(mask),
+  );
+}
+
 List<BankAccountSummary> bankAccountSummariesFromInstruments(
   Iterable<Instrument> instruments, {
   ManualBalances manualBalances = const {},
 }) {
+  final all = instruments.toList();
   final rows =
       [
-        for (final i in instruments)
+        for (final i in all)
           if (i.kind == InstrumentKind.bankAccount &&
+              !isShadowedByCard(i, all) &&
               i.status == InstrumentStatus.confirmed &&
               i.maskDigits != null &&
               i.maskDigits!.length >= 4)

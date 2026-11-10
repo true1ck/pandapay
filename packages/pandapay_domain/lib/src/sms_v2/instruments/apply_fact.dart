@@ -108,13 +108,6 @@ InstrumentUpdate applyFact(
   return InstrumentUpdate(next, List.unmodifiable(history));
 }
 
-/// A detected bank account that has had an SMS balance: safe to confirm
-/// without asking. Anything else detected still waits for the user.
-bool isSureOwnAccount(Instrument i) =>
-    i.kind == InstrumentKind.bankAccount &&
-    i.status == InstrumentStatus.detected &&
-    i.availableMinor != null;
-
 Instrument _applyBalance(Instrument i, BalanceSnapshotFact fact) {
   final asOf = fact.asOf.toUtc();
   final available =
@@ -123,12 +116,6 @@ Instrument _applyBalance(Instrument i, BalanceSnapshotFact fact) {
     final stored = i.availableAt;
     if (stored == null || asOf.isAfter(stored)) {
       i = i.copyWith(availableMinor: available.minor, availableAt: asOf);
-    }
-    // A bank only prints an available balance in a message about the user's
-    // own account, never a counterparty's, so a balance is a sure sign of
-    // ownership. Accounts with no balance stay "detected" and ask the user.
-    if (fact.amount(AmountRole.availableBalance) != null && isSureOwnAccount(i)) {
-      i = i.copyWith(status: InstrumentStatus.confirmed);
     }
   }
   final points = fact.amount(AmountRole.pointsBalance);

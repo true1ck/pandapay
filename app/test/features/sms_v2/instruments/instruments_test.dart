@@ -525,6 +525,25 @@ void main() {
       );
     });
 
+    test('a credit card read as a bank account is not listed as one', () {
+      Instrument make(InstrumentKind kind) => Instrument(
+        instrumentId: nextId(),
+        kind: kind,
+        issuerSlug: 'axis',
+        maskDigits: '2468',
+        displayName: 'x',
+        status: InstrumentStatus.confirmed,
+        firstSeenAt: DateTime.utc(2026, 11, 1),
+        lastSeenAt: DateTime.utc(2026, 11, 1),
+        evidenceCount: 1,
+      );
+      final out = bankAccountSummariesFromInstruments([
+        make(InstrumentKind.bankAccount),
+        make(InstrumentKind.creditCard),
+      ]);
+      expect(out, isEmpty);
+    });
+
     test('a detected account is not listed until the user confirms it', () {
       final detected = Instrument(
         instrumentId: nextId(),

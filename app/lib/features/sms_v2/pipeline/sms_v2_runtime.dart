@@ -210,16 +210,6 @@ class SmsV2Runtime {
       issuerSlugOf: cardIssuerSlugFromCatalogue(catalogue),
       bankAccounts: const [],
     );
-    // Accounts already stored with an SMS balance are surely the user's own;
-    // confirm them once so only the doubtful ones are left to ask about.
-    for (final i in instrumentStore.list(
-      status: InstrumentStatus.detected,
-      kind: InstrumentKind.bankAccount,
-    )) {
-      if (isSureOwnAccount(i)) {
-        instrumentStore.upsert(i.copyWith(status: InstrumentStatus.confirmed));
-      }
-    }
     final session = ++_captureSessions;
     for (var start = 0; start < messages.length; start += 200) {
       _checkAccount();
@@ -311,6 +301,14 @@ class SmsV2Runtime {
     }
     _state.put('rules:last-check', clock().toUtc().toIso8601String());
   }
+
+  /// True while a sync / migration pass is in flight. Read by the
+  /// notification sweep so it never announces a half-finished import.
+  bool get isBusy => _running != null;
+
+  /// Messages captured on the phone but not yet read through the pipeline.
+  int get pendingIntake =>
+      SmsIntakeRepository(financial.database).counts(namespace).pending;
 
   Future<void> sync() {
     final running = _running;
