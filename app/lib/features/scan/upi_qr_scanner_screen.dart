@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -30,16 +32,52 @@ class _UpiQrScannerScreenState extends State<UpiQrScannerScreen> {
   String? _hint;
   bool _torchOn = false;
 
+  Timer? _refocus;
+
+  @override
+  void initState() {
+    super.initState();
+    // Phone cameras often lock focus on the background when pointed at a
+    // screen/printed QR from close range (the blur seen on iPhone). Re-assert
+    // centre focus every couple of seconds until a code is read.
+    _refocus = Timer.periodic(const Duration(seconds: 2), (_) async {
+      if (!mounted || _handling) return;
+      try {
+        await _controller.setFocusPoint(const Offset(0.5, 0.45));
+      } catch (_) {}
+    });
+  }
+
   @override
   void dispose() {
+    _refocus?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
   void _onDetect(BarcodeCapture capture) {
     if (_handling || capture.barcodes.isEmpty) return;
-    final raw = capture.barcodes.first.rawValue;
-    _handleRaw(raw);
+    // Several codes can be in frame (a page often carries more than one);
+    // use the first that is actually a UPI payment code instead of
+    // rejecting the whole frame because the first one wasn't.
+    final raws = capture.barcodes
+        .map((b) => b.rawValue)
+        .whereType<String>()
+        .where((r) => r.isNotEmpty)
+        .toList();
+    final upi = raws.where((r) => parseUpiQrString(r) != null);
+    _handleRaw(upi.isNotEmpty ? upi.first : (raws.isEmpty ? null : raws.first));
+  }
+
+  String _describeNonUpi(String raw) {
+    final t = raw.trim().toLowerCase();
+    if (t.startsWith('upi://mandate') || t.startsWith('upi://')) {
+      return "That's a UPI request PandaPay can't pay from (not a payment QR).";
+    }
+    if (t.startsWith('http://') || t.startsWith('https://')) {
+      return "That QR is a web link, not a UPI payment code.";
+    }
+    return "That's not a UPI code.";
   }
 
   Future<void> _handleRaw(String? raw) async {
@@ -52,8 +90,9 @@ class _UpiQrScannerScreenState extends State<UpiQrScannerScreen> {
     }
     final parsed = parseUpiQrString(raw);
     if (parsed == null) {
+      debugPrint('UPI scanner: unrecognised QR payload: $raw');
       setState(() {
-        _hint = "That's not a UPI code.";
+        _hint = _describeNonUpi(raw);
         _handling = false;
       });
       return;
@@ -68,11 +107,24 @@ class _UpiQrScannerScreenState extends State<UpiQrScannerScreen> {
   Future<void> _pickFromGallery() async {
     final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
     if (picked == null) return;
-    final capture = await _controller.analyzeImage(picked.path);
-    final raw = capture?.barcodes.isNotEmpty == true
-        ? capture!.barcodes.first.rawValue
-        : null;
-    await _handleRaw(raw);
+    BarcodeCapture? capture;
+    try {
+      capture = await _controller.analyzeImage(picked.path);
+    } catch (_) {}
+    final raws = (capture?.barcodes ?? const <Barcode>[])
+        .map((b) => b.rawValue)
+        .whereType<String>()
+        .where((r) => r.isNotEmpty)
+        .toList();
+    if (raws.isEmpty) {
+      if (!mounted) return;
+      setState(
+        () => _hint = 'No QR found in that photo — try a sharper, closer image.',
+      );
+      return;
+    }
+    final upi = raws.where((r) => parseUpiQrString(r) != null);
+    await _handleRaw(upi.isNotEmpty ? upi.first : raws.first);
   }
 
   Future<void> _toggleTorch() async {

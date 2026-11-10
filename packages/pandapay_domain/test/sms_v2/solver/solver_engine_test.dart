@@ -591,6 +591,34 @@ void main() {
       );
     });
 
+    test('a provider confirming a deposit is evidence of an investment, not a second debit', () {
+      for (final body in [
+        'Hi Ravi, your deposit of Rs 5,000.00 was processed successfully. - Sample Savings',
+        'Your fixed deposit of Rs 25,000.00 has been created on 05-11-2026. For queries call 1800-000-0000 - Sample',
+      ]) {
+        final d = _solve(body);
+        expect(d.read, SolverRead.investment, reason: body);
+        expect(d.evidenceOnly, isTrue, reason: body);
+        expect(d.countsInTotals, isFalse, reason: body);
+        final m = _facts(d).facts.first as MovementFact;
+        expect(m.purpose, MovementPurpose.investment);
+        expect(m.evidenceOnly, isTrue);
+      }
+      // A bank alert that cash was deposited into the account is still a credit.
+      final credit = _solve('Rs 5,000.00 deposited in your A/c XX1234 on 05-11-2026 by cash.');
+      expect(credit.debitDirection, isFalse);
+      expect(credit.evidenceOnly, isFalse);
+    });
+
+    test('a refund "transferred ... will be credited" is money coming back, never a debit', () {
+      final d = _solve('Sample Refund Processed: Refund of Rs 540.00 for CHAI POINT is successfully transferred and will be credited to your account by 12-Nov-2026 06:00PM.');
+      expect(d.debitDirection, isNot(true));
+      expect(d.countsInTotals && d.debitDirection == true, isFalse);
+      // A bank alert that names the account is still a debit, whatever it says.
+      final bank = _solve('Rs 540.00 debited from A/c XX1234 on 05-11-2026 towards refund reversal to MERCHANT. Avl Bal Rs 9,000.00');
+      expect(bank.debitDirection, isTrue);
+    });
+
     test('an offer that says "when your loan is credited" is a promotion, not income', () {
       final d = _solve('Hi Sam, special Loan offer on your recent Pay Later a/c XX1234 transaction! Get a Rs 250 gift voucher when your loan is credited! The offer is valid only till today!');
       expect(d.countsInTotals, isFalse);

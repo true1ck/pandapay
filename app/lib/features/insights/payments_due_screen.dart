@@ -402,7 +402,12 @@ bool _matchesCommitment(Commitment c, BillsHorizonFilter filter) {
     return false;
   }
   if (filter.isUpcoming) {
-    if (c.status == CommitmentStatus.paid) return false;
+    // A statement a newer one replaced (payment not detected) is not upcoming:
+    // the newer statement carries whatever is still owed.
+    if (c.status == CommitmentStatus.paid ||
+        c.status == CommitmentStatus.paymentNotDetected) {
+      return false;
+    }
     return filter.matchesOpenDue(c.dueOn);
   }
   return filter.matchesDue(c.dueOn);
@@ -704,6 +709,9 @@ class _DueList extends ConsumerWidget {
       for (final c in visibleCommitments) {
         if (c.status == CommitmentStatus.paid) {
           if (c.amount != null) paidPaise += c.amount!.paise;
+        } else if (c.status == CommitmentStatus.paymentNotDetected &&
+            filter.isUpcoming) {
+          // Replaced by a newer statement: neither due nor paid in this view.
         } else {
           if (c.amount != null) duePaise += c.amount!.paise;
           actionable++;

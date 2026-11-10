@@ -27,6 +27,10 @@ class EngineStats {
   /// was not sure of (left for review), and accepted readings that could not be
   /// written as valid facts.
   int solverAccepted = 0;
+
+  /// A generic catch-all rule's plain debit/credit that the solver enriched with
+  /// a merchant, a purpose or a mandate.
+  int solverRefined = 0;
   int solverCandidates = 0;
   int solverRejected = 0;
 
@@ -78,8 +82,63 @@ class EngineStats {
 }
 
 /// An [InterpretResult] with the detail the frozen result type has no room for.
+/// A bill reminder the solver read (amount, maybe account) but that prints no due
+/// date. It is unresolved here; a caller with the account's history may complete
+/// it with `matchEarlierBill` and `completeBillFromHistory`.
+class PendingBill {
+  const PendingBill({
+    required this.decision,
+    required this.issuerSlug,
+    required this.packVersion,
+    required this.bundleVersion,
+    required this.engineVersion,
+    required this.appVersion,
+  });
+
+  final SolverDecision decision;
+  final String? issuerSlug;
+  final int packVersion;
+  final int bundleVersion;
+  final String engineVersion;
+  final String appVersion;
+}
+
+/// A refund or reversal the solver read (amount, credit) but that names no
+/// account. A caller with history may still link it to the one earlier spend of
+/// that amount ([PendingBill] is the same idea for a bill with no due date).
+class PendingRefund {
+  const PendingRefund({
+    required this.decision,
+    required this.issuerSlug,
+    required this.packVersion,
+    required this.bundleVersion,
+    required this.engineVersion,
+    required this.appVersion,
+  });
+
+  final SolverDecision decision;
+  final String? issuerSlug;
+  final int packVersion;
+  final int bundleVersion;
+  final String engineVersion;
+  final String appVersion;
+}
+
 class EngineOutcome {
-  const EngineOutcome(this.result, {this.reason, this.winnerId, this.detail});
+  const EngineOutcome(
+    this.result, {
+    this.reason,
+    this.winnerId,
+    this.detail,
+    this.pendingBill,
+    this.pendingRefund,
+  });
+
+  /// Set when the message is a refund with an amount and no account.
+  final PendingRefund? pendingRefund;
+
+  /// Set when the message is a bill reminder with an amount and no due date.
+  final PendingBill? pendingBill;
 
   final InterpretResult result;
 
@@ -268,9 +327,32 @@ class RuleEngine implements SmsInterpreter {
           stats.invalidEmits[id] = (stats.invalidEmits[id] ?? 0) + 1;
           return unknown('rule_emitted_invalid', winner: id, detail: '$id: $e');
         }
+        // A generic catch-all rule reads "debited from A/c ..." but keeps no
+        // purpose or merchant. The solver may enrich THAT (purpose, merchant,
+        // recurring mandate) and nothing else.
+        if (id.startsWith('GEN-')) {
+          final refined = _refineGeneric(cb, facts, message, brand, appVersion);
+          if (refined != null) {
+            stats.solverRefined++;
+            stats.matched++;
+            stats.ruleHits['SOLVER-REFINED'] =
+                (stats.ruleHits['SOLVER-REFINED'] ?? 0) + 1;
+            return EngineOutcome(
+              InterpretResult(
+                outcome: InterpretOutcome.matched,
+                facts: refined,
+                ruleId: 'SOLVER-REFINED',
+                ruleVersion: cb.solver!.pack.version,
+                templateHash: hash,
+              ),
+              winnerId: 'SOLVER-REFINED',
+            );
+          }
+        }
         // Two readers are better than one. A rule that is not sure, or that
         // calls a message "information only", is checked against the evidence
-        // reader before its reading stands.
+        // reader before its reading stands. (What the refinement above could
+        // not enrich still gets its confidence and purpose from here.)
         final second = _secondOpinion(c.rule, facts, cb, message, brand, appVersion);
         if (second != null && second.overruled) {
           final sid = second.ruleId!;
@@ -355,7 +437,7 @@ class RuleEngine implements SmsInterpreter {
         facts.every((f) => f is InfoFact || f is BalanceSnapshotFact);
     if (!unsure && !informationOnly) return null;
 
-    final read = _solverRead(cb, msg, brand, appVersion, count: false);
+    final read = _solverRead(cb, msg, brand, appVersion, count: false).built;
     if (read == null || read.ignored) return null;
     final theirs = [
       for (final f in read.facts)
@@ -436,6 +518,86 @@ class RuleEngine implements SmsInterpreter {
 
   // ---- tier 2 ----
 
+  /// Enriches a generic catch-all rule's reading, never replaces it: the rule's
+  /// amount, direction, account and date stay; only a missing purpose, merchant
+  /// and mandate come from the solver, and only when the solver independently read
+  /// the same amount in the same direction. Anything else returns null and the
+  /// rule's own facts stand exactly as before.
+  List<Fact>? _refineGeneric(
+    CompiledBundle cb,
+    List<Fact> facts,
+    SmsMessage msg,
+    String brand,
+    String appVersion,
+  ) {
+    final solver = cb.solver;
+    if (solver == null) return null;
+    final movements = facts.whereType<MovementFact>().toList();
+    if (movements.length != 1) return null;
+    final m = movements.single;
+    if (m.purpose != MovementPurpose.unknown || m.evidenceOnly == true) {
+      return null;
+    }
+    final posted = m.amounts.where((a) => a.role == AmountRole.posted);
+    if (posted.isEmpty) return null;
+    try {
+      final d = solver.solve(
+        msg.body,
+        observedAt: msg.observedAt,
+        senderBrand: brand,
+        senderKind: cb.sendersByBrand[brand]?.issuerKind.wire,
+      );
+      if (!d.accepted ||
+          (d.read != SolverRead.debit && d.read != SolverRead.credit) ||
+          d.evidenceOnly ||
+          d.unit != 'INR' ||
+          d.minor != posted.first.minor ||
+          d.debitDirection != (m.direction == Direction.debit)) {
+        return null;
+      }
+      final adds =
+          (d.purpose != null && d.purpose != 'unknown') ||
+          d.party != null ||
+          d.recurring ||
+          d.mandateRef != null;
+      if (!adds) return null;
+      final built = SolverFacts.build(
+        d,
+        sourceKey: msg.sourceKey,
+        observedAt: msg.observedAt,
+        issuerSlug:
+            m.instrument?.issuerSlug ??
+            cb.sendersByBrand[brand]?.issuerSlug ??
+            _plainIssuerSlug(brand),
+        packVersion: solver.pack.version,
+        bundleVersion: cb.bundle.bundleVersion,
+        engineVersion: engineVersion,
+        appVersion: appVersion,
+        ruleIdOverride: 'SOLVER-REFINED',
+      );
+      if (built == null || built.ignored) return null;
+      final out = <Fact>[];
+      for (final f in built.facts) {
+        final json = f.toJson();
+        // The rule's own account and date win over the solver's.
+        if (f is MovementFact || f is MandateFact) {
+          if (m.instrument != null) json['instrument'] = m.instrument!.toJson();
+        }
+        if (f is MovementFact && m.occurredAt != null) {
+          json['occurredAt'] = formatUtc(m.occurredAt!);
+        }
+        out.add(Fact.fromJson(json));
+      }
+      // Anything else the rule found (a balance, say) is kept.
+      for (final f in facts) {
+        if (f is! MovementFact) out.add(f);
+      }
+      return out;
+    } on Object {
+      return null;
+    }
+  }
+
   /// An issuer identity for a sender the registry does not know: its header in
   /// plain lower case ("NEWBNK" -> "newbnk"). Bills and card payments from the same
   /// header then share one identity, so a bill can be matched to its payment and
@@ -447,12 +609,18 @@ class RuleEngine implements SmsInterpreter {
     return slug.length < 3 || RegExp(r'^\d+$').hasMatch(slug) ? null : slug;
   }
 
-  /// The evidence reader's accepted reading of [msg] as facts, or null when it
-  /// is not sure or the reading cannot be written as valid facts. [count]
-  /// decides whether the tier 2 counters move.
-  SolverFactResult? _solverRead(CompiledBundle cb, SmsMessage msg, String brand, String appVersion, {required bool count}) {
+  /// The evidence reader's reading of [msg]: the accepted reading as facts
+  /// (null when it is not sure or cannot be written as valid facts) and the
+  /// decision it came from. [count] decides whether the tier 2 counters move.
+  ({SolverFactResult? built, SolverDecision? decision}) _solverRead(
+    CompiledBundle cb,
+    SmsMessage msg,
+    String brand,
+    String appVersion, {
+    required bool count,
+  }) {
     final solver = cb.solver;
-    if (solver == null) return null;
+    if (solver == null) return (built: null, decision: null);
     final SolverDecision decision;
     try {
       decision = solver.solve(
@@ -462,11 +630,11 @@ class RuleEngine implements SmsInterpreter {
         senderKind: cb.sendersByBrand[brand]?.issuerKind.wire,
       );
     } on Object {
-      return null;
+      return (built: null, decision: null);
     }
     if (!decision.accepted) {
       if (count) stats.solverCandidates++;
-      return null;
+      return (built: null, decision: decision);
     }
     final SolverFactResult? built;
     try {
@@ -483,17 +651,77 @@ class RuleEngine implements SmsInterpreter {
       );
     } on Object {
       if (count) stats.solverRejected++;
-      return null;
+      return (built: null, decision: decision);
     }
     if (built == null && count) stats.solverRejected++;
-    return built;
+    return (built: built, decision: decision);
   }
 
   EngineOutcome? _solve(CompiledBundle cb, SmsMessage msg, String brand, String hash, String appVersion) {
     final solver = cb.solver;
     if (solver == null) return null;
-    final built = _solverRead(cb, msg, brand, appVersion, count: true);
-    if (built == null) return null;
+    final read = _solverRead(cb, msg, brand, appVersion, count: true);
+    final built = read.built;
+    if (built == null) {
+      final decision = read.decision;
+      if (decision == null || decision.accepted) return null;
+      if (decision.read == SolverRead.billDue &&
+          decision.dueDate == null &&
+          decision.minor != null &&
+          decision.unit == 'INR') {
+        // Unresolved for now, but the amount and account are known: a caller
+        // with history can still complete it. It counts as unknown exactly as
+        // before, so a caller that ignores this stays unchanged.
+        stats.unknown++;
+        stats.unknownReasons['no_rule_matched'] =
+            (stats.unknownReasons['no_rule_matched'] ?? 0) + 1;
+        return EngineOutcome(
+          InterpretResult(
+            outcome: InterpretOutcome.unknown,
+            facts: const [],
+            templateHash: hash,
+          ),
+          reason: 'no_rule_matched',
+          pendingBill: PendingBill(
+            decision: decision,
+            issuerSlug:
+                cb.sendersByBrand[brand]?.issuerSlug ?? _plainIssuerSlug(brand),
+            packVersion: solver.pack.version,
+            bundleVersion: cb.bundle.bundleVersion,
+            engineVersion: engineVersion,
+            appVersion: appVersion,
+          ),
+        );
+      }
+      if (decision.read == SolverRead.credit &&
+          (decision.purpose == 'refund' || decision.purpose == 'reversal') &&
+          decision.minor != null &&
+          decision.unit == 'INR' &&
+          decision.mask == null &&
+          decision.instrumentKind == null) {
+        stats.unknown++;
+        stats.unknownReasons['no_rule_matched'] =
+            (stats.unknownReasons['no_rule_matched'] ?? 0) + 1;
+        return EngineOutcome(
+          InterpretResult(
+            outcome: InterpretOutcome.unknown,
+            facts: const [],
+            templateHash: hash,
+          ),
+          reason: 'no_rule_matched',
+          pendingRefund: PendingRefund(
+            decision: decision,
+            issuerSlug:
+                cb.sendersByBrand[brand]?.issuerSlug ?? _plainIssuerSlug(brand),
+            packVersion: solver.pack.version,
+            bundleVersion: cb.bundle.bundleVersion,
+            engineVersion: engineVersion,
+            appVersion: appVersion,
+          ),
+        );
+      }
+      return null;
+    }
     final id = built.ruleId;
     stats.ruleHits[id] = (stats.ruleHits[id] ?? 0) + 1;
     if (built.ignored) {

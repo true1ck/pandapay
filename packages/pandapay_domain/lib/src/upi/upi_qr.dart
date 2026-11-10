@@ -77,7 +77,61 @@ bool isProviderManagedMerchantVpa(String value) {
 /// up VPA in crowdsource DB -> else ask user to pick a category" edge case
 /// both start from this returning null/non-null.
 ParsedUpiQr? parseUpiQrString(String raw) {
-  final uri = Uri.tryParse(raw.trim());
+  final trimmed = raw.trim();
+  // Bharat QR / EMV-co merchant QRs (start with "000201") carry the VPA in a
+  // nested merchant-account tag instead of a upi:// link.
+  if (trimmed.startsWith('000201')) return _parseEmvMerchantQr(trimmed);
+  return _parseUpiLink(raw);
+}
+
+Map<String, String>? _emvTlv(String s) {
+  final out = <String, String>{};
+  var i = 0;
+  while (i + 4 <= s.length) {
+    final tag = s.substring(i, i + 2);
+    final len = int.tryParse(s.substring(i + 2, i + 4));
+    if (len == null || i + 4 + len > s.length) return null;
+    out.putIfAbsent(tag, () => s.substring(i + 4, i + 4 + len));
+    i += 4 + len;
+  }
+  return out;
+}
+
+ParsedUpiQr? _parseEmvMerchantQr(String s) {
+  final top = _emvTlv(s);
+  if (top == null) return null;
+  String? pa;
+  for (var t = 26; t <= 51 && pa == null; t++) {
+    final inner = top[t.toString().padLeft(2, '0')];
+    final sub = inner == null ? null : _emvTlv(inner);
+    if (sub == null) continue;
+    for (final v in sub.values) {
+      if (RegExp(r'^[\w.\-]{2,}@[A-Za-z][\w.\-]*$').hasMatch(v)) {
+        pa = v;
+        break;
+      }
+    }
+  }
+  if (pa == null) return null;
+  final mc = top['52'];
+  final amRaw = top['54'];
+  final parsedAm = amRaw == null ? null : double.tryParse(amRaw);
+  return ParsedUpiQr(
+    pa: pa,
+    pn: top['59'],
+    mc: (mc == null || mc.isEmpty || mc == '0000') ? null : mc,
+    am: parsedAm == null || parsedAm <= 0 ? null : Money.fromRupees(parsedAm),
+    isLikelyP2P:
+        (mc == null || mc.isEmpty || mc == '0000') &&
+        !isProviderManagedMerchantVpa(pa),
+  );
+}
+
+ParsedUpiQr? _parseUpiLink(String raw) {
+  var text = raw.trim();
+  // Some generators emit `upi:pay?...` / `upi:/pay?...` with no `//`.
+  text = text.replaceFirst(RegExp(r'^upi:/{0,2}pay', caseSensitive: false), 'upi://pay');
+  final uri = Uri.tryParse(text);
   if (uri == null || uri.scheme != 'upi' || uri.host != 'pay') return null;
 
   final pa = uri.queryParameters['pa'];

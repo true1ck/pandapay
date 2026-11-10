@@ -16,3 +16,5 @@ export 'src/sms_v2/solver/solver_text.dart'
         SolverDate,
         parseSolverDate;
 export 'src/sms_v2/solver/solver_facts.dart';
+export 'src/sms_v2/solver/bill_history.dart';
+export 'src/sms_v2/solver/refund_history.dart';

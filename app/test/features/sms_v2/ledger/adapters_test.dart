@@ -33,6 +33,9 @@ Event moneyEvent(Fact f, EventType type, {List<EventLeg>? legs}) => Event(
   amountMinor: f.amounts.first.minor,
 );
 
+String _hexId(String id) =>
+    id.codeUnits.map((c) => c.toRadixString(16)).join().padRight(64, '0');
+
 void main() {
   test(
     'subscriptions keep cancelled history and exclude one-time IPO mandates',
@@ -150,6 +153,158 @@ void main() {
     expect(rows.single.lifecycleStatus, 'failed_payment');
     expect(rows.single.annualCost.paise, 0);
   });
+  group('card bill worst cases', () {
+    BillDueFact statement(
+      String id,
+      String stmt,
+      String due,
+      int total, {
+      Map<String, Object?>? instrument,
+      int? minimum,
+    }) =>
+        fixture('bill_due.total_only', changes: {
+          'factId': _hexId(id),
+          'sourceKey': 'sms:$id',
+          if (instrument != null) 'instrument': instrument,
+          'observedAt': '${stmt}T06:00:00Z',
+          'occurredAt': null,
+          'attrs': {'dueDate': due, 'statementDate': stmt},
+          'amounts': [
+            {'role': 'due_total', 'minor': total, 'unit': 'INR'},
+            if (minimum != null)
+              {'role': 'due_minimum', 'minor': minimum, 'unit': 'INR'},
+          ],
+        }) as BillDueFact;
+    MovementFact payment(
+      String id,
+      String at,
+      int minor,
+      Map<String, Object?>? instrument,
+    ) =>
+        fixture('movement.card_spend', changes: {
+          'factId': _hexId(id),
+          'sourceKey': 'sms:$id',
+          'instrument': instrument,
+          'observedAt': '${at}T06:00:00Z',
+          'occurredAt': null,
+          'amounts': [
+            {'role': 'posted', 'minor': minor, 'unit': 'INR'},
+          ],
+        }) as MovementFact;
+
+    test('a payment made before the statement exists does not settle it', () {
+      final bill = statement('a1', '2026-10-10', '2026-10-25', 10000);
+      final early = payment('p1', '2026-10-05', 10000, bill.instrument?.toJson());
+      final rows = billsFromFacts(
+        [bill, early],
+        [moneyEvent(early, EventType.cardBillPayment)],
+      );
+      expect(rows.single.status.name, 'due');
+    });
+
+    test('a payment on the other card never settles this card', () {
+      final bill = statement('a1', '2026-10-10', '2026-10-25', 10000);
+      final other = {...?bill.instrument?.toJson(), 'maskDigits': '9999'};
+      final pay = payment('p1', '2026-10-20', 10000, other);
+      final rows = billsFromFacts(
+        [bill, pay],
+        [moneyEvent(pay, EventType.cardBillPayment)],
+      );
+      expect(rows.single.status.name, 'due');
+    });
+
+    test('paying after the due date still settles that statement', () {
+      final bill = statement('a1', '2026-10-10', '2026-10-25', 10000);
+      final late = payment('p1', '2026-10-30', 10000, bill.instrument?.toJson());
+      final rows = billsFromFacts(
+        [bill, late],
+        [moneyEvent(late, EventType.cardBillPayment)],
+      );
+      expect(rows.single.status.name, 'paid');
+    });
+
+    test('a payment after the next statement belongs to the next cycle', () {
+      final oct = statement('a1', '2026-10-10', '2026-10-25', 10000);
+      final nov = statement('a2', '2026-11-10', '2026-11-25', 12000);
+      final pay = payment('p1', '2026-11-12', 12000, oct.instrument?.toJson());
+      final rows = billsFromFacts(
+        [oct, nov, pay],
+        [moneyEvent(pay, EventType.cardBillPayment)],
+      );
+      // October stays in history as "not detected"; November is paid.
+      rows.sort((a, b) => a.dueOn.compareTo(b.dueOn));
+      expect(rows, hasLength(2));
+      expect(rows.first.status.name, 'paymentNotDetected');
+      expect(rows.last.status.name, 'paid');
+    });
+
+    test('a newer statement marks an unpaid older one "not detected"; a paid one stays paid', () {
+      final oct = statement('a1', '2026-10-10', '2026-10-25', 10000);
+      final nov = statement('a2', '2026-11-10', '2026-11-25', 12000);
+      final unpaid = billsFromFacts([oct, nov], const [])
+        ..sort((a, b) => a.dueOn.compareTo(b.dueOn));
+      expect(unpaid, hasLength(2), reason: 'history is kept');
+      expect(unpaid.first.status.name, 'paymentNotDetected');
+      expect(unpaid.last.status.name, 'due');
+      // Paid before the newer statement arrived: still shown as paid history.
+      final pay = payment('p1', '2026-10-20', 10000, oct.instrument?.toJson());
+      final both = billsFromFacts(
+        [oct, nov, pay],
+        [moneyEvent(pay, EventType.cardBillPayment)],
+      );
+      expect(both, hasLength(2));
+      expect(both.map((b) => b.status.name).toSet(), {'paid', 'due'});
+      // Another card's newer statement retires nothing of this card's.
+      final other = statement(
+        'a3',
+        '2026-11-10',
+        '2026-11-25',
+        12000,
+        instrument: {...?oct.instrument?.toJson(), 'maskDigits': '9999'},
+      );
+      expect(
+        billsFromFacts([oct, other], const []).map((b) => b.status.name).toSet(),
+        {'due'},
+      );
+      // The per-card history still has every statement.
+    });
+
+    test('a guessed (inferred) later bill never retires a real statement', () {
+      final oct = statement('a1', '2026-10-10', '2026-10-25', 10000);
+      final guess = fixture('bill_due.total_only', changes: {
+        'factId': _hexId('g1'),
+        'sourceKey': 'sms:g1',
+        'observedAt': '2026-11-10T06:00:00Z',
+        'occurredAt': null,
+        'confidence': 0.6,
+        'attrs': {'dueDate': '2026-11-25', 'statementDate': '2026-11-10'},
+        'amounts': [
+          {'role': 'due_total', 'minor': 10000, 'unit': 'INR'},
+        ],
+      }) as BillDueFact;
+      expect(
+        billsFromFacts([oct, guess], const []).map((b) => b.status.name).toSet(),
+        {'due'},
+      );
+    });
+
+    test('a minimum-only payment leaves the rest outstanding, not paid', () {
+      final bill = statement('a1', '2026-10-10', '2026-10-25', 10000, minimum: 1000);
+      final min = payment('p1', '2026-10-20', 1000, bill.instrument?.toJson());
+      final rows = billsFromFacts(
+        [bill, min],
+        [moneyEvent(min, EventType.cardBillPayment)],
+      );
+      expect(rows.single.status.name, 'due');
+    });
+
+    test('a statement re-sent with the same due date is one bill, not two', () {
+      final one = statement('a1', '2026-10-10', '2026-10-25', 10000);
+      final again = statement('a2', '2026-10-10', '2026-10-25', 10000);
+      expect(billsFromFacts([one, again], const []).length, 1);
+    });
+  });
+
   group('a biller receipt chained to its bill by consumer number and amount', () {
     BillDueFact bill(String name, {String due = '2026-11-20', String stmt = '2026-11-05'}) =>
         fixture('bill_due.total_only', changes: {

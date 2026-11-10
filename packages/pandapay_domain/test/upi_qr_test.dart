@@ -184,4 +184,25 @@ void main() {
       );
     });
   });
+
+  group('parseUpiQrString variants', () {
+    test('accepts upi:pay without slashes', () {
+      expect(parseUpiQrString('upi:pay?pa=a@b&pn=X')?.pa, 'a@b');
+    });
+    test('parses a Bharat QR (EMV) merchant payload', () {
+      String tlv(String t, String v) => '$t${v.length.toString().padLeft(2, '0')}$v';
+      final acct = tlv('00', 'A000000524') + tlv('01', 'shop@okaxis');
+      final qr = tlv('00', '01') + tlv('01', '11') + tlv('26', acct) +
+          tlv('52', '5411') + tlv('54', '120.50') + tlv('59', 'Corner Shop');
+      final p = parseUpiQrString(qr)!;
+      expect(p.pa, 'shop@okaxis');
+      expect(p.pn, 'Corner Shop');
+      expect(p.mc, '5411');
+      expect(p.am?.rupees, 120.5);
+    });
+    test('rejects a web link and garbage', () {
+      expect(parseUpiQrString('https://example.com/pay'), isNull);
+      expect(parseUpiQrString('000201zz'), isNull);
+    });
+  });
 }

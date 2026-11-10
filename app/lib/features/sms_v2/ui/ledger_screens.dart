@@ -207,6 +207,14 @@ class LedgerReportList extends StatelessWidget {
                         meta,
                         style: BambooFonts.ui(12, color: BambooInk.ink500),
                       ),
+                      if (item.noAllotmentNoticeAt != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            'No allotment notice on ${smsDate(item.noAllotmentNoticeAt!)} • your bank should release the money',
+                            style: BambooFonts.ui(12, color: BambooInk.ink500),
+                          ),
+                        ),
                     ],
                   ),
                 ),

@@ -4,6 +4,8 @@
 // rule-matched message in exactly two ways, both checked here on every rule
 // example and every golden-case message so neither can widen unnoticed:
 //
+// 0. refined: a generic catch-all rule's reading enriched with purpose and
+//    merchant by the solver (the rule's own account and date are kept).
 // 1. corroborated: the rule's one movement was unsure (confidence below
 //    kConfidentRead, or no stated purpose). The evidence reader read the same
 //    direction, amount and account, so the same rule's facts are kept and only
@@ -36,10 +38,15 @@ Map<String, Object?> _withoutTyping(Fact f) {
   return j;
 }
 
-/// 'corroborated' or 'overruled' when the difference between the reading
-/// without the pack ([bare]) and with it ([full]) is one the promise allows;
-/// null when it is not.
+/// 'refined', 'corroborated' or 'overruled' when the difference between the
+/// reading without the pack ([bare]) and with it ([full]) is one the promise
+/// allows; null when it is not.
 String? _allowedDifference(EngineOutcome bare, EngineOutcome full, RuleBundle bundle) {
+  // A generic catch-all rule's plain reading enriched by the solver (same
+  // amount and direction, purpose and merchant added).
+  if ((bare.winnerId ?? '').startsWith('GEN-') && full.winnerId == 'SOLVER-REFINED') {
+    return 'refined';
+  }
   final before = bare.result.facts, after = full.result.facts;
   final mine = before.where(_countable).toList();
   final unsure = mine.length == 1 &&
@@ -112,6 +119,7 @@ void main() {
       final differences = <String>[];
       final allowed = <String, int>{};
       final overruled = <String>[];
+      final refined = <String>[];
       for (final rule in withPack.rules) {
         for (final ex in rule.examples) {
           final msg = SmsMessage(
@@ -135,6 +143,7 @@ void main() {
             } else {
               allowed[why] = (allowed[why] ?? 0) + 1;
               if (why == 'overruled') overruled.add('${a.winnerId} -> ${b.winnerId}: ${ex.body}');
+              if (why == 'refined') refined.add('${rule.id}: ${ex.body}');
             }
           }
         }
@@ -152,6 +161,13 @@ void main() {
       // The weak last-resort rules and the rules that could not name a purpose
       // are the ones corroborated. Zero would mean the second opinion is off.
       expect(allowed['corroborated'] ?? 0, greaterThan(20));
+      // Reviewed: these autopay debits were plain unknown-purpose debits that a
+      // generic catch-all rule read and the solver enriched.
+      expect(refined.map((e) => e.split(':').first).toSet(), {
+        'MND-UPCOMING-01',
+        'MND-UPCOMING-01-INV',
+        'MND-UPCOMING-90',
+      });
     },
   );
 

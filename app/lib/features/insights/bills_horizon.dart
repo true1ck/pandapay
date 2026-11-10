@@ -96,6 +96,9 @@ class BillsHorizonFilter {
     final date = bill.dueDate ?? bill.receivedAt;
     if (isUpcoming) {
       if (bill.state == SmsBillState.linked) return false;
+      // Payment not detected means overdue or replaced by a newer bill: history,
+      // not something upcoming.
+      if (bill.state == SmsBillState.paymentNotDetected) return false;
       return !date.isBefore(today);
     }
     return matchesDue(date);

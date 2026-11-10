@@ -368,6 +368,9 @@ class _Run {
       for (final h in credit) _Cue(h.start, h.end, false, 'credit'),
       for (final h in biller) _Cue(h.start, h.end, true, 'biller'),
       for (final h in paidReceipt) _Cue(h.start, h.end, true, 'receipt'),
+      // "Your deposit of Rs X was processed": the provider confirms money it took.
+      for (final h in hits('investment'))
+        if (h.entry.kind == 'confirm') _Cue(h.start, h.end, true, 'receipt'),
     ];
     // "Recharge ... successful": a purpose that means money out, completed by a
     // word with no direction of its own. Always offered; the nearest cue wins.
@@ -786,11 +789,14 @@ class _Run {
     }
     if (due == null) {
       reasons.add('bill without a readable due date');
+      // The account is kept so a caller with history can match the statement.
+      final undatedMask = _mask(null, totalIdx ?? mins.first);
       return _done(
         SolverRead.billDue,
         SolverVerdict.candidate,
         0.5,
         amount: counted,
+        mask: undatedMask,
         statementDate: statement,
       );
     }
@@ -888,7 +894,25 @@ class _Run {
       if (c.debit != cue.debit) other = math.min(other, _dist(c, amtIdx));
     }
     final ambiguous = other < (1 << 30) && other - bestD < p.directionMargin;
-    final debitDir = cue.debit;
+    // "Refund of Rs X ... transferred / processed": the money comes BACK, however
+    // the verb reads. Only a bank alert that names the account is trusted as a
+    // real debit.
+    // The refund word must sit right before the amount ("Refund of Rs X"); a
+    // later "will be refunded if cancelled" about a debit is a promise, not this.
+    final comesBack = hits('purposeCue').any(
+      (h) =>
+          (h.entry.kind == 'refund' || h.entry.kind == 'reversal') &&
+          h.end <= amtIdx &&
+          amtIdx - h.end <= 3 &&
+          same(h.start, amtIdx),
+    );
+    final realBankDebit =
+        cue.debit && cue.bank && _mask(true, amtIdx) != null;
+    final flipped = cue.debit && comesBack && !realBankDebit;
+    final debitDir = flipped ? false : cue.debit;
+    if (flipped) {
+      reasons.add('refund / reversal wording: a credit, not a debit');
+    }
 
     final ownT = hits('ownTransfer');
     final wallet = hits('walletTopup');
@@ -989,6 +1013,12 @@ class _Run {
     // never counts as money on its own. A bank-voice alert (a bank verb with the
     // account named) is the real debit and is not a receipt.
     final bankVoice = cue.bank && mask != null;
+    // A provider's confirmation of a deposit / purchase is evidence of money out,
+    // not a second debit: the bank's own alert (when there is one) is the debit.
+    if (kind == SolverRead.investment && cue.how == 'receipt' && !bankVoice) {
+      evidenceOnly = true;
+      reasons.add('investment confirmation: evidence only, never counted by itself');
+    }
     // A phrase that explicitly says a payment was received / already paid / has a
     // receipt is a receipt by itself; a plain "paid" needs a bill word beside it.
     final explicitReceipt = cue.how == 'biller' || cue.how == 'receipt';

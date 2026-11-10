@@ -1052,6 +1052,21 @@
       {
         "p": "folio",
         "cue": true
+      },
+      {
+        "p": "deposit of <amt> was? processed|created|booked|confirmed|successful|successfully",
+        "kind": "confirm",
+        "cue": true
+      },
+      {
+        "p": "deposit of <amt> has? been? created|booked|processed|confirmed",
+        "kind": "confirm",
+        "cue": true
+      },
+      {
+        "p": "fixed|recurring deposit of <amt> has? been? created|booked|opened",
+        "kind": "confirm",
+        "cue": true
       }
     ],
     "maskOtherDebit": [

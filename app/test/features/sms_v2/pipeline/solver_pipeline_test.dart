@@ -190,6 +190,206 @@ void main() {
     expect(bills.map((b) => b.dueDate).toSet(), {'2026-11-20'});
   });
 
+  group('a reminder with an amount but no due date', () {
+    const statementText =
+        'Your credit card statement for card ending 4410 is generated. Total amount due Rs 23,540.00, minimum amount due Rs 1,177.00, payment due date 20-Nov-2026.';
+    String nudge(String amount, {String card = '4410'}) =>
+        'Reminder: your credit card bill of Rs $amount for card ending $card is due. Pay on or before the due date to avoid late charges.';
+
+    List<BillDueFact> bills() =>
+        FactStore(db.db, namespace: _ns).all().whereType<BillDueFact>().toList();
+    int openReviews() => db.db.select(
+      "SELECT count(*) c FROM v2_review_items WHERE namespace=? AND status='open'",
+      [_ns],
+    ).first['c'] as int;
+
+    test('borrows the due date of the one statement it can only be about, as an inference', () {
+      pipeline.process(sms(statementText));
+      final m = sms(nudge('23,540'));
+      pipeline.process(m);
+      final fact = factsOf(m).whereType<BillDueFact>().single;
+      expect(fact.dueDate, '2026-11-20');
+      expect(fact.instrument?.maskDigits, '4410');
+      expect(fact.confidence, lessThan(0.7));
+      expect(fact.provenance.ruleId, 'SOLVER-BILL-DUE-INFERRED');
+      // It joins the statement's cycle: still one bill, still the statement's amount.
+      final rows = billsFromFacts(FactStore(db.db, namespace: _ns).all(), const []);
+      expect(rows, hasLength(1));
+      expect(rows.single.amount!.paise, 2354000);
+      // A person is asked to confirm the inference.
+      expect(openReviews(), greaterThan(0));
+    });
+
+    test('the minimum amount is matched to the statement minimum', () {
+      pipeline.process(sms(statementText));
+      final m = sms(nudge('1,177'));
+      pipeline.process(m);
+      expect(factsOf(m).whereType<BillDueFact>().single.amount(AmountRole.dueMinimum)!.minor, 117700);
+      expect(billsFromFacts(FactStore(db.db, namespace: _ns).all(), const []).single.amount!.paise, 2354000);
+    });
+
+    test('an amount that matches nothing on the statement stays unresolved', () {
+      pipeline.process(sms(statementText));
+      final m = sms(nudge('9,999'));
+      pipeline.process(m);
+      expect(factsOf(m), isEmpty);
+      expect(bills(), hasLength(1));
+    });
+
+    test('another card is never borrowed from', () {
+      pipeline.process(sms(statementText));
+      final m = sms(nudge('23,540', card: '7788'));
+      pipeline.process(m);
+      expect(factsOf(m), isEmpty);
+    });
+
+    const emiBill =
+        'Dear Customer, your EMI of Rs 4,500.00 for loan A/c XX3345 is due on 05-12-2026. Please maintain sufficient balance in your account.';
+    const emiNudge =
+        'Dear customer, paying your EMI of Rs 4,500.00 on or before the due date helps in avoiding penalty charges. Please maintain sufficient balance in your bank account to honour your payment on your due date.';
+
+    test('an EMI nudge borrows the due date of the one earlier EMI bill of that sender and amount', () {
+      pipeline.process(sms(emiBill, sender: 'VM-SAMPLF-S'));
+      final m = sms(emiNudge, sender: 'VM-SAMPLF-S');
+      pipeline.process(m);
+      final fact = factsOf(m).whereType<BillDueFact>().single;
+      expect(fact.dueDate, '2026-12-05');
+      expect(fact.confidence, lessThan(0.7));
+      expect(billsFromFacts(FactStore(db.db, namespace: _ns).all(), const []), hasLength(1));
+    });
+
+    test('an EMI nudge from another sender, or for another amount, borrows nothing', () {
+      pipeline.process(sms(emiBill, sender: 'VM-SAMPLF-S'));
+      final other = sms(emiNudge, sender: 'VM-OTHERB-S');
+      pipeline.process(other);
+      expect(factsOf(other), isEmpty);
+      final amount = sms(emiNudge.replaceAll('4,500.00', '7,000.00'), sender: 'VM-SAMPLF-S');
+      pipeline.process(amount);
+      expect(factsOf(amount), isEmpty);
+    });
+
+    test('two loans with the same EMI amount are ambiguous', () {
+      pipeline.process(sms(emiBill, sender: 'VM-SAMPLF-S'));
+      pipeline.process(
+        sms(emiBill.replaceAll('XX3345', 'XX9911').replaceAll('05-12-2026', '10-12-2026'), sender: 'VM-SAMPLF-S'),
+      );
+      final m = sms(emiNudge, sender: 'VM-SAMPLF-S');
+      pipeline.process(m);
+      expect(factsOf(m), isEmpty);
+    });
+
+    test('with no statement on file there is nothing to borrow', () {
+      final m = sms(nudge('23,540'));
+      pipeline.process(m);
+      expect(factsOf(m), isEmpty);
+    });
+
+    test('two statements with the same amount are ambiguous, so it stays unresolved', () {
+      pipeline.process(sms(statementText));
+      pipeline.process(
+        sms(statementText.replaceAll('20-Nov-2026', '20-Dec-2026')),
+      );
+      final m = sms(nudge('23,540'));
+      pipeline.process(m);
+      expect(factsOf(m), isEmpty);
+    });
+  });
+
+  group('a deposit confirmation', () {
+    const confirm = 'Hi Ravi, your deposit of Rs 5,000.00 was processed successfully. - Sample Savings';
+    int events() => EventStore(db.db, namespace: _ns).listSince(DateTime.utc(1900)).length;
+
+    test('joins the one bank debit of that amount and adds no second spend', () {
+      pipeline.process(
+        sms('Rs 5,000.00 debited from A/c XX1234 on 05-Nov-26 via UPI to SAMPLE SAVINGS. Avl Bal Rs 20,000.00', sender: 'VM-HDFCBK-S'),
+      );
+      final before = events();
+      final m = sms(confirm, sender: 'VM-SAMPL-S');
+      pipeline.process(m);
+      final fact = factsOf(m).whereType<MovementFact>().single;
+      expect(fact.evidenceOnly, isTrue);
+      expect(fact.purpose, MovementPurpose.investment);
+      expect(events(), before, reason: 'the confirmation joined the debit');
+      expect(transactions().where((t) => t.entryKind.name == 'spend' || t.entryKind.name == 'transfer'), hasLength(1));
+    });
+
+    test('with no matching debit it is never counted (the receipt sweep asks later)', () {
+      final m = sms(confirm, sender: 'VM-SAMPL-S');
+      pipeline.process(m);
+      expect(transactions(), isEmpty);
+      expect(factsOf(m).whereType<MovementFact>().single.evidenceOnly, isTrue);
+    });
+  });
+
+  group('a refund that names no account', () {
+    SmsMessage spend(String day, {String merchant = 'CHAI POINT', String card = '5678'}) {
+      counter++;
+      return SmsMessage(
+        sender: 'VM-HDFCBK-S',
+        body: 'Rs.540.00 spent on HDFC Bank Card x$card at $merchant on 01-11-26',
+        sourceKey: counter.toRadixString(16).padLeft(64, '0'),
+        observedAt: DateTime.parse('${day}T06:00:00Z'),
+      );
+    }
+
+    SmsMessage refund({String merchant = 'CHAI POINT', String amount = '540.00', String day = '2026-11-05'}) {
+      counter++;
+      return SmsMessage(
+        sender: 'VM-NEWPAY-S',
+        body: 'Refund for order $merchant of Rs $amount is successfully processed to your Sample Payment Wallet.',
+        sourceKey: counter.toRadixString(16).padLeft(64, '0'),
+        observedAt: DateTime.parse('${day}T06:00:00Z'),
+      );
+    }
+
+    List<Fact> movements(SmsMessage m) => factsOf(m).whereType<MovementFact>().toList();
+
+    test('links to the one earlier spend of that amount, as an inference, and is not a debit', () {
+      pipeline.process(spend('2026-11-01'));
+      final m = refund();
+      pipeline.process(m);
+      final fact = movements(m).single as MovementFact;
+      expect(fact.direction, Direction.credit);
+      expect(fact.purpose, MovementPurpose.refund);
+      expect(fact.confidence, lessThan(0.7));
+      expect(fact.provenance.ruleId, 'SOLVER-REFUND-INFERRED');
+      final rows = transactions();
+      expect(rows.where((t) => t.entryKind.name == 'spend'), hasLength(1));
+      expect(rows.where((t) => t.entryKind.name == 'refund'), hasLength(1));
+    });
+
+    test('with no earlier spend it stays unresolved', () {
+      final m = refund();
+      pipeline.process(m);
+      expect(factsOf(m), isEmpty);
+    });
+
+    test('two earlier spends of that amount are ambiguous', () {
+      pipeline.process(spend('2026-11-01'));
+      pipeline.process(spend('2026-11-02', card: '1111'));
+      final m = refund();
+      pipeline.process(m);
+      expect(factsOf(m), isEmpty);
+    });
+
+    test('a spend at an unrelated merchant is not the original', () {
+      pipeline.process(spend('2026-11-01', merchant: 'PETROL STATION'));
+      final m = refund();
+      pipeline.process(m);
+      expect(factsOf(m), isEmpty);
+    });
+
+    test('a different amount, or a spend older than 90 days, is not the original', () {
+      pipeline.process(spend('2026-11-01'));
+      final other = refund(amount: '999.00');
+      pipeline.process(other);
+      expect(factsOf(other), isEmpty);
+      final old = refund(day: '2027-03-10');
+      pipeline.process(old);
+      expect(factsOf(old), isEmpty);
+    });
+  });
+
   test('a message a rule matches is read by the rule, never by the solver', () {
     final b = bundle();
     final example = b.rules.first.examples.first;
