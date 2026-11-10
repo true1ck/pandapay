@@ -8,6 +8,30 @@ Background: `ACCOUNT_LOCK_AND_RECOVERY_ROLLOUT_2026-11-09.md` (what each switch 
 
 ## 1. Where things stand
 
+> **Update, 10 Nov 01:35 IST. Read this first; the table below is from earlier.**
+> Sujay merged `origin/dev` into `dev` and pushed `2f4d704` to both `origin/dev` and
+> `origin/prod`. That commit contains my lock, recovery and device-check work (auth
+> migrations 0015 to 0018 included) but **not** the reward gate. My commits had reached
+> `origin/dev` without my pushing them, through a merge made under your name at 00:48 that I
+> did not run. The push started the deploy run `42688467981` at 01:28. You asked me to
+> cancel it; it was cancelled while still in the test phase, **before the deploy job ran**.
+> I then checked the server read-only: it is still on `a575b29` (Sujay's earlier successful
+> deploy), api and auth healthy, auth ledger still at `9001`, so **production was not
+> touched**.
+>
+> The run's "Security migrations and encrypted PostgreSQL recovery" job had already failed:
+> my change to `googleIdentity.js` needs the `email_canonical` column from migration 0016,
+> and the Google identity fixture's schema did not have it. That job gates every deploy, so
+> until it is fixed any push to `prod` is blocked in CI. The fix is a small test-schema
+> change, committed on local `dev` as "fix(ci): apply migration 0016 in the Google identity
+> fixture", and `security_remaining_postgres.py` passes in full locally. **It is not pushed.**
+>
+> Consequence for this plan: the candidate branch `integrate-2026-11-10` is out of date.
+> What is still missing from `origin/prod` is the CI fix, the renumbered reward gate and the
+> docs. Phase A now means: rebuild the candidate as `origin/prod` + those three, re-test,
+> then continue at Phase C.
+
+
 | Thing | State |
 |---|---|
 | Production (`origin/prod`) | `666a943`, deployed by Sujay on 10 Nov. It is **16 commits ahead of `origin/master`** and has none of the lock, recovery or gate work. |
@@ -233,7 +257,27 @@ All schema changes are additive, so old code still runs on the new schema.
   `master` shows it red, that is Sujay's test to fix, not a reason to hold the release.
 - The analyzer reports 116 informational notes and no errors or warnings, the same count
   as before the merge.
-- Not yet run by anyone: Phase B on the real server, and everything in Phases C to G.
+- **Phase B was run on 10 Nov** (read-only: queries inside `BEGIN READ ONLY` / a transaction
+  that is rolled back, and a count of which settings exist; no values printed, nothing changed):
+  - Production checkout is at `666a943` and api, auth, rewards worker and the AI worker were
+    healthy. They had been up only about 20 minutes, so a deploy had just happened. Check
+    with Sujay before pushing `prod`.
+  - **Duplicate mailboxes: none.** Migration 0016 will pass on today's data. Run the preflight
+    again just before Phase D, because new sign-ups can change it.
+  - Server `.env`: `AUTH_PUBLIC_BASE_URL` was not set, and **was added on 10 Nov** (`https://auth.pandapath.site`, one line appended; the file was backed up first to `/home/ubuntu/pandapay-secrets/env-backup/`; nothing else changed, and it takes effect only at the next deploy);
+    `AUTH_RUNTIME_ROLE` is not set (production runs auth as the table owner, so the
+    recovery-table grant fix has no effect there; it is harmless); `REQUIRE_PHONE_AT_SIGNUP`,
+    `DEVICE_ACCOUNT_LIMIT` and `RECOVERY_REMINDER_EMAILS_ENABLED` are not set, so the compose
+    defaults (off, 3, off) apply; `AUTH_INTERNAL_SERVICE_SECRET` is at least 32 characters.
+  - Auth ledger newest is `9001_active_contact_uniqueness`, then `0014_approved_browser_enrollment`:
+    exactly the state the upgrade rehearsal started from. 0015 to 0018 are not applied.
+  - Product ledger newest is `20261118010000_shared_expenses_enable_runtime_flags.sql`; the
+    reward gate is not applied. `app_status.min_supported_version` is `1.0.17`, maintenance off.
+  - **Scale: 14 live accounts**, none without an email, 4 with a phone number on file. So
+    "every existing account must add a phone at next open" affects 14 people, and the whole
+    forced-upgrade and lock sequence can be done by hand with them.
+- Not yet run by anyone: the rest of Phase D onwards (anything that changes production, and the
+  phone, email and nginx checks).
 
 ## 9. What stays unbuilt
 
