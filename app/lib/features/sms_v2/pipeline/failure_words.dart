@@ -1,4 +1,13 @@
 import 'package:sqlite3/sqlite3.dart';
+import '../../../data/cached_regexp.dart';
+
+// Compiled once: these run for every failed message.
+final RegExp _longDigits = cachedRegExp(r'\d{5,}');
+final RegExp _spaces = cachedRegExp(r'\s+');
+final RegExp _snapshotFrame = cachedRegExp(
+  r'_kDart(Isolate|Vm)SnapshotInstructions\+0x([0-9a-f]+)',
+);
+final RegExp _dartFileLine = cachedRegExp(r'([\w.]+\.dart):(\d+)');
 
 /// Plain words for why an SMS step failed, safe to put on screen.
 ///
@@ -31,8 +40,8 @@ String describeFailure(Object error) {
     _ => '',
   };
   final clean = detail
-      .replaceAll(RegExp(r'\d{5,}'), '#')
-      .replaceAll(RegExp(r'\s+'), ' ')
+      .replaceAll(_longDigits, '#')
+      .replaceAll(_spaces, ' ')
       .trim();
   final cut = clean.length > 110 ? '${clean.substring(0, 110)}…' : clean;
   return cut.isEmpty ? failureKind(error) : '${failureKind(error)}: $cut';
@@ -47,12 +56,12 @@ String compactStack(StackTrace stack, {int frames = 8}) {
   final out = <String>[];
   for (final line in stack.toString().split('\n')) {
     if (out.length >= frames) break;
-    final code = RegExp(r'_kDart(Isolate|Vm)SnapshotInstructions\+0x([0-9a-f]+)').firstMatch(line);
+    final code = _snapshotFrame.firstMatch(line);
     if (code != null) {
       out.add('${code.group(1) == 'Isolate' ? 'I' : 'V'}+0x${code.group(2)}');
       continue;
     }
-    final file = RegExp(r'([\w.]+\.dart):(\d+)').firstMatch(line);
+    final file = _dartFileLine.firstMatch(line);
     if (file != null) out.add('${file.group(1)}:${file.group(2)}');
   }
   return out.join(' ');

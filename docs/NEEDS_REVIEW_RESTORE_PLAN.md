@@ -1,6 +1,6 @@
 # Needs review: bring back Auto-resolved, History and AI progress
 
-Status: plan, not yet built. Written 10 Nov 2026 after reading the commits that removed the old screen.
+Status: built 10 Nov 2026 (Auto, History, AI progress header, Move back to review, failed-AI count). Not built: a Retry button for failed AI reviews, because the server has no way for a phone to ask for a failed draft to be tried again. Old receipts from before 5 Nov are not recoverable.
 
 ## What the old screen had (and where it went)
 
