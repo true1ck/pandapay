@@ -67,19 +67,42 @@ function maskName(name) {
  * at most one write per person per day (or when the number changes), never
  * blocking or failing the request that triggered it.
  */
-function createDirectoryToucher({withUserClient,secret,ttlMs=24*3600*1000,retryMs=10*60*1000,limit=20000,now=Date.now}) {
+function createDirectoryToucher({withUserClient,secret,ttlMs=24*3600*1000,retryMs=10*60*1000,limit=20000,now=Date.now,busy=()=>false,maxInFlight=2}) {
   const seen=new Map();
+  // People whose write is running right now, and how many writes run at all. A phone opening the app sends
+  // several requests at once; without these, every one of them started its own write on a connection the
+  // requests themselves needed (the 10-connection pool ran dry and real requests failed with 503).
+  const inFlight=new Set();
+  let active=0;
+  const remember=(userId,entry)=>{if(seen.size>=limit)seen.delete(seen.keys().next().value);seen.set(userId,entry);};
+  // The write itself. The slot taken by the caller is ALWAYS given back (try/finally), whatever happens, so a
+  // failure of any kind can never leave the counters stuck and silently switch the feature off.
+  const write=async(userId,hash)=>{
+    try {
+      await withUserClient(userId,client=>client.query('SELECT shared_expenses.register_phone($1::text,NULL) AS result',[hash]));
+      remember(userId,{hash,at:now()});
+      return true;
+    } catch(_) {
+      // Back off for a few minutes so a switched-off feature or a database blip
+      // costs one attempt, not one per request.
+      remember(userId,{hash,at:now()-ttlMs+retryMs});
+      return false;
+    } finally {
+      inFlight.delete(userId);active--;
+    }
+  };
   return function touch(req) {
     try {
       const hash=sessionPhoneHash(secret,req.verifiedSession);
       if(!hash||!req.userId)return Promise.resolve(false);
       const prior=seen.get(req.userId);
       if(prior&&prior.hash===hash&&now()-prior.at<ttlMs)return Promise.resolve(false);
-      return withUserClient(req.userId,client=>client.query('SELECT shared_expenses.register_phone($1::text,NULL) AS result',[hash]))
-        .then(()=>{if(seen.size>=limit)seen.delete(seen.keys().next().value);seen.set(req.userId,{hash,at:now()});return true;})
-        // Back off for a few minutes so a switched-off feature or a database blip
-        // costs one attempt, not one per request.
-        .catch(()=>{if(seen.size>=limit)seen.delete(seen.keys().next().value);seen.set(req.userId,{hash,at:now()-ttlMs+retryMs});return false;});
+      if(inFlight.has(req.userId))return Promise.resolve(false);
+      // Not now: nothing is recorded, so the person's next request tries again. A request that needs the
+      // database always comes first.
+      if(active>=maxInFlight||busy())return Promise.resolve(false);
+      inFlight.add(req.userId);active++;
+      return write(req.userId,hash);
     }catch(_){return Promise.resolve(false);}
   };
 }
@@ -105,7 +128,7 @@ function landingPage(token,packageId) {
   '<small>Opening this page does not join anyone.</small></main></body></html>';
 }
 function stripPhone(items) {return (items||[]).map(({claimantPhone,...rest})=>rest);}
-function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,androidPackageId='app.pandapay.pandapay',notify=async()=>0,phone:phoneOpts={enabled:()=>false,ring:()=>null}}) {
+function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,androidPackageId='app.pandapay.pandapay',notify=async()=>0,phone:phoneOpts={enabled:()=>false,ring:()=>null},poolBusy=()=>false}) {
   const phoneOn=()=>phoneOpts.enabled()===true;
   app.get('/split/join/:token',(req,res)=>{
     res.set({'Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Robots-Tag':'noindex, nofollow','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"});
@@ -224,7 +247,7 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
     res.json(result);
   });
   const own=(req)=>sessionPhoneHash(secret,req.verifiedSession);
-  const touch=createDirectoryToucher({withUserClient,secret});
+  const touch=createDirectoryToucher({withUserClient,secret,busy:poolBusy});
   // Register everyone's verified phone as soon as they use the app at all, so a person
   // who has installed and signed in is findable and can receive invites without ever
   // opening Splits. Throttled per person; never blocks or fails a request.

@@ -229,3 +229,104 @@ test('your own number on file is refused as an invite target, and no number mean
   const none = await rig.call('GET /shared-expenses/invitations/inbox', { userId: actor, query: {}, verifiedSession: { verifiedContacts: {} } });
   assert.equal(none.body.items.length, 0, 'an account with no number simply has no invites');
 });
+
+// A phone opening the app sends several requests at once. The directory write must not multiply by that, and it must
+// never take a database connection a real request is waiting for (the 10-connection pool ran dry and requests got 503).
+function deferredClient() {
+  const started = [];
+  const withUserClient = (user, fn) => new Promise((resolve, reject) => {
+    started.push({ user, finish: () => resolve(fn({ query: async () => ({ rows: [{ result: {} }] }) })), fail: () => reject(new Error('db down')) });
+  });
+  return { started, withUserClient };
+}
+const verifiedFor = (userId, value = '+919876543210') => ({ userId, verifiedSession: { verifiedContacts: { phone: { verified: true, value } } } });
+const tick = () => new Promise((r) => setImmediate(r));
+
+test('directory registration: a burst of requests from one person makes one write', async () => {
+  const { createDirectoryToucher } = require('../src/shared_expenses/invitations');
+  const { started, withUserClient } = deferredClient();
+  const touch = createDirectoryToucher({ withUserClient, secret });
+  const burst = Array.from({ length: 6 }, () => touch(verifiedFor(actor)));
+  await tick();
+  assert.equal(started.length, 1, 'six parallel requests, one write');
+  started[0].finish();
+  const results = await Promise.all(burst);
+  assert.equal(results.filter(Boolean).length, 1, 'only the first one did the work');
+  assert.equal(await touch(verifiedFor(actor)), false, 'then throttled for the day as before');
+  assert.equal(started.length, 1);
+});
+
+test('directory registration: at most two writes run at once; the rest wait for a later request', async () => {
+  const { createDirectoryToucher } = require('../src/shared_expenses/invitations');
+  const { started, withUserClient } = deferredClient();
+  const touch = createDirectoryToucher({ withUserClient, secret, maxInFlight: 2 });
+  const people = ['a', 'b', 'c', 'd', 'e'].map((c) => c.repeat(8) + '-1111-4111-8111-' + c.repeat(12));
+  const first = people.map((p) => touch(verifiedFor(p)));
+  await tick();
+  assert.equal(started.length, 2, 'two people at a time');
+  assert.deepEqual((await Promise.all(first.slice(2))), [false, false, false], 'the others are skipped, not queued');
+  started[0].finish(); started[1].finish();
+  await Promise.all(first.slice(0, 2));
+  // Nothing was recorded for the skipped ones, so their next request registers them.
+  const next = people.slice(2).map((p) => touch(verifiedFor(p)));
+  await tick();
+  assert.equal(started.length, 4, 'two more started, one still waits');
+  assert.equal(await next[2], false, 'the third is skipped again, not queued');
+  started[2].finish(); started[3].finish();
+  assert.deepEqual(await Promise.all(next.slice(0, 2)), [true, true]);
+});
+
+test('directory registration: while the connection pool is short nothing is written or recorded', async () => {
+  const { createDirectoryToucher } = require('../src/shared_expenses/invitations');
+  const { started, withUserClient } = deferredClient();
+  let busy = true;
+  const touch = createDirectoryToucher({ withUserClient, secret, busy: () => busy });
+  assert.equal(await touch(verifiedFor(actor)), false);
+  assert.equal(started.length, 0, 'a request that needs the database always comes first');
+  busy = false;
+  const done = touch(verifiedFor(actor));
+  await tick();
+  assert.equal(started.length, 1, 'once connections are free, the very next request registers the person');
+  started[0].finish();
+  assert.equal(await done, true);
+});
+
+test('directory registration: a failed write frees its slot (and backs off for that person)', async () => {
+  const { createDirectoryToucher } = require('../src/shared_expenses/invitations');
+  const { started, withUserClient } = deferredClient();
+  let clock = 1000;
+  const touch = createDirectoryToucher({ withUserClient, secret, maxInFlight: 1, now: () => clock });
+  const other = '99999999-9999-4999-8999-999999999999';
+  const failing = touch(verifiedFor(actor));
+  await tick();
+  assert.equal(await touch(verifiedFor(other)), false, 'the only slot is taken');
+  started[0].fail();
+  assert.equal(await failing, false, 'a database failure is swallowed');
+  const second = touch(verifiedFor(other));
+  await tick();
+  assert.equal(started.length, 2, 'the slot is free again after the failure');
+  started[1].finish();
+  assert.equal(await second, true);
+  assert.equal(await touch(verifiedFor(actor)), false, 'the failed person is not retried straight away');
+});
+
+test('directory registration: a database call that throws at once cannot leave a slot stuck', async () => {
+  const { createDirectoryToucher } = require('../src/shared_expenses/invitations');
+  let mode = 'throw-sync', calls = 0;
+  const withUserClient = (_user, fn) => {
+    calls++;
+    if (mode === 'throw-sync') throw new Error('thrown before any promise exists');
+    return Promise.resolve(fn({ query: async () => ({ rows: [{ result: {} }] }) }));
+  };
+  let clock = 1000;
+  const touch = createDirectoryToucher({ withUserClient, secret, maxInFlight: 1, ttlMs: 100, retryMs: 50, now: () => clock });
+  const a = '11111111-1111-4111-8111-111111111111', b = '22222222-2222-4222-8222-222222222222';
+  // Three failures in a row with a single slot: if a slot leaked, the second person would never be tried.
+  assert.equal(await touch(verifiedFor(a)), false);
+  assert.equal(await touch(verifiedFor(b)), false);
+  assert.equal(calls, 2, 'both were attempted: the slot was released after each failure');
+  mode = 'ok';
+  clock += 1000;
+  assert.equal(await touch(verifiedFor(a)), true, 'and the feature still works once the database does');
+  assert.equal(await touch(verifiedFor(b)), true);
+});

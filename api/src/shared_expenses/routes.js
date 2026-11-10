@@ -63,7 +63,10 @@ function registerSharedExpenseRoutes(app,{requireAuth,withUserClient,invitationS
     process.stderr.write(JSON.stringify({level:'warn',ts:new Date().toISOString(),msg:'shared_expense_phone_sharing_enabled_without_usable_key_ring',hint:'set SHARED_EXPENSE_PHONE_ENC_KEYS; join requests will carry no phone number until then'})+'\n');
   }
   registerInvitationRoutes(app,{protect,withUserClient,sendError,secret:invitationSecret,phone:phoneOpts,androidPackageId:config.androidPackageId,
-    notify:(args)=>notifyAfterCommit({withUserClient,...args})});
+    notify:(args)=>notifyAfterCommit({withUserClient,...args}),
+    // True when the API's database pool is short of connections: background work (the phone directory write) then
+    // waits so it never takes a connection a request is waiting for.
+    poolBusy:()=>{try{const {pool}=require('../db');return pool.waitingCount>0||(pool.idleCount===0&&pool.totalCount>=(pool.options?.max??10)-1);}catch(_){return false;}}});
   app.get('/shared-expenses/capabilities',...protect(async(req,res)=>{
     const result=await withUserClient(req.userId,client=>capabilities(client,{allowMissing:true}));
     res.json(result);
