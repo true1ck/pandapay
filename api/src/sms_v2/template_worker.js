@@ -4,7 +4,7 @@ const crypto = require("node:crypto");
 const { validateRequest, validateBundle } = require("./contracts");
 const { lintPattern } = require("./rules_admin_route");
 const { redactionError } = require("./ai_templates");
-const { readSettings, DEFAULT_AI_MODEL } = require("./settings");
+const { readSettings, DEFAULT_AI_MODEL, envNumber } = require("./settings");
 
 const path = require("node:path");
 const { SCHEMA_DIR } = require("./contracts");
@@ -71,10 +71,11 @@ function workerConfig(env = process.env) {
 // Console settings (settings.js) over the environment-derived config. The
 // environment stays a hard ceiling for rate limits.
 function applyWorkerSettings(config, settings, env = process.env) {
-  const capped = (value, key) =>
-    env[key] !== undefined && Number.isFinite(Number(env[key]))
-      ? Math.min(value, Number(env[key]))
-      : value;
+  // A blank variable (compose passes an unset one as "") is no ceiling, never 0.
+  const capped = (value, key) => {
+    const ceiling = envNumber(env, key);
+    return ceiling === undefined ? value : Math.min(value, ceiling);
+  };
   return {
     ...config,
     model: settings.ai_model || config.model,

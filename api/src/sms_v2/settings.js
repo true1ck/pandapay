@@ -54,13 +54,24 @@ function allowedModels(env) {
     .split(',').map((s) => s.trim()).filter(Boolean);
 }
 
+// A number from the environment, or undefined when the variable is not set.
+// Compose passes an unset variable through as "" and Number("") is 0, so a blank
+// value must count as "not set": read as a ceiling it would be 0 and refuse all
+// work (the AI worker answered "capacity" to every layout for that reason).
+function envNumber(env, key) {
+  if (!key) return undefined;
+  const raw = env[key];
+  if (raw === undefined || raw === null || String(raw).trim() === '') return undefined;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : undefined;
+}
+
 // The largest value the host allows for a key: the environment ceiling when it
 // names one (or, for per-day caps, the operator's configured value), else the
 // registry maximum. `undefined` means unbounded.
 function ceilingOf(spec, env) {
-  const source = spec.ceilingEnv ?? spec.env;
-  if (source && env[source] !== undefined && Number.isFinite(Number(env[source]))) return Number(env[source]);
-  return spec.max;
+  const fromEnv = envNumber(env, spec.ceilingEnv ?? spec.env);
+  return fromEnv === undefined ? spec.max : fromEnv;
 }
 
 function validateSetting(key, value, env = process.env) {
@@ -170,5 +181,5 @@ async function intakeOpen(security, req) {
 module.exports = {
   DEFAULT_AI_MODEL, SETTINGS, PUBLIC_KEYS, USER_LIMIT_KEYS, SettingError,
   validateSetting, mergeSettings, listSettings, storedSettings, readSettings, readPublicSettings,
-  clearSettingsCache, ceilingOf, intakeOpen,
+  clearSettingsCache, ceilingOf, envNumber, intakeOpen,
 };
