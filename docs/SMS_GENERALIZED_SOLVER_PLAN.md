@@ -356,3 +356,20 @@ The update build on the owner's phone showed the Subscriptions list with rows na
 - **No name at all:** a mandate or membership notice with no readable service name and no reference stays in review (never accepted), and a nameless mandate with no charge is never listed.
 Result on the real inbox: 16 rows became 8, all clean, with one charge now linked. OpenAI, Emergent, Netflix and Spotify have no debits in the inbox, so "Awaiting first charge" is correct for them. The Google Play mandate is correctly shown cancelled (a revoke message names it). The vocabulary part reaches phones only through a published rule bundle.
 The "N messages need review" banner adds open review items to merchant-category and bill prompts from the ledger; most of it is category confirmation, and its "which card" wording is outdated.
+
+## 23. Release checklist for this work (nothing here is done without the owner's word)
+
+What ships where:
+- **In the app (needs a new app build):** the history chain, the retry across chunks, bill and subscription views, the unified Subscriptions list, Scheduled payments, the IPO notice line, the Gemini upload hold, the solver code.
+- **In the signed rule bundle from the server (no app build):** `rules/sms/solver/pack.json` (vocabulary, version 3 plus ours) and the tightened mandate rules in `rules/sms/v2/bills_mandates/mandates.json`. A phone with the new app but the old bundle keeps the old name and wording behaviour.
+- **On the API server (a server deploy):** the Gemini prompt (`api/src/sms_v2/template_worker.js`, prompt version `tpl-2026-11-20`).
+
+Order, each step reversible:
+1. Merge `dev` into `prod` the project's usual way (a push to `prod` runs the tests, then deploys the server, which carries the new Gemini prompt). Confirm "Verify production is healthy" is green. Not a rule-bundle publish.
+2. Publish the rule bundle through the admin console's usual release flow, to the testers cohort first (cohorts: all, 25%, 5%, testers). Check one phone: Subscriptions names, Payments, Needs Review count.
+3. Build the app update with a version code above the installed one and ship it to testers; the update-in-place recipe is in `docs/merchant-bulk-category-implementation-plan.md` (Dev flavor on the hosted backend). Do not raise the minimum supported version.
+4. Widen the bundle cohort (5%, 25%, all) only after the testers look right.
+
+Rollback: the bundle can be re-signed with the previous rules (phones fall back to the last good one); the server by pointing `prod` back to the last good commit (a forced push, the owner's decision); the app by not raising the minimum version.
+
+Open items to confirm with whoever runs releases: exactly how the repo rule files become the published bundle (the admin console release step), and who pushes `prod`.
