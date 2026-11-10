@@ -111,6 +111,13 @@ void main() {
         overrides: [
           if (source != null)
             cacheNamespaceProvider.overrideWithValue('user:$account'),
+          // The screen prints today's date ("Mon, Nov 9"). flutter_test draws text
+          // in the Ahem font, one em per glyph, so at 2x text a two-digit day
+          // ("Tue, Nov 10") fills the whole header row and the layout test failed
+          // on every day from the 10th of the month. A fixed day makes it the same
+          // test every day (the Clock comment says tests must not read the real
+          // time).
+          clockProvider.overrideWithValue(TestClock(DateTime(2026, 11, 9, 12))),
           sharedExpensesEnabledProvider.overrideWithValue(true),
           sharedExpensesRuntimeProvider.overrideWith((ref) async => runtime),
           userCardsProvider.overrideWith((ref) async => const []),
