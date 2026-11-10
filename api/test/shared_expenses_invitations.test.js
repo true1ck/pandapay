@@ -108,7 +108,7 @@ test('lookup, inbox and decision routes use only the verified phone and never re
   const inbox = await call('GET /shared-expenses/invitations/inbox', { userId: actor, query: {}, verifiedSession: verified });
   assert.equal(inbox.body.items[0].inviterName, 'Asha R.');
   const unverified = { verifiedContacts: { phone: { verified: false, value: '+919876543210' } } };
-  assert.deepEqual((await call('GET /shared-expenses/invitations/inbox', { userId: actor, query: {}, verifiedSession: unverified })).body, { phoneVerified: false, emailVerified: false, items: [] });
+  assert.deepEqual((await call('GET /shared-expenses/invitations/inbox', { userId: actor, query: {}, verifiedSession: unverified })).body, { phoneVerified: false, items: [] });
   const before = queries.length;
   const denied = await call('POST /shared-expenses/invitations/accept', { userId: actor, body: { invitationId: id, operationId: id }, verifiedSession: unverified });
   assert.equal(denied.code, 409);
@@ -162,85 +162,4 @@ test('a signed-in person is registered by any authenticated request, without ope
   auth._runVerifiedSessionHooks({ userId: '99999999-9999-4999-8999-999999999999', verifiedSession: { verifiedContacts: {} } });
   await new Promise((r) => setImmediate(r));
   assert.equal(writes.length, 1);
-});
-
-const emailOnly = { verifiedContacts: { email: { verified: true, value: 'Chandresh@Example.com' }, phone: { verified: false, value: null } } };
-function emailRig(responder) {
-  const routes = {}, queries = [];
-  const app = { get: (p, ...h) => { routes['GET ' + p] = h[h.length - 1]; }, post: (p, ...h) => { routes['POST ' + p] = h[h.length - 1]; } };
-  const withUserClient = async (_u, fn) => fn({ query: async (sql, args) => { queries.push([sql, args]); if (/register_phone/.test(sql)) return { rows: [{ result: {} }] }; return { rows: [{ result: responder(sql, args) }] }; } });
-  require('../src/shared_expenses/invitations').registerInvitationRoutes(app, { protect: (fn) => [fn], withUserClient, sendError() {}, secret, androidPackageId: 'x' });
-  const call = async (key, req) => { const out = {}; const res = { status(c) { out.code = c; return res; }, json(b) { out.body = b; return res; } }; await routes[key](req, res); return out; };
-  return { call, queries };
-}
-
-test('an email is normalised and hashed apart from phone numbers', () => {
-  const { normalizeEmail, emailHash, verifiedEmailHash, identityHashes } = require('../src/shared_expenses/invitations');
-  assert.equal(normalizeEmail('  Chandresh@Example.COM '), 'chandresh@example.com');
-  assert.throws(() => normalizeEmail('not-an-email'));
-  assert.throws(() => normalizeEmail('a@b'));
-  assert.equal(emailHash(secret, 'Chandresh@Example.com'), emailHash(secret, 'chandresh@example.com'));
-  assert.match(emailHash(secret, 'a@b.co'), /^[a-f0-9]{64}$/);
-  assert.notEqual(emailHash(secret, 'a@b.co'), verifiedPhoneHash(secret, { phone: { verified: true, value: '+919876543210' } }));
-  assert.equal(verifiedEmailHash(secret, { email: { verified: false, value: 'a@b.co' } }), null);
-  assert.equal(verifiedEmailHash(secret, {}), null);
-  const both = { email: { verified: true, value: 'a@b.co' }, phone: { verified: true, value: '+919876543210' } };
-  assert.equal(identityHashes(secret, both).length, 2);
-  assert.equal(identityHashes(secret, both)[0], emailHash(secret, 'a@b.co'), 'email comes first');
-  assert.deepEqual(identityHashes(secret, { email: { verified: false }, phone: { verified: false } }), []);
-});
-
-test('a person with only a verified email is registered, found by email and sees invites', async () => {
-  const { emailHash, createDirectoryToucher } = require('../src/shared_expenses/invitations');
-  const writes = [];
-  const rig = emailRig((sql) => {
-    if (/lookup_phone/.test(sql)) return { found: true, self: false, displayName: 'Chandresh Kerkar', existingContextId: null };
-    if (/list_my_invitations/.test(sql)) return { items: [{ invitationId: id, createdAt: '2026-11-10T10:00:00Z', inviterName: 'Sujay K' }] };
-    return { status: 'joined' };
-  });
-  const want = emailHash(secret, 'chandresh@example.com');
-  const lookup = await rig.call('POST /shared-expenses/directory/lookup', { userId: actor, body: { email: 'chandresh@example.com' }, verifiedSession: emailOnly });
-  assert.equal(lookup.body.found, true);
-  assert.equal(rig.queries[0][1][0], want, 'lookup hashes the typed address');
-  const inbox = await rig.call('GET /shared-expenses/invitations/inbox', { userId: actor, query: {}, verifiedSession: emailOnly });
-  assert.equal(inbox.body.emailVerified, true);
-  assert.equal(inbox.body.items.length, 1);
-  assert.equal(rig.queries.find(([sql]) => /list_my_invitations/.test(sql))[1][0], want, 'inbox matches on the verified email');
-  const accept = await rig.call('POST /shared-expenses/invitations/accept', { userId: actor, body: { invitationId: id, operationId: id }, verifiedSession: emailOnly });
-  assert.equal(accept.body.status, 'joined');
-  const claim = rig.queries.find(([sql]) => /claim_invitation_by_id/.test(sql));
-  assert.equal(claim[1][1], want);
-  assert.equal(claim[1][2], null, 'no phone suffix for an email identity');
-  const touch = createDirectoryToucher({ withUserClient: async (u, fn) => fn({ query: async (sql, a) => { writes.push(a[0]); return { rows: [{ result: {} }] }; } }), secret });
-  assert.equal(await touch({ userId: actor, verifiedSession: emailOnly }), true);
-  assert.equal(writes[0], want, 'the directory stores the email hash');
-});
-
-test('an invite by email is created, and your own address is refused', async () => {
-  const { emailHash } = require('../src/shared_expenses/invitations');
-  const ctx = '33333333-3333-4333-8333-333333333333', member = '44444444-4444-4444-8444-444444444444';
-  const rig = emailRig(() => ({ invitationId: id, contextId: ctx, memberId: member, status: 'open' }));
-  const ok = await rig.call('POST /shared-expenses/invitations', { userId: actor, body: { invitationId: id, contextId: ctx, memberId: member, email: 'Friend@Example.com' }, verifiedSession: emailOnly });
-  assert.ok(ok.body.joinUrl);
-  assert.equal(JSON.parse(rig.queries[0][1][0]).targetPhoneHash, emailHash(secret, 'friend@example.com'));
-  const self = await rig.call('POST /shared-expenses/invitations', { userId: actor, body: { invitationId: id, contextId: ctx, memberId: member, email: 'chandresh@EXAMPLE.com' }, verifiedSession: emailOnly });
-  assert.equal(self.code, 400);
-  assert.equal(self.body.error, 'invitation_self');
-  await assert.rejects(rig.call('POST /shared-expenses/invitations', { userId: actor, body: { invitationId: id, contextId: ctx, memberId: member, email: 'a@b.co', phoneNumber: '9876543210' }, verifiedSession: emailOnly }));
-});
-
-test('accept tries the next verified address when the first does not match the invite', async () => {
-  const { emailHash } = require('../src/shared_expenses/invitations');
-  const both = { verifiedContacts: { email: { verified: true, value: 'a@b.co' }, phone: { verified: true, value: '+919876543210' } } };
-  const tried = [];
-  const withUserClient = async (_u, fn) => fn({ query: async (sql, args) => { tried.push(args[1]); if (tried.length === 1) throw new Error('invitation_unavailable'); return { rows: [{ result: { status: 'joined' } }] }; } });
-  const routes = {};
-  require('../src/shared_expenses/invitations').registerInvitationRoutes({ get() {}, post: (p, ...h) => { routes[p] = h[h.length - 1]; } }, { protect: (fn) => [fn], withUserClient, sendError() {}, secret });
-  const out = {};
-  const res = { status(c) { out.code = c; return res; }, json(b) { out.body = b; return res; } };
-  await routes['/shared-expenses/invitations/accept']({ userId: actor, body: { invitationId: id, operationId: id }, verifiedSession: both }, res);
-  assert.equal(out.body.status, 'joined');
-  assert.equal(tried.length, 2);
-  assert.equal(tried[0], emailHash(secret, 'a@b.co'));
-  assert.equal(tried[1], verifiedPhoneHash(secret, both.verifiedContacts));
 });

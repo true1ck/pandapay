@@ -252,7 +252,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
   Future<SharedPhoneLookup> lookupPhone(String phone) async {
     _current();
     if (!proposalsEnabled) throw const SharedRuntimeUnavailable();
-    final cleaned = sharedCleanContact(phone);
+    final cleaned = sharedCleanPhone(phone);
     if (cleaned == null) return SharedPhoneLookup.none;
     final result = await remote.lookupPhone(cleaned);
     _current();
@@ -269,7 +269,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
   }) async {
     final cleaned = phone == null || phone.trim().isEmpty
         ? null
-        : sharedCleanContact(phone);
+        : sharedCleanPhone(phone);
     if (phone != null && phone.trim().isNotEmpty && cleaned == null) {
       throw const SharedTransportException(code: 'invalid_phone');
     }

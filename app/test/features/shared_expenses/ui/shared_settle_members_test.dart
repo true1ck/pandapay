@@ -436,7 +436,7 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Add person'));
       await tester.pumpAndSettle();
       expect(
-        find.text('Enter a valid email or mobile number, or leave it empty.'),
+        find.text('Enter a valid mobile number, or leave it empty.'),
         findsOneWidget,
       );
       expect(runtime.store.pendingCount, 0);

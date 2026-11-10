@@ -17,20 +17,6 @@ void main() {
     }
   });
 
-  test('an email is cleaned and told apart from a phone number', () {
-    expect(sharedIsEmail('a@b.co'), isTrue);
-    expect(sharedIsEmail('98765 43210'), isFalse);
-    expect(sharedCleanEmail('  Chandresh@Example.COM '), 'chandresh@example.com');
-    for (final bad in ['', 'abc', 'a@b', '@b.co', 'a b@c.co', 'a@@b.co']) {
-      expect(sharedCleanEmail(bad), isNull, reason: bad);
-    }
-    // One field holds either: an address with @ is an email, anything else a number.
-    expect(sharedCleanContact('Friend@Example.com'), 'friend@example.com');
-    expect(sharedCleanContact('98765 43210'), '9876543210');
-    expect(sharedCleanContact('not a contact'), isNull);
-    expect(sharedCleanContact('rahul@upi'), isNull, reason: 'a UPI id is not an email');
-  });
-
   test('lookup and inbox payloads are validated', () {
     final found = SharedPhoneLookup.fromJson({
       'found': true,
@@ -64,7 +50,7 @@ void main() {
       sharedInviteIssueMessage(
         const SharedTransportException(code: 'invitation_self'),
       ),
-      'That is your own email or number.',
+      'That is your own number.',
     );
     expect(sharedInviteIssueMessage(StateError('x')), contains('try again'));
   });
