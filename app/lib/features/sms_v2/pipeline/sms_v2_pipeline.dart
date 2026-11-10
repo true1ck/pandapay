@@ -79,7 +79,11 @@ class SmsV2Pipeline {
 
   /// A history chunk shares one link pass and one local transaction.
   /// Callers yield to the UI between chunks of at most 500 messages.
-  int processBatch(List<SmsMessage> messages, {bool backfill = false}) {
+  int processBatch(
+    List<SmsMessage> messages, {
+    bool backfill = false,
+    bool retry = false,
+  }) {
     if (messages.length > 500) {
       throw ArgumentError('Maximum chunk is 500 messages');
     }
@@ -93,12 +97,18 @@ class SmsV2Pipeline {
       // stayed out of the ledger for good, even after the gate was fixed.
       final mayBeRead = previous?.decision == 'unknown' ||
           previous?.decision == 'ignored';
-      if (previous?.policyVersion != 'v2' ||
+      // [retry] re-reads a message that was left waiting for history.
+      if (retry ||
+          previous?.policyVersion != 'v2' ||
           mayBeRead && previous?.parserVersion != processingRevision) {
         unique.putIfAbsent(message.sourceKey, () => message);
       }
     }
     if (unique.isEmpty) return 0;
+    // Set inside the batch: new statements or spends arrived, so messages that
+    // were waiting for history may now be completable.
+    var brokeNewHistory = false;
+    DateTime? newest;
     financial.batch(() {
       _db.execute('SAVEPOINT sms_v2_process');
       try {
@@ -179,17 +189,37 @@ class SmsV2Pipeline {
             );
           }
           interpreted.add((message, outcome));
+          // A reminder or refund that could not be completed yet is remembered, so
+          // a later batch that brings its statement or spend can finish it; one
+          // that completed (or was read some other way) is forgotten.
+          final waitingKey = 'history-pending:${message.sourceKey}';
+          if (result.outcome == InterpretOutcome.unknown &&
+              (outcome.pendingBill != null || outcome.pendingRefund != null)) {
+            SyncStateStore(_db, namespace: namespace).put(
+              waitingKey,
+              message.observedAt.toUtc().toIso8601String(),
+            );
+          } else {
+            _db.execute(
+              'DELETE FROM v2_sync_state WHERE namespace=? AND key=?',
+              [namespace, waitingKey],
+            );
+          }
           if (result.outcome == InterpretOutcome.unknown) {
             // A reminder with no date, or a refund with no account, is waiting for
             // history, not for a rule: an AI-drafted rule could not read it either.
-            review.add(
-              _templateReview(
-                message,
-                result,
-                history: outcome.pendingBill != null ||
-                    outcome.pendingRefund != null,
-              ),
-            );
+            // On a retry its review item already exists (and may have been
+            // dismissed), so it is not raised again.
+            if (!retry) {
+              review.add(
+                _templateReview(
+                  message,
+                  result,
+                  history: outcome.pendingBill != null ||
+                      outcome.pendingRefund != null,
+                ),
+              );
+            }
           } else if (result.outcome == InterpretOutcome.ignored) {
             for (final fact in result.facts) {
               _facts.insert(fact);
@@ -209,6 +239,10 @@ class SmsV2Pipeline {
             }
           }
         }
+        brokeNewHistory = incoming.any(
+          (f) => f is BillDueFact || f is MovementFact,
+        );
+        newest = oldestFirst.last.observedAt;
         var traces = <String, DecisionTrace>{};
         if (incoming.isNotEmpty) {
           traces = _project(
@@ -295,7 +329,62 @@ class SmsV2Pipeline {
         rethrow;
       }
     });
+    if (!retry && brokeNewHistory) {
+      _retryWaitingForHistory(
+        backfill: backfill,
+        newest: newest!,
+        justRead: unique.keys.toSet(),
+      );
+    }
     return unique.length;
+  }
+
+  /// How many waiting messages one retry pass re-reads.
+  static const int _retryLimit = 100;
+
+  /// Re-reads, oldest first and once, the messages that were left waiting for a
+  /// statement or a spend, now that a batch has stored more history. Phones hand
+  /// history over newest first in chunks, so a reminder can land in a chunk read
+  /// before the chunk that holds its statement. A message whose capture is gone,
+  /// or that is older than the history window, is forgotten.
+  void _retryWaitingForHistory({
+    required bool backfill,
+    required DateTime newest,
+    required Set<String> justRead,
+  }) {
+    final rows = _db.select(
+      "SELECT key, value FROM v2_sync_state WHERE namespace=? AND key LIKE 'history-pending:%' ORDER BY value LIMIT ?",
+      [namespace, _retryLimit + justRead.length],
+    );
+    final messages = <SmsMessage>[];
+    for (final row in rows) {
+      final key = (row['key'] as String).substring('history-pending:'.length);
+      if (justRead.contains(key)) continue;
+      final at = DateTime.tryParse(row['value'] as String);
+      final captured = _intake.capturedById(namespace, key)?.message;
+      if (at == null ||
+          captured == null ||
+          newest.difference(at) > kRefundHistoryWindow + const Duration(days: 30)) {
+        _db.execute('DELETE FROM v2_sync_state WHERE namespace=? AND key=?', [
+          namespace,
+          row['key'],
+        ]);
+        continue;
+      }
+      messages.add(
+        SmsMessage(
+          sender: captured.sender,
+          body: captured.body,
+          sourceKey: key,
+          observedAt: captured.receivedAt.toUtc(),
+          iosFilter: normalizeSenderBrand(captured.sender).iosFilter,
+        ),
+      );
+      if (messages.length >= _retryLimit) break;
+    }
+    if (messages.isNotEmpty) {
+      processBatch(messages, backfill: backfill, retry: true);
+    }
   }
 
   void _queue(SmsMessage message, List<Fact> facts, {required bool backfill}) {
