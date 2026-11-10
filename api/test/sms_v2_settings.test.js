@@ -249,6 +249,25 @@ test('the worker stops when this month spend reaches the budget', async () => {
   assert.equal(raised.calls.claim, 1, 'raising the budget lets the next run claim work');
 });
 
+test('a blank environment value is no ceiling, never zero (compose passes an unset variable as "")', () => {
+  // Production passed SMS_V2_AI_TPM as "": the worker's token ceiling became 0 and it
+  // answered "capacity" to every layout, so nothing was ever drafted.
+  const blank = { SMS_V2_AI_RPM: '60', SMS_V2_AI_TPM: '', SMS_V2_UNKNOWN_TEMPLATES_PER_DAY: ' ' };
+  const settings = mergeSettings([]);
+  const applied = applyWorkerSettings({ ...fixtureConfig, model: 'model-a' }, settings, blank);
+  assert.equal(applied.tpm, 100000, 'blank SMS_V2_AI_TPM leaves the setting as it is');
+  assert.equal(applied.rpm, 30, 'a real ceiling still caps (30 is under 60)');
+  assert.equal(applyWorkerSettings({ ...fixtureConfig, model: 'model-a' }, { ...settings, ai_rpm: 90 }, blank).rpm, 60);
+  // The console can still save a value, and shows no ceiling for the blank one.
+  assert.equal(validateSetting('ai_tpm', 120000, blank), 120000);
+  assert.equal(validateSetting('templates_per_user_per_day', 500, blank), 500);
+  const row = (key) => listSettings([], blank).find((r) => r.key === key);
+  assert.equal(row('ai_tpm').ceiling, null);
+  assert.equal(row('ai_rpm').ceiling, 60);
+  // A word that is not a number is no ceiling either.
+  assert.equal(applyWorkerSettings({ ...fixtureConfig, model: 'model-a' }, settings, { SMS_V2_AI_TPM: 'abc' }).tpm, 100000);
+});
+
 test('settings override the model, limits and generation values, with the environment as ceiling', () => {
   const settings = { ...mergeSettings([]), ai_model: 'model-b', ai_rpm: 40, ai_tpm: 90000, ai_temperature: 0.3, ai_max_output_tokens: 2048 };
   const applied = applyWorkerSettings({ ...fixtureConfig, model: 'model-a' }, settings, { SMS_V2_AI_RPM: '25', SMS_V2_AI_TPM: '200000' });
