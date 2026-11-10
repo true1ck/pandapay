@@ -13,6 +13,7 @@
 const zlib = require('node:zlib');
 const contracts = require('./contracts');
 const storage = require('./storage');
+const hygiene = require('./upload_hygiene');
 const { safeErrorCode } = require('../safeErrorCode');
 
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -105,9 +106,18 @@ function createFactsHandler({ withUserClient, hooks, deps, categoryOnly = false 
       console.error('sms_v2 rate hook failed', safeErrorCode(err));
       return fail(res, 503, 'security_unavailable');
     }
+    // A sender header with a character the brand pattern refuses must not cost the phone its whole batch.
+    hygiene.cleanSenderBrands(body);
     const check = contracts.validateRequest('facts_batch', body);
     if (!check.ok) {
       return fail(res, 400, check.errors[0].code, `${check.errors.length} validation error(s)`, { errors: check.errors.slice(0, 50) });
+    }
+    // The contract accepts a year the database cannot store (0000); left alone it fails the insert with a 500.
+    const oddTimes = hygiene.implausibleTimes(body);
+    if (oddTimes.length) {
+      return fail(res, 400, 'common.timestamp_invalid', `${oddTimes.length} timestamp(s) outside ${hygiene.YEAR_FROM}-${hygiene.YEAR_TO}`, {
+        errors: oddTimes.map((path) => ({ code: 'common.timestamp_invalid', path })),
+      });
     }
     if (categoryOnly && (body.items.length || body.instruments.length || body.events.length)) {
       return fail(res, 400, 'invalid_request', 'A category refresh contains ledger entries only.');

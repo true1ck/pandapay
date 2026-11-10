@@ -26,6 +26,14 @@ class HistoryCategoryReport {
   int get processed => data['processed'] as int;
   int get total => data['total'] as int;
   int get awaitingSync => data['awaitingSync'] as int? ?? 0;
+
+  /// Spends this pass could not look at, and why (reason word -> how many).
+  /// One spend that cannot be re-sorted never stops the rest.
+  int get failed => data['failed'] as int? ?? 0;
+  Map<String, int> get failedWhy => {
+    for (final entry in ((data['failedWhy'] as Map?) ?? const {}).entries)
+      '${entry.key}': (entry.value as num).toInt(),
+  };
   Map<String, Object?> toJson() => Map.of(data);
 }
 
@@ -159,7 +167,10 @@ class HistoryCategoryRecheck {
     if (!accountIsCurrent()) throw StateError('History account changed');
   }
 
-  Future<HistoryCategoryReport> preview() async {
+  /// Works out what a pass would do on a copy of the database; nothing on the
+  /// phone changes. [restart] looks at every spend again even when this rule
+  /// set was already applied.
+  Future<HistoryCategoryReport> preview({bool restart = false}) async {
     _check();
     final clone = sqlite3.openInMemory();
     FinancialStore? store;
@@ -175,7 +186,9 @@ class HistoryCategoryRecheck {
         to: to,
         categoryIdBySlug: categoryIdBySlug,
         accountIsCurrent: accountIsCurrent,
-      ).run();
+        onlySources: onlySources,
+        onlyEventIds: onlyEventIds,
+      ).run(restart: restart);
     } finally {
       store?.dispose();
       clone.dispose();
@@ -237,7 +250,7 @@ class HistoryCategoryRecheck {
       financial.batch(() {
         db.execute('SAVEPOINT history_categories');
         try {
-          final counts = _apply(ready);
+          final counts = _applyIsolating(ready, progress);
           progress['processed'] = (progress['processed'] as int) + ids.length;
           progress['changed'] = (progress['changed'] as int) + counts.$1;
           progress['preservedUser'] =
@@ -257,7 +270,7 @@ class HistoryCategoryRecheck {
     final held = progress['held'] as int? ?? 0;
     progress['awaitingSync'] = _awaiting.length + held;
     progress['complete'] = progress['processed'] == targets.length;
-    if (held > 0) {
+    if (held > 0 || (progress['failed'] as int? ?? 0) > 0) {
       // Held spends were skipped: forget this job so the next pass looks at
       // every spend again once what they wait for has been sent.
       db.execute('DELETE FROM v2_sync_state WHERE namespace=? AND key=?', [
@@ -268,6 +281,56 @@ class HistoryCategoryRecheck {
       _state.put(key, jsonEncode(progress));
     }
     return HistoryCategoryReport(Map.of(progress));
+  }
+
+  /// [_apply] for a chunk; if it refuses the chunk, each spend is tried alone
+  /// so one that cannot be re-sorted is counted, with the reason, and the rest
+  /// still are. `_apply` checks everything before it writes anything, so a
+  /// refusal leaves the chunk untouched.
+  (int, int) _applyIsolating(Set<String> ready, Map<String, Object?> progress) {
+    try {
+      return _apply(ready);
+    } on Object catch (error) {
+      if (ready.length == 1) {
+        _countFailure(progress, error);
+        return (0, 0);
+      }
+    }
+    var changed = 0, kept = 0;
+    for (final id in ready) {
+      try {
+        final one = _apply({id});
+        changed += one.$1;
+        kept += one.$2;
+      } on Object catch (error) {
+        _countFailure(progress, error);
+      }
+    }
+    return (changed, kept);
+  }
+
+  void _countFailure(Map<String, Object?> progress, Object error) {
+    progress['failed'] = (progress['failed'] as int? ?? 0) + 1;
+    final why = ((progress['failedWhy'] as Map?) ?? const {})
+        .cast<String, Object?>();
+    final reason = failureReason(error);
+    progress['failedWhy'] = {
+      ...why,
+      reason: ((why[reason] as int?) ?? 0) + 1,
+    };
+  }
+
+  /// A short word for why a spend could not be looked at: a fixed set of
+  /// words, never a message that could carry a value.
+  static String failureReason(Object error) {
+    final text = '$error';
+    if (text.contains('Sync pending money')) return 'waiting_to_send';
+    if (text.contains('changed money')) return 'money_would_change';
+    return switch (error) {
+      StateError() => 'inconsistent_data',
+      ArgumentError() => 'unexpected_value',
+      _ => 'error',
+    };
   }
 
   /// True when this event, or one linked to it through a shared fact (a

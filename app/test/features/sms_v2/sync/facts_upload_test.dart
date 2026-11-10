@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -260,4 +261,154 @@ void main() {
       expect(queue.due(now.add(const Duration(days: 1))), isEmpty);
     },
   );
+
+  // A copy of the one queued source record under a new key, for the tests that
+  // need several sources in one batch.
+  void addSource(String key, {String? brand}) {
+    final base = queue
+        .due(now.add(const Duration(days: 1)))
+        .firstWhere((r) => r.kind == 'source');
+    final copy = (jsonDecode(jsonEncode(base.json)) as Map)
+        .cast<String, Object?>();
+    copy['sourceKey'] = key;
+    if (brand != null) copy['senderBrand'] = brand;
+    copy['facts'] = [
+      for (final (i, fact) in (copy['facts'] as List).indexed)
+        {
+          ...(fact as Map),
+          'factId': sha256.convert(utf8.encode('$key-$i')).toString(),
+        },
+    ];
+    queue.enqueue('source', key, copy, backfill: base.backfill);
+  }
+
+  Set<String> queuedSources() => {
+    for (final r in queue.due(now.add(const Duration(days: 3650))))
+      if (r.kind == 'source') r.id.substring('source:'.length),
+  };
+
+  String? stateValue(String key) {
+    final rows = database.db.select(
+      'SELECT value FROM v2_sync_state WHERE key=?',
+      [key],
+    );
+    return rows.isEmpty ? null : rows.single['value'] as String;
+  }
+
+  test(
+    'a sender name the server would refuse leaves the phone as a plain brand',
+    () async {
+      addSource('odd-1', brand: 'SBI-UPI');
+      addSource('odd-2', brand: '+91 98765 43210');
+      final brands = <String>[];
+      final schemaErrors = <Object?>[];
+      final client = MockClient((request) async {
+        final body = decode(request);
+        for (final item in body['items']) {
+          brands.add(item['senderBrand'] as String);
+        }
+        schemaErrors.addAll(
+          SchemaValidator.instance.validate(
+            'facts_batch.request.schema.json',
+            body,
+            fallback: 'invalid',
+          ),
+        );
+        return http.Response(jsonEncode({'results': accepted(body)}), 200);
+      });
+      await uploader(client).drain();
+      expect(schemaErrors, isEmpty);
+      expect(brands, containsAll(['SBIUPI', 'NUMBER']));
+      expect(brands.every((b) => RegExp(r'^[A-Z0-9]+$').hasMatch(b)), isTrue);
+      expect(queue.due(now.add(const Duration(days: 1))), isEmpty);
+    },
+  );
+
+  // The server cannot store one record (it answers 500 for any batch that
+  // holds it) and takes everything else.
+  http.Client poisonedBy(String sourceKey, {List<int>? calls}) =>
+      MockClient((request) async {
+        final body = decode(request);
+        calls?.add((body['items'] as List).length);
+        if ((body['items'] as List).any(
+          (item) => item['sourceKey'] == sourceKey,
+        )) {
+          return http.Response('{"error":"internal_error"}', 500);
+        }
+        return http.Response(jsonEncode({'results': accepted(body)}), 200);
+      });
+
+  test(
+    'one record the server cannot store does not block the ones behind it',
+    () async {
+      for (final key in ['good-1', 'poison', 'good-2', 'good-3']) {
+        addSource(key);
+      }
+      final upload = uploader(poisonedBy('poison'));
+      await upload.drain();
+      // Everything else got through on the first pass. The bad record waits.
+      expect(queuedSources(), {'poison'});
+      expect(stateValue(FactsUpload.refusedKey), isNull);
+      expect(
+        queue.due(now.add(const Duration(days: 1))).map((r) => r.kind),
+        ['source'],
+        reason: 'events and money rows were not held up by it',
+      );
+      // Tried again alone later and still refused: set aside, phone copy kept.
+      now = now.add(const Duration(hours: 2));
+      await upload.drain();
+      expect(queuedSources(), isEmpty);
+      expect(stateValue(FactsUpload.refusedKey), '1');
+      expect(
+        jsonDecode(stateValue(FactsUpload.refusedReasonsKey)!),
+        {'http_500': 1},
+      );
+    },
+  );
+
+  test('finding the bad record takes few requests, not one per record', () async {
+    for (var i = 0; i < 40; i++) {
+      addSource(i == 23 ? 'poison' : 'good-$i');
+    }
+    final calls = <int>[];
+    await uploader(poisonedBy('poison', calls: calls)).drain();
+    expect(queuedSources(), {'poison'});
+    // 41 sources: a handful of halvings, far below one request per record.
+    expect(calls.length, lessThan(20));
+  });
+
+  test(
+    'when the server fails for everything nothing is set aside or lost',
+    () async {
+      for (final key in ['a', 'b', 'c']) {
+        addSource(key);
+      }
+      final before = queue.due(now.add(const Duration(days: 3650))).length;
+      final down = MockClient(
+        (request) async => http.Response('{"error":"internal_error"}', 500),
+      );
+      final upload = uploader(down);
+      for (var i = 0; i < 4; i++) {
+        await upload.drain();
+        now = now.add(const Duration(hours: 2));
+      }
+      expect(stateValue(FactsUpload.refusedKey), isNull);
+      expect(queue.due(now.add(const Duration(days: 3650))).length, before);
+    },
+  );
+
+  test('a sign-in or rate-limit answer is not blamed on a record', () async {
+    for (final key in ['a', 'b']) {
+      addSource(key);
+    }
+    for (final status in [401, 429, 503]) {
+      final upload = uploader(
+        MockClient((request) async => http.Response('{}', status)),
+      );
+      await upload.drain();
+      now = now.add(const Duration(hours: 2));
+      await upload.drain();
+    }
+    expect(stateValue(FactsUpload.refusedKey), isNull);
+  });
 }

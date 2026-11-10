@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
+import 'package:pandapay_domain/sms_v2.dart' show uploadSenderBrand;
+
 import '../storage/outbox_store.dart';
 import '../storage/sync_state_store.dart';
 
@@ -111,7 +113,7 @@ class FactsUpload {
     'deviceId': deviceId,
     'items': [
       for (final record in records)
-        if (record.kind == 'source') record.json,
+        if (record.kind == 'source') _sendable(record),
     ],
     'instruments': [
       for (final record in records)
@@ -167,104 +169,306 @@ class FactsUpload {
     );
   }
 
+  /// Requests one drain may spend finding the record inside a failing batch.
+  static const _isolationBudget = 60;
+
+  /// Why records were set aside, counted by reason (`event_leg_role_conflict`,
+  /// `http_500`), for the refresh sheet.
+  static const refusedReasonsKey = 'upload:refused-reasons';
+
+  /// Whether the server answers an empty batch with 200. A record that fails
+  /// alone is only set aside when it does: if the server is failing for
+  /// everything (an outage, a bad deploy), the record is not the problem.
+  Future<bool> _serverAnswers() async {
+    try {
+      final body = _body(const []);
+      final response = await client
+          .post(
+            baseUri.resolve('/sms/v2/facts:batch'),
+            headers: {
+              ...await headers(),
+              'Content-Type': 'application/json',
+              'Content-Encoding': 'gzip',
+              'X-Sms-Device-Id': deviceId,
+            },
+            body: gzip.encode(utf8.encode(jsonEncode(body))),
+          )
+          .timeout(const Duration(seconds: 15));
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Source records leave the phone with the brand the server stores. A record
+  /// queued by an older build may still carry a header the server refuses.
+  Map<String, Object?> _sendable(OutboxRecord record) {
+    final json = record.json;
+    final brand = json['senderBrand'];
+    if (record.kind != 'source' || brand is! String) return json;
+    final clean = uploadSenderBrand(brand);
+    return clean == brand ? json : {...json, 'senderBrand': clean};
+  }
+
+  UploadBatch _batchOf(List<OutboxRecord> records, UploadBatch like) {
+    final body = _body(records);
+    return UploadBatch(
+      records,
+      body,
+      gzip.encode(utf8.encode(jsonEncode(body))),
+      like.backfill,
+    );
+  }
+
   Future<int> _drain({
     required bool backfill,
     bool settleRefused = false,
   }) async {
     var acknowledged = 0;
+    var isolationRequests = 0;
     while (accountIsCurrent()) {
       final batch = nextBatch(ignoreBackoff: settleRefused);
       if (batch == null) return acknowledged;
-      try {
-        final response = await client
-            .post(
-              baseUri
-                  .resolve(
-                    batch.categoryOnly
-                        ? '/sms/v2/categories:batch'
-                        : '/sms/v2/facts:batch',
-                  )
-                  .replace(
-                    queryParameters: backfill || batch.backfill
-                        ? {'backfill': 'true'}
-                        : null,
-                  ),
-              headers: {
-                ...await headers(),
-                'Content-Type': 'application/json',
-                'Content-Encoding': 'gzip',
-                'X-Sms-Device-Id': deviceId,
-              },
-              body: batch.gzipBytes,
-            )
-            .timeout(const Duration(seconds: 30));
-        if (!accountIsCurrent()) return acknowledged;
-        if (response.statusCode != 200) {
-          throw const FormatException('Upload failed');
-        }
-        final json = jsonDecode(response.body) as Map;
-        final accepted = <String>{
-          for (final result in json['results'] as List)
-            if (result['status'] == 'accepted' ||
-                result['status'] == 'duplicate')
-              '${result['kind']}:${result['id']}',
-        };
-        final refused = <String>{
-          for (final result in json['results'] as List)
-            if (result['status'] == 'rejected')
-              '${result['kind']}:${result['id']}',
-        };
-        var progressed = false;
-        queue.db.execute('SAVEPOINT sms_v2_upload_ack');
-        try {
-          for (final record in batch.records) {
-            final ids = record.kind == 'source'
-                ? [
-                    for (final fact in record.json['facts'] as List)
-                      'fact:${fact['factId']}',
-                  ]
-                : [record.id];
-            if (ids.every(accepted.contains)) {
-              if (queue.acknowledge(record)) {
-                _markClean(record);
-                acknowledged++;
-              }
-              progressed = true;
-            } else if (ids.any(refused.contains) &&
-                (settleRefused || record.attempts >= _settleAfterAttempts)) {
-              // Refused for good (for example the server already holds a
-              // different version of this event): keep the phone's own copy,
-              // stop sending, and count it so the person can be told.
-              if (queue.acknowledge(record)) {
-                if (record.kind != 'source') _markClean(record);
-                final state = SyncStateStore(
-                  queue.db,
-                  namespace: queue.namespace,
-                );
-                state.put(
-                  refusedKey,
-                  '${(int.tryParse(state.get(refusedKey) ?? '') ?? 0) + 1}',
-                );
-              }
-              progressed = true;
-            } else {
-              queue.retry(record, clock());
-            }
-          }
-          queue.db.execute('RELEASE SAVEPOINT sms_v2_upload_ack');
-        } catch (_) {
-          queue.db.execute('ROLLBACK TO SAVEPOINT sms_v2_upload_ack');
-          queue.db.execute('RELEASE SAVEPOINT sms_v2_upload_ack');
-          rethrow;
-        }
-        if (!progressed) return acknowledged;
-      } catch (_) {
-        for (final record in batch.records) {
-          queue.retry(record, clock());
-        }
-        return acknowledged;
-      }
+      final sent = await _send(
+        batch,
+        backfill: backfill,
+        settleRefused: settleRefused,
+      );
+      acknowledged += sent.acknowledged;
+      if (sent.outcome == _Outcome.progressed) continue;
+      if (sent.outcome != _Outcome.refusedWhole) return acknowledged;
+      // The server answered the whole batch with an error that does not say
+      // which record is at fault (a record it cannot store, a request it finds
+      // invalid). Retrying the same batch would block every record behind it,
+      // forever. Split it until the record is alone.
+      final found = await _isolate(
+        batch,
+        backfill: backfill,
+        settleRefused: settleRefused,
+        budget: _isolationBudget - isolationRequests,
+        status: sent.status,
+      );
+      acknowledged += found.acknowledged;
+      isolationRequests += found.requests;
+      if (!found.progressed) return acknowledged;
     }
     return acknowledged;
   }
+
+  /// Sends the halves of a failing batch until each failing record is alone.
+  ///
+  /// A record that fails alone while the rest are accepted is the problem: it
+  /// is retried once on the usual wait, then set aside with the phone's copy
+  /// kept. When nothing is accepted the server is failing for everything, and
+  /// every record is simply retried later.
+  Future<({int acknowledged, int requests, bool progressed})> _isolate(
+    UploadBatch failed, {
+    required bool backfill,
+    required bool settleRefused,
+    required int budget,
+    required int? status,
+  }) async {
+    var acknowledged = 0, requests = 0;
+    var progressed = false;
+    final work = <List<OutboxRecord>>[failed.records];
+    final suspects = <OutboxRecord>[];
+    var stopped = false;
+    while (work.isNotEmpty && accountIsCurrent()) {
+      final part = work.removeAt(0);
+      if (part.length == 1 && failed.records.length == 1) {
+        suspects.add(part.single);
+        continue;
+      }
+      if (requests >= budget) {
+        work.insert(0, part);
+        break;
+      }
+      final sent = await _send(
+        _batchOf(part, failed),
+        backfill: backfill,
+        settleRefused: settleRefused,
+        retryFailures: false,
+      );
+      requests++;
+      acknowledged += sent.acknowledged;
+      switch (sent.outcome) {
+        case _Outcome.progressed:
+          progressed = true;
+        case _Outcome.noProgress:
+          break;
+        case _Outcome.refusedWhole:
+          if (part.length == 1) {
+            suspects.add(part.single);
+          } else {
+            final middle = part.length ~/ 2;
+            work.insertAll(0, [part.sublist(0, middle), part.sublist(middle)]);
+          }
+        case _Outcome.stopped:
+          // The network or the account changed: keep every record for later.
+          work.insert(0, part);
+          stopped = true;
+      }
+      if (stopped) break;
+    }
+    for (final part in work) {
+      for (final record in part) {
+        queue.retry(record, clock());
+      }
+    }
+    final healthy = suspects.isEmpty
+        ? false
+        : progressed || await _serverAnswers();
+    for (final record in suspects) {
+      if (healthy &&
+          (settleRefused || record.attempts + 1 >= _settleAfterAttempts)) {
+        _setAside(record, reason: 'http_${status ?? 0}');
+        progressed = true;
+      } else {
+        queue.retry(record, clock());
+      }
+    }
+    return (
+      acknowledged: acknowledged,
+      requests: requests,
+      progressed: progressed,
+    );
+  }
+
+  /// Stops sending [record] and counts it, keeping the phone's own copy.
+  void _setAside(OutboxRecord record, {required String reason}) {
+    if (!queue.acknowledge(record)) return;
+    if (record.kind != 'source') _markClean(record);
+    final state = SyncStateStore(queue.db, namespace: queue.namespace);
+    state.put(
+      refusedKey,
+      '${(int.tryParse(state.get(refusedKey) ?? '') ?? 0) + 1}',
+    );
+    Map<String, Object?> reasons;
+    try {
+      reasons = (jsonDecode(state.get(refusedReasonsKey) ?? '{}') as Map)
+          .cast<String, Object?>();
+    } catch (_) {
+      reasons = {};
+    }
+    reasons[reason] = ((reasons[reason] as int?) ?? 0) + 1;
+    state.put(refusedReasonsKey, jsonEncode(reasons));
+  }
+
+  /// Sends [batch] once. [retryFailures] false leaves a failed batch's records
+  /// alone, for the caller that is about to split it.
+  Future<_Sent> _send(
+    UploadBatch batch, {
+    required bool backfill,
+    required bool settleRefused,
+    bool retryFailures = true,
+  }) async {
+    void retryAll() {
+      if (!retryFailures) return;
+      for (final record in batch.records) {
+        queue.retry(record, clock());
+      }
+    }
+
+    try {
+      final response = await client
+          .post(
+            baseUri
+                .resolve(
+                  batch.categoryOnly
+                      ? '/sms/v2/categories:batch'
+                      : '/sms/v2/facts:batch',
+                )
+                .replace(
+                  queryParameters: backfill || batch.backfill
+                      ? {'backfill': 'true'}
+                      : null,
+                ),
+            headers: {
+              ...await headers(),
+              'Content-Type': 'application/json',
+              'Content-Encoding': 'gzip',
+              'X-Sms-Device-Id': deviceId,
+            },
+            body: batch.gzipBytes,
+          )
+          .timeout(const Duration(seconds: 30));
+      if (!accountIsCurrent()) return const _Sent(_Outcome.stopped);
+      // 400 (a request the server finds invalid), 413 (too large) and 500 (the
+      // server could not store something in it) mean "something in this batch".
+      // Anything else (sign-in, rate limit, outage) is not about the records.
+      if (const {400, 413, 422, 500}.contains(response.statusCode)) {
+        return _Sent(_Outcome.refusedWhole, status: response.statusCode);
+      }
+      if (response.statusCode != 200) {
+        retryAll();
+        return const _Sent(_Outcome.stopped);
+      }
+      final json = jsonDecode(response.body) as Map;
+      final accepted = <String>{
+        for (final result in json['results'] as List)
+          if (result['status'] == 'accepted' ||
+              result['status'] == 'duplicate')
+            '${result['kind']}:${result['id']}',
+      };
+      final refused = <String, String>{
+        for (final result in json['results'] as List)
+          if (result['status'] == 'rejected')
+            '${result['kind']}:${result['id']}':
+                '${((result['errors'] as List?)?.firstOrNull as Map?)?['code'] ?? 'rejected'}',
+      };
+      var acknowledged = 0;
+      var progressed = false;
+      queue.db.execute('SAVEPOINT sms_v2_upload_ack');
+      try {
+        for (final record in batch.records) {
+          final ids = record.kind == 'source'
+              ? [
+                  for (final fact in record.json['facts'] as List)
+                    'fact:${fact['factId']}',
+                ]
+              : [record.id];
+          if (ids.every(accepted.contains)) {
+            if (queue.acknowledge(record)) {
+              _markClean(record);
+              acknowledged++;
+            }
+            progressed = true;
+          } else if (ids.any(refused.containsKey) &&
+              (settleRefused || record.attempts >= _settleAfterAttempts)) {
+            // Refused for good (for example the server already holds a
+            // different version of this event): keep the phone's own copy,
+            // stop sending, and count it so the person can be told.
+            _setAside(
+              record,
+              reason: refused[ids.firstWhere(refused.containsKey)]!,
+            );
+            progressed = true;
+          } else {
+            queue.retry(record, clock());
+          }
+        }
+        queue.db.execute('RELEASE SAVEPOINT sms_v2_upload_ack');
+      } catch (_) {
+        queue.db.execute('ROLLBACK TO SAVEPOINT sms_v2_upload_ack');
+        queue.db.execute('RELEASE SAVEPOINT sms_v2_upload_ack');
+        rethrow;
+      }
+      return _Sent(
+        progressed ? _Outcome.progressed : _Outcome.noProgress,
+        acknowledged: acknowledged,
+      );
+    } catch (_) {
+      retryAll();
+      return const _Sent(_Outcome.stopped);
+    }
+  }
+}
+
+enum _Outcome { progressed, noProgress, refusedWhole, stopped }
+
+class _Sent {
+  const _Sent(this.outcome, {this.acknowledged = 0, this.status});
+  final _Outcome outcome;
+  final int acknowledged;
+  final int? status;
 }

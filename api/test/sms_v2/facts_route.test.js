@@ -98,6 +98,9 @@ test('every invalid facts_batch fixture is rejected with the code in its file na
     assert.ok(files.length >= 8);
     for (const f of files) {
       const expected = f.replace(/\.json$/, '').split('~')[0];
+      // The contract still refuses an odd sender name (the Dart validator is tested on it), but the route cleans it
+      // first so one odd header cannot stall a phone's queue. Covered by its own test below.
+      if (expected === 'request.facts_batch.sender_brand_invalid') continue;
       const body = JSON.parse(fs.readFileSync(path.join(INVALID, f), 'utf8'));
       const r = await h1.post(FACTS, body);
       assert.ok(r.status === 400 || r.status === 413, `${f}: status ${r.status}`);
@@ -176,6 +179,62 @@ test('the valid contract fixture passes validation and reaches the database laye
     assert.equal(r.status, 500); // the stub database refuses, so validation was passed
     assert.equal(h1.state.dbCalls, 1);
   } finally { console.error = origError; h1.close(); }
+});
+
+test('a sender header the brand pattern refuses is cleaned, not a reason to refuse the batch', async () => {
+  const hs = await harness();
+  const origError = console.error;
+  console.error = () => {};
+  try {
+    for (const header of ['SBI-UPI', 'HDFC_BK', 'Paytm Bank', '+91 98765 43210', '', 'hdfcbk']) {
+      const body = JSON.parse(fs.readFileSync(VALID, 'utf8'));
+      body.items[0].senderBrand = header;
+      const r = await hs.post(FACTS, body);
+      // 500 is the stub database: the contract accepted the batch.
+      assert.equal(r.status, 500, `header "${header}"`);
+    }
+    assert.equal(hs.state.dbCalls, 6);
+  } finally { console.error = origError; hs.close(); }
+});
+
+test('cleanSenderBrand keeps the phone and the server in step', () => {
+  const { cleanSenderBrand } = require('../../src/sms_v2/upload_hygiene');
+  assert.equal(cleanSenderBrand('HDFCBK'), 'HDFCBK');
+  assert.equal(cleanSenderBrand('SBI-UPI'), 'SBIUPI');
+  assert.equal(cleanSenderBrand('Paytm Bank'), 'PAYTMBANK');
+  assert.equal(cleanSenderBrand('HDFC_BK'), 'HDFCBK');
+  assert.equal(cleanSenderBrand(''), 'UNKNOWN');
+  assert.equal(cleanSenderBrand('---'), 'UNKNOWN');
+  assert.equal(cleanSenderBrand('+91 98765 43210'), 'NUMBER');
+  assert.equal(cleanSenderBrand('56767'), '56767');
+  assert.equal(cleanSenderBrand('A'.repeat(80)).length, 32);
+});
+
+test('a timestamp the database cannot store is a clean 400 naming where, not a 500 that blocks the queue', async () => {
+  const hs = await harness();
+  try {
+    for (const [value, ok] of [['0000-01-01T00:00:00Z', false], ['0026-11-01T07:00:11Z', false], ['1969-12-31T23:59:59Z', false], ['2300-01-01T00:00:00Z', false], ['2026-11-01T07:00:11Z', true]]) {
+      const body = JSON.parse(fs.readFileSync(VALID, 'utf8'));
+      body.items[0].facts[0].occurredAt = value;
+      // The contract wants a fact never to occur after it was observed.
+      if (value.startsWith('2300')) body.items[0].facts[0].observedAt = value;
+      const calls = hs.state.dbCalls;
+      const origError = console.error;
+      console.error = () => {};
+      let r;
+      try { r = await hs.post(FACTS, body); } finally { console.error = origError; }
+      if (ok) {
+        assert.equal(r.status, 500, value); // reached the stub database
+        assert.equal(hs.state.dbCalls, calls + 1);
+      } else {
+        assert.equal(r.status, 400, value);
+        assert.equal(r.json.error, 'common.timestamp_invalid');
+        assert.ok(r.json.errors.every((e) => e.code === 'common.timestamp_invalid'));
+        assert.ok(r.json.errors.some((e) => e.path === '/items/0/facts/0/occurredAt'), 'names the field');
+        assert.equal(hs.state.dbCalls, calls, 'no database work for it');
+      }
+    }
+  } finally { hs.close(); }
 });
 
 test('with the flag off every v2 route is a 404 and no body is read or database touched', async () => {

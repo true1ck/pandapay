@@ -42,6 +42,12 @@ void main() {
       ('2026-11-01', 'yyyy-MM-dd:HH:mm:ss', u(2026, 11, 1).subtract(ist)),
       // invalid
       ('31-02-26', 'dd-MM-yy', null),
+      // A year no bank message carries: the server's database refuses year 0.
+      ('01-01-0000', 'dd-MM-yyyy', null),
+      ('01-01-0026', 'dd-MM-yyyy', null),
+      ('01-01-1999', 'dd-MM-yyyy', null),
+      ('01-01-2101', 'dd-MM-yyyy', null),
+      ('0000-01-01', 'yyyy-MM-dd:HH:mm:ss', null),
       ('01-13-26', 'dd-MM-yy', null),
       ('01Xyz26', 'ddMMMyy', null),
       ('nonsense', 'dd-MM-yy', null),
@@ -94,6 +100,48 @@ void main() {
     };
     table.forEach((input, want) {
       test('"$input"', () => expect(sanitizeNarration(input), want));
+    });
+  });
+
+  group('uploadSenderBrand (the shape the server accepts)', () {
+    final shape = RegExp(r'^[A-Z0-9]{1,32}$');
+    test('a plain brand is unchanged', () {
+      expect(uploadSenderBrand('HDFCBK'), 'HDFCBK');
+      expect(uploadBrandOfSender('VM-HDFCBK-S'), 'HDFCBK');
+    });
+    test('headers the server used to refuse', () {
+      const headers = {
+        'AD-SBI-UPI': 'SBIUPI',
+        'JM-HDFC_BK': 'HDFCBK',
+        'Paytm Bank': 'PAYTMBANK',
+        'VK-ICICI.B-S': 'ICICIB',
+        'AX-ICICIB (smsfp)': 'ICICIB',
+        'HDFC/BANK': 'HDFCBANK',
+        'ÉTAT': 'TAT',
+      };
+      headers.forEach((raw, want) {
+        final got = uploadBrandOfSender(raw);
+        expect(got, matches(shape), reason: raw);
+        expect(got, want, reason: raw);
+      });
+    });
+    test('nothing usable is sent as UNKNOWN, a phone number as NUMBER', () {
+      expect(uploadSenderBrand(''), 'UNKNOWN');
+      expect(uploadSenderBrand('---'), 'UNKNOWN');
+      expect(uploadSenderBrand('+91 98765 43210'), 'NUMBER');
+      expect(uploadBrandOfSender('+919876543210'), 'NUMBER');
+      expect(uploadSenderBrand('56767'), '56767', reason: 'a short code is a brand');
+    });
+    test('long headers are cut to 32', () {
+      final got = uploadSenderBrand('A' * 80);
+      expect(got.length, 32);
+      expect(got, matches(shape));
+    });
+    test('registered aliases still resolve before cleaning', () {
+      final senders = [
+        SenderEntry(brand: 'HDFCBK', issuerSlug: 'hdfc', issuerKind: IssuerKind.bank, aliases: ['HDFCCC']),
+      ];
+      expect(uploadBrandOfSender('VM-HDFCCC-S', senders), 'HDFCBK');
     });
   });
 

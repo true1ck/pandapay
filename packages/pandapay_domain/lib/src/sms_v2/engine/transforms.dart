@@ -12,6 +12,11 @@ const Set<String> knownTransforms = {
   'stripTrailingRefs',
 };
 
+/// The years a bank message can plausibly carry. The same bounds the evidence
+/// reader uses, and well inside what the server's database accepts.
+const int kEarliestPlausibleYear = 2000;
+const int kLatestPlausibleYear = 2100;
+
 final RegExp _amountPrefix = RegExp(r'^\s*(?:rs\.?|inr|₹)\s*', caseSensitive: false);
 final RegExp _amountSuffix = RegExp(r'\s*(?:/-|only)\s*$', caseSensitive: false);
 final RegExp _amountBody = RegExp(r'^\d[\d,]*(?:\.\d+)?$');
@@ -152,6 +157,10 @@ DateTime? _tryFormat(String text, String format) {
     }
   }
   if (month < 1 || month > 12 || day < 1 || hh > 23 || mm > 59 || ss > 59) return null;
+  // A four-digit year of 0000 or 0026 is not a date a bank sent. It would be
+  // stored as a fact time, and the server's database refuses year 0 outright,
+  // which used to stall the whole upload queue behind that one record.
+  if (year < kEarliestPlausibleYear || year > kLatestPlausibleYear) return null;
   final utc = DateTime.utc(year, month, day, hh, mm, ss);
   if (utc.month != month || utc.day != day) return null; // 31 Feb and the like
   return utc.subtract(istOffset);

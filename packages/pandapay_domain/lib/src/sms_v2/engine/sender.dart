@@ -42,6 +42,31 @@ NormalizedSender normalizeSenderBrand(String sender, [Iterable<SenderEntry> send
   return NormalizedSender(brand: brand, iosFilter: filter);
 }
 
+final RegExp _notBrandChar = RegExp(r'[^A-Z0-9]');
+
+/// A brand in the only shape the server stores: capital letters and digits,
+/// 1 to 32 long.
+///
+/// A header can carry anything the sender chose (`SBI-UPI`, `HDFC_BK`,
+/// `Paytm Bank`, a mobile number). The rules match on the plain brand, so
+/// [normalizeSenderBrand] keeps it as it is; this is for the moment a brand
+/// leaves the phone. One odd header used to make the server refuse the whole
+/// batch it travelled in, and everything queued behind that batch waited.
+/// A header that is only a long number is a person's phone number: it is sent
+/// as `NUMBER`, never as digits.
+String uploadSenderBrand(String brand) {
+  final upper = brand.toUpperCase();
+  final cleaned = upper.replaceAll(_notBrandChar, '');
+  if (cleaned.isEmpty) return 'UNKNOWN';
+  if (cleaned.length >= 10 && !upper.contains(RegExp('[A-Z]'))) return 'NUMBER';
+  return cleaned.length > 32 ? cleaned.substring(0, 32) : cleaned;
+}
+
+/// [normalizeSenderBrand] followed by [uploadSenderBrand]: the brand to put in
+/// anything sent to the server.
+String uploadBrandOfSender(String sender, [Iterable<SenderEntry> senders = const []]) =>
+    uploadSenderBrand(normalizeSenderBrand(sender, senders).brand);
+
 bool _isRegistered(String brand, Iterable<SenderEntry> senders) {
   for (final e in senders) {
     if (e.brand == brand) return true;

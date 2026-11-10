@@ -292,10 +292,7 @@ class SmsV2Pipeline {
     if (upload.isNotEmpty) {
       _outbox.enqueue('source', message.sourceKey, {
         'sourceKey': message.sourceKey,
-        'senderBrand': normalizeSenderBrand(
-          message.sender,
-          bundle.senders,
-        ).brand,
+        'senderBrand': uploadBrandOfSender(message.sender, bundle.senders),
         'observedAt': message.observedAt.toUtc().toIso8601String(),
         'bodyHash': sha256.convert(utf8.encode(message.body)).toString(),
         'facts': upload,

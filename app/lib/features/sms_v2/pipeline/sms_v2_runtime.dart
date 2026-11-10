@@ -16,6 +16,8 @@ import '../../../data/local/financial_store.dart';
 import '../../../data/user_cards_repository.dart';
 import '../instruments/instrument_seeder.dart';
 import 'ai_withdrawal.dart';
+import '../storage/event_store.dart';
+import '../storage/fact_store.dart';
 import '../storage/instrument_store.dart';
 import '../ledger/card_state_adapter.dart';
 import '../../../data/local/sms_intake_repository.dart';
@@ -61,6 +63,7 @@ class SmsV2Runtime {
     this.cardRepository,
 
     this.categoryIdBySlug = const {},
+    this.autoApplyResort = false,
     this.captureExecutor,
     DateTime Function()? clock,
   }) : clock = clock ?? DateTime.now {
@@ -87,6 +90,10 @@ class SmsV2Runtime {
   final bool Function() accountIsCurrent;
   final CaptureExecutor? captureExecutor;
   final Map<String, String> categoryIdBySlug;
+
+  /// Whether a new rule set re-sorts spends without being asked. Off: the
+  /// refresh sheet shows what would move and waits for a tap.
+  final bool autoApplyResort;
   final DateTime Function() clock;
   late final PersonalRuleStore _personalRules = PersonalRuleStore(_state);
   late final RuleEngine _engine = PersonalRuleEngine(
@@ -452,7 +459,7 @@ class SmsV2Runtime {
           intake: intake,
           sourceKey: sourceKey,
           eventId: eventId,
-          brandOf: (sender) => normalizeSenderBrand(sender, senders).brand,
+          brandOf: (sender) => uploadBrandOfSender(sender, senders),
         ),
         clock: clock,
       ).drain(),
@@ -526,7 +533,13 @@ class SmsV2Runtime {
         _state.put('pipeline:revision', _revision(active.revision));
       });
     }
-    await guarded(() => _refreshAutomaticCategories());
+    // A person asked to see what a re-sort would move before it moves
+    // anything, so ordinary sync leaves categories alone. The refresh sheet
+    // shows the preview and applies it on a tap. [autoApplyResort] set to true
+    // has each new rule set re-sort spends on its own again.
+    if (autoApplyResort) {
+      await guarded(() => _refreshAutomaticCategories());
+    }
     final failure = firstError;
     if (failure != null) Error.throwWithStackTrace(failure, firstStack!);
   }
@@ -587,6 +600,156 @@ class SmsV2Runtime {
     if (messages.isNotEmpty) await capture(messages, backfill: true);
   }
 
+  static String _categoryRevision(RuleBundle shared) => sha256
+      .convert(
+        utf8.encode(
+          canonicalJson({
+            'categoryRules': [
+              for (final rule in shared.categoryRules) rule.toJson(),
+            ],
+            'merchantAliases': [
+              for (final alias in shared.merchantAliases) alias.toJson(),
+            ],
+            'taxonomy': shared.taxonomyVersion,
+          }),
+        ),
+      )
+      .toString();
+
+  /// What a re-sort would do, worked out on a copy: nothing on the phone
+  /// changes. Spends still waiting to be sent are not touched either way.
+  Future<HistoryCategoryReport> _previewAutomaticCategories() async {
+    final shared = _bundle;
+    if (shared == null) throw StateError('No rules loaded');
+    return HistoryCategoryRecheck.automaticChoices(
+      financial: financial,
+      namespace: namespace,
+      bundle: shared,
+      accountIsCurrent: accountIsCurrent,
+      categoryIdBySlug: categoryIdBySlug,
+      now: clock(),
+    ).preview(restart: true);
+  }
+
+  /// The tap on "Apply" in the refresh sheet: puts rule-chosen spends in their
+  /// new category on this phone, then tells the account. A spend the person set
+  /// or confirmed is never touched.
+  Future<RulesRefreshReport> applyResort() async {
+    final running = _running;
+    if (running != null) {
+      try {
+        await running;
+      } catch (_) {}
+    }
+    final done = Completer<void>();
+    final marker = done.future;
+    _running = marker;
+    try {
+      _checkAccount();
+      await _loadBundle();
+      String? resortProblem;
+      var report = const HistoryCategoryReport({
+        'changed': 0,
+        'preservedUser': 0,
+        'awaitingSync': 0,
+        'processed': 0,
+        'total': 0,
+      });
+      try {
+        report = await _refreshAutomaticCategories(force: true) ?? report;
+      } catch (error) {
+        _checkAccount();
+        resortProblem = RulesRefreshReport.resortProblemFor(
+          HistoryCategoryRecheck.failureReason(error),
+        );
+      }
+      String? sendProblem;
+      try {
+        await _upload.drain(settleRefused: true);
+      } catch (_) {
+        _checkAccount();
+        sendProblem = RulesRefreshReport.sendProblemText;
+      }
+      return RulesRefreshReport(
+        versionBefore: _bundle!.bundleVersion,
+        versionAfter: _bundle!.bundleVersion,
+        ruleCount: _bundle!.rules.length,
+        sendProblem: sendProblem,
+        resorted: report.changed,
+        keptYours: report.preservedUser,
+        waitingToSend: report.awaitingSync,
+        resortSkipped: report.failed,
+        resortSkippedWhy: report.failedWhy,
+        refusedForGood:
+            int.tryParse(_state.get(FactsUpload.refusedKey) ?? '') ?? 0,
+        refusedWhy: _refusedWhy(),
+        resortProblem: resortProblem,
+        applied: true,
+        finishedAt: clock(),
+      );
+    } finally {
+      done.complete();
+      if (identical(_running, marker)) _running = null;
+    }
+  }
+
+  /// Once, on the build that learned to find the record the server cannot
+  /// take: sends again the messages the server never accepted (their facts are
+  /// not marked as received and nothing is waiting to send them), with the
+  /// spend built on them. Anything it still cannot take is set aside again,
+  /// this time with the reason written down. Returns how many it queued.
+  int _resendSetAside() {
+    const marker = 'upload:resent-set-aside-v1';
+    if (_state.get(marker) != null) return 0;
+    final db = financial.database.db;
+    final sources = [
+      for (final row in db.select(
+        "SELECT DISTINCT source_key FROM v2_facts WHERE namespace=? AND uploaded_at IS NULL AND fact_type!='info' "
+        "AND source_key NOT IN (SELECT substr(id,8) FROM v2_outbox WHERE namespace=? AND kind='source') LIMIT 2000",
+        [namespace, namespace],
+      ))
+        row['source_key'] as String,
+    ];
+    final queue = OutboxStore(db, namespace: namespace);
+    final intake = SmsIntakeRepository(financial.database);
+    final facts = FactStore(db, namespace: namespace);
+    final events = EventStore(db, namespace: namespace);
+    var queued = 0;
+    for (final source in sources) {
+      _checkAccount();
+      final linked = events.findByFactIds([
+        for (final fact in facts.forSource(source)) fact.factId,
+      ]);
+      for (final eventId in linked.isEmpty
+          ? <String?>[null]
+          : [for (final event in linked) event.eventId]) {
+        queued += requeueForUpload(
+          queue: queue,
+          intake: intake,
+          sourceKey: source,
+          eventId: eventId,
+          brandOf: (sender) => uploadBrandOfSender(sender, _bundle?.senders ?? const []),
+        );
+      }
+    }
+    _state.put(marker, clock().toUtc().toIso8601String());
+    return queued;
+  }
+
+  Map<String, int> _refusedWhy() {
+    try {
+      return {
+        for (final entry
+            in (jsonDecode(_state.get(FactsUpload.refusedReasonsKey) ?? '{}')
+                    as Map)
+                .entries)
+          '${entry.key}': (entry.value as num).toInt(),
+      };
+    } catch (_) {
+      return const {};
+    }
+  }
+
   /// A new shared rule set can categorise shops that earlier sat in "Other".
   /// Once per rule-set revision, spends whose category the rules chose are
   /// worked out again; a category the person set or confirmed is never touched.
@@ -598,21 +761,7 @@ class SmsV2Runtime {
   }) async {
     final shared = _bundle;
     if (shared == null || !accountIsCurrent()) return null;
-    final revision = sha256
-        .convert(
-          utf8.encode(
-            canonicalJson({
-              'categoryRules': [
-                for (final rule in shared.categoryRules) rule.toJson(),
-              ],
-              'merchantAliases': [
-                for (final alias in shared.merchantAliases) alias.toJson(),
-              ],
-              'taxonomy': shared.taxonomyVersion,
-            }),
-          ),
-        )
-        .toString();
+    final revision = _categoryRevision(shared);
     if (!force && _state.get('pipeline:category-revision') == revision) {
       return null;
     }
@@ -625,8 +774,9 @@ class SmsV2Runtime {
         categoryIdBySlug: categoryIdBySlug,
         now: clock(),
       ).run(chunkSize: 50, shouldContinue: accountIsCurrent, restart: force);
-      // Money still waiting for the server is picked up on a later pass.
-      if (report.complete && report.awaitingSync == 0) {
+      // Money still waiting for the server, or a spend that could not be looked
+      // at, is picked up on a later pass.
+      if (report.complete && report.awaitingSync == 0 && report.failed == 0) {
         _state.put('pipeline:category-revision', revision);
       }
       return report;
@@ -684,11 +834,15 @@ class SmsV2Runtime {
         await _upload.drain(settleRefused: true);
       } catch (_) {
         _checkAccount();
-        sendProblem =
-            'Some of your spends could not be sent to your account just now. They are kept on this phone and sent later.';
+        sendProblem = RulesRefreshReport.sendProblemText;
       }
     }
 
+    try {
+      _resendSetAside();
+    } catch (_) {
+      _checkAccount();
+    }
     await send();
 
     // 3. Messages that were not recognised, with the rules now in force.
@@ -710,7 +864,8 @@ class SmsV2Runtime {
             ).first['n']
             as int;
 
-    // 4. Rule-chosen categories, every one looked at again.
+    // 4. Rule-chosen categories, every one looked at again on this phone, on a
+    // copy. Nothing moves until the person taps Apply in the sheet.
     var report = const HistoryCategoryReport({
       'changed': 0,
       'preservedUser': 0,
@@ -719,21 +874,16 @@ class SmsV2Runtime {
       'total': 0,
     });
     try {
-      report = await _refreshAutomaticCategories(force: true) ?? report;
+      report = await _previewAutomaticCategories();
       if (report.awaitingSync > 0) {
         await send();
-        final again = await _refreshAutomaticCategories(force: true);
-        if (again != null) {
-          report = HistoryCategoryReport({
-            ...again.data,
-            'changed': report.changed + again.changed,
-          });
-        }
+        report = await _previewAutomaticCategories();
       }
-    } catch (_) {
+    } catch (error) {
       _checkAccount();
-      resortProblem =
-          'Could not re-sort your spends just now. They are unchanged.';
+      resortProblem = RulesRefreshReport.resortProblemFor(
+        HistoryCategoryRecheck.failureReason(error),
+      );
     }
 
     // 5. Tell the account about the new categories.
@@ -748,11 +898,14 @@ class SmsV2Runtime {
       rereadMessages: reread,
       stillUnrecognised: stillUnknown,
       rereadProblem: rereadProblem,
-      resorted: report.changed,
+      resortWouldMove: report.changed,
       keptYours: report.preservedUser,
       waitingToSend: report.awaitingSync,
+      resortSkipped: report.failed,
+      resortSkippedWhy: report.failedWhy,
       refusedForGood:
           int.tryParse(_state.get(FactsUpload.refusedKey) ?? '') ?? 0,
+      refusedWhy: _refusedWhy(),
       resortProblem: resortProblem,
       finishedAt: clock(),
     );

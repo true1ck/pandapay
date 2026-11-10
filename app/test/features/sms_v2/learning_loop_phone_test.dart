@@ -37,6 +37,7 @@ void main() {
   var clockNow = DateTime.utc(2026, 11, 10, 12);
   String? servedBundle; // what GET /sms/v2/rules answers, null for "no change"
   var signalStatus = 202;
+  var rejectFacts = false;
   var aiResults = <Map<String, Object?>>[];
   final signalPosts = <Map<String, Object?>>[];
 
@@ -92,7 +93,21 @@ void main() {
             'results': [
               for (final item in body['items'])
                 for (final fact in item['facts'])
-                  {'kind': 'fact', 'id': fact['factId'], 'status': 'accepted'},
+                  if (rejectFacts)
+                    {
+                      'kind': 'fact',
+                      'id': fact['factId'],
+                      'status': 'rejected',
+                      'errors': [
+                        {'code': 'fact_id_conflict', 'path': '/factId'},
+                      ],
+                    }
+                  else
+                    {
+                      'kind': 'fact',
+                      'id': fact['factId'],
+                      'status': 'accepted',
+                    },
               for (final (key, kind, id) in [
                 ('instruments', 'instrument', 'instrumentId'),
                 ('events', 'event', 'eventId'),
@@ -139,30 +154,34 @@ void main() {
     await runtime.sync();
   }
 
+  SmsV2Runtime makeRuntime({required bool autoApply}) => SmsV2Runtime(
+    autoApplyResort: autoApply,
+    financial: financial,
+    namespace: _namespace,
+    client: MockClient((request) async => server(request)),
+    baseUri: Uri.parse('https://api.invalid'),
+    deviceId: 'loop-device',
+    appVersion: '2.0.0',
+    headers: () async => {'Authorization': 'Bearer fixture'},
+    verify: (raw) async =>
+        RuleBundle.fromJson((jsonDecode(raw) as Map).cast<String, Object?>()),
+    loadShippedBundle: () async => baselineJson,
+    accountIsCurrent: () => true,
+    hasSharingConsent: () async => consent,
+    clock: () => clockNow,
+  );
+
   setUp(() {
     consent = false;
     clockNow = DateTime.utc(2026, 11, 10, 12);
     servedBundle = null;
     signalStatus = 202;
+    rejectFacts = false;
     aiResults = [];
     signalPosts.clear();
     database = AppDatabase.forTesting(sqlite3.openInMemory());
     financial = FinancialStore(database);
-    runtime = SmsV2Runtime(
-      financial: financial,
-      namespace: _namespace,
-      client: MockClient((request) async => server(request)),
-      baseUri: Uri.parse('https://api.invalid'),
-      deviceId: 'loop-device',
-      appVersion: '2.0.0',
-      headers: () async => {'Authorization': 'Bearer fixture'},
-      verify: (raw) async =>
-          RuleBundle.fromJson((jsonDecode(raw) as Map).cast<String, Object?>()),
-      loadShippedBundle: () async => baselineJson,
-      accountIsCurrent: () => true,
-      hasSharingConsent: () async => consent,
-      clock: () => clockNow,
-    );
+    runtime = makeRuntime(autoApply: true);
   });
   tearDown(() {
     financial.dispose();
@@ -242,6 +261,120 @@ void main() {
         ).get('pipeline:category-revision'),
         isNotNull,
       );
+    },
+  );
+
+  test(
+    'a re-sort is shown first and nothing moves until it is applied',
+    () async {
+      // Ordinary sync does not re-sort by itself.
+      runtime = makeRuntime(autoApply: false);
+      await runtime.capture([
+        _purchase('SWIGGY', 499, 1),
+        _purchase('SWIGGY', 500, 2),
+        _purchase('SWIGGY', 501, 3),
+      ]);
+      await sync();
+      final events = await eventsByAmount();
+      final mine = events['50100']!;
+      ledger().replaceForEvent(
+        mine,
+        [
+          for (final entry in ledger().forEvent(mine))
+            entry.withCategory('groceries', CategorySource.user),
+        ],
+        category: const CategoryDecision(
+          slug: 'groceries',
+          source: CategorySource.user,
+          confidence: 1,
+        ),
+      );
+      servedBundle = nextRuleSet();
+      clockNow = clockNow.add(const Duration(hours: 7));
+      await sync();
+      Map<String, String> slugs() => {
+        for (final e in ledger().categoryDecisions().entries)
+          e.key: e.value.slug,
+      };
+      final untouched = slugs();
+      expect(
+        untouched[events['49900']],
+        'other',
+        reason: 'a sync alone changes nothing',
+      );
+      int categoryRecords() => database.db.select(
+        "SELECT 1 FROM v2_outbox WHERE namespace=? AND kind='ledger' AND json_extract(payload,'\$._categoryOnly')=1",
+        [_namespace],
+      ).length;
+      final queuedBefore = categoryRecords();
+
+      // The button shows what would move, and moves nothing.
+      final preview = await runtime.refreshRulesAndReanalyze();
+      expect(preview.resortProblem, isNull);
+      expect(preview.applied, isFalse);
+      expect(preview.canApply, isTrue);
+      expect(preview.resortWouldMove, 2);
+      expect(preview.resorted, 0);
+      expect(preview.keptYours, 1, reason: 'your own choice is counted, not touched');
+      expect(
+        preview.lines.join(' '),
+        contains('Nothing has changed yet'),
+      );
+      expect(slugs(), untouched, reason: 'not applied, so not changed');
+      expect(categoryRecords(), queuedBefore, reason: 'and nothing queued');
+
+      // Asking again changes nothing either: the preview stays as it was.
+      final again = await runtime.refreshRulesAndReanalyze();
+      expect(again.resortWouldMove, 2);
+      expect(slugs(), untouched);
+
+      // The tap on Apply moves them, on the phone, and queues them for the account.
+      final applied = await runtime.applyResort();
+      expect(applied.applied, isTrue);
+      expect(applied.resorted, 2);
+      expect(applied.resortProblem, isNull);
+      final after = slugs();
+      expect(after[events['49900']], 'dining');
+      expect(after[events['50000']], 'dining');
+      expect(after[mine], 'groceries', reason: 'your choice wins');
+      expect(applied.lines.join(' '), contains('Moved 2 spends'));
+
+      // Nothing is left to show afterwards.
+      final last = await runtime.refreshRulesAndReanalyze();
+      expect(last.resortWouldMove, 0);
+      expect(last.canApply, isFalse);
+    },
+  );
+
+  test(
+    'messages the server turned down are sent again once, and the reason is kept',
+    () async {
+      runtime = makeRuntime(autoApply: false);
+      final state = SyncStateStore(database.db, namespace: _namespace);
+      int unsent() => database.db.select(
+        "SELECT 1 FROM v2_facts WHERE namespace=? AND uploaded_at IS NULL AND fact_type!='info'",
+        [_namespace],
+      ).length;
+      rejectFacts = true;
+      await runtime.capture([_purchase('SWIGGY', 499, 1)]);
+      final turnedDown = await runtime.refreshRulesAndReanalyze();
+      expect(turnedDown.refusedForGood, greaterThan(0));
+      expect(turnedDown.refusedWhy, containsPair('fact_id_conflict', 1));
+      expect(unsent(), greaterThan(0), reason: 'the phone keeps its copy');
+      expect(
+        turnedDown.lines.join(' '),
+        contains('already holds a different version'),
+      );
+
+      // A later build sends them again, once. The server now takes them.
+      rejectFacts = false;
+      database.db.execute(
+        "DELETE FROM v2_sync_state WHERE namespace=? AND key='upload:resent-set-aside-v1'",
+        [_namespace],
+      );
+      await runtime.refreshRulesAndReanalyze();
+      expect(unsent(), 0, reason: 'sent again and accepted');
+      expect(state.get('upload:resent-set-aside-v1'), isNotNull);
     },
   );
 

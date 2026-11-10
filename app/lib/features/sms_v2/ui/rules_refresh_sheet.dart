@@ -31,6 +31,7 @@ class RulesRefreshSheet extends ConsumerStatefulWidget {
 class _RulesRefreshSheetState extends ConsumerState<RulesRefreshSheet> {
   RulesRefreshReport? _report;
   String? _failure;
+  bool _applying = false;
 
   @override
   void initState() {
@@ -63,10 +64,38 @@ class _RulesRefreshSheetState extends ConsumerState<RulesRefreshSheet> {
     }
   }
 
+  /// The tap on Apply: moves the spends the preview listed, on this phone,
+  /// then tells the account. Until then nothing has changed.
+  Future<void> _apply() async {
+    setState(() => _applying = true);
+    try {
+      final runtime = await ref.read(smsV2RuntimeProvider.future);
+      if (runtime == null) {
+        if (mounted) setState(() => _applying = false);
+        return;
+      }
+      final applied = await runtime.applyResort();
+      if (mounted) {
+        setState(() {
+          _report = applied;
+          _applying = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _applying = false;
+          _failure =
+              'Something stopped the re-sort. Your spends are as they were. Try again.';
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final report = _report;
-    final working = report == null && _failure == null;
+    final working = (report == null && _failure == null) || _applying;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
       child: Column(
@@ -75,7 +104,7 @@ class _RulesRefreshSheetState extends ConsumerState<RulesRefreshSheet> {
         children: [
           Text(
             working
-                ? 'Refreshing your rules…'
+                ? (_applying ? 'Sorting your spends…' : 'Refreshing your rules…')
                 : (report?.hasProblem ?? true)
                 ? 'Refreshed, with a problem'
                 : 'Refreshed',
@@ -86,7 +115,9 @@ class _RulesRefreshSheetState extends ConsumerState<RulesRefreshSheet> {
             const LinearProgressIndicator(),
             const SizedBox(height: 12),
             Text(
-              'Getting the newest rules, then checking your earlier spends. This takes a moment.',
+              _applying
+                  ? 'Moving your spends to their new categories. This takes a moment.'
+                  : 'Getting the newest rules, then checking your earlier spends. Nothing is changed until you say so.',
               style: BambooFonts.ui(13.5, color: BambooInk.ink700),
             ),
           ] else if (_failure != null)
@@ -101,7 +132,25 @@ class _RulesRefreshSheetState extends ConsumerState<RulesRefreshSheet> {
                 ),
               ),
           const SizedBox(height: 16),
-          if (!working)
+          if (!working && (report?.canApply ?? false))
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(report),
+                    child: const Text('Not now'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _apply,
+                    child: Text('Apply to ${report!.resortWouldMove}'),
+                  ),
+                ),
+              ],
+            )
+          else if (!working)
             Row(
               children: [
                 if (_failure != null || (report?.hasProblem ?? false))

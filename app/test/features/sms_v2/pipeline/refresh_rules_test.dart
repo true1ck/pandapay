@@ -9,6 +9,8 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/financial_store.dart';
+import 'package:pandapay/features/sms_v2/migration/history_category_recheck.dart';
+import 'package:pandapay/features/sms_v2/pipeline/rules_refresh.dart';
 import 'package:pandapay/features/sms_v2/pipeline/sms_v2_runtime.dart';
 import 'package:pandapay/features/sms_v2/storage/sync_state_store.dart';
 import 'package:pandapay_domain/sms_v2.dart';
@@ -48,8 +50,10 @@ void main() {
     String rulesBody = '',
     int syncStatus = 200,
     bool badSync = false,
+    bool autoApplyResort = false,
   }) {
     return SmsV2Runtime(
+      autoApplyResort: autoApplyResort,
       financial: financial,
       namespace: _ns,
       client: MockClient((request) async {
@@ -175,7 +179,7 @@ void main() {
     'a failing step in the ordinary sync no longer stops the re-sort',
     () async {
       final paths = <String>[];
-      final r = runtime(paths, badSync: true);
+      final r = runtime(paths, badSync: true, autoApplyResort: true);
       // The pull fails and is reported...
       await expectLater(r.sync(), throwsA(anything));
       // ...but everything after it still ran: the rule-chosen categories were
@@ -190,4 +194,86 @@ void main() {
       );
     },
   );
+
+  group('what the sheet says', () {
+    RulesRefreshReport report({
+      int wouldMove = 0,
+      int skipped = 0,
+      Map<String, int> skippedWhy = const {},
+      int refused = 0,
+      Map<String, int> refusedWhy = const {},
+      String? problem,
+      bool applied = false,
+    }) => RulesRefreshReport(
+      versionBefore: 12,
+      versionAfter: 13,
+      ruleCount: 1229,
+      resortWouldMove: wouldMove,
+      resorted: applied ? wouldMove : 0,
+      resortSkipped: skipped,
+      resortSkippedWhy: skippedWhy,
+      refusedForGood: refused,
+      refusedWhy: refusedWhy,
+      resortProblem: problem,
+      applied: applied,
+    );
+
+    test('a preview says nothing has changed and offers Apply', () {
+      final r = report(wouldMove: 4);
+      expect(r.canApply, isTrue);
+      expect(r.lines.join('\n'), contains('4 spends would move'));
+      expect(r.lines.join('\n'), contains('Nothing has changed yet'));
+      expect(report(wouldMove: 4, applied: true).canApply, isFalse);
+      expect(report().canApply, isFalse);
+      expect(report(wouldMove: 4, problem: 'x').canApply, isFalse);
+    });
+
+    test('a refusal names the reason, not a guess', () {
+      final text = report(
+        refused: 36,
+        refusedWhy: const {'event_leg_role_conflict': 30, 'http_500': 6},
+      ).lines.join('\n');
+      expect(text, contains('would not take 36 records'));
+      expect(text, contains('already holds this spend read differently: 30'));
+      expect(text, contains('could not store the record: 6'));
+      expect(text, isNot(contains('different version. They stay')));
+    });
+
+    test('skipped spends say how many and why, and that they are unchanged', () {
+      final text = report(
+        skipped: 3,
+        skippedWhy: const {'waiting_to_send': 2, 'error': 1},
+      ).lines.join('\n');
+      expect(text, contains('3 spends could not be looked at'));
+      expect(text, contains('still waiting to be sent: 2'));
+      expect(text, contains('They are unchanged'));
+    });
+
+    test('a stopped re-sort says why from a fixed word, never an error text', () {
+      expect(
+        HistoryCategoryRecheck.failureReason(
+          StateError('Sync pending money changes before refreshing categories'),
+        ),
+        'waiting_to_send',
+      );
+      expect(
+        HistoryCategoryRecheck.failureReason(
+          StateError('History category check changed money'),
+        ),
+        'money_would_change',
+      );
+      expect(
+        HistoryCategoryRecheck.failureReason(StateError('IBAN DE89 3704 0044')),
+        'inconsistent_data',
+      );
+      expect(
+        RulesRefreshReport.resortProblemFor('inconsistent_data'),
+        isNot(contains('IBAN')),
+      );
+      expect(
+        RulesRefreshReport.resortProblemFor('money_would_change'),
+        contains('Nothing was changed'),
+      );
+    });
+  });
 }

@@ -375,7 +375,7 @@ class CorrectionsService {
             'sourceKey': source,
             'senderBrand': correction.message == null
                 ? 'USER'
-                : normalizeSenderBrand(correction.message!.sender).brand,
+                : uploadBrandOfSender(correction.message!.sender),
             'observedAt': replacement.observedAt.toUtc().toIso8601String(),
             'bodyHash': sha256.convert(utf8.encode(source)).toString(),
             'facts': [
