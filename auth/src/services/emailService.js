@@ -4,6 +4,7 @@ const nodemailer = require('nodemailer');
 const net = require('node:net');
 const config = require('../config');
 const { getOtpWorkAdmission, OtpCapacityError, BUSY_CODE } = require('./otpWorkAdmission');
+const { isReservedTestEmail } = require('../utils/reservedEmailDomain');
 const otpAdmission = getOtpWorkAdmission();
 
 // Initialize Nodemailer transporter
@@ -67,6 +68,13 @@ const CODE_PURPOSES = Object.freeze({
 
 async function deliver(mailOptions, recipient, what) {
   try {
+    // A reserved test domain cannot receive mail. Nothing is sent (it would only bounce to our own mailbox) and the
+    // caller is told it worked, exactly as for any address, so this reveals nothing about which addresses exist.
+    // The address itself is never logged.
+    if (config.suppressReservedEmailDomains && isReservedTestEmail(recipient)) {
+      console.info(`${what} email not sent: reserved test domain`);
+      return { success: true, suppressed: true };
+    }
     if (!transporter) {
       return { success: false, error: 'Email delivery is not configured' };
     }

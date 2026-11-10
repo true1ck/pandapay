@@ -76,6 +76,13 @@ const corsAllowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || '')
 
 const isProduction = process.env.NODE_ENV === 'production';
 
+// Hosted environments never send mail to reserved test domains (example.com and the like): it can only bounce
+// to our own sending mailbox. Automated test tools (a store pre-launch report, a robot filling in forms) type such
+// addresses into the sign-in screens. EMAIL_SEND_TO_RESERVED_DOMAINS=true turns the guard off on purpose.
+const suppressReservedEmailDomains =
+  (isProduction || process.env.NODE_ENV === 'staging') &&
+  process.env.EMAIL_SEND_TO_RESERVED_DOMAINS !== 'true';
+
 // A returning user should remain signed in for months, while a lost or
 // abandoned device must still require authentication eventually. Keep the
 // value bounded even when an environment file is malformed.
@@ -114,6 +121,7 @@ module.exports = {
   ),
   corsAllowedOrigins,
   isProduction,
+  suppressReservedEmailDomains,
   refreshMaxIdleMinutes,
   googleClientId: process.env.GOOGLE_CLIENT_ID,
   emailHost: process.env.EMAIL_HOST,
