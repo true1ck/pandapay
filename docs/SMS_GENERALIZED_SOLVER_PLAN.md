@@ -293,3 +293,22 @@ This is a check of the real pipeline's behaviour on one person's inbox, not an a
 2. Refund with no account: if the sender is not a registered wallet, find an earlier spend of the same amount in the last 90 days; if exactly one matches, take its instrument and let the refund link rule join them.
 3. A bank "deposit received" or a mutual-fund purchase confirmation: join to the pending request or deposit by amount and date within a short window.
 This needs a new read-only argument on the engine and a store lookup in the app pipeline, so it is a separate piece of work with its own tests.
+
+## 14. Bill chain, money in, ads (done)
+
+- A biller's "processed payment of X for CONSUMER_NO" is an evidence-only bill payment; the consumer number rides in the counterparty name. The bill build chains it to a bill of the same amount in its cycle: same number, or (when the bill printed none) only when no other bill could take it.
+- A credit with no stated reason is money in; loans paid out and wallet credits count; wallet top-up stays a transfer. Coin redemption is an own transfer (activity only). Ads (loan offers, job ads, recharge-plan notices, in English, Hindi and Marathi) are recognised by wording and ignored.
+
+## 15. History chain (done)
+
+One mechanism, three uses. The engine returns the unresolved reading with what it did learn (`PendingBill`, `PendingRefund`); the pipeline looks back in a bounded window of stored facts and completes it only when exactly ONE earlier fact fits. The completed fact is written at confidence 0.6, below the review bar, so a person is asked to confirm; otherwise nothing changes and the message stays in Needs Review.
+- Bill or EMI reminder with an amount and no due date: borrows the due date, instrument and biller of the one earlier statement of the same sender whose total or minimum equals the amount (75-day window, 20-day grace). It copies the statement's identity, so it cannot make a second bill or change an amount.
+- Refund with no account: accepted when exactly one same-amount spend (90 days) whose merchant the refund mentions exists. A refund or reversal word right before the amount makes the reading a credit even when the verb says transferred.
+- A newer statement of the same card or biller marks an unpaid older one "payment not detected": kept in history, removed from upcoming lists and totals (the newer one carries what is owed).
+
+## 16. Subscriptions (done)
+
+- Name variants of one service ("SPOTIFY" / "SPOTIFY SI") merge when they share an instrument or either names none; the shorter name is shown.
+- Three or more equal charges at one merchant on a steady monthly or weekly rhythm, with no mandate message, are listed under Possible subscriptions (a review candidate): never counted in totals, never reminded about, never duplicated when a mandate exists.
+- IPO lifecycles (apply, allot, partial, not allotted, same-amount IPOs, company-less messages, UPI-mandate route) are covered by tests on the real rules.
+- Known limit: wording only the generic "debited from A/c" rule matches carries no merchant or purpose, so it never reaches the solver and cannot join a mandate.

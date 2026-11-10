@@ -201,6 +201,13 @@ void main() {
       expect(s.setupConfirmed, isFalse);
       expect(s.detectionSource, 'sms_v2_pattern');
       expect(s.lifecycleStatus, 'active');
+      expect(s.reviewCandidate, isTrue, reason: 'listed as a possible subscription');
+      final report = recurringReportFromLedger(
+        FactStore(db.db, namespace: _ns).all(),
+        EventStore(db.db, namespace: _ns).listSince(DateTime.utc(1900)),
+        now: DateTime.utc(2026, 11, 9),
+      );
+      expect(report.totalAnnual.paise, 0, reason: 'a candidate is not counted');
     });
 
     test('two charges are not enough', () {

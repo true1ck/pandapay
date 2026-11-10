@@ -154,6 +154,15 @@ void main() {
       );
     });
 
+    test('upcoming hides a bill a newer one replaced, but history keeps it', () {
+      final replaced = _smsBill(
+        dueDate: DateTime(2026, 10, 26),
+        state: SmsBillState.paymentNotDetected,
+      );
+      expect(_filter(BillsHorizon.upcoming).matchesSmsBill(replaced), isFalse);
+      expect(_filter(BillsHorizon.currentMonth).matchesSmsBill(replaced), isTrue);
+    });
+
     test('lastMonth keeps a linked September row', () {
       expect(
         _filter(BillsHorizon.lastMonth).matchesSmsBill(

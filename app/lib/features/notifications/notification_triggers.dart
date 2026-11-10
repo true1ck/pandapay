@@ -326,6 +326,8 @@ class NotificationTriggerRunner {
     for (final series in report.series) {
       final renewal = series.nextExpectedOn;
       if (renewal == null || series.typicalAmount.paise <= 0) continue;
+      // A merchant only suspected of recurring is not something to remind about.
+      if (series.reviewCandidate) continue;
       final stage = subscriptionReminderStage(renewal, now);
       if (stage == null) continue;
       final date = DateFormat('yyyy-MM-dd').format(renewal);

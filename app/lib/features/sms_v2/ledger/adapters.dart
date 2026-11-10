@@ -373,6 +373,9 @@ Iterable<RecurringSeries> _patternSubscriptions(
       detectionSource: 'sms_v2_pattern',
       cadenceConfirmed: true,
       setupConfirmed: false,
+      // Found by rhythm alone: listed under "Possible subscriptions" for the
+      // person to confirm, never counted in totals or reminded about.
+      reviewCandidate: true,
     );
   }
 }
@@ -958,8 +961,9 @@ RecurringReport recurringReportFromLedger(
       series
           .where(
             (s) =>
-                s.lifecycleStatus == 'active' ||
-                s.lifecycleStatus == 'failed_payment',
+                !s.reviewCandidate &&
+                (s.lifecycleStatus == 'active' ||
+                    s.lifecycleStatus == 'failed_payment'),
           )
           .fold(0, (sum, s) => sum + s.annualCost.paise),
     ),
