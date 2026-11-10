@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart' as app;
+import 'package:pandapay/data/consents_api.dart' show ConsentRecord;
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/response_cache.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
@@ -371,9 +372,12 @@ void main() {
           openItems: 0,
         );
         expect(s.tone, GeminiTone.warn);
-        expect(s.title, 'Gemini is not receiving your message formats');
+        expect(s.title, 'Gemini is not receiving your message formats yet');
         expect(s.detail, contains('12 formats held back'));
-        expect(s.detail, contains('tester'));
+        expect(s.detail, contains('Nothing for you to do'));
+        // No roles or owners are ever asked of the person.
+        expect(s.detail.toLowerCase(), isNot(contains('tester')));
+        expect(s.detail.toLowerCase(), isNot(contains('owner')));
       },
     );
 
@@ -450,6 +454,26 @@ void main() {
       },
     );
 
+    test('with sharing off the bar says so, whatever the server answers', () {
+      for (final server in [
+        null,
+        counted,
+        const AiServerStatus(countedNow: false, eligible: false, held: 3),
+      ]) {
+        final s = geminiBarState(
+          server: server,
+          local: null,
+          unreadOnPhone: 0,
+          openItems: 0,
+          sharingOff: true,
+        );
+        expect(s.tone, GeminiTone.warn);
+        expect(s.title, 'Gemini is off: sharing is off on this phone');
+        expect(s.detail, contains('Help PandaPay read messages'));
+        expect(s.progress, isFalse);
+      }
+    });
+
     test('on and idle: nothing sent yet, and all done', () {
       expect(
         geminiBarState(
@@ -492,7 +516,11 @@ void main() {
       expect(s.ready, 3);
     });
 
-    Future<void> pumpBar(WidgetTester tester, AiServerStatus? server) async {
+    Future<void> pumpBar(
+      WidgetTester tester,
+      AiServerStatus? server, {
+      bool sharing = true,
+    }) async {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
@@ -501,6 +529,15 @@ void main() {
               (ref) async => const AiReviewStatus(),
             ),
             aiUnreadCountProvider.overrideWith((ref) async => 0),
+            app.smsSharedLearningConsentProvider.overrideWith(
+              (ref) async => sharing
+                  ? ConsentRecord(
+                      purpose: 'sms_shared_learning',
+                      granted: true,
+                      grantedAt: DateTime(2026, 11, 1),
+                    )
+                  : null,
+            ),
           ],
           child: const MaterialApp(
             home: Scaffold(body: GeminiStatusBar(openItems: 2)),
@@ -525,10 +562,30 @@ void main() {
       );
       expect(find.byKey(const Key('gemini-status-bar')), findsOneWidget);
       expect(
-        find.text('Gemini is not receiving your message formats'),
+        find.text('Gemini is not receiving your message formats yet'),
         findsOneWidget,
       );
       expect(find.byType(LinearProgressIndicator), findsNothing);
+    });
+
+    testWidgets('says sharing is off, and shows no server numbers', (
+      tester,
+    ) async {
+      await pumpBar(
+        tester,
+        const AiServerStatus(
+          countedNow: true,
+          eligible: true,
+          total: 4,
+          ready: 4,
+        ),
+        sharing: false,
+      );
+      expect(
+        find.text('Gemini is off: sharing is off on this phone'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('done'), findsNothing);
     });
 
     testWidgets('shows a moving bar while Gemini works', (tester) async {

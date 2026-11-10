@@ -414,9 +414,21 @@ GeminiBarState geminiBarState({
   required AiReviewStatus? local,
   required int unreadOnPhone,
   required int openItems,
+  bool sharingOff = false,
 }) {
   String plural(int n, String one, [String? many]) =>
       '$n ${n == 1 ? one : (many ?? '${one}s')}';
+  // Gemini only ever sees anonymised layouts the person agreed to share. With
+  // that off nothing is sent, whatever the server says.
+  if (sharingOff) {
+    return const GeminiBarState(
+      tone: GeminiTone.warn,
+      title: 'Gemini is off: sharing is off on this phone',
+      detail:
+          'Gemini only sees anonymised message layouts you agree to share. '
+          'Turn on "Help PandaPay read messages" to let it work.',
+    );
+  }
   if (server == null) {
     final waiting = local?.checkingTemplates.length ?? 0;
     final read = local?.resolved.length ?? 0;
@@ -442,13 +454,13 @@ GeminiBarState geminiBarState({
   if (!server.countedNow && server.inProgress == 0) {
     return GeminiBarState(
       tone: GeminiTone.warn,
-      title: 'Gemini is not receiving your message formats',
+      title: 'Gemini is not receiving your message formats yet',
       detail: server.held > 0
-          ? '${plural(server.held, 'format')} held back: this phone is not '
-                'counted for AI drafts (no App Check, not a listed tester). '
-                'Ask the owner to add it as a tester.'
-          : 'This phone is not counted for AI drafts, so formats sent now '
-                'would be held back. Ask the owner to add it as a tester.',
+          ? '${plural(server.held, 'format')} held back: AI drafts are not '
+                'switched on for this phone yet. Nothing for you to do; they '
+                'are sent again as soon as it is.'
+          : 'AI drafts are not switched on for this phone yet, so formats '
+                'sent now would be held back. Nothing for you to do.',
     );
   }
   if (server.inProgress > 0) {
@@ -526,11 +538,27 @@ class GeminiStatusBar extends ConsumerStatefulWidget {
 class _GeminiStatusBarState extends ConsumerState<GeminiStatusBar> {
   Timer? _refresh;
 
+  /// The last answer the server gave. A server that is restarting for a minute
+  /// (a deploy) must not turn a good status into "unavailable".
+  AiServerStatus? _lastGood;
+  DateTime? _lastGoodAt;
+  DateTime _lastAsked = DateTime.now();
+  static const _keepLastFor = Duration(minutes: 10);
+
   @override
   void initState() {
     super.initState();
-    _refresh = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted) ref.invalidate(geminiServerStatusProvider);
+    // Ask again every 30 s, or every 10 s while the server is not answering.
+    _refresh = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (!mounted) return;
+      final answering =
+          ref.read(geminiServerStatusProvider).valueOrNull != null;
+      final due =
+          DateTime.now().difference(_lastAsked) >= const Duration(seconds: 30);
+      if (!answering || due) {
+        _lastAsked = DateTime.now();
+        ref.invalidate(geminiServerStatusProvider);
+      }
     });
   }
 
@@ -542,13 +570,22 @@ class _GeminiStatusBarState extends ConsumerState<GeminiStatusBar> {
 
   @override
   Widget build(BuildContext context) {
-    final server = ref.watch(geminiServerStatusProvider);
+    final answer = ref.watch(geminiServerStatusProvider).valueOrNull;
+    if (answer != null) {
+      _lastGood = answer;
+      _lastGoodAt = DateTime.now();
+    }
+    final recent =
+        _lastGoodAt != null &&
+        DateTime.now().difference(_lastGoodAt!) < _keepLastFor;
+    final consent = ref.watch(app.smsSharedLearningConsentProvider);
     final state = geminiBarState(
-      // Keep the last answer on screen while a refresh is in flight.
-      server: server.valueOrNull,
+      server: answer ?? (recent ? _lastGood : null),
       local: ref.watch(aiReviewStatusProvider).valueOrNull,
       unreadOnPhone: ref.watch(aiUnreadCountProvider).valueOrNull ?? 0,
       openItems: widget.openItems,
+      // No consent record: sharing is off and nothing is sent.
+      sharingOff: consent.hasValue && consent.value == null,
     );
     final warn = state.tone == GeminiTone.warn;
     final color = switch (state.tone) {

@@ -80,8 +80,12 @@ ON CONFLICT(namespace, id) DO UPDATE SET payload=excluded.payload,
     return db.updatedRows != 0;
   }
 
-  void retry(OutboxRecord sent, DateTime now) {
-    final seconds = (30 * (1 << sent.attempts.clamp(0, 6))).clamp(30, 1800);
+  /// Schedules another try. [after] overrides the usual back-off, for a server
+  /// that said when to come back (HTTP 429 with Retry-After).
+  void retry(OutboxRecord sent, DateTime now, {Duration? after}) {
+    final seconds =
+        after?.inSeconds ??
+        (30 * (1 << sent.attempts.clamp(0, 6))).clamp(30, 1800);
     db.execute(
       'UPDATE v2_outbox SET attempts=attempts+1, next_attempt_at=? '
       'WHERE namespace=? AND id=? AND payload=?',

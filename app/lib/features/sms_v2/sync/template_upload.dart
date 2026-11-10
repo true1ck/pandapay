@@ -77,8 +77,22 @@ class TemplateUpload {
     caseSensitive: false,
   );
 
+  /// Layouts per request. The server allows 50 a day per person and refuses a
+  /// whole request that would pass it, so a big batch can fail for ever once a
+  /// few have been sent; small ones always fit what is left.
+  static const _batchSize = 10;
+
   Future<void> drain() async {
     if (!await _canShare()) return;
+    // The server told us to wait (HTTP 429): hold the whole queue until then.
+    final holdUntil = DateTime.tryParse(
+      SyncStateStore(
+            queue.db,
+            namespace: queue.namespace,
+          ).get('template:wait') ??
+          '',
+    );
+    if (holdUntil != null && clock().isBefore(holdUntil)) return;
     // Previous builds queued the original hash with a different redacted body.
     // Rebuild those entries from the retained local capture before retrying.
     for (final row in queue.db.select(
@@ -153,7 +167,7 @@ class TemplateUpload {
       final records = queue
           .due(clock(), limit: 2500)
           .where((item) => item.kind == 'template')
-          .take(50)
+          .take(_batchSize)
           .toList();
       if (records.isEmpty) return;
       try {
@@ -180,6 +194,23 @@ class TemplateUpload {
             )
             .timeout(const Duration(seconds: 30));
         if (!await _canShare()) return;
+        if (response.statusCode == 429) {
+          // Over the daily allowance or the rate limit: come back when the
+          // server says, not every few minutes.
+          final wait = Duration(
+            seconds:
+                (int.tryParse(response.headers['retry-after'] ?? '') ?? 3600)
+                    .clamp(300, 21600),
+          );
+          for (final record in records) {
+            queue.retry(record, clock(), after: wait);
+          }
+          SyncStateStore(
+            queue.db,
+            namespace: queue.namespace,
+          ).put('template:wait', clock().add(wait).toUtc().toIso8601String());
+          return;
+        }
         if (response.statusCode != 200 && response.statusCode != 202) {
           throw const FormatException('Template upload failed');
         }

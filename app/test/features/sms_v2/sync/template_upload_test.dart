@@ -84,33 +84,32 @@ void main() {
     },
   );
 
-  test('a message waiting on history is never sent for AI rule drafting', () async {
+  test('layouts go in batches of at most ten, and a 429 is waited out', () async {
     final db = AppDatabase.forTesting(sqlite3.openInMemory());
     addTearDown(db.db.dispose);
     SmsV2Schema.ensure(db.db);
     final intake = SmsIntakeRepository(db);
-    final now = DateTime.utc(2026, 11);
-    const sender = 'HDFCBK';
-    const reminder =
-        'Reminder: your credit card bill of Rs 23,540 is due. Pay on or before the due date.';
-    const ordinary = 'Your Sample Bank account was updated with a new feature.';
-    final held = smsSourceKey('a', sender, reminder);
-    final normal = smsSourceKey('a', sender, ordinary);
-    intake.remember('a', QueuedSms(sender: sender, body: reminder, receivedAt: now));
-    intake.remember('a', QueuedSms(sender: sender, body: ordinary, receivedAt: now));
-    for (final (key, payload) in [
-      (held, {'sourceKey': held, 'templateHash': 'a' * 64, 'aiHold': 'history'}),
-      (normal, {'sourceKey': normal, 'templateHash': 'b' * 64}),
-    ]) {
+    var now = DateTime.utc(2026, 11);
+    // Each layout differs in how many plain words it has, so every one has its
+    // own skeleton (merchant-like words are masked and would all collapse).
+    for (var i = 1; i <= 25; i++) {
+      final raw =
+          'Alert ${List.filled(i, 'info').join(' ')} Rs.500.00 debited from A/c XX6789';
+      final source = smsSourceKey('a', 'HDFCBK', raw);
+      intake.remember(
+        'a',
+        QueuedSms(sender: 'HDFCBK', body: raw, receivedAt: now),
+      );
       db.db.execute('INSERT INTO v2_review_items VALUES(?,?,?,?,?)', [
         'a',
-        key,
+        source,
         'template',
-        jsonEncode(payload),
+        jsonEncode({'sourceKey': source, 'templateHash': 'a' * 64}),
         'open',
       ]);
     }
-    final sent = <String>[];
+    final sizes = <int>[];
+    var status = 429;
     final queue = OutboxStore(db.db, namespace: 'a');
     final uploader = TemplateUpload(
       intake: intake,
@@ -121,16 +120,102 @@ void main() {
       accountIsCurrent: () => true,
       clock: () => now,
       client: MockClient((request) async {
-        for (final item in (jsonDecode(request.body) as Map)['items'] as List) {
-          sent.add((item as Map)['redactedBody'] as String);
+        final items = (jsonDecode(request.body) as Map)['items'] as List;
+        sizes.add(items.length);
+        if (status == 429) {
+          return http.Response(
+            '{"error":"template_daily_cap"}',
+            429,
+            headers: {'retry-after': '86400'},
+          );
         }
-        return http.Response('{}', 503);
+        return http.Response(
+          jsonEncode({
+            'accepted': [for (final item in items) item['templateHash']],
+          }),
+          202,
+        );
       }),
     );
+    // Over the allowance: one small request, then it waits (no retry storm).
     await uploader.drain();
-    expect(sent.join(' ').toLowerCase(), contains('feature'));
-    expect(sent.join(' ').toLowerCase(), isNot(contains('credit card bill')));
+    expect(sizes, [10]);
+    await uploader.drain();
+    expect(sizes, [10], reason: 'nothing is sent again straight away');
+    now = now.add(const Duration(hours: 5));
+    await uploader.drain();
+    expect(sizes, [
+      10,
+    ], reason: 'still inside the six hours the server asked for');
+    // Once the wait is over and the server accepts, everything goes in tens.
+    now = now.add(const Duration(hours: 2));
+    status = 202;
+    await uploader.drain();
+    expect(sizes.skip(1), [10, 10, 5]);
+    expect(sizes.every((n) => n <= 10), isTrue);
   });
+
+  test(
+    'a message waiting on history is never sent for AI rule drafting',
+    () async {
+      final db = AppDatabase.forTesting(sqlite3.openInMemory());
+      addTearDown(db.db.dispose);
+      SmsV2Schema.ensure(db.db);
+      final intake = SmsIntakeRepository(db);
+      final now = DateTime.utc(2026, 11);
+      const sender = 'HDFCBK';
+      const reminder =
+          'Reminder: your credit card bill of Rs 23,540 is due. Pay on or before the due date.';
+      const ordinary =
+          'Your Sample Bank account was updated with a new feature.';
+      final held = smsSourceKey('a', sender, reminder);
+      final normal = smsSourceKey('a', sender, ordinary);
+      intake.remember(
+        'a',
+        QueuedSms(sender: sender, body: reminder, receivedAt: now),
+      );
+      intake.remember(
+        'a',
+        QueuedSms(sender: sender, body: ordinary, receivedAt: now),
+      );
+      for (final (key, payload) in [
+        (
+          held,
+          {'sourceKey': held, 'templateHash': 'a' * 64, 'aiHold': 'history'},
+        ),
+        (normal, {'sourceKey': normal, 'templateHash': 'b' * 64}),
+      ]) {
+        db.db.execute('INSERT INTO v2_review_items VALUES(?,?,?,?,?)', [
+          'a',
+          key,
+          'template',
+          jsonEncode(payload),
+          'open',
+        ]);
+      }
+      final sent = <String>[];
+      final queue = OutboxStore(db.db, namespace: 'a');
+      final uploader = TemplateUpload(
+        intake: intake,
+        queue: queue,
+        baseUri: Uri.parse('https://api.invalid'),
+        headers: () async => {},
+        hasConsent: () async => true,
+        accountIsCurrent: () => true,
+        clock: () => now,
+        client: MockClient((request) async {
+          for (final item
+              in (jsonDecode(request.body) as Map)['items'] as List) {
+            sent.add((item as Map)['redactedBody'] as String);
+          }
+          return http.Response('{}', 503);
+        }),
+      );
+      await uploader.drain();
+      expect(sent.join(' ').toLowerCase(), contains('feature'));
+      expect(sent.join(' ').toLowerCase(), isNot(contains('credit card bill')));
+    },
+  );
 
   test(
     'consented safe hash maps authenticated private rules back to original formats',
@@ -372,7 +457,11 @@ void main() {
       expect(stats, hasLength(1));
       expect(stats.single['rule_id'], matches(RegExp(r'^AI-[0-9a-f]{64}$')));
       expect(
-        [stats.single['hits'], stats.single['to_review'], stats.single['corrected']],
+        [
+          stats.single['hits'],
+          stats.single['to_review'],
+          stats.single['corrected'],
+        ],
         [1, 1, 0],
       );
       expect(
