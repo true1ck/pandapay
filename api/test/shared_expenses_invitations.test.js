@@ -124,3 +124,36 @@ test('group links are per-group, per-generation secrets and only a hash reaches 
   assert.notEqual(groupLinkCredentials(secret, id, ctx, gen).token, one.token);
   assert.notEqual(one.token, inviteCredentials(secret, actor, gen).token, 'invite and group links never collide');
 });
+
+test('a failed directory write backs off instead of retrying on every request', async () => {
+  const { createDirectoryToucher } = require('../src/shared_expenses/invitations');
+  let calls = 0, clock = 1000;
+  const withUserClient = async () => { calls++; throw new Error('feature off'); };
+  const touch = createDirectoryToucher({ withUserClient, secret, ttlMs: 100000, retryMs: 500, now: () => clock });
+  const req = { userId: actor, verifiedSession: { verifiedContacts: { phone: { verified: true, value: '+919876543210' } } } };
+  assert.equal(await touch(req), false);
+  assert.equal(await touch(req), false);
+  assert.equal(await touch(req), false);
+  assert.equal(calls, 1, 'one attempt, then quiet');
+  clock += 501;
+  await touch(req);
+  assert.equal(calls, 2, 'tries again after the short backoff');
+});
+
+test('a signed-in person is registered by any authenticated request, without opening Splits', async () => {
+  const auth = require('../src/auth');
+  const { registerInvitationRoutes } = require('../src/shared_expenses/invitations');
+  const writes = [];
+  const withUserClient = async (user, fn) => fn({ query: async (sql, args) => { if (/register_phone/.test(sql)) writes.push({ user, hash: args[0] }); return { rows: [{ result: {} }] }; } });
+  registerInvitationRoutes({ get() {}, post() {} }, { protect: () => [], withUserClient, sendError() {}, secret });
+  const verifiedReq = { userId: actor, verifiedSession: { verifiedContacts: { phone: { verified: true, value: '+919876543210' } } } };
+  auth._runVerifiedSessionHooks(verifiedReq);
+  await new Promise((r) => setImmediate(r));
+  assert.equal(writes.length, 1, 'registered on an ordinary request');
+  assert.equal(writes[0].user, actor);
+  assert.match(writes[0].hash, /^[a-f0-9]{64}$/, 'only a keyed hash is stored');
+  // Someone with no verified phone is simply skipped.
+  auth._runVerifiedSessionHooks({ userId: '99999999-9999-4999-8999-999999999999', verifiedSession: { verifiedContacts: {} } });
+  await new Promise((r) => setImmediate(r));
+  assert.equal(writes.length, 1);
+});

@@ -171,10 +171,11 @@ class SharedExpenseDraft {
       errors['payerIntent'] =
           'Choose who paid. Your payment must be zero when someone else paid.';
     }
+    // Only an expense tied to an existing bank payment needs funding checks.
+    // A plain "I paid" entry sends no funding claim (sources stay empty), so it
+    // is an ordinary shared expense and must be submittable.
     final linked =
-        source != null ||
-        entryKind == SharedEntryKind.existingOwnPayment ||
-        entryKind == SharedEntryKind.newOwnPayment;
+        source != null || entryKind == SharedEntryKind.existingOwnPayment;
     if (linked) {
       if (!sourceFundingEnabled) {
         blockers.add(SharedDraftBlocker.sourceFundingUnavailable);

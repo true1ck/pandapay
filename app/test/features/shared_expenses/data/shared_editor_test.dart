@@ -106,15 +106,44 @@ void main() {
     },
   );
   test(
-    'own bank payment stays blocked until funding admission is implemented',
+    'an expense the user paid submits as a plain shared expense with no funding claim',
     () async {
       setup();
       editor.choosePayer(me);
-      expect(editor.evaluation.canPropose, isFalse);
-      await expectLater(editor.seal(), throwsStateError);
-      expect(store.pendingCount, 0);
+      expect(editor.canSubmit, isTrue);
+      expect(editor.submitBlockReason, isNull);
+      final command = await editor.seal();
+      final payload = command.toJson()['payload'] as Map;
+      expect(payload['sources'], isEmpty);
+      expect((payload['snapshot'] as Map)['contributions'], [
+        {'memberId': me, 'amountMinor': '90000'},
+      ]);
+      expect(store.pendingCount, 1);
     },
   );
+  test('an invited friend who has not accepted can still be split with', () {
+    editor.selectContext(group, 'Chandresh', const [
+      SharedEditorMember(me, 'You'),
+      SharedEditorMember(friend, 'Chandresh', state: 'invited'),
+    ], me);
+    editor.setBill('100');
+    editor.setTitle('Lunch');
+    expect(editor.canSubmit, isTrue);
+    expect(editor.evaluation.preview!.yourShare.paise, 5000);
+  });
+  test('a disabled submit explains why', () {
+    editor.selectContext(group, 'Chandresh', const [
+      SharedEditorMember(me, 'You'),
+      SharedEditorMember(friend, 'Chandresh', state: 'invited'),
+    ], me);
+    editor.setBill('100');
+    expect(editor.canSubmit, isFalse);
+    expect(editor.submitBlockReason, 'Enter a merchant or payee to submit.');
+    editor.setTitle('Lunch');
+    expect(editor.submitBlockReason, isNull);
+    editor.setBill('');
+    expect(editor.submitBlockReason, isNotNull);
+  });
   test('concurrent submit taps seal one immutable operation', () async {
     setup();
     final result = await Future.wait([editor.seal(), editor.seal()]);

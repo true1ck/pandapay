@@ -320,3 +320,38 @@ test('reviewer targeting preserves notification preferences, operation dedupe an
     profileId: friend, deepLink: `/insights/splits/${ctx}`, dedupeKey: `split:op-reviewer-dedupe:${friend}`,
   }]);
 });
+
+test('a phone invite notifies the registered invitee and opens the Splits hub', async () => {
+  const seen = [];
+  const invitation = '99999999-9999-4999-8999-999999999999';
+  const withUserClient = async (profileId, fn) => fn({
+    async query(sql, params) {
+      seen.push({ profileId, sql: sql.replace(/\s+/g, ' ').slice(0, 60), params });
+      if (/invitation_recipient/.test(sql)) {
+        return { rows: [{ result: { recipient: friend, contextName: null, inviterName: 'Asha' } }] };
+      }
+      if (/FROM shared_expenses.members/.test(sql)) throw new Error('invitee flow must not read the roster');
+      if (/notification_preferences/.test(sql)) return { rowCount: 0, rows: [] };
+      if (/INSERT INTO notifications/.test(sql)) return { rowCount: 1, rows: [{ id: 'n1' }] };
+      return { rows: [] };
+    },
+  });
+  const sent = await notifyAfterCommit({ withUserClient, actorId: actor, kind: 'invitation.created', payload: {}, contextId: ctx, operationId: invitation, invitationId: invitation, options: { enabled: true }, logger: quiet });
+  assert.equal(sent, 1);
+  const insert = seen.find((s) => s.sql.startsWith('INSERT INTO notifi'));
+  assert.equal(insert.profileId, friend);
+  assert.equal(insert.params[4], '/insights/splits');
+  assert.match(insert.params[3], /Asha wants to split expenses with you/);
+  assert.equal(insert.params[5], `split:${invitation}:${friend}`);
+});
+
+test('a link-only or unregistered invite notifies nobody', async () => {
+  const withUserClient = async (profileId, fn) => fn({
+    async query(sql) {
+      if (/invitation_recipient/.test(sql)) return { rows: [{ result: { recipient: null } }] };
+      throw new Error('nothing else may run');
+    },
+  });
+  const sent = await notifyAfterCommit({ withUserClient, actorId: actor, kind: 'invitation.created', payload: {}, contextId: ctx, operationId: 'op-i', invitationId: '99999999-9999-4999-8999-999999999999', options: { enabled: true }, logger: quiet });
+  assert.equal(sent, 0);
+});

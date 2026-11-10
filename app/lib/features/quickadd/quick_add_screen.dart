@@ -2902,7 +2902,47 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         ),
       );
 
-  Widget _saveBar() => DecoratedBox(
+  /// Why a shared expense cannot be submitted yet, shown above the greyed-out
+  /// button so the person is never left guessing.
+  String? get _sharedSubmitHint {
+    final editor = _sharedEditor;
+    if (!_sharing || editor == null || _sharingLoading || _saving) return null;
+    if (editor.sealed || _canSave) return null;
+    if (_pickingReceipt || _scanningReceipt) return null;
+    final reason = editor.submitBlockReason;
+    if (reason != null) return reason;
+    if (_sharedRuntime?.proposalsEnabled != true) {
+      return 'Sharing is not available right now. Check your connection and try again.';
+    }
+    return null;
+  }
+
+  Widget _saveBar() {
+    final hint = _sharedSubmitHint;
+    final bar = _saveBarButton();
+    if (hint == null) return bar;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ColoredBox(
+          color: BambooInk.paper,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+            child: Text(
+              hint,
+              key: const ValueKey('shared-submit-hint'),
+              textAlign: TextAlign.center,
+              style: BambooFonts.ui(12.5, color: BambooInk.clayInk),
+            ),
+          ),
+        ),
+        bar,
+      ],
+    );
+  }
+
+  Widget _saveBarButton() => DecoratedBox(
     decoration: const BoxDecoration(
       color: BambooInk.paper,
       border: Border(top: BorderSide(color: BambooInk.hairlineOnPaper)),

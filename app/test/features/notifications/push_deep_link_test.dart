@@ -12,6 +12,10 @@ void main() {
     );
   });
 
+  test('the Splits hub link (where invites wait) is allowed', () {
+    expect(pushDeepLink('/insights/splits'), '/insights/splits');
+  });
+
   test('anything else in the payload is ignored, never routed', () {
     for (final bad in [
       null,

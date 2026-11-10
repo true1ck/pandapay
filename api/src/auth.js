@@ -171,7 +171,22 @@ async function verifyRequestSession(req) {
     throw new SessionVerificationError('session_invalid', 401);
   }
   req.verifiedSession = session;
+  runVerifiedSessionHooks(req);
   return session;
+}
+
+// Called for every request whose session was just verified. Lets a feature keep
+// per-person state current (for example the split phone directory) without the
+// person having to open that feature first.
+const verifiedSessionHooks = [];
+function runVerifiedSessionHooks(req) {
+  for (const hook of verifiedSessionHooks) {
+    // Best effort and never awaited: a hook can never slow or fail a request.
+    try { hook(req); } catch (_) { /* ignored */ }
+  }
+}
+function onVerifiedSession(hook) {
+  if (typeof hook === 'function') verifiedSessionHooks.push(hook);
 }
 
 function sendSessionError(res, error) {
@@ -251,6 +266,8 @@ module.exports = {
   requireVerifiedSession,
   verifyAccessToken,
   verifyRequestSession,
+  onVerifiedSession,
+  _runVerifiedSessionHooks: runVerifiedSessionHooks,
   verifyMemberRequest,
   requirePhoneIfLocked,
   fetchCurrentSession,

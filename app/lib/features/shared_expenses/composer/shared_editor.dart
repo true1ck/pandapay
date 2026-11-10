@@ -29,9 +29,11 @@ class SharedEditorMember {
   });
   bool get canSettle => state == 'active' && profileId != null;
 
-  /// Shown in pickers: someone who has not joined can still be added to an
-  /// expense, but it stays waiting until they join and approve.
-  String get label => state == 'invited' ? '$name (not joined yet)' : name;
+  /// Shown in pickers: someone who has not accepted yet can still be added to
+  /// an expense, but it stays waiting until they join and approve. They may
+  /// already have a PandaPay account; "invited" only means the invite is
+  /// still waiting for them to accept.
+  String get label => state == 'invited' ? '$name (invite pending)' : name;
 }
 
 /// Authenticated form state, embedded in Quick Add. No bank transaction writer.
@@ -74,6 +76,23 @@ class SharedEditor extends ChangeNotifier {
       title.trim().length <= 200 &&
       !RegExp(r'[\x00-\x1f\x7f]').hasMatch(title) &&
       evaluation.canPropose;
+  /// Plain-language reason Submit is unavailable, or null when it is allowed
+  /// (or already sent). Lets the screen explain a greyed-out button.
+  String? get submitBlockReason {
+    if (sealed || _sealing) return null;
+    if (!contextVerified) return 'Choose who to split with.';
+    final text = title.trim();
+    if (text.isEmpty) return 'Enter a merchant or payee to submit.';
+    if (text.length > 200) return 'Use 200 characters or fewer for the merchant.';
+    if (RegExp(r'[\x00-\x1f\x7f]').hasMatch(title)) {
+      return 'The merchant has characters that cannot be saved.';
+    }
+    final result = evaluation;
+    if (result.canPropose) return null;
+    if (result.errors.isNotEmpty) return result.errors.values.first;
+    return 'This expense cannot be submitted yet.';
+  }
+
   SharedEditor({
     required this.store,
     required this.accountId,

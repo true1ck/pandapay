@@ -45,7 +45,7 @@ function maskName(name) {
  * at most one write per person per day (or when the number changes), never
  * blocking or failing the request that triggered it.
  */
-function createDirectoryToucher({withUserClient,secret,ttlMs=24*3600*1000,limit=20000,now=Date.now}) {
+function createDirectoryToucher({withUserClient,secret,ttlMs=24*3600*1000,retryMs=10*60*1000,limit=20000,now=Date.now}) {
   const seen=new Map();
   return function touch(req) {
     try {
@@ -55,7 +55,9 @@ function createDirectoryToucher({withUserClient,secret,ttlMs=24*3600*1000,limit=
       if(prior&&prior.hash===hash&&now()-prior.at<ttlMs)return Promise.resolve(false);
       return withUserClient(req.userId,client=>client.query('SELECT shared_expenses.register_phone($1::text,NULL) AS result',[hash]))
         .then(()=>{if(seen.size>=limit)seen.delete(seen.keys().next().value);seen.set(req.userId,{hash,at:now()});return true;})
-        .catch(()=>false);
+        // Back off for a few minutes so a switched-off feature or a database blip
+        // costs one attempt, not one per request.
+        .catch(()=>{if(seen.size>=limit)seen.delete(seen.keys().next().value);seen.set(req.userId,{hash,at:now()-ttlMs+retryMs});return false;});
     }catch(_){return Promise.resolve(false);}
   };
 }
@@ -101,6 +103,11 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
       const payload={invitationId:b.invitationId,contextId:b.contextId,memberId:b.memberId,targetPhoneHash:target,tokenHash:creds.tokenHash};
       return (await client.query('SELECT shared_expenses.create_invitation($1::jsonb,$2::text) AS result',[JSON.stringify(payload),requestHash(payload)])).rows[0].result;
     });
+    // Tell an invitee who is already on PandaPay. The server decides from the stored
+    // invitation whether it is phone-bound to a registered person; link-only invites
+    // notify nobody. After the commit, fire-and-forget: a failed push never affects
+    // the invitation, and a replay is deduplicated by invitation id.
+    void notify({actorId:req.userId,kind:'invitation.created',payload:{},contextId:b.contextId,operationId:b.invitationId,invitationId:b.invitationId});
     res.json({...result,joinUrl:`https://pandapay.app/split/join/${creds.token}`});
   });
   route('/shared-expenses/invitations/preview',async(req,res)=>{
@@ -194,6 +201,10 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
   });
   const own=(req)=>verifiedPhoneHash(secret,req.verifiedSession?.verifiedContacts);
   const touch=createDirectoryToucher({withUserClient,secret});
+  // Register everyone's verified phone as soon as they use the app at all, so a person
+  // who has installed and signed in is findable and can receive invites without ever
+  // opening Splits. Throttled per person; never blocks or fails a request.
+  try{require('../auth').onVerifiedSession(req=>{void touch(req);});}catch(_){}
   route('/shared-expenses/directory/lookup',async(req,res)=>{
     record(req.body,['phoneNumber']);
     const hash=phoneHash(secret,req.body.phoneNumber);

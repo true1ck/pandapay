@@ -285,11 +285,10 @@ void main() {
       );
       expect(value.source!.toJson(), source.toJson());
       expect(value.evaluate(sourceFundingEnabled: true).canPropose, isTrue);
+      // A plain "I paid" expense has no bank link, so it needs no funding.
       expect(
-        draft(
-          kind: SharedEntryKind.newOwnPayment,
-        ).evaluate(sourceFundingEnabled: true).canPropose,
-        isFalse,
+        draft(kind: SharedEntryKind.newOwnPayment).evaluate().canPropose,
+        isTrue,
       );
     },
   );

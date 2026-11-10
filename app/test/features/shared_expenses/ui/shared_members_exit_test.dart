@@ -199,12 +199,12 @@ void main() {
     expect(find.textContaining('Take over as owner'), findsOneWidget);
   });
 
-  testWidgets('unjoined people are labelled in expense pickers', (
+  testWidgets('people who have not accepted are labelled in expense pickers', (
     tester,
   ) async {
     expect(
       const SharedEditorMember(friend, 'Asha', state: 'invited').label,
-      'Asha (not joined yet)',
+      'Asha (invite pending)',
     );
     expect(const SharedEditorMember(friend, 'Asha').label, 'Asha');
   });

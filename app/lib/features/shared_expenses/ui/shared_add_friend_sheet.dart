@@ -391,7 +391,7 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
         ),
         const SizedBox(height: 8),
         Text(
-          'With a number, we check if they are on PandaPay and send the invite to them. Without one, you can share a link later.',
+          'Add the mobile number they verified on PandaPay and the invite reaches them in the app, with a notification. Without a number, nothing is sent until you share a link. You can still add expenses meanwhile.',
           style: BambooFonts.ui(12, color: BambooInk.ink700),
         ),
         if (_error != null) ...[

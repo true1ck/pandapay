@@ -22,7 +22,9 @@ const CATEGORY = 'needs_review';
 const GENERIC_CONTEXT_LABEL = 'PandaPay friend';
 
 /** Only these commands ever notify someone; every other kind must cost no query. */
-const NOTIFYING_KINDS = new Set(['expense.propose', 'settlement.report', 'invitation.requested', 'invitation.joined']);
+const NOTIFYING_KINDS = new Set(['expense.propose', 'settlement.report', 'invitation.requested', 'invitation.joined', 'invitation.created']);
+/** An invitee is not a member yet, so their push opens the Splits hub where the invite waits. */
+const INVITE_DEEP_LINK = '/insights/splits';
 
 function enabled(options = {}) {
   return (options.enabled ?? config.sharedExpenseNotificationsEnabled) === true;
@@ -63,6 +65,16 @@ function plan({ kind, payload, actorMemberName, contextName, members, actorId })
       return others
         .filter((m) => m.role === 'owner')
         .map((m) => ({ profileId: m.profileId, title: `${who} wants to join`, body: `${who} asked to join${joinWhat}. Approve or decline.` }));
+    case 'invitation.created':
+      // `members` is just the invited, registered person here.
+      return others.map((m) => ({
+        profileId: m.profileId,
+        deepLink: INVITE_DEEP_LINK,
+        title: `${who} invited you`,
+        body: cleanContext && cleanContext !== GENERIC_CONTEXT_LABEL
+          ? `${who} added you to "${cleanContext}". Open PandaPay to accept.`
+          : `${who} wants to split expenses with you. Open PandaPay to accept.`,
+      }));
     case 'invitation.joined':
       return others
         .filter((m) => m.role === 'owner')
@@ -107,6 +119,18 @@ async function loadAudience(client, contextId, actorId, revision) {
   };
 }
 
+/** The invitee, found by the inviter's own phone-bound invitation. Empty when nobody is registered on that number. */
+async function loadInviteeAudience(client, invitationId) {
+  const { rows } = await client.query('SELECT shared_expenses.invitation_recipient($1::uuid) AS result', [invitationId]);
+  const r = rows[0]?.result;
+  if (!r || !r.recipient) return { members: [], contextName: null, actorName: null };
+  return {
+    members: [{ memberId: null, profileId: r.recipient, role: 'member', name: null }],
+    contextName: r.contextName ?? null,
+    actorName: r.inviterName ?? null,
+  };
+}
+
 async function deliverOne({ withUserClient, target, contextId, dedupeKey, logger }) {
   const created = await withUserClient(target.profileId, async (client) => {
     const preference = await client.query(
@@ -119,7 +143,7 @@ async function deliverOne({ withUserClient, target, contextId, dedupeKey, logger
        VALUES ($1, $2, 'info', $3, $4, $5, $6)
        ON CONFLICT (profile_id, dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING
        RETURNING id`,
-      [target.profileId, CATEGORY, target.title, target.body, `/insights/splits/${contextId}`, dedupeKey],
+      [target.profileId, CATEGORY, target.title, target.body, target.deepLink ?? `/insights/splits/${contextId}`, dedupeKey],
     );
     if (inserted.rowCount === 0) return null;
     if (config.notificationOutboxEnabled) await enqueueNotification(client, inserted.rows[0].id);
@@ -133,7 +157,7 @@ async function deliverOne({ withUserClient, target, contextId, dedupeKey, logger
         body: target.body,
         category: CATEGORY,
         severity: 'info',
-        deepLink: `/insights/splits/${contextId}`,
+        deepLink: target.deepLink ?? `/insights/splits/${contextId}`,
         dedupeKey,
       })
       .catch((error) => logger.warn?.('shared_expense_push_failed', { code: error?.code ?? 'send_failed' }));
@@ -157,11 +181,13 @@ async function loadInvitationAudience(client, tokenHash) {
   };
 }
 
-async function notifyAfterCommit({ withUserClient, actorId, kind, payload, contextId, operationId, tokenHash, options = {}, logger = console }) {
+async function notifyAfterCommit({ withUserClient, actorId, kind, payload, contextId, operationId, tokenHash, invitationId, options = {}, logger = console }) {
   if (!enabled(options) || !NOTIFYING_KINDS.has(kind)) return 0;
   try {
     const invitation = kind.startsWith('invitation.');
-    const audience = invitation
+    const audience = kind === 'invitation.created'
+      ? await withUserClient(actorId, (client) => loadInviteeAudience(client, invitationId))
+      : invitation
       ? await withUserClient(actorId, (client) => loadInvitationAudience(client, tokenHash))
       : await withUserClient(actorId, (client) => loadAudience(client, contextId, actorId, kind === 'expense.propose' ? { expenseId: payload?.expenseId, revisionId: payload?.revisionId } : null));
     const actor = audience.members.find((m) => m.profileId === actorId);
