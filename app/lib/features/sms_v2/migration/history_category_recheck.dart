@@ -5,7 +5,6 @@ import 'package:pandapay_domain/sms_v2.dart';
 import 'package:pandapay_domain/sms_v2_ledger.dart';
 import 'package:sqlite3/sqlite3.dart';
 
-import '../../../data/local/app_database.dart';
 import '../../../data/local/financial_store.dart';
 import '../category/category_snapshot.dart';
 import 'package:pandapay_domain/sms_v2_category.dart';
@@ -62,6 +61,7 @@ class HistoryCategoryRecheck {
     this.categoryIdBySlug = const {},
     this.onlySources,
     this.onlyEventIds,
+    this.dryRun = false,
   }) {
     if (!from.isBefore(to)) throw ArgumentError('Choose a nonempty period');
     SmsV2Schema.ensure(db);
@@ -95,6 +95,13 @@ class HistoryCategoryRecheck {
   /// When set, only these events are looked at (a bulk change from the edit
   /// screen); the period then only bounds which of them count.
   final Set<String>? onlyEventIds;
+
+  /// Looks at every spend and counts what would change, but writes nothing:
+  /// no category, no queue entry, no saved progress. It reads the live
+  /// database. (The first version of the preview worked on an in-memory copy
+  /// made with SQLite's backup, which an encrypted SQLCipher database cannot
+  /// give to a plain one, so it never worked on a phone.)
+  final bool dryRun;
 
   final FinancialStore financial;
   final String namespace;
@@ -167,32 +174,22 @@ class HistoryCategoryRecheck {
     if (!accountIsCurrent()) throw StateError('History account changed');
   }
 
-  /// Works out what a pass would do on a copy of the database; nothing on the
-  /// phone changes. [restart] looks at every spend again even when this rule
-  /// set was already applied.
-  Future<HistoryCategoryReport> preview({bool restart = false}) async {
+  /// Works out what a pass would do; nothing on the phone changes. [restart]
+  /// looks at every spend again even when this rule set was already applied.
+  Future<HistoryCategoryReport> preview({bool restart = false}) {
     _check();
-    final clone = sqlite3.openInMemory();
-    FinancialStore? store;
-    try {
-      await db.backup(clone, nPage: 64).drain<void>();
-      _check();
-      store = FinancialStore(AppDatabase.forTesting(clone));
-      return await HistoryCategoryRecheck(
-        financial: store,
-        namespace: namespace,
-        bundle: bundle,
-        from: from,
-        to: to,
-        categoryIdBySlug: categoryIdBySlug,
-        accountIsCurrent: accountIsCurrent,
-        onlySources: onlySources,
-        onlyEventIds: onlyEventIds,
-      ).run(restart: restart);
-    } finally {
-      store?.dispose();
-      clone.dispose();
-    }
+    return HistoryCategoryRecheck(
+      financial: financial,
+      namespace: namespace,
+      bundle: bundle,
+      from: from,
+      to: to,
+      categoryIdBySlug: categoryIdBySlug,
+      accountIsCurrent: accountIsCurrent,
+      onlySources: onlySources,
+      onlyEventIds: onlyEventIds,
+      dryRun: true,
+    ).run(restart: restart);
   }
 
   /// [restart] ignores a saved "already done" record for the same rules and
@@ -247,22 +244,30 @@ class HistoryCategoryRecheck {
           : ids.where((id) => !_linkedToPending(id, pending)).toSet();
       progress['held'] =
           (progress['held'] as int? ?? 0) + (ids.length - ready.length);
-      financial.batch(() {
-        db.execute('SAVEPOINT history_categories');
-        try {
-          final counts = _applyIsolating(ready, progress);
-          progress['processed'] = (progress['processed'] as int) + ids.length;
-          progress['changed'] = (progress['changed'] as int) + counts.$1;
-          progress['preservedUser'] =
-              (progress['preservedUser'] as int) + counts.$2;
-          _state.put(key, jsonEncode(progress));
-          db.execute('RELEASE history_categories');
-        } catch (_) {
-          db.execute('ROLLBACK TO history_categories');
-          db.execute('RELEASE history_categories');
-          rethrow;
-        }
-      });
+      void step() {
+        final counts = _applyIsolating(ready, progress);
+        progress['processed'] = (progress['processed'] as int) + ids.length;
+        progress['changed'] = (progress['changed'] as int) + counts.$1;
+        progress['preservedUser'] =
+            (progress['preservedUser'] as int) + counts.$2;
+      }
+
+      if (dryRun) {
+        step();
+      } else {
+        financial.batch(() {
+          db.execute('SAVEPOINT history_categories');
+          try {
+            step();
+            _state.put(key, jsonEncode(progress));
+            db.execute('RELEASE history_categories');
+          } catch (_) {
+            db.execute('ROLLBACK TO history_categories');
+            db.execute('RELEASE history_categories');
+            rethrow;
+          }
+        });
+      }
       onProgress?.call(HistoryCategoryReport(Map.of(progress)));
       await Future<void>.delayed(const Duration(milliseconds: 1));
     }
@@ -270,7 +275,9 @@ class HistoryCategoryRecheck {
     final held = progress['held'] as int? ?? 0;
     progress['awaitingSync'] = _awaiting.length + held;
     progress['complete'] = progress['processed'] == targets.length;
-    if (held > 0 || (progress['failed'] as int? ?? 0) > 0) {
+    if (dryRun) {
+      // Nothing is saved: the pass was only a look.
+    } else if (held > 0 || (progress['failed'] as int? ?? 0) > 0) {
       // Held spends were skipped: forget this job so the next pass looks at
       // every spend again once what they wait for has been sent.
       db.execute('DELETE FROM v2_sync_state WHERE namespace=? AND key=?', [
@@ -291,7 +298,8 @@ class HistoryCategoryRecheck {
   (int, int) _applyIsolating(Set<String> ready, Map<String, Object?> progress) {
     try {
       return _apply(ready);
-    } on StateError catch (error) {
+    } catch (error) {
+      if (!_skippable(error)) rethrow;
       if (ready.length == 1) {
         _countFailure(progress, error);
         return (0, 0);
@@ -303,12 +311,21 @@ class HistoryCategoryRecheck {
         final one = _apply({id});
         changed += one.$1;
         kept += one.$2;
-      } on StateError catch (error) {
+      } catch (error) {
+        if (!_skippable(error)) rethrow;
         _countFailure(progress, error);
       }
     }
     return (changed, kept);
   }
+
+  /// A check that refuses a spend ([StateError]) is skippable. A look that
+  /// writes nothing may also skip a spend whose data surprised the code (a
+  /// type or range error). A database error never is, and while changing
+  /// anything only the checks are: a surprise after a write began must roll
+  /// the chunk back.
+  bool _skippable(Object error) =>
+      error is StateError || (dryRun && error is! SqliteException);
 
   void _countFailure(Map<String, Object?> progress, Object error) {
     progress['failed'] = (progress['failed'] as int? ?? 0) + 1;
@@ -327,9 +344,16 @@ class HistoryCategoryRecheck {
     final text = '$error';
     if (text.contains('Sync pending money')) return 'waiting_to_send';
     if (text.contains('changed money')) return 'money_would_change';
+    // Type names are obfuscated in a release build, so each kind of failure
+    // gets its own word here.
     return switch (error) {
       StateError() => 'inconsistent_data',
+      RangeError() => 'unexpected_range',
       ArgumentError() => 'unexpected_value',
+      SqliteException() => 'database_error',
+      TypeError() => 'unexpected_type',
+      FormatException() => 'unexpected_format',
+      UnsupportedError() => 'unsupported',
       _ => 'error',
     };
   }
@@ -496,7 +520,7 @@ class HistoryCategoryRecheck {
         throw StateError('History category check changed money');
       }
     }
-    if (changed.isNotEmpty) {
+    if (changed.isNotEmpty && !dryRun) {
       final update = LedgerSnapshot(
         events: snapshot.events.where((e) => changed.contains(e.eventId)),
         entries: snapshot.entries.where((e) => changed.contains(e.eventId)),

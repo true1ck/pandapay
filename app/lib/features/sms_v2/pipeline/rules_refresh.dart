@@ -136,6 +136,11 @@ class RulesRefreshReport {
     'money_would_change': 'the check found an amount would change',
     'inconsistent_data': 'their saved data did not agree',
     'unexpected_value': 'a saved value was unexpected',
+    'unexpected_type': 'a saved value had an unexpected kind',
+    'unexpected_range': 'a saved value was out of range',
+    'unexpected_format': 'a saved value could not be read',
+    'database_error': 'the phone database refused',
+    'unsupported': 'an unsupported step',
     'error': 'an unexpected problem',
   };
 
