@@ -105,7 +105,11 @@ class SmsV2Pipeline {
         final interpreted = <(SmsMessage, EngineOutcome)>[];
         final review = <ReviewItem>[];
         final incoming = <Fact>[];
-        for (final message in unique.values) {
+        // Oldest first. The phone hands history over newest first, and a reminder
+        // can only borrow from a statement or a spend that was read before it.
+        final oldestFirst = unique.values.toList()
+          ..sort((a, b) => a.observedAt.compareTo(b.observedAt));
+        for (final message in oldestFirst) {
           var outcome = engine.interpretDetailed(
             message,
             bundle,

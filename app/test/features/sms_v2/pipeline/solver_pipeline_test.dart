@@ -278,6 +278,36 @@ void main() {
       expect(factsOf(m), isEmpty);
     });
 
+    test('a batch handed over newest first still completes the reminder', () {
+      final statement = sms(statementText);
+      final reminder = SmsMessage(
+        sender: 'VM-NEWBNK-S',
+        body: nudge('23,540'),
+        sourceKey: 'f' * 64,
+        observedAt: DateTime.utc(2026, 11, 12, 6),
+      );
+      // The statement arrived 3 days before the reminder, but is listed after it.
+      pipeline.processBatch([reminder, statement]);
+      expect(factsOf(reminder).whereType<BillDueFact>().single.dueDate, '2026-11-20');
+    });
+
+    test('a refund listed before its spend is still linked', () {
+      final spend = SmsMessage(
+        sender: 'VM-HDFCBK-S',
+        body: 'Rs.540.00 spent on HDFC Bank Card x5678 at CHAI POINT on 01-11-26',
+        sourceKey: 'e' * 64,
+        observedAt: DateTime.utc(2026, 11, 1, 6),
+      );
+      final refund = SmsMessage(
+        sender: 'VM-NEWPAY-S',
+        body: 'Refund for order CHAI POINT of Rs 540.00 is successfully processed to your Sample Payment Wallet.',
+        sourceKey: 'd' * 64,
+        observedAt: DateTime.utc(2026, 11, 5, 6),
+      );
+      pipeline.processBatch([refund, spend]);
+      expect(factsOf(refund).whereType<MovementFact>(), hasLength(1));
+    });
+
     test('with no statement on file there is nothing to borrow', () {
       final m = sms(nudge('23,540'));
       pipeline.process(m);
