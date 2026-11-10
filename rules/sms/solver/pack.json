@@ -1262,7 +1262,14 @@
       "point",
       "coins",
       "miles",
-      "stars"
+      "stars",
+      "credit report",
+      "credit score",
+      "credit card application",
+      "card application",
+      "loan application",
+      "application no|number|status",
+      "invoice sent"
     ],
     "futureMarker": [
       "will",

@@ -319,3 +319,7 @@ One mechanism, three uses. The engine returns the unresolved reading with what i
 - An exchange "no allotment" notice appears on the one IPO application still waiting (blocked, not older than 60 days); with two waiting it is not guessed onto either.
 - A provider's confirmation ("deposit of Rs X was processed", "fixed deposit of Rs X has been created") is read as evidence-only investment. The existing receipt link joins it to the same-amount bank debit within 72 hours; with no debit it is never counted and the receipt sweep asks later.
 - Not measured on the real inbox yet: the phone was not reachable for wireless debugging.
+
+## 18. Real-inbox measurement, 10 Nov 2026 (counts only, export deleted)
+
+Phone read read-only (6,019 messages). Through the app's real intake gate: 935 sensitive dropped, 2,507 dropped by the gate, 2,577 reach the engine. End to end through the real pipeline (history chain included): 16 messages have no reading at all (was 20), 1 refund inference waits for confirmation, 42 are low-confidence readings of the existing rules (unchanged by this work), 44 event questions and 3 instrument questions are the existing ones. At engine level the unresolved count went 73 -> 51 and the money counted did not change (100 debits, 18 credits), the strict invariant held (0 changed rule results), and 1 generic autopay debit was enriched. Credits are enriched only by a real purpose; a payer word alone ("by CASH") is not an improvement. Credit reports and card-application status notices are ignored as non-money.
