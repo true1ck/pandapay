@@ -140,23 +140,34 @@ class _LookupState extends State<SharedPhoneLookupStatus> {
   }
 }
 
+/// Asks for contacts access the moment it is needed (iOS and Android). Limited
+/// access (iOS 18) counts as allowed. A refusal says so and, when the system
+/// will not ask again, offers a shortcut to Settings.
+Future<bool> sharedEnsureContactsAccess(BuildContext context) async {
+  final status = await Permission.contacts.request();
+  if (status.isGranted || status.isLimited) return true;
+  if (!context.mounted) return false;
+  final needsSettings = status.isPermanentlyDenied || status.isRestricted;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        needsSettings
+            ? 'Contacts access is off. Turn it on in Settings, or type a name and number.'
+            : 'Contacts access was not granted. You can still type a name and number.',
+      ),
+      action: needsSettings
+          ? SnackBarAction(label: 'Settings', onPressed: openAppSettings)
+          : null,
+    ),
+  );
+  return false;
+}
+
 /// Picks one contact. Asks for contacts access only when tapped; a refusal
 /// leaves manual entry fully usable. Nothing is uploaded.
 Future<(String, String)?> sharedPickContact(BuildContext context) async {
   try {
-    final status = await Permission.contacts.request();
-    if (!status.isGranted) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Contacts access was not granted. You can still type a name and number.',
-            ),
-          ),
-        );
-      }
-      return null;
-    }
+    if (!await sharedEnsureContactsAccess(context)) return null;
     final picked = await FlutterContacts.native.showPicker(
       properties: {ContactProperty.name, ContactProperty.phone},
     );

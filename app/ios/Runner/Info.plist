@@ -16,6 +16,8 @@
 	<string>PandaPay uses the microphone when you choose Add by voice so your spoken spending details can be shown for review before saving.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>PandaPay uses Face ID to unlock the app when you enable app lock. Your biometric data stays on your device.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>PandaPay reads a contact's name and phone number only when you tap Pick from contacts while adding a friend to a shared expense. Contacts are never uploaded.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>PandaPay uses speech recognition when you choose Add by voice to transcribe spending details for your review.</string>
 	<!-- UA-8 (Chunk 32, extended): "check nearby merchants" geofencing.

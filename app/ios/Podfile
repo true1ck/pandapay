@@ -125,6 +125,9 @@ post_install do |installer|
           'PERMISSION_MICROPHONE=1',
           'PERMISSION_NOTIFICATIONS=1',
           'PERMISSION_LOCATION=1',
+          # Shared expenses: "Pick from contacts". Without this the contacts
+          # strategy is compiled out and request() reports denied with no prompt.
+          'PERMISSION_CONTACTS=1',
         ]).uniq
       end
     end

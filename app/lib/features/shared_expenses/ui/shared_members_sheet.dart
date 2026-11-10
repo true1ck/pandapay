@@ -3,7 +3,6 @@ import '../storage/shared_store.dart'
     show SharedCommandState, SharedNameException;
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 import '../../../app/design/app_theme.dart';
@@ -750,19 +749,7 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
 
   Future<(String, String)?> _pickContact() async {
     try {
-      final status = await Permission.contacts.request();
-      if (!status.isGranted) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                "Contacts access was not granted. You can still type a name and number.",
-              ),
-            ),
-          );
-        }
-        return null;
-      }
+      if (!await sharedEnsureContactsAccess(context)) return null;
       final picked = await FlutterContacts.native.showPicker(
         properties: {ContactProperty.name, ContactProperty.phone},
       );
