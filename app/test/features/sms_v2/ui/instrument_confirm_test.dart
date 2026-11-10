@@ -101,6 +101,31 @@ void main() {
     namespace: _namespace,
   ).due(DateTime.now()).where((i) => i.kind == 'instrument').length;
 
+  test('confirming a bank account is a local write that needs no rule bundle '
+      'and no ledger re-projection', () {
+    store.upsert(_instrument(_bankId, kind: InstrumentKind.bankAccount));
+    final fast = InstrumentActions(
+      financial: financial,
+      namespace: _namespace,
+    );
+
+    expect(fast.confirm(_bankId), isNull);
+
+    expect(store.get(_bankId)!.status, InstrumentStatus.confirmed);
+    expect(queuedInstruments(), 1);
+  });
+
+  test('rejecting still needs the rule bundle', () {
+    store.upsert(_instrument(_bankId, kind: InstrumentKind.bankAccount));
+    final fast = InstrumentActions(
+      financial: financial,
+      namespace: _namespace,
+    );
+
+    expect(() => fast.reject(_bankId), throwsStateError);
+    expect(store.get(_bankId)!.status, InstrumentStatus.detected);
+  });
+
   test('a credit card with no wallet card is not confirmed yet', () {
     store.upsert(_instrument(_creditId));
 

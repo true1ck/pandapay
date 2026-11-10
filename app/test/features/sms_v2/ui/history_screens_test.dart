@@ -114,6 +114,12 @@ void main() {
     }
     await show(const FoundInstrumentsScreen());
     expect(find.text('Bank accounts'), findsOneWidget);
-    expect(find.text('Confirm'), findsWidgets);
+    // Accounts with an SMS balance are confirmed on their own; the rest ask.
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is Text && (w.data == 'Confirm' || w.data == 'Confirmed'),
+      ),
+      findsWidgets,
+    );
   });
 }

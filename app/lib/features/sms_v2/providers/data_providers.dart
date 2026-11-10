@@ -19,7 +19,7 @@ final merchantPromptMinimumOccurrencesProvider = Provider<int>((ref) => 2);
 final merchantPromptLargeAmountProvider = Provider<int>((ref) => 200000);
 
 final instrumentsProvider = FutureProvider<List<Instrument>>((ref) async {
-  return (await ref.watch(smsV2LedgerReadModelProvider.future)).instruments;
+  return ref.watch(liveInstrumentsProvider.future);
 });
 
 final eventsProvider = FutureProvider<List<Event>>((ref) async {

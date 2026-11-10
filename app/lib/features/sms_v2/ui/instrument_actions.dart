@@ -18,12 +18,16 @@ class InstrumentActions {
   const InstrumentActions({
     required this.financial,
     required this.namespace,
-    required this.bundle,
+    this.bundle,
     this.catalogue = const [],
   });
   final FinancialStore financial;
   final String namespace;
-  final RuleBundle bundle;
+
+  /// Needed only when a choice changes the ledger (rejecting an account, or
+  /// renaming one). Confirming does not touch the ledger, so callers may pass
+  /// null and skip loading the rule bundle.
+  final RuleBundle? bundle;
   final List<CardProduct> catalogue;
 
   /// Confirms [id] as the user's own.
@@ -96,7 +100,33 @@ class InstrumentActions {
       InstrumentStore(financial.database.db, namespace: namespace).get(id) ??
       (throw ArgumentError('Instrument is not in this account'));
 
-  void _write(Instrument instrument) {
+  /// Only a rejected account changes what the ledger shows (its movements are
+  /// hidden). Detected -> confirmed, or attaching a wallet card, changes no
+  /// ledger row, so it must not re-project the whole history on the UI thread.
+  void _write(Instrument instrument, {bool? reproject}) {
+    final previous = InstrumentStore(
+      financial.database.db,
+      namespace: namespace,
+    ).get(instrument.instrumentId);
+    final full =
+        reproject ??
+        (previous == null ||
+            previous.status == InstrumentStatus.rejected ||
+            instrument.status == InstrumentStatus.rejected ||
+            previous.displayName != instrument.displayName);
+    if (!full) {
+      financial.batch(() {
+        final db = financial.database.db;
+        InstrumentStore(db, namespace: namespace).upsert(instrument);
+        OutboxStore(
+          db,
+          namespace: namespace,
+        ).enqueue('instrument', instrument.instrumentId, instrument.toJson());
+      });
+      return;
+    }
+    final bundle = this.bundle;
+    if (bundle == null) throw StateError('No verified rules');
     final db = financial.database.db;
     financial.batch(() {
       db.execute('SAVEPOINT sms_v2_instrument_choice');

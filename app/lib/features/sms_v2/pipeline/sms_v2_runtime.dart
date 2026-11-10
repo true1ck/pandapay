@@ -210,6 +210,16 @@ class SmsV2Runtime {
       issuerSlugOf: cardIssuerSlugFromCatalogue(catalogue),
       bankAccounts: const [],
     );
+    // Accounts already stored with an SMS balance are surely the user's own;
+    // confirm them once so only the doubtful ones are left to ask about.
+    for (final i in instrumentStore.list(
+      status: InstrumentStatus.detected,
+      kind: InstrumentKind.bankAccount,
+    )) {
+      if (isSureOwnAccount(i)) {
+        instrumentStore.upsert(i.copyWith(status: InstrumentStatus.confirmed));
+      }
+    }
     final session = ++_captureSessions;
     for (var start = 0; start < messages.length; start += 200) {
       _checkAccount();

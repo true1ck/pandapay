@@ -11,6 +11,7 @@ import '../../../app/design/widgets.dart';
 import '../../../app/providers.dart' as app;
 import '../../cards/card_picker_screen.dart';
 import '../instruments/card_linker.dart';
+import '../ledger/providers.dart' show instrumentChoiceRevisionProvider;
 import '../providers/data_providers.dart';
 import '../providers/runtime_provider.dart';
 import 'instrument_actions.dart';
@@ -36,14 +37,19 @@ class FoundInstrumentsScreen extends ConsumerWidget {
   ) async {
     final namespace = ref.read(app.cacheNamespaceProvider);
     try {
-      final runtime = await ref.read(smsV2RuntimeProvider.future);
-      final bundle = await runtime?.activeBundle();
+      // Confirming changes no ledger row, so it needs neither the rule bundle
+      // nor a ledger re-projection. Rejecting and renaming still do.
+      RuleBundle? bundle;
+      if (action != 'confirm') {
+        final runtime = await ref.read(smsV2RuntimeProvider.future);
+        bundle = await runtime?.activeBundle();
+        if (bundle == null) throw StateError('No verified rules');
+      }
       final cache = await ref.read(app.responseCacheProvider.future);
       if (!context.mounted ||
           namespace != ref.read(app.cacheNamespaceProvider)) {
         return;
       }
-      if (bundle == null) throw StateError('No verified rules');
       final actions = InstrumentActions(
         financial: cache.financialStore,
         namespace: namespace,
@@ -115,7 +121,10 @@ class FoundInstrumentsScreen extends ConsumerWidget {
           }
         }
       }
-      ref.invalidate(instrumentsProvider);
+      // Local first: the choice is already saved on the phone; show it on this
+      // list and on Home right now. Syncing to the server happens later from
+      // the outbox, never while the user waits.
+      ref.read(instrumentChoiceRevisionProvider.notifier).state++;
     } catch (error) {
       if (context.mounted) smsShowError(context, error);
     }

@@ -14,7 +14,9 @@ typedef ManualBalances = Map<String, ({Money balance, DateTime updatedAt})>;
 /// registry. It returns today's [BankAccountSummary], with the same fields
 /// the local store fills in, so those screens render unchanged.
 ///
-/// - Only `bank_account` instruments the user has not rejected or archived.
+/// - Only `bank_account` instruments the user has confirmed. Auto-detection
+///   can be wrong (a counterparty's account, a UPI handle), so a detected
+///   account waits on "Accounts and cards we found" and is not listed here.
 /// - `accountLast4` is the last 4 digits of the mask. A 2 or 3 digit mask has
 ///   no last 4 and is left out.
 /// - `issuerSlug` and `issuerShortName` use today's bank code and label
@@ -31,8 +33,7 @@ List<BankAccountSummary> bankAccountSummariesFromInstruments(
       [
         for (final i in instruments)
           if (i.kind == InstrumentKind.bankAccount &&
-              (i.status == InstrumentStatus.detected ||
-                  i.status == InstrumentStatus.confirmed) &&
+              i.status == InstrumentStatus.confirmed &&
               i.maskDigits != null &&
               i.maskDigits!.length >= 4)
             i,

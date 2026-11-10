@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pandapay_domain/sms_v2.dart' show Instrument;
 import 'package:pandapay_domain/sms_v2_ledger.dart';
 import 'package:sqlite3/sqlite3.dart';
 import '../../../app/providers.dart' as app;
@@ -194,6 +195,27 @@ final _ledgerModelSourceProvider = FutureProvider<LedgerModelSource>((
     });
   }
   return source;
+});
+
+/// Shows a just-saved instrument choice everywhere (Home accounts, the found
+/// list) at once, without re-reading the ledger.
+/// Bumped after the user's confirm/reject/rename is saved on the phone.
+final instrumentChoiceRevisionProvider = StateProvider<int>((ref) => 0);
+
+/// The instruments straight from the local table (a handful of rows), so a
+/// confirm shows up at once. It deliberately does NOT go through the ledger
+/// model: swapping the model rebuilt every report (spend, insights, activity,
+/// ~40 consumers) for a change that alters none of them, which was the lag.
+final liveInstrumentsProvider = FutureProvider<List<Instrument>>((ref) async {
+  final namespace = ref.watch(app.cacheNamespaceProvider);
+  final cache = await ref.watch(app.responseCacheProvider.future);
+  ref.watch(instrumentChoiceRevisionProvider);
+  // Also follow the full model, so server sync and new SMS still refresh this.
+  ref.watch(smsV2LedgerReadModelProvider);
+  return InstrumentStore(
+    cache.financialStore.database.db,
+    namespace: namespace,
+  ).list();
 });
 
 /// One immutable account snapshot for every ledger-backed reporting surface.

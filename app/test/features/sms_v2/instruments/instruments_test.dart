@@ -83,6 +83,10 @@ BankAccountSummary _acct(
   manualBalanceUpdatedAt: manualAt,
 );
 
+List<Instrument> _confirmed(List<Instrument> all) => [
+  for (final i in all) i.copyWith(status: InstrumentStatus.confirmed),
+];
+
 void main() {
   late Database db;
   late InstrumentStore store;
@@ -411,7 +415,7 @@ void main() {
         issuerSlugOf: (_) => null,
         bankAccounts: accounts,
       );
-      final out = bankAccountSummariesFromInstruments(store.list());
+      final out = bankAccountSummariesFromInstruments(_confirmed(store.list()));
       expect(out.map((a) => a.accountLast4), ['1234', '4321']); // newest first
       final hdfc = out.first;
       expect(hdfc.issuerSlug, 'hdfc');
@@ -460,7 +464,9 @@ void main() {
           issuerSlugOf: (_) => null,
           bankAccounts: today,
         );
-        final back = bankAccountSummariesFromInstruments(store.list());
+        final back = bankAccountSummariesFromInstruments(
+          _confirmed(store.list()),
+        );
         expect(back.length, today.length);
         for (var i = 0; i < today.length; i++) {
           final a = today[i], b = back[i];
@@ -508,7 +514,7 @@ void main() {
         issuerSlug: 'axis',
         maskDigits: '123456',
         displayName: 'x',
-        status: InstrumentStatus.detected,
+        status: InstrumentStatus.confirmed,
         firstSeenAt: DateTime.utc(2026, 11, 1),
         lastSeenAt: DateTime.utc(2026, 11, 1),
         evidenceCount: 1,
@@ -517,6 +523,21 @@ void main() {
         bankAccountSummariesFromInstruments([axis]).single.accountLast4,
         '3456',
       );
+    });
+
+    test('a detected account is not listed until the user confirms it', () {
+      final detected = Instrument(
+        instrumentId: nextId(),
+        kind: InstrumentKind.bankAccount,
+        issuerSlug: 'sbi',
+        maskDigits: '2626',
+        displayName: 'x',
+        status: InstrumentStatus.detected,
+        firstSeenAt: DateTime.utc(2026, 11, 1),
+        lastSeenAt: DateTime.utc(2026, 11, 1),
+        evidenceCount: 1,
+      );
+      expect(bankAccountSummariesFromInstruments([detected]), isEmpty);
     });
 
     test(
@@ -528,7 +549,7 @@ void main() {
           issuerSlug: 'hdfc',
           maskDigits: '1234',
           displayName: 'x',
-          status: InstrumentStatus.detected,
+          status: InstrumentStatus.confirmed,
           firstSeenAt: DateTime.utc(2026, 11, 1),
           lastSeenAt: DateTime.utc(2026, 11, 1),
           evidenceCount: 1,

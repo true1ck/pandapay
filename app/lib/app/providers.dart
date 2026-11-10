@@ -3603,10 +3603,10 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
   ref,
 ) async {
   if (ref.watch(smsV2ReportingEnabledProvider)) {
-    final model = await ref.watch(smsV2LedgerReadModelProvider.future);
+    final instruments = await ref.watch(liveInstrumentsProvider.future);
     final cache = await ref.watch(responseCacheProvider.future);
     ref.watch(financialStoreRevisionProvider('manual_bank_balances'));
-    return bankAccountSummariesFromInstruments(model.instruments,
+    return bankAccountSummariesFromInstruments(instruments,
       manualBalances: cache.financialStore.manualBankBalances(ref.watch(cacheNamespaceProvider)));
   }
   var ready = false;
