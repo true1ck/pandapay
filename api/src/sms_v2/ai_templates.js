@@ -32,6 +32,13 @@ function createTemplateStore({ withUserClient }) {
         return rows.rows.map((row) => row.hash);
       });
     },
+    // Counts of the person's own layouts by state (no text), for the status bar.
+    async summary(profileId) {
+      return withUserClient(profileId, async (client) => {
+        const row = (await client.query("SELECT pandapay.sms_v2_ai_summary() AS summary")).rows[0];
+        return row?.summary || {};
+      });
+    },
     async results(profileId, cursor) {
       if (
         cursor !== null &&
@@ -71,6 +78,35 @@ function createTemplateStore({ withUserClient }) {
         };
       });
     },
+  };
+}
+
+// What the status bar in the app shows: how this phone's layouts stand with
+// the AI worker. `countedNow` says whether layouts sent now would be queued
+// (App Check passed, or the owner listed this account as a tester); when it is
+// false they are held and never reach the AI.
+function createAiStatusHandler({ store, security }) {
+  return async (req, res) => {
+    try {
+      await security.verifyAttestation(req);
+      const summary = await store.summary(req.userId);
+      const n = (key) => (Number.isInteger(summary[key]) && summary[key] > 0 ? summary[key] : 0);
+      return res.json({
+        countedNow: req.smsV2Security?.sharedLearningEligible === true,
+        eligible: summary.eligible === true,
+        total: n("total"),
+        held: n("held"),
+        queued: n("queued"),
+        working: n("working"),
+        ready: n("ready"),
+        covered: n("covered"),
+        failed: n("failed"),
+      });
+    } catch (error) {
+      if (error.code === "42501") return res.status(403).json({ error: "sms_shared_learning_consent_required" });
+      console.error("sms_v2 ai status unavailable", error.code || error.name);
+      return res.status(503).json({ error: "ai_status_unavailable" });
+    }
   };
 }
 
@@ -131,6 +167,12 @@ function registerTemplates(
     requireSmsV2,
     requireMember,
     createTemplateHandler({ store, security: hooks.security }),
+  );
+  app.get(
+    "/sms/v2/ai-status",
+    requireSmsV2,
+    requireMember,
+    createAiStatusHandler({ store, security: hooks.security }),
   );
   hooks.aiResultsSince = (profileId, cursor) =>
     store.results(profileId, cursor);
@@ -376,6 +418,7 @@ module.exports = {
   redactionError,
   createTemplateStore,
   createTemplateHandler,
+  createAiStatusHandler,
   registerTemplates,
   registerPrivateTemplateRoutes,
 };

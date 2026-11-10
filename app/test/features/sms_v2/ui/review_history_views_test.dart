@@ -9,6 +9,7 @@ import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/response_cache.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/sms_v2/providers/ai_status_provider.dart';
+import 'package:pandapay/features/sms_v2/sync/ai_server_status.dart';
 import 'package:pandapay/features/sms_v2/storage/schema.dart';
 import 'package:pandapay/features/sms_v2/ui/review_history_views.dart';
 import 'package:pandapay_domain/pandapay_domain.dart' show Money;
@@ -321,17 +322,228 @@ void main() {
     expect(find.textContaining('Nothing filed by Gemini yet'), findsOneWidget);
   });
 
-  testWidgets('the AI header stays hidden with nothing to report', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(
-          home: Scaffold(body: AiProgressHeader(openItems: 3)),
-        ),
-      ),
+  group('the Gemini status bar', () {
+    const counted = AiServerStatus(countedNow: true, eligible: true);
+
+    test(
+      'says it is unavailable, never an error, when the server is unreachable',
+      () {
+        final s = geminiBarState(
+          server: null,
+          local: const AiReviewStatus(),
+          unreadOnPhone: 0,
+          openItems: 4,
+        );
+        expect(s.tone, GeminiTone.unknown);
+        expect(s.title, 'Gemini status unavailable');
+        expect(s.detail, contains('4 still need you'));
+        expect(s.progress, isFalse);
+      },
     );
-    await tester.pump();
-    expect(find.byKey(const Key('ai-progress-header')), findsNothing);
+
+    test(
+      'offline, a format the phone already sent still shows as checking',
+      () {
+        final s = geminiBarState(
+          server: null,
+          local: const AiReviewStatus(checkingTemplates: {'a', 'b'}),
+          unreadOnPhone: 0,
+          openItems: 1,
+        );
+        expect(s.tone, GeminiTone.ok);
+        expect(s.title, 'Gemini is checking 2 message formats');
+        expect(s.progress, isTrue);
+      },
+    );
+
+    test(
+      'a phone that is not counted says Gemini is not receiving its formats',
+      () {
+        final s = geminiBarState(
+          server: const AiServerStatus(
+            countedNow: false,
+            eligible: false,
+            total: 12,
+            held: 12,
+          ),
+          local: const AiReviewStatus(),
+          unreadOnPhone: 0,
+          openItems: 0,
+        );
+        expect(s.tone, GeminiTone.warn);
+        expect(s.title, 'Gemini is not receiving your message formats');
+        expect(s.detail, contains('12 formats held back'));
+        expect(s.detail, contains('tester'));
+      },
+    );
+
+    test('a not-counted phone with no formats yet still warns', () {
+      final s = geminiBarState(
+        server: const AiServerStatus(countedNow: false, eligible: false),
+        local: null,
+        unreadOnPhone: 0,
+        openItems: 0,
+      );
+      expect(s.tone, GeminiTone.warn);
+      expect(s.detail, contains('would be held back'));
+    });
+
+    test(
+      'layouts waiting or being drafted show as working, with a moving bar',
+      () {
+        final s = geminiBarState(
+          server: const AiServerStatus(
+            countedNow: true,
+            eligible: true,
+            total: 6,
+            queued: 2,
+            working: 1,
+            ready: 2,
+            failed: 1,
+          ),
+          local: null,
+          unreadOnPhone: 0,
+          openItems: 0,
+        );
+        expect(s.tone, GeminiTone.ok);
+        expect(s.title, 'Gemini is working');
+        expect(s.detail, '1 drafting · 2 waiting · 2 done · 1 failed');
+        expect(s.progress, isTrue);
+      },
+    );
+
+    test(
+      'an older queued layout still shows as working on a phone not counted now',
+      () {
+        final s = geminiBarState(
+          server: const AiServerStatus(
+            countedNow: false,
+            eligible: true,
+            total: 1,
+            queued: 1,
+          ),
+          local: null,
+          unreadOnPhone: 0,
+          openItems: 0,
+        );
+        expect(s.title, 'Gemini is working');
+      },
+    );
+
+    test(
+      'when everything finished and some failed, it warns with the failures',
+      () {
+        final s = geminiBarState(
+          server: const AiServerStatus(
+            countedNow: true,
+            eligible: true,
+            total: 3,
+            ready: 2,
+            failed: 1,
+          ),
+          local: null,
+          unreadOnPhone: 0,
+          openItems: 0,
+        );
+        expect(s.tone, GeminiTone.warn);
+        expect(s.title, 'Gemini could not draft 1 format');
+      },
+    );
+
+    test('on and idle: nothing sent yet, and all done', () {
+      expect(
+        geminiBarState(
+          server: counted,
+          local: null,
+          unreadOnPhone: 0,
+          openItems: 0,
+        ).detail,
+        'No unreadable message formats have been sent yet.',
+      );
+      final s = geminiBarState(
+        server: const AiServerStatus(
+          countedNow: true,
+          eligible: true,
+          total: 4,
+          ready: 3,
+          covered: 1,
+        ),
+        local: null,
+        unreadOnPhone: 0,
+        openItems: 0,
+      );
+      expect(s.title, 'Gemini is on');
+      expect(s.detail, '4 formats sent · 4 done · 0 held back');
+      expect(s.progress, isFalse);
+    });
+
+    test('the server reply is read defensively', () {
+      final s = AiServerStatus.fromJson({
+        'countedNow': true,
+        'eligible': 'yes',
+        'total': -2,
+        'held': 1.5,
+        'ready': 3,
+      });
+      expect(s.countedNow, isTrue);
+      expect(s.eligible, isFalse);
+      expect(s.total, 0);
+      expect(s.held, 0);
+      expect(s.ready, 3);
+    });
+
+    Future<void> pumpBar(WidgetTester tester, AiServerStatus? server) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            geminiServerStatusProvider.overrideWith((ref) async => server),
+            aiReviewStatusProvider.overrideWith(
+              (ref) async => const AiReviewStatus(),
+            ),
+            aiUnreadCountProvider.overrideWith((ref) async => 0),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(body: GeminiStatusBar(openItems: 2)),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+    }
+
+    testWidgets('shows the warning for a phone that is not counted', (
+      tester,
+    ) async {
+      await pumpBar(
+        tester,
+        const AiServerStatus(
+          countedNow: false,
+          eligible: false,
+          total: 5,
+          held: 5,
+        ),
+      );
+      expect(find.byKey(const Key('gemini-status-bar')), findsOneWidget);
+      expect(
+        find.text('Gemini is not receiving your message formats'),
+        findsOneWidget,
+      );
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+    });
+
+    testWidgets('shows a moving bar while Gemini works', (tester) async {
+      await pumpBar(
+        tester,
+        const AiServerStatus(
+          countedNow: true,
+          eligible: true,
+          total: 2,
+          working: 1,
+          queued: 1,
+        ),
+      );
+      expect(find.text('Gemini is working'), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    });
   });
 }

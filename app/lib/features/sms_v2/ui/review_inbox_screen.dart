@@ -432,10 +432,10 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
                 ),
               ),
             ),
-            if (_tab == 0 || _tab == 2)
-              AiProgressHeader(
-                openItems: (review.valueOrNull?.length ?? 0) - aiItems.length,
-              ),
+            // Always shown, on every tab: whether Gemini is working or not.
+            GeminiStatusBar(
+              openItems: (review.valueOrNull?.length ?? 0) - aiItems.length,
+            ),
             Expanded(
               child: _tab == 3
                   ? const SettledList(history: false)

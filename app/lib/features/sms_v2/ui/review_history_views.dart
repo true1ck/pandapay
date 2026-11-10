@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -12,7 +13,9 @@ import '../../../app/providers.dart' as app;
 import '../../../data/user_cards_repository.dart';
 import '../providers/ai_status_provider.dart';
 import '../providers/data_providers.dart';
+import '../providers/runtime_provider.dart';
 import '../storage/schema.dart';
+import '../sync/ai_server_status.dart';
 import '../ledger/providers.dart';
 import 'screen_parts.dart';
 
@@ -375,24 +378,172 @@ class SettledCard extends ConsumerWidget {
   }
 }
 
-/// What the AI check is doing right now, over the Needs review list: how many
-/// message formats were sent, how many are waiting, how many were read.
-class AiProgressHeader extends ConsumerWidget {
-  const AiProgressHeader({super.key, required this.openItems});
+/// How the Gemini status bar looks.
+enum GeminiTone {
+  /// Working, or idle and healthy.
+  ok,
+
+  /// Not reaching Gemini (held back, failures): something to act on.
+  warn,
+
+  /// Not known (offline, no answer yet).
+  unknown,
+}
+
+class GeminiBarState {
+  const GeminiBarState({
+    required this.tone,
+    required this.title,
+    required this.detail,
+    this.progress = false,
+  });
+  final GeminiTone tone;
+  final String title;
+  final String detail;
+
+  /// Show a moving bar: layouts are waiting or being drafted right now.
+  final bool progress;
+}
+
+/// Turns what the server reports (and, when it cannot be reached, what the
+/// phone itself knows) into one honest line for the bar. Pure, so every case is
+/// tested.
+GeminiBarState geminiBarState({
+  required AiServerStatus? server,
+  required AiReviewStatus? local,
+  required int unreadOnPhone,
+  required int openItems,
+}) {
+  String plural(int n, String one, [String? many]) =>
+      '$n ${n == 1 ? one : (many ?? '${one}s')}';
+  if (server == null) {
+    final waiting = local?.checkingTemplates.length ?? 0;
+    final read = local?.resolved.length ?? 0;
+    if (waiting > 0) {
+      return GeminiBarState(
+        tone: GeminiTone.ok,
+        title: 'Gemini is checking ${plural(waiting, 'message format')}',
+        detail:
+            'From this phone: $waiting waiting · $read read by AI · '
+            '$openItems still need you',
+        progress: true,
+      );
+    }
+    return GeminiBarState(
+      tone: GeminiTone.unknown,
+      title: 'Gemini status unavailable',
+      detail:
+          'Could not reach the server. This phone knows: $read read by AI'
+          '${unreadOnPhone > 0 ? ' · $unreadOnPhone could not be read' : ''}'
+          ' · $openItems still need you',
+    );
+  }
+  if (!server.countedNow && server.inProgress == 0) {
+    return GeminiBarState(
+      tone: GeminiTone.warn,
+      title: 'Gemini is not receiving your message formats',
+      detail: server.held > 0
+          ? '${plural(server.held, 'format')} held back: this phone is not '
+                'counted for AI drafts (no App Check, not a listed tester). '
+                'Ask the owner to add it as a tester.'
+          : 'This phone is not counted for AI drafts, so formats sent now '
+                'would be held back. Ask the owner to add it as a tester.',
+    );
+  }
+  if (server.inProgress > 0) {
+    return GeminiBarState(
+      tone: GeminiTone.ok,
+      title: 'Gemini is working',
+      detail:
+          '${server.working} drafting · ${server.queued} waiting · '
+          '${server.ready + server.covered} done · ${server.failed} failed',
+      progress: true,
+    );
+  }
+  if (server.failed > 0) {
+    return GeminiBarState(
+      tone: GeminiTone.warn,
+      title: 'Gemini could not draft ${plural(server.failed, 'format')}',
+      detail:
+          '${server.ready + server.covered} done · ${server.failed} failed'
+          '${server.held > 0 ? ' · ${server.held} held back' : ''}',
+    );
+  }
+  if (server.total == 0) {
+    return const GeminiBarState(
+      tone: GeminiTone.ok,
+      title: 'Gemini is on',
+      detail: 'No unreadable message formats have been sent yet.',
+    );
+  }
+  return GeminiBarState(
+    tone: GeminiTone.ok,
+    title: 'Gemini is on',
+    detail:
+        '${plural(server.total, 'format')} sent · '
+        '${server.ready + server.covered} done · ${server.held} held back',
+  );
+}
+
+/// The server's view of this phone's formats; refreshed while the bar is shown.
+final geminiServerStatusProvider = FutureProvider.autoDispose<AiServerStatus?>((
+  ref,
+) async {
+  final runtime = await ref.watch(smsV2RuntimeProvider.future);
+  if (runtime == null) return null;
+  return fetchAiServerStatus(
+    client: runtime.client,
+    baseUri: runtime.baseUri,
+    headers: runtime.headers,
+  );
+});
+
+/// A bar at the top of Needs review that says whether Gemini is working: how
+/// many formats it is drafting or waiting on, how many are done or failed, and
+/// whether this phone's formats are reaching it at all.
+class GeminiStatusBar extends ConsumerStatefulWidget {
+  const GeminiStatusBar({super.key, required this.openItems});
   final int openItems;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final status = ref.watch(aiReviewStatusProvider).valueOrNull;
-    if (status == null) return const SizedBox.shrink();
-    final waiting = status.checkingTemplates.length;
-    final read = status.resolved.length;
-    final unread = ref.watch(aiUnreadCountProvider).valueOrNull ?? 0;
-    if (waiting == 0 && read == 0 && unread == 0) {
-      return const SizedBox.shrink();
-    }
+  ConsumerState<GeminiStatusBar> createState() => _GeminiStatusBarState();
+}
+
+class _GeminiStatusBarState extends ConsumerState<GeminiStatusBar> {
+  Timer? _refresh;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) ref.invalidate(geminiServerStatusProvider);
+    });
+  }
+
+  @override
+  void dispose() {
+    _refresh?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final server = ref.watch(geminiServerStatusProvider);
+    final state = geminiBarState(
+      // Keep the last answer on screen while a refresh is in flight.
+      server: server.valueOrNull,
+      local: ref.watch(aiReviewStatusProvider).valueOrNull,
+      unreadOnPhone: ref.watch(aiUnreadCountProvider).valueOrNull ?? 0,
+      openItems: widget.openItems,
+    );
+    final warn = state.tone == GeminiTone.warn;
+    final color = switch (state.tone) {
+      GeminiTone.ok => BambooInk.jade,
+      GeminiTone.warn => BambooInk.clayInk,
+      GeminiTone.unknown => BambooInk.ink500,
+    };
     return Padding(
-      key: const Key('ai-progress-header'),
+      key: const Key('gemini-status-bar'),
       padding: const EdgeInsets.fromLTRB(
         AppSpace.lg,
         0,
@@ -402,33 +553,43 @@ class AiProgressHeader extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: BambooInk.paperMuted,
+          color: warn ? BambooInk.warningBg : BambooInk.paperMuted,
           borderRadius: BorderRadius.circular(AppRadius.md),
+          border: warn ? Border.all(color: BambooInk.warningBorder) : null,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              waiting > 0
-                  ? 'AI is checking $waiting message format${waiting == 1 ? '' : 's'}'
-                  : 'AI review finished',
-              style: BambooFonts.ui(
-                13.5,
-                weight: FontWeight.w700,
-                color: BambooInk.ink900,
-              ),
+            Row(
+              children: [
+                Icon(
+                  warn ? Icons.error_outline_rounded : Icons.auto_awesome,
+                  size: 16,
+                  color: color,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    state.title,
+                    style: BambooFonts.ui(
+                      13.5,
+                      weight: FontWeight.w700,
+                      color: warn ? BambooInk.clayInk : BambooInk.ink900,
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 4),
             Text(
-              [
-                '$waiting waiting',
-                '$read read by AI',
-                if (unread > 0) '$unread could not be read',
-                '$openItems still need you',
-              ].join(' · '),
-              style: BambooFonts.ui(12.5, color: BambooInk.ink700),
+              state.detail,
+              style: BambooFonts.ui(
+                12.5,
+                color: warn ? BambooInk.clayInk : BambooInk.ink700,
+                height: 1.4,
+              ),
             ),
-            if (waiting > 0) ...[
+            if (state.progress) ...[
               const SizedBox(height: 8),
               const LinearProgressIndicator(minHeight: 3),
             ],

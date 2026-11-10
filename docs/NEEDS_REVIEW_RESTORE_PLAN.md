@@ -44,3 +44,19 @@ Tab order: Needs review, AI suggested (when present), Auto-resolved, History, Di
 1. Is the History tab meant to include dismissed items, or only items settled with a category or edit?
 2. How many days back should Auto-resolved and History reach (proposal: 90 days, 200 rows per tab)?
 3. Should "Move to Needs review" also ask Gemini again, or only re-queue it for the person?
+
+## Gemini status bar (added 10 Nov 2026)
+
+Needs review now shows a bar on every tab that says whether Gemini is working.
+The phone asks `GET /sms/v2/ai-status` (counts only, from the new
+`pandapay.sms_v2_ai_summary()` function; migration `20261120020000`) every 30 s
+while the screen is open, and shows one of: not receiving your formats (this
+phone is not counted: no App Check, not a listed tester, so layouts are held and
+never queued), working (N drafting, N waiting, N done, N failed), could not
+draft, on and idle, or status unavailable (server unreachable; falls back to
+what the phone knows).
+
+Why it exists: on 10 Nov the owner's phone had sent 12 formats that were all
+stored `held`, because the account was not in `sms_v2_testers` and the sideloaded
+build has no App Check token. `sms_v2_template_results` also returns nothing to a
+phone that is not counted, so nothing could ever come back and nothing said so.
