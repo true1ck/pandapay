@@ -1,4 +1,10 @@
 'use strict';
+// src/auth.js loads config, which refuses to start without these; CI sets neither.
+process.env.API_DATABASE_URL ||= 'postgres://unused:unused@localhost:5432/pandapay';
+process.env.JWT_ACCESS_SECRET ||= 'ci_only_not_a_real_secret';
+// src/auth.js loads the server config, which wants these (the CI job has no .env).
+process.env.JWT_ACCESS_SECRET ||= 'ci_only_not_a_real_secret';
+process.env.DATABASE_URL ||= 'postgresql://ci:ci@127.0.0.1:5432/ci_never_connected';
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const {normalizePhone,inviteCredentials,verifiedPhoneHash}=require('../src/shared_expenses/invitations');

@@ -16,6 +16,10 @@ const SETTINGS = Object.freeze({
   signals_min_distinct_users: { type: 'int', default: 1, min: 1, max: 20 },
   // OFF by default. On: a phone in sms_v2_testers counts as eligible without App Check (free Apple accounts cannot attest).
   testers_count_without_attestation: { type: 'bool', default: false },
+  // OFF by default. On: every registered member who agreed to share counts as eligible for AI drafts and the Learning page
+  // without App Check, with no list of accounts (a sideloaded or Staging build, a failed attestation). Turn it off before a
+  // public launch so only attested phones count. The per-person daily cap and the monthly AI budget still apply.
+  members_count_without_attestation: { type: 'bool', default: false },
   signals_retention_days: { type: 'int', default: 180, min: 30, max: 730 },
   intake_enabled: { type: 'bool', default: true }, // false: phones' layouts and signals are refused with 503 learning_paused
   ai_enabled: { type: 'bool', default: true },

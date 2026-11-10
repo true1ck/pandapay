@@ -114,3 +114,21 @@ The admin Corrections list also shows, for each layout, how many **different peo
 wrong (category, shop name, payment method, type, amount, date, missed SMS), and the totals of shared against
 private cases. Patterns many people hit come first. Account ids are never part of that answer.
 
+
+## Rolling AI drafts out to every member (10 Nov 2026)
+
+`testers_count_without_attestation` needs an account in a table. To roll the AI drafts out to **everyone who has
+registered and agreed to share**, use the console setting `members_count_without_attestation` (Settings tab, default
+**off**; migration `20261120030000`). On: every member counts as eligible like an attested phone, with no list of
+accounts, so a sideloaded or Staging build, or a phone whose attestation failed, still gets its layouts queued and
+its results back. Off: only attested phones and listed testers count, as before.
+
+- Consent still decides: a member who did not agree to share is refused either way.
+- The per-person daily cap (`templates_per_user_per_day`) and the monthly AI budget (`ai_monthly_budget_usd`) still
+  apply, so the cost is bounded.
+- The server remembers each account's answer for a minute, so the switch takes effect within a minute.
+- It also lets unattested members count toward the Learning page and shared cases. Turn it off before a public
+  launch so only attested phones count (and raise `signals_min_distinct_users`).
+- Layouts an uncounted phone sent earlier are stored `held` and never resent. When the phone sees "counted now, N
+  held" (`GET /sms/v2/ai-status`), it forgets what it sent and sends them again, at most once every 6 hours
+  (`app/lib/features/sms_v2/sync/template_resend.dart`). Nothing is edited by hand per account.
