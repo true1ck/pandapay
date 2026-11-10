@@ -104,6 +104,15 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+    # Xcode 27 refuses a deployment target below 15.0 ("supported range is
+    # 15.0 to 27.2"), and many pods still declare 9.0 to 13.0. Raise only
+    # those to this app's own minimum; a pod that asks for more keeps it.
+    target.build_configurations.each do |config|
+      current = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET']
+      if current.nil? || Gem::Version.new(current.to_s) < Gem::Version.new('15.5')
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.5'
+      end
+    end
     # permission_handler_apple compiles each strategy out by default. Usage
     # descriptions alone do not enable native prompts. Keep these definitions
     # on its pod in every configuration, including signed Profile builds.
