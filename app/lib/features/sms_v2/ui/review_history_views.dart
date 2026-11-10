@@ -16,6 +16,7 @@ import '../providers/data_providers.dart';
 import '../providers/runtime_provider.dart';
 import '../storage/schema.dart';
 import '../sync/ai_server_status.dart';
+import '../sync/template_resend.dart';
 import '../ledger/providers.dart';
 import 'screen_parts.dart';
 
@@ -491,11 +492,24 @@ final geminiServerStatusProvider = FutureProvider.autoDispose<AiServerStatus?>((
 ) async {
   final runtime = await ref.watch(smsV2RuntimeProvider.future);
   if (runtime == null) return null;
-  return fetchAiServerStatus(
+  final status = await fetchAiServerStatus(
     client: runtime.client,
     baseUri: runtime.baseUri,
     headers: runtime.headers,
   );
+  if (status != null) {
+    // Counted now but layouts still held from before: send them again once.
+    final cache = await ref.read(app.responseCacheProvider.future);
+    final db = cache.financialStore.database.db;
+    SmsV2Schema.ensure(db);
+    resendHeldTemplates(
+      db,
+      namespace: ref.read(app.cacheNamespaceProvider),
+      status: status,
+      now: DateTime.now(),
+    );
+  }
+  return status;
 });
 
 /// A bar at the top of Needs review that says whether Gemini is working: how
