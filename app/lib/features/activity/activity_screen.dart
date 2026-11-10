@@ -1605,6 +1605,9 @@ class _SearchFieldState extends ConsumerState<_SearchField> {
       controller: _controller,
       onChanged: _onChanged,
       textInputAction: TextInputAction.search,
+      // Tapping anywhere outside the field (or pressing Search) closes the keyboard.
+      onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+      onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
       style: BambooFonts.ui(14.5, color: BambooInk.ink900),
       decoration: InputDecoration(
         hintText: 'Search merchant or note',

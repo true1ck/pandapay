@@ -450,8 +450,12 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.light,
-      builder: (context, child) =>
-          _scaledTextMediaQuery(context, child, textScale),
+      // Tapping any non-interactive area closes the on-screen keyboard, app-wide.
+      builder: (context, child) => GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: _scaledTextMediaQuery(context, child, textScale),
+      ),
       routerConfig: ref.watch(goRouterProvider),
     );
   }
