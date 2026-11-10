@@ -118,6 +118,10 @@ class NotificationGate {
     String severity = 'info',
     String? deepLink,
     DateTime? now,
+
+    /// Fixed OS notification id. A later notification with the same id
+    /// replaces the earlier one instead of stacking beside it.
+    int? notificationId,
   }) async {
     final prefs = await ref.read(notificationPreferencesProvider.future);
     if (prefs == null) return false;
@@ -153,7 +157,7 @@ class NotificationGate {
     try {
       await _ensurePluginInitialized();
       await notifications.show(
-        dedupeKey.hashCode,
+        notificationId ?? dedupeKey.hashCode,
         title,
         body,
         NotificationBranding.alertDetails,

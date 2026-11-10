@@ -394,6 +394,7 @@ class _RecordingGate extends NotificationGate {
     String severity = 'info',
     String? deepLink,
     DateTime? now,
+    int? notificationId,
   }) async {
     fired.add({
       'category': category,

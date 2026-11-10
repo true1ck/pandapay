@@ -23,6 +23,7 @@ class _RecordingGate extends NotificationGate {
     String severity = 'info',
     String? deepLink,
     DateTime? now,
+    int? notificationId,
   }) async {
     fired.add((title: title, body: body, key: dedupeKey, category: category));
     return true;

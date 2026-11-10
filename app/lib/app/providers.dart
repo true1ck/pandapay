@@ -6618,7 +6618,9 @@ final backgroundAlertsLifecycleProvider = Provider<void>((ref) {
 final notificationTriggerRunnerProvider = Provider<NotificationTriggerRunner>((
   ref,
 ) {
-  return NotificationTriggerRunner(ref);
+  final runner = NotificationTriggerRunner(ref);
+  ref.onDispose(runner.dispose);
+  return runner;
 });
 
 /// Runs the B3 trigger sweep on app foreground/resume, and whenever
@@ -6633,7 +6635,13 @@ final notificationTriggerLifecycleProvider = Provider<void>((ref) {
   final runner = ref.read(notificationTriggerRunnerProvider);
   final startup = ref.read(startupWorkSchedulerProvider);
 
-  final listener = AppLifecycleListener(onResume: () => runner.runAll());
+  final listener = AppLifecycleListener(
+    onResume: () {
+      runner.onForegrounded();
+      unawaited(runner.runAll());
+    },
+    onPause: runner.onBackgrounded,
+  );
   ref.onDispose(listener.dispose);
 
   ref.listen<AsyncValue<List<UserCard>>>(userCardsProvider, (previous, next) {
@@ -6728,6 +6736,13 @@ class SmsAutoImportController {
   bool _disposed = false;
   bool _uploadAgainRequested = false;
   Future<void>? _starting;
+
+  /// True while an inbox scan, its continuation slices or an upload pass is
+  /// still running — i.e. the import is not finished yet.
+  bool get isBusy =>
+      _activeInboxCapture != null ||
+      _inboxContinuation != null ||
+      _activeInboxSync != null;
 
   /// iOS supplies the evidence through Shortcuts; everything after validation
   /// joins the same account-scoped capture owner as the Android inbox.

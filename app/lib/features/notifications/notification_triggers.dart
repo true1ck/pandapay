@@ -1,7 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/widgets.dart'
+    show AppLifecycleState, WidgetsBinding;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/design/display_text.dart';
 import '../../app/providers.dart';
@@ -10,6 +15,10 @@ import '../../data/user_cards_repository.dart' show UserCard;
 import '../cards/cap_progress.dart';
 import '../cards/next_best_card.dart';
 import '../insights/payments_due_screen.dart' show paymentsDueProvider;
+import '../sms_v2/providers/runtime_provider.dart' show smsV2RuntimeProvider;
+import '../sms_v2/storage/schema.dart' show SmsV2Schema;
+import '../sms_v2/storage/sync_state_store.dart' show SyncStateStore;
+import '../sms_v2/sync/ai_status.dart' show AiStatusReader;
 
 /// One cap notification, ready for `NotificationGate.fire`.
 class CapAlert {
@@ -392,23 +401,135 @@ class NotificationTriggerRunner {
     );
   }
 
+  static const _lastNotifiedKey = 'needs_review_last_notified_count_v1';
+  static const _needsReviewNotificationId = 0x4e52;
+
+  /// How often the background watch re-checks, and how long it keeps trying
+  /// before it tells the user anyway (e.g. an AI layout that never answers).
+  static const _watchEvery = Duration(minutes: 2);
+  static const _watchGiveUp = Duration(minutes: 20);
+
+  /// The app counts as "in use" unless the OS has actually sent it to the
+  /// background. Overridable for tests.
+  @visibleForTesting
+  bool Function() isForeground = () {
+    final s = WidgetsBinding.instance.lifecycleState;
+    return s == null ||
+        s == AppLifecycleState.resumed ||
+        s == AppLifecycleState.inactive;
+  };
+
+  Timer? _watch;
+  DateTime? _watchSince;
+  bool _watchBusy = false;
+
+  /// Called when the app goes to the background: the user has stopped looking,
+  /// so this is the earliest moment a "needs review" summary is welcome.
+  void onBackgrounded() => unawaited(_tryRun(_checkNeedsReview));
+
+  void onForegrounded() => _stopWatch();
+
+  void dispose() => _stopWatch();
+
+  void _startWatch() {
+    if (_watch != null) return;
+    _watchSince = DateTime.now();
+    _watch = Timer.periodic(_watchEvery, (_) => unawaited(_watchTick()));
+  }
+
+  void _stopWatch() {
+    _watch?.cancel();
+    _watch = null;
+    _watchSince = null;
+  }
+
+  bool get _watchExpired =>
+      _watchSince != null &&
+      DateTime.now().difference(_watchSince!) > _watchGiveUp;
+
+  Future<void> _watchTick() async {
+    if (_watchBusy) return;
+    _watchBusy = true;
+    try {
+      if (isForeground()) {
+        _stopWatch();
+        return;
+      }
+      // Pull the AI's answers and finish any pending reading while the app is
+      // away, so the count we announce is the final one.
+      try {
+        final runtime = await ref.read(smsV2RuntimeProvider.future);
+        await runtime?.sync();
+      } catch (_) {}
+      await _tryRun(_checkNeedsReview);
+    } finally {
+      _watchBusy = false;
+    }
+  }
+
+  /// True once nothing is still producing review items: the inbox scan and
+  /// upload have finished, no captured message is waiting to be read, and no
+  /// unreadable layout is still with the AI.
+  Future<bool> _pipelineSettled() async {
+    if (ref.read(smsAutoImportProvider).isBusy) return false;
+    final runtime = await ref.read(smsV2RuntimeProvider.future);
+    if (runtime == null) return true;
+    if (runtime.isBusy || runtime.pendingIntake > 0) return false;
+    final cache = await ref.read(responseCacheProvider.future);
+    final db = cache.financialStore.database.db;
+    SmsV2Schema.ensure(db);
+    final reader = AiStatusReader(
+      SyncStateStore(db, namespace: ref.read(cacheNamespaceProvider)),
+    );
+    return !reader.hasChecking();
+  }
+
+  /// One "N transactions need review" notification per finished import.
+  ///
+  /// It is held back while the app is open (the badge already shows the
+  /// number there) and while the pipeline — scan, upload, Gemini drafting —
+  /// is still changing the count. Once the app is in the background it waits
+  /// for that work to settle, then sends a single notification with a fixed
+  /// id so it replaces, rather than stacks on, an earlier one. A queue that
+  /// only shrinks (the AI resolved some) never notifies again.
   Future<void> _checkNeedsReview() async {
     final count = await ref.read(needsReviewCountProvider.future);
-    if (count <= 0) return;
-    final gate = ref.read(notificationGateProvider);
-    await gate.fire(
+    final prefs = await SharedPreferences.getInstance();
+    final last = prefs.getInt(_lastNotifiedKey) ?? 0;
+    if (count <= 0) {
+      if (last != 0) await prefs.setInt(_lastNotifiedKey, 0);
+      _stopWatch();
+      return;
+    }
+    if (count <= last) {
+      // Queue shrank or is unchanged since the last announcement: lower the
+      // baseline so later growth is announced, but say nothing now.
+      if (count < last) await prefs.setInt(_lastNotifiedKey, count);
+      _stopWatch();
+      return;
+    }
+    if (isForeground()) return;
+    if (!_watchExpired && !await _pipelineSettled()) {
+      _startWatch();
+      return;
+    }
+    _stopWatch();
+    // Re-read: the count can move while we were checking the pipeline.
+    final finalCount = await ref.read(needsReviewCountProvider.future);
+    if (finalCount <= last) return;
+    final now = DateTime.now();
+    final fired = await ref.read(notificationGateProvider).fire(
       category: 'needs_review',
-      title: count == 1
+      title: finalCount == 1
           ? '1 transaction needs review'
-          : '$count transactions need review',
+          : '$finalCount transactions need review',
       body:
           'A message didn\'t match automatically — check Needs Review to fill it in.',
-      // Keyed by the count itself so a growing queue notifies again as it
-      // grows, not just once ever — see the class doc-comment for why
-      // there's no earlier/later comparison available to do this more
-      // precisely without a push/cron backend.
-      dedupeKey: 'needs_review:$count',
+      dedupeKey:
+          'needs_review:$finalCount:${now.year}-${now.month}-${now.day}',
+      notificationId: _needsReviewNotificationId,
     );
+    if (fired) await prefs.setInt(_lastNotifiedKey, finalCount);
   }
 
   /// Budget warnings — the only trigger the user set the threshold for

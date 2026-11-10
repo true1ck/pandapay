@@ -82,6 +82,34 @@ class AiStatusReader {
     return AiTemplateState.none;
   }
 
+  /// Whether any uploaded format of this account is still waiting for the AI's
+  /// answer. Cheap (one query, no message data) so a notification sweep can ask
+  /// it without building the review list.
+  bool hasChecking() {
+    for (final row in state.db.select(
+      "SELECT key FROM v2_sync_state WHERE namespace=? AND key LIKE 'template:origins:%'",
+      [state.namespace],
+    )) {
+      final remote = (row['key'] as String).substring('template:origins:'.length);
+      final sent = state.get('template:sent:$remote');
+      if (sent == null) continue;
+      try {
+        final raw = state.get('ai:$remote');
+        final status = raw == null ? null : (jsonDecode(raw) as Map)['status'];
+        if (status == 'ready' || status == 'rejected' || status == 'failed') {
+          continue;
+        }
+        final sentAt = DateTime.tryParse(sent);
+        final current = (now ?? DateTime.now)();
+        if (sentAt != null && current.difference(sentAt) > checkingFor) continue;
+        return true;
+      } catch (_) {
+        continue;
+      }
+    }
+    return false;
+  }
+
   /// The AI rule that read this source, from the decision trace saved when it
   /// was read. [sharedRuleIds] are the rule ids in the signed bundle.
   AiResolution? resolution(

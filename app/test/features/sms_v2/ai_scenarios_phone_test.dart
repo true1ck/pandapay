@@ -241,6 +241,11 @@ void main() {
         AiTemplateState.checking,
       );
       expect(spendMinor(), 0, reason: 'nothing is counted before an answer');
+      expect(
+        AiStatusReader(state).hasChecking(),
+        isTrue,
+        reason: 'the needs-review notification waits while the AI is working',
+      );
     },
   );
 
@@ -280,6 +285,7 @@ void main() {
         AiTemplateState.unavailable,
       );
       expect(spendMinor(), 0);
+      expect(AiStatusReader(state).hasChecking(), isFalse);
     },
   );
 
