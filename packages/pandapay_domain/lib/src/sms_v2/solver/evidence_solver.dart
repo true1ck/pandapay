@@ -546,6 +546,13 @@ class _Run {
     final declined = _s(cue).toLowerCase().contains('declin');
     final amt = eligible.isEmpty ? null : toks[eligible.first];
     final m = _mask(true, eligible.isEmpty ? null : eligible.first);
+    // "Declined for security reasons" with no amount is a fraud-prevention alert, not
+    // a payment that failed.
+    if ((amt == null || amt.unit != 'INR') &&
+        hits('notice').any((n) => _s(n).toLowerCase().contains('security'))) {
+      reasons.add('a declined notice for security reasons, no amount: an alert');
+      return _done(SolverRead.info, SolverVerdict.accept, 1);
+    }
     // A report or an application status mentions cards and credit without being a
     // payment: nothing to review when no amount is printed.
     if ((amt == null || amt.unit != 'INR') && hits('nonMoneyUnit').isNotEmpty) {
@@ -686,7 +693,8 @@ class _Run {
               .map((d) => d.date)
               .firstOrNull ??
           _relativeDay();
-      final coming = _s(h).toLowerCase().contains('credit');
+      final said = _s(h).toLowerCase();
+      final coming = said.contains('credit') || said.contains('refund');
       return _done(
         SolverRead.scheduled,
         SolverVerdict.accept,
@@ -1069,12 +1077,18 @@ class _Run {
     // "get a voucher when your loan is credited! offer valid till today": a
     // promotion that merely contains the word. Only a bank-voice alert (a bank
     // verb with the account named) is trusted to carry an offer footer.
+    // A weak marketing word ("claim now", "click to check") beside a credit to the
+    // user's own named wallet is a footer, not a promotion.
+    final strongPromo = [
+      for (final h in hits('promo'))
+        if (!(h.entry.kind == 'weak' && named && !debitDir)) h,
+    ];
     if ((kind == SolverRead.debit || kind == SolverRead.credit) &&
         !bankVoice &&
-        hits('promo').isNotEmpty) {
+        strongPromo.isNotEmpty) {
       conflict = true;
       reasons.add(
-        'promotional wording beside the cue: "${_s(hits('promo').first)}"',
+        'promotional wording beside the cue: "${_s(strongPromo.first)}"',
       );
     }
 

@@ -141,7 +141,13 @@
       "renews on",
       "renewing on",
       "next charge",
-      "next debit"
+      "next debit",
+      "initiated * refund",
+      "refund * initiated",
+      "auto renewed",
+      "auto-renewed",
+      "will be renewed",
+      "to be renewed"
     ],
     "notice": [
       "you requested",
@@ -171,7 +177,16 @@
       "money through",
       "requests money",
       "traded value",
-      "contract note"
+      "contract note",
+      "buy value",
+      "sell value",
+      "net value",
+      "confirmation code",
+      "has to visit",
+      "avoid challan",
+      "not covered under insurance",
+      "for security reasons",
+      "due to security reasons"
     ],
     "promo": [
       "pre-approved",
@@ -180,7 +195,10 @@
       "congrats",
       "you have won",
       "lucky draw",
-      "claim",
+      {
+        "p": "claim",
+        "kind": "weak"
+      },
       "apply now",
       "use code",
       "coupon",
@@ -188,8 +206,14 @@
       "t&c",
       "limited period",
       "limited time",
-      "click here",
-      "click to",
+      {
+        "p": "click here",
+        "kind": "weak"
+      },
+      {
+        "p": "click to",
+        "kind": "weak"
+      },
       "exclusive offer",
       "get flat",
       "cashback on",
@@ -224,7 +248,19 @@
       "प्लान",
       "zaroorat",
       "paayein",
-      "apply karein"
+      "apply karein",
+      "enjoy flat",
+      "flat * off",
+      "miss out",
+      "waiting in your",
+      "now you can",
+      "download latest app",
+      "book appointment",
+      "win cash",
+      "rummy",
+      "casino",
+      "jackpot",
+      "please contact"
     ],
     "billDue": [
       "is due",
