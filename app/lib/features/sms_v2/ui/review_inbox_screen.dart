@@ -17,6 +17,7 @@ import 'correction_form.dart';
 import 'dismissed_reviews_view.dart';
 import 'review_clustering.dart';
 import 'review_controller.dart';
+import 'review_history_views.dart';
 import 'screen_parts.dart';
 import 'sharing_offer_card.dart';
 
@@ -366,12 +367,13 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
     final review = ref.watch(reviewItemsProvider);
     final dismissed =
         ref.watch(dismissedReviewItemsProvider).valueOrNull ?? const [];
-    final ai = ref.watch(aiReviewStatusProvider).valueOrNull ??
-        const AiReviewStatus();
+    final ai =
+        ref.watch(aiReviewStatusProvider).valueOrNull ?? const AiReviewStatus();
     final aiItems = [
       for (final item in review.valueOrNull ?? const <LocalReviewItem>[])
         if (ai.resolutionOf(item) != null) item,
     ];
+    final settled = ref.watch(settledListsProvider).valueOrNull;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Needs review'),
@@ -394,32 +396,50 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
                 AppSpace.lg,
                 AppSpace.xs,
               ),
-              child: SegmentedButton<int>(
-                segments: [
-                  ButtonSegment(
-                    value: 0,
-                    label: Text(
-                      'Needs review${review.valueOrNull == null ? '' : ' (${review.valueOrNull!.length - aiItems.length})'}',
-                    ),
-                  ),
-                  if (aiItems.isNotEmpty)
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SegmentedButton<int>(
+                  segments: [
                     ButtonSegment(
-                      value: 2,
-                      label: Text('AI suggested (${aiItems.length})'),
+                      value: 0,
+                      label: Text(
+                        'Needs review${review.valueOrNull == null ? '' : ' (${review.valueOrNull!.length - aiItems.length})'}',
+                      ),
                     ),
-                  ButtonSegment(
-                    value: 1,
-                    label: Text('Dismissed (${dismissed.length})'),
-                  ),
-                ],
-                selected: {_tab},
-                showSelectedIcon: false,
-                expandedInsets: EdgeInsets.zero,
-                onSelectionChanged: (s) => setState(() => _tab = s.first),
+                    if (aiItems.isNotEmpty)
+                      ButtonSegment(
+                        value: 2,
+                        label: Text('AI suggested (${aiItems.length})'),
+                      ),
+                    ButtonSegment(
+                      value: 3,
+                      label: Text('Auto (${settled?.auto.length ?? 0})'),
+                    ),
+                    ButtonSegment(
+                      value: 4,
+                      label: Text('History (${settled?.history.length ?? 0})'),
+                    ),
+                    ButtonSegment(
+                      value: 1,
+                      label: Text('Dismissed (${dismissed.length})'),
+                    ),
+                  ],
+                  selected: {_tab},
+                  showSelectedIcon: false,
+                  onSelectionChanged: (s) => setState(() => _tab = s.first),
+                ),
               ),
             ),
+            if (_tab == 0 || _tab == 2)
+              AiProgressHeader(
+                openItems: (review.valueOrNull?.length ?? 0) - aiItems.length,
+              ),
             Expanded(
-              child: _tab == 2 && aiItems.isNotEmpty
+              child: _tab == 3
+                  ? const SettledList(history: false)
+                  : _tab == 4
+                  ? const SettledList(history: true)
+                  : _tab == 2 && aiItems.isNotEmpty
                   ? ReviewInboxList(
                       items: aiItems,
                       busy: _saving,
