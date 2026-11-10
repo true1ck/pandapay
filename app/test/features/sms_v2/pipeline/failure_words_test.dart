@@ -42,4 +42,18 @@ void main() {
     expect(describeFailure(const FormatException('secret body text')), 'FormatException');
     expect(describeFailure(Object()), 'Error');
   });
+
+  test('a scrambled stack is cut to offsets and a readable one to file and line', () {
+    final scrambled = StackTrace.fromString(
+      '#00 abs 0000000102a3b1c7 virt 00000000016a21c7 _kDartIsolateSnapshotInstructions+0x1a2b\n'
+      '#01 abs 0000000102a3b2c7 virt 00000000016a22c7 _kDartVmSnapshotInstructions+0xff\n',
+    );
+    expect(compactStack(scrambled), 'I+0x1a2b V+0xff');
+    final readable = StackTrace.fromString(
+      '#0      applyCipherKey (package:pandapay/data/local/database_key.dart:32:5)\n'
+      '#1      AppDatabase.openFile (package:pandapay/data/local/app_database.dart:592:7)\n',
+    );
+    expect(compactStack(readable), 'database_key.dart:32 app_database.dart:592');
+    expect(compactStack(scrambled, frames: 1), 'I+0x1a2b');
+  });
 }

@@ -894,7 +894,7 @@ class IosSmsIntakeController extends ChangeNotifier {
               await _advance(expected, revision);
             }
             _scheduleAutoResume(expected, revision);
-          } catch (error) {
+          } catch (error, stack) {
             debugPrint('SMS refresh failed: $error');
             _endAutomaticSession();
             if (!_disposed &&
@@ -907,7 +907,7 @@ class IosSmsIntakeController extends ChangeNotifier {
                   ? text.substring('Bad state: SMS capture failed: '.length)
                   : describeFailure(error);
               _drainError =
-                  'Saved messages could not be processed ($why). Retry processing; no new import is needed.';
+                  'Saved messages could not be processed ($why) [${compactStack(stack)}]. Retry processing; no new import is needed.';
               _publish(IosSmsIntakeState(snapshot: state.snapshot));
             }
           }
