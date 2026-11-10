@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../data/portable_backup/account_recovery_operation_gate.dart';
+import '../sms_v2/pipeline/failure_words.dart';
 import 'ios_sms_intake_service.dart';
 
 typedef IosSmsCapture =
@@ -899,8 +900,14 @@ class IosSmsIntakeController extends ChangeNotifier {
             if (!_disposed &&
                 namespace() == expected &&
                 revision == _revision) {
+              // Say why, in plain words: "could not be processed" alone left
+              // a stuck import with nothing to go on.
+              final text = '$error';
+              final why = text.startsWith('Bad state: SMS capture failed: ')
+                  ? text.substring('Bad state: SMS capture failed: '.length)
+                  : describeFailure(error);
               _drainError =
-                  'Saved messages could not be processed. Retry processing; no new import is needed.';
+                  'Saved messages could not be processed ($why). Retry processing; no new import is needed.';
               _publish(IosSmsIntakeState(snapshot: state.snapshot));
             }
           }

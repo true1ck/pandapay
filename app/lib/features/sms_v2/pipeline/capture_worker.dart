@@ -18,6 +18,7 @@ import '../storage/provisional_store.dart';
 import '../storage/schema.dart';
 import '../storage/sync_state_store.dart';
 import 'capture_executor.dart';
+import 'failure_words.dart';
 
 /// Serial, database-owning worker for SMS v2 capture. It opens its own SQLite
 /// connection (path + key; a native handle is never shared across isolates)
@@ -310,9 +311,7 @@ class SmsCaptureWorker implements CaptureExecutor {
           replies.send([id, null, committed.toList()]);
         } catch (error) {
           // Only a type / SQLite message: SMS text must not reach the logs.
-          final text = error is SqliteException
-              ? 'SMS capture failed: ${error.message} (${error.resultCode})'
-              : 'SMS capture failed: ${error.runtimeType}';
+          final text = 'SMS capture failed: ${describeFailure(error)}';
           replies.send([id, text, committed.toList()]);
         }
       });
