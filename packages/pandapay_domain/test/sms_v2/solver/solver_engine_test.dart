@@ -591,6 +591,103 @@ void main() {
       );
     });
 
+    test('a refund that is only initiated is an upcoming credit, never money moved or spent', () {
+      final d = _solve('Hi Ravi! We have initiated your refund for Rs 540.00 for order 12345. Track it with https://x.example - Team Sample');
+      expect(d.read, SolverRead.scheduled);
+      expect(d.debitDirection, isFalse);
+      expect(d.countsInTotals, isFalse);
+      final fact = _facts(d).facts.single as AttemptFact;
+      expect(fact.status, AttemptStatus.scheduled);
+      expect(fact.direction, Direction.credit);
+    });
+
+    test('a weak marketing footer beside a credit to your own wallet does not demote it; a real offer does', () {
+      for (final body in [
+        'Hi Ravi, Received Rs 540.00 to your Wallet A/c Click to check now https://x.example Sample',
+        'Dear Customer, successfully credited Rs 540.00 to your wallet A/c on 05-11-2026 Claim now https://x.example Sample',
+      ]) {
+        final d = _solve(body);
+        expect(d.countsInTotals, isTrue, reason: body);
+        expect(d.debitDirection, isFalse, reason: body);
+      }
+      final offer = _solve('Rs 540.00 credited to your wallet A/c. Offer: get 10% cashback, apply now https://x.example');
+      expect(offer.countsInTotals, isFalse);
+    });
+
+    test('campaigns, ads and informational notices are ignored whatever amount they quote', () {
+      for (final body in [
+        'Dear Sir/Madam, the Salary Rs 25000 is open for you. Please contact https://x.example for rummy and win cash',
+        'Ravi! Your free Rs 50 is waiting in your Sample wallet. Only 2 days left to use it - do not miss out! Use now: https://x.example',
+        'Ravi, Sample Salon is here! Book appointment today https://x.example & enjoy flat Rs 200 off. Team Sample',
+        'Dear Customer, Now you can add Sample Pay request for Cheque issued above Rs 50000 on our Sample app. Download latest app from the store.',
+        'Transaction Confirmation Code CS12345 - Broker 1234 - Buy Value Rs 12,500.00 - Sell Value Rs 0.00 - Net Value Rs 12,500.00 - Dated 05-11-2026',
+        'Dear Ravi (A12345), one of your family member has to visit Sample Branch on 05-11-2026 to collect your Sample card. Member to carry Aadhaar and Rs 100 as fees.',
+        'Sir/ Madam, As per Sample records, your vehicle KA01AB1234 is not covered under Insurance. Buy insurance to avoid challan of Rs 2000.',
+      ]) {
+        final d = _solve(body);
+        expect(d.accepted, isTrue, reason: body);
+        expect(d.countsInTotals, isFalse, reason: body);
+        expect(d.read == SolverRead.promo || d.read == SolverRead.info, isTrue, reason: body);
+      }
+    });
+
+    test('an insurance auto-renewal notice is an upcoming bill debit; "May 2027" is not a day', () {
+      final d = _solve('Dear Customer, your Sample Shield policy for upto Rs 2 lakh accidental insurance will be auto-renewed during May 2027 with an annual premium of Rs 449 subject to eligibility. Please ensure sufficient balance.');
+      expect(d.read, SolverRead.scheduled);
+      expect(d.minor, 44900);
+      expect(d.scheduledDate, isNull);
+      expect(d.countsInTotals, isFalse);
+      _facts(d);
+    });
+
+    test('a mandate is named for the service it is towards, never a frequency, a verb or a bank', () {
+      final cases = <String, (String, String)>{
+        'Dear Customer,UPI AutoPay Mandate with MONTHLY is successfully created towards AGIONE TEC from 01/11/2026 to 01/11/2027 for Rs.499.00-Union Bank of India': ('AGIONE TEC', 'created'),
+        'Dear Customer,UPI AutoPay Mandate with ASPRESENTED is successfully created towards Amazon Ind from 01/11/2026 to 01/11/2027 for Rs.299.00-Union Bank of India': ('Amazon Ind', 'created'),
+        'Your ASPRESENTED UPI AutoPay Mandate from 01/11/2026 to 01/11/2027 is successfully created towards Google Play for Rs.1850.00. Refer UM no. abc@okaxis. Regards, Kotak Bank': ('Google Play', 'created'),
+        'Your request to Revoke the UPI AutoPay Mandate of Rs.1850.00 towards Google Play is successful. Refer UM no. abc@okaxis. Regards, Kotak Bank': ('Google Play', 'revoked'),
+      };
+      for (final e in cases.entries) {
+        final d = _solve(e.key);
+        expect(d.read, SolverRead.mandate, reason: e.key);
+        expect(d.party, e.value.$1, reason: e.key);
+        expect(d.mandatePhase, e.value.$2, reason: e.key);
+      }
+      // A debit alert that names the mandate rail after the service stops at the service.
+      final debit = _solve('Dear Customer, Your account has been successfully debited with Rs.499.00 on 05-11-2026 towards AGIONE TEC UPI AutoPay-Union Bank of India');
+      expect(debit.party, 'AGIONE TEC');
+      // "Autopay SI-NAME": the service follows the hyphen.
+      final si = _solve('UPDATE: INR 1,000.00 debited from HDFC Bank XX1234 on 05-AUG-26. Info: CC 123456789012XXXX3456 Autopay SI-TAD. Avl bal:INR 5,000.00');
+      expect(si.party, 'TAD');
+    });
+
+    test('a mandate or membership notice with no service name is left for a person, never a row', () {
+      for (final body in [
+        'HDFC Bank: Your UPI-Mandate is successfully cancelled by 9876543210@ikwik for Rs 99.00.',
+        'Sample Store: Your Plus membership expired on 10 Jun 2026. To know how to become a member again, click here: https://x.example',
+      ]) {
+        final d = _solve(body);
+        final nameless = d.read == SolverRead.mandate && d.party == null;
+        expect(nameless && d.accepted, isFalse, reason: body);
+      }
+    });
+
+    test('a card or UPI attempt declined for security reasons, with no amount, is an alert', () {
+      for (final body in [
+        'Transaction on Sample Bank Credit Card no. XX1234 has been declined due to security reasons. Please call 1800 for details.',
+        'UPI Transaction Declined for your Sample Bank account XX1234 for security reasons. For queries call 1800.',
+      ]) {
+        final d = _solve(body);
+        expect(d.accepted, isTrue, reason: body);
+        expect(d.read, SolverRead.info, reason: body);
+      }
+      // A failed payment that names an amount still goes the failed way.
+      expect(
+        _solve('Your payment of Rs 540.00 to SAMPLE STORE failed. Amount, if debited, will be refunded.').read,
+        SolverRead.failed,
+      );
+    });
+
     test('credit reports and application status notices are not money and are ignored', () {
       for (final body in [
         'Your Sample credit report is generated by Sample Bureau on 05-11-2026 10:15:00. To know more visit https://x.example',

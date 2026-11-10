@@ -166,7 +166,13 @@
       "renews on",
       "renewing on",
       "next charge",
-      "next debit"
+      "next debit",
+      "initiated * refund",
+      "refund * initiated",
+      "auto renewed",
+      "auto-renewed",
+      "will be renewed",
+      "to be renewed"
     ],
     "notice": [
       "you requested",
@@ -196,7 +202,16 @@
       "money through",
       "requests money",
       "traded value",
-      "contract note"
+      "contract note",
+      "buy value",
+      "sell value",
+      "net value",
+      "confirmation code",
+      "has to visit",
+      "avoid challan",
+      "not covered under insurance",
+      "for security reasons",
+      "due to security reasons"
     ],
     "promo": [
       "pre-approved",
@@ -205,7 +220,10 @@
       "congrats",
       "you have won",
       "lucky draw",
-      "claim",
+      {
+        "p": "claim",
+        "kind": "weak"
+      },
       "apply now",
       "use code",
       "coupon",
@@ -213,8 +231,14 @@
       "t&c",
       "limited period",
       "limited time",
-      "click here",
-      "click to",
+      {
+        "p": "click here",
+        "kind": "weak"
+      },
+      {
+        "p": "click to",
+        "kind": "weak"
+      },
       "exclusive offer",
       "get flat",
       "cashback on",
@@ -249,6 +273,18 @@
       "zaroorat",
       "paayein",
       "apply karein",
+      "enjoy flat",
+      "flat * off",
+      "miss out",
+      "waiting in your",
+      "now you can",
+      "download latest app",
+      "book appointment",
+      "win cash",
+      "rummy",
+      "casino",
+      "jackpot",
+      "please contact",
       "to avail",
       "avail now",
       "avail of",
@@ -362,7 +398,11 @@
       "every month",
       "per year",
       "e-mandate",
-      "standing instruction"
+      "standing instruction",
+      {
+        "p": "si",
+        "kind": "prefix"
+      }
     ],
     "mandateSetup": [
       "mandate created",
@@ -753,13 +793,28 @@
       "for"
     ],
     "merchantCue": [
-      "for",
-      "to",
-      "of",
-      "at",
       "towards",
-      "with",
-      "from"
+      "for",
+      {
+        "p": "to",
+        "kind": "weak"
+      },
+      {
+        "p": "with",
+        "kind": "weak"
+      },
+      {
+        "p": "from",
+        "kind": "weak"
+      },
+      {
+        "p": "of",
+        "kind": "weak"
+      },
+      {
+        "p": "at",
+        "kind": "weak"
+      }
     ],
     "loanWord": [
       "loan",
@@ -1198,7 +1253,28 @@
       "loan",
       "charges",
       "interest",
-      "salary"
+      "salary",
+      "monthly",
+      "yearly",
+      "weekly",
+      "daily",
+      "quarterly",
+      "annual",
+      "annually",
+      "aspresented",
+      "presented",
+      "revoke",
+      "revoked",
+      "cancel",
+      "cancelled",
+      "pause",
+      "paused",
+      "resume",
+      "renew",
+      "renewed",
+      "know",
+      "become",
+      "cc"
     ],
     "instrumentKind": [
       {

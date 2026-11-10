@@ -323,3 +323,59 @@ One mechanism, three uses. The engine returns the unresolved reading with what i
 ## 18. Real-inbox measurement, 10 Nov 2026 (counts only, export deleted)
 
 Phone read read-only (6,019 messages). Through the app's real intake gate: 935 sensitive dropped, 2,507 dropped by the gate, 2,577 reach the engine. End to end through the real pipeline (history chain included): 16 messages have no reading at all (was 20), 1 refund inference waits for confirmation, 42 are low-confidence readings of the existing rules (unchanged by this work), 44 event questions and 3 instrument questions are the existing ones. At engine level the unresolved count went 73 -> 51 and the money counted did not change (100 debits, 18 credits), the strict invariant held (0 changed rule results), and 1 generic autopay debit was enriched. Credits are enriched only by a real purpose; a payer word alone ("by CASH") is not an improvement. Credit reports and card-application status notices are ignored as non-money.
+
+## 19. Cross-screen audit, 10 Nov 2026
+
+Every screen reads the one ledger read model; the risk is two screens each re-deriving a list. Inventory and result:
+- **Bills:** the commitments list, the SMS bill rows and the per-card ledger are all built from one `_billRecords`, so status, amount and due date agree by construction. Tested together (`views_agree_test.dart`). Home, Cards, the calendar, notifications and the voice answers read the card ledger's latest statement.
+- **Subscriptions:** there were TWO lists with different rules. The main Subscriptions screen filtered (not-a-subscription names, possible-subscription split, canonical service names); the SMS ledger's list did not (it showed raw rows, "NETFLIX" instead of "Netflix", and would have shown pattern-found candidates as subscriptions). Both now call `buildSubscriptionView` (`features/insights/subscription_view.dart`).
+- **IPO:** the IPO screen and the instrument detail's holds both read `ipoApplications`; one source.
+- **Money in:** the Money-in screen and the transactions' income agree (tested).
+- **A real gap found by the audit:** rule-read bills from a sender the registry does not know carry the card's last digits but no issuer. Their identity was unique per message, so a newer statement never replaced an older one and a payment never matched. A card is now recognised by kind and last digits when the issuer is unknown (two different issuers with the same last four would merge; accepted, one in ten thousand per pair).
+- **Hidden by design, not changed:** the Payments Due screen keeps the SMS bills and scheduled-payments sections switched off (`_showSmsBills`, `_showScheduledPayments`), so bills of category other/rent/education/tax are not listed there.
+
+## 20. Gemini rule drafting, 10 Nov 2026
+
+The server asks Gemini to draft a regex rule for a layout no rule matched (`api/src/sms_v2/template_worker.js`; drafts are validated and stay provisional until an admin approves). Findings and changes:
+- **What was uploaded:** every open "template" review item, including readings already made by history (a reminder that borrowed its due date, a refund linked to a spend) and messages waiting for history. A rule cannot be written for those, and an AI rule would outrank the evidence reader. They are now flagged `aiHold: history` and never uploaded.
+- **Prompt:** its domain rules pre-dated the evidence reader and the ledger decisions. Measured live on 12 invented layouts (no real message text), scoring the MEANING of each draft: the old prompt drafted the right meaning 21 of 47 times (45%); the new one 51 of 55 (93%). Wrong before: a provider's renewal receipt counted as a debit, a refund that was only initiated counted as money received, coin redemption counted as income, a deposit confirmation drafted as a credit, an AutoPay debit alert drafted as a mandate. Added rules for provider receipts (evidenceOnly), initiated refunds (an attempt), lender credits (money in) vs wallet top-ups, coin redemption (own transfer), AutoPay debits, never inventing a date, application/report notices, and repeated placeholders. `PROMPT_VERSION` is tpl-2026-11-20 and a test pins the rules.
+- **Structural validity** (the regex and examples validate) is unchanged within noise (old 6-10 of 12, new 7-8 of 12 per run); the worker already retries once with the errors.
+- **Dry-run script:** it did not stamp drafts as the worker does, so every draft looked invalid; fixed to mirror the worker.
+
+## 21. Retry across chunks (done) and how one template is shared between users
+
+- **Chunk boundary:** history is read in chunks of at most 500 messages, newest first. A reminder or refund waiting for its statement or spend, read in an earlier chunk than that statement, found nothing and was never read again. The pipeline now remembers such a message (`history-pending:<sourceKey>` in the local sync state) and, whenever a later batch stores new bills or money movements, re-reads up to 100 of them once, oldest first, in `SmsV2Pipeline._retryWaitingForHistory`. Entries older than the history window, or whose capture is gone, are dropped. A retry never raises a second review question (a dismissed one stays dismissed) and never triggers another retry.
+- **Same template, two people, Gemini:** one row per template hash on the server (`sms_v2_unknown_templates`, primary key the hash). A second person sending the same layout only adds themselves as a submitter and bumps the result revision; the worker claims a `queued` row once (lease, `SKIP LOCKED`), so Gemini is called once per hash. Every consenting submitter of that hash receives the same draft when it is `ready` (`sms_v2_template_results`). The draft stays provisional until an admin approves it, so each phone gets it as a private rule meanwhile.
+
+## 22. Found on a real phone, 10 Nov 2026: subscription names
+
+The update build on the owner's phone showed the Subscriptions list with rows named "ASPRESENTED", "MONTHLY", "Revoke", "CC", "know how", five rows of "account will be debited with Rs… towards Amazon Pay…" and "Unknown service". Reproducing it on the real inbox (read-only, counts and layouts only, export deleted) gave concrete causes, each fixed generally:
+- **Frequency or verb taken as the service:** "UPI AutoPay Mandate with MONTHLY is created towards NAME" and "request to Revoke the Mandate of Rs X towards NAME". The merchant cues are now ranked (towards / for first; with / from / to / of / at only as a fallback), and frequency and verb words cannot begin a name (pack `merchantCue` kinds, `nonParty`).
+- **Name running on:** "towards NAME UPI AutoPay-Bank of X" now ends at the rail or mandate word; a name right before an account number is the user's own account, not a service; "Autopay SI-NAME" reads NAME (pack `recurring` entry with kind `prefix`).
+- **An upcoming debit notice read as "mandate paused":** ten "mandate was paused / resumed / revoked / expired / modified" rules captured their service name too freely and now refuse "will be debited" and "upcoming mandate" text; the real shape is a negative example.
+- **No name at all:** a mandate or membership notice with no readable service name and no reference stays in review (never accepted), and a nameless mandate with no charge is never listed.
+Result on the real inbox: 16 rows became 8, all clean, with one charge now linked. OpenAI, Emergent, Netflix and Spotify have no debits in the inbox, so "Awaiting first charge" is correct for them. The Google Play mandate is correctly shown cancelled (a revoke message names it). The vocabulary part reaches phones only through a published rule bundle.
+The "N messages need review" banner adds open review items to merchant-category and bill prompts from the ledger; most of it is category confirmation, and its "which card" wording is outdated.
+
+## 23. Release checklist for this work (nothing here is done without the owner's word)
+
+What ships where:
+- **In the app (needs a new app build):** the history chain, the retry across chunks, bill and subscription views, the unified Subscriptions list, Scheduled payments, the IPO notice line, the Gemini upload hold, the solver code.
+- **In the signed rule bundle from the server (no app build):** `rules/sms/solver/pack.json` (vocabulary, version 3 plus ours) and the tightened mandate rules in `rules/sms/v2/bills_mandates/mandates.json`. A phone with the new app but the old bundle keeps the old name and wording behaviour.
+- **On the API server (a server deploy):** the Gemini prompt (`api/src/sms_v2/template_worker.js`, prompt version `tpl-2026-11-20`).
+
+Order, each step reversible:
+1. Merge `dev` into `prod` the project's usual way (a push to `prod` runs the tests, then deploys the server, which carries the new Gemini prompt). Confirm "Verify production is healthy" is green. Not a rule-bundle publish.
+2. Publish the rule bundle through the admin console's usual release flow, to the testers cohort first (cohorts: all, 25%, 5%, testers). Check one phone: Subscriptions names, Payments, Needs Review count.
+3. Build the app update with a version code above the installed one and ship it to testers; the update-in-place recipe is in `docs/merchant-bulk-category-implementation-plan.md` (Dev flavor on the hosted backend). Do not raise the minimum supported version.
+4. Widen the bundle cohort (5%, 25%, all) only after the testers look right.
+
+Rollback: the bundle can be re-signed with the previous rules (phones fall back to the last good one); the server by pointing `prod` back to the last good commit (a forced push, the owner's decision); the app by not raising the minimum version.
+
+Open items to confirm with whoever runs releases: exactly how the repo rule files become the published bundle (the admin console release step), and who pushes `prod`.
+
+## 24. How the rules reach phones (found 10 Nov 2026), and the new-id rule
+
+- The release is `api/scripts/release_sms_v2_bundle.js` (dry run by default, `--apply --admin-id <id>` to publish). It builds the bundle from `rules/sms/v2`, runs every example and the golden gate, imports the rules, signs the bundle and mints it for every group (testers, pct5, pct25, all). It needs the signing key and the private admin database login, which live on the administration machine, so it is not run from here (the permission classifier also refuses it). The runbook is `docs/sms-pipeline-v2/runbooks/bundle-release.md`.
+- **An import never replaces a rule id that is already stored**, so an EDIT to an existing rule (my ten mandate-rule edits) reaches phones only through the admin Rules page (a new version). A NEW id reaches phones through the import. The other session's fix for the same limit was typed replacement rules with new ids; this follows it: `MND-UPCOMING-RECURRING-01` (priority 710, `rules/sms/v2/bills_mandates/mandate_upcoming_notice.json`) reads "For the upcoming mandate set for D, your account will be debited with Rs X towards NAME for the Recurring Bill Payments. If mandate is paused …" as a scheduled debit, ahead of the "mandate paused" rule that used to read it. It requires the "if mandate is paused" wording so it cannot shadow the Axis-specific rule of the same family.
+- The solver vocabulary (`rules/sms/solver/pack.json`) is part of the bundle's non-rule content, so a re-run of the release with the changed pack mints new bundles; that carries the merchant-name fixes.

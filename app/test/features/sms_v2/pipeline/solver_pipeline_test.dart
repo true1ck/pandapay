@@ -7,6 +7,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/financial_store.dart';
+import 'package:pandapay/data/local/sms_intake_repository.dart';
+import 'package:pandapay/features/sms_import/sms_background_queue.dart' show QueuedSms;
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/sms_v2/ledger/adapters.dart';
 import 'package:pandapay/features/sms_v2/pipeline/sms_v2_pipeline.dart';
@@ -276,6 +278,84 @@ void main() {
       final m = sms(emiNudge, sender: 'VM-SAMPLF-S');
       pipeline.process(m);
       expect(factsOf(m), isEmpty);
+    });
+
+    SmsMessage captured(String body, String sender, DateTime at) {
+      // As the phone does: kept in the capture store before the pipeline reads it.
+      SmsIntakeRepository(db).remember(_ns, QueuedSms(sender: sender, body: body, receivedAt: at));
+      return SmsMessage(
+        sender: sender,
+        body: body,
+        sourceKey: smsSourceKey(_ns, sender, body),
+        observedAt: at,
+      );
+    }
+
+    test('a reminder read in an earlier chunk is completed when its statement arrives in a later one', () {
+      final reminder = captured(nudge('23,540'), 'VM-NEWBNK-S', DateTime.utc(2026, 11, 12, 6));
+      final statement = captured(statementText, 'VM-NEWBNK-S', DateTime.utc(2026, 11, 9, 6));
+      // Chunk 1 holds the newer reminder; the statement is in the next chunk.
+      pipeline.processBatch([reminder]);
+      expect(factsOf(reminder), isEmpty, reason: 'nothing to borrow from yet');
+      pipeline.processBatch([statement]);
+      final fact = factsOf(reminder).whereType<BillDueFact>().single;
+      expect(fact.dueDate, '2026-11-20');
+      expect(fact.provenance.ruleId, 'SOLVER-BILL-DUE-INFERRED');
+      // Done once: a third chunk does not read it again or reopen anything.
+      pipeline.processBatch([captured('Rs.540.00 spent on HDFC Bank Card x5678 at CHAI POINT on 13-11-26', 'VM-HDFCBK-S', DateTime.utc(2026, 11, 13, 6))]);
+      expect(factsOf(reminder), hasLength(1), reason: 'not read or stored a second time');
+      expect(
+        db.db.select("SELECT count(*) c FROM v2_sync_state WHERE namespace=? AND key LIKE 'history-pending:%'", [_ns]).first['c'],
+        0,
+        reason: 'no longer waiting',
+      );
+    });
+
+    test('a message that never finds its statement stays in review and is not read over and over', () {
+      final reminder = captured(nudge('23,540'), 'VM-NEWBNK-S', DateTime.utc(2026, 11, 12, 6));
+      pipeline.processBatch([reminder]);
+      // Dismiss its review question, as a person may.
+      db.db.execute("UPDATE v2_review_items SET status='dismissed' WHERE namespace=?", [_ns]);
+      // Unrelated history arrives (a spend), which wakes the retry.
+      pipeline.processBatch([
+        captured('Rs.540.00 spent on HDFC Bank Card x5678 at CHAI POINT on 01-11-26', 'VM-HDFCBK-S', DateTime.utc(2026, 11, 1, 6)),
+      ]);
+      expect(factsOf(reminder), isEmpty);
+      final open = db.db.select(
+        "SELECT count(*) c FROM v2_review_items WHERE namespace=? AND kind='template' AND status='open'",
+        [_ns],
+      ).first['c'] as int;
+      expect(open, 0, reason: 'a dismissed question is not reopened by the retry');
+    });
+
+    test('a batch handed over newest first still completes the reminder', () {
+      final statement = sms(statementText);
+      final reminder = SmsMessage(
+        sender: 'VM-NEWBNK-S',
+        body: nudge('23,540'),
+        sourceKey: 'f' * 64,
+        observedAt: DateTime.utc(2026, 11, 12, 6),
+      );
+      // The statement arrived 3 days before the reminder, but is listed after it.
+      pipeline.processBatch([reminder, statement]);
+      expect(factsOf(reminder).whereType<BillDueFact>().single.dueDate, '2026-11-20');
+    });
+
+    test('a refund listed before its spend is still linked', () {
+      final spend = SmsMessage(
+        sender: 'VM-HDFCBK-S',
+        body: 'Rs.540.00 spent on HDFC Bank Card x5678 at CHAI POINT on 01-11-26',
+        sourceKey: 'e' * 64,
+        observedAt: DateTime.utc(2026, 11, 1, 6),
+      );
+      final refund = SmsMessage(
+        sender: 'VM-NEWPAY-S',
+        body: 'Refund for order CHAI POINT of Rs 540.00 is successfully processed to your Sample Payment Wallet.',
+        sourceKey: 'd' * 64,
+        observedAt: DateTime.utc(2026, 11, 5, 6),
+      );
+      pipeline.processBatch([refund, spend]);
+      expect(factsOf(refund).whereType<MovementFact>(), hasLength(1));
     });
 
     test('with no statement on file there is nothing to borrow', () {

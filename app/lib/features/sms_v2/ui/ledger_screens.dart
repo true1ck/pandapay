@@ -5,6 +5,7 @@ import 'package:pandapay_domain/sms_v2_ledger.dart';
 import '../../../app/design/app_theme.dart';
 import '../../../app/design/bamboo_components.dart';
 import '../../../app/design/widgets.dart';
+import '../../insights/subscription_view.dart';
 import '../ledger/adapters.dart';
 import '../ledger/providers.dart';
 import '../ledger/reports.dart';
@@ -262,11 +263,12 @@ class LedgerReportList extends StatelessWidget {
           );
         }
       case SmsLedgerScreen.subscriptions:
-        final subscriptions = subscriptionsFromLedger(
-          model.facts,
-          events,
-          now: DateTime.now(),
+        // The same filtering and merging as the main Subscriptions screen
+        // ([buildSubscriptionView]), so both list the same services.
+        final view = buildSubscriptionView(
+          subscriptionsFromLedger(model.facts, events, now: DateTime.now()),
         );
+        final subscriptions = view.subscriptions;
         for (final active in [true, false]) {
           final items = subscriptions
               .where((s) => (s.lifecycleStatus == 'active') == active)
@@ -303,6 +305,37 @@ class LedgerReportList extends StatelessWidget {
                           'Amount unknown',
                           style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                         ),
+                ),
+            ]),
+          );
+        }
+        if (view.candidates.isNotEmpty) {
+          children.add(
+            BambooSectionLabel(
+              'Possible subscriptions',
+              asTitle: true,
+              padding: EdgeInsets.fromLTRB(
+                4,
+                children.isEmpty ? AppSpace.sm : AppSpace.xl,
+                4,
+                10,
+              ),
+            ),
+          );
+          children.add(
+            _RowGroup([
+              for (final item in view.candidates)
+                ListTile(
+                  contentPadding: _rowPadding,
+                  leading: const BambooIconTile(
+                    Icons.help_outline_rounded,
+                    size: 36,
+                  ),
+                  title: Text(item.displayName),
+                  subtitle: Text(
+                    'Found from repeated charges, not confirmed • every ${item.cadenceDays} days',
+                  ),
+                  trailing: _amount(smsMoney(item.typicalAmount.paise)),
                 ),
             ]),
           );

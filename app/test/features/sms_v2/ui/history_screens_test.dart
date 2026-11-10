@@ -107,7 +107,7 @@ void main() {
       (SmsLedgerScreen.investments, 'Net invested'),
       (SmsLedgerScreen.ipos, 'Blocked'),
       (SmsLedgerScreen.moneyIn, 'Salary'),
-      (SmsLedgerScreen.subscriptions, 'NETFLIX'),
+      (SmsLedgerScreen.subscriptions, 'Netflix'),
     ]) {
       await show(SmsLedgerScreenView(screen: screen));
       expect(find.textContaining(evidence, findRichText: true), findsWidgets);

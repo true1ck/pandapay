@@ -976,7 +976,7 @@ void main() {
   });
 
   testWidgets(
-    'scheduled payments section is omitted when _showScheduledPayments is off',
+    'a rent bill is listed under Scheduled payments, never silently hidden',
     (tester) async {
       final rent = Commitment(
         id: 'c-rent',
@@ -998,9 +998,9 @@ void main() {
         ],
       );
 
-      expect(find.text('Scheduled payments'), findsNothing);
-      expect(find.text('Monthly Flat Rent'), findsNothing);
-      expect(find.text('No upcoming bills'), findsOneWidget);
+      expect(find.text('Scheduled payments'), findsOneWidget);
+      expect(find.text('Monthly Flat Rent'), findsOneWidget);
+      expect(find.text('No upcoming bills'), findsNothing);
     },
   );
 

@@ -84,6 +84,54 @@ void main() {
     },
   );
 
+  test('a message waiting on history is never sent for AI rule drafting', () async {
+    final db = AppDatabase.forTesting(sqlite3.openInMemory());
+    addTearDown(db.db.dispose);
+    SmsV2Schema.ensure(db.db);
+    final intake = SmsIntakeRepository(db);
+    final now = DateTime.utc(2026, 11);
+    const sender = 'HDFCBK';
+    const reminder =
+        'Reminder: your credit card bill of Rs 23,540 is due. Pay on or before the due date.';
+    const ordinary = 'Your Sample Bank account was updated with a new feature.';
+    final held = smsSourceKey('a', sender, reminder);
+    final normal = smsSourceKey('a', sender, ordinary);
+    intake.remember('a', QueuedSms(sender: sender, body: reminder, receivedAt: now));
+    intake.remember('a', QueuedSms(sender: sender, body: ordinary, receivedAt: now));
+    for (final (key, payload) in [
+      (held, {'sourceKey': held, 'templateHash': 'a' * 64, 'aiHold': 'history'}),
+      (normal, {'sourceKey': normal, 'templateHash': 'b' * 64}),
+    ]) {
+      db.db.execute('INSERT INTO v2_review_items VALUES(?,?,?,?,?)', [
+        'a',
+        key,
+        'template',
+        jsonEncode(payload),
+        'open',
+      ]);
+    }
+    final sent = <String>[];
+    final queue = OutboxStore(db.db, namespace: 'a');
+    final uploader = TemplateUpload(
+      intake: intake,
+      queue: queue,
+      baseUri: Uri.parse('https://api.invalid'),
+      headers: () async => {},
+      hasConsent: () async => true,
+      accountIsCurrent: () => true,
+      clock: () => now,
+      client: MockClient((request) async {
+        for (final item in (jsonDecode(request.body) as Map)['items'] as List) {
+          sent.add((item as Map)['redactedBody'] as String);
+        }
+        return http.Response('{}', 503);
+      }),
+    );
+    await uploader.drain();
+    expect(sent.join(' ').toLowerCase(), contains('feature'));
+    expect(sent.join(' ').toLowerCase(), isNot(contains('credit card bill')));
+  });
+
   test(
     'consented safe hash maps authenticated private rules back to original formats',
     () async {

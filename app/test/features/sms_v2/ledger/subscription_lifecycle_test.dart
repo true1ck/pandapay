@@ -216,6 +216,20 @@ void main() {
     expect(subs(), isEmpty);
   });
 
+  test('an upcoming-debit notice that mentions "if mandate is paused" is not a paused mandate', () {
+    send(
+      'VM-YESBNK-S',
+      'For the upcoming mandate set for 05-12-26, your account will be debited with Rs.75.00 towards Amazon Pay for the Recurring Bill Payments. If mandate is paused the execution for the same will not happen. - Amazon Pay and Yes Bank.',
+      '2026-11-28',
+    );
+    final all = FactStore(db.db, namespace: _ns).all();
+    expect(all.whereType<MandateFact>(), isEmpty, reason: 'it is not a mandate event');
+    final attempt = all.whereType<AttemptFact>().single;
+    expect(attempt.status, AttemptStatus.scheduled);
+    expect(attempt.counterparty?.name?.toLowerCase(), contains('amazon pay'));
+    expect(subs(), isEmpty, reason: 'no subscription row is made from it');
+  });
+
   group('no mandate message: found by pattern, and flagged as such', () {
     void spend(String merchant, String amount, String d, String day) => send(
       'VM-HDFCBK-S',
