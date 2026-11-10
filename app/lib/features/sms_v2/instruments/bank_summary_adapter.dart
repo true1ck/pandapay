@@ -29,19 +29,27 @@ typedef ManualBalances = Map<String, ({Money balance, DateTime updatedAt})>;
 /// is a credit card ending in the same digits. A message about a credit card
 /// (rewards, limit, statement) can be read as a bank account, and one number
 /// cannot be both, so the card wins and the "account" is not listed.
-bool isShadowedByCard(Instrument account, Iterable<Instrument> instruments) {
+bool isShadowedByCard(Instrument account, Iterable<Instrument> instruments) =>
+    shadowingCard(account, instruments) != null;
+
+/// The credit card that [account] collides with (same bank, same last 4), or
+/// null. The user settles the collision once on "Accounts and cards we
+/// found"; either answer archives one side, so the collision is then gone.
+Instrument? shadowingCard(Instrument account, Iterable<Instrument> instruments) {
   final mask = account.maskDigits;
-  if (account.kind != InstrumentKind.bankAccount || mask == null) return false;
+  if (account.kind != InstrumentKind.bankAccount || mask == null) return null;
   String last4(String m) => m.length > 4 ? m.substring(m.length - 4) : m;
-  return instruments.any(
-    (c) =>
-        c.kind == InstrumentKind.creditCard &&
+  for (final c in instruments) {
+    if (c.kind == InstrumentKind.creditCard &&
         c.status != InstrumentStatus.rejected &&
         c.status != InstrumentStatus.archived &&
         c.issuerSlug == account.issuerSlug &&
         c.maskDigits != null &&
-        last4(c.maskDigits!) == last4(mask),
-  );
+        last4(c.maskDigits!) == last4(mask)) {
+      return c;
+    }
+  }
+  return null;
 }
 
 List<BankAccountSummary> bankAccountSummariesFromInstruments(

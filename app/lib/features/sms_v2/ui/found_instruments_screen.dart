@@ -11,6 +11,8 @@ import '../../../app/design/widgets.dart';
 import '../../../app/providers.dart' as app;
 import '../../cards/card_picker_screen.dart';
 import '../instruments/card_linker.dart';
+import '../instruments/bank_summary_adapter.dart'
+    show isShadowedByCard, shadowingCard;
 import '../ledger/providers.dart' show instrumentChoiceRevisionProvider;
 import '../providers/data_providers.dart';
 import '../providers/runtime_provider.dart';
@@ -68,6 +70,28 @@ class FoundInstrumentsScreen extends ConsumerWidget {
         if (name != null) actions.rename(instrument.instrumentId, name);
       } else if (action == 'reject') {
         actions.reject(instrument.instrumentId);
+      } else if (action == 'asCard' || action == 'asAccount') {
+        // [instrument] is the bank-account reading of a number that is also a
+        // credit card. Keep the side the user names; archive the other.
+        final all = ref.read(instrumentsProvider).valueOrNull ?? const [];
+        final card = shadowingCard(instrument, all);
+        if (action == 'asCard') {
+          actions.archive(instrument.instrumentId);
+        } else if (card != null && card.userCardId == null) {
+          actions.archive(card.instrumentId);
+          actions.confirm(instrument.instrumentId);
+        } else {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'This card is in your wallet. Remove it there first.',
+                ),
+              ),
+            );
+          }
+          return;
+        }
       } else {
         final result = actions.confirm(instrument.instrumentId);
         if (result case CardNeedsProduct(
@@ -147,6 +171,8 @@ class FoundInstrumentsScreen extends ConsumerWidget {
             onConfirm: (i) => _act(context, ref, i, 'confirm'),
             onReject: (i) => _act(context, ref, i, 'reject'),
             onRename: (i) => _act(context, ref, i, 'rename'),
+            onResolveKind: (i, isCard) =>
+                _act(context, ref, i, isCard ? 'asCard' : 'asAccount'),
             onOpen: (i) =>
                 context.push('/sms-v2/instruments/${i.instrumentId}'),
           ),
@@ -164,9 +190,14 @@ class FoundInstrumentsList extends StatelessWidget {
     required this.onReject,
     required this.onRename,
     required this.onOpen,
+    this.onResolveKind,
   });
   final List<Instrument> instruments;
   final ValueChanged<Instrument> onConfirm, onReject, onRename, onOpen;
+
+  /// Called with the bank-account reading and true when the user says it is a
+  /// credit card, false when it is a bank account.
+  final void Function(Instrument account, bool isCard)? onResolveKind;
   @override
   Widget build(BuildContext context) {
     final visible = instruments
@@ -200,7 +231,13 @@ class FoundInstrumentsList extends StatelessWidget {
             for (final instrument in visible.where((i) => i.kind == kind))
               Padding(
                 padding: const EdgeInsets.only(bottom: AppSpace.md),
-                child: _InstrumentPanel(
+                child: onResolveKind != null &&
+                        isShadowedByCard(instrument, visible)
+                    ? _KindQuestionPanel(
+                        account: instrument,
+                        onChoose: (isCard) => onResolveKind!(instrument, isCard),
+                      )
+                    : _InstrumentPanel(
                   instrument: instrument,
                   onConfirm: onConfirm,
                   onReject: onReject,
@@ -221,6 +258,53 @@ IconData instrumentKindIcon(InstrumentKind kind) => switch (kind) {
   InstrumentKind.broker => Icons.show_chart_rounded,
   _ => Icons.account_balance_outlined,
 };
+
+/// One question for a number that your messages call both a credit card and
+/// a bank account. Home lists neither until it is answered.
+class _KindQuestionPanel extends StatelessWidget {
+  const _KindQuestionPanel({required this.account, required this.onChoose});
+  final Instrument account;
+  final ValueChanged<bool> onChoose;
+
+  @override
+  Widget build(BuildContext context) {
+    return BambooPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '${account.issuerSlug.toUpperCase()} ••${account.maskDigits}',
+            style: BambooFonts.ui(
+              15.5,
+              weight: FontWeight.w700,
+              color: BambooInk.ink900,
+            ),
+          ),
+          const SizedBox(height: AppSpace.xs),
+          Text(
+            'Your messages call this both a credit card and a bank account. Which is it?',
+            style: BambooFonts.ui(14, color: BambooInk.ink700, height: 1.45),
+          ),
+          const SizedBox(height: AppSpace.md),
+          BambooActionBar(
+            primary: FilledButton(
+              style: BambooButtons.primary,
+              onPressed: () => onChoose(true),
+              child: const Text('Credit card'),
+            ),
+            quiet: [
+              TextButton(
+                style: BambooButtons.quiet,
+                onPressed: () => onChoose(false),
+                child: const Text('Bank account'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _InstrumentPanel extends StatelessWidget {
   const _InstrumentPanel({

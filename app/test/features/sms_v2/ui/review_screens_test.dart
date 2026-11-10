@@ -57,6 +57,50 @@ void main() {
     await tester.tap(find.text('Rename'));
     expect(action, 'rename');
   });
+  testWidgets('a number that is both a card and an account asks which it is', (
+    tester,
+  ) async {
+    Instrument make(String id, InstrumentKind kind) => Instrument(
+      instrumentId: id,
+      kind: kind,
+      issuerSlug: 'axis',
+      maskDigits: '2468',
+      displayName: 'Axis',
+      status: InstrumentStatus.confirmed,
+      firstSeenAt: DateTime.utc(2026, 11, 1),
+      lastSeenAt: DateTime.utc(2026, 11, 2),
+      evidenceCount: 2,
+    );
+    final account = make(
+      '33333333-3333-4333-8333-333333333333',
+      InstrumentKind.bankAccount,
+    );
+    final creditCard = make(
+      '44444444-4444-4444-8444-444444444444',
+      InstrumentKind.creditCard,
+    );
+    bool? choseCard;
+    await tester.pumpWidget(
+      app(
+        FoundInstrumentsList(
+          instruments: [account, creditCard],
+          onConfirm: (_) {},
+          onReject: (_) {},
+          onRename: (_) {},
+          onOpen: (_) {},
+          onResolveKind: (i, isCard) {
+            expect(i.instrumentId, account.instrumentId);
+            choseCard = isCard;
+          },
+        ),
+      ),
+    );
+    expect(find.textContaining('Which is it?'), findsOneWidget);
+    await tester.tap(find.text('Credit card'));
+    expect(choseCard, isTrue);
+    await tester.tap(find.text('Bank account'));
+    expect(choseCard, isFalse);
+  });
   Instrument card({
     required InstrumentStatus status,
     String? userCardId,

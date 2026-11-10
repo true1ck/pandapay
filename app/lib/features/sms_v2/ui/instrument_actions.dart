@@ -68,6 +68,12 @@ class InstrumentActions {
     return result;
   }
 
+  /// Settles a card-or-account collision: the user says [id] is not what the
+  /// messages made it look like. Archived, not rejected, so its transactions
+  /// stay in the ledger and later messages still resolve to it quietly.
+  void archive(String id) =>
+      _write(_owned(id).copyWith(status: InstrumentStatus.archived));
+
   void reject(String id) =>
       _write(_owned(id).copyWith(status: InstrumentStatus.rejected));
 

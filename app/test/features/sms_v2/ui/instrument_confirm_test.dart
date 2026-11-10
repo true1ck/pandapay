@@ -115,6 +115,19 @@ void main() {
     expect(queuedInstruments(), 1);
   });
 
+  test('archiving settles a card-or-account collision without a rule bundle', () {
+    store.upsert(_instrument(_bankId, kind: InstrumentKind.bankAccount));
+    final fast = InstrumentActions(
+      financial: financial,
+      namespace: _namespace,
+    );
+
+    fast.archive(_bankId);
+
+    expect(store.get(_bankId)!.status, InstrumentStatus.archived);
+    expect(queuedInstruments(), 1);
+  });
+
   test('rejecting still needs the rule bundle', () {
     store.upsert(_instrument(_bankId, kind: InstrumentKind.bankAccount));
     final fast = InstrumentActions(
