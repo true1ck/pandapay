@@ -283,14 +283,15 @@ class HistoryCategoryRecheck {
     return HistoryCategoryReport(Map.of(progress));
   }
 
-  /// [_apply] for a chunk; if it refuses the chunk, each spend is tried alone
-  /// so one that cannot be re-sorted is counted, with the reason, and the rest
-  /// still are. `_apply` checks everything before it writes anything, so a
-  /// refusal leaves the chunk untouched.
+  /// [_apply] for a chunk; if its checks refuse the chunk (a [StateError]),
+  /// each spend is tried alone so one that cannot be re-sorted is counted, with
+  /// the reason, and the rest still are. `_apply` checks everything before it
+  /// writes anything, so a refusal leaves the chunk untouched. A failed write (a
+  /// database error) is not a refusal: it propagates and rolls the chunk back.
   (int, int) _applyIsolating(Set<String> ready, Map<String, Object?> progress) {
     try {
       return _apply(ready);
-    } on Object catch (error) {
+    } on StateError catch (error) {
       if (ready.length == 1) {
         _countFailure(progress, error);
         return (0, 0);
@@ -302,7 +303,7 @@ class HistoryCategoryRecheck {
         final one = _apply({id});
         changed += one.$1;
         kept += one.$2;
-      } on Object catch (error) {
+      } on StateError catch (error) {
         _countFailure(progress, error);
       }
     }
