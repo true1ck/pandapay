@@ -537,7 +537,7 @@ class BillsHorizonSummary {
 // ---------------------------------------------------------------------------
 // Hidden for now per user request; preserved to easily re-enable later.
 const bool _showSmsBills = false;
-const bool _showScheduledPayments = false;
+const bool _showScheduledPayments = true;
 const bool _showCardBillReview = false;
 
 class _DueList extends ConsumerWidget {
