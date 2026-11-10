@@ -142,4 +142,78 @@ void main() {
     expect(projection.visibleSelectedCount({'one'}), 2);
     expect(projection.totalOutgoing.paise, 200);
   });
+
+  group('sorting', () {
+    TransactionEntry named(String id, int paise, DateTime day, String? name) =>
+        TransactionEntry(
+          id: id,
+          amount: Money.fromPaise(paise),
+          occurredAt: day,
+          merchantName: name,
+          entryKind: TxnEntryKind.spend,
+          source: 'manual',
+          status: 'active',
+        );
+    final d1 = DateTime(2026, 10, 29), d2 = DateTime(2026, 10, 30);
+    final d3 = DateTime(2026, 10, 31);
+    final rows = [
+      named('a', 500, d3, 'Zomato'),
+      named('b', 900, d1, 'amazon'),
+      named('c', 100, d2, null),
+      named('d', 900, d3, 'Blinkit'),
+      named('e', 300, d2, 'Amazon'),
+    ];
+    List<String> ids(ActivityProjection p) => [
+      for (final r in p.rows)
+        if (r.kind == ActivityRowKind.transaction) r.entry!.id,
+    ];
+
+    test('newest first is the default and keeps the day headers', () {
+      final p = ActivityProjection.build(rows);
+      expect(p.rows.where((r) => r.kind == ActivityRowKind.dayHeader), hasLength(3));
+      expect(p.rows[1].day, d3);
+      expect(ids(p), ['a', 'd', 'c', 'e', 'b']);
+    });
+
+    test('oldest first turns the whole list around, days and rows', () {
+      final p = ActivityProjection.build(rows, sort: ActivitySort.oldest);
+      expect(p.rows[1].day, d1);
+      expect(ids(p), ['b', 'e', 'c', 'd', 'a']);
+      expect(p.rows.where((r) => r.kind == ActivityRowKind.dayHeader), hasLength(3));
+    });
+
+    test('highest and lowest amount are one flat list, ties newest first', () {
+      final high = ActivityProjection.build(rows, sort: ActivitySort.highestAmount);
+      expect(high.rows.where((r) => r.kind == ActivityRowKind.dayHeader), isEmpty);
+      expect(ids(high), ['d', 'b', 'a', 'e', 'c']);
+      final low = ActivityProjection.build(rows, sort: ActivitySort.lowestAmount);
+      expect(ids(low), ['c', 'e', 'a', 'd', 'b']);
+    });
+
+    test('merchant A to Z ignores case and puts rows with no merchant last', () {
+      final p = ActivityProjection.build(rows, sort: ActivitySort.merchantAz);
+      // amazon (b, 29 Oct) and Amazon (e, 30 Oct) tie on name: newest first.
+      expect(ids(p), ['e', 'b', 'd', 'a', 'c']);
+    });
+
+    test('totals and counts do not depend on the order', () {
+      final base = ActivityProjection.build(rows);
+      for (final sort in ActivitySort.values) {
+        final p = ActivityProjection.build(rows, sort: sort);
+        expect(p.activeCount, base.activeCount, reason: sort.name);
+        expect(p.totalOutgoing.paise, base.totalOutgoing.paise, reason: sort.name);
+        expect(p.visibleSelectedCount({'a', 'b', 'zz'}), 2, reason: sort.name);
+      }
+    });
+
+    test('the cache rebuilds when only the sort changes', () {
+      final cache = ActivityProjectionCache();
+      final first = cache.resolve(rows, scope: 'x');
+      final same = cache.resolve(rows, scope: 'x');
+      expect(identical(first, same), isTrue);
+      final other = cache.resolve(rows, scope: ('x', ActivitySort.merchantAz), sort: ActivitySort.merchantAz);
+      expect(identical(first, other), isFalse);
+      expect(ids(other), ['e', 'b', 'd', 'a', 'c']);
+    });
+  });
 }

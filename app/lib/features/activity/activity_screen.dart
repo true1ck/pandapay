@@ -739,6 +739,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     }
 
     final filter = ref.watch(_activityFilterProvider);
+    final sort = ref.watch(_activitySortProvider);
     final transactions = ref.watch(activityTransactionsProvider);
     final tagRepository = ref.watch(transactionTagsProvider);
     final foreign =
@@ -794,6 +795,15 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                     const Expanded(child: _SearchField()),
                     const SizedBox(width: AppSpace.xs),
                     IconButton(
+                      key: const Key('activity-sort-button'),
+                      tooltip: 'Sort: ${sort.label}',
+                      color: sort == ActivitySort.newest
+                          ? null
+                          : BambooInk.jade,
+                      onPressed: () => _openSortSheet(context, sort),
+                      icon: const Icon(Icons.swap_vert_rounded),
+                    ),
+                    IconButton(
                       tooltip: 'Select transactions',
                       onPressed: _selecting || _isBulkOperating
                           ? null
@@ -825,16 +835,32 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                 const SizedBox(height: AppSpace.xs),
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: FilterChip(
-                    key: const Key('activity-foreign-filter'),
-                    avatar: const Icon(Icons.currency_exchange, size: 16),
-                    label: const Text('Foreign currency'),
-                    selected: _foreignOnly,
-                    onSelected: (selected) => setState(() {
-                      _foreignOnly = selected;
-                      _selecting = false;
-                      _selectedIds.clear();
-                    }),
+                  child: Wrap(
+                    spacing: AppSpace.xs,
+                    children: [
+                      FilterChip(
+                        key: const Key('activity-foreign-filter'),
+                        avatar: const Icon(Icons.currency_exchange, size: 16),
+                        label: const Text('Foreign currency'),
+                        selected: _foreignOnly,
+                        onSelected: (selected) => setState(() {
+                          _foreignOnly = selected;
+                          _selecting = false;
+                          _selectedIds.clear();
+                        }),
+                      ),
+                      if (sort != ActivitySort.newest)
+                        InputChip(
+                          key: const Key('activity-sort-chip'),
+                          avatar: Icon(_activitySortIcon(sort), size: 16),
+                          label: Text(sort.label),
+                          onPressed: () => _openSortSheet(context, sort),
+                          onDeleted: () =>
+                              ref.read(_activitySortProvider.notifier).state =
+                                  ActivitySort.newest,
+                          deleteButtonTooltipMessage: 'Back to newest first',
+                        ),
+                    ],
                   ),
                 ),
                 if (filter.hasClearableFilters) ...[
@@ -931,8 +957,10 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                     token,
                     filter,
                     v2Enabled,
+                    sort,
                   ),
                   ledgerTotals: ledgerModel?.totalsForTransactions(entries),
+                  sort: sort,
                 );
                 final visibleSelected = projection.visibleSelectedCount(
                   _selectedIds,
@@ -1074,6 +1102,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                   ),
                                   child: _TransactionTile(
                                     entry,
+                                    showDate: !sort.groupsByDay,
                                     foreignPayment:
                                         foreignByTransaction[entry.id],
                                     selecting: _selecting,
@@ -1134,6 +1163,65 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _openSortSheet(
+    BuildContext context,
+    ActivitySort current,
+  ) async {
+    final picked = await showModalBottomSheet<ActivitySort>(
+      context: context,
+      backgroundColor: BambooInk.paper,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpace.lg,
+                  AppSpace.sm,
+                  AppSpace.lg,
+                  AppSpace.xs,
+                ),
+                child: Text(
+                  'Sort activity',
+                  style: BambooFonts.heading(17, color: BambooInk.ink900),
+                ),
+              ),
+              for (final option in ActivitySort.values)
+                ListTile(
+                  key: Key('activity-sort-${option.name}'),
+                  leading: Icon(
+                    _activitySortIcon(option),
+                    color: option == current
+                        ? BambooInk.jade
+                        : BambooInk.ink500,
+                  ),
+                  title: Text(
+                    option.label,
+                    style: BambooFonts.ui(
+                      14,
+                      weight: FontWeight.w600,
+                      color: BambooInk.ink900,
+                    ),
+                  ),
+                  trailing: option == current
+                      ? const Icon(Icons.check_rounded, color: BambooInk.jade)
+                      : null,
+                  selected: option == current,
+                  selectedTileColor: BambooInk.paperMuted,
+                  onTap: () => Navigator.of(sheetContext).pop(option),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    ref.read(_activitySortProvider.notifier).state = picked;
   }
 
   static String _dayLabel(DateTime day) {
@@ -1267,6 +1355,20 @@ ActivityFilter _activityMonthFilter([DateTime? now]) {
 final _activityFilterProvider = StateProvider<ActivityFilter>(
   (ref) => _activityMonthFilter(),
 );
+
+/// How the Activity list is ordered. Starts as newest first; not part of the
+/// filter, so Clear leaves it alone and it never reaches the server.
+final _activitySortProvider = StateProvider<ActivitySort>(
+  (ref) => ActivitySort.newest,
+);
+
+IconData _activitySortIcon(ActivitySort sort) => switch (sort) {
+  ActivitySort.newest => Icons.arrow_downward_rounded,
+  ActivitySort.oldest => Icons.arrow_upward_rounded,
+  ActivitySort.highestAmount => Icons.trending_down_rounded,
+  ActivitySort.lowestAmount => Icons.trending_up_rounded,
+  ActivitySort.merchantAz => Icons.sort_by_alpha_rounded,
+};
 
 final activityTransactionsProvider = FutureProvider<List<TransactionEntry>>((
   ref,
@@ -2629,8 +2731,12 @@ class _TransactionTile extends StatelessWidget {
   final List<String> tagNames;
   final bool selecting;
   final bool selected;
+
+  /// Shows the day before the time: for a list that is not grouped by day.
+  final bool showDate;
   const _TransactionTile(
     this.entry, {
+    this.showDate = false,
     this.foreignPayment,
     required this.onTap,
     this.onLongPress,
@@ -2673,12 +2779,15 @@ class _TransactionTile extends StatelessWidget {
         ? BambooInk.clay
         : BambooInk.ink900;
     final isSmsImported = entry.source == 'sms' || entry.source == 'sms_bulk';
-    final timeLabel = _ActivityScreenState._timeLabel(
+    final clock = _ActivityScreenState._timeLabel(
       context,
       isSmsImported
           ? (entry.smsReceivedAt ?? entry.occurredAt)
           : entry.occurredAt,
     );
+    final timeLabel = showDate
+        ? '${_ActivityScreenState._dayLabel(DateTime(entry.occurredAt.toLocal().year, entry.occurredAt.toLocal().month, entry.occurredAt.toLocal().day))} · $clock'
+        : clock;
     // SMS import stores a P2P transfer as "Transfer to <payee>". Showing the
     // payee and moving "Transfer" into the chip slot keeps the cue when the
     // list is scanned (docs/design/spending-activity-redesign-2026-10-20.html).

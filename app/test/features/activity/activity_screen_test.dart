@@ -308,6 +308,64 @@ void main() {
     expect(find.text('2 txns'), findsOneWidget);
   });
 
+  testWidgets('sorts the list from the Sort button and shows each row\'s date', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    final repo = _FakeUserCardsRepository([
+      _txn(id: 't1', amount: Money.fromRupees(500), occurredAt: now, merchantName: 'Zeta Shop'),
+      _txn(id: 't2', amount: Money.fromRupees(9000), occurredAt: now.subtract(const Duration(days: 1)), merchantName: 'Alpha Shop'),
+      _txn(id: 't3', amount: Money.fromRupees(40), occurredAt: now.subtract(const Duration(days: 1)), merchantName: 'Mid Shop'),
+    ]);
+    await _pump(
+      tester,
+      repo: repo,
+      cards: const [],
+      activityScreen: ActivityScreen(
+        initialFrom: now.subtract(const Duration(days: 1)),
+        initialTo: now,
+      ),
+    );
+    double top(String name) => tester.getTopLeft(find.text(name)).dy;
+
+    // Default: newest first, grouped by day.
+    expect(find.text('Today'), findsOneWidget);
+    expect(top('Zeta Shop'), lessThan(top('Alpha Shop')));
+    expect(find.byKey(const Key('activity-sort-chip')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('activity-sort-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Sort activity'), findsOneWidget);
+    for (final label in ['Newest first', 'Oldest first', 'Highest amount', 'Lowest amount', 'Merchant A to Z']) {
+      expect(find.text(label), findsOneWidget);
+    }
+
+    await tester.tap(find.byKey(const Key('activity-sort-highestAmount')));
+    await tester.pumpAndSettle();
+    // Flat list, biggest first, no day headings, a chip says what is applied.
+    expect(find.text('Today'), findsNothing);
+    expect(top('Alpha Shop'), lessThan(top('Zeta Shop')));
+    expect(top('Zeta Shop'), lessThan(top('Mid Shop')));
+    expect(find.byKey(const Key('activity-sort-chip')), findsOneWidget);
+    expect(find.textContaining('Today ·'), findsOneWidget, reason: 'the row for today shows its own date');
+    expect(find.textContaining('Yesterday ·'), findsNWidgets(2));
+
+    await tester.tap(find.byKey(const Key('activity-sort-button')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('activity-sort-merchantAz')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('activity-sort-merchantAz')));
+    await tester.pumpAndSettle();
+    expect(top('Alpha Shop'), lessThan(top('Mid Shop')));
+    expect(top('Mid Shop'), lessThan(top('Zeta Shop')));
+
+    // The chip's x puts it back to newest first with the day headings.
+    await tester.tap(find.byTooltip('Back to newest first'));
+    await tester.pumpAndSettle();
+    expect(find.text('Today'), findsOneWidget);
+    expect(find.byKey(const Key('activity-sort-chip')), findsNothing);
+  });
+
   testWidgets('does not count a credit-card bill payment as spending', (
     tester,
   ) async {
