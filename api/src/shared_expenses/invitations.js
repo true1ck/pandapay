@@ -22,6 +22,35 @@ function verifiedPhoneHash(secret,contacts) {
   if(contacts?.phone?.verified!==true||typeof contacts.phone.value!=='string')return null;
   return phoneHash(secret,contacts.phone.value);
 }
+/** Lower-cased, trimmed address; rejects anything that cannot be an email. */
+function normalizeEmail(value) {
+  if(typeof value!=='string'||value.length>254)fail('INVALID_INPUT','email');
+  const email=value.trim().toLowerCase();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254)fail('INVALID_INPUT','email');
+  return email;
+}
+// An email hash is a different keyed hash from a phone hash (own domain prefix), so the two can
+// never collide. Both are stored in the same opaque hash columns the invite functions compare.
+function emailHash(secret,email) {return crypto.createHmac('sha256',key(secret)).update('pandapay:split-email:v1:'+normalizeEmail(email)).digest('hex');}
+function verifiedEmailHash(secret,contacts) {
+  if(contacts?.email?.verified!==true||typeof contacts.email.value!=='string'||!contacts.email.value)return null;
+  try {return emailHash(secret,contacts.email.value);}catch(error){if(error?.message==='invitations_unavailable')throw error;return null;}
+}
+/**
+ * Every verified way this person can be reached, email first. Most people sign in with
+ * Google or email and have no verified phone, so email is the identity that always exists.
+ */
+function identityHashes(secret,contacts) {
+  return [verifiedEmailHash(secret,contacts),verifiedPhoneHash(secret,contacts)].filter(Boolean);
+}
+/** The hash a typed target stands for: an email address or a phone number, never both. */
+function targetHash(secret,body) {
+  const hasEmail=body.email!=null,hasPhone=body.phoneNumber!=null;
+  if(hasEmail&&hasPhone)fail('INVALID_INPUT','email');
+  if(hasEmail)return emailHash(secret,body.email);
+  if(hasPhone)return phoneHash(secret,body.phoneNumber);
+  return null;
+}
 function inviteCredentials(secret,actor,id) {
   uuid(actor,'actorId');uuid(id,'invitationId');
   const token=crypto.createHmac('sha256',key(secret)).update(`pandapay:split-invite:v1:${actor}:${id}`).digest('base64url');
@@ -49,7 +78,7 @@ function createDirectoryToucher({withUserClient,secret,ttlMs=24*3600*1000,retryM
   const seen=new Map();
   return function touch(req) {
     try {
-      const hash=verifiedPhoneHash(secret,req.verifiedSession?.verifiedContacts);
+      const hash=identityHashes(secret,req.verifiedSession?.verifiedContacts)[0];
       if(!hash||!req.userId)return Promise.resolve(false);
       const prior=seen.get(req.userId);
       if(prior&&prior.hash===hash&&now()-prior.at<ttlMs)return Promise.resolve(false);
@@ -94,10 +123,10 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
     try {key(secret);await handler(req,res);}catch(error){if(error?.message==='invitations_unavailable')return res.status(503).json({error:'invitations_unavailable'});throw error;}
   }));
   route('/shared-expenses/invitations',async(req,res)=>{
-    const b=req.body;record(b,['invitationId','contextId','memberId'],'$','INVALID_INPUT',['phoneNumber']);
+    const b=req.body;record(b,['invitationId','contextId','memberId'],'$','INVALID_INPUT',['phoneNumber','email']);
     for(const field of ['invitationId','contextId','memberId'])uuid(b[field],field);
-    const target=b.phoneNumber==null?null:phoneHash(secret,b.phoneNumber);
-    if(target&&target===verifiedPhoneHash(secret,req.verifiedSession?.verifiedContacts))return res.status(400).json({error:'invitation_self'});
+    const target=targetHash(secret,b);
+    if(target&&identityHashes(secret,req.verifiedSession?.verifiedContacts).includes(target))return res.status(400).json({error:'invitation_self'});
     const creds=inviteCredentials(secret,req.userId,b.invitationId);
     const result=await withUserClient(req.userId,async client=>{
       const payload={invitationId:b.invitationId,contextId:b.contextId,memberId:b.memberId,targetPhoneHash:target,tokenHash:creds.tokenHash};
@@ -127,6 +156,7 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
     const b=req.body;record(b,['token','operationId'],'$','INVALID_INPUT',['sharePhone']);uuid(b.operationId,'operationId');
     if(Object.hasOwn(b,'sharePhone')&&typeof b.sharePhone!=='boolean')fail('INVALID_INPUT','sharePhone');
     const hash=tokenHash(b.token),phone=verifiedPhoneHash(secret,req.verifiedSession?.verifiedContacts);
+    const claimHashes=identityHashes(secret,req.verifiedSession?.verifiedContacts);
     const e164=phone?normalizePhone(req.verifiedSession.verifiedContacts.phone.value):null;
     const last4=e164?e164.slice(-4):null;
     const on=phoneOn();
@@ -135,8 +165,12 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
     const share=!on?null:!e164?'none':b.sharePhone===true?'shared':b.sharePhone===false?'declined':null;
     let result;
     try {
+     // An address-bound invite is matched against whichever verified address this person has;
+     // only a mismatch (raised before anything is written) moves on to the next one.
+     for(const claimAs of (claimHashes.length?claimHashes:[null])) {
+      try {
       result=await withUserClient(req.userId,async client=>{
-        const r=(await client.query('SELECT shared_expenses.claim_invitation($1::text,$2::text,$3::text,$4::uuid,$5::text,$6::text) AS result',[hash,phone,last4,b.operationId,requestHash({tokenHash:hash,accept:true,sharePhone:on&&Object.hasOwn(b,'sharePhone')?b.sharePhone:null}),share==='shared'?null:share])).rows[0].result;
+        const r=(await client.query('SELECT shared_expenses.claim_invitation($1::text,$2::text,$3::text,$4::uuid,$5::text,$6::text) AS result',[hash,claimAs,last4,b.operationId,requestHash({tokenHash:hash,accept:true,sharePhone:on&&Object.hasOwn(b,'sharePhone')?b.sharePhone:null}),share==='shared'?null:share])).rows[0].result;
         let phoneShare=share==='shared'?'not_asked':(share||'not_asked');
         const ring=share==='shared'&&r?.fresh===true&&r?.status==='awaiting_owner'&&r.invitationId?phoneOpts.ring():null;
         if(ring) {
@@ -155,9 +189,15 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
         const {fresh,...reply}=r;
         return on?{...reply,phoneShare}:(({invitationId,...rest})=>rest)(reply);
       });
+      break;
+      }catch(error){
+        if(error?.message==='invitation_phone_mismatch'&&claimAs!==claimHashes[claimHashes.length-1])continue;
+        throw error;
+      }
+     }
     }catch(error){
-      // A number-bound invite needs a verified number; say that instead of "wrong number".
-      if(error?.message==='invitation_phone_mismatch'&&!phone)return res.status(409).json({error:'phone_not_verified'});
+      // An address-bound invite needs a verified address; say that instead of "wrong number".
+      if(error?.message==='invitation_phone_mismatch'&&!claimHashes.length)return res.status(409).json({error:'phone_not_verified'});
       throw error;
     }
     res.json(result);
@@ -199,25 +239,27 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
     const result=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.respond_invitation($1::uuid,$2::boolean,$3::uuid,$4::text) AS result',[b.invitationId,b.approve,b.operationId,requestHash(b)])).rows[0].result);
     res.json(result);
   });
-  const own=(req)=>verifiedPhoneHash(secret,req.verifiedSession?.verifiedContacts);
+  const own=(req)=>identityHashes(secret,req.verifiedSession?.verifiedContacts)[0]??null;
+  const ownAll=(req)=>identityHashes(secret,req.verifiedSession?.verifiedContacts);
   const touch=createDirectoryToucher({withUserClient,secret});
   // Register everyone's verified phone as soon as they use the app at all, so a person
   // who has installed and signed in is findable and can receive invites without ever
   // opening Splits. Throttled per person; never blocks or fails a request.
   try{require('../auth').onVerifiedSession(req=>{void touch(req);});}catch(_){}
   route('/shared-expenses/directory/lookup',async(req,res)=>{
-    record(req.body,['phoneNumber']);
-    const hash=phoneHash(secret,req.body.phoneNumber);
+    record(req.body,[],'$','INVALID_INPUT',['phoneNumber','email']);
+    const hash=targetHash(secret,req.body);
+    if(!hash)fail('INVALID_INPUT','email');
     const result=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.lookup_phone($1::text) AS result',[hash])).rows[0].result);
     res.json({found:result.found===true,self:result.self===true,...(result.found?{displayName:maskName(result.displayName)??'A PandaPay user',existingContextId:result.existingContextId??null}:{})});
   });
   app.get('/shared-expenses/directory',...protect(async(req,res)=>{
     key(secret);
     const phone=own(req);
-    if(!phone)return res.json({phoneVerified:false,registered:false,discoverable:true});
+    if(!phone)return res.json({phoneVerified:false,emailVerified:false,registered:false,discoverable:true});
     await touch(req);
     const result=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.directory_status() AS result')).rows[0].result);
-    res.json({phoneVerified:true,registered:result.registered===true,discoverable:result.discoverable!==false});
+    res.json({phoneVerified:true,emailVerified:Boolean(verifiedEmailHash(secret,req.verifiedSession?.verifiedContacts)),registered:result.registered===true,discoverable:result.discoverable!==false});
   }));
   route('/shared-expenses/directory',async(req,res)=>{
     record(req.body,['discoverable']);
@@ -230,11 +272,17 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
   app.get('/shared-expenses/invitations/inbox',...protect(async(req,res)=>{
     key(secret);
     if(Object.keys(req.query).length)fail('INVALID_INPUT','query');
-    const phone=own(req);
-    if(!phone)return res.json({phoneVerified:false,items:[]});
+    const hashes=ownAll(req);
+    if(!hashes.length)return res.json({phoneVerified:false,emailVerified:false,items:[]});
     await touch(req);
-    const result=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.list_my_invitations($1::text) AS result',[phone])).rows[0].result);
-    res.json({phoneVerified:true,items:(result.items||[]).map(i=>({...i,inviterName:maskName(i.inviterName)}))});
+    const seen=new Map();
+    for(const hash of hashes) {
+      const result=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.list_my_invitations($1::text) AS result',[hash])).rows[0].result);
+      for(const item of result.items||[])if(!seen.has(item.invitationId))seen.set(item.invitationId,item);
+    }
+    const items=[...seen.values()].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))).slice(0,20);
+    // phoneVerified is kept for older apps and now means "has a verified way to be reached".
+    res.json({phoneVerified:true,emailVerified:Boolean(verifiedEmailHash(secret,req.verifiedSession?.verifiedContacts)),items:items.map(i=>({...i,inviterName:maskName(i.inviterName)}))});
   }));
   route('/shared-expenses/members/remove',async(req,res)=>{
     const b=req.body;record(b,['contextId','memberId','operationId']);for(const f of ['contextId','memberId','operationId'])uuid(b[f],f);
@@ -301,14 +349,29 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
   for(const [path,fn] of [['accept','claim_invitation_by_id'],['decline','decline_invitation']]) {
     route('/shared-expenses/invitations/'+path,async(req,res)=>{
       const b=req.body;record(b,['invitationId','operationId']);uuid(b.invitationId,'invitationId');uuid(b.operationId,'operationId');
-      const phone=own(req);
-      if(!phone)return res.status(409).json({error:'phone_not_verified'});
+      const contacts=req.verifiedSession?.verifiedContacts;
+      const hashes=ownAll(req);
+      if(!hashes.length)return res.status(409).json({error:'phone_not_verified'});
+      const phoneH=verifiedPhoneHash(secret,contacts);
       const rh=requestHash({invitationId:b.invitationId,action:path});
-      const result=await withUserClient(req.userId,async client=>{
-        const sql=path==='accept'?'SELECT shared_expenses.claim_invitation_by_id($1::uuid,$2::text,$3::text,$4::uuid,$5::text) AS result':'SELECT shared_expenses.decline_invitation($1::uuid,$2::text,$3::uuid,$4::text) AS result';
-        const params=path==='accept'?[b.invitationId,phone,normalizePhone(req.verifiedSession.verifiedContacts.phone.value).slice(-4),b.operationId,rh]:[b.invitationId,phone,b.operationId,rh];
-        return (await client.query(sql,params)).rows[0].result;
-      });
+      // The invite is bound to one address; try each verified one until it matches. A mismatch
+      // raises before anything is written, so every attempt is its own clean transaction.
+      let result,lastError=null;
+      for(const phone of hashes) {
+        try {
+          result=await withUserClient(req.userId,async client=>{
+            const sql=path==='accept'?'SELECT shared_expenses.claim_invitation_by_id($1::uuid,$2::text,$3::text,$4::uuid,$5::text) AS result':'SELECT shared_expenses.decline_invitation($1::uuid,$2::text,$3::uuid,$4::text) AS result';
+            const last4=phone===phoneH?normalizePhone(contacts.phone.value).slice(-4):null;
+            const params=path==='accept'?[b.invitationId,phone,last4,b.operationId,rh]:[b.invitationId,phone,b.operationId,rh];
+            return (await client.query(sql,params)).rows[0].result;
+          });
+          lastError=null;break;
+        }catch(error){
+          lastError=error;
+          if(error?.message!=='invitation_unavailable')break;
+        }
+      }
+      if(lastError)throw lastError;
       const {audienceKey,...publicResult}=result;
       res.json(publicResult);
       if(path==='accept'&&result.status==='awaiting_owner'&&audienceKey) {
@@ -325,4 +388,4 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
     res.json(phoneOn()?result:{...result,items:stripPhone(result.items)});
   }));
 }
-module.exports={normalizePhone,inviteCredentials,groupLinkCredentials,verifiedPhoneHash,registerInvitationRoutes,createDirectoryToucher,maskName};
+module.exports={normalizePhone,normalizeEmail,emailHash,verifiedEmailHash,identityHashes,inviteCredentials,groupLinkCredentials,verifiedPhoneHash,registerInvitationRoutes,createDirectoryToucher,maskName};

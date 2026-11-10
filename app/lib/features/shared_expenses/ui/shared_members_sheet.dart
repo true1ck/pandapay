@@ -566,6 +566,9 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
 
   static bool _phonesMatch(String? a, String? b) {
     if (a == null || b == null) return false;
+    if (a.contains('@') || b.contains('@')) {
+      return a.trim().toLowerCase() == b.trim().toLowerCase();
+    }
     final da = a.replaceAll(RegExp(r'[^0-9]'), '');
     final db = b.replaceAll(RegExp(r'[^0-9]'), '');
     if (da == db && da.isNotEmpty) return true;
@@ -602,11 +605,12 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
           );
           return;
         }
-        final cleaned = phone.isEmpty ? null : sharedCleanPhone(phone);
+        final cleaned = phone.isEmpty ? null : sharedCleanContact(phone);
         if (phone.isNotEmpty && cleaned == null) {
           setState(
             () =>
-                _formError = 'Enter a valid mobile number, or leave it empty.',
+                _formError =
+                    'Enter a valid email or mobile number, or leave it empty.',
           );
           return;
         }
@@ -616,7 +620,7 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
             lookup = await widget.runtime.lookupPhone(cleaned);
           } catch (_) {}
           if (lookup.self) {
-            setState(() => _formError = 'That is your own number.');
+            setState(() => _formError = 'That is your own email or number.');
             return;
           }
         }
@@ -717,7 +721,7 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
     final contact = await _pickContact();
     if (contact == null || !mounted) return;
     final pickedName = contact.$1;
-    final pickedPhone = sharedCleanPhone(contact.$2);
+    final pickedPhone = sharedCleanContact(contact.$2);
 
     String? error;
     try {
@@ -735,7 +739,8 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
               'Someone in this split already has that name. Add a surname or initial.';
         } else if (pickedPhone != null &&
             _phones.values.any((p) => _phonesMatch(p, pickedPhone))) {
-          error = 'Someone in this split is already invited with that number.';
+          error =
+              'Someone in this split is already invited with that email or number.';
         }
       }
     } catch (_) {}
@@ -751,12 +756,19 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
     try {
       if (!await sharedEnsureContactsAccess(context)) return null;
       final picked = await FlutterContacts.native.showPicker(
-        properties: {ContactProperty.name, ContactProperty.phone},
+        properties: {
+          ContactProperty.name,
+          ContactProperty.phone,
+          ContactProperty.email,
+        },
       );
       final rawName = picked?.displayName?.trim() ?? "";
       if (picked == null || rawName.isEmpty) return null;
       final name = rawName.length > 40 ? rawName.substring(0, 40).trim() : rawName;
+      // An email always matches a PandaPay account, so it is offered first.
       final numbers = [
+        for (final e in picked.emails)
+          if (sharedCleanEmail(e.address) != null) sharedCleanEmail(e.address)!,
         for (final p in picked.phones)
           if (sharedCleanPhone(p.number) != null) sharedCleanPhone(p.number)!,
       ].toSet().toList();
@@ -764,7 +776,7 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
         final choice = await showDialog<String>(
           context: context,
           builder: (ctx) => SimpleDialog(
-            title: Text("Which number for $name?"),
+            title: Text("Which email or number for $name?"),
             children: [
               for (final n in numbers)
                 SimpleDialogOption(
@@ -854,15 +866,15 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
       const SizedBox(height: 12),
       TextField(
         controller: _phoneField,
-        keyboardType: TextInputType.phone,
-        maxLength: 20,
+        keyboardType: TextInputType.emailAddress,
+        maxLength: 80,
         buildCounter:
             (_, {required currentLength, required isFocused, maxLength}) =>
                 null,
         textInputAction: TextInputAction.done,
         style: BambooFonts.ui(15),
         decoration: const InputDecoration(
-          labelText: 'Mobile number (optional)',
+          labelText: 'Their PandaPay email or mobile number (optional)',
         ),
       ),
       SharedPhoneLookupStatus(

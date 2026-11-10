@@ -80,7 +80,23 @@ String? sharedCleanPhone(String raw) {
   return RegExp(r'^[1-9][0-9]{7,14}$').hasMatch(digits) ? '+$digits' : null;
 }
 
-/// Answer to "is this number on PandaPay?" for one number the user picked.
+/// True when the typed value is an email address rather than a phone number.
+bool sharedIsEmail(String raw) => raw.contains('@');
+
+/// A tidy lower-case email, or null when [raw] cannot be one. Most people sign in
+/// with Google or email, so an email is the contact that always matches.
+String? sharedCleanEmail(String raw) {
+  final text = raw.trim().toLowerCase();
+  if (text.isEmpty || text.length > 254) return null;
+  return RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(text) ? text : null;
+}
+
+/// What a typed "email or mobile number" field means: a clean email, a clean
+/// phone number, or null when it is neither.
+String? sharedCleanContact(String raw) =>
+    sharedIsEmail(raw) ? sharedCleanEmail(raw) : sharedCleanPhone(raw);
+
+/// Answer to "is this person on PandaPay?" for one email or number the user picked.
 /// An unregistered number and a person who turned discovery off look the same.
 final class SharedPhoneLookup {
   final bool found, self;
@@ -294,7 +310,7 @@ final class SharedGroupLinkStatus {
 String sharedInviteIssueMessage(Object error) {
   final code = error is SharedTransportException ? error.code : null;
   return switch (code) {
-    'invitation_self' => 'That is your own number.',
+    'invitation_self' => 'That is your own email or number.',
     'invitation_already_member' => 'That person is already in this split.',
     'invitation_duplicate' =>
       'Someone in this split is already invited with that number.',
@@ -332,7 +348,7 @@ String sharedInviteIssueMessage(Object error) {
     'settle_first' =>
       'Settle up and clear any waiting expenses before leaving.',
     'phone_not_verified' =>
-      'Verify your mobile number in your profile to use phone invites.',
+      'Verify your email or mobile number in your profile to use invites.',
     'invitation_unavailable' =>
       'This invite has expired or is no longer available.',
     'network_unavailable' =>

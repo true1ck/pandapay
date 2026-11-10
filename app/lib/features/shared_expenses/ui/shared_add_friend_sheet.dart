@@ -50,7 +50,7 @@ class _LookupState extends State<SharedPhoneLookupStatus> {
 
   void _changed() {
     _debounce?.cancel();
-    final phone = sharedCleanPhone(widget.controller.text);
+    final phone = sharedCleanContact(widget.controller.text);
     if (phone == _checked && phone != null) return;
     if (phone == null) {
       _checked = null;
@@ -75,7 +75,7 @@ class _LookupState extends State<SharedPhoneLookupStatus> {
     });
     try {
       final result = await widget.runtime.lookupPhone(phone);
-      if (!mounted || sharedCleanPhone(widget.controller.text) != phone) {
+      if (!mounted || sharedCleanContact(widget.controller.text) != phone) {
         return;
       }
       _checked = phone;
@@ -107,7 +107,7 @@ class _LookupState extends State<SharedPhoneLookupStatus> {
         : r.self
         ? (
             Icons.info_outline_rounded,
-            'That is your own number.',
+            'That is your own email or number.',
             BambooInk.clayInk,
           )
         : r.found
@@ -169,12 +169,20 @@ Future<(String, String)?> sharedPickContact(BuildContext context) async {
   try {
     if (!await sharedEnsureContactsAccess(context)) return null;
     final picked = await FlutterContacts.native.showPicker(
-      properties: {ContactProperty.name, ContactProperty.phone},
+      properties: {
+        ContactProperty.name,
+        ContactProperty.phone,
+        ContactProperty.email,
+      },
     );
     final rawName = picked?.displayName?.trim() ?? '';
     if (picked == null || rawName.isEmpty) return null;
     final name = rawName.length > 40 ? rawName.substring(0, 40).trim() : rawName;
+    // An email is the contact that always matches a PandaPay account, so it
+    // comes first; a phone number is offered after it.
     final numbers = [
+      for (final e in picked.emails)
+        if (sharedCleanEmail(e.address) != null) sharedCleanEmail(e.address)!,
       for (final p in picked.phones)
         if (sharedCleanPhone(p.number) != null) sharedCleanPhone(p.number)!,
     ].toSet().toList();
@@ -182,7 +190,7 @@ Future<(String, String)?> sharedPickContact(BuildContext context) async {
       final choice = await showDialog<String>(
         context: context,
         builder: (ctx) => SimpleDialog(
-          title: Text('Which number for $name?'),
+          title: Text('Which email or number for $name?'),
           children: [
             for (final n in numbers)
               SimpleDialogOption(
@@ -278,7 +286,7 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
     final contact = await sharedPickContact(context);
     if (contact == null || !mounted) return;
     final pickedName = contact.$1;
-    final pickedPhone = sharedCleanPhone(contact.$2);
+    final pickedPhone = sharedCleanContact(contact.$2);
     String? error;
     final lower = pickedName.trim().toLowerCase();
     if (lower == 'you' || lower == 'me' || lower == 'myself') {
@@ -309,10 +317,10 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
       );
       return;
     }
-    final phone = sharedCleanPhone(raw);
+    final phone = sharedCleanContact(raw);
     if (raw.isNotEmpty && phone == null) {
       setState(
-        () => _error = 'Enter a valid mobile number, or leave it empty.',
+        () => _error = 'Enter a valid email or mobile number, or leave it empty.',
       );
       return;
     }
@@ -322,7 +330,7 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
         lookup = await widget.runtime.lookupPhone(phone);
       } catch (_) {}
       if (lookup.self) {
-        if (mounted) setState(() => _error = 'That is your own number.');
+        if (mounted) setState(() => _error = 'That is your own email or number.');
         return;
       }
     }
@@ -377,14 +385,14 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
         const SizedBox(height: 12),
         TextField(
           controller: _phone,
-          keyboardType: TextInputType.phone,
-          maxLength: 20,
+          keyboardType: TextInputType.emailAddress,
+          maxLength: 80,
           buildCounter:
               (_, {required currentLength, required isFocused, maxLength}) =>
                   null,
           style: BambooFonts.ui(15),
           decoration: const InputDecoration(
-            labelText: 'Mobile number (optional)',
+            labelText: 'Their PandaPay email or mobile number (optional)',
           ),
         ),
         SharedPhoneLookupStatus(
@@ -402,7 +410,7 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Add the mobile number they verified on PandaPay and the invite reaches them in the app, with a notification. Without a number, nothing is sent until you share a link. You can still add expenses meanwhile.',
+          'Use the email they signed in to PandaPay with (or their mobile number) and the invite reaches them in the app, with a notification. Without one, nothing is sent until you share a link. You can still add expenses meanwhile.',
           style: BambooFonts.ui(12, color: BambooInk.ink700),
         ),
         if (_error != null) ...[

@@ -326,7 +326,7 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
         'contextId': contextId,
         'memberId': memberId,
         if (phoneNumber != null && phoneNumber.isNotEmpty)
-          'phoneNumber': phoneNumber,
+          (sharedIsEmail(phoneNumber) ? 'email' : 'phoneNumber'): phoneNumber,
       }),
     ))!;
     final url = value['joinUrl'];
@@ -374,13 +374,15 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
     return status;
   }
 
-  /// One picked number. The server rate-limits this and never reveals whether
+  /// One picked email or number (an address with "@" is sent as an email). The server rate-limits this and never reveals whether
   /// a person who opted out of discovery is registered.
   Future<SharedPhoneLookup> lookupPhone(String phoneNumber) async {
     final value = (await _request(
       'POST',
       '/shared-expenses/directory/lookup',
-      body: jsonEncode({'phoneNumber': phoneNumber}),
+      body: jsonEncode({
+        (sharedIsEmail(phoneNumber) ? 'email' : 'phoneNumber'): phoneNumber,
+      }),
     ))!;
     return SharedPhoneLookup.fromJson(value);
   }
