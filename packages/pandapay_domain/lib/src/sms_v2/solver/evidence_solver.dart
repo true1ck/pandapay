@@ -616,13 +616,17 @@ class _Run {
     if (mandateEnd.isNotEmpty) {
       final h = mandateEnd.first;
       reasons.add('mandate ended: "${_s(h)}"');
+      final endParty = _merchantNear(h.start);
+      final endRef = _mandateRef();
+      final named = endParty != null || endRef != null;
+      if (!named) reasons.add('no service name or reference: left for review');
       return _done(
         SolverRead.mandate,
-        SolverVerdict.accept,
-        1,
+        named ? SolverVerdict.accept : SolverVerdict.candidate,
+        named ? 1 : 0.4,
         mandatePhase: h.entry.kind ?? 'revoked',
-        mandateRef: _mandateRef(),
-        party: _merchantNear(h.start),
+        mandateRef: endRef,
+        party: endParty,
         mandatePurpose: _mandatePurpose(recurring.isNotEmpty),
       );
     }
@@ -634,7 +638,9 @@ class _Run {
       final amt = payable.isEmpty ? null : toks[payable.first];
       final party = _merchantNear(h.start);
       final freq = _frequency();
-      final enough = party != null || amt != null || recurring.isNotEmpty;
+      // A mandate with no readable service name (and no reference) cannot become
+      // a subscription row: a person is asked instead.
+      final enough = party != null || _mandateRef() != null;
       return _done(
         SolverRead.mandate,
         enough ? SolverVerdict.accept : SolverVerdict.candidate,
@@ -1332,13 +1338,43 @@ class _Run {
   /// "to" / "of" next to the cue.
   String? _merchantNear(int cueIdx) {
     final cues = hits('merchantCue');
-    final stop = {for (final h in hits('partyStop')) h.start};
+    // A name ends where the payment rail, a mandate word or a frequency begins
+    // ("towards NAME UPI AutoPay-Bank of X").
+    final stop = {
+      for (final name in const [
+        'partyStop',
+        'rail',
+        'recurring',
+        'mandateSetup',
+        'mandateEnd',
+      ])
+        for (final h in hits(name)) h.start,
+    };
     final nonParty = {for (final h in hits('nonParty')) h.start};
+    // "towards" / "for" name the merchant; "with", "from", "to" only when nothing
+    // better does ("Mandate with MONTHLY ... created towards NAME").
     final ordered = [...cues]
-      ..sort(
-        (a, b) => (a.start - cueIdx).abs().compareTo((b.start - cueIdx).abs()),
-      );
+      ..sort((a, b) {
+        final weak = (a.entry.kind == 'weak' ? 1 : 0) -
+            (b.entry.kind == 'weak' ? 1 : 0);
+        if (weak != 0) return weak;
+        return (a.start - cueIdx).abs().compareTo((b.start - cueIdx).abs());
+      });
+    // "Autopay SI-NAME": a prefix word, a hyphen, then the service.
+    String? hyphenName;
+    for (final h in hits('recurring')) {
+      if (h.entry.kind != 'prefix') continue;
+      final t = toks[h.start];
+      if (t.kind != TokKind.word || !t.text.contains('-')) continue;
+      final tail = t.text.split('-').last;
+      if (tail.length >= 2 && RegExp(r'^[A-Za-z]+$').hasMatch(tail)) {
+        hyphenName = tail;
+        break;
+      }
+    }
     for (final c in ordered) {
+      // Better than a weak cue ("from HDFC Bank ..."): the service named after a hyphen.
+      if (c.entry.kind == 'weak' && hyphenName != null) return hyphenName;
       var i = c.end;
       final words = <String>[];
       while (i < toks.length &&
@@ -1350,9 +1386,13 @@ class _Run {
         words.add(t.text);
         i++;
       }
+      // Right before an account number it is the user's own account, not a service.
+      if (words.isNotEmpty && i < toks.length && toks[i].kind == TokKind.mask) {
+        continue;
+      }
       if (words.isNotEmpty) return words.join(' ');
     }
-    return null;
+    return hyphenName;
   }
 
   /// The biller's name: the words just before the bill word ("... Energy bill").
@@ -1512,6 +1552,12 @@ class _Run {
   (String, bool)? _party(bool debit, int amtIdx) {
     final cues = hits(debit ? 'payeeDebit' : 'payeeCredit');
     final stop = {for (final h in hits('partyStop')) h.start};
+    // Once a name has begun, a mandate word ("UPI AutoPay-Bank") or a frequency
+    // ends it: "towards AGIONE TEC UPI AutoPay-Union Bank" is AGIONE TEC.
+    final afterName = {
+      for (final name in const ['rail', 'recurring', 'mandateSetup', 'mandateEnd'])
+        for (final h in hits(name)) h.start,
+    };
     final nonParty = {for (final h in hits('nonParty')) h.start};
     final lead = {for (final h in hits('partyLead')) h.start};
     final ordered = [...cues]
@@ -1539,8 +1585,14 @@ class _Run {
         final t = toks[i];
         if (t.kind != TokKind.word || stop.contains(i)) break;
         if (words.isEmpty && nonParty.contains(i)) break;
+        if (words.isNotEmpty && afterName.contains(i)) break;
         words.add(t.text);
         i++;
+      }
+      // Words that sit right before an account number ("from HDFC Bank XX1234")
+      // name the user's own account, not a payee.
+      if (words.isNotEmpty && i < toks.length && toks[i].kind == TokKind.mask) {
+        continue;
       }
       if (words.isNotEmpty) return (words.join(' '), false);
     }

@@ -1699,7 +1699,12 @@
     "priority": 680,
     "match": {
       "pattern": "your\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:expired|lapsed)",
-      "flags": "i"
+      "flags": "i",
+      "rejectAny": [
+        "will be debited",
+        "will be deducted",
+        "upcoming mandate"
+      ]
     },
     "emit": [
       {
@@ -1744,7 +1749,12 @@
     "priority": 681,
     "match": {
       "pattern": "your\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:expired|lapsed)(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)",
-      "flags": "i"
+      "flags": "i",
+      "rejectAny": [
+        "will be debited",
+        "will be deducted",
+        "upcoming mandate"
+      ]
     },
     "emit": [
       {
@@ -1960,7 +1970,12 @@
     "priority": 680,
     "match": {
       "pattern": "your\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:modified|updated|changed|revised)",
-      "flags": "i"
+      "flags": "i",
+      "rejectAny": [
+        "will be debited",
+        "will be deducted",
+        "upcoming mandate"
+      ]
     },
     "emit": [
       {
@@ -2005,7 +2020,12 @@
     "priority": 681,
     "match": {
       "pattern": "your\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:modified|updated|changed|revised)(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)",
-      "flags": "i"
+      "flags": "i",
+      "rejectAny": [
+        "will be debited",
+        "will be deducted",
+        "upcoming mandate"
+      ]
     },
     "emit": [
       {
@@ -2148,7 +2168,12 @@
     "priority": 680,
     "match": {
       "pattern": "your\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:paused|put on hold|suspended)",
-      "flags": "i"
+      "flags": "i",
+      "rejectAny": [
+        "will be debited",
+        "will be deducted",
+        "upcoming mandate"
+      ]
     },
     "emit": [
       {
@@ -2177,6 +2202,11 @@
         "sender": "VM-HDFCBK-S",
         "body": "Your NETFLIX UPI AutoPay mandate has been resumed.",
         "expectFactTypes": []
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "For the upcoming mandate set for 05-12-26, your account will be debited with Rs.75.00 towards Amazon Pay for the Recurring Bill Payments. If mandate is paused the execution for the same will not happen. - Amazon Pay and Yes Bank.",
+        "expectFactTypes": []
       }
     ],
     "status": "active",
@@ -2193,7 +2223,12 @@
     "priority": 681,
     "match": {
       "pattern": "your\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:paused|put on hold|suspended)(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)",
-      "flags": "i"
+      "flags": "i",
+      "rejectAny": [
+        "will be debited",
+        "will be deducted",
+        "upcoming mandate"
+      ]
     },
     "emit": [
       {
@@ -2336,7 +2371,12 @@
     "priority": 680,
     "match": {
       "pattern": "your\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:resumed|reactivated|re-activated|unpaused)",
-      "flags": "i"
+      "flags": "i",
+      "rejectAny": [
+        "will be debited",
+        "will be deducted",
+        "upcoming mandate"
+      ]
     },
     "emit": [
       {
@@ -2381,7 +2421,12 @@
     "priority": 681,
     "match": {
       "pattern": "your\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:resumed|reactivated|re-activated|unpaused)(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)",
-      "flags": "i"
+      "flags": "i",
+      "rejectAny": [
+        "will be debited",
+        "will be deducted",
+        "upcoming mandate"
+      ]
     },
     "emit": [
       {
@@ -2430,7 +2475,12 @@
     "priority": 680,
     "match": {
       "pattern": "your\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:has been|is|was)\\s+(?:cancelled|canceled|revoked|deleted|closed|terminated|deactivated)(?:\\s+successfully)?",
-      "flags": "i"
+      "flags": "i",
+      "rejectAny": [
+        "will be debited",
+        "will be deducted",
+        "upcoming mandate"
+      ]
     },
     "emit": [
       {
@@ -2475,7 +2525,12 @@
     "priority": 681,
     "match": {
       "pattern": "your\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:has been|is|was)\\s+(?:cancelled|canceled|revoked|deleted|closed|terminated|deactivated)(?:\\s+successfully)?(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)",
-      "flags": "i"
+      "flags": "i",
+      "rejectAny": [
+        "will be debited",
+        "will be deducted",
+        "upcoming mandate"
+      ]
     },
     "emit": [
       {

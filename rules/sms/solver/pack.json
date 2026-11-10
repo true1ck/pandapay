@@ -398,7 +398,11 @@
       "every month",
       "per year",
       "e-mandate",
-      "standing instruction"
+      "standing instruction",
+      {
+        "p": "si",
+        "kind": "prefix"
+      }
     ],
     "mandateSetup": [
       "mandate created",
@@ -789,13 +793,28 @@
       "for"
     ],
     "merchantCue": [
-      "for",
-      "to",
-      "of",
-      "at",
       "towards",
-      "with",
-      "from"
+      "for",
+      {
+        "p": "to",
+        "kind": "weak"
+      },
+      {
+        "p": "with",
+        "kind": "weak"
+      },
+      {
+        "p": "from",
+        "kind": "weak"
+      },
+      {
+        "p": "of",
+        "kind": "weak"
+      },
+      {
+        "p": "at",
+        "kind": "weak"
+      }
     ],
     "loanWord": [
       "loan",
@@ -1234,7 +1253,28 @@
       "loan",
       "charges",
       "interest",
-      "salary"
+      "salary",
+      "monthly",
+      "yearly",
+      "weekly",
+      "daily",
+      "quarterly",
+      "annual",
+      "annually",
+      "aspresented",
+      "presented",
+      "revoke",
+      "revoked",
+      "cancel",
+      "cancelled",
+      "pause",
+      "paused",
+      "resume",
+      "renew",
+      "renewed",
+      "know",
+      "become",
+      "cc"
     ],
     "instrumentKind": [
       {

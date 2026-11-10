@@ -169,6 +169,12 @@ List<RecurringSeries> subscriptionsFromLedger(
         .putIfAbsent(canon[c.key] ?? c.key, () => [])
         .addAll(c.value);
   }
+  // A mandate whose service name was never read, with no charge to show for it, is
+  // not a subscription: it would be listed as "Unknown service".
+  final nameless = normalizeMerchantText('Unknown service');
+  mergedGroups.removeWhere(
+    (key, _) => key == nameless && (mergedCharges[key] ?? const []).isEmpty,
+  );
   final result = <RecurringSeries>[];
   for (final group in mergedGroups.entries) {
     final mandates = group.value.whereType<v2.MandateFact>().toList()

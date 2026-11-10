@@ -640,6 +640,38 @@ void main() {
       _facts(d);
     });
 
+    test('a mandate is named for the service it is towards, never a frequency, a verb or a bank', () {
+      final cases = <String, (String, String)>{
+        'Dear Customer,UPI AutoPay Mandate with MONTHLY is successfully created towards AGIONE TEC from 01/11/2026 to 01/11/2027 for Rs.499.00-Union Bank of India': ('AGIONE TEC', 'created'),
+        'Dear Customer,UPI AutoPay Mandate with ASPRESENTED is successfully created towards Amazon Ind from 01/11/2026 to 01/11/2027 for Rs.299.00-Union Bank of India': ('Amazon Ind', 'created'),
+        'Your ASPRESENTED UPI AutoPay Mandate from 01/11/2026 to 01/11/2027 is successfully created towards Google Play for Rs.1850.00. Refer UM no. abc@okaxis. Regards, Kotak Bank': ('Google Play', 'created'),
+        'Your request to Revoke the UPI AutoPay Mandate of Rs.1850.00 towards Google Play is successful. Refer UM no. abc@okaxis. Regards, Kotak Bank': ('Google Play', 'revoked'),
+      };
+      for (final e in cases.entries) {
+        final d = _solve(e.key);
+        expect(d.read, SolverRead.mandate, reason: e.key);
+        expect(d.party, e.value.$1, reason: e.key);
+        expect(d.mandatePhase, e.value.$2, reason: e.key);
+      }
+      // A debit alert that names the mandate rail after the service stops at the service.
+      final debit = _solve('Dear Customer, Your account has been successfully debited with Rs.499.00 on 05-11-2026 towards AGIONE TEC UPI AutoPay-Union Bank of India');
+      expect(debit.party, 'AGIONE TEC');
+      // "Autopay SI-NAME": the service follows the hyphen.
+      final si = _solve('UPDATE: INR 1,000.00 debited from HDFC Bank XX1234 on 05-AUG-26. Info: CC 123456789012XXXX3456 Autopay SI-TAD. Avl bal:INR 5,000.00');
+      expect(si.party, 'TAD');
+    });
+
+    test('a mandate or membership notice with no service name is left for a person, never a row', () {
+      for (final body in [
+        'HDFC Bank: Your UPI-Mandate is successfully cancelled by 9876543210@ikwik for Rs 99.00.',
+        'Sample Store: Your Plus membership expired on 10 Jun 2026. To know how to become a member again, click here: https://x.example',
+      ]) {
+        final d = _solve(body);
+        final nameless = d.read == SolverRead.mandate && d.party == null;
+        expect(nameless && d.accepted, isFalse, reason: body);
+      }
+    });
+
     test('a card or UPI attempt declined for security reasons, with no amount, is an alert', () {
       for (final body in [
         'Transaction on Sample Bank Credit Card no. XX1234 has been declined due to security reasons. Please call 1800 for details.',
