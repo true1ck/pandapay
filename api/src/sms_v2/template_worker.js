@@ -34,7 +34,7 @@ const attrValidators = Object.fromEntries(
 
 // Recorded on every attempt and inside the prompt. Change it with any change to
 // the prompt text or its rules, and run the --eval dry run first.
-const PROMPT_VERSION = "tpl-2026-11-17";
+const PROMPT_VERSION = "tpl-2026-11-20";
 
 // Compose passes an unset variable through as "", which means "not set".
 const isSet = (env, key) => env[key] !== undefined && env[key] !== "";
@@ -133,7 +133,16 @@ const SMS_DOMAIN_RULES = Object.freeze([
   "An AutoPay or e-mandate registration, change, pause or cancellation is a mandate fact. Its amount is a ceiling, never a spend.",
   "An IPO or ASBA block, a UPI mandate block or a card pre-authorisation is a hold fact.",
   "An ATM cash withdrawal is a movement fact with direction debit and purpose atm.",
-  "A refund, reversal or cashback is a movement fact with direction credit and purpose refund, reversal or cashback.",
+  "A refund, reversal or cashback that is processed, credited or transferred is a movement fact with direction credit and purpose refund, reversal or cashback. The verb \"transferred\" or \"processed\" does not make it a debit.",
+  "A refund that is only initiated, in progress or \"will be credited\" has not moved money. It is an attempt fact with status pending or scheduled, direction credit and purpose refund, never a movement.",
+  "A message from a biller, app, merchant or service (not the user's own bank or card issuer) that confirms a payment, renewal, deposit or purchase it took (renewed, payment processed, receipt, deposit processed, fixed deposit created) is that provider's receipt. Emit its movement with evidenceOnly true, direction debit, and the purpose that fits (purchase, bill_payment, emi or investment). The bank's own alert that the account or card was debited is the real debit and has no evidenceOnly.",
+  "A deposit, fixed deposit, SIP or fund purchase confirmed by its provider means the user's money went out: direction debit, purpose investment, evidenceOnly true. It is never a credit.",
+  "A credit with no stated reason, a loan amount paid out by a lender, or a lender or app crediting the user's wallet or account is money in: a movement with direction credit and purpose p2p. Purpose wallet_topup is only the user adding their own money to a wallet (recharged, added money, top-up).",
+  "Redeeming coins, points or rewards for wallet value is not income and not spending: a movement with direction debit, purpose transfer and counterparty kind own, so it appears in activity only.",
+  "A debit alert that mentions AutoPay, a UPI mandate, a standing instruction or a mandate reference is a movement fact (direction debit) and puts the mandate reference in references.umrn when printed. Only a message that registers, changes, pauses, cancels or expires the mandate is a mandate fact.",
+  "When the same placeholder appears more than once in the layout (two <REF>, two <AMT>), each occurrence is a different real value. Capture each with its own uniquely named group; never use a backreference such as \\k<name> or \\1.",
+  "Never invent a date. A bill_due fact needs a printed due date. A reminder that prints an amount but no due date is not a bill_due; do not guess one.",
+  "A credit report or credit score notice, and the status of a card or loan application (received, approved, declined, not processed), are info facts with category service.",
   "A credit card bill payment is a movement fact with purpose card_payment.",
   "Telecom talktime or validity deductions, loan or Pay Later offers, credit-limit upgrade offers, OTPs, gambling or promotional messages and general service alerts are info facts with category otp, security, promotion or service. They never create a movement.",
   "An available-balance or balance-after amount is never the movement amount.",

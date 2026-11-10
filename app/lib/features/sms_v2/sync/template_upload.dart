@@ -109,6 +109,8 @@ class TemplateUpload {
       final review = jsonDecode(row['payload'] as String) as Map;
       final key = review['sourceKey'];
       if (key is! String) continue;
+      // Waiting for history, or already read by it: no rule can be drafted.
+      if (review['aiHold'] != null) continue;
       final message = intake.capturedById(queue.namespace, key)?.message;
       if (message == null) continue;
       final salt = base64UrlEncode(

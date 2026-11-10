@@ -536,3 +536,31 @@ test("validation runs in one reusable thread, and a runaway regex times out with
   assert.ok(Date.now() - started < 5000);
   assert.deepEqual(await validateDraftSafely(good, template, config.model, []), []);
 });
+
+// The prompt must keep teaching the model the decisions the phone's reader and ledger
+// are built on. A draft that breaks them double counts money or swallows a message
+// the phone could still complete, so each rule is pinned by what it says.
+test("the prompt carries the rules the ledger depends on", () => {
+  const rules = JSON.parse(buildPrompt(template)).domainRules.join("\n").toLowerCase();
+  const pinned = [
+    // A provider's own receipt is never a second debit.
+    "evidenceonly true",
+    // A refund that has not arrived has not moved money.
+    "only initiated",
+    "attempt fact",
+    // Coins and rewards are activity, not income or spending.
+    "counterparty kind own",
+    // A debit alert about an AutoPay is a movement, not a mandate.
+    "references.umrn",
+    // Money in, and what a wallet top-up is.
+    "money in",
+    "wallet_topup",
+    // Never invent a date.
+    "never invent a date",
+    // Repeated placeholders are different values.
+    "never use a backreference",
+    // Reports and application status are information.
+    "credit report",
+  ];
+  for (const phrase of pinned) assert.ok(rules.includes(phrase), `domain rules lost: ${phrase}`);
+});

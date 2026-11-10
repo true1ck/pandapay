@@ -32,7 +32,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { redactionError } = require('../src/sms_v2/ai_templates');
 const {
-  workerConfig, buildPrompt, validateDraftSafely, createGeminiTemplateProvider,
+  workerConfig, buildPrompt, stampDraft, validateDraftSafely, createGeminiTemplateProvider,
 } = require('../src/sms_v2/template_worker');
 
 const REPO_ROOT = path.resolve(__dirname, '../..');
@@ -92,7 +92,13 @@ async function draftOne({ template, examples, provider, config, validate }) {
       const input = tokens(response?.inputTokens);
       out.inputTokens += input;
       out.outputTokens += Math.max(tokens(response?.outputTokens), tokens(response?.totalTokens) - input);
-      out.rule = typeof response.rule === 'string' ? JSON.parse(response.rule) : response.rule;
+      // Stamped as the worker does (id, status, author, sender, template link), so
+      // the verdict here is the verdict the worker would reach.
+      out.rule = stampDraft(
+        typeof response.rule === 'string' ? JSON.parse(response.rule) : response.rule,
+        template,
+        config.model,
+      );
       errors = await validate(out.rule, template, config.model);
     } catch {
       errors = ['provider_or_json_invalid'];

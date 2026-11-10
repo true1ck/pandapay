@@ -180,7 +180,16 @@ class SmsV2Pipeline {
           }
           interpreted.add((message, outcome));
           if (result.outcome == InterpretOutcome.unknown) {
-            review.add(_templateReview(message, result));
+            // A reminder with no date, or a refund with no account, is waiting for
+            // history, not for a rule: an AI-drafted rule could not read it either.
+            review.add(
+              _templateReview(
+                message,
+                result,
+                history: outcome.pendingBill != null ||
+                    outcome.pendingRefund != null,
+              ),
+            );
           } else if (result.outcome == InterpretOutcome.ignored) {
             for (final fact in result.facts) {
               _facts.insert(fact);
@@ -189,7 +198,14 @@ class SmsV2Pipeline {
             incoming.addAll(result.facts);
             if (result.facts.any((fact) => fact.confidence < .7) ||
                 provisional) {
-              review.add(_templateReview(message, result));
+              review.add(
+                _templateReview(
+                  message,
+                  result,
+                  // Already read, by history: the person confirms it, no rule is needed.
+                  history: (result.ruleId ?? '').endsWith('-INFERRED'),
+                ),
+              );
             }
           }
         }
@@ -385,16 +401,21 @@ class SmsV2Pipeline {
     );
   }
 
-  ReviewItem _templateReview(SmsMessage message, InterpretResult result) =>
-      ReviewItem(
-        kind: ReviewKind.template,
-        payload: {
-          'sourceKey': message.sourceKey,
-          'templateHash': result.templateHash,
-          'senderBrand': normalizeSenderBrand(message.sender).brand,
-          'iosFilter': message.iosFilter,
-        },
-      );
+  ReviewItem _templateReview(
+    SmsMessage message,
+    InterpretResult result, {
+    bool history = false,
+  }) => ReviewItem(
+    kind: ReviewKind.template,
+    payload: {
+      'sourceKey': message.sourceKey,
+      'templateHash': result.templateHash,
+      'senderBrand': normalizeSenderBrand(message.sender).brand,
+      'iosFilter': message.iosFilter,
+      // Never sent for AI rule drafting: history completes it, not a rule.
+      if (history) 'aiHold': 'history',
+    },
+  );
 
   Map<String, DecisionTrace> _project(
     List<SmsMessage> messages,
