@@ -1,6 +1,6 @@
 # Spend accuracy: fixes to build later (11 Nov 2026)
 
-Status: plan only, nothing built. Counts and shares only, no merchants, people, names or amounts from any private corpus. The real figures live in the owner's private workbook, not here.
+Status: plan only, nothing built. Counts and shares only, no merchants, people, names or amounts from any private corpus. The real figures live in the owner's private workbook, not here. Section A was rewritten on 12 Nov 2026: the first version let card bill payments drop out of every total and had no row for income, split bills, lending, cash or loans.
 
 ## What the evidence says
 
@@ -24,38 +24,63 @@ Spend and income totals were not affected by cause 5. Causes 1 to 4, 6 and 7 mov
 - Per-transaction "Transfer between my accounts" and "Credit card bill payment" (`app/lib/features/activity/mark_transaction_kind.dart`), with an offer to apply to other payments to the same payee (`app/lib/features/sms_v2/similar/similar_offer_sheet.dart`).
 - Tags: "Add tag" on the transaction screen and bulk "Add tags" in Activity (`TransactionTagsRepository`, `app/lib/app/providers.dart`; picker in `app/lib/app/transaction_tag_picker.dart`).
 - "Not mine" per account (`app/lib/features/sms_v2/ui/found_instruments_screen.dart`, `InstrumentActions.reject`): a rejected account's movements are hidden. Reached from Home, Accounts.
-- Activity's **Money out** filter already means spending plus investments (`_ActivityTypeFilter.moneyOut` in `app/lib/features/activity/activity_screen.dart`). Home shows only "Money in" and "Total spent".
+- Activity's **Money out** filter already means spending plus investments (`_ActivityTypeFilter.moneyOut` in `app/lib/features/activity/activity_screen.dart`). Home shows only "Money in" and "Total spent". Section A keeps that meaning and makes Home use the same definition.
 
 ## Goals
 
-1. **Money out means everything that left the owner**, so it includes spending and investments, not spending alone (section A).
+1. **Money out means everything that left the owner** (spending plus investments), **Spending is the headline for what was bought, and every other flow gets its own line** (Invested, Card bills paid, Transfers, From people, Lent), so nothing vanishes and the lines bridge to what left the bank accounts (section A).
 2. **Detect family from the owner's own name and tag it automatically** (section B).
 3. **Recognise self-transfers without a profile name, and stop hiding unrelated payments under one shared "UNKNOWN" payee** (section C).
 4. Fold in the smaller fixes this review found (section D).
 
 Non-goals: new bank rules in a release, server changes, AI changes. Sections A, B and the app side of C are app changes (one app build). C4 and D1 to D2 are rule changes and need a rule-bundle version through the admin console.
 
-## A. Money out and Money in (what to show)
+## A. What counts as spending, income and everything else (what to show)
 
-**Definition.** Money out is every rupee that left the owner's own money and did not come back to it. It counts card spending when the card is used, so paying the card bill is not counted again.
+*Rewritten 12 Nov 2026 after review.* The first version had three problems:
+
+- A withdrawal of investment principal was labelled "Investment returns". Only dividends and interest are returns.
+- A card bill payment vanished from every total, even when the card's own spends never reached the phone. Section E found that about half of statement rows had no SMS, so for those cards the bill was the only trace.
+- It had no row for salary, a friend's share of a bill, money lent, cash or loans, which are the flows most people have most often.
+
+**Definitions.**
+
+- **Money out** is every rupee that left the owner's own money and did not come back to it: Spending plus **Invested**. This follows the owner's decision of 11 Nov 2026 that Money out includes investments. A card spend counts when the card is used, so paying the card bill is not counted again. The part of a bill that tracked spends do not explain (A2) is Spending, so it is in Money out too.
+- **Spending** is what the owner bought or paid for, counted when it happened. It is the headline figure for "how much did I spend". Money out and Spending differ only by Invested, so a month of investing never reads as overspending.
+- **Income** is new money that belongs to the owner: salary and other pay, rent received, interest on savings.
+- **Money in** is Income, plus **Investment returns** (dividends and interest only), plus **Withdrawn from investments**, plus **From people**. Each is its own line.
+- **Money that only changes place** is in neither figure: moves between own accounts, card bill payments, loan principal received. Each gets its own line so nothing disappears.
+- **Left your accounts** is the cash view: every debit on the owner's bank accounts, with card bills counted when paid. It is the one figure that should match a bank statement, and the app shows how to get from Money out to it (A7).
 
 | Event | Money out | Money in | Spending | Note |
 | --- | --- | --- | --- | --- |
-| purchase, subscription, bill payment, fee, tax | yes | no | yes | Taxes and interest are spending. |
-| payment to a person | yes | no | yes, unless tagged Family or self | Family shows as its own line (section B). |
-| investment, IPO application | yes (gross) | no | no | Shown as the **Investments** line of Money out. |
-| investment withdrawal, dividend | no | yes, as **Investment returns** | no | Never mixed into salary or other income. |
+| purchase, subscription, bill payment, fee, tax, insurance premium | yes | no | yes | Taxes and interest are spending. A card spend counts when the card is used. |
+| payment to a person | yes | no | yes, family included | Shown as Spending with a **Family** slice. A setting leaves all Family payments out of Spending (B5), and Edit transaction leaves out one payment (A8); either way it stays in Money out. Money lent is a separate row. |
+| cash withdrawal | yes | no | yes | Category Cash, counted when withdrawn. |
+| card bill payment | only the part the card's tracked spends do not explain | no | the same part | The rest is the **Card bills paid** memo line. The unexplained part is Spending "not itemised" (A2). Counted once, after the bank debit and the card credit are merged (D1). |
+| investment, SIP, IPO application, FD booking | yes (gross) | no | no | Shown as the **Invested** line of Money out. |
+| investment withdrawal, maturity, redemption | no | yes, as **Withdrawn from investments** | no | Shown next to Invested, with the net beside it. Not Income, and never called a return. |
+| dividend, interest on an investment | no | yes, as **Investment returns** | no | Never mixed into salary or other income. |
+| salary, other pay, rent received, interest on savings | no | yes, as Income | no | |
+| credit from a person | no, or reduces it once marked "Split" | yes, as **From people**, never Income; no once marked "Split or paid back" | no, or reduces it once marked "Split" | A share of a bill the owner paid reduces Spending and Money out. A repayment of money lent is excluded. D4 pairs the clear cases. |
+| money lent to a person | no, once marked Lent | no | no | **Lent** line until repaid. The repayment is excluded from Money in. |
 | refund, reversal | netted against what it refunds | no | reduces it | Already how the totals work. |
-| card bill payment | no | no | no | Counted when the card was used. Shown as a memo line "paid to cards". |
-| move between own accounts, wallet top-up | no | no | no | Shown under Transfers. |
-| credit from a person later repaid to the same person | no | no | no | See D4. |
+| loan received | no | no | no | Shown under Loans. Not income. |
+| loan EMI | yes | no | yes, in full; interest only when the SMS splits principal and interest | |
+| move between own accounts, wallet top-up | no | no | no | Shown under Transfers. A wallet whose spends the phone does not see is treated like a card (A2). |
+
+**Trade-off.** Payments to family and large payments to people stay inside Spending and Money out by default. Causes 1 and 2 in the evidence table become visible slices of the headline instead of being dropped from it. The owner can leave Family out of Spending with the setting in B5, and any single payment can be left out of Spending from Edit transaction (A8), with a reason, so a large payment to someone can be marked Family, Lent or something else.
 
 | Step | Change | Where | Done when |
 | --- | --- | --- | --- |
-| A1 | Add money out, investments out and people-and-family out to the totals next to `spendMinor`, `incomeMinor`, `investmentMinor`. | `packages/pandapay_domain/lib/src/sms_v2/ledger/projector.dart` (`totals`), tests in `packages/pandapay_domain/test/sms_v2/ledger/golden_totals_test.dart` | Money out equals spending plus investments plus people; transfers and card bills never appear in it. A golden case per row of the table. |
-| A2 | Home gets a **Money out** figure beside Money in and Total spent, with the split Spending, Investments, Family and other people. | `app/lib/features/home/home_screen.dart` (`_HomeSpendMetric`), report model in `app/lib/features/sms_v2/ledger/reports.dart` | Widget test: the three figures add up on a month that has all four kinds. |
-| A3 | Activity's Money out chip and its header total use the same definition as Home. | `app/lib/features/activity/activity_screen.dart` | One definition shared by Home and Activity; a test fails if they differ. |
-| A4 | Investment withdrawals appear as Investment returns in Money in, labelled so they are not read as income. | Home, Activity, Insights (`app/lib/features/insights/spend_trends_screen.dart`) | A month with a withdrawal shows it on its own line. |
+| A1 | Add to the totals next to `spendMinor`, `incomeMinor`, `investmentMinor`: money out (spending plus invested), invested, withdrawn, investment returns, family (a slice of spend, not an extra amount), from people, lent, card bills paid, transfers, and left your accounts. | `packages/pandapay_domain/lib/src/sms_v2/ledger/projector.dart` (`totals`), tests in `packages/pandapay_domain/test/sms_v2/ledger/golden_totals_test.dart` | A golden case per row of the table. Money out equals Spending plus Invested; transfers and card bills never appear in it except the not-itemised part. |
+| A2 | **Card spending not itemised.** Per card, keep a running balance of tracked card spends minus bills paid. When bills paid exceed tracked spends, the excess counts as Spending "not itemised" (and so as Money out) and is flagged on the card page. The same rule applies to a wallet. Run it after D1, so a bill paid through an app (bank debit plus card credit) is counted once. Use the issuer's statement-total SMS where one exists instead of the running balance. A card's first bill pays spends from before tracking began, so the first bill and the edge of a cycle need settling on one real card's data before this ships. | `packages/pandapay_domain/lib/src/sms_v2/ledger/projector.dart`, linker, the card page | Golden: a bill of 10,000 with 7,000 tracked puts 3,000 in Spending "not itemised"; a bill below tracked spends adds nothing and is never negative; the cause-5 double count does not return. |
+| A3 | Home shows **Money in**, **Money out** and **Spent**, each with its split: Money in (Income, Investment returns, Withdrawn, From people), Money out (Spending, Invested), Spent (with Family inside it). A link opens "Where your money went": Spending, Invested, Card bills paid, Transfers. | `app/lib/features/home/home_screen.dart` (`_HomeSpendMetric`), report model in `app/lib/features/sms_v2/ledger/reports.dart` | Widget test: the figures add up on a month that has every kind of row. |
+| A4 | Activity's Money out chip and its header total use the same definition as Home (it already means spending plus investments). Add chips for Spending, Card bills and Transfers. | `app/lib/features/activity/activity_screen.dart` (`_ActivityTypeFilter.moneyOut`) | One definition shared by Home and Activity; a test fails if they differ. |
+| A5 | Investments: **Invested** (in Money out) and **Withdrawn** (in Money in) on one line, with the net beside it. Dividends and interest are **Investment returns**. A redemption is never labelled returns. | Home, Activity, Insights (`app/lib/features/insights/spend_trends_screen.dart`) | A month with a withdrawal and a dividend shows them on separate lines. |
+| A6 | **From people.** A credit from a person is its own line in Money in. One tap, "Split or paid back", nets it against Spending and Money out or marks it a repayment. A payment the owner marks "Lent" leaves Spending and Money out. D4 pairs the clear cases in both directions (credit then repaid; paid then paid back). | linker, tags (`TransactionTagsRepository`), Home | A friend paying back a split dinner reduces Spending and adds nothing to Income. Nothing is netted without a pair or a tap. |
+| A7 | **Left your accounts**, the cash view, with a bridge from Money out: take off spending on cards and wallets, add Card bills paid, Wallet top-ups, Transfers out and Lent. | "Where your money went" or Insights, `reports.dart` | For an account with complete data the bridge equals the bank's debit total for the month. An account with missing SMS shows the gap (section E). |
+| A8 | **Leave one payment out of spending, from Edit transaction.** Today the Type dropdown offers Spending, Money in, Investment, Transfer and Refund, so the only way out of Spending is to call a payment a transfer, which is wrong for a family payment and also removes it from Money out. Add a visible switch **Count in spending** (on by default) under the Type dropdown, shown for any row that counts as spending. Switching it off asks "Why?": **Family** (adds the Family tag, stays in Money out), **Lent** (marks it Lent, leaves Money out too until repaid, A6) or **Something else** (stays in Money out). Saving then offers the existing similar-payments sheet with nothing ticked, plus "Remember for this payee". The choice is stored as a user edit next to `eventType` and `category`, not as a type change, so a family payment is never turned into a transfer and a re-read of history never undoes it (precedence rule 1). Make it visible: the Activity row and the detail screen say "Left out of spending · reason", Where your money went shows "N left out, amount" with a one-tap "Count again", and Spending falls by exactly that amount (Money out too for Lent). | `app/lib/features/activity/edit_transaction_screen.dart` (the Type dropdown, near line 943), `app/lib/features/activity/transaction_detail_screen.dart` (a "Counted in spending" row beside Status), `app/lib/features/activity/activity_screen.dart` (the "Excluded from spend" marker near line 3660 gains the reason), `app/lib/features/sms_v2/ui/transaction_actions.dart` (`SmsTransactionActions.edit` takes the new field), `packages/pandapay_domain/lib/src/sms_v2/ledger/projector.dart` (`totals`), `app/lib/features/sms_v2/similar/similar_offer_sheet.dart` | Widget test: switching off moves the amount from Spending to "left out" and leaves Money out unchanged (Lent changes both). A golden totals case per reason. A re-read of history keeps it. Home, Activity and the detail screen show the same state, and "Count again" restores it. |
 
 ## B. Family detection from the owner's name, with an automatic tag
 
@@ -67,7 +92,7 @@ Indian names usually run first name, father's name, surname. A payee that shares
 | B2 | `familyLikeName(payee, ownerNames)`: true when the payee shares the surname (whole, cut to 4 or more letters, or as an initial after other words) or the father's name together with one more word, including forms with an honorific (Smt, Shri, Mr, Mrs). False for a business, for the first name alone, and for very common words (a short stoplist plus any word that appears in many unrelated payees). | `person_name.dart` | Synthetic matrix below passes. |
 | B3 | **Automatic tag.** When a payment or credit to a person matches, set the tag **Family** through `TransactionTagsRepository`, marked as automatic. A tag the person removes is never re-added; "Not family" remembers the payee. A weak match shows a "Family?" suggestion and does not tag. | `app/lib/app/providers.dart`, `transaction_tag_picker.dart`, pipeline write after the ledger projection | Re-reading history does not undo a manual removal; a test covers tag, remove, re-read. |
 | B4 | Offer "Tag all payments to this payee" through the existing similar-changes sheet. | `app/lib/features/sms_v2/similar/` | Same sheet as the own-transfer flow. |
-| B5 | Reports: a **Family** line in Money out. A setting "Count family payments as spending" (see Open questions). | `reports.dart`, Home, Insights | Switching the setting moves the figure between Spending and Family, Money out does not change. |
+| B5 | Reports: **Family** is a slice inside Spending by default. A setting "Leave family payments out of Spending" moves it out into its own line (see Open questions). It is the bulk form of A8's per-payment switch. | `reports.dart`, Home, Insights | Switching the setting moves the figure between Spending and the Family line; Money out does not change. |
 | B6 | Only person payees are eligible (counterparty kind person), never a merchant or a card. | linker output | A merchant with a family surname in its name is not tagged. |
 
 Synthetic cases for B2 (invented names, owner "Ravi Mohan Patil"): `SMT PATIL` yes; `MOHAN R P` yes; `ASHA MOHAN PATIL` yes; `RAVI MOHAN` (the owner) is self, not family; `RAVI SHARMA` no (first name only); `PATIL HARDWARE STORES` no (business); `MOHAN` alone no (one word); `ANITA MOHAN` yes only with a second shared word, otherwise "Family?".
@@ -153,17 +178,21 @@ What is not done or not proven: the layouts are written from real statements but
 ## Order of work
 
 1. C1 and the one-time name prompt (largest effect, no rule release).
-2. A1 to A4 (definitions, one shared total).
+2. A1 to A8 (definitions, one shared total, card spending not itemised, the bridge to the bank total, the per-payment "Count in spending" switch). A2 needs one real card's data before it ships.
 3. B1 to B6 (family tag).
 4. C2, C3, D1, D2, C4 (rule bundle).
 5. D3 to D6, C5.
 
 ## Open questions (decisions for the owner)
 
-1. Should family payments count in **Spending** by default? Proposal: no, they are in Money out and shown as Family; a setting flips it.
-2. Money out counts card spending when the card is used. Do you also want a **cash view** (what left your bank accounts, card bills counted when paid)?
-3. Investment withdrawals: show as **Investment returns** in Money in (proposal), or net them against investments?
+Questions 1 to 3 were answered by the 12 Nov 2026 rewrite of section A. The owner approved the rewrite, not each answer, so change one here if it is wrong.
+
+1. Should family payments count in **Spending** by default? Adopted: yes, as a visible Family slice, with a setting to leave them out (B5). Reason: a surname match is a guess, and money to a spouse or parent is often household spending.
+2. Do you also want a **cash view** (what left your bank accounts, card bills counted when paid)? Adopted: yes, as **Left your accounts** (A7), separate from Spending.
+3. Investment withdrawals: **Investment returns**, or net against investments? Adopted: neither. A withdrawal is **Withdrawn from investments** in Money in, shown next to Invested with the net beside it; only dividends and interest are Investment returns (A5).
 4. One large transfer names a first name only in the SMS. Is that person you, family, or someone else? That decides whether C5 matters.
+5. A credit from a person defaults to **From people**, not Income, and is netted only on a pair or a tap (A6). Is that the right default, or should an unpaired credit count as Income?
+6. A loan EMI counts as Spending in full unless the SMS splits principal and interest (section A table). Is that right for a home loan, where most of the EMI is principal?
 
 ## Checking it
 
