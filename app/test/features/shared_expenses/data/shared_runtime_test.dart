@@ -94,7 +94,8 @@ void main() {
   late SharedExpensesRuntime runtime;
   late AuthenticatedHttpClient client;
   var current = true, offline = false, enabled = true;
-  var serverDown = false, overviewDown = false;
+  var serverDown = false, overviewDown = false, combined = false;
+  var hubCalls = 0, legacyContextCalls = 0;
   var revoked = false;
   Completer<void>? overviewStarted, releaseOverview;
   setUp(() {
@@ -102,6 +103,9 @@ void main() {
     offline = false;
     serverDown = false;
     overviewDown = false;
+    combined = false;
+    hubCalls = 0;
+    legacyContextCalls = 0;
     enabled = true;
     revoked = false;
     BambooFonts.useSystemFontsForTests = true;
@@ -126,7 +130,7 @@ void main() {
           overviewStarted!.complete();
           await releaseOverview!.future;
         }
-        final Object body = switch (request.url.path.split('/').last) {
+        Object bodyFor(String name, Map<String, String> query) => switch (name) {
           'capabilities' => {
             'schemaVersion': 1,
             'available': true,
@@ -152,7 +156,7 @@ void main() {
             'expenseCount': '2',
           },
           'contexts' => {
-            'items': revoked || request.url.queryParameters['kind'] == 'direct'
+            'items': revoked || query['kind'] == 'direct'
                 ? []
                 : [
                     {
@@ -173,6 +177,28 @@ void main() {
           'activity' => {'items': [], 'nextCursor': null, 'hasMore': false},
           _ => {},
         };
+        final last = request.url.path.split('/').last;
+        final Object body;
+        if (last == 'hub' || last == 'screen') {
+          // An older server has no such route: an HTML 404, not JSON.
+          if (last == 'screen' || !combined) {
+            return http.Response(
+              'Not found',
+              404,
+              headers: {'content-type': 'text/html'},
+            );
+          }
+          hubCalls++;
+          body = {
+            'friends': bodyFor('contexts', {'kind': 'direct'}),
+            'groups': bodyFor('contexts', {'kind': 'group'}),
+            'overview': bodyFor('overview', {}),
+            'activity': bodyFor('activity', {}),
+          };
+        } else {
+          if (last == 'contexts') legacyContextCalls++;
+          body = bodyFor(last, request.url.queryParameters);
+        }
         return http.Response(
           jsonEncode(body),
           200,
@@ -425,6 +451,31 @@ void main() {
       );
     },
   );
+  test('the hub loads in one request when the server supports it', () async {
+    combined = true;
+    await runtime.refresh();
+    final view = await runtime.loadHub();
+    expect(hubCalls, 1);
+    expect(legacyContextCalls, 0);
+    expect(view.groups.items.single.title, 'Flatmates');
+    // And it is saved, so the same screen shows offline.
+    offline = true;
+    final again = await runtime.loadHub();
+    expect(again.offline, isTrue);
+    expect(again.groups.items.single.title, 'Flatmates');
+  });
+  test('an older server without the one-request route still works', () async {
+    combined = false;
+    await runtime.refresh();
+    final view = await runtime.loadHub();
+    expect(hubCalls, 0);
+    expect(legacyContextCalls, greaterThan(0));
+    expect(view.groups.items.single.title, 'Flatmates');
+    // The first answer is remembered: the next load does not probe again.
+    legacyContextCalls = 0;
+    await runtime.loadHub();
+    expect(legacyContextCalls, greaterThan(0));
+  });
   test('a 5xx from the server still shows the saved splits', () async {
     await runtime.refresh();
     await runtime.loadHub();

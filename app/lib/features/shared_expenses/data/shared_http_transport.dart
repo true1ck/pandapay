@@ -44,6 +44,7 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
       throw ArgumentError('Invalid shared API configuration');
     }
   }
+
   /// Plain http only for a developer's own machine or private network (the
   /// Android emulator alias, localhost, a Mac's LAN address for an iPhone).
   /// Release builds already refuse local origins in `Env`.
@@ -172,14 +173,19 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
 
   List<SharedProjection> _records(Object? value) => _sharedRecords(value);
 
+  // Static: a closure made in an instance method would capture `this` (the
+  // HTTP client), which cannot be sent to another isolate.
+  static Future<List<SharedProjection>> _parseInIsolate(List<Object?> value) =>
+      Isolate.run(() => _sharedRecords(value));
+
   /// A change page can hold 100 records, each validated and canonicalised
   /// (measured 16-115 ms per page on a desktop, several times that on a
   /// phone). That is UI-isolate work, so a big page is parsed in a short-lived
   /// isolate; the result is plain data and is copied back.
   Future<List<SharedProjection>> _recordsOffThread(Object? value) async {
-    if (value is List && value.length > 8) {
+    if (value is List<Object?> && value.length > 8) {
       try {
-        return await Isolate.run(() => _sharedRecords(value));
+        return await _parseInIsolate(value);
       } on FormatException {
         rethrow;
       } on TypeError {
@@ -696,8 +702,10 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
     return value;
   }
 
-  Future<Map<String, Object?>> fetchOverview() async {
-    final value = (await _request('GET', '/shared-expenses/overview'))!;
+  Future<Map<String, Object?>> fetchOverview() async =>
+      _validateOverview((await _request('GET', '/shared-expenses/overview'))!);
+
+  Map<String, Object?> _validateOverview(Map<String, Object?> value) {
     const keys = {
       'currency',
       'owedMinor',
@@ -732,11 +740,15 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
     return value;
   }
 
-  Future<Map<String, Object?>> fetchTotals(String contextId) async {
-    final value = await _contextRead(
-      contextId,
-      '/shared-expenses/contexts/$contextId/totals',
-    );
+  Future<Map<String, Object?>> fetchTotals(String contextId) async =>
+      _validateTotals(
+        await _contextRead(
+          contextId,
+          '/shared-expenses/contexts/$contextId/totals',
+        ),
+      );
+
+  Map<String, Object?> _validateTotals(Map<String, Object?> value) {
     const keys = {
       'contextId',
       'currency',
@@ -817,7 +829,23 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
     final value = contextId == null
         ? (await _request('GET', path, query: query))!
         : await _contextRead(contextId, path, query: query);
+    return _validateList(
+      value,
+      limit: limit,
+      after: after,
+      contextId: contextId,
+    );
+  }
+
+  Map<String, Object?> _validateList(
+    Object? raw, {
+    required int limit,
+    String? after,
+    String? contextId,
+  }) {
     try {
+      if (raw is! Map) throw const FormatException();
+      final value = Map<String, Object?>.from(raw);
       if (value.length != 3 ||
           !value.keys.toSet().containsAll({'items', 'nextCursor', 'hasMore'}) ||
           value['items'] is! List ||
@@ -847,6 +875,142 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
     }
   }
 
+  /// Everything the Splits hub shows, in one request (one server connection)
+  /// instead of four. Each section passes the same strict checks as its own
+  /// route. Throws `hub_unsupported` on a server that does not have the route.
+  Future<Map<String, Object?>> fetchHub({
+    String? friendsAfter,
+    String? groupsAfter,
+    String? activityAfter,
+    String? friendsSearch,
+    String? groupsSearch,
+    String? activitySearch,
+  }) async {
+    for (final cursor in [friendsAfter, groupsAfter, activityAfter]) {
+      if (cursor != null && (cursor.isEmpty || cursor.length > 1024)) {
+        throw ArgumentError('Invalid shared page query');
+      }
+    }
+    for (final term in [friendsSearch, groupsSearch, activitySearch]) {
+      if (term != null &&
+          (term.length > 128 || RegExp(r'[\x00-\x1f\x7f]').hasMatch(term))) {
+        throw ArgumentError('Invalid filter');
+      }
+    }
+    final value = await _combined('/shared-expenses/hub', {
+      'friendsAfter': ?friendsAfter,
+      'groupsAfter': ?groupsAfter,
+      'activityAfter': ?activityAfter,
+      if (friendsSearch != null && friendsSearch.isNotEmpty)
+        'friendsSearch': friendsSearch,
+      if (groupsSearch != null && groupsSearch.isNotEmpty)
+        'groupsSearch': groupsSearch,
+      if (activitySearch != null && activitySearch.isNotEmpty)
+        'activitySearch': activitySearch,
+    });
+    if (value.length != 4 ||
+        !value.keys.toSet().containsAll({
+          'friends',
+          'groups',
+          'overview',
+          'activity',
+        }) ||
+        value['overview'] is! Map) {
+      throw const SharedTransportException(code: 'invalid_response');
+    }
+    return {
+      'friends': _validateList(
+        value['friends'],
+        limit: 50,
+        after: friendsAfter,
+      ),
+      'groups': _validateList(value['groups'], limit: 50, after: groupsAfter),
+      'overview': _validateOverview(
+        Map<String, Object?>.from(value['overview'] as Map),
+      ),
+      'activity': _validateList(
+        value['activity'],
+        limit: 50,
+        after: activityAfter,
+      ),
+    };
+  }
+
+  /// One split's whole screen in one request; see [fetchHub].
+  Future<Map<String, Object?>> fetchGroupScreen(
+    String contextId, {
+    String? expenseAfter,
+    String? balanceAfter,
+  }) async {
+    for (final cursor in [expenseAfter, balanceAfter]) {
+      if (cursor != null && (cursor.isEmpty || cursor.length > 1024)) {
+        throw ArgumentError('Invalid shared page query');
+      }
+    }
+    final value = await _contextRead(
+      contextId,
+      '/shared-expenses/contexts/$contextId/screen',
+      query: {'expenseAfter': ?expenseAfter, 'balanceAfter': ?balanceAfter},
+    );
+    if (value.length != 5 ||
+        !value.keys.toSet().containsAll({
+          'context',
+          'members',
+          'expenses',
+          'balances',
+          'totals',
+        }) ||
+        value['context'] is! Map ||
+        value['totals'] is! Map) {
+      throw const SharedTransportException(code: 'invalid_response');
+    }
+    return {
+      'context': _validateContext(
+        contextId,
+        Map<String, Object?>.from(value['context'] as Map),
+      ),
+      'members': _validateList(
+        value['members'],
+        limit: 50,
+        contextId: contextId,
+      ),
+      'expenses': _validateList(
+        value['expenses'],
+        limit: 50,
+        after: expenseAfter,
+        contextId: contextId,
+      ),
+      'balances': _validateList(
+        value['balances'],
+        limit: 50,
+        after: balanceAfter,
+        contextId: contextId,
+      ),
+      'totals': _validateTotals(
+        Map<String, Object?>.from(value['totals'] as Map),
+      ),
+    };
+  }
+
+  Future<Map<String, Object?>> _combined(
+    String path,
+    Map<String, String> query,
+  ) async {
+    try {
+      return (await _request(
+        'GET',
+        path,
+        query: query.isEmpty ? null : query,
+      ))!;
+    } on SharedTransportException catch (error) {
+      // An older server has no such route: an HTML/other 404 with no JSON code.
+      if (error.statusCode == 404 && error.code == 'invalid_response') {
+        throw const SharedTransportException(code: 'hub_unsupported');
+      }
+      rethrow;
+    }
+  }
+
   Future<Map<String, Object?>> fetchContexts({
     String? after,
     int limit = 50,
@@ -869,11 +1033,16 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
     limit: limit,
     search: search,
   );
-  Future<Map<String, Object?>> fetchContext(String contextId) async {
-    final value = await _contextRead(
-      contextId,
-      '/shared-expenses/contexts/$contextId',
-    );
+  Future<Map<String, Object?>> fetchContext(String contextId) async =>
+      _validateContext(
+        contextId,
+        await _contextRead(contextId, '/shared-expenses/contexts/$contextId'),
+      );
+
+  Map<String, Object?> _validateContext(
+    String contextId,
+    Map<String, Object?> value,
+  ) {
     const keys = {
       'contextId',
       'kind',

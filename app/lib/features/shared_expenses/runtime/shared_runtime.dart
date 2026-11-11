@@ -19,8 +19,8 @@ import '../data/shared_pending_phones.dart';
 import 'shared_expense_mapping.dart';
 
 class SharedRuntimeUnavailable implements Exception {
-  /// Why: `reads_off` (the feature flag is off for this server/account),
-  /// `no_saved_copy`, `account`, or null when not specific.
+  /// Why: `reads_off` (flag off on the server), `disabled` (off in this
+  /// build), `account` (no signed-in account), `no_saved_copy`, or null.
   final String? reason;
   const SharedRuntimeUnavailable([this.reason]);
   @override
@@ -42,11 +42,16 @@ String sharedErrorCode(Object? error) {
 /// What the person reads. Only a server-side "off" says "not enabled";
 /// everything else is a load problem that a retry can fix.
 String sharedUnavailableMessage(Object? error) =>
-    (error is SharedRuntimeUnavailable && error.reason == 'reads_off') ||
+    (error is SharedRuntimeUnavailable &&
+            const {
+              'reads_off',
+              'disabled',
+              'account',
+            }.contains(error.reason)) ||
         (error is SharedTransportException &&
             (error.code == 'feature_disabled' ||
                 error.code == 'feature_unavailable'))
-    ? 'Shared expenses are not turned on for your account yet. Existing transactions and private splits are still available.'
+    ? 'Shared expenses are not available yet. Existing transactions and private splits are still available.'
     : 'Could not load your splits right now. Check your connection and try again. (${sharedErrorCode(error)})';
 
 class SharedRoster {
@@ -251,13 +256,14 @@ class SharedExpensesRuntime extends ChangeNotifier {
             await cache.clearPrefix('${store.namespace}:shared:');
             _current();
           }
-          await store.applyPage(page, expectedCursor: before);
+          await store.applyPageOffThread(page, expectedCursor: before);
           syncLag = page.hasMore;
           if (!page.hasMore) break;
           // perf-ok: a real 60 ms gap (not Duration.zero) so frames paint
           // between 100-record SQLite writes that run on the UI isolate.
           await Future<void>.delayed(const Duration(milliseconds: 60));
         }
+        if (offline) dataVersion++; // back online: screens re-fetch
         offline = false;
       });
     } catch (error) {
@@ -411,8 +417,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
   Future<String?> sameNameFriend(String name) async {
     try {
       _current();
-      final wanted =
-          name.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+      final wanted = name.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
       final page = await remote.fetchContexts(
         kind: 'direct',
         search: name.trim(),
@@ -707,7 +712,8 @@ class SharedExpensesRuntime extends ChangeNotifier {
           error.statusCode == 401 ||
           error.code == 'account_changed' ||
           error.code == 'feature_disabled' ||
-          error.code == 'feature_unavailable';
+          error.code == 'feature_unavailable' ||
+          error.code == 'hub_unsupported';
       if (denied) rethrow;
       authorized();
       final saved = await cache.get(cacheKey);
@@ -1166,19 +1172,67 @@ class SharedExpensesRuntime extends ChangeNotifier {
     contextId: id,
   );
 
-  Future<SharedGroupPresentation> loadGroup(
-    String id, {
+  /// Whether the server has the one-request screen routes. Flips to false the
+  /// first time it answers "no such route" (an older server) and stays so.
+  bool _combinedScreens = true;
+
+  /// The five sections of one split, as [context, members, expenses,
+  /// balances, totals]. One request when the server supports it; otherwise (or
+  /// when only an old per-section saved copy exists offline) the old five.
+  Future<List<Map<String, Object?>>> _groupSections(
+    String id,
     String? expenseAfter,
     String? balanceAfter,
-  }) async {
-    _servedStale = false;
-    final results = await Future.wait([
+  ) async {
+    if (_combinedScreens) {
+      try {
+        final screen = await _query(
+          'screen:$id:${expenseAfter ?? 'first'}:${balanceAfter ?? 'first'}',
+          () => remote.fetchGroupScreen(
+            id,
+            expenseAfter: expenseAfter,
+            balanceAfter: balanceAfter,
+          ),
+          contextId: id,
+        );
+        return [
+          for (final key in const [
+            'context',
+            'members',
+            'expenses',
+            'balances',
+            'totals',
+          ])
+            Map<String, Object?>.from(screen[key] as Map),
+        ];
+      } on SharedTransportException catch (error) {
+        if (error.code == 'hub_unsupported') {
+          _combinedScreens = false;
+        } else if (_combinedDenied(error)) {
+          rethrow;
+        }
+      } on SharedRuntimeUnavailable {
+        // Nothing saved under the new key yet: only the cache-only first
+        // paint may fall back to the older saved sections.
+        if (Zone.current[_cacheOnlyKey] != true) rethrow;
+      }
+    }
+    return Future.wait([
       context(id),
       members(id),
       expenses(id, after: expenseAfter),
       balances(id, after: balanceAfter),
       totals(id),
     ]);
+  }
+
+  Future<SharedGroupPresentation> loadGroup(
+    String id, {
+    String? expenseAfter,
+    String? balanceAfter,
+  }) async {
+    _servedStale = false;
+    final results = await _groupSections(id, expenseAfter, balanceAfter);
     _current();
     final details = results[0],
         roster = results[1],
@@ -1259,11 +1313,91 @@ class SharedExpensesRuntime extends ChangeNotifier {
       e.statusCode == 404 ||
       e.code == 'account_changed';
 
-  Future<SharedHubPresentation> loadHub({
-    Map<SharedHubTab, String?> after = const {},
-    Map<SharedHubTab, String> searches = const {},
-  }) async {
-    _servedStale = false;
+  bool _combinedHub = true;
+
+  /// Refusals that a per-section retry would not change: not allowed, account
+  /// moved, feature off.
+  static bool _combinedDenied(SharedTransportException e) =>
+      e.statusCode == 401 ||
+      e.statusCode == 403 ||
+      e.statusCode == 404 && e.code != 'invalid_response' ||
+      e.code == 'account_changed' ||
+      e.code == 'feature_disabled' ||
+      e.code == 'feature_unavailable';
+
+  /// [friends, groups, overview, activity] for the hub: one request when the
+  /// server supports it, else the four old ones. The totals strip and the
+  /// activity tab are extras on the old path; on the one-request path the
+  /// server answers for the whole screen.
+  Future<
+    ({
+      List<Map<String, Object?>> results,
+      bool summaryKnown,
+      bool activityKnown,
+    })
+  >
+  _hubSections(
+    Map<SharedHubTab, String?> after,
+    Map<SharedHubTab, String> searches,
+  ) async {
+    if (_combinedHub) {
+      try {
+        String enc(SharedHubTab tab) =>
+            Uri.encodeComponent(searches[tab] ?? '');
+        String cur(SharedHubTab tab) => after[tab] ?? 'first';
+        final hub = await _query(
+          'hub:${enc(SharedHubTab.friends)}:${cur(SharedHubTab.friends)}|'
+          '${enc(SharedHubTab.groups)}:${cur(SharedHubTab.groups)}|'
+          '${enc(SharedHubTab.activity)}:${cur(SharedHubTab.activity)}',
+          () => remote.fetchHub(
+            friendsAfter: after[SharedHubTab.friends],
+            groupsAfter: after[SharedHubTab.groups],
+            activityAfter: after[SharedHubTab.activity],
+            friendsSearch: searches[SharedHubTab.friends],
+            groupsSearch: searches[SharedHubTab.groups],
+            activitySearch: searches[SharedHubTab.activity],
+          ),
+        );
+        return (
+          results: [
+            for (final key in const [
+              'friends',
+              'groups',
+              'overview',
+              'activity',
+            ])
+              Map<String, Object?>.from(hub[key] as Map),
+          ],
+          summaryKnown: true,
+          activityKnown: true,
+        );
+      } on SharedTransportException catch (error) {
+        if (error.code == 'hub_unsupported') {
+          _combinedHub = false;
+        } else if (_combinedDenied(error)) {
+          rethrow;
+        }
+        // Anything else (no saved copy of the new route yet, or the new route
+        // failing) falls through to the proven per-section requests and their
+        // saved copy, so the new route can never be the reason a screen fails.
+      } on SharedRuntimeUnavailable {
+        if (Zone.current[_cacheOnlyKey] != true) rethrow;
+      }
+    }
+    return _hubSectionsLegacy(after, searches);
+  }
+
+  Future<
+    ({
+      List<Map<String, Object?>> results,
+      bool summaryKnown,
+      bool activityKnown,
+    })
+  >
+  _hubSectionsLegacy(
+    Map<SharedHubTab, String?> after,
+    Map<SharedHubTab, String> searches,
+  ) async {
     var summaryKnown = true, activityKnown = true;
     Future<Map<String, Object?>> contextsFor(
       SharedHubTab tab,
@@ -1299,6 +1433,22 @@ class SharedExpensesRuntime extends ChangeNotifier {
         return <String, Object?>{'items': <Object?>[], 'hasMore': false};
       }),
     ]);
+    return (
+      results: results,
+      summaryKnown: summaryKnown,
+      activityKnown: activityKnown,
+    );
+  }
+
+  Future<SharedHubPresentation> loadHub({
+    Map<SharedHubTab, String?> after = const {},
+    Map<SharedHubTab, String> searches = const {},
+  }) async {
+    _servedStale = false;
+    final sections = await _hubSections(after, searches);
+    final results = sections.results;
+    final summaryKnown = sections.summaryKnown,
+        activityKnown = sections.activityKnown;
     _current();
     SharedPage<SharedContextRow> contextPage(
       Map<String, Object?> data,

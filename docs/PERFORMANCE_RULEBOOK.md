@@ -151,6 +151,19 @@ Still on the UI isolate, in order of cost:
    (busy_timeout) and then throws SQLITE_BUSY. Watch logcat for `database is locked`; if it
    shows up, shorten worker transactions or queue UI writes behind the worker.
 
+Split (shared expenses), 12 Nov: the change pull (`/shared-expenses/changes`) used to parse,
+canonicalise and write up to 200 records per refresh on the UI isolate. Large pages are now
+parsed in `Isolate.run` (`SharedExpensesHttpTransport`) and written by
+`SharedExpensesStore.applyPageOffThread`, a short-lived worker isolate with its own connection
+(`AppDatabase.openFile`, same pattern as the capture worker), inside the recovery gate and one
+transaction with the cursor. Screens paint the saved copy first, never replace a loaded screen
+with an error, and reload only when `SharedExpensesRuntime.dataVersion` changes. The hub and a
+split's screen are one request each (`/shared-expenses/hub`, `/contexts/:id/screen`) instead of
+4 and 5, with automatic fallback to the per-section routes for an older server. The local
+`shared_projections` rows are still written but no screen reads them (known debt: either read
+them or stop writing them). Same contention caveat as item 5: a UI write that lands while the
+Split worker commits waits up to the 3 s busy_timeout.
+
 Not yet verified on a phone: killing the app mid-import and relaunching (messages must be
 retried without duplicates); covered on the host by `capture_worker_test.dart`.
 

@@ -20,12 +20,12 @@ final sharedExpensesEnabledProvider = Provider<bool>(
 final sharedExpensesRuntimeProvider =
     FutureProvider.autoDispose<SharedExpensesRuntime>((ref) async {
       if (!ref.watch(sharedExpensesEnabledProvider)) {
-        throw const SharedRuntimeUnavailable();
+        throw const SharedRuntimeUnavailable('disabled');
       }
       final namespace = ref.watch(cacheNamespaceProvider);
       if (!namespace.startsWith('user:') ||
           !sharedUuid(namespace.substring(5))) {
-        throw const SharedRuntimeUnavailable();
+        throw const SharedRuntimeUnavailable('account');
       }
       var active = true;
       ref.onDispose(() => active = false);

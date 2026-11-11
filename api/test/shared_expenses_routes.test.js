@@ -18,7 +18,7 @@ async function fixture(t,query) {
 }
 test('all routes require authentication before entering user database context',async t=>{
   const f=await fixture(t,async()=>{throw new Error('must not run');});
-  for(const [path,body] of [['/shared-expenses/capabilities'],['/shared-expenses/contexts'],['/shared-expenses/commands',{}],['/shared-expenses/sources/inspect',{}],['/shared-expenses/operations/'+op]]) {
+  for(const [path,body] of [['/shared-expenses/capabilities'],['/shared-expenses/contexts'],['/shared-expenses/hub'],['/shared-expenses/contexts/'+context+'/screen'],['/shared-expenses/commands',{}],['/shared-expenses/sources/inspect',{}],['/shared-expenses/operations/'+op]]) {
     assert.equal((await f.request(path,body,false)).status,401);
   }
   assert.deepEqual(f.calls,[]);
@@ -61,4 +61,16 @@ test('SQL errors expose only approved error codes, never SQL/private payload',as
   const f=await fixture(t,async()=>{throw Object.assign(new Error('customer@example.com raw SQL'),{code:'XX000'});});
   const response=await f.request('/shared-expenses/capabilities');
   assert.equal(response.status,500);assert.deepEqual(await response.json(),{error:'internal_error'});
+});
+
+test('combined hub and split-screen routes honour the read flag and reject unknown parameters',async t=>{
+  const off=await fixture(t,async()=>({rows:[{result:{schemaVersion:1,reads:false,proposals:false,acceptedWrites:false,settlements:false,sourceFunding:false}}]}));
+  for(const path of ['/shared-expenses/hub','/shared-expenses/contexts/'+context+'/screen']) {
+    const response=await off.request(path);
+    assert.equal(response.status,503);assert.deepEqual(await response.json(),{error:'feature_disabled'});
+  }
+  const on=await fixture(t,async()=>({rows:[{result:{schemaVersion:1,reads:true,proposals:true,acceptedWrites:true,settlements:true,sourceFunding:false}}]}));
+  assert.equal((await on.request('/shared-expenses/hub?actorId='+actor)).status,400);
+  assert.equal((await on.request('/shared-expenses/contexts/'+context+'/screen?after=x')).status,400);
+  assert.equal((await on.request('/shared-expenses/hub?friendsAfter='+'x'.repeat(2000))).status,400);
 });

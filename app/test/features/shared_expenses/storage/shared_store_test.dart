@@ -789,6 +789,78 @@ void main() {
     },
   );
   test(
+    'a big pull page is applied by a worker isolate, atomically with its cursor',
+    () async {
+      // A second connection can only open a real file, not the shared
+      // in-memory fixture, so this test owns a file-backed database.
+      final fileDb = AppDatabase.openUnencryptedFileForTesting(
+        '${temp.path}/offthread.sqlite',
+      );
+      addTearDown(fileDb.close);
+      final fileStore = SharedExpensesStore(fileDb, namespace: accountA);
+      String ctx(int i) =>
+          '33333333-3333-4333-8333-${i.toRadixString(16).padLeft(12, '0')}';
+      SharedProjection row(int i) => SharedProjection(
+        entity: 'contexts',
+        id: ctx(i),
+        contextId: ctx(i),
+        revision: 1,
+        payload: {'title': 'Split $i'},
+      );
+      await fileStore.applyPageOffThread(
+        SharedChangePage(
+          records: [for (var i = 1; i <= 6; i++) row(i)],
+          nextCursor: 'c1',
+        ),
+        expectedCursor: null,
+      );
+      // The main connection sees what the worker committed.
+      expect(fileStore.cursor, 'c1');
+      expect(fileStore.readContexts().items, hasLength(6));
+      // A page built against a stale cursor is refused and changes nothing.
+      await expectLater(
+        fileStore.applyPageOffThread(
+          SharedChangePage(
+            records: [for (var i = 7; i <= 12; i++) row(i)],
+            nextCursor: 'c2',
+          ),
+          expectedCursor: 'wrong',
+        ),
+        throwsA(isA<SharedLocalException>()),
+      );
+      expect(fileStore.cursor, 'c1');
+      expect(fileStore.readContexts().items, hasLength(6));
+      // A conflicting repeat rolls the whole page back, cursor included.
+      await expectLater(
+        fileStore.applyPageOffThread(
+          SharedChangePage(
+            records: [
+              for (var i = 1; i <= 5; i++) row(i),
+              SharedProjection(
+                entity: 'contexts',
+                id: ctx(1),
+                contextId: ctx(1),
+                revision: 1,
+                payload: {'title': 'Different at the same revision'},
+              ),
+            ],
+            nextCursor: 'c3',
+          ),
+          expectedCursor: 'c1',
+        ),
+        throwsA(isA<SharedLocalException>()),
+      );
+      expect(fileStore.cursor, 'c1');
+      // The UI connection can still write after the worker's commit.
+      await fileStore.applyPage(
+        SharedChangePage(records: [row(20)], nextCursor: 'c4'),
+        expectedCursor: 'c1',
+      );
+      expect(fileStore.readContexts().items, hasLength(7));
+    },
+  );
+
+  test(
     'pull page and cursor commit together, old revision never overwrites newer',
     () async {
       await store.applyPage(

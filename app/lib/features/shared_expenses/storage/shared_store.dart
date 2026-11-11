@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
 
 import 'package:flutter/foundation.dart';
+import 'package:sqlite3/sqlite3.dart' show Database;
 
 import '../../../data/local/app_database.dart';
 import '../../../data/portable_backup/account_recovery_operation_gate.dart';
@@ -550,11 +552,147 @@ ORDER BY c.created_at,c.operation_id LIMIT 1''',
     ),
   );
 
-  void _projections(List<SharedProjection> records) {
+  void _projections(List<SharedProjection> records) =>
+      _projectionsTo(database.db, namespace, _projRows(records));
+
+  String? get cursor => _cursorOf(database.db, namespace);
+
+  Future<void> applyPage(
+    SharedChangePage page, {
+    required String? expectedCursor,
+  }) => _write(
+    () => _applyPageTo(
+      database.db,
+      namespace,
+      _PagePlan.of(page, expectedCursor),
+    ),
+  );
+
+  /// Same as [applyPage], but a file-backed database applies the page on a
+  /// short-lived worker isolate with its own connection (the pattern the SMS
+  /// capture and `FinancialReadWorker` already use), so a 100-record write no
+  /// longer blocks frames. The page and its cursor still commit in one
+  /// transaction, and the call stays inside the account-recovery gate so a
+  /// recovery waits for it. In-memory/test databases cannot be opened by a
+  /// second connection and take the synchronous path.
+  Future<void> applyPageOffThread(
+    SharedChangePage page, {
+    required String? expectedCursor,
+  }) {
+    final path = database.filePath;
+    if (path == null || page.records.length < 4) {
+      return applyPage(page, expectedCursor: expectedCursor);
+    }
+    final plan = _PagePlan.of(page, expectedCursor);
+    final key = database.keyHexForWorker, ns = namespace;
+    return recoveryGate.run(() async {
+      if (!isCurrent()) throw const SharedLocalException('account_changed');
+      await _runPageInIsolate(path, key, ns, plan);
+      try {
+        onChanged?.call();
+      } catch (_, stack) {
+        FlutterError.reportError(
+          FlutterErrorDetails(
+            exception: const SharedLocalException('change_listener_failed'),
+            stack: stack,
+            library: 'shared expenses store',
+          ),
+        );
+      }
+    });
+  }
+
+  static String? _cursorOf(Database db, String namespace) {
+    final rows = db.select(
+      "SELECT value FROM shared_sync_state WHERE namespace=? AND key='cursor'",
+      [namespace],
+    );
+    return rows.isEmpty ? null : rows.single['value'] as String;
+  }
+
+  // Static on purpose: the closure must not capture `this`, which holds the
+  // native database handle and cannot cross to another isolate.
+  static Future<void> _runPageInIsolate(
+    String path,
+    String? keyHex,
+    String namespace,
+    _PagePlan plan,
+  ) => Isolate.run(() => _applyPageInIsolate(path, keyHex, namespace, plan));
+
+  // Runs in the worker isolate: open, apply in one transaction, close.
+  static void _applyPageInIsolate(
+    String path,
+    String? keyHex,
+    String namespace,
+    _PagePlan plan,
+  ) {
+    final connection = keyHex == null
+        ? AppDatabase.openUnencryptedFileForTesting(path)
+        : AppDatabase.openFile(path, keyHex: keyHex);
+    try {
+      final db = connection.db;
+      db.execute('BEGIN IMMEDIATE');
+      try {
+        _applyPageTo(db, namespace, plan);
+        db.execute('COMMIT');
+      } catch (_) {
+        db.execute('ROLLBACK');
+        rethrow;
+      }
+    } finally {
+      connection.db.dispose();
+    }
+  }
+
+  static void _applyPageTo(Database db, String namespace, _PagePlan plan) {
+    if (_cursorOf(db, namespace) != plan.expectedCursor) {
+      throw const SharedLocalException('cursor_changed');
+    }
+    if (plan.hasMore && plan.nextCursor == plan.expectedCursor) {
+      throw const SharedLocalException('cursor_not_advancing');
+    }
+    for (final id in plan.revoked) {
+      db.execute(
+        'DELETE FROM shared_projections WHERE namespace=? AND context_id=?',
+        [namespace, id],
+      );
+      db.execute(
+        "INSERT INTO shared_sync_state VALUES(?,?,'1') ON CONFLICT(namespace,key) DO UPDATE SET value='1'",
+        [namespace, 'revoked:$id'],
+      );
+    }
+    // Fresh authorized grant pages can arrive over several bounded pulls.
+    // Rows remain quarantined behind the durable tombstone until the server's
+    // terminal grant marker; no bulk copy or per-row network lookup is needed.
+    _projectionsTo(db, namespace, plan.rows);
+    for (final id in plan.granted) {
+      db.execute('DELETE FROM shared_sync_state WHERE namespace=? AND key=?', [
+        namespace,
+        'revoked:$id',
+      ]);
+    }
+    if (plan.nextCursor == null) {
+      db.execute(
+        "DELETE FROM shared_sync_state WHERE namespace=? AND key='cursor'",
+        [namespace],
+      );
+    } else {
+      db.execute(
+        "INSERT INTO shared_sync_state VALUES(?,'cursor',?) ON CONFLICT(namespace,key) DO UPDATE SET value=excluded.value",
+        [namespace, plan.nextCursor],
+      );
+    }
+  }
+
+  static void _projectionsTo(
+    Database db,
+    String namespace,
+    List<_ProjRow> records,
+  ) {
     // The change feed emits one row per event, so one page can repeat a key.
     // Keep the highest revision (the last when equal); two different payloads
     // at one revision is a real conflict.
-    final latest = <String, SharedProjection>{};
+    final latest = <String, _ProjRow>{};
     for (final row in records) {
       final key = '${row.contextId}:${row.entity}:${row.id}';
       final held = latest[key];
@@ -567,7 +705,7 @@ ORDER BY c.created_at,c.operation_id LIMIT 1''',
       if (held == null || row.revision >= held.revision) latest[key] = row;
     }
     for (final row in latest.values) {
-      final previous = database.db.select(
+      final previous = db.select(
         'SELECT revision,payload,deleted FROM shared_projections WHERE namespace=? AND context_id=? AND entity=? AND id=?',
         [namespace, row.contextId, row.entity, row.id],
       );
@@ -580,7 +718,7 @@ ORDER BY c.created_at,c.operation_id LIMIT 1''',
         }
         if ((old['revision'] as int) >= row.revision) continue;
       }
-      database.db.execute(
+      db.execute(
         'INSERT INTO shared_projections VALUES(?,?,?,?,?,?,?) ON CONFLICT(namespace,context_id,entity,id) DO UPDATE SET revision=excluded.revision,payload=excluded.payload,deleted=excluded.deleted',
         [
           namespace,
@@ -595,56 +733,6 @@ ORDER BY c.created_at,c.operation_id LIMIT 1''',
     }
   }
 
-  String? get cursor {
-    final rows = database.db.select(
-      "SELECT value FROM shared_sync_state WHERE namespace=? AND key='cursor'",
-      [namespace],
-    );
-    return rows.isEmpty ? null : rows.single['value'] as String;
-  }
-
-  Future<void> applyPage(
-    SharedChangePage page, {
-    required String? expectedCursor,
-  }) => _write(() {
-    if (cursor != expectedCursor) {
-      throw const SharedLocalException('cursor_changed');
-    }
-    if (page.hasMore && page.nextCursor == expectedCursor) {
-      throw const SharedLocalException('cursor_not_advancing');
-    }
-    for (final id in page.revokedContextIds) {
-      database.db.execute(
-        'DELETE FROM shared_projections WHERE namespace=? AND context_id=?',
-        [namespace, id],
-      );
-      database.db.execute(
-        "INSERT INTO shared_sync_state VALUES(?,?,'1') ON CONFLICT(namespace,key) DO UPDATE SET value='1'",
-        [namespace, 'revoked:$id'],
-      );
-    }
-    // Fresh authorized grant pages can arrive over several bounded pulls.
-    // Rows remain quarantined behind the durable tombstone until the server's
-    // terminal grant marker; no bulk copy or per-row network lookup is needed.
-    _projections(page.records);
-    for (final id in page.grantedContextIds) {
-      database.db.execute(
-        'DELETE FROM shared_sync_state WHERE namespace=? AND key=?',
-        [namespace, 'revoked:$id'],
-      );
-    }
-    if (page.nextCursor == null) {
-      database.db.execute(
-        "DELETE FROM shared_sync_state WHERE namespace=? AND key='cursor'",
-        [namespace],
-      );
-    } else {
-      database.db.execute(
-        "INSERT INTO shared_sync_state VALUES(?,'cursor',?) ON CONFLICT(namespace,key) DO UPDATE SET value=excluded.value",
-        [namespace, page.nextCursor],
-      );
-    }
-  });
   SharedStoredPage readPage({
     required String entity,
     required String contextId,
@@ -760,4 +848,56 @@ ${contextId == null ? '' : 'AND c.context_id=?'} ORDER BY c.operation_id LIMIT ?
       [namespace, 'revoked:$contextId'],
     );
   });
+}
+
+/// Plain, sendable copy of one projection row for the worker isolate.
+final class _ProjRow {
+  final String contextId, entity, id, canonicalJson;
+  final int revision;
+  final bool deleted;
+  const _ProjRow(
+    this.contextId,
+    this.entity,
+    this.id,
+    this.revision,
+    this.canonicalJson,
+    this.deleted,
+  );
+}
+
+List<_ProjRow> _projRows(List<SharedProjection> records) => [
+  for (final r in records)
+    _ProjRow(
+      r.contextId,
+      r.entity,
+      r.id,
+      r.revision,
+      r.canonicalJson,
+      r.deleted,
+    ),
+];
+
+/// Everything `applyPage` needs, as plain data that can cross isolates.
+final class _PagePlan {
+  final List<_ProjRow> rows;
+  final List<String> revoked, granted;
+  final String? nextCursor, expectedCursor;
+  final bool hasMore;
+  const _PagePlan(
+    this.rows,
+    this.revoked,
+    this.granted,
+    this.nextCursor,
+    this.expectedCursor,
+    this.hasMore,
+  );
+  factory _PagePlan.of(SharedChangePage page, String? expectedCursor) =>
+      _PagePlan(
+        _projRows(page.records),
+        List.of(page.revokedContextIds),
+        List.of(page.grantedContextIds),
+        page.nextCursor,
+        expectedCursor,
+        page.hasMore,
+      );
 }

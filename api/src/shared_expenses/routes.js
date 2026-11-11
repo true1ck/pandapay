@@ -106,6 +106,31 @@ function registerSharedExpenseRoutes(app,{requireAuth,withUserClient,invitationS
       return handler(client,req);
     });res.json(result);
   }));
+  // One request and one database connection for a whole screen. The phone used to open 4 (hub) or 5 (one
+  // split) connections at once, which starved the 10-connection pool. Same queries, same authorization, run in
+  // turn on the single transaction; the per-section routes below stay for older app versions.
+  const pick=(query,from,to)=>({limit:'50',...(typeof query[from+'After']==='string'?{after:query[from+'After']}:{}),
+    ...(typeof query[from+'Search']==='string'&&query[from+'Search']!==''?{q:query[from+'Search']}:{}),...(to?{kind:to}:{})});
+  read('/shared-expenses/hub',async(client,req)=>{
+    const allowed=new Set(['friendsAfter','groupsAfter','activityAfter','friendsSearch','groupsSearch','activitySearch']);
+    if(Object.keys(req.query).some(key=>!allowed.has(key)))throw new SharedExpenseError('INVALID_INPUT','query');
+    const friends=await q.listContexts(client,req.userId,pick(req.query,'friends','direct'));
+    const groups=await q.listContexts(client,req.userId,pick(req.query,'groups','group'));
+    const overview=await q.readOverview(client,req.userId);
+    const activity=await q.listPersonalActivity(client,req.userId,pick(req.query,'activity'));
+    return {friends,groups,overview,activity};
+  });
+  read('/shared-expenses/contexts/:contextId/screen',async(client,req)=>{
+    const allowed=new Set(['expenseAfter','balanceAfter']);
+    if(Object.keys(req.query).some(key=>!allowed.has(key)))throw new SharedExpenseError('INVALID_INPUT','query');
+    const id=req.params.contextId,page=name=>({limit:'50',...(typeof req.query[name]==='string'?{after:req.query[name]}:{})});
+    const context=await q.readContext(client,req.userId,id);
+    const members=await q.listContextMembers(client,req.userId,id,{limit:'50'});
+    const expenses=await q.listContextExpenses(client,req.userId,id,page('expenseAfter'));
+    const balances=await q.readBalances(client,req.userId,id,page('balanceAfter'));
+    const totals=await q.readContextTotals(client,req.userId,id);
+    return {context,members,expenses,balances,totals};
+  });
   read('/shared-expenses/contexts',(client,req)=>q.listContexts(client,req.userId,req.query));
   read('/shared-expenses/overview',(client,req)=>q.readOverview(client,req.userId));
   read('/shared-expenses/activity',(client,req)=>q.listPersonalActivity(client,req.userId,req.query));
