@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -18,10 +19,35 @@ import '../data/shared_pending_phones.dart';
 import 'shared_expense_mapping.dart';
 
 class SharedRuntimeUnavailable implements Exception {
-  const SharedRuntimeUnavailable();
+  /// Why: `reads_off` (the feature flag is off for this server/account),
+  /// `no_saved_copy`, `account`, or null when not specific.
+  final String? reason;
+  const SharedRuntimeUnavailable([this.reason]);
   @override
   String toString() => 'Shared expenses are not available for this account yet';
 }
+
+/// A short, non-sensitive code for a failure, shown on the error screen and
+/// logged, so a screenshot from any device says what actually went wrong.
+String sharedErrorCode(Object? error) {
+  if (error is SharedTransportException) {
+    return error.code ??
+        (error.statusCode != null ? 'http_${error.statusCode}' : 'transport');
+  }
+  if (error is SharedRuntimeUnavailable) return error.reason ?? 'unavailable';
+  if (error is ArgumentError) return 'bad_config';
+  return error?.runtimeType.toString() ?? 'unknown';
+}
+
+/// What the person reads. Only a server-side "off" says "not enabled";
+/// everything else is a load problem that a retry can fix.
+String sharedUnavailableMessage(Object? error) =>
+    (error is SharedRuntimeUnavailable && error.reason == 'reads_off') ||
+        (error is SharedTransportException &&
+            (error.code == 'feature_disabled' ||
+                error.code == 'feature_unavailable'))
+    ? 'Shared expenses are not turned on for your account yet. Existing transactions and private splits are still available.'
+    : 'Could not load your splits right now. Check your connection and try again. (${sharedErrorCode(error)})';
 
 class SharedRoster {
   final String name, ownMemberId;
@@ -60,6 +86,41 @@ class SharedExpensesRuntime extends ChangeNotifier {
   Map<String, Object?>? capabilities;
   bool _disposed = false, busy = false, offline = false, syncLag = true;
   Object? lastError;
+
+  /// Bumped only when the server's data for this person really changed (a pull
+  /// brought records or a revocation, or a write finished). Screens reload on
+  /// this, not on every refresh, so an idle refresh no longer re-fetches pages.
+  int dataVersion = 0;
+
+  /// True while the page being built was filled from the saved copy.
+  bool _servedStale = false;
+  DateTime? _capabilitiesAt;
+  static const _capabilitiesFresh = Duration(seconds: 60);
+  String get _capabilitiesKey => '${store.namespace}:shared:capabilities';
+
+  /// Runs [fetch] once for concurrent callers and reuses a result for a few
+  /// seconds, so the invite inbox and the Account badge share one request.
+  final _single = <String, ({DateTime at, Future<Object?> future})>{};
+  Future<T> _shared<T>(String key, Future<T> Function() fetch) {
+    final hit = _single[key];
+    if (hit != null &&
+        DateTime.now().difference(hit.at) < const Duration(seconds: 3)) {
+      return hit.future as Future<T>;
+    }
+    final future = fetch();
+    _single[key] = (at: DateTime.now(), future: future);
+    future.catchError((_) {
+      if (_single[key]?.future == future) _single.remove(key);
+      return null as T;
+    });
+    return future;
+  }
+
+  /// Zone flag: answer from the saved copy only (no network). Used to paint
+  /// the last known screen at once while the live load runs behind it.
+  static const _cacheOnlyKey = #sharedCacheOnly;
+  Future<R> runCacheOnly<R>(Future<R> Function() action) =>
+      runZoned(action, zoneValues: {_cacheOnlyKey: true});
   int _accessGeneration = 0;
   final _queries = <String, Object>{};
   SharedExpensesRuntime({
@@ -99,6 +160,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
       await cache.clearPrefix('${store.namespace}:shared:');
       _current();
       await store.revokeContext(contextId);
+      dataVersion++;
       _notify();
     });
   }
@@ -118,11 +180,34 @@ class SharedExpensesRuntime extends ChangeNotifier {
       final flags = await remote.fetchCapabilities();
       _current();
       capabilities = flags;
+      _capabilitiesAt = DateTime.now();
+      unawaited(_saveCapabilities(flags));
     } catch (error) {
       lastError = error;
       offline =
           error is SharedTransportException &&
           error.code == 'network_unavailable';
+      // The feature gate is not a secret that changes by the minute: reuse
+      // what this device last saw so a bad connection at launch does not
+      // lock the person out of splits they already have.
+      capabilities = await _savedCapabilities();
+    }
+  }
+
+  Future<void> _saveCapabilities(Map<String, Object?> flags) async {
+    try {
+      await cache.put(_capabilitiesKey, jsonEncode(flags));
+    } catch (_) {}
+  }
+
+  Future<Map<String, Object?>?> _savedCapabilities() async {
+    try {
+      final raw = await cache.get(_capabilitiesKey);
+      if (raw == null) return null;
+      final decoded = jsonDecode(raw);
+      return decoded is Map ? Map<String, Object?>.from(decoded) : null;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -137,10 +222,18 @@ class SharedExpensesRuntime extends ChangeNotifier {
     _notify();
     try {
       await store.recoveryGate.run(() async {
-        final flags = await remote.fetchCapabilities();
-        _current();
-        capabilities = flags;
-        if (!readsEnabled) throw const SharedRuntimeUnavailable();
+        // Startup just fetched the flags; do not ask again within a minute.
+        final at = _capabilitiesAt;
+        if (capabilities == null ||
+            at == null ||
+            DateTime.now().difference(at) > _capabilitiesFresh) {
+          final flags = await remote.fetchCapabilities();
+          _current();
+          capabilities = flags;
+          _capabilitiesAt = DateTime.now();
+          unawaited(_saveCapabilities(flags));
+        }
+        if (!readsEnabled) throw const SharedRuntimeUnavailable('reads_off');
         await store.resumeAuthentication();
         // Each queued kind remains capability checked by the authoritative SQL
         // command; a disabled flag cannot silently change a stored command.
@@ -149,6 +242,9 @@ class SharedExpensesRuntime extends ChangeNotifier {
           final before = store.cursor,
               page = await remote.pull(cursor: before, limit: 100);
           _current();
+          if (page.records.isNotEmpty || page.revokedContextIds.isNotEmpty) {
+            dataVersion++;
+          }
           if (page.revokedContextIds.isNotEmpty) {
             // Remove stale query summaries before acknowledging access loss.
             _accessGeneration++;
@@ -158,6 +254,9 @@ class SharedExpensesRuntime extends ChangeNotifier {
           await store.applyPage(page, expectedCursor: before);
           syncLag = page.hasMore;
           if (!page.hasMore) break;
+          // perf-ok: a real 60 ms gap (not Duration.zero) so frames paint
+          // between 100-record SQLite writes that run on the UI isolate.
+          await Future<void>.delayed(const Duration(milliseconds: 60));
         }
         offline = false;
       });
@@ -206,6 +305,9 @@ class SharedExpensesRuntime extends ChangeNotifier {
     syncLag = true;
     _notify();
     await refresh();
+    // The write has reached (or been queued for) the server: screens reload.
+    dataVersion++;
+    _notify();
     return command.operationId;
   }
 
@@ -332,7 +434,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
   Future<List<SharedInboxInvite>> inviteInbox() async {
     _current();
     if (!proposalsEnabled) return const [];
-    final items = await remote.fetchInviteInbox();
+    final items = await _shared('invite-inbox', remote.fetchInviteInbox);
     _current();
     return items;
   }
@@ -351,6 +453,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
       accept: accept,
     );
     _current();
+    _single.clear();
     if (accept) await refresh();
     return status;
   }
@@ -481,7 +584,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
   Future<List<SharedJoinRequest>> joinRequests() async {
     _current();
     if (!proposalsEnabled) return const [];
-    final items = await remote.fetchJoinRequests();
+    final items = await _shared('join-requests', remote.fetchJoinRequests);
     _current();
     cachedJoinRequests = items;
     return items;
@@ -520,6 +623,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
       approve: approve,
     );
     _current();
+    _single.clear();
     cachedJoinRequests = [
       for (final r in cachedJoinRequests ?? const <SharedJoinRequest>[])
         if (r.invitationId != invitationId) r,
@@ -554,11 +658,22 @@ class SharedExpensesRuntime extends ChangeNotifier {
     String? contextId,
   }) async {
     _current();
-    if (!readsEnabled) throw const SharedRuntimeUnavailable();
+    // Only a known "off" blocks reading. Unknown (no answer yet, e.g. a bad
+    // connection at launch) must still reach the saved copy; the server
+    // enforces the flag itself on every live read.
+    if (capabilities != null && !readsEnabled) {
+      throw const SharedRuntimeUnavailable('reads_off');
+    }
     if (contextId != null && store.isContextRevoked(contextId)) {
       throw const SharedRuntimeUnavailable();
     }
     final cacheKey = '${store.namespace}:shared:$key';
+    if (Zone.current[_cacheOnlyKey] == true) {
+      final saved = await cache.get(cacheKey);
+      _current();
+      if (saved == null) throw const SharedRuntimeUnavailable('no_saved_copy');
+      return Map<String, Object?>.from(jsonDecode(saved) as Map);
+    }
     final accessGeneration = _accessGeneration, request = Object();
     _queries[cacheKey] = request;
     void authorized() {
@@ -585,15 +700,20 @@ class SharedExpensesRuntime extends ChangeNotifier {
         }
         rethrow;
       }
-      if (error.code != 'network_unavailable' &&
-          error.statusCode != 408 &&
-          error.statusCode != 429) {
-        rethrow;
-      }
+      // Anything that is not "you may not see this" (offline, timeout, 5xx,
+      // a garbled reply, a busy server) is the server's problem, not a reason
+      // to blank a screen the person has already seen.
+      final denied =
+          error.statusCode == 401 ||
+          error.code == 'account_changed' ||
+          error.code == 'feature_disabled' ||
+          error.code == 'feature_unavailable';
+      if (denied) rethrow;
       authorized();
       final saved = await cache.get(cacheKey);
       authorized();
       if (saved == null) rethrow;
+      _servedStale = true;
       offline = true;
       return Map<String, Object?>.from(jsonDecode(saved) as Map);
     } finally {
@@ -1051,7 +1171,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     String? expenseAfter,
     String? balanceAfter,
   }) async {
-    offline = false;
+    _servedStale = false;
     final results = await Future.wait([
       context(id),
       members(id),
@@ -1127,15 +1247,24 @@ class SharedExpensesRuntime extends ChangeNotifier {
         yourShare: sharedMoneyFromMinor(total['yourShareMinor']),
         periodLabel: 'All reviewed expenses',
       ),
-      offline: offline,
+      offline: offline = _servedStale,
     );
   }
+
+  /// Errors that must still surface: access was refused or the account moved.
+  static bool _isDenied(Object e) =>
+      e is! SharedTransportException ||
+      e.statusCode == 401 ||
+      e.statusCode == 403 ||
+      e.statusCode == 404 ||
+      e.code == 'account_changed';
 
   Future<SharedHubPresentation> loadHub({
     Map<SharedHubTab, String?> after = const {},
     Map<SharedHubTab, String> searches = const {},
   }) async {
-    offline = false;
+    _servedStale = false;
+    var summaryKnown = true, activityKnown = true;
     Future<Map<String, Object?>> contextsFor(
       SharedHubTab tab,
       String kind,
@@ -1151,14 +1280,24 @@ class SharedExpensesRuntime extends ChangeNotifier {
     final results = await Future.wait([
       contextsFor(SharedHubTab.friends, 'direct'),
       contextsFor(SharedHubTab.groups, 'group'),
-      _query('overview', remote.fetchOverview),
+      // The totals strip and the activity tab are extras: if one of them
+      // cannot load, the friends and groups still show (marked incomplete).
+      _query('overview', remote.fetchOverview).catchError((Object e) {
+        if (_isDenied(e)) throw e;
+        summaryKnown = false;
+        return <String, Object?>{};
+      }),
       _query(
         'personal-activity:${Uri.encodeComponent(searches[SharedHubTab.activity] ?? '')}:${after[SharedHubTab.activity] ?? 'first'}',
         () => remote.fetchPersonalActivity(
           after: after[SharedHubTab.activity],
           search: searches[SharedHubTab.activity],
         ),
-      ),
+      ).catchError((Object e) {
+        if (_isDenied(e)) throw e;
+        activityKnown = false;
+        return <String, Object?>{'items': <Object?>[], 'hasMore': false};
+      }),
     ]);
     _current();
     SharedPage<SharedContextRow> contextPage(
@@ -1177,7 +1316,14 @@ class SharedExpensesRuntime extends ChangeNotifier {
 
     final activityPage = results[3];
     return SharedHubPresentation(
-      summary: _summary(results[2]['owedMinor'], results[2]['owingMinor']),
+      summary: summaryKnown
+          ? _summary(results[2]['owedMinor'], results[2]['owingMinor'])
+          : const SharedBalanceSummary(
+              owedToYou: Money.zero(),
+              youOwe: Money.zero(),
+              netBalance: Money.zero(),
+              incomplete: true,
+            ),
       friends: contextPage(results[0], SharedHubTab.friends),
       groups: contextPage(results[1], SharedHubTab.groups),
       activity: SharedPage(
@@ -1193,12 +1339,12 @@ class SharedExpensesRuntime extends ChangeNotifier {
             ),
         ],
         hasMore: activityPage['hasMore'] == true,
-        incomplete: syncLag,
+        incomplete: syncLag || !activityKnown,
         hasPrevious: after[SharedHubTab.activity] != null,
         nextLabel: 'Next page',
         nextCursor: activityPage['nextCursor'] as String?,
       ),
-      offline: offline,
+      offline: offline = _servedStale,
       pendingChanges: store.waitingCount,
     );
   }

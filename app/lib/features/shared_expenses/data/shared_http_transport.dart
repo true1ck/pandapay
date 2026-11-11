@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show IOException;
+import 'dart:isolate' show Isolate, RemoteError;
 
 import 'package:http/http.dart' as http;
 
@@ -36,18 +38,28 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
         _base.hasFragment ||
         _base.host.isEmpty ||
         !(_base.scheme == 'https' ||
-            _base.scheme == 'http' &&
-                {
-                  'localhost',
-                  '127.0.0.1',
-                  '::1',
-                  '10.0.2.2',
-                }.contains(_base.host)) ||
+            _base.scheme == 'http' && _isLocalDevelopmentHost(_base.host)) ||
         !namespace.startsWith('user:') ||
         !sharedUuid(namespace.substring(5))) {
       throw ArgumentError('Invalid shared API configuration');
     }
   }
+  /// Plain http only for a developer's own machine or private network (the
+  /// Android emulator alias, localhost, a Mac's LAN address for an iPhone).
+  /// Release builds already refuse local origins in `Env`.
+  static bool _isLocalDevelopmentHost(String host) {
+    if ({'localhost', '127.0.0.1', '::1', '10.0.2.2'}.contains(host)) {
+      return true;
+    }
+    if (host.endsWith('.local') || host.endsWith('.localhost')) return true;
+    final m = RegExp(
+      r'^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$',
+    ).firstMatch(host);
+    if (m == null) return false;
+    final a = int.parse(m.group(1)!), b = int.parse(m.group(2)!);
+    return a == 10 || a == 192 && b == 168 || a == 172 && b >= 16 && b <= 31;
+  }
+
   String _token() {
     if (!isCurrent()) {
       throw const SharedTransportException(code: 'account_changed');
@@ -152,53 +164,31 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
       throw const SharedTransportException(code: 'invalid_response');
     } on http.ClientException {
       throw const SharedTransportException(code: 'network_unavailable');
+    } on IOException {
+      // TLS handshake, reset connection, DNS: the network, not the server.
+      throw const SharedTransportException(code: 'network_unavailable');
     }
   }
 
-  SharedProjection _record(Object? value) {
-    if (value is! Map ||
-        value.length != 6 ||
-        !value.keys.toSet().containsAll({
-          'entity',
-          'id',
-          'contextId',
-          'revision',
-          'payload',
-          'deleted',
-        }) ||
-        value['entity'] is! String ||
-        value['id'] is! String ||
-        value['contextId'] is! String ||
-        value['deleted'] is! bool) {
-      throw const FormatException('Invalid projection');
-    }
-    final raw = value['revision'];
-    final int revision;
-    if (raw is int && raw >= 0 && raw <= 9007199254740991) {
-      revision = raw;
-    } else if (raw is String &&
-        raw.length <= 16 &&
-        RegExp(r'^(0|[1-9][0-9]*)$').firstMatch(raw)?.group(0) == raw &&
-        BigInt.parse(raw) <= BigInt.parse('9007199254740991')) {
-      revision = BigInt.parse(raw).toInt();
-    } else {
-      throw const FormatException('Invalid projection version');
-    }
-    return SharedProjection(
-      entity: value['entity'] as String,
-      id: value['id'] as String,
-      contextId: value['contextId'] as String,
-      revision: revision,
-      payload: value['payload'],
-      deleted: value['deleted'] as bool,
-    );
-  }
+  List<SharedProjection> _records(Object? value) => _sharedRecords(value);
 
-  List<SharedProjection> _records(Object? value) {
-    if (value is! List || value.length > 100) {
-      throw const FormatException('Invalid projection page');
+  /// A change page can hold 100 records, each validated and canonicalised
+  /// (measured 16-115 ms per page on a desktop, several times that on a
+  /// phone). That is UI-isolate work, so a big page is parsed in a short-lived
+  /// isolate; the result is plain data and is copied back.
+  Future<List<SharedProjection>> _recordsOffThread(Object? value) async {
+    if (value is List && value.length > 8) {
+      try {
+        return await Isolate.run(() => _sharedRecords(value));
+      } on FormatException {
+        rethrow;
+      } on TypeError {
+        rethrow;
+      } on RemoteError {
+        throw const FormatException('Invalid projection page');
+      }
     }
-    return value.map(_record).toList(growable: false);
+    return _sharedRecords(value);
   }
 
   SharedCommitResponse _commit(
@@ -288,7 +278,7 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
         throw const FormatException('Invalid changes');
       }
       final page = SharedChangePage(
-        records: _records(result['records']),
+        records: await _recordsOffThread(result['records']),
         nextCursor: result['nextCursor'] as String?,
         hasMore: result['hasMore'] as bool,
         revokedContextIds: (result['revokedContextIds'] as List).cast<String>(),
@@ -1001,4 +991,52 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
       limit: limit,
     );
   }
+}
+
+// Top level on purpose: runs inside Isolate.run for large change pages.
+final _revisionPattern = RegExp(r'^(0|[1-9][0-9]*)$');
+SharedProjection _sharedRecord(Object? value) {
+  if (value is! Map ||
+      value.length != 6 ||
+      !value.keys.toSet().containsAll({
+        'entity',
+        'id',
+        'contextId',
+        'revision',
+        'payload',
+        'deleted',
+      }) ||
+      value['entity'] is! String ||
+      value['id'] is! String ||
+      value['contextId'] is! String ||
+      value['deleted'] is! bool) {
+    throw const FormatException('Invalid projection');
+  }
+  final raw = value['revision'];
+  final int revision;
+  if (raw is int && raw >= 0 && raw <= 9007199254740991) {
+    revision = raw;
+  } else if (raw is String &&
+      raw.length <= 16 &&
+      _revisionPattern.firstMatch(raw)?.group(0) == raw &&
+      BigInt.parse(raw) <= BigInt.parse('9007199254740991')) {
+    revision = BigInt.parse(raw).toInt();
+  } else {
+    throw const FormatException('Invalid projection version');
+  }
+  return SharedProjection(
+    entity: value['entity'] as String,
+    id: value['id'] as String,
+    contextId: value['contextId'] as String,
+    revision: revision,
+    payload: value['payload'],
+    deleted: value['deleted'] as bool,
+  );
+}
+
+List<SharedProjection> _sharedRecords(Object? value) {
+  if (value is! List || value.length > 100) {
+    throw const FormatException('Invalid projection page');
+  }
+  return value.map(_sharedRecord).toList(growable: false);
 }

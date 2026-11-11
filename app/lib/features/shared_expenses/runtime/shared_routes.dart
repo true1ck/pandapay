@@ -39,7 +39,11 @@ class SharedExpensesRoute extends ConsumerStatefulWidget {
 }
 
 class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
-  Future<SharedHubPresentation>? _view;
+  /// The last screen we could build. Once there is one, a failed refresh
+  /// never replaces it with an error: the person keeps what they were seeing.
+  SharedHubPresentation? _data;
+  Object? _error;
+  int _seq = 0, _seenVersion = 0;
   SharedExpensesRuntime? _runtime;
   final _history = {
     for (final tab in SharedHubTab.values) tab: <String?>[null],
@@ -55,19 +59,53 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
   }
 
   void _changed() {
-    if (_runtime?.busy == false) _reload();
+    final runtime = _runtime;
+    if (!mounted || runtime == null || runtime.busy) return;
+    // Reload only when the server's data really changed; an idle refresh
+    // used to re-fetch every page each time it finished.
+    if (runtime.dataVersion != _seenVersion) {
+      _seenVersion = runtime.dataVersion;
+      _reload();
+    } else {
+      setState(() {}); // flags (e.g. add friend) may have arrived
+    }
   }
 
   Future<SharedHubPresentation> _load() => _runtime!.loadHub(
     after: {for (final entry in _history.entries) entry.key: entry.value.last},
     searches: Map.of(_searches),
   );
-  void _reload() {
-    if (mounted && _runtime != null) {
-      setState(() {
-        _view = _load();
-      });
+
+  /// Paints the saved screen at once (when there is one), then loads live data
+  /// behind it. Newer calls win; an older failure is ignored.
+  Future<void> _run({bool cacheFirst = false}) async {
+    final runtime = _runtime;
+    if (runtime == null) return;
+    final seq = ++_seq;
+    if (cacheFirst && _data == null) {
+      try {
+        final saved = await runtime.runCacheOnly(_load);
+        if (mounted && seq == _seq && _data == null) {
+          setState(() => _data = saved);
+        }
+      } catch (_) {}
     }
+    try {
+      final fresh = await _load();
+      if (!mounted || seq != _seq) return;
+      setState(() {
+        _data = fresh;
+        _error = null;
+      });
+    } catch (error) {
+      debugPrint('shared hub load failed: ${sharedErrorCode(error)}');
+      if (!mounted || seq != _seq) return;
+      if (_data == null) setState(() => _error = error);
+    }
+  }
+
+  void _reload() {
+    if (mounted && _runtime != null) unawaited(_run());
   }
 
   Future<void> _create(SharedExpensesRuntime runtime) async {
@@ -129,9 +167,13 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
       skipLoadingOnRefresh: true,
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (_, _) => _Unavailable(
-        onRetry: () => ref.invalidate(sharedExpensesRuntimeProvider),
-      ),
+      error: (error, _) {
+        debugPrint('shared runtime failed: ${sharedErrorCode(error)}');
+        return _Unavailable(
+          error: error,
+          onRetry: () => ref.invalidate(sharedExpensesRuntimeProvider),
+        );
+      },
       data: (runtime) {
         if (_runtime != runtime) {
           _runtime?.removeListener(_changed);
@@ -141,31 +183,36 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
             _history[tab] = [null];
           }
           _runtime = runtime;
+          _data = null;
+          _error = null;
+          _seenVersion = runtime.dataVersion;
           runtime.addListener(_changed);
-          _view = _load();
+          unawaited(_run(cacheFirst: true));
         }
-        return FutureBuilder<SharedHubPresentation>(
-          key: ValueKey(
-            '${runtime.store.namespace}:${runtime.accessGeneration}',
-          ),
-          future: _view,
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return _Unavailable(
-                onRetry: () async {
-                  await runtime.refresh();
-                  _reload();
-                },
-              );
-            }
-            if (!snapshot.hasData) {
+        return Builder(
+          builder: (context) {
+            final data = _data;
+            if (data == null) {
+              if (_error != null) {
+                return _Unavailable(
+                  error: _error,
+                  onRetry: () {
+                    setState(() => _error = null);
+                    unawaited(
+                      runtime.refresh().whenComplete(() {
+                        if (mounted) _reload();
+                      }),
+                    );
+                  },
+                );
+              }
               return const Scaffold(
                 body: Center(child: CircularProgressIndicator()),
               );
             }
             return SharedExpensesScreen(
               key: ValueKey(runtime.store.namespace),
-              data: snapshot.data!,
+              data: data,
               header: SharedInviteInbox(
                 runtime: runtime,
                 onJoined: _reload,
@@ -183,7 +230,7 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
                   : null,
               onRetry: (_) => _reload(),
               onLoadMore: (tab) {
-                final view = snapshot.data!;
+                final view = data;
                 final next = switch (tab) {
                   SharedHubTab.friends => view.friends.nextCursor,
                   SharedHubTab.groups => view.groups.nextCursor,
@@ -289,7 +336,9 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
     if (mounted) open();
   }
 
-  Future<SharedGroupPresentation>? _view;
+  SharedGroupPresentation? _data;
+  Object? _error;
+  int _seq = 0, _seenVersion = 0;
   SharedExpensesRuntime? _runtime;
   final _history = {
     for (final tab in [SharedGroupTab.expenses, SharedGroupTab.balances])
@@ -303,8 +352,15 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
 
   void _changed() {
     // A split this person left is gone from their device; do not reload it.
-    if (_runtime?.store.isContextRevoked(widget.contextId) == true) return;
-    if (_runtime?.busy == false) _reload();
+    final runtime = _runtime;
+    if (!mounted || runtime == null || runtime.busy) return;
+    if (runtime.store.isContextRevoked(widget.contextId)) return;
+    if (runtime.dataVersion != _seenVersion) {
+      _seenVersion = runtime.dataVersion;
+      _reload();
+    } else {
+      setState(() {});
+    }
   }
 
   @override
@@ -314,7 +370,11 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
       for (final tab in _history.keys) {
         _history[tab] = [null];
       }
-      if (_runtime != null) _view = _load();
+      if (_runtime != null) {
+        _data = null;
+        _error = null;
+        unawaited(_run(cacheFirst: true));
+      }
     }
   }
 
@@ -323,12 +383,34 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
     expenseAfter: _history[SharedGroupTab.expenses]!.last,
     balanceAfter: _history[SharedGroupTab.balances]!.last,
   );
-  void _reload() {
-    if (mounted && _runtime != null) {
-      setState(() {
-        _view = _load();
-      });
+  Future<void> _run({bool cacheFirst = false}) async {
+    final runtime = _runtime;
+    if (runtime == null) return;
+    final seq = ++_seq;
+    if (cacheFirst && _data == null) {
+      try {
+        final saved = await runtime.runCacheOnly(_load);
+        if (mounted && seq == _seq && _data == null) {
+          setState(() => _data = saved);
+        }
+      } catch (_) {}
     }
+    try {
+      final fresh = await _load();
+      if (!mounted || seq != _seq) return;
+      setState(() {
+        _data = fresh;
+        _error = null;
+      });
+    } catch (error) {
+      debugPrint('shared group load failed: ${sharedErrorCode(error)}');
+      if (!mounted || seq != _seq) return;
+      if (_data == null) setState(() => _error = error);
+    }
+  }
+
+  void _reload() {
+    if (mounted && _runtime != null) unawaited(_run());
   }
 
   @override
@@ -339,9 +421,13 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
         skipLoadingOnRefresh: true,
         loading: () =>
             const Scaffold(body: Center(child: CircularProgressIndicator())),
-        error: (_, _) => _Unavailable(
-          onRetry: () => ref.invalidate(sharedExpensesRuntimeProvider),
-        ),
+        error: (error, _) {
+          debugPrint('shared runtime failed: ${sharedErrorCode(error)}');
+          return _Unavailable(
+            error: error,
+            onRetry: () => ref.invalidate(sharedExpensesRuntimeProvider),
+          );
+        },
         data: (runtime) {
           if (_runtime != runtime) {
             _runtime?.removeListener(_changed);
@@ -349,31 +435,43 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
               _history[tab] = [null];
             }
             _runtime = runtime;
+            _data = null;
+            _error = null;
+            _seenVersion = runtime.dataVersion;
             runtime.addListener(_changed);
-            _view = _load();
+            unawaited(_run(cacheFirst: true));
           }
-          return FutureBuilder<SharedGroupPresentation>(
-            key: ValueKey(
-              '${runtime.store.namespace}:${widget.contextId}:${runtime.accessGeneration}',
-            ),
-            future: _view,
-            builder: (context, snapshot) {
-              if (snapshot.hasError) return _Unavailable(onRetry: _reload);
-              if (!snapshot.hasData) {
+          return Builder(
+            builder: (context) {
+              final data = _data;
+              if (data == null) {
+                if (_error != null) {
+                  return _Unavailable(
+                    error: _error,
+                    onRetry: () {
+                      setState(() => _error = null);
+                      unawaited(
+                        runtime.refresh().whenComplete(() {
+                          if (mounted) _reload();
+                        }),
+                      );
+                    },
+                  );
+                }
                 return const Scaffold(
                   body: Center(child: CircularProgressIndicator()),
                 );
               }
               return SharedGroupScreen(
                 key: ValueKey('${runtime.store.namespace}:${widget.contextId}'),
-                data: snapshot.data!,
+                data: data,
                 onAddExpense: widget.onAddExpense,
                 onMembers: () => unawaited(
                   SharedMembersSheet.show(
                     context,
                     runtime: runtime,
                     contextId: widget.contextId,
-                    groupName: snapshot.data!.title,
+                    groupName: data.title,
                   ).then((left) {
                     // Left the split: this screen has nothing left to show.
                     if (left == true && mounted) {
@@ -384,7 +482,7 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
                 onOpenBalance: !runtime.settlementsEnabled
                     ? null
                     : (memberId) {
-                        final row = snapshot.data!.balances.items.firstWhere(
+                        final row = data.balances.items.firstWhere(
                           (row) => row.id == memberId,
                         );
                         // Opposite obligations can coexist. Prefill one gross
@@ -426,12 +524,12 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
                     context,
                     runtime: runtime,
                     contextId: widget.contextId,
-                    groupName: snapshot.data!.title,
+                    groupName: data.title,
                   ),
                 ),
                 onRetry: (_) => _reload(),
                 onLoadMore: (tab) {
-                  final view = snapshot.data!;
+                  final view = data;
                   final next = switch (tab) {
                     SharedGroupTab.expenses => view.expenses.nextCursor,
                     SharedGroupTab.balances => view.balances.nextCursor,
@@ -471,15 +569,15 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
 
 class _Unavailable extends StatelessWidget {
   final VoidCallback onRetry;
-  const _Unavailable({required this.onRetry});
+  final Object? error;
+  const _Unavailable({required this.onRetry, this.error});
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: BambooInk.paper,
     appBar: AppBar(title: Text('Splits', style: BambooFonts.heading(17))),
     body: AppBackground(
       child: ErrorState(
-        message:
-            'Shared expenses are not available yet. Existing transactions and private splits are still available.',
+        message: sharedUnavailableMessage(error),
         onRetry: onRetry,
       ),
     ),

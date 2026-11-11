@@ -94,11 +94,14 @@ void main() {
   late SharedExpensesRuntime runtime;
   late AuthenticatedHttpClient client;
   var current = true, offline = false, enabled = true;
+  var serverDown = false, overviewDown = false;
   var revoked = false;
   Completer<void>? overviewStarted, releaseOverview;
   setUp(() {
     current = true;
     offline = false;
+    serverDown = false;
+    overviewDown = false;
     enabled = true;
     revoked = false;
     BambooFonts.useSystemFontsForTests = true;
@@ -111,6 +114,14 @@ void main() {
       refreshAccessToken: () async => null,
       inner: MockClient((request) async {
         if (offline) throw http.ClientException('offline');
+        if (serverDown ||
+            overviewDown && request.url.path.endsWith('/overview')) {
+          return http.Response(
+            jsonEncode({'error': 'internal_error'}),
+            503,
+            headers: {'content-type': 'application/json'},
+          );
+        }
         if (request.url.path.endsWith('/overview') && releaseOverview != null) {
           overviewStarted!.complete();
           await releaseOverview!.future;
@@ -411,6 +422,79 @@ void main() {
       expect(
         await runtime.cache.read('user:other:shared:contexts:first'),
         isNull,
+      );
+    },
+  );
+  test('a 5xx from the server still shows the saved splits', () async {
+    await runtime.refresh();
+    await runtime.loadHub();
+    serverDown = true;
+    final view = await runtime.loadHub();
+    expect(view.offline, isTrue);
+    expect(view.groups.items.single.title, 'Flatmates');
+  });
+  test('a failed totals strip does not blank friends and groups', () async {
+    await runtime.refresh();
+    overviewDown = true;
+    final view = await runtime.loadHub();
+    expect(view.groups.items.single.title, 'Flatmates');
+    expect(view.summary?.incomplete, isTrue);
+  });
+  test(
+    'cold start offline reuses the saved flags and the saved screen',
+    () async {
+      await runtime.ensureCapabilities();
+      await runtime.refresh();
+      await runtime.loadHub();
+      // A fresh runtime over the same database, with no network at all.
+      offline = true;
+      final cold = SharedExpensesRuntime(
+        store: runtime.store,
+        remote: runtime.remote,
+        cache: runtime.cache,
+        isCurrent: () => current,
+      );
+      addTearDown(cold.dispose);
+      await cold.ensureCapabilities();
+      expect(cold.readsEnabled, isTrue);
+      final view = await cold.loadHub();
+      expect(view.offline, isTrue);
+      expect(view.groups.items.single.title, 'Flatmates');
+    },
+  );
+  test('cache-only paints the saved screen without the network', () async {
+    await runtime.refresh();
+    await runtime.loadHub();
+    var calls = 0;
+    offline = true;
+    final view = await runtime.runCacheOnly(() {
+      calls++;
+      return runtime.loadHub();
+    });
+    expect(calls, 1);
+    expect(view.offline, isFalse);
+    expect(view.groups.items.single.title, 'Flatmates');
+  });
+  test('refresh with nothing new does not bump the data version', () async {
+    await runtime.refresh();
+    final before = runtime.dataVersion;
+    await runtime.refresh();
+    expect(runtime.dataVersion, before);
+  });
+  test(
+    'a switched-off feature is reported as off, not as a load failure',
+    () async {
+      enabled = false;
+      await runtime.refresh();
+      await expectLater(
+        runtime.loadHub(),
+        throwsA(
+          isA<SharedRuntimeUnavailable>().having(
+            (e) => e.reason,
+            'reason',
+            'reads_off',
+          ),
+        ),
       );
     },
   );
