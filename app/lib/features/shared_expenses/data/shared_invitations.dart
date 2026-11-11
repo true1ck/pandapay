@@ -1,12 +1,12 @@
 import 'shared_transport.dart';
 
-/// Split invite links are `https://pandapay.app/split/join/<token>` (or the
+/// Split invite links are `https://pandapay.pandapath.live/split/join/<token>` (or the
 /// `pandapay://split/join/<token>` fallback). The token is a 43-character
 /// URL-safe secret. It grants only the right to ask to join: the server never
 /// accepts debt, approves expenses or posts money from a link view.
 final _tokenPattern = RegExp(r'^[A-Za-z0-9_-]{43}$');
 
-const sharedInviteHost = 'pandapay.app';
+const sharedInviteHost = 'pandapay.pandapath.live';
 
 String sharedInviteUrl(String token) =>
     'https://$sharedInviteHost/split/join/$token';

@@ -370,7 +370,7 @@ class MainActivity : FlutterFragmentActivity() {
     private fun invitationCodeFromReferrer(raw: String): String? {
         val candidates = listOf(raw, Uri.decode(raw)).distinct()
         for (candidate in candidates) {
-            // Split-group invite: https://pandapay.app/split/join/<token> sends
+            // Split-group invite: https://pandapay.pandapath.live/split/join/<token> sends
             // the token through the Play referrer as split_join=<token>.
             val splitToken = (if (candidate.startsWith("http://", true) ||
                 candidate.startsWith("https://", true)

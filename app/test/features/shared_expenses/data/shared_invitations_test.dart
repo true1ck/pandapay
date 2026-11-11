@@ -8,7 +8,7 @@ void main() {
   test('only well-formed split join links yield a token', () {
     expect(
       sharedInviteTokenFromUri(
-        Uri.parse('https://pandapay.app/split/join/$token'),
+        Uri.parse('https://pandapay.pandapath.live/split/join/$token'),
       ),
       token,
     );
@@ -18,11 +18,11 @@ void main() {
     );
     for (final bad in [
       'https://evil.example/split/join/$token',
-      'http://pandapay.app/split/join/$token',
-      'https://pandapay.app/i/$token', // product-access codes are separate
-      'https://pandapay.app/split/join/short',
-      'https://pandapay.app/split/join/$token/extra',
-      'https://pandapay.app/split/join/${token.replaceRange(0, 1, '!')}',
+      'http://pandapay.pandapath.live/split/join/$token',
+      'https://pandapay.pandapath.live/i/$token', // product-access codes are separate
+      'https://pandapay.pandapath.live/split/join/short',
+      'https://pandapay.pandapath.live/split/join/$token/extra',
+      'https://pandapay.pandapath.live/split/join/${token.replaceRange(0, 1, '!')}',
     ]) {
       expect(sharedInviteTokenFromUri(Uri.parse(bad)), isNull, reason: bad);
     }
@@ -35,7 +35,7 @@ void main() {
       personName: 'Rahul',
       url: sharedInviteUrl(token),
     );
-    expect(text, contains('https://pandapay.app/split/join/$token'));
+    expect(text, contains('https://pandapay.pandapath.live/split/join/$token'));
     expect(text, isNot(contains('₹')));
   });
 
@@ -62,10 +62,10 @@ void main() {
     final text = sharedInviteMessage(
       groupName: 'Rahul',
       personName: 'Rahul',
-      url: 'https://pandapay.app/split/join/x',
+      url: 'https://pandapay.pandapath.live/split/join/x',
       direct: true,
     );
     expect(text, isNot(contains('added you to')));
-    expect(text, contains('https://pandapay.app/split/join/x'));
+    expect(text, contains('https://pandapay.pandapath.live/split/join/x'));
   });
 }

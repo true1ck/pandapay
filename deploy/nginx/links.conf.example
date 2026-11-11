@@ -1,0 +1,26 @@
+# Public link host (invite landing pages + Android App Links verification).
+# Serves ONLY the two public paths below; everything else is 404, so this host
+# never exposes the rest of the API. Copy to /etc/nginx/sites-available/, edit
+# server_name if you use a different host, symlink into sites-enabled, then:
+#   sudo certbot --nginx -d pandapay.pandapath.live
+# (certbot adds the :443 listener and certificate lines itself.)
+server {
+    listen 80;
+    server_name pandapay.pandapath.live;
+
+    location ^~ /split/join/ {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location = /.well-known/assetlinks.json {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+    }
+
+    location / { return 404; }
+}

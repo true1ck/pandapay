@@ -5,6 +5,9 @@ const {record,fail}=require('./validation');
 const {encryptPhone,decryptPhone}=require('./phone_crypto');
 const {cleanLabel}=require('./label');
 const {describePhone}=require('./phone_display');
+// Public origin of split invite links. Must match the host in the app's Android
+// manifest and assetlinks; override per environment.
+const INVITE_BASE_URL=(process.env.INVITE_BASE_URL||'https://pandapay.pandapath.live').replace(/\/+$/,'');
 const TOKEN=/^[A-Za-z0-9_-]{43}$/;
 function normalizePhone(value) {
   if(typeof value!=='string'||value.length>40||!/^[+0-9 ()-]+$/.test(value))fail('INVALID_INPUT','phoneNumber');
@@ -130,6 +133,13 @@ function landingPage(token,packageId) {
 function stripPhone(items) {return (items||[]).map(({claimantPhone,...rest})=>rest);}
 function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,androidPackageId='app.pandapay.pandapay',notify=async()=>0,phone:phoneOpts={enabled:()=>false,ring:()=>null},poolBusy=()=>false}) {
   const phoneOn=()=>phoneOpts.enabled()===true;
+  // Android App Links verification. Fingerprints (SHA-256 of each signing cert,
+  // colon-separated hex) come from ANDROID_CERT_SHA256, comma-separated, so
+  // release, staging and debug builds can all be verified without a code change.
+  app.get('/.well-known/assetlinks.json',(req,res)=>{
+    const fingerprints=(process.env.ANDROID_CERT_SHA256||'').split(',').map(s=>s.trim().toUpperCase()).filter(Boolean);
+    res.set('Cache-Control','public, max-age=300').json(fingerprints.length?[{relation:['delegate_permission/common.handle_all_urls'],target:{namespace:'android_app',package_name:androidPackageId,sha256_cert_fingerprints:fingerprints}}]:[]);
+  });
   app.get('/split/join/:token',(req,res)=>{
     res.set({'Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Robots-Tag':'noindex, nofollow','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"});
     if(!TOKEN.test(req.params.token))return res.status(404).type('text/plain').send('Not found');
@@ -153,7 +163,7 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
     // notify nobody. After the commit, fire-and-forget: a failed push never affects
     // the invitation, and a replay is deduplicated by invitation id.
     void notify({actorId:req.userId,kind:'invitation.created',payload:{},contextId:b.contextId,operationId:b.invitationId,invitationId:b.invitationId});
-    res.json({...result,joinUrl:`https://pandapay.app/split/join/${creds.token}`});
+    res.json({...result,joinUrl:`${INVITE_BASE_URL}/split/join/${creds.token}`});
   });
   route('/shared-expenses/invitations/preview',async(req,res)=>{
     record(req.body,['token']);const hash=tokenHash(req.body.token);
@@ -312,7 +322,7 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
     const creds=groupLinkCredentials(secret,req.userId,b.contextId,b.linkId);
     const rh=requestHash({contextId:b.contextId,linkId:b.linkId,action:'create'});
     const result=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.create_group_link($1::uuid,$2::text,$3::uuid,$4::text) AS result',[b.contextId,creds.tokenHash,b.linkId,rh])).rows[0].result);
-    res.json({...result,joinUrl:`https://pandapay.app/split/join/${creds.token}`});
+    res.json({...result,joinUrl:`${INVITE_BASE_URL}/split/join/${creds.token}`});
   });
   route('/shared-expenses/groups/link/revoke',async(req,res)=>{
     const b=req.body;record(b,['contextId','operationId']);uuid(b.contextId,'contextId');uuid(b.operationId,'operationId');

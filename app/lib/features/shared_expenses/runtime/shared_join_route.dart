@@ -12,7 +12,7 @@ import '../ui/shared_phone_consent.dart';
 import 'shared_providers.dart';
 import 'shared_runtime.dart';
 
-/// Landing page for `https://pandapay.app/split/join/<token>`. Opening the link
+/// Landing page for `https://pandapay.pandapath.live/split/join/<token>`. Opening the link
 /// only previews the group; nothing is joined until the person taps Join, and
 /// joining never accepts an expense or debt (those stay in explicit review).
 class SharedJoinRoute extends ConsumerStatefulWidget {
