@@ -1,6 +1,9 @@
 import 'dart:typed_data';
 
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:pandapay_domain/sms_v2.dart' as sms;
+import 'package:pandapay_domain/sms_v2_ledger.dart' as stmt;
+import 'package:pandapay_domain/statement_layouts.dart' as layouts;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import 'import_models.dart';
@@ -288,6 +291,10 @@ ParsedStatement parseStatementText(
   String text, {
   StatementTableOptions options = const StatementTableOptions(),
 }) {
+  // A statement in a layout we know is read by its own reader and proven
+  // against its own running balance; anything else falls to the generic reader.
+  final bank = _parseKnownBankStatement(text);
+  if (bank != null) return bank;
   final transactions = <ParsedStatementLine>[];
   Money? closingBalance;
   String? block;
@@ -387,5 +394,80 @@ ParsedStatement parseStatementText(
     ],
     rejectedRows: rejected,
     reconciliation: reconciliation,
+  );
+}
+
+/// SBI and ICICI statements, read by `readBankStatement` and checked with
+/// `verifyStatement`: a row that does not follow the printed running balance, or
+/// whose direction cannot be read, is flagged for the person instead of imported
+/// as if it were certain. Null when the text is neither layout.
+ParsedStatement? _parseKnownBankStatement(String text) {
+  final read = layouts.readBankStatement(text);
+  if (read == null || read.rows.isEmpty) return null;
+  final check = read.check;
+  final label = switch (read.issuerSlug) {
+    'sbi' => 'SBI',
+    'icici' => 'ICICI',
+    final other => other.toUpperCase(),
+  };
+  final account = read.accountMask == null
+      ? '$label statement'
+      : '$label ••${read.accountMask}';
+  final unknownDirection = check.directionUnknown.toSet();
+  final suspect = check.chainBreaks.toSet();
+
+  final lines = <ParsedStatementLine>[];
+  for (final row in check.rows) {
+    final description = _cleanDescription(row.narration);
+    final reasons = <String>[
+      if (unknownDirection.contains(row.index))
+        'The statement does not say whether this was money in or out, and the balance before it is not printed. Choose the direction before importing.',
+      if (suspect.contains(row.index))
+        "This row does not follow the statement's running balance, so its date, amount or direction may be misread. Check it before importing.",
+      if (description.isEmpty) 'This row has no description. Add one before importing.',
+    ];
+    final references = stmt.extractReferences(row.narration);
+    lines.add(
+      ParsedStatementLine(
+        date: DateTime(row.date.year, row.date.month, row.date.day),
+        description: description.isEmpty ? 'Statement row' : description,
+        amount: Money.fromPaise(row.amountMinor),
+        isCredit: row.direction == null ? false : row.direction == sms.Direction.credit,
+        sourceAccount: account,
+        bankReference: references.isEmpty ? null : references.first,
+        sourceRowId: 'pdf:row:${row.index}',
+        reviewReasons: reasons,
+        isTransfer: _isRepaymentOrTransfer(description),
+        isInvestment: isInvestmentMovementDescription(description),
+      ),
+    );
+  }
+  final closing = read.closingMinor == null
+      ? null
+      : Money.fromPaise(read.closingMinor!);
+  final opening = read.openingMinor == null
+      ? null
+      : Money.fromPaise(read.openingMinor!);
+  return ParsedStatement(
+    transactions: lines,
+    closingBalance: closing,
+    warnings: [
+      ...check.problems,
+      if (read.skipped.isNotEmpty)
+        '${read.skipped.length} dated line(s) could not be read and are listed as rejected rows.',
+    ],
+    rejectedRows: [
+      for (final line in read.skipped)
+        ImportRejectedRow(
+          'pdf:unreadable',
+          [line],
+          'Could not safely read this dated row. Correct its date, description, and amount.',
+        ),
+    ],
+    reconciliation: StatementReconciler.reconcile(
+      lines: lines,
+      openingBalance: opening,
+      closingBalance: closing,
+    ),
   );
 }
