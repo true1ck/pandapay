@@ -40,8 +40,8 @@ Production builds require explicit hosted endpoints and never use the local
 backend:
 
 ```bash
-PANDAPAY_API_BASE_URL=https://api.pandapath.site \
-PANDAPAY_AUTH_BASE_URL=https://auth.pandapath.site \
+PANDAPAY_API_BASE_URL=https://api.pandapath.live \
+PANDAPAY_AUTH_BASE_URL=https://auth.pandapath.live \
 scripts/build_app.sh prod appbundle --release
 ```
 

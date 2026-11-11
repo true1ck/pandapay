@@ -10,7 +10,7 @@ How PandaPay finds out about crashes, failing requests, slow responses and a sic
  │ node-exporter ──────┘         │                        │ Grafana (dashboards)               │
  │                               │                        │ Uptime Kuma (is it up?)            │
  │ api/auth error reports ───────┼── HTTPS ──────────────▶│ Caddy ─(ingest only)─> GlitchTip   │
- └───────────────────────────────┘   errors.pandapath.site └────────────────────────────────────┘
+ └───────────────────────────────┘   errors.pandapath.live └────────────────────────────────────┘
  Phones (later) send crash reports to the same public ingest address.
 ```
 
@@ -26,7 +26,7 @@ How PandaPay finds out about crashes, failing requests, slow responses and a sic
 
 1. Create a small Linux VM (2 vCPU, 4 GB RAM is enough; Oracle's free ARM tier may cover it). Open only ports 80 and 443 to the internet, and 22 to your IP.
 2. Install Docker and [Tailscale](https://tailscale.com/download) on it and on the app VM, and join both to the same tailnet. Note the monitoring VM's address with `tailscale ip -4`.
-3. Point `errors.pandapath.site` (A record) at the monitoring VM's public IP.
+3. Point `errors.pandapath.live` (A record) at the monitoring VM's public IP.
 4. Copy this `deploy/monitoring` folder to `/opt/pandapay-monitoring` on the VM. In that folder:
    ```sh
    cp monitoring.env.example .env && chmod 600 .env     # fill in every value
@@ -47,9 +47,9 @@ How PandaPay finds out about crashes, failing requests, slow responses and a sic
 
    | Monitor | Type | Target |
    | --- | --- | --- |
-   | Customer API | HTTP(s) | `https://api.pandapath.site/ready` |
-   | Auth | HTTP(s) | `https://auth.pandapath.site/ready` |
-   | Error ingestion | TCP port | `errors.pandapath.site:443` |
+   | Customer API | HTTP(s) | `https://api.pandapath.live/ready` |
+   | Auth | HTTP(s) | `https://auth.pandapath.live/ready` |
+   | Error ingestion | TCP port | `errors.pandapath.live:443` |
    | Grafana | HTTP(s) | `http://grafana:3000/api/health` |
 
 ## 2. App VM
@@ -58,8 +58,8 @@ How PandaPay finds out about crashes, failing requests, slow responses and a sic
    ```sh
    API_METRICS_PORT=9464
    AUTH_METRICS_PORT=9465
-   API_ERROR_REPORTING_DSN=https://<key>@errors.pandapath.site/<api-project-id>
-   AUTH_ERROR_REPORTING_DSN=https://<key>@errors.pandapath.site/<auth-project-id>
+   API_ERROR_REPORTING_DSN=https://<key>@errors.pandapath.live/<api-project-id>
+   AUTH_ERROR_REPORTING_DSN=https://<key>@errors.pandapath.live/<auth-project-id>
    ```
    The next deploy picks them up (or restart `api` and `auth`). Deploys also tag every report and metric with the commit (`PANDAPAY_GIT_SHA`).
 2. Start the agent, as its own Compose project so deploy.sh's service check is unaffected:
@@ -78,7 +78,7 @@ Add the `pandapay-app` project's DSN to staging and production builds (Codemagic
 
 ```sh
 flutter build appbundle --release ... \
-  --dart-define=PANDAPAY_ERROR_REPORTING_DSN=https://<key>@errors.pandapath.site/<app-project-id>
+  --dart-define=PANDAPAY_ERROR_REPORTING_DSN=https://<key>@errors.pandapath.live/<app-project-id>
 ```
 
 Builds without it send nothing. A report holds the error's class name, code locations (`data/import_models.dart:142`), app version, platform and which handler caught it; never the message, screen content, user or device ids. Reports wait on the phone when offline (at most 20, for 7 days), each problem is sent once per app session, and at most 10 a minute. See `app/lib/app/crash_reporter.dart`.

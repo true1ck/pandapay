@@ -15,7 +15,7 @@ services:
     restart: unless-stopped
     ports: ["80:80", "443:443"]
     environment:
-      ERRORS_HOSTNAME: "${ERRORS_HOSTNAME:?Set ERRORS_HOSTNAME, e.g. errors.pandapath.site}"
+      ERRORS_HOSTNAME: "${ERRORS_HOSTNAME:?Set ERRORS_HOSTNAME, e.g. errors.pandapath.live}"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

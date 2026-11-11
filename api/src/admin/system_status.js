@@ -14,7 +14,12 @@ const PROBE_TIMEOUT_MS = 3_000;
 const MAX_PROBES = 12;
 const MAX_BRANCHES = 100;
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]']);
-const DEFAULT_PROBES = 'api=https://api.pandapath.site/ready,auth=https://auth.pandapath.site/ready';
+// Default health probes derive from PANDAPAY_DOMAIN (one operator setting for the
+// whole deployment); with no domain configured there are no default probes.
+function defaultProbes(env = process.env) {
+  const domain = String(env.PANDAPAY_DOMAIN || '').trim();
+  return domain ? `api=https://api.${domain}/ready,auth=https://auth.${domain}/ready` : '';
+}
 
 // What production runs (docker-compose.prod.yml + deploy/admin/compose.private.yml)
 // and how each one's health is measured here. These are programs, not
@@ -90,7 +95,7 @@ const JOBS = Object.freeze([
 ]);
 
 function parseProbes(raw) {
-  const value = raw === undefined ? DEFAULT_PROBES : String(raw).trim();
+  const value = raw === undefined ? defaultProbes() : String(raw).trim();
   if (value === '' || value === 'none') return { probes: [], ignored: 0 };
   const probes = [];
   let ignored = 0;
