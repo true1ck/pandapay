@@ -9,6 +9,10 @@ import '../../data/account_name_api.dart';
 import '../../data/api_exception.dart';
 import '../settings/feedback_support_screen.dart';
 import '../settings/phone_change_screen.dart';
+import 'avatar_photo_processor.dart';
+import 'avatar_picker_sheet.dart';
+import 'avatar_providers.dart';
+import 'user_avatar.dart';
 
 /// Edit profile: the name, the phone number, and the sign-in email (read-only).
 ///
@@ -30,6 +34,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _nameController = TextEditingController();
   bool _seeded = false;
   bool _saving = false;
+  bool _avatarBusy = false;
   String? _error;
   String _savedName = '';
 
@@ -79,6 +84,47 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     }
   }
 
+  Future<void> _changeAvatar(AvatarState? current) async {
+    if (_avatarBusy) return;
+    final choice = await showAvatarPickerSheet(
+      context,
+      name: _savedName,
+      currentPreset: current?.preset,
+      hasPhoto: current?.photo != null,
+    );
+    if (choice == null || !mounted) return;
+    final api = ref.read(avatarApiProvider);
+    if (api == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _avatarBusy = true);
+    try {
+      switch (choice) {
+        case ChoosePreset(:final id):
+          // A photo beats a preset on screen, so picking a preset replaces it.
+          if (current?.photo != null) await api.removePhoto();
+          await api.setPreset(id);
+        case UseInitial():
+          if (current?.photo != null) await api.removePhoto();
+          if (current?.preset != null) await api.setPreset(null);
+        case RemovePhoto():
+          await api.removePhoto();
+        case ChoosePhoto(:final source):
+          final picked = await ref.read(avatarPhotoPickerProvider).pick(source);
+          if (picked == null) return; // backed out of the picker
+          final jpeg = await prepareAvatarPhoto(picked);
+          await api.uploadPhoto(jpeg);
+      }
+      ref.invalidate(avatarProvider);
+      await ref.read(avatarProvider.future);
+      if (mounted) messenger.showSnackBar(const SnackBar(content: Text('Avatar updated')));
+    } catch (error) {
+      final text = error is AvatarPhotoException ? error.message : userFacingErrorMessage(error);
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text(text)));
+    } finally {
+      if (mounted) setState(() => _avatarBusy = false);
+    }
+  }
+
   Future<void> _openPhoneChange(bool hasPhone) async {
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => PhoneChangeScreen(changing: hasPhone)),
@@ -90,6 +136,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   Widget build(BuildContext context) {
     final profile = ref.watch(profileProvider);
     final phone = ref.watch(phoneStatusProvider).valueOrNull;
+    final avatar = ref.watch(avatarProvider).valueOrNull;
 
     return Scaffold(
       backgroundColor: BambooInk.paper,
@@ -122,18 +169,59 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               padding: const EdgeInsets.fromLTRB(20, AppSpace.md, 20, 30),
               children: [
                 Center(
-                  child: Container(
-                    width: 76,
-                    height: 76,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: BambooInk.slate,
-                      borderRadius: BorderRadius.circular(24),
+                  child: Pressable(
+                    onTap: () => _changeAvatar(avatar),
+                    semanticLabel: 'Change avatar',
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        UserAvatar(
+                          key: const Key('edit-avatar'),
+                          name: shownName.isNotEmpty ? shownName : initial,
+                          preset: avatar?.preset,
+                          photo: avatar?.photo,
+                          size: 92,
+                          radiusFactor: 0.3,
+                        ),
+                        if (_avatarBusy)
+                          Positioned.fill(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.35),
+                                borderRadius: BorderRadius.circular(92 * 0.3),
+                              ),
+                              child: const Center(
+                                child: SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                                ),
+                              ),
+                            ),
+                          ),
+                        Positioned(
+                          right: -6,
+                          bottom: -6,
+                          child: Container(
+                            key: const Key('edit-avatar-badge'),
+                            padding: const EdgeInsets.all(7),
+                            decoration: BoxDecoration(
+                              color: BambooInk.slate,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: BambooInk.paper, width: 2),
+                            ),
+                            child: const Icon(Icons.edit_rounded, size: 14, color: BambooInk.lime),
+                          ),
+                        ),
+                      ],
                     ),
-                    child: Text(
-                      initial,
-                      style: BambooFonts.heading(32, weight: FontWeight.w800, color: BambooInk.lime),
-                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpace.sm),
+                Center(
+                  child: Text(
+                    'Tap to change your avatar',
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                   ),
                 ),
                 const SizedBox(height: AppSpace.xl),

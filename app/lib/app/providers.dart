@@ -79,6 +79,7 @@ import '../data/recovery_api.dart';
 import '../data/account_recovery_api.dart';
 import '../data/phone_api.dart';
 import '../data/account_name_api.dart';
+import '../data/avatar_api.dart';
 import '../data/recovery_email_api.dart';
 import '../features/auth/recovery_hold_store.dart';
 import '../data/referral_repository.dart';
@@ -829,6 +830,17 @@ final recoveryEmailStatusProvider =
         return null;
       }
     });
+
+/// The signed-in person's own avatar (preset and photo). Null while signed out.
+final avatarApiProvider = Provider<AvatarApi?>((ref) {
+  final token = _stableSessionToken(ref);
+  if (token == null) return null;
+  return AvatarApi(
+    authBaseUrl: _authBaseUrl,
+    accessToken: token,
+    client: ref.read(authenticatedHttpClientProvider),
+  );
+});
 
 /// The phone API for the signed-in session (adding or changing the number).
 /// Null while signed out.

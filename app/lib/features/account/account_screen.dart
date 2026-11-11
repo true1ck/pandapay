@@ -11,7 +11,9 @@ import '../../app/router.dart' show AppRoute;
 import '../shared_expenses/runtime/shared_providers.dart';
 import '../../data/api_exception.dart';
 import '../../main.dart' show MoneyText;
+import 'avatar_providers.dart';
 import 'edit_profile_screen.dart';
+import 'user_avatar.dart';
 import '../notifications/notifications_screen.dart';
 import '../referrals/invite_friends_screen.dart';
 import '../subscription_credits/subscription_credits_screen.dart';
@@ -364,6 +366,7 @@ class _ProfileHero extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final summary = ref.watch(homeSummaryProvider).valueOrNull;
     final cards = ref.watch(userCardsProvider).valueOrNull ?? const [];
+    final avatar = ref.watch(avatarProvider).valueOrNull;
 
     final displayName = (profile?['display_name'] as String?)?.trim();
     final email = (profile?['email'] as String?)?.trim();
@@ -409,22 +412,13 @@ class _ProfileHero extends ConsumerWidget {
               children: [
                 Row(
                   children: [
-                    Container(
-                      width: 56,
-                      height: 56,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: BambooInk.lime,
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: Text(
-                        name.characters.first.toUpperCase(),
-                        style: BambooFonts.heading(
-                          22,
-                          weight: FontWeight.w800,
-                          color: BambooInk.slate,
-                        ),
-                      ),
+                    UserAvatar(
+                      key: const Key('profile-avatar'),
+                      name: name,
+                      preset: avatar?.preset,
+                      photo: avatar?.photo,
+                      size: 56,
+                      radiusFactor: 18 / 56,
                     ),
                     const SizedBox(width: 14),
                     Expanded(

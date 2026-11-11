@@ -155,6 +155,7 @@ app.use('/auth', authRoutes);
 app.use('/users', userRoutes);
 app.use('/users/me/recovery-contact', require('./routes/recoveryContactRoutes'));
 app.use('/users/me/phone', require('./routes/phoneClaimRoutes'));
+app.use('/users/me/avatar', require('./routes/avatarRoutes'));
 app.use('/users/me/recovery-email', require('./routes/recoveryEmailRoutes'));
 app.use('/users/me/recovery-pending', accountRecoveryRoutes.pendingRouter);
 app.use('/internal', internalRoutes);
