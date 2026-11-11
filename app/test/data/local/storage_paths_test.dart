@@ -3,6 +3,9 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/local/storage_paths.dart';
 
+/// Paths use the platform separator; compare them with `/` so the tests agree on Windows.
+String _slash(String p) => p.replaceAll(r'\', '/');
+
 void main() {
   late Directory support;
   late List<String> excluded;
@@ -19,9 +22,9 @@ void main() {
 
   test('all account files live under Application Support/PandaPay', () async {
     final paths = await make();
-    expect(paths.databasePath, '${support.path}/PandaPay/pandapay.sqlite');
-    expect(paths.receiptsDir.path, '${support.path}/PandaPay/receipts');
-    expect(excluded, ['${support.path}/PandaPay']);
+    expect(_slash(paths.databasePath), _slash('${support.path}/PandaPay/pandapay.sqlite'));
+    expect(_slash(paths.receiptsDir.path), _slash('${support.path}/PandaPay/receipts'));
+    expect(excluded.map(_slash).toList(), [_slash('${support.path}/PandaPay')]);
   });
 
   test('wipe deletes everything and re-excludes the empty root', () async {

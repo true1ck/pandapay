@@ -311,7 +311,10 @@ void main() {
       expect(restored.id, attachmentId);
       expect(restored.fileName, 'receipt.png');
       expect(restored.mimeType, 'image/png');
-      expect(restored.localPath, startsWith('${targetPhone.path}/receipts/'));
+      expect(
+        restored.localPath.replaceAll(r'\', '/'),
+        startsWith('${targetPhone.path}/receipts/'.replaceAll(r'\', '/')),
+      );
       final restoredBytes = File(restored.localPath).readAsBytesSync();
       expect(_isPprc(restoredBytes), isTrue);
       expect(_containsRun(restoredBytes, _plainRun), isFalse);
