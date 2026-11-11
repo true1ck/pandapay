@@ -35,6 +35,8 @@ const PROOF_CHECKS=['api','auth','database','backup','deployment','app','console
 const hash=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
 function stableJson(value){if(Array.isArray(value))return '['+value.map(stableJson).join(',')+']';if(value&&typeof value==='object')return '{'+Object.keys(value).sort().map(key=>JSON.stringify(key)+':'+stableJson(value[key])).join(',')+'}';return JSON.stringify(value);}
 function readBounded(filename,maximum=MAX_JSON){
+ // O_NOFOLLOW does not exist on Windows, so refuse a symlink explicitly as well.
+ if(fs.lstatSync(filename).isSymbolicLink())throw new Error('Release input is not a bounded regular file');
  const fd=fs.openSync(filename,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);
  try{const before=fs.fstatSync(fd);if(!before.isFile()||before.size>maximum)throw new Error('Release input is not a bounded regular file');const bytes=Buffer.alloc(before.size+1);const length=fs.readSync(fd,bytes,0,bytes.length,0);const after=fs.fstatSync(fd);if(length!==before.size||before.size!==after.size||before.mtimeMs!==after.mtimeMs||before.ctimeMs!==after.ctimeMs)throw new Error('Release input changed during review');return bytes.subarray(0,length);}finally{fs.closeSync(fd);}
 }

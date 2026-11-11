@@ -1,2 +1,14 @@
 /db/scripts/compose-init-databases.sh text eol=lf
 /db/scripts/*.sh text eol=lf
+
+# Data files whose exact bytes are hashed or signed (catalogue snapshots, SMS rule
+# bundles and their contracts). They must be checked out with LF on every platform,
+# or the hashes differ on Windows checkouts (core.autocrlf=true) and the tests fail.
+/db/fixtures/** text eol=lf
+/api/scripts/catalogue_overrides/** text eol=lf
+/contracts/sms/** text eol=lf
+/rules/sms/** text eol=lf
+# Vendored copies of the files above (api/Dockerfile builds from api/ only), kept
+# byte-identical to their sources by api/scripts/sync_sms_v2_assets.js --check.
+/api/sms_v2_assets/** text eol=lf
+/tools/sms_golden/gates.json text eol=lf
