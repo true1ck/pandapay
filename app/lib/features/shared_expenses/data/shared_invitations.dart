@@ -34,6 +34,15 @@ String? sharedInviteTokenFromUri(Uri? uri) {
       : null;
 }
 
+/// The in-app Join route for a split invite link, or null. iOS hands a
+/// `pandapay://split/join/<token>` link to the router untouched, so its host is
+/// `split` and its path is `/join/<token>`, which matches no route; this gives
+/// the router the real `/split/join/<token>` location to go to instead.
+String? splitJoinLocationForUri(Uri uri) {
+  final token = sharedInviteTokenFromUri(uri);
+  return token == null ? null : '/split/join/$token';
+}
+
 final class SharedInviteLink {
   final String invitationId, token, url;
   const SharedInviteLink({

@@ -29,6 +29,29 @@ void main() {
     expect(sharedInviteTokenFromUri(null), isNull);
   });
 
+  test('both link shapes map to the one in-app Join route', () {
+    final expected = '/split/join/$token';
+    expect(
+      splitJoinLocationForUri(Uri.parse('pandapay://split/join/$token')),
+      expected,
+    );
+    expect(
+      splitJoinLocationForUri(
+        Uri.parse('https://pandapay.pandapath.live/split/join/$token'),
+      ),
+      expected,
+    );
+    // Referral codes, assistant links and look-alike hosts never match.
+    for (final other in [
+      'pandapay://i/PANDA-ABC123',
+      'pandapay://assistant/wallet',
+      'https://evil.example/split/join/$token',
+      'pandapay://split/join/short',
+    ]) {
+      expect(splitJoinLocationForUri(Uri.parse(other)), isNull, reason: other);
+    }
+  });
+
   test('invite message carries the link and no money', () {
     final text = sharedInviteMessage(
       groupName: 'Goa trip',

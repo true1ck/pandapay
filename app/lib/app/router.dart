@@ -3,6 +3,8 @@ import '../features/sms_v2/ui/migration_report_screen.dart';
 import '../features/sms_v2/ui/found_instruments_screen.dart';
 import '../features/sms_v2/ui/review_inbox_screen.dart';
 import '../features/sms_v2/ui/ledger_screens.dart';
+import '../features/shared_expenses/data/shared_invitations.dart'
+    show splitJoinLocationForUri;
 import '../features/shared_expenses/runtime/shared_providers.dart';
 import '../features/shared_expenses/runtime/shared_join_route.dart';
 import '../features/shared_expenses/runtime/shared_routes.dart';
@@ -413,6 +415,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           path != '${AppRoute.inviteLinkPrefix}/$invitationCode') {
         return '${AppRoute.inviteLinkPrefix}/$invitationCode';
       }
+
+      // The same for a split invite: `pandapay://split/join/<token>` arrives
+      // with host `split` and path `/join/<token>`, which no route matches.
+      final splitJoin = splitJoinLocationForUri(state.uri);
+      if (splitJoin != null && path != splitJoin) return splitJoin;
 
       // S5/S6 — checked first, ahead of the onboarding guard below: a
       // maintenance window or a too-old install blocks the app regardless

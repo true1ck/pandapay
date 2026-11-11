@@ -6,7 +6,9 @@ import 'package:pandapay/features/quickadd/quick_add_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/design/app_theme.dart';
+import 'package:pandapay/app/error_handling.dart';
 import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/features/shared_expenses/runtime/shared_join_route.dart';
 import 'package:pandapay/app/router.dart';
 import 'package:pandapay/app/tutorial_keys.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
@@ -254,6 +256,48 @@ void main() {
       expect(find.text('Splits'), findsNothing);
     },
   );
+
+  // iOS hands a custom-scheme link to the router untouched, so the host
+  // (`split`) is not part of the path and `/join/<token>` matched no route:
+  // tapping "Open it" on the invite page ended on "That page couldn't be found".
+  testWidgets(
+    'pandapay://split/join/<token> opens the Join screen, not the not-found page',
+    (tester) async {
+      await _pumpApp(tester, shared: true);
+      final scope = ProviderScope.containerOf(
+        tester.element(find.byType(MaterialApp)),
+      );
+      final token = List.filled(43, 'a').join();
+      scope.read(goRouterProvider).go('pandapay://split/join/$token');
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.byType(AppRouteErrorScreen), findsNothing);
+      final join = tester.widget<SharedJoinRoute>(find.byType(SharedJoinRoute));
+      expect(join.token, token);
+    },
+  );
+
+  testWidgets('the https split invite link opens the Join screen too', (
+    tester,
+  ) async {
+    await _pumpApp(tester, shared: true);
+    final scope = ProviderScope.containerOf(
+      tester.element(find.byType(MaterialApp)),
+    );
+    final token = List.filled(43, 'b').join();
+    scope
+        .read(goRouterProvider)
+        .go('https://pandapay.pandapath.live/split/join/$token');
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.byType(AppRouteErrorScreen), findsNothing);
+    expect(
+      tester.widget<SharedJoinRoute>(find.byType(SharedJoinRoute)).token,
+      token,
+    );
+  });
 
   testWidgets('the scan FAB is present on every tab (not just Home)', (
     tester,
