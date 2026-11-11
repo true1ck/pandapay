@@ -89,7 +89,25 @@ function cacheSession(key, value) {
   sessionCache.set(key, { value, expiresAt: Date.now() + SESSION_CACHE_TTL_MS });
 }
 
+// Requests for one session that arrive while the auth service is still answering the first one share
+// that answer. A phone opening a screen sends several requests at once; without this each one called
+// the auth service itself (the 5 s cache is only filled after the reply), which multiplied the load on
+// it and turned its slow replies into 503s for every page, not just that screen.
+const sessionInFlight = new Map();
 async function fetchCurrentSession(token, fetchImpl = globalThis.fetch) {
+  const key = crypto.createHash('sha256').update(String(token)).digest('hex');
+  const shared = sessionInFlight.get(key);
+  if (shared && shared.fetchImpl === fetchImpl) return shared.promise;
+  const promise = fetchCurrentSessionOnce(token, fetchImpl);
+  sessionInFlight.set(key, { fetchImpl, promise });
+  try {
+    return await promise;
+  } finally {
+    if (sessionInFlight.get(key)?.promise === promise) sessionInFlight.delete(key);
+  }
+}
+
+async function fetchCurrentSessionOnce(token, fetchImpl) {
   if (!config.authInternalBaseUrl || !config.authInternalServiceSecret) {
     throw new SessionVerificationError('auth_service_unavailable', 503);
   }

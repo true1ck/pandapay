@@ -213,6 +213,37 @@ app.get('/profile', requireAuth, async (req, res) => {
 });
 
 /**
+ * PATCH /profile — the signed-in user edits their own display name. Only the
+ * name is writable here; the row is found by the authenticated id (never the
+ * body) and RLS keeps it to their own row.
+ */
+app.patch('/profile', requireAuth, async (req, res) => {
+  const body = req.body;
+  if (!body || typeof body !== 'object' || Array.isArray(body) ||
+      Object.keys(body).some((key) => key !== 'display_name') || typeof body.display_name !== 'string') {
+    return res.status(400).json({ error: 'display_name_invalid' });
+  }
+  const name = body.display_name.replace(/\s+/g, ' ').trim();
+  // eslint-disable-next-line no-control-regex
+  if (name.length < 1 || name.length > 60 || /[\u0000-\u001f\u007f<>]/.test(name)) {
+    return res.status(400).json({ error: 'display_name_invalid' });
+  }
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        'UPDATE profiles SET display_name = $2, updated_at = now() WHERE id = $1 RETURNING *',
+        [req.userId, name],
+      )
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'profile_not_found' });
+    return res.json({ profile: result.rows[0] });
+  } catch (err) {
+    console.error('PATCH /profile error', safeErrorCode(err));
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
  * POST /profile — onboarding: creates the profiles row for the
  * already-authenticated auth-service user id. profiles.id has no DB-level
  * FK to auth/'s users table (cross-database), so this route is the one

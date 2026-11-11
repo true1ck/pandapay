@@ -56,9 +56,10 @@ final sharedExpensesRuntimeProvider =
         isCurrent: current,
       );
       ref.onDispose(runtime.dispose);
-      // Only the capability flags gate the screens; the slower sync (queue
-      // flush and change pull) runs behind the UI instead of holding a spinner.
-      await runtime.ensureCapabilities();
+      // Opening Splits never waits on the network: the saved flags are a local
+      // read, and the live flags, the queue flush and the change pull all run
+      // in the background refresh (screens rebuild when the flags arrive).
+      await runtime.useSavedCapabilities();
       if (!current()) throw const SharedRuntimeUnavailable();
       unawaited(runtime.refresh());
       return runtime;
@@ -88,7 +89,10 @@ final sharedExpensesLifecycleProvider = Provider.autoDispose<void>((ref) {
   });
   // Retry backoff is durable; this only schedules a small bounded attempt.
   final timer = Timer.periodic(const Duration(seconds: 45), (_) {
-    if (runtime.store.waitingCount > 0 || runtime.syncLag) refresh();
+    if ((runtime.store.waitingCount > 0 || runtime.syncLag) &&
+        !runtime.backingOff) {
+      refresh();
+    }
   });
   ref.onDispose(() {
     WidgetsBinding.instance.removeObserver(observer);

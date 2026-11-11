@@ -63,7 +63,7 @@ async function getPhoneClaimStatus({ query, userId, env = process.env }) {
  * `pool` needs connect(); every step runs in one transaction so two sign-ups
  * cannot both take the same number.
  */
-async function claimPhone({ pool, userId, phone, countries }) {
+async function claimPhone({ pool, userId, phone, countries, replace = false }) {
   const parsed = parseClaimedPhone(phone, countries ? { countries } : undefined);
   if (!parsed.ok) throw new PhoneClaimError(parsed.reason === 'unsupported_country' ? 'phone_country_unsupported' : 'phone_invalid');
   const hash = phoneLookupHash(parsed.phone);
@@ -92,8 +92,13 @@ async function claimPhone({ pool, userId, phone, countries }) {
       began = false;
       return { phone_hint: maskPhone(parsed.phone), already: true };
     }
-    // This account already has a different number. The person cannot swap it.
-    if (user.claimed_phone_hash || (user.phone_number && user.is_phone_verified === true)) {
+    // This account already has a different number. Swapping it is allowed only
+    // from the confirmed phone-change flow (`replace`), and never when the number
+    // is the account's own verified sign-in phone: support moves that one.
+    if (user.phone_number && user.is_phone_verified === true) {
+      throw new PhoneClaimError('phone_already_set');
+    }
+    if (user.claimed_phone_hash && !replace) {
       throw new PhoneClaimError('phone_already_set');
     }
 

@@ -20,7 +20,12 @@ function load(relativePath, dependencies) {
   return loaded.exports;
 }
 
-async function harness(t, { user = { id: 'user-1', device_id: 'device-1' }, claim, status, budget } = {}) {
+class PhoneChangeError extends Error {
+  constructor(code, status = 400) { super(code); this.code = code; this.status = status; }
+}
+
+async function harness(t, { user = { id: 'user-1', device_id: 'device-1' }, claim, status, budget, change = {} } = {}) {
+  const changeCalls = [];
   const audits = [];
   const budgets = [];
   const claimCalls = [];
@@ -41,6 +46,15 @@ async function harness(t, { user = { id: 'user-1', device_id: 'device-1' }, clai
       async claimPhone(args) { claimCalls.push(args); return claim ? claim(args) : { phone_hint: '+91 •••• 3210', already: false }; },
       async getPhoneClaimStatus() { return status ? status() : { claimed: false, verified: false, required: true, needs_phone: true, phone_hint: null }; },
     },
+    '../services/jwtKeys': { getActiveKey: () => ({ keyId: 'k', secret: 's' }), getKeySecret: () => 's', getIssuer: () => 'i', getAudience: () => 'a' },
+    '../services/otpService': { createOtpV2() {}, verifyOtpV2() {}, discardUndeliveredOtpV2() {}, V2_TTL_SECONDS: 60 },
+    '../services/emailService': { sendOtpEmail() {}, sendSecurityNotice() {} },
+    '../services/otpWorkAdmission': { OtpCapacityError: class extends Error {}, respondOtpCapacityUnavailable: res => res.status(503).json({ error: 'busy' }) },
+    '../services/phoneChange': {
+      PhoneChangeError,
+      async startChange(args) { changeCalls.push(['start', args]); return change.start ? change.start(args) : { challenge: 'tok', email_hint: 'm•••@gmail.com', phone_hint: '+91 •••• 3210', expires_in: 60 }; },
+      async finishChange(args) { changeCalls.push(['finish', args]); return change.finish ? change.finish(args) : { phone_hint: '+91 •••• 3210', had_phone: false }; },
+    },
   });
   const app = express();
   app.use(express.json());
@@ -49,7 +63,11 @@ async function harness(t, { user = { id: 'user-1', device_id: 'device-1' }, clai
   t.after(() => { server.closeAllConnections(); server.close(); });
   const base = `http://127.0.0.1:${server.address().port}/users/me/phone`;
   return {
-    audits, budgets, claimCalls,
+    audits, budgets, claimCalls, changeCalls,
+    async postTo(suffix, body) {
+      const response = await fetch(`${base}${suffix}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+      return { status: response.status, body: await response.json() };
+    },
     async post(body) {
       const response = await fetch(base, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
       return { status: response.status, body: await response.json(), cache: response.headers.get('cache-control') };
@@ -126,4 +144,45 @@ test('GET reports whether the lock needs a phone', async t => {
   const r = await h.get();
   assert.equal(r.status, 200);
   assert.deepEqual(r.body, { claimed: false, verified: false, required: true, needs_phone: true, phone_hint: null });
+});
+
+test('change/request counts against the limits, passes the device, and returns the challenge', async t => {
+  const h = await harness(t);
+  const r = await h.postTo('/change/request', { phone_number: '98765 43210', device_id: 'device-1' });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.challenge, 'tok');
+  assert.equal(r.body.code_length, 6);
+  assert.deepEqual(h.budgets.map(b => b[0]), ['phone-change-start-user', 'phone-change-start-ip']);
+  assert.equal(h.changeCalls[0][1].deviceId, 'device-1');
+});
+
+test('change/request refuses a wrong device id or extra fields before doing any work', async t => {
+  const h = await harness(t);
+  assert.equal((await h.postTo('/change/request', { phone_number: '98765 43210', device_id: 'other' })).status, 400);
+  assert.equal((await h.postTo('/change/request', { phone_number: '98765 43210', device_id: 'device-1', extra: 'x' })).status, 400);
+  assert.equal(h.changeCalls.length, 0);
+});
+
+test('change/request maps a refusal to its status and plain wording', async t => {
+  const h = await harness(t, { change: { start() { throw new PhoneChangeError('phone_unavailable', 409); } } });
+  const r = await h.postTo('/change/request', { phone_number: '98765 43210', device_id: 'device-1' });
+  assert.equal(r.status, 409);
+  assert.equal(r.body.error, 'phone_unavailable');
+  assert.match(r.body.message, /can't be used/);
+});
+
+test('change/confirm needs a 6-digit code, then saves and audits without the number', async t => {
+  const h = await harness(t);
+  assert.equal((await h.postTo('/change/confirm', { challenge: 'tok', code: '12ab', device_id: 'device-1' })).status, 400);
+  const r = await h.postTo('/change/confirm', { challenge: 'tok', code: '123456', device_id: 'device-1' });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body, { ok: true, phone_hint: '+91 •••• 3210' });
+  assert.deepEqual(h.audits.at(-1).meta, { outcome: 'added' });
+  assert.equal(h.budgets.at(-1)[0], 'phone-change-finish-user');
+});
+
+test('a recovery session cannot add or change a phone', async t => {
+  const h = await harness(t, { user: { id: 'user-1', device_id: 'device-1', recovery_channel: 'email' } });
+  assert.equal((await h.postTo('/change/request', { phone_number: '98765 43210', device_id: 'device-1' })).status, 403);
+  assert.equal((await h.postTo('/change/confirm', { challenge: 'tok', code: '123456', device_id: 'device-1' })).status, 403);
 });

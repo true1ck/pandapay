@@ -199,6 +199,15 @@ class SharedExpensesRuntime extends ChangeNotifier {
     }
   }
 
+  /// The flags this device last saw, read locally (no network), so the screen
+  /// can open at once; the live flags follow with the background refresh.
+  Future<void> useSavedCapabilities() async {
+    if (capabilities != null) return;
+    final saved = await _savedCapabilities();
+    _current();
+    capabilities ??= saved;
+  }
+
   Future<void> _saveCapabilities(Map<String, Object?> flags) async {
     try {
       await cache.put(_capabilitiesKey, jsonEncode(flags));
@@ -216,7 +225,37 @@ class SharedExpensesRuntime extends ChangeNotifier {
     }
   }
 
-  Future<void> refresh({int maxPullPages = 2}) async {
+  Future<void>? _running;
+  bool _again = false;
+  int _failures = 0;
+  DateTime? _retryAt;
+
+  /// True while the server has been failing: the background timer waits
+  /// (45 s, 90 s, ... up to 10 min) instead of hammering it. A person's own
+  /// action (save, pull to retry, reconnect, app resume) is never held back.
+  bool get backingOff => _retryAt != null && DateTime.now().isBefore(_retryAt!);
+
+  /// Syncs the queue and pulls changes. A call that arrives while a sync is
+  /// running (a person saving an expense just after opening the screen) is not
+  /// dropped: the running sync is followed by one more, and the caller waits
+  /// for both, so a queued write goes out now rather than at the next timer.
+  Future<void> refresh({int maxPullPages = 2}) {
+    _current();
+    if (busy) {
+      _again = true;
+      return _running ?? Future<void>.value();
+    }
+    return _running = _refreshLoop(maxPullPages);
+  }
+
+  Future<void> _refreshLoop(int maxPullPages) async {
+    do {
+      _again = false;
+      await _refreshOnce(maxPullPages: maxPullPages);
+    } while (_again && !_disposed && isCurrent());
+  }
+
+  Future<void> _refreshOnce({int maxPullPages = 2}) async {
     _current();
     if (busy) return;
     if (maxPullPages < 1 || maxPullPages > 5) {
@@ -237,6 +276,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
           capabilities = flags;
           _capabilitiesAt = DateTime.now();
           unawaited(_saveCapabilities(flags));
+          _notify();
         }
         if (!readsEnabled) throw const SharedRuntimeUnavailable('reads_off');
         await store.resumeAuthentication();
@@ -265,9 +305,15 @@ class SharedExpensesRuntime extends ChangeNotifier {
         }
         if (offline) dataVersion++; // back online: screens re-fetch
         offline = false;
+        _failures = 0;
+        _retryAt = null;
       });
     } catch (error) {
       lastError = error;
+      _failures++;
+      _retryAt = DateTime.now().add(
+        Duration(seconds: (45 << (_failures - 1).clamp(0, 4)).clamp(45, 600)),
+      );
       // Type and code only (never the message): a silent apply failure must
       // not look like "still loading".
       debugPrint(
@@ -1210,6 +1256,14 @@ class SharedExpensesRuntime extends ChangeNotifier {
           _combinedScreens = false;
         } else if (_combinedDenied(error)) {
           rethrow;
+        } else {
+          try {
+            final saved = await runCacheOnly(() => _groupSectionsLegacy(id));
+            _servedStale = true;
+            return saved;
+          } catch (_) {
+            throw error;
+          }
         }
       } on SharedRuntimeUnavailable {
         // Nothing saved under the new key yet: only the cache-only first
@@ -1217,14 +1271,20 @@ class SharedExpensesRuntime extends ChangeNotifier {
         if (Zone.current[_cacheOnlyKey] != true) rethrow;
       }
     }
-    return Future.wait([
-      context(id),
-      members(id),
-      expenses(id, after: expenseAfter),
-      balances(id, after: balanceAfter),
-      totals(id),
-    ]);
+    return _groupSectionsLegacy(id, expenseAfter, balanceAfter);
   }
+
+  Future<List<Map<String, Object?>>> _groupSectionsLegacy(
+    String id, [
+    String? expenseAfter,
+    String? balanceAfter,
+  ]) => Future.wait([
+    context(id),
+    members(id),
+    expenses(id, after: expenseAfter),
+    balances(id, after: balanceAfter),
+    totals(id),
+  ]);
 
   Future<SharedGroupPresentation> loadGroup(
     String id, {
@@ -1234,6 +1294,9 @@ class SharedExpensesRuntime extends ChangeNotifier {
     _servedStale = false;
     final results = await _groupSections(id, expenseAfter, balanceAfter);
     _current();
+    if (!_servedStale && Zone.current[_cacheOnlyKey] != true) {
+      _groupLive[id] = (at: DateTime.now(), version: dataVersion);
+    }
     final details = results[0],
         roster = results[1],
         expensePage = results[2],
@@ -1315,6 +1378,23 @@ class SharedExpensesRuntime extends ChangeNotifier {
 
   bool _combinedHub = true;
 
+  /// Reopening Splits within this window of a live load, with nothing changed
+  /// since, paints the saved copy and asks the server nothing.
+  static const _liveFresh = Duration(seconds: 20);
+  DateTime? _hubLiveAt;
+  int _hubLiveVersion = -1;
+  final _groupLive = <String, ({DateTime at, int version})>{};
+  bool hubFresh() =>
+      _hubLiveAt != null &&
+      _hubLiveVersion == dataVersion &&
+      DateTime.now().difference(_hubLiveAt!) < _liveFresh;
+  bool groupFresh(String id) {
+    final live = _groupLive[id];
+    return live != null &&
+        live.version == dataVersion &&
+        DateTime.now().difference(live.at) < _liveFresh;
+  }
+
   /// Refusals that a per-section retry would not change: not allowed, account
   /// moved, feature off.
   static bool _combinedDenied(SharedTransportException e) =>
@@ -1376,10 +1456,20 @@ class SharedExpensesRuntime extends ChangeNotifier {
           _combinedHub = false;
         } else if (_combinedDenied(error)) {
           rethrow;
+        } else {
+          // The server is failing or unreachable: do not send it four more
+          // requests. Use an older per-section saved copy if there is one,
+          // otherwise report the failure.
+          try {
+            final saved = await runCacheOnly(
+              () => _hubSectionsLegacy(after, searches),
+            );
+            _servedStale = true;
+            return saved;
+          } catch (_) {
+            throw error;
+          }
         }
-        // Anything else (no saved copy of the new route yet, or the new route
-        // failing) falls through to the proven per-section requests and their
-        // saved copy, so the new route can never be the reason a screen fails.
       } on SharedRuntimeUnavailable {
         if (Zone.current[_cacheOnlyKey] != true) rethrow;
       }
@@ -1450,6 +1540,10 @@ class SharedExpensesRuntime extends ChangeNotifier {
     final summaryKnown = sections.summaryKnown,
         activityKnown = sections.activityKnown;
     _current();
+    if (!_servedStale && Zone.current[_cacheOnlyKey] != true) {
+      _hubLiveAt = DateTime.now();
+      _hubLiveVersion = dataVersion;
+    }
     SharedPage<SharedContextRow> contextPage(
       Map<String, Object?> data,
       SharedHubTab tab,

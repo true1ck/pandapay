@@ -227,6 +227,32 @@ router.put(
 );
 
 
+// PUT /users/me/name - change the display name. A name is not a credential, so it
+// needs no fresh sign-in code (unlike PUT /users/me above).
+router.put('/me/name', auth, userRateLimitWrite, async (req, res) => {
+  try {
+    const body = req.body;
+    if (!body || typeof body !== 'object' || Array.isArray(body) ||
+        Object.keys(body).some(key => key !== 'name') || typeof body.name !== 'string') {
+      return res.status(400).json({ error: 'name_invalid' });
+    }
+    const name = body.name.replace(/\s+/g, ' ').trim();
+    // eslint-disable-next-line no-control-regex
+    if (name.length < 1 || name.length > 60 || /[\u0000-\u001f\u007f<>]/.test(name)) {
+      return res.status(400).json({ error: 'name_invalid' });
+    }
+    const { rows } = await db.query(
+      'UPDATE users SET name = $1, updated_at = NOW() WHERE id = $2 AND deleted = FALSE RETURNING id, name',
+      [name, req.user.id],
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    return res.json({ ok: true, name: rows[0].name });
+  } catch (err) {
+    logUserRouteError('name update failed', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /users/me/devices - List all active devices
 // Rate limited: Read operation (100 requests per 15 minutes per user)
 router.get('/me/devices', auth, userRateLimitRead, async (req, res) => {

@@ -205,3 +205,24 @@ test('session cache prunes an expired entry before evicting a live entry at capa
     _sessionCache.clear();
   }
 });
+
+test('parallel requests for one session share a single auth-service call', async () => {
+  _sessionCache.clear();
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls++;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    return { ok: true, json: async () => ({ token_valid: true, valid: true, subject: 'u1', session: { active: true, revoked: false } }) };
+  };
+  const results = await Promise.all(Array.from({ length: 12 }, () => fetchCurrentSession('synthetic-burst-token', fetchImpl)));
+  assert.equal(calls, 1);
+  assert.ok(results.every((session) => session.subject === 'u1'));
+  // A failed first call is not remembered: the next request asks again.
+  _sessionCache.clear();
+  let failing = true, attempts = 0;
+  const flaky = async () => { attempts++; if (failing) throw new Error('down'); return fetchImpl(); };
+  await assert.rejects(Promise.all([fetchCurrentSession('synthetic-flaky-token', flaky), fetchCurrentSession('synthetic-flaky-token', flaky)]));
+  assert.equal(attempts, 1);
+  failing = false;
+  assert.equal((await fetchCurrentSession('synthetic-flaky-token', flaky)).subject, 'u1');
+});

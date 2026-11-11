@@ -43,18 +43,42 @@ class PhoneStatus {
   );
 }
 
+/// What step one of a phone change returns: a signed token that ties the emailed
+/// code to this person and this device. Opaque to the app and kept only in memory.
+class PhoneChangeChallenge {
+  final String token;
+
+  /// The masked sign-in email the code went to, such as `m•••@gmail.com`.
+  final String emailHint;
+
+  /// The masked number being saved, such as `+91 •••• 3210`.
+  final String phoneHint;
+  final DateTime expiresAt;
+
+  const PhoneChangeChallenge({
+    required this.token,
+    required this.emailHint,
+    required this.phoneHint,
+    required this.expiresAt,
+  });
+}
+
 class PhoneApi {
   static const _timeout = Duration(seconds: 15);
+  static const _changeTimeout = Duration(seconds: 20);
 
   final String authBaseUrl;
   final String accessToken;
   final http.Client _client;
+  final DateTime Function() _now;
 
   PhoneApi({
     required this.authBaseUrl,
     required this.accessToken,
     http.Client? client,
-  }) : _client = client ?? http.Client();
+    DateTime Function()? now,
+  }) : _client = client ?? http.Client(),
+       _now = now ?? DateTime.now;
 
   Map<String, String> get _headers => {
     'Authorization': 'Bearer $accessToken',
@@ -84,7 +108,79 @@ class PhoneApi {
     return body['phone_hint'] as String?;
   }
 
-  ApiException _failure(String method, http.Response response) {
+  Uri _changeUri(String suffix) =>
+      Uri.parse('$authBaseUrl/users/me/phone/change$suffix');
+
+  /// Step one of adding or changing the phone. Checks the number, then emails a
+  /// code to the sign-in email. The code proves control of the email, not of the
+  /// phone: nothing is sent to the number.
+  Future<PhoneChangeChallenge> requestChange(
+    String phone, {
+    required String deviceId,
+  }) async {
+    final response = await _client
+        .post(
+          _changeUri('/request'),
+          headers: _headers,
+          body: jsonEncode({'phone_number': phone, 'device_id': deviceId}),
+        )
+        .timeout(_changeTimeout);
+    if (response.statusCode != 200) throw _failure('POST', response, '/change/request');
+    try {
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final token = body['challenge'];
+      final emailHint = body['email_hint'];
+      final phoneHint = body['phone_hint'];
+      final seconds = body['expires_in'];
+      if (token is! String || token.isEmpty || emailHint is! String ||
+          phoneHint is! String || body['code_length'] != 6 ||
+          seconds is! int || seconds < 1 || seconds > 600) {
+        throw const FormatException();
+      }
+      return PhoneChangeChallenge(
+        token: token,
+        emailHint: emailHint,
+        phoneHint: phoneHint,
+        expiresAt: _now().add(Duration(seconds: seconds)),
+      );
+    } catch (_) {
+      throw ApiException(
+        'Phone change challenge unavailable',
+        userMessage: 'Unable to send the code. Please try again shortly.',
+      );
+    }
+  }
+
+  /// Step two. The code must be right; the number is then saved, replacing any
+  /// earlier one. Returns the masked number.
+  Future<String?> confirmChange(
+    PhoneChangeChallenge challenge, {
+    required String code,
+    required String deviceId,
+  }) async {
+    if (!_now().isBefore(challenge.expiresAt)) {
+      throw ApiException(
+        'Phone change challenge expired',
+        userMessage: 'The code has expired. Start again to get a new one.',
+      );
+    }
+    final response = await _client
+        .post(
+          _changeUri('/confirm'),
+          headers: _headers,
+          body: jsonEncode({
+            'challenge': challenge.token,
+            'code': code,
+            'device_id': deviceId,
+          }),
+        )
+        .timeout(_changeTimeout);
+    if (response.statusCode != 200) throw _failure('POST', response, '/change/confirm');
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return body['phone_hint'] as String?;
+  }
+
+  ApiException _failure(String method, http.Response response, [String suffix = '']) {
     String? message;
     try {
       final decoded = jsonDecode(response.body);
@@ -95,7 +191,7 @@ class PhoneApi {
       // Not JSON (a proxy error page, for example): fall back to the generic wording.
     }
     return ApiException(
-      '$method /users/me/phone failed: ${response.statusCode} ${response.body}',
+      '$method /users/me/phone$suffix failed: ${response.statusCode} ${response.body}',
       userMessage: message == null || message.isEmpty ? null : message,
     );
   }
