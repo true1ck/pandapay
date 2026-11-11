@@ -6,7 +6,7 @@
 // /admin/sms/v2/settings returns exactly listSettings(), so a setting cannot
 // exist without a console row.
 // Used when neither the console nor the host names a model.
-const DEFAULT_AI_MODEL = 'gemini-3.5-flash-lite';
+const DEFAULT_AI_MODEL = 'gemini-3.1-flash-lite';
 
 const SETTINGS = Object.freeze({
   templates_per_user_per_day: { type: 'int', default: 50, min: 1, max: 500, env: 'SMS_V2_UNKNOWN_TEMPLATES_PER_DAY' },

@@ -19,6 +19,7 @@ const {
   createPgWorkerStore,
   createGeminiTemplateProvider,
   runTemplateWorkerOnce,
+  busyWaitMs,
 } = require("../template_worker");
 const {
   createPgSuggestionStore,
@@ -61,6 +62,7 @@ async function main() {
   const { pool, store, suggestionStore } = await openStores();
   let stopped = false;
   let lastCleanup = 0;
+  let consecutiveBusy = 0;
   const stop = () => {
     stopped = true;
   };
@@ -85,11 +87,15 @@ async function main() {
           console.error("SMS v2 AI cleanup failed", error.code || error.name);
         }
       }
+      consecutiveBusy = result.status === "provider_busy" ? consecutiveBusy + 1 : 0;
       if (process.argv.includes("--once") || stopped) break;
       // disabled: an admin switched AI drafting off. budget: this month's cap is
       // spent. Layouts wait in the queue meanwhile.
+      // provider_busy: Gemini is overloaded; wait (longer each time in a row) rather than fail layouts.
       await delay(
-        result.status === "idle"
+        result.status === "provider_busy"
+          ? busyWaitMs({ retryAfterMs: result.retryAfterMs }, consecutiveBusy)
+          : result.status === "idle"
           ? 15000
           : result.status === "capacity" || result.status === "disabled"
             ? 60000

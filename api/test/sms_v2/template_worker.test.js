@@ -193,7 +193,7 @@ test("failed second draft stays failed, and exhausted capacity makes no call", a
   assert.equal(calls, 0);
   assert.equal(finish.requeue, true);
   // Only the key and a database login come from the host: the rest has defaults.
-  assert.equal(workerConfig({}).model, "gemini-3.5-flash-lite");
+  assert.equal(workerConfig({}).model, "gemini-3.1-flash-lite");
   assert.equal(workerConfig({ SMS_V2_AI_MODEL: "test" }).tpm, 100000);
   assert.throws(() => workerConfig({ SMS_V2_AI_TPM: "0" }), /TPM_invalid/);
   // Compose hands an unset variable over as an empty string: that means "unset".
@@ -205,7 +205,7 @@ test("failed second draft stays failed, and exhausted capacity makes no call", a
     SMS_V2_AI_INPUT_USD_PER_MILLION: "",
     SMS_V2_AI_OUTPUT_USD_PER_MILLION: "",
   });
-  assert.equal(blank.model, "gemini-3.5-flash-lite");
+  assert.equal(blank.model, "gemini-3.1-flash-lite");
   assert.equal(blank.tpm, 100000);
   assert.equal(blank.inputPrice, null);
   assert.equal(
@@ -563,4 +563,42 @@ test("the prompt carries the rules the ledger depends on", () => {
     "credit report",
   ];
   for (const phrase of pinned) assert.ok(rules.includes(phrase), `domain rules lost: ${phrase}`);
+});
+
+test("an overloaded provider makes the layout wait in the queue instead of failing", async () => {
+  const { ProviderBusyError, MAX_PROVIDER_FAILURES, busyWaitMs } = require("../../src/sms_v2/template_worker");
+  let calls = 0,
+    finish,
+    failures = 0;
+  const store = {
+    claim: async () => template,
+    examples: async () => [],
+    beginAttempt: async () => null,
+    recordAttempt: async () => {},
+    providerFailures: async () => failures,
+    finish: async (_t, out) => {
+      finish = out;
+    },
+  };
+  const provider = {
+    generate: async () => {
+      calls++;
+      throw new ProviderBusyError("template_provider_busy", { status: 503, retryAfterMs: 7000 });
+    },
+  };
+  const result = await runTemplateWorkerOnce({ store, provider, config });
+  assert.equal(result.status, "provider_busy");
+  assert.equal(result.retryAfterMs, 7000);
+  assert.equal(calls, 1, "one call, not an immediate second try");
+  assert.equal(finish.requeue, true);
+  assert.equal(finish.code, undefined);
+
+  failures = MAX_PROVIDER_FAILURES;
+  const gaveUp = await runTemplateWorkerOnce({ store, provider, config });
+  assert.equal(gaveUp.status, "failed");
+  assert.equal(finish.code, "provider_unavailable");
+
+  assert.deepEqual([1, 2, 3, 9].map((n) => busyWaitMs({}, n)), [5000, 10000, 20000, 120000]);
+  assert.equal(busyWaitMs({ retryAfterMs: 90000 }, 1), 90000);
+  assert.equal(busyWaitMs({ retryAfterMs: 9e9 }, 1), 120000);
 });

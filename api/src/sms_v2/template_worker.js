@@ -39,6 +39,30 @@ const PROMPT_VERSION = "tpl-2026-11-20";
 // Compose passes an unset variable through as "", which means "not set".
 const isSet = (env, key) => env[key] !== undefined && env[key] !== "";
 
+// The provider could not be used right now (rate limit, overloaded, timed out, network): the layout is fine and
+// the same request is worth sending again later. This is NOT a bad draft, so it never costs the layout one of its
+// tries; the worker puts the layout back in the queue and waits.
+class ProviderBusyError extends Error {
+  constructor(reason, { retryAfterMs = 0, status = null } = {}) {
+    super(reason);
+    this.name = "ProviderBusyError";
+    this.retryAfterMs = retryAfterMs;
+    this.status = status;
+  }
+}
+// After this many separate provider failures for one layout (over many waits) it is given up on, so a layout the
+// provider can never answer does not circle for ever.
+const MAX_PROVIDER_FAILURES = 8;
+const BUSY_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+const BUSY_WAIT_MS = { min: 5000, max: 120000 };
+// How long to wait before the next try, from the provider's own Retry-After when it gives one, else a short
+// pause that grows with the number of failures in a row.
+function busyWaitMs(error, inARow = 1) {
+  const asked = Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > 0 ? error.retryAfterMs : 0;
+  const grown = BUSY_WAIT_MS.min * 2 ** Math.min(Math.max(inARow, 1) - 1, 5);
+  return Math.min(BUSY_WAIT_MS.max, Math.max(BUSY_WAIT_MS.min, asked, grown));
+}
+
 function positiveInteger(env, key, fallback) {
   const value = Number(isSet(env, key) ? env[key] : fallback);
   if (!Number.isSafeInteger(value) || value < 1)
@@ -719,6 +743,20 @@ function createPgWorkerStore({ withAdminClient, adminId, transaction }) {
         ).rows.map((row) => row.body),
       );
     },
+    // How many times the provider failed to answer this layout (an attempt that came back with no tokens), across
+    // all earlier waits. Used to give up on a layout only after many separate failures.
+    providerFailures(template) {
+      return tx(async (client) =>
+        Number(
+          (
+            await client.query(
+              "SELECT count(*)::int AS n FROM sms_v2_template_attempts WHERE template_hash=$1 AND outcome='rejected' AND coalesce(total_tokens,0)=0",
+              [template.template_hash],
+            )
+          ).rows[0].n,
+        ),
+      );
+    },
     async beginAttempt(template, attempt, prompt, config) {
       return tx(async (client) => {
         const row = (
@@ -819,13 +857,15 @@ async function runTemplateWorkerOnce({
         await store.finish(template, {
           model: config.model,
           code: blocked,
-          requeue: blocked === "capacity" && attempt === 1,
+          // Waiting for capacity is never a reason to give up on a layout, on any try.
+          requeue: blocked === "capacity",
         });
         return { status: blocked };
       }
       const started = clock();
       let response;
       let rule;
+      let busy = null;
       try {
         response = await provider.generate({
           prompt,
@@ -839,8 +879,9 @@ async function runTemplateWorkerOnce({
             : response.rule;
         rule = stampDraft(rule, template, config.model);
         errors = await validateDraftSafely(rule, template, config.model, siblings);
-      } catch {
+      } catch (error) {
         errors = ["provider_or_json_invalid"];
+        if (error instanceof ProviderBusyError) busy = error;
       }
       const tokens = (value) =>
         Number.isSafeInteger(value) && value >= 0 ? value : 0;
@@ -870,6 +911,17 @@ async function runTemplateWorkerOnce({
                 billedOutputTokens * config.outputPrice) /
               1000000,
       });
+      if (busy) {
+        // The provider failed, not the draft. Do not spend the layout's tries on it: put it back in the queue and
+        // let the worker wait. Only a layout the provider has failed on many separate times is given up on.
+        const failures = typeof store.providerFailures === "function" ? await store.providerFailures(template) : 0;
+        if (failures >= MAX_PROVIDER_FAILURES) {
+          await store.finish(template, { model: config.model, code: "provider_unavailable" });
+          return { status: "failed", templateHash: template.template_hash };
+        }
+        await store.finish(template, { model: config.model, requeue: true });
+        return { status: "provider_busy", retryAfterMs: busy.retryAfterMs || 0, providerStatus: busy.status };
+      }
       if (!errors.length) {
         await store.finish(template, { rule, model: config.model });
         return { status: "ready", templateHash: template.template_hash };
@@ -896,7 +948,9 @@ function createGeminiTemplateProvider({
   if (!apiKey) throw new Error("GEMINI_API_KEY_required");
   return {
     async generate({ prompt, model, maxOutputTokens, temperature }) {
-      const response = await fetchImpl(
+      let response;
+      try {
+        response = await fetchImpl(
         `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
         {
           method: "POST",
@@ -916,7 +970,23 @@ function createGeminiTemplateProvider({
           }),
         },
       );
-      if (!response.ok) throw new Error("template_provider_failed");
+      } catch (error) {
+        // A timeout or a network failure says nothing about the layout: try again later.
+        if (error?.name === "TimeoutError" || error?.name === "AbortError" || error instanceof TypeError)
+          throw new ProviderBusyError("template_provider_unreachable");
+        throw error;
+      }
+      if (!response.ok) {
+        // 429 (rate limit), 503 (overloaded) and the other "come back later" answers are not a bad draft.
+        if (BUSY_STATUSES.has(response.status)) {
+          const seconds = Number(response.headers?.get?.("retry-after"));
+          throw new ProviderBusyError("template_provider_busy", {
+            status: response.status,
+            retryAfterMs: Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 0,
+          });
+        }
+        throw new Error("template_provider_failed");
+      }
       let size = 0;
       const chunks = [];
       for await (const chunk of response.body) {
@@ -945,6 +1015,9 @@ function createGeminiTemplateProvider({
 }
 
 module.exports = {
+  ProviderBusyError,
+  MAX_PROVIDER_FAILURES,
+  busyWaitMs,
   reserveCapacity,
   monthSpendUsd,
   recordUsage,
