@@ -4,8 +4,11 @@
 // who may see them (people who share an active Split context) and then relays them.
 // A person with no shared context and a person who does not exist look identical: 404.
 
-const config = require('./config');
 const { safeErrorCode } = require('./safeErrorCode');
+// The config refuses to load without its environment (database URL and so on), so it
+// is read on first use, not at import: this module stays importable in isolation, for
+// example in tests that inject the auth address and secret.
+const config = () => require('./config');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_PHOTO_BYTES = 200 * 1024;
@@ -28,8 +31,8 @@ function createLimiter({ now = () => Date.now(), windowMs = WINDOW_MS, max = MAX
 }
 
 function registerAvatarRoutes(app, { requireAuth, withUserClient, fetchImpl = fetch, baseUrl, serviceSecret, limiter = createLimiter(), logger = console } = {}) {
-  const base = () => (typeof baseUrl === 'function' ? baseUrl() : baseUrl ?? config.authInternalBaseUrl);
-  const secret = () => (typeof serviceSecret === 'function' ? serviceSecret() : serviceSecret ?? config.authInternalServiceSecret);
+  const base = () => (typeof baseUrl === 'function' ? baseUrl() : baseUrl ?? config().authInternalBaseUrl);
+  const secret = () => (typeof serviceSecret === 'function' ? serviceSecret() : serviceSecret ?? config().authInternalServiceSecret);
 
   const callAuth = async (path) => {
     const b = base();
