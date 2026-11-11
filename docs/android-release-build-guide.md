@@ -12,9 +12,9 @@ Every production build must use:
 | --- | --- |
 | Flavor | `prod` |
 | Package ID | `app.pandapay.pandapay` |
-| API | `https://api.pandapath.site` |
-| Auth | `https://auth.pandapath.site` |
-| Legal | `https://api.pandapath.site/legal/` |
+| API | `https://api.pandapath.live` |
+| Auth | `https://auth.pandapath.live` |
+| Legal | `https://api.pandapath.live/legal/` |
 | Delivery format for phones | Split APK (`--split-per-abi`) |
 
 Do not change these values while preparing a normal update. Development and
@@ -212,9 +212,9 @@ command:
 .\scripts\build_app.ps1 prod -Target apk `
   -SplitPerAbi `
   -BuildNumber N `
-  -ApiBaseUrl https://api.pandapath.site `
-  -AuthBaseUrl https://auth.pandapath.site `
-  -LegalBaseUrl https://api.pandapath.site/legal/
+  -ApiBaseUrl https://api.pandapath.live `
+  -AuthBaseUrl https://auth.pandapath.live `
+  -LegalBaseUrl https://api.pandapath.live/legal/
 ```
 
 Replace `N` only after completing the pre-build version check. Never reuse a

@@ -107,9 +107,9 @@ which the gate currently reads as `1.0.0`; see section 6):
 flutter build apk --profile --flavor dev --build-name 1.1.0 --build-number <higher than installed> \
   --target-platform android-arm64 \
   --dart-define=PANDAPAY_ENV=dev_hosted \
-  --dart-define=PANDAPAY_API_BASE_URL=https://api.pandapath.site \
-  --dart-define=PANDAPAY_AUTH_BASE_URL=https://auth.pandapath.site \
-  --dart-define=PANDAPAY_LEGAL_BASE_URL=https://api.pandapath.site/legal/
+  --dart-define=PANDAPAY_API_BASE_URL=https://api.pandapath.live \
+  --dart-define=PANDAPAY_AUTH_BASE_URL=https://auth.pandapath.live \
+  --dart-define=PANDAPAY_LEGAL_BASE_URL=https://api.pandapath.live/legal/
 adb install -r -d build/app/outputs/flutter-apk/app-dev-profile.apk
 ```
 

@@ -535,8 +535,8 @@ flutter test test/features/activity/duplicate_review_screen_test.dart
 ### Production manifest guard
 
 ```bash
-PANDAPAY_API_BASE_URL=https://api.pandapath.site \
-PANDAPAY_AUTH_BASE_URL=https://auth.pandapath.site \
+PANDAPAY_API_BASE_URL=https://api.pandapath.live \
+PANDAPAY_AUTH_BASE_URL=https://auth.pandapath.live \
   ./scripts/build_app.sh prod appbundle --release
 
 ./scripts/check_prod_manifest.sh

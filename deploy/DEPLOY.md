@@ -145,6 +145,10 @@ sudo apt install -y nginx certbot python3-certbot-nginx
 Point both `api.yourapp.com` and `auth.yourapp.com` A records at the VM's
 public IP.
 
+Set the domain once in the host `.env` (`PANDAPAY_DOMAIN=yourapp.com`); health
+probes, `scripts/verify_prod_endpoints.js`, the Fastlane release builds and
+`AUTH_PUBLIC_BASE_URL` all derive `api.` / `auth.` from it. See
+"Changing the domain" below.
 ## 3. Clone and configure secrets
 
 ```bash
@@ -404,6 +408,20 @@ duplicate the existing `Runner` scheme per environment — deliberately not
 done via blind edits to `project.pbxproj` here, same treatment this plan
 gives the App Store Connect listing itself: an owner action, not a code
 change.)
+
+## Changing the domain
+
+Used when moving from one domain to another (for example `old.example` to `new.example`).
+
+1. **DNS:** add A records for `api.` and `auth.` on the new domain pointing at the VM. Keep the old records until installed apps have moved over.
+2. **nginx:** add the new names beside the old ones in `server_name` for both sites, so both domains work during the move.
+3. **Certificate:** expand the existing cert (keeps the same `ssl_certificate` paths):
+   `sudo certbot certonly --nginx --cert-name <existing-cert-name> -d api.old -d auth.old -d api.new -d auth.new --expand` (add `--dry-run` first), then `sudo nginx -t && sudo systemctl reload nginx`.
+4. **Host `.env`** (never overwritten by deploys): set `PANDAPAY_DOMAIN=new.example`, `AUTH_PUBLIC_BASE_URL=https://auth.new.example`, and add `https://new.example` to `CORS_ALLOWED_ORIGINS`. Back up `.env` first.
+5. **Deploy** (push `prod`) so the containers restart and read the new values.
+6. **App release:** export `PANDAPAY_DOMAIN=new.example` and build with the Fastlane lane or `scripts/build_app.sh`. Installed apps keep calling the old domain until they update, so do not let it lapse before then.
+7. **Verify:** `PANDAPAY_DOMAIN=new.example node scripts/verify_prod_endpoints.js`.
+8. **Other places to check:** GitHub Actions secrets/variables, monitoring (`errors.<domain>`), Play Console privacy-policy URL, and the Google OAuth redirect URIs.
 
 ## Updating a running deploy
 

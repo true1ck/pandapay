@@ -19,9 +19,9 @@ cd app
 flutter build ipa --release \
   --obfuscate --split-debug-info=build/debug-info \
   --dart-define=PANDAPAY_ENV=prod \
-  --dart-define=PANDAPAY_API_BASE_URL=https://api.pandapath.site \
-  --dart-define=PANDAPAY_AUTH_BASE_URL=https://auth.pandapath.site \
-  --dart-define=PANDAPAY_LEGAL_BASE_URL=https://api.pandapath.site/legal/
+  --dart-define=PANDAPAY_API_BASE_URL=https://api.pandapath.live \
+  --dart-define=PANDAPAY_AUTH_BASE_URL=https://auth.pandapath.live \
+  --dart-define=PANDAPAY_LEGAL_BASE_URL=https://api.pandapath.live/legal/
 ```
 
 Archive the folder with the build (see below). If an iOS build is ever added to CI or Codemagic, give it the same two flags and the same artifact upload.

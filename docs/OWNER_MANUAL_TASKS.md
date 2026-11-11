@@ -160,7 +160,7 @@ Source: `docs/card-rewards-phase1-implementation-plan.md` section 9, `docs/card-
   3. `api/scripts/sync_card_catalogue.sh --dry-run`, read `.staging/coverage-report.md`, then the real import. On a catalogue that already has published cards, it must be run with `--force` (otherwise published cards are skipped and never get Phase 1 rules). Each forced refresh writes an audit row and the card stays published.
   4. `publish_card_pipeline.js --dry-run`, then publish (already-published cards are a no-op).
   5. `node api/scripts/recompute_card_state.js --dry-run`, then `--apply`, straight after the forced import (the import removes users' cap, milestone and fee-waiver progress until this runs). Run it again after any `card_state_v2 deferred` warning in the API logs.
-  6. `node api/scripts/audit_catalogue.js https://api.pandapath.site/catalogue?schema=2` and record the numbers in the status doc.
+  6. `node api/scripts/audit_catalogue.js https://api.pandapath.live/catalogue?schema=2` and record the numbers in the status doc.
   7. Release the app build that has card rewards.
 - **Known limits you are accepting:**
   - Flipkart Axis: installed apps lose its quarterly Flipkart limit until they update (a small over-statement above ₹80,000 a quarter, an under-statement below).
