@@ -59,6 +59,11 @@ const CODE_PURPOSES = Object.freeze({
     heading: 'Confirm your new sign-in email',
     lead: 'This address is being set as the sign-in email for a PandaPay account. Enter this code to confirm it:',
   },
+  'phone-change': {
+    subject: 'Confirm it is you: PandaPay phone number',
+    heading: 'Confirm it is you',
+    lead: 'Someone is adding or changing the phone number on your PandaPay account. To confirm it is you, enter this code:',
+  },
   'recovery-email-new': {
     subject: 'Your PandaPay recovery email code',
     heading: 'Confirm your recovery email',

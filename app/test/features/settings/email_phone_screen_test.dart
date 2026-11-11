@@ -40,12 +40,13 @@ void main() {
     phoneHint: hint,
   );
 
-  testWidgets('a number typed at sign-up shows masked, as not verified, with how to change it', (tester) async {
+  testWidgets('a typed-in number shows masked with no verified badge, and can be changed with an email code', (tester) async {
     await pump(tester, profile: {'id': 'p1'}, phone: typed('+91 •••• 3210'));
     expect(find.text('+91 •••• 3210'), findsOneWidget);
-    expect(find.text('Not verified'), findsOneWidget);
-    expect(find.textContaining('tie this account to one number'), findsOneWidget);
-    expect(find.textContaining('Contact support to change it'), findsOneWidget);
+    expect(find.text('Not verified'), findsNothing);
+    expect(find.text('Verified'), findsNothing);
+    expect(find.textContaining('we email a code to your sign-in email'), findsOneWidget);
+    expect(find.text('Change phone number'), findsOneWidget);
   });
 
   testWidgets('an older verified phone shows as Verified', (tester) async {
@@ -61,7 +62,8 @@ void main() {
     );
     expect(find.text('+91•••••••3210'), findsOneWidget);
     expect(find.text('Verified'), findsOneWidget);
-    expect(find.textContaining('Confirmed by a code we sent to it'), findsOneWidget);
+    expect(find.textContaining('tied to your sign-in'), findsOneWidget);
+    expect(find.text('Change phone number'), findsNothing, reason: 'a verified sign-in phone is moved by support');
   });
 
   testWidgets('no phone anywhere: says so plainly and shows no badge', (tester) async {
@@ -69,12 +71,13 @@ void main() {
     expect(find.text('Not on file'), findsOneWidget);
     expect(find.text('Not verified'), findsNothing);
     expect(find.text('No phone number is saved on this account.'), findsOneWidget);
+    expect(find.text('Add phone number'), findsOneWidget);
   });
 
-  testWidgets('while the phone status loads, the profiles phone is a fallback shown as not verified', (tester) async {
+  testWidgets('while the phone status loads, the profiles phone is a fallback with no badge', (tester) async {
     await pump(tester, profile: {'id': 'p1', 'phone_number': '+919876543210'});
     expect(find.text('+919876543210'), findsOneWidget);
-    expect(find.text('Not verified'), findsOneWidget);
+    expect(find.text('Not verified'), findsNothing);
   });
 
   testWidgets('no recovery email: a banner and an Add button explain the risk', (tester) async {

@@ -107,8 +107,8 @@ class _AddPhoneScreenState extends ConsumerState<AddPhoneScreen> {
             const SizedBox(height: AppSpace.md),
             Text(
               'Each PandaPay account is tied to one mobile number. We won’t text '
-              'you or share it. You can’t change it yourself later, so check it '
-              'is right.',
+              'you or share it. You can change it later from Edit profile, '
+              'with a code sent to your email.',
               style: BambooFonts.ui(14, color: BambooInk.ink500, height: 1.5),
             ),
             const SizedBox(height: AppSpace.xl),

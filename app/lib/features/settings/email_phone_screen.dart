@@ -7,6 +7,7 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/recovery_email_api.dart';
 import 'feedback_support_screen.dart';
+import 'phone_change_screen.dart';
 import 'recovery_email_screen.dart';
 
 /// Design 22 "Email & phone" — the two identifiers the account is reachable
@@ -85,18 +86,35 @@ class EmailPhoneScreen extends ConsumerWidget {
                   value: phoneHint?.isNotEmpty == true
                       ? phoneHint!
                       : (profilePhone?.isNotEmpty == true ? profilePhone! : 'Not on file'),
-                  badge: hasPhone
-                      ? _Badge(
-                          phoneVerified ? 'Verified' : 'Not verified',
-                          verified: phoneVerified,
-                        )
-                      : null,
+                  // A verified phone (older accounts that sign in by phone) keeps
+                  // its badge. A typed-in number shows none: phone-ownership
+                  // verification is a later feature, so "not verified" would only
+                  // be noise.
+                  badge: hasPhone && phoneVerified ? const _Badge('Verified', verified: true) : null,
                   note: !hasPhone
                       ? 'No phone number is saved on this account.'
                       : phoneVerified
-                          ? 'Confirmed by a code we sent to it. Contact support to change it.'
-                          : 'Saved when you signed up, to tie this account to one number. It is not '
-                              'verified and can’t be changed here. Contact support to change it.',
+                          ? 'This number is tied to your sign-in. Contact support to change it.'
+                          : 'Ties this account to one mobile number. To change it, we email a code '
+                              'to your sign-in email.',
+                  action: hasPhone && phoneVerified
+                      ? null
+                      : OutlinedButton(
+                          onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => PhoneChangeScreen(changing: hasPhone),
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: BambooInk.ink900,
+                            backgroundColor: BambooInk.paperMuted,
+                            minimumSize: const Size.fromHeight(46),
+                            side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            textStyle: BambooFonts.ui(14, weight: FontWeight.w700),
+                          ),
+                          child: Text(hasPhone ? 'Change phone number' : 'Add phone number'),
+                        ),
                 ),
                 const SizedBox(height: AppSpace.xl),
                 const _SectionLabel('Email'),

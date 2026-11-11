@@ -11,6 +11,7 @@ import '../../app/router.dart' show AppRoute;
 import '../shared_expenses/runtime/shared_providers.dart';
 import '../../data/api_exception.dart';
 import '../../main.dart' show MoneyText;
+import 'edit_profile_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../referrals/invite_friends_screen.dart';
 import '../subscription_credits/subscription_credits_screen.dart';
@@ -447,6 +448,35 @@ class _ProfileHero extends ConsumerWidget {
                             ),
                           ),
                         ],
+                      ),
+                    ),
+                    Pressable(
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const EditProfileScreen()),
+                      ),
+                      semanticLabel: 'Edit profile',
+                      child: Container(
+                        key: const Key('profile-edit-button'),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: BambooInk.slateRaised,
+                          borderRadius: BorderRadius.circular(AppRadius.pill),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.edit_outlined, size: 15, color: BambooInk.lime),
+                            const SizedBox(width: 5),
+                            Text(
+                              'Edit',
+                              style: BambooFonts.ui(
+                                12.5,
+                                weight: FontWeight.w700,
+                                color: BambooInk.onSlate,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
