@@ -95,7 +95,7 @@ void main() {
   late AuthenticatedHttpClient client;
   var current = true, offline = false, enabled = true;
   var serverDown = false, overviewDown = false, combined = false;
-  var hubCalls = 0, legacyContextCalls = 0;
+  var hubCalls = 0, legacyContextCalls = 0, requests = 0, changesCalls = 0;
   var revoked = false;
   Completer<void>? overviewStarted, releaseOverview;
   setUp(() {
@@ -106,6 +106,8 @@ void main() {
     combined = false;
     hubCalls = 0;
     legacyContextCalls = 0;
+    requests = 0;
+    changesCalls = 0;
     enabled = true;
     revoked = false;
     BambooFonts.useSystemFontsForTests = true;
@@ -117,6 +119,7 @@ void main() {
     client = AuthenticatedHttpClient(
       refreshAccessToken: () async => null,
       inner: MockClient((request) async {
+        requests++;
         if (offline) throw http.ClientException('offline');
         if (serverDown ||
             overviewDown && request.url.path.endsWith('/overview')) {
@@ -130,53 +133,54 @@ void main() {
           overviewStarted!.complete();
           await releaseOverview!.future;
         }
-        Object bodyFor(String name, Map<String, String> query) => switch (name) {
-          'capabilities' => {
-            'schemaVersion': 1,
-            'available': true,
-            'reads': enabled,
-            'proposals': enabled,
-            'acceptedWrites': enabled,
-            'settlements': enabled,
-            'sourceFunding': false,
-          },
-          'changes' => {
-            'records': [],
-            'nextCursor': null,
-            'hasMore': false,
-            'revokedContextIds': [],
-            'grantedContextIds': [],
-          },
-          'overview' => {
-            'currency': 'INR',
-            'owedMinor': revoked ? '0' : '100',
-            'owingMinor': revoked ? '0' : '100',
-            'netMinor': '0',
-            'contextCount': '1',
-            'expenseCount': '2',
-          },
-          'contexts' => {
-            'items': revoked || query['kind'] == 'direct'
-                ? []
-                : [
-                    {
-                      'contextId': fixtures.contextId,
-                      'name': 'Flatmates',
-                      'kind': 'group',
-                      'membershipState': 'active',
-                      'expenseCount': '2',
-                      'owedMinor': '100',
-                      'owingMinor': '100',
-                      'memberId': fixtures.contextId,
-                      'committedSequence': '3',
-                    },
-                  ],
-            'nextCursor': null,
-            'hasMore': false,
-          },
-          'activity' => {'items': [], 'nextCursor': null, 'hasMore': false},
-          _ => {},
-        };
+        Object bodyFor(String name, Map<String, String> query) =>
+            switch (name) {
+              'capabilities' => {
+                'schemaVersion': 1,
+                'available': true,
+                'reads': enabled,
+                'proposals': enabled,
+                'acceptedWrites': enabled,
+                'settlements': enabled,
+                'sourceFunding': false,
+              },
+              'changes' => {
+                'records': [],
+                'nextCursor': null,
+                'hasMore': false,
+                'revokedContextIds': [],
+                'grantedContextIds': [],
+              },
+              'overview' => {
+                'currency': 'INR',
+                'owedMinor': revoked ? '0' : '100',
+                'owingMinor': revoked ? '0' : '100',
+                'netMinor': '0',
+                'contextCount': '1',
+                'expenseCount': '2',
+              },
+              'contexts' => {
+                'items': revoked || query['kind'] == 'direct'
+                    ? []
+                    : [
+                        {
+                          'contextId': fixtures.contextId,
+                          'name': 'Flatmates',
+                          'kind': 'group',
+                          'membershipState': 'active',
+                          'expenseCount': '2',
+                          'owedMinor': '100',
+                          'owingMinor': '100',
+                          'memberId': fixtures.contextId,
+                          'committedSequence': '3',
+                        },
+                      ],
+                'nextCursor': null,
+                'hasMore': false,
+              },
+              'activity' => {'items': [], 'nextCursor': null, 'hasMore': false},
+              _ => {},
+            };
         final last = request.url.path.split('/').last;
         final Object body;
         if (last == 'hub' || last == 'screen') {
@@ -197,6 +201,7 @@ void main() {
           };
         } else {
           if (last == 'contexts') legacyContextCalls++;
+          if (last == 'changes') changesCalls++;
           body = bodyFor(last, request.url.queryParameters);
         }
         return http.Response(
@@ -476,6 +481,44 @@ void main() {
     await runtime.loadHub();
     expect(legacyContextCalls, greaterThan(0));
   });
+  test('a failing server is not sent four more requests', () async {
+    combined = true;
+    await runtime.refresh();
+    serverDown = true;
+    requests = 0;
+    await expectLater(runtime.loadHub(), throwsA(anything));
+    expect(requests, 1);
+  });
+  test('reopening right after a live load asks the server nothing', () async {
+    combined = true;
+    await runtime.refresh();
+    expect(runtime.hubFresh(), isFalse);
+    await runtime.loadHub();
+    expect(runtime.hubFresh(), isTrue);
+    runtime.dataVersion++;
+    expect(runtime.hubFresh(), isFalse);
+  });
+  test(
+    'a failing refresh backs the background timer off, a good one clears it',
+    () async {
+      serverDown = true;
+      await runtime.refresh();
+      expect(runtime.backingOff, isTrue);
+      serverDown = false;
+      await runtime.refresh();
+      expect(runtime.backingOff, isFalse);
+    },
+  );
+  test(
+    'a refresh asked for while one runs is followed by one more, not dropped',
+    () async {
+      final first = runtime.refresh();
+      final second = runtime.refresh();
+      await Future.wait([first, second]);
+      expect(changesCalls, 2);
+      expect(runtime.busy, isFalse);
+    },
+  );
   test('a 5xx from the server still shows the saved splits', () async {
     await runtime.refresh();
     await runtime.loadHub();
