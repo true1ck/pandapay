@@ -1561,7 +1561,7 @@ class _Run {
     _put(
       _build(
         e.eventId,
-        e.type,
+        _typeWithReceipt(e, r as MovementFact),
         e.status,
         legs,
         e.linkRuleId ?? rule.id,
@@ -1652,13 +1652,42 @@ class _Run {
     _put(
       _build(
         e.eventId,
-        e.type,
+        _typeWithReceipt(e, f),
         e.status,
         legs,
         e.linkRuleId ?? rule.id,
         prior: e,
       ),
     );
+  }
+
+  /// Event types a card-bill receipt may settle. The receipt says the money was
+  /// a credit card bill; a debit typed from the payee name alone (a bill-pay
+  /// app the rules do not know by name, a payee printed as a person or a shop)
+  /// was a guess. Types with their own meaning (investment, wallet top-up, ATM,
+  /// EMI, subscription, transfer) are never overruled.
+  static const _receiptSettles = {
+    EventType.p2pOut,
+    EventType.purchase,
+    EventType.billPayment,
+    EventType.unknown,
+  };
+
+  /// The type [e] has once [receipt] has joined it. A card-bill receipt turns a
+  /// guessed spend into a card bill payment, in whichever order the two
+  /// messages arrive. A debit made ON a credit card is a purchase on it, never
+  /// the payment of a bill, so it is left alone.
+  EventType _typeWithReceipt(Event e, MovementFact receipt) {
+    if (receipt.purpose != MovementPurpose.cardPayment ||
+        !_receiptSettles.contains(e.type)) {
+      return e.type;
+    }
+    for (final l in e.legs) {
+      if (l.role != LegRole.debitLeg && l.role != LegRole.charge) continue;
+      final g = facts[l.factId];
+      if (g != null && _instKind(g) == InstrumentKind.creditCard) return e.type;
+    }
+    return EventType.cardBillPayment;
   }
 
   /// True when [e] already holds a receipt that names a different reference

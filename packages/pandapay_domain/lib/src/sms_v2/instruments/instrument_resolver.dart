@@ -164,12 +164,30 @@ class DefaultInstrumentResolver implements InstrumentResolver {
   ///
   /// [senderBrand] is the normalised sender brand. It becomes an alias on a
   /// new instrument and feeds the UPI-app rule; it is never part of identity.
+  ///
+  /// [createWithoutMask] lets a credit card with NO printed number become an
+  /// instrument when nothing of that issuer and kind exists yet. Pass it only
+  /// for a fact that proves money moved on the card (a spend, a refund, a
+  /// payment receipt): the card is then the source of that money, and some
+  /// issuers (for example a co-branded card app) never print a number in any
+  /// message. A mask that was printed but is unusable never counts as "no mask"
+  /// (it may be a reference number), and accounts, debit cards, prepaid cards
+  /// and loans are never created without a number: a bank has many of them and
+  /// a message that omits the number cannot say which.
+  ///
+  /// [adoptNumberlessCard] lets a message that prints a number complete a card
+  /// that has none. Pass false for a payment receipt: issuers print the card
+  /// ACCOUNT number there (see `cardPaymentMayCreateCard`), which is not the
+  /// number on the card, and stamping it on the card would split it in two when
+  /// the first spend alert arrives.
   InstrumentOutcome resolveDetailed(
     InstrumentMention mention,
     Iterable<Instrument> known, {
     required String profileId,
     required DateTime observedAt,
     String? senderBrand,
+    bool createWithoutMask = false,
+    bool adoptNumberlessCard = true,
   }) {
     final issuer = mention.issuerSlug;
     if (issuer == null || issuer.isEmpty) {
@@ -198,6 +216,13 @@ class DefaultInstrumentResolver implements InstrumentResolver {
       if (exact.isNotEmpty) return _pick(exact);
       final sameNumber = sameIssuer.where((i) => i.kind == kind && _sameNumberEnding(i.maskDigits, mask)).toList();
       if (sameNumber.isNotEmpty) return _pick(sameNumber);
+      // A numbered message after a card that never had a number: one card.
+      final numberless = adoptNumberlessCard ? _numberlessCardToAdopt(sameIssuer, kind, mention) : null;
+      if (numberless != null) {
+        return InstrumentResolved(
+          InstrumentResolution(instrument: _withNumber(numberless, issuer, mask, mention), created: false),
+        );
+      }
     }
     // 2. No kind: the one instrument with that issuer and mask.
     if (kind == null) {
@@ -220,7 +245,10 @@ class DefaultInstrumentResolver implements InstrumentResolver {
       return const InstrumentReviewNeeded(InstrumentReviewReason.kindUnknown);
     }
     if (mask == null && !maskFreeKinds.contains(kind)) {
-      return const InstrumentNotCreated(InstrumentNotCreatedReason.noIdentity);
+      final nothingPrinted = mention.maskDigits == null;
+      if (!(createWithoutMask && nothingPrinted && kind == InstrumentKind.creditCard)) {
+        return const InstrumentNotCreated(InstrumentNotCreatedReason.noIdentity);
+      }
     }
     if (kind == InstrumentKind.bankAccount && _isUpiApp(senderBrand)) {
       return const InstrumentNotCreated(InstrumentNotCreatedReason.upiAppMask);
@@ -236,15 +264,83 @@ class DefaultInstrumentResolver implements InstrumentResolver {
     );
   }
 
+  /// A rejected instrument is not a candidate: the user said it is not theirs.
+  /// Among the others the match must be unique; when every candidate was
+  /// rejected the mention belongs to something the user turned away.
   InstrumentOutcome _pick(List<Instrument> candidates) {
-    if (candidates.length > 1) {
-      return InstrumentReviewNeeded(InstrumentReviewReason.ambiguous, candidates: candidates);
-    }
-    final only = candidates.single;
-    if (only.status == InstrumentStatus.rejected) {
+    final live = [
+      for (final i in candidates)
+        if (i.status != InstrumentStatus.rejected) i,
+    ];
+    if (live.isEmpty) {
       return InstrumentReviewNeeded(InstrumentReviewReason.rejected, candidates: candidates);
     }
-    return InstrumentResolved(InstrumentResolution(instrument: only, created: false));
+    if (live.length > 1) {
+      return InstrumentReviewNeeded(InstrumentReviewReason.ambiguous, candidates: live);
+    }
+    return InstrumentResolved(InstrumentResolution(instrument: live.single, created: false));
+  }
+
+  /// The credit card that [mention] (which prints a number) is most likely the
+  /// same card as: the issuer's ONLY card, when it has no number, was found from
+  /// messages (not linked by the user from the catalogue), is not rejected, and
+  /// does not name a different product. Null otherwise: two cards, a catalogue
+  /// card or a different product are other cards, never merged by a guess.
+  Instrument? _numberlessCardToAdopt(
+    List<Instrument> sameIssuer,
+    InstrumentKind kind,
+    InstrumentMention mention,
+  ) {
+    if (kind != InstrumentKind.creditCard) return null;
+    final cards = [
+      for (final i in sameIssuer)
+        if (i.kind == kind) i,
+    ];
+    if (cards.length != 1) return null;
+    final only = cards.single;
+    if (only.maskDigits != null ||
+        only.userCardId != null ||
+        only.status == InstrumentStatus.rejected ||
+        !_productsCompatible(only.aliases.productNames, mention.productName)) {
+      return null;
+    }
+    return only;
+  }
+
+  /// [numberless] with the number [mask] now known. The name stays as the user
+  /// left it; a name the app made (issuer and kind) gains the number.
+  Instrument _withNumber(Instrument numberless, String issuer, String mask, InstrumentMention mention) {
+    final length = mention.maskLength;
+    final fullLength = (length != null && length > mask.length && length <= 32) ? length : null;
+    final autoName = defaultDisplayName(_issuerLabel(issuer), numberless.kind, null);
+    final product = mention.productName?.trim();
+    final products = numberless.aliases.productNames;
+    return numberless.copyWith(
+      maskDigits: mask,
+      maskLength: fullLength,
+      displayName: numberless.displayName == autoName
+          ? defaultDisplayName(_issuerLabel(issuer), numberless.kind, mask)
+          : null,
+      aliases: product == null || product.isEmpty || products.any((p) => p.toLowerCase() == product.toLowerCase())
+          ? null
+          : InstrumentAliases(
+              senders: numberless.aliases.senders,
+              vpas: numberless.aliases.vpas,
+              productNames: [...products, product],
+            ),
+    );
+  }
+
+  /// True when either side names no product, or one product name contains the
+  /// other ("Scapia" and "Scapia Federal Visa"). Two different products of one
+  /// issuer are two cards.
+  static bool _productsCompatible(List<String> known, String? incoming) {
+    final b = incoming?.trim().toLowerCase();
+    if (b == null || b.isEmpty || known.isEmpty) return true;
+    return known.any((a) {
+      final x = a.trim().toLowerCase();
+      return x.isEmpty || x.contains(b) || b.contains(x);
+    });
   }
 
   bool _isUpiApp(String? brand) {
@@ -324,6 +420,29 @@ Instrument? instrumentByNumberOnly(
         i,
   ];
   return matches.length == 1 ? matches.single : null;
+}
+
+/// The instrument of [kind] whose number [maskDigits] ends, across issuers, that
+/// the user REJECTED. Used when a notice names an account by its number alone and
+/// no live account matches ([instrumentByNumberOnly] is null): if every match is
+/// rejected the notice belongs to something the user said is not theirs, and its
+/// money must stay hidden instead of falling into "an account we cannot name".
+Instrument? rejectedByNumberOnly(
+  InstrumentKind? kind,
+  String? maskDigits,
+  Iterable<Instrument> known,
+) {
+  final mask = DefaultInstrumentResolver._cleanMask(maskDigits);
+  if (kind == null || mask == null) return null;
+  for (final i in known) {
+    if (i.kind == kind &&
+        i.status == InstrumentStatus.rejected &&
+        i.maskDigits != null &&
+        (i.maskDigits == mask || DefaultInstrumentResolver._sameNumberEnding(i.maskDigits, mask))) {
+      return i;
+    }
+  }
+  return null;
 }
 
 /// Issuer plus kind plus `••` plus digits, for example `HDFC Bank credit card ••5678`.
