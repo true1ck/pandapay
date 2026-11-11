@@ -80,6 +80,7 @@ import '../data/account_recovery_api.dart';
 import '../data/phone_api.dart';
 import '../data/account_name_api.dart';
 import '../data/avatar_api.dart';
+import '../data/member_avatar_api.dart';
 import '../data/recovery_email_api.dart';
 import '../features/auth/recovery_hold_store.dart';
 import '../data/referral_repository.dart';
@@ -837,6 +838,17 @@ final avatarApiProvider = Provider<AvatarApi?>((ref) {
   if (token == null) return null;
   return AvatarApi(
     authBaseUrl: _authBaseUrl,
+    accessToken: token,
+    client: ref.read(authenticatedHttpClientProvider),
+  );
+});
+
+/// Other Split members' avatars. Points at `apiBaseUrl`. Null while signed out.
+final memberAvatarApiProvider = Provider<MemberAvatarApi?>((ref) {
+  final token = _stableSessionToken(ref);
+  if (token == null) return null;
+  return MemberAvatarApi(
+    apiBaseUrl: _apiBaseUrl,
     accessToken: token,
     client: ref.read(authenticatedHttpClientProvider),
   );

@@ -12,14 +12,24 @@ class AvatarInfo {
   final String? preset;
   final bool hasPhoto;
 
+  /// Whether the owner lets Split members they share a group with see the
+  /// photo. Only meaningful for the owner's own info; off by default.
+  final bool sharePhoto;
+
   /// Changes whenever the avatar does, so a cached photo can tell it is stale.
   final int version;
 
-  const AvatarInfo({this.preset, this.hasPhoto = false, this.version = 0});
+  const AvatarInfo({
+    this.preset,
+    this.hasPhoto = false,
+    this.sharePhoto = false,
+    this.version = 0,
+  });
 
   factory AvatarInfo.fromJson(Map<String, dynamic> json) => AvatarInfo(
     preset: json['preset'] as String?,
     hasPhoto: json['has_photo'] == true,
+    sharePhoto: json['share_photo'] == true,
     version: (json['version'] as num?)?.toInt() ?? 0,
   );
 }
@@ -81,6 +91,19 @@ class AvatarApi {
     if (response.statusCode == 404) return null;
     if (response.statusCode != 200) throw _failure('GET', response, '/photo');
     return response.bodyBytes;
+  }
+
+  /// Turns photo sharing with Split members on or off.
+  Future<AvatarInfo> setPhotoSharing(bool share) async {
+    final response = await _client
+        .put(
+          _uri('/sharing'),
+          headers: {..._auth, 'Content-Type': 'application/json'},
+          body: jsonEncode({'share_photo': share}),
+        )
+        .timeout(_timeout);
+    if (response.statusCode != 200) throw _failure('PUT', response, '/sharing');
+    return AvatarInfo.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   Future<AvatarInfo> removePhoto() async {

@@ -12,6 +12,7 @@ const { AvatarError, MAX_PHOTO_BYTES } = avatars;
 
 const MESSAGES = Object.freeze({
   preset_invalid: 'Choose one of the avatars on the list.',
+  sharing_invalid: 'Send share_photo as true or false.',
   photo_invalid: 'That photo could not be used. Choose a different one.',
   photo_too_large: 'That photo is too large. Choose a smaller one.',
   photo_type_unsupported: 'Use a JPEG or PNG photo.',
@@ -43,7 +44,7 @@ function ordinarySession(req, res, next) {
   return next();
 }
 
-// GET /users/me/avatar -> { preset, has_photo, version }
+// GET /users/me/avatar -> { preset, has_photo, share_photo, version }
 router.get('/', auth, userRateLimitRead, async (req, res) => {
   try {
     return res.json(await avatars.getAvatar({ query, userId: req.user.id }));
@@ -59,6 +60,18 @@ router.put('/preset', auth, userRateLimitWrite, ordinarySession, async (req, res
   }
   try {
     return res.json(await avatars.setPreset({ query, userId: req.user.id, preset: body.preset }));
+  } catch (error) { return fail(res, error); }
+});
+
+// PUT /users/me/avatar/sharing  { share_photo: true | false }
+router.put('/sharing', auth, userRateLimitWrite, ordinarySession, async (req, res) => {
+  const body = req.body;
+  if (!body || typeof body !== 'object' || Array.isArray(body) ||
+      Object.keys(body).some(key => key !== 'share_photo') || typeof body.share_photo !== 'boolean') {
+    return res.status(400).json({ error: 'sharing_invalid', message: MESSAGES.sharing_invalid });
+  }
+  try {
+    return res.json(await avatars.setSharing({ query, userId: req.user.id, share: body.share_photo }));
   } catch (error) { return fail(res, error); }
 });
 

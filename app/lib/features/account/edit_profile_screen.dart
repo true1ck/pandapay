@@ -35,6 +35,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   bool _seeded = false;
   bool _saving = false;
   bool _avatarBusy = false;
+  bool _sharingBusy = false;
+  bool? _sharingOverride;
   String? _error;
   String _savedName = '';
 
@@ -122,6 +124,32 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       if (mounted) messenger.showSnackBar(SnackBar(content: Text(text)));
     } finally {
       if (mounted) setState(() => _avatarBusy = false);
+    }
+  }
+
+  Future<void> _setSharing(bool share) async {
+    if (_sharingBusy) return;
+    final api = ref.read(avatarApiProvider);
+    if (api == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    // Show the new value at once; put it back if the server says no.
+    setState(() {
+      _sharingBusy = true;
+      _sharingOverride = share;
+    });
+    try {
+      await api.setPhotoSharing(share);
+      ref.invalidate(avatarProvider);
+      await ref.read(avatarProvider.future);
+    } catch (error) {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sharingBusy = false;
+          _sharingOverride = null;
+        });
+      }
     }
   }
 
@@ -224,6 +252,33 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                     style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                   ),
                 ),
+                if (avatar?.photo != null) ...[
+                  const SizedBox(height: AppSpace.lg),
+                  _Card(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Show my photo to people in Split',
+                              style: BambooFonts.ui(15, weight: FontWeight.w600, color: BambooInk.ink900),
+                            ),
+                          ),
+                          Switch(
+                            key: const Key('edit-share-photo'),
+                            value: _sharingOverride ?? avatar!.sharePhoto,
+                            onChanged: _sharingBusy ? null : _setSharing,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpace.xs),
+                      Text(
+                        'Off: they see your avatar or initial. On: Split members you share a group with can see your photo.',
+                        style: BambooFonts.ui(12.5, color: BambooInk.ink500, height: 1.5),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: AppSpace.xl),
                 const _SectionLabel('Name'),
                 _Card(

@@ -10,7 +10,10 @@ import '../../app/providers.dart';
 class AvatarState {
   final String? preset;
   final Uint8List? photo;
-  const AvatarState({this.preset, this.photo});
+
+  /// Whether Split members may see the photo (the owner's own setting).
+  final bool sharePhoto;
+  const AvatarState({this.preset, this.photo, this.sharePhoto = false});
 }
 
 /// The signed-in person's avatar. Null while signed out or when it cannot be
@@ -29,7 +32,44 @@ final avatarProvider = FutureProvider<AvatarState?>((ref) async {
         photo = null;
       }
     }
+    return AvatarState(preset: info.preset, photo: photo, sharePhoto: info.sharePhoto);
+  } catch (_) {
+    return null;
+  }
+});
+
+/// Another Split member's avatar, by profile id. Cached for the session (and
+/// reset on account switch, since the API provider is rebuilt). Null on any
+/// failure or when the server has nothing to show: it is decorative, so every
+/// screen then draws the initial letter and never an error.
+final memberAvatarProvider = FutureProvider.family<AvatarState?, String>((ref, profileId) async {
+  final api = ref.watch(memberAvatarApiProvider);
+  if (api == null) return null;
+  try {
+    final info = await api.info(profileId);
+    if (info == null) return null;
+    Uint8List? photo;
+    if (info.hasPhoto) {
+      try {
+        photo = await api.photo(profileId);
+      } catch (_) {
+        photo = null;
+      }
+    }
     return AvatarState(preset: info.preset, photo: photo);
+  } catch (_) {
+    return null;
+  }
+});
+
+/// Another Split member's own PandaPay name, by profile id: what they call
+/// themselves, shown under the name the signed-in person saved for them. Cached
+/// for the session. Null on any failure or when there is none to show.
+final memberProfileNameProvider = FutureProvider.family<String?, String>((ref, profileId) async {
+  final api = ref.watch(memberAvatarApiProvider);
+  if (api == null) return null;
+  try {
+    return await api.profileName(profileId);
   } catch (_) {
     return null;
   }

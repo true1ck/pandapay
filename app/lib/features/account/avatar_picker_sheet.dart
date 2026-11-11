@@ -77,7 +77,7 @@ class _AvatarPickerSheet extends StatelessWidget {
             Text('Choose your avatar', style: BambooFonts.heading(20, color: BambooInk.ink900)),
             const SizedBox(height: AppSpace.xs),
             Text(
-              'Only you see your photo. Everyone else sees your avatar or your initial.',
+              'Your photo is private unless you turn on sharing in Edit profile. Others see your avatar or your initial.',
               style: BambooFonts.ui(13, color: BambooInk.ink500, height: 1.5),
             ),
             const SizedBox(height: AppSpace.lg),

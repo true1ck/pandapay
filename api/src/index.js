@@ -194,6 +194,7 @@ registerPortableBackupRestoreRoutes(app, { requireAuth, pool:accountBackupPool }
 registerSharedExpenseRoutes(app, { requireAuth, withUserClient });
 registerUserMerchantCategoryRuleRoutes(app, { requireAuth, withUserClient });
 require('./recovery_internal_routes').registerRecoveryInternalRoutes(app, { withUserClient, serviceSecret: () => config.authInternalServiceSecret });
+require('./avatar_routes').registerAvatarRoutes(app, { requireAuth, withUserClient });
 
 /**
  * GET /profile — proves RLS is reachable end to end: an authenticated user

@@ -13,6 +13,7 @@ const MIN_PHOTO_BYTES = 100;
 
 const STATUS_BY_CODE = Object.freeze({
   preset_invalid: 400,
+  sharing_invalid: 400,
   photo_invalid: 400,
   photo_too_large: 413,
   photo_type_unsupported: 415,
@@ -43,7 +44,7 @@ function sniffImageType(buffer) {
 
 async function getAvatar({ query, userId }) {
   const { rows } = await query(
-    `SELECT avatar_preset, (avatar_photo IS NOT NULL) AS has_photo, avatar_updated_at
+    `SELECT avatar_preset, (avatar_photo IS NOT NULL) AS has_photo, avatar_photo_shared, avatar_updated_at
        FROM users WHERE id = $1 AND deleted = FALSE AND is_active = TRUE`,
     [userId],
   );
@@ -52,6 +53,8 @@ async function getAvatar({ query, userId }) {
   return {
     preset: user.avatar_preset || null,
     has_photo: user.has_photo === true,
+    // Whether other people may see the photo. Off until the owner turns it on.
+    share_photo: user.avatar_photo_shared === true,
     // Changes whenever the avatar does, so the app can tell when its copy is stale.
     version: user.avatar_updated_at ? new Date(user.avatar_updated_at).getTime() : 0,
   };
@@ -66,6 +69,18 @@ async function setPreset({ query, userId, preset }) {
     `UPDATE users SET avatar_preset = $2, avatar_updated_at = NOW(), updated_at = NOW()
       WHERE id = $1 AND deleted = FALSE AND is_active = TRUE RETURNING id`,
     [userId, preset],
+  );
+  if (rows.length === 0) throw new AvatarError('account_unavailable');
+  return getAvatar({ query, userId });
+}
+
+/** Turn photo sharing on or off. Allowed with no photo (harmless: nothing to show). */
+async function setSharing({ query, userId, share }) {
+  if (typeof share !== 'boolean') throw new AvatarError('sharing_invalid');
+  const { rows } = await query(
+    `UPDATE users SET avatar_photo_shared = $2, avatar_updated_at = NOW(), updated_at = NOW()
+      WHERE id = $1 AND deleted = FALSE AND is_active = TRUE RETURNING id`,
+    [userId, share],
   );
   if (rows.length === 0) throw new AvatarError('account_unavailable');
   return getAvatar({ query, userId });
@@ -101,7 +116,7 @@ async function getPhoto({ query, userId }) {
 
 async function removePhoto({ query, userId }) {
   const { rows } = await query(
-    `UPDATE users SET avatar_photo = NULL, avatar_photo_type = NULL, avatar_updated_at = NOW(), updated_at = NOW()
+    `UPDATE users SET avatar_photo = NULL, avatar_photo_type = NULL, avatar_photo_shared = FALSE, avatar_updated_at = NOW(), updated_at = NOW()
       WHERE id = $1 AND deleted = FALSE AND is_active = TRUE RETURNING id`,
     [userId],
   );
@@ -109,7 +124,40 @@ async function removePhoto({ query, userId }) {
   return getAvatar({ query, userId });
 }
 
+// What another person's app may show. Used only by the service-secret internal API;
+// the API service has already checked the two people share a group. A photo that is
+// not shared is never mentioned: photo_shared is true only when it exists AND is
+// shared. Unknown, deleted and inactive accounts all look the same (null).
+async function getPublicAvatar({ query, userId }) {
+  const { rows } = await query(
+    `SELECT avatar_preset, (avatar_photo IS NOT NULL AND avatar_photo_shared = TRUE) AS photo_shared, avatar_updated_at
+       FROM users WHERE id = $1 AND deleted = FALSE AND is_active = TRUE`,
+    [userId],
+  );
+  const user = rows[0];
+  if (!user) return null;
+  return {
+    preset: user.avatar_preset || null,
+    photo_shared: user.photo_shared === true,
+    version: user.avatar_updated_at ? new Date(user.avatar_updated_at).getTime() : 0,
+  };
+}
+
+/** The photo bytes, only if present AND shared; otherwise null (no hint which). */
+async function getPublicPhoto({ query, userId }) {
+  const { rows } = await query(
+    `SELECT avatar_photo, avatar_photo_type FROM users
+      WHERE id = $1 AND deleted = FALSE AND is_active = TRUE
+        AND avatar_photo_shared = TRUE AND avatar_photo IS NOT NULL`,
+    [userId],
+  );
+  const user = rows[0];
+  if (!user) return null;
+  return { bytes: user.avatar_photo, type: user.avatar_photo_type };
+}
+
 module.exports = {
   AvatarError, PRESETS, MAX_PHOTO_BYTES, sniffImageType,
-  getAvatar, setPreset, setPhoto, getPhoto, removePhoto,
+  getAvatar, setPreset, setSharing, setPhoto, getPhoto, removePhoto,
+  getPublicAvatar, getPublicPhoto,
 };

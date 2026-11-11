@@ -14,11 +14,22 @@ const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a
 
 // In-memory users row answering the four statements the service issues.
 function world(extra = {}) {
-  const row = { id: 'me', deleted: false, is_active: true, avatar_preset: null, avatar_photo: null, avatar_photo_type: null, avatar_updated_at: null, ...extra };
+  const row = { id: 'me', deleted: false, is_active: true, avatar_preset: null, avatar_photo: null, avatar_photo_type: null, avatar_photo_shared: false, avatar_updated_at: null, ...extra };
   const query = async (sql, args = []) => {
     const live = row.id === args[0] && !row.deleted && row.is_active;
     if (sql.includes('SELECT avatar_preset, (avatar_photo IS NOT NULL)')) {
-      return { rows: live ? [{ avatar_preset: row.avatar_preset, has_photo: row.avatar_photo !== null, avatar_updated_at: row.avatar_updated_at }] : [] };
+      return { rows: live ? [{ avatar_preset: row.avatar_preset, has_photo: row.avatar_photo !== null, avatar_photo_shared: row.avatar_photo_shared, avatar_updated_at: row.avatar_updated_at }] : [] };
+    }
+    if (sql.includes('avatar_photo_shared = TRUE AND avatar_photo IS NOT NULL')) {
+      const ok = live && row.avatar_photo_shared === true && row.avatar_photo !== null;
+      return { rows: ok ? [{ avatar_photo: row.avatar_photo, avatar_photo_type: row.avatar_photo_type }] : [] };
+    }
+    if (sql.includes('AS photo_shared')) {
+      return { rows: live ? [{ avatar_preset: row.avatar_preset, photo_shared: row.avatar_photo !== null && row.avatar_photo_shared === true, avatar_updated_at: row.avatar_updated_at }] : [] };
+    }
+    if (sql.includes('SET avatar_photo_shared = $2')) {
+      if (!live) return { rows: [] };
+      row.avatar_photo_shared = args[1]; row.avatar_updated_at = new Date(Date.now() + 4000); return { rows: [{ id: row.id }] };
     }
     if (sql.includes('SELECT avatar_photo, avatar_photo_type')) {
       return { rows: live ? [{ avatar_photo: row.avatar_photo, avatar_photo_type: row.avatar_photo_type }] : [] };
@@ -33,6 +44,8 @@ function world(extra = {}) {
     }
     if (sql.includes('SET avatar_photo = NULL')) {
       if (!live) return { rows: [] };
+      if (!sql.includes('avatar_photo_shared = FALSE')) throw new Error('removePhoto must reset sharing');
+      row.avatar_photo_shared = false;
       row.avatar_photo = null; row.avatar_photo_type = null; row.avatar_updated_at = new Date(Date.now() + 3000); return { rows: [{ id: row.id }] };
     }
     throw new Error(`Unexpected SQL: ${sql.slice(0, 60)}`);
@@ -42,7 +55,7 @@ function world(extra = {}) {
 
 test('a fresh account has no avatar', async () => {
   const w = world();
-  assert.deepEqual(await svc.getAvatar({ query: w.query, userId: 'me' }), { preset: null, has_photo: false, version: 0 });
+  assert.deepEqual(await svc.getAvatar({ query: w.query, userId: 'me' }), { preset: null, has_photo: false, share_photo: false, version: 0 });
 });
 
 test('every preset id is accepted, anything else is not', async () => {
@@ -180,4 +193,172 @@ test('HTTP: a recovery session cannot change the avatar', async t => {
   assert.equal((await fetch(`${base}/preset`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ preset: 'panda' }) })).status, 403);
   assert.equal((await fetch(`${base}/photo`, { method: 'PUT', headers: { 'content-type': 'image/jpeg' }, body: JPEG })).status, 403);
   assert.equal((await fetch(`${base}/photo`, { method: 'DELETE' })).status, 403);
+});
+
+// ---- consent to show the photo to other people ----
+
+test('sharing is off by default, can be toggled, and only booleans are accepted', async () => {
+  const w = world();
+  assert.equal((await svc.getAvatar({ query: w.query, userId: 'me' })).share_photo, false);
+  assert.equal((await svc.setSharing({ query: w.query, userId: 'me', share: true })).share_photo, true);
+  assert.equal(w.row.avatar_photo_shared, true);
+  assert.equal((await svc.setSharing({ query: w.query, userId: 'me', share: false })).share_photo, false);
+  for (const bad of ['true', 1, null, undefined, {}]) {
+    await assert.rejects(svc.setSharing({ query: w.query, userId: 'me', share: bad }), e => e.code === 'sharing_invalid' && e.status === 400);
+  }
+  const gone = world({ deleted: true });
+  await assert.rejects(svc.setSharing({ query: gone.query, userId: 'me', share: true }), e => e.code === 'account_unavailable');
+});
+
+test('removing the photo turns sharing off; replacing it keeps the flag', async () => {
+  const w = world();
+  await svc.setPhoto({ query: w.query, userId: 'me', bytes: JPEG });
+  await svc.setSharing({ query: w.query, userId: 'me', share: true });
+  await svc.setPhoto({ query: w.query, userId: 'me', bytes: PNG });
+  assert.equal(w.row.avatar_photo_shared, true);
+  const out = await svc.removePhoto({ query: w.query, userId: 'me' });
+  assert.equal(out.share_photo, false);
+  await svc.setPhoto({ query: w.query, userId: 'me', bytes: JPEG });
+  assert.equal(w.row.avatar_photo_shared, false);
+});
+
+test('public avatar: preset only while the photo is private, photo once shared', async () => {
+  const w = world();
+  await svc.setPreset({ query: w.query, userId: 'me', preset: 'sun' });
+  await svc.setPhoto({ query: w.query, userId: 'me', bytes: JPEG });
+  let pub = await svc.getPublicAvatar({ query: w.query, userId: 'me' });
+  assert.deepEqual(Object.keys(pub).sort(), ['photo_shared', 'preset', 'version']);
+  assert.equal(pub.preset, 'sun');
+  assert.equal(pub.photo_shared, false);
+  assert.equal(await svc.getPublicPhoto({ query: w.query, userId: 'me' }), null);
+  await svc.setSharing({ query: w.query, userId: 'me', share: true });
+  pub = await svc.getPublicAvatar({ query: w.query, userId: 'me' });
+  assert.equal(pub.photo_shared, true);
+  const photo = await svc.getPublicPhoto({ query: w.query, userId: 'me' });
+  assert.ok(photo.bytes.equals(JPEG));
+  assert.equal(photo.type, 'image/jpeg');
+});
+
+test('public avatar: sharing on with no photo reports no photo; unknown, deleted, inactive are null', async () => {
+  const w = world();
+  await svc.setSharing({ query: w.query, userId: 'me', share: true });
+  assert.equal((await svc.getPublicAvatar({ query: w.query, userId: 'me' })).photo_shared, false);
+  assert.equal(await svc.getPublicPhoto({ query: w.query, userId: 'me' }), null);
+  assert.equal(await svc.getPublicAvatar({ query: w.query, userId: 'someone-else' }), null);
+  for (const extra of [{ deleted: true }, { is_active: false }]) {
+    const x = world({ ...extra, avatar_photo: JPEG, avatar_photo_type: 'image/jpeg', avatar_photo_shared: true });
+    assert.equal(await svc.getPublicAvatar({ query: x.query, userId: 'me' }), null);
+    assert.equal(await svc.getPublicPhoto({ query: x.query, userId: 'me' }), null);
+  }
+});
+
+test('HTTP: the sharing route validates its body, persists, and is blocked for recovery sessions', async t => {
+  const { base, w } = await harness(t);
+  const put = (b, body) => fetch(`${b}/sharing`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  for (const bad of [{}, { share_photo: 'yes' }, { share_photo: 1 }, { share_photo: true, extra: 1 }, [true], { shared: true }]) {
+    const r = await put(base, bad);
+    assert.equal(r.status, 400);
+    assert.equal((await r.json()).error, 'sharing_invalid');
+  }
+  assert.equal(w.row.avatar_photo_shared, false);
+  let r = await put(base, { share_photo: true });
+  assert.equal(r.status, 200);
+  assert.deepEqual(Object.keys(await r.json()).sort(), ['has_photo', 'preset', 'share_photo', 'version']);
+  assert.equal(w.row.avatar_photo_shared, true);
+  r = await fetch(base);
+  assert.equal((await r.json()).share_photo, true);
+
+  const rec = await harness(t, { user: { id: 'me', device_id: 'device-1', recovery_channel: 'email' } });
+  assert.equal((await put(rec.base, { share_photo: true })).status, 403);
+  assert.equal(rec.w.row.avatar_photo_shared, false);
+});
+
+// ---- the internal service-to-service endpoints ----
+
+const SECRET = 'test-internal-service-secret-at-least-32-bytes';
+const UID = '11111111-2222-4333-8444-555555555555';
+const OTHER_UID = '99999999-2222-4333-8444-555555555555';
+
+async function internalHarness(t, { secret = SECRET, extra = {} } = {}) {
+  const w = world({ id: UID, ...extra });
+  let calls = 0;
+  const query = (...a) => { calls += 1; return w.query(...a); };
+  const router = load('../src/routes/internalRoutes.js', {
+    '../config': { authInternalServiceSecret: secret },
+    '../db': { query },
+    '../services/currentSessionVerification': { verifyCurrentSession: async () => ({}) },
+  });
+  const app = express(); app.use(express.json()); app.use('/internal', router);
+  const server = await new Promise(resolve => { const l = app.listen(0, '127.0.0.1', () => resolve(l)); });
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  const base = `http://127.0.0.1:${server.address().port}/internal/avatar`;
+  const get = (suffix, headers = { 'x-auth-service-secret': SECRET }) => fetch(`${base}/${suffix}`, { headers });
+  return { w, get, calls: () => calls };
+}
+
+test('internal avatar: needs the service secret (401 wrong/missing, 503 unconfigured) and a UUID', async t => {
+  const h = await internalHarness(t);
+  assert.equal((await h.get(UID, {})).status, 401);
+  assert.equal((await h.get(UID, { 'x-auth-service-secret': 'wrong-secret-wrong-secret-wrong-secret' })).status, 401);
+  assert.equal((await h.get(`${UID}/photo`, {})).status, 401);
+  assert.equal(h.calls(), 0);
+  for (const bad of ['not-a-uuid', '123', 'me', `${UID}x`]) {
+    assert.equal((await h.get(bad)).status, 400);
+    assert.equal((await h.get(`${bad}/photo`)).status, 400);
+  }
+  assert.equal(h.calls(), 0);
+  const off = await internalHarness(t, { secret: null });
+  assert.equal((await off.get(UID)).status, 503);
+  assert.equal((await off.get(`${UID}/photo`)).status, 503);
+});
+
+test('internal avatar: private photo shows preset only; shared photo is served with safe headers', async t => {
+  const h = await internalHarness(t, { extra: { avatar_preset: 'wave', avatar_photo: JPEG, avatar_photo_type: 'image/jpeg' } });
+  let r = await h.get(UID);
+  assert.equal(r.status, 200);
+  const body = await r.json();
+  assert.deepEqual(Object.keys(body).sort(), ['photo_shared', 'preset', 'version']);
+  assert.equal(body.preset, 'wave');
+  assert.equal(body.photo_shared, false);
+  const privatePhoto = await h.get(`${UID}/photo`);
+  assert.equal(privatePhoto.status, 404);
+  assert.deepEqual(await privatePhoto.json(), { error: 'not_found' });
+
+  h.w.row.avatar_photo_shared = true;
+  r = await h.get(UID);
+  assert.equal((await r.json()).photo_shared, true);
+  r = await h.get(`${UID}/photo`);
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get('content-type'), 'image/jpeg');
+  assert.equal(r.headers.get('x-content-type-options'), 'nosniff');
+  assert.match(r.headers.get('content-security-policy'), /sandbox/);
+  assert.equal(r.headers.get('cache-control'), 'no-store');
+  assert.ok(Buffer.from(await r.arrayBuffer()).equals(JPEG));
+});
+
+test('internal avatar: private photo, no photo, unknown and deleted users get the identical 404', async t => {
+  const cases = [
+    { avatar_photo: JPEG, avatar_photo_type: 'image/jpeg', avatar_photo_shared: false },
+    { avatar_photo_shared: true },
+    { avatar_photo_shared: false },
+    { deleted: true, avatar_photo: JPEG, avatar_photo_type: 'image/jpeg', avatar_photo_shared: true },
+    { is_active: false, avatar_photo: JPEG, avatar_photo_type: 'image/jpeg', avatar_photo_shared: true },
+  ];
+  const seen = [];
+  for (const extra of cases) {
+    const h = await internalHarness(t, { extra });
+    const r = await h.get(`${UID}/photo`);
+    seen.push([r.status, await r.text(), r.headers.get('content-type')]);
+  }
+  const h = await internalHarness(t);
+  const unknown = await h.get(`${OTHER_UID}/photo`);
+  seen.push([unknown.status, await unknown.text(), unknown.headers.get('content-type')]);
+  for (const s of seen) assert.deepEqual(s, seen[0]);
+  assert.equal(seen[0][0], 404);
+  assert.equal(seen[0][1], JSON.stringify({ error: 'not_found' }));
+  const gone = await internalHarness(t, { extra: { deleted: true } });
+  const g = await gone.get(UID);
+  assert.equal(g.status, 404);
+  assert.deepEqual(await g.json(), { error: 'not_found' });
+  assert.equal((await h.get(OTHER_UID)).status, 404);
 });
