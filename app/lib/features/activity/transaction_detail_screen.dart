@@ -18,6 +18,7 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../app/transaction_tag_picker.dart';
+import '../../data/merchant_identity.dart';
 import '../../data/api_exception.dart';
 import '../../data/local/split_repository.dart';
 import '../../data/local/sms_intake_repository.dart';
@@ -107,7 +108,11 @@ class TransactionDetailScreen extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            entry.merchantName ?? 'Saved transaction',
+                            MerchantIdentity.displayName(
+                                  entry.merchantName,
+                                  incoming: entry.entryKind == TxnEntryKind.income,
+                                ) ??
+                                'Saved transaction',
                             style: BambooFonts.heading(20),
                           ),
                           const SizedBox(height: AppSpace.md),
@@ -1345,7 +1350,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                         ),
                         const SizedBox(height: AppSpace.xs),
                         Text(
-                          entry.merchantName ??
+                          MerchantIdentity.displayName(
+                                entry.merchantName,
+                                incoming: entry.entryKind == TxnEntryKind.income,
+                              ) ??
                               (entry.entryKind == TxnEntryKind.income
                                   ? 'Income'
                                   : entry.entryKind.label),
@@ -2014,7 +2022,12 @@ class _SmsEvidenceSection extends ConsumerWidget {
             ),
             _EvidenceLine(
               label: 'Merchant detected',
-              value: entry.merchantName ?? 'Not provided by SMS',
+              value:
+                  MerchantIdentity.displayName(
+                    entry.merchantName,
+                    incoming: entry.entryKind == TxnEntryKind.income,
+                  ) ??
+                  'Not provided by SMS',
             ),
             _EvidenceLine(
               label: 'Date detected',

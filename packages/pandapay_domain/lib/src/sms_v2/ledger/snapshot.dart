@@ -8,6 +8,7 @@ import '../contract/rule_bundle.dart';
 import '../contract/types.dart';
 import '../category/category_resolver.dart';
 import '../category/merchant_key.dart';
+import 'counterparty_resolution.dart';
 import 'projector.dart';
 
 /// An immutable reporting snapshot, including explicit refund category context.
@@ -102,6 +103,22 @@ class LedgerSnapshot {
           break;
         }
       }
+      // The message printed nobody: take the name from a linked leg (the purchase
+      // a refund reverses) or, where the issuer necessarily is the other side (a
+      // wallet's own movements, a bank's own fee), from the issuer.
+      if (!counterpartyIsNamed(cp)) {
+        final resolved = resolveMissingCounterparty(
+          event: event,
+          money: fact,
+          factsById: factsById,
+          instrument: instrumentForFact(
+            fact,
+            instrumentsById,
+            instrumentIdByFactId: instrumentIdByFactId,
+          ),
+        );
+        if (resolved != null) cp = resolved.counterparty;
+      }
       counterparties[event.eventId] = cp;
       if (categories.containsKey(event.eventId)) {
         return categories[event.eventId];
@@ -157,6 +174,26 @@ class LedgerSnapshot {
                 'to': {'external': key},
               }),
             );
+            continue;
+          }
+        }
+      }
+      // An entry that names nobody ("UNKNOWN") takes the counterparty resolved
+      // above, so the ledger and the category agree on who the other side is.
+      if (projected.length == 1) {
+        final entry = projected.single;
+        final outside = entry.to is ExternalEndpoint
+            ? entry.to as ExternalEndpoint
+            : entry.from is ExternalEndpoint
+            ? entry.from as ExternalEndpoint
+            : null;
+        final cp = counterparties[event.eventId];
+        if (outside != null && outside.counterpartyKey == 'UNKNOWN' && counterpartyIsNamed(cp)) {
+          final key = resolver.keyer.keyFor(cp) ?? resolver.keyer.personRuleKey(cp);
+          if (key != null && key.isNotEmpty) {
+            final json = {...entry.toJson()};
+            json[entry.to is ExternalEndpoint ? 'to' : 'from'] = {'external': key};
+            entries.add(LedgerEntry.fromJson(json));
             continue;
           }
         }

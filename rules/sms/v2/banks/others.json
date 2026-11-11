@@ -35605,7 +35605,7 @@
   },
   {
     "id": "GEN-REFUND-NOMASK",
-    "version": 4,
+    "version": 5,
     "family": "refund",
     "senders": [
       "*"
@@ -35624,7 +35624,14 @@
         "is being",
         "under process",
         "in process",
-        "in progress"
+        "in progress",
+        "will be processed",
+        "shall be processed",
+        "will be reversed",
+        "will be received",
+        "will be settled",
+        "will be initiated",
+        "shall be credited"
       ]
     },
     "emit": [
@@ -35754,6 +35761,11 @@
       {
         "sender": "VM-SAMPLEB-S",
         "body": "Refund of Rs 899 for order 12345 is being processed.",
+        "expectFactTypes": []
+      },
+      {
+        "sender": "VM-GENAPP-S",
+        "body": "Refund of Rs. 177.05 for your Sample Food order from Sunrise Biryani House will be processed in 3 days.",
         "expectFactTypes": []
       }
     ],

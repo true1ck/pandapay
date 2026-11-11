@@ -1,0 +1,373 @@
+[
+  {
+    "id": "GENZ-ACCT-DR-TRANSFER-TO-NAME",
+    "version": 1,
+    "family": "acct_debit",
+    "senders": [
+      "*"
+    ],
+    "priority": 280,
+    "match": {
+      "pattern": "^(?=[\\s\\S]*?(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?))(?=[\\s\\S]*?\\b(?:a/?c|acct?\\.?|account)\\s*(?:no\\.?|number)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\b)(?=[\\s\\S]*?\\b(?:debited|withdrawn)\\b)(?=[\\s\\S]*?\\bto\\s+(?<payee>[a-z](?:(?!\\b(?:from|on|via|using|by|through|at)\\b)[a-z .&']){0,40}?)\\s+(?:a/?c|ac|acct)\\s*(?:no\\.?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<dmask>\\d{2,18})\\b)(?=[\\s\\S]*?\\b(?:on|dated|date|dt)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
+      "flags": "i",
+      "rejectAny": [
+        "credited",
+        "will be",
+        "failed",
+        "declined",
+        "reversed",
+        "not been"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "transfer",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "unknown",
+          "nameFrom": "payee",
+          "accountMaskFrom": "dmask",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        },
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "VM-GENBNK-S",
+        "body": "Your Ac x4455 debited Rs.5,000.00 for transfer to riya Ac x7788 dt 29.01.27 Ref 123456789012. If not done by you, call 1800000000.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-GENBNK-S",
+        "body": "A/c XX1234 debited by Rs 700.00 on 05-11-26: transfer to RAVI KUMAR A/c XX9988. Ref 555566667777",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-GENBNK-S",
+        "body": "Your Ac x4455 will be debited Rs.5,000.00 for transfer to riya Ac x7788 dt 29.01.27.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "generalization",
+    "updatedAt": "2026-11-12T00:00:00Z"
+  },
+  {
+    "id": "GENZ-ACCT-CR-RAIL-BY-ACCTNAME",
+    "version": 1,
+    "family": "acct_credit",
+    "senders": [
+      "*"
+    ],
+    "priority": 270,
+    "match": {
+      "pattern": "^(?=[\\s\\S]*?(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?))(?=[\\s\\S]*?\\bcredited\\b)(?=[\\s\\S]*?\\b(?:a/?c|acct?\\.?|account)\\s*(?:no\\.?|number)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\b)(?=[\\s\\S]*?\\b(?:rtgs|neft|imps)\\b)(?=[\\s\\S]*?\\bby\\s+\\d{6,}\\s*(?<payer>[a-z][a-z .&']{2,45}?)(?=\\s*[,;(/]|\\s*\\.(?:\\s|$)|\\s*$|\\s+(?:info|ref|utr|avl|on|dated)\\b))(?=[\\s\\S]*?\\b(?:on|dated|date|dt)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
+      "flags": "i",
+      "rejectAny": [
+        "debited",
+        "will be",
+        "failed",
+        "reversed",
+        "not been"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "p2p",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "unknown",
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        },
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "VM-GENBNK-S",
+        "body": "Dear Customer, INR 3,00,000.00 credited to your A/c No XX4455 on 31/12/2026 through RTGS with UTR ABCD52026123100000001 by 024400000001234 ASHA RAO, INFO: SAMPLE ////// //////",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-GENBNK-S",
+        "body": "Dear Customer, INR 8,000.00 credited to your A/c No XX4455 on 02/01/2027 through NEFT with UTR ABCD52027010200000002 by 024400000009876PRIYA SHARMA, INFO: SAMPLE ////// //////",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-GENBNK-S",
+        "body": "Rs.12,500.00 credited to A/c XX7788 on 05-11-26 via NEFT by 998877665 EXAMPLE TRADERS PVT LTD. Ref 123456789012",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-GENBNK-S",
+        "body": "Dear Customer, INR 3,00,000.00 will be credited to your A/c No XX4455 on 31/12/2026 through RTGS by 024400000001234 ASHA RAO.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "generalization",
+    "updatedAt": "2026-11-12T00:00:00Z"
+  },
+  {
+    "id": "GENZ-REFUND-ORDER-FROM-MERCHANT",
+    "version": 1,
+    "family": "refund",
+    "senders": [
+      "*"
+    ],
+    "priority": 410,
+    "match": {
+      "pattern": "^(?=[\\s\\S]*?\\brefund\\s+(?:of|for)\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?))(?=[\\s\\S]*?\\border\\s+from\\s+(?<merchant>[a-z0-9][^\\n]{1,60}?)\\s+(?:has|is|was)\\s+(?:been\\s+)?(?:successfully\\s+)?(?:processed|completed|credited|refunded|initiated)\\b)",
+      "flags": "i",
+      "rejectAny": [
+        "will be",
+        "failed",
+        "declined",
+        "rejected"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "VM-GENAPP-S",
+        "body": "Refund of Rs. 177.05 for your Sample Food order from Sunrise Biryani House - Old Town has been successfully processed and shall reflect in your account by now.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-GENAPP-S",
+        "body": "Refund of INR 90 for your ExampleMart order from Fresh Basket Store was processed. It may take 3 days.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-GENAPP-S",
+        "body": "Refund of Rs. 177.05 for your Sample Food order from Sunrise Biryani House will be processed in 3 days.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "generalization",
+    "updatedAt": "2026-11-12T00:00:00Z"
+  }
+]

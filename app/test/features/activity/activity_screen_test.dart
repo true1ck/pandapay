@@ -274,6 +274,39 @@ void main() {
     expect(find.text('No activity this month'), findsOneWidget);
   });
 
+  testWidgets('says Unknown merchant or Unknown sender, never the raw UNKNOWN', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    final repo = _FakeUserCardsRepository([
+      _txn(
+        id: 'spend',
+        amount: Money.fromRupees(400),
+        occurredAt: now,
+        merchantName: 'UNKNOWN',
+      ),
+      _txn(
+        id: 'income',
+        amount: Money.fromRupees(900),
+        occurredAt: now,
+        merchantName: 'UNKNOWN',
+        entryKind: TxnEntryKind.income,
+      ),
+      _txn(
+        id: 'named',
+        amount: Money.fromRupees(100),
+        occurredAt: now,
+        merchantName: 'Corner Shop',
+      ),
+    ]);
+    await _pump(tester, repo: repo, cards: const []);
+
+    expect(find.text('Unknown merchant'), findsOneWidget);
+    expect(find.text('Unknown sender'), findsOneWidget);
+    expect(find.text('Corner Shop'), findsOneWidget);
+    expect(find.text('UNKNOWN'), findsNothing);
+  });
+
   testWidgets('groups transactions by day and shows a spend summary', (
     tester,
   ) async {

@@ -1,14 +1,14 @@
 [
   {
     "id": "GENZ-ACCT-CR-THIRD-PARTY-NOTICE",
-    "version": 1,
+    "version": 2,
     "family": "acct_credit",
     "senders": [
       "*"
     ],
     "priority": 260,
     "match": {
-      "pattern": "^(?=[\\s\\S]*?(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?))(?=[\\s\\S]*?\\b(?:credited|transferred|deposited|remitted)\\b)(?=[\\s\\S]*?\\byour\\s+(?:bank\\s+)?(?:a/?c|acct?\\.?|account)\\s*(?:no\\.?|number)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\b)(?=[\\s\\S]*?(?:\\b(?:check|confirm|verify|contact)\\s+(?:with\\s+)?(?:your|the)\\s+(?:own\\s+)?bank\\b|\\bcheck\\s+your\\s+(?:bank\\s+)?(?:account|a/c|statement)\\b))",
+      "pattern": "^(?=[\\s\\S]*?(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?))(?=[\\s\\S]*?\\b(?:credited|transferred|deposited|remitted)\\b)(?=[\\s\\S]*?\\byour\\s+(?:bank\\s+)?(?:a/?c|acct?\\.?|account)\\s*(?:no\\.?|number)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\b)(?=[\\s\\S]*?(?:\\b(?:check|confirm|verify|contact)\\s+(?:with\\s+)?(?:your|the)\\s+(?:own\\s+)?bank\\b|\\bcheck\\s+your\\s+(?:bank\\s+)?(?:account|a/c|statement)\\b))(?=(?:[\\s\\S]*?\\bfrom\\s+(?<payer>[a-z][a-z0-9 .&'-]{2,40}?)\\s*\\.?\\s*$|))",
       "flags": "i",
       "rejectAny": [
         "debited",
@@ -42,6 +42,13 @@
           "kind": "bank_account",
           "maskFrom": "mask",
           "issuerFromSender": false
+        },
+        "counterparty": {
+          "kind": "unknown",
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],

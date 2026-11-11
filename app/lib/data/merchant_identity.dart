@@ -85,6 +85,24 @@ class MerchantIdentity {
     if (cache.length > 10000) cache.clear();
   }
 
+  /// What a row shows when the ledger could not say who the other side was.
+  static const unknownMerchantLabel = 'Unknown merchant';
+  static const unknownSenderLabel = 'Unknown sender';
+
+  /// The name to show for a stored merchant [name].
+  ///
+  /// The ledger stores the word UNKNOWN when the message named nobody and nothing
+  /// linked to it did either. Shown as it is, that reads like a bug. Money coming
+  /// in has a sender, everything else a merchant, so the screen says "Unknown
+  /// sender" or "Unknown merchant". Any other name, and a missing one, is returned
+  /// unchanged: the caller keeps its own fallback for a row with no name at all.
+  static String? displayName(String? name, {required bool incoming}) {
+    if (name == null) return null;
+    return name.trim().toUpperCase() == 'UNKNOWN'
+        ? (incoming ? unknownSenderLabel : unknownMerchantLabel)
+        : name;
+  }
+
   static String? cleanName(String? value) {
     if (value == null) return null;
     final cached = _cleanCache[value];

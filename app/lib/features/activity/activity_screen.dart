@@ -3626,7 +3626,9 @@ class _TransactionTile extends StatelessWidget {
     // SMS import stores a P2P transfer as "Transfer to <payee>". Showing the
     // payee and moving "Transfer" into the chip slot keeps the cue when the
     // list is scanned (docs/design/spending-activity-redesign-2026-10-20.html).
-    final merchantDisplay = entry.merchantName ?? entryLabel;
+    final merchantDisplay =
+        MerchantIdentity.displayName(entry.merchantName, incoming: isIncome) ??
+        entryLabel;
     final transferPayee = MerchantIdentity.transferPayee(merchantDisplay);
     // The payee-first title only exists to free the chip slot. When Refund or
     // Reversal claims it, the name keeps its verb — a row must not lose the
