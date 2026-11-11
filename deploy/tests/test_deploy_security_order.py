@@ -316,7 +316,8 @@ class DeploySecurityOrderTest(unittest.TestCase):
                                         and c[1][-1] == "auth")
         self.assertLess(build, stop)
         preflights = [i for i,c in enumerate(commands) if c[0] == "docker" and "run" in c[1]
-                      and "db-migrate" in c[1] and "--entrypoint" in c[1]]
+                      and "db-migrate" in c[1] and "--entrypoint" in c[1]
+                      and "backfillSplitDirectory.js" not in " ".join(c[1])]
         self.assertEqual(len(preflights), 2)
         self.assertTrue(all(build < i < stop for i in preflights))
         self.assertLess(stop, backup)

@@ -550,6 +550,13 @@ exit 1
 FINAL_HEALTH_CHECK
 SERVICES_FENCED=0
 
+# Everyone who already has a number on their account becomes findable in Split without opening the
+# app (the API only registers people lazily as they make requests). Idempotent, so it runs on every
+# release and quickly finds nothing to do. Best effort, after the release is live and healthy: a
+# failure here is a warning, never a failed or rolled-back deploy.
+echo "==> Registering existing accounts in the split phone directory (best effort)"
+timeout --kill-after=10s --foreground 180s "${TARGET_COMPOSE[@]}" run --rm --no-deps   --entrypoint node db-migrate /workspace/auth/scripts/backfillSplitDirectory.js --apply   || echo "WARNING: split directory backfill did not complete; it is safe to re-run." >&2
+
 echo "==> Pruning dangling images"
 docker image prune -f >/dev/null 2>&1 || true
 

@@ -66,6 +66,8 @@ services:
       SMS_LEARNING_WORKER_DB_PASSWORD: "${SMS_LEARNING_WORKER_DB_PASSWORD:-}"
       # Opt-in: blank leaves the SMS AI drafts worker's login (sms_ai_worker) uncreated.
       SMS_AI_WORKER_DB_PASSWORD: "${SMS_AI_WORKER_DB_PASSWORD:-}"
+      # Only the split directory backfill (auth/scripts/backfillSplitDirectory.js) reads this.
+      SHARED_EXPENSE_INVITE_SECRET: "${SHARED_EXPENSE_INVITE_SECRET:-}"
       PHONE_LOOKUP_HMAC_KEY: "${PHONE_LOOKUP_HMAC_KEY:?}"
       ENCRYPTION_ENABLED: "${ENCRYPTION_ENABLED:-true}"
       ENCRYPTION_KEY: "${ENCRYPTION_KEY:?}"
