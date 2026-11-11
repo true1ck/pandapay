@@ -78,6 +78,7 @@ import '../data/premium_reminders.dart';
 import '../data/recovery_api.dart';
 import '../data/account_recovery_api.dart';
 import '../data/phone_api.dart';
+import '../data/account_name_api.dart';
 import '../data/recovery_email_api.dart';
 import '../features/auth/recovery_hold_store.dart';
 import '../data/referral_repository.dart';
@@ -758,6 +759,42 @@ final recoveryStatusProvider = FutureProvider.autoDispose<RecoveryStatus?>((
   }
 });
 
+/// Saves the account name (api/ `profiles.display_name`, then auth/ `users.name`).
+/// Null while signed out.
+final accountNameApiProvider = Provider<AccountNameApi?>((ref) {
+  final token = _stableSessionToken(ref);
+  if (token == null) return null;
+  return AccountNameApi(
+    apiBaseUrl: _apiBaseUrl,
+    authBaseUrl: _authBaseUrl,
+    accessToken: token,
+    client: ref.read(authenticatedHttpClientProvider),
+  );
+});
+
+/// Puts a just-saved profile row into the profile cache and refreshes
+/// [profileProvider]. That provider paints its cached snapshot first, so without
+/// this an edited name would flash back to the old one until the background
+/// refresh landed.
+final profileSnapshotWriterProvider =
+    Provider<Future<void> Function(Map<String, dynamic> profile)>((ref) {
+      return (profile) async {
+        final namespace = ref.read(cacheNamespaceProvider);
+        final cache = await _cacheOrNull(ref);
+        final key = _scopedCacheKey(ref, 'profile');
+        try {
+          await cache?.put(key, jsonEncode({'profile': profile}));
+          cache?.financialStore.database.saveProfileDisplayName(
+            namespace,
+            profile['display_name'] as String?,
+          );
+        } catch (_) {
+          // The cache is a convenience; the refresh below still shows the truth.
+        }
+        ref.invalidate(profileProvider);
+      };
+    });
+
 /// The recovery email (a second address that can get a person back in). Null
 /// while signed out. Points at `authBaseUrl`.
 final recoveryEmailApiProvider = Provider<RecoveryEmailApi?>((ref) {
@@ -783,6 +820,16 @@ final recoveryEmailStatusProvider =
         return null;
       }
     });
+
+/// The phone API for the signed-in session (adding or changing the number).
+/// Null while signed out.
+final phoneApiProvider = Provider<PhoneApi?>((ref) {
+  final token = _stableSessionToken(ref);
+  if (token == null) return null;
+  return ref
+      .read(authApiProvider)
+      .phoneApiFor(token, client: ref.read(authenticatedHttpClientProvider));
+});
 
 /// The phone on this account (typed in at sign-up), for the Email & phone screen.
 /// Null while signed out, on an older server, or on failure.

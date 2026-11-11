@@ -39,6 +39,12 @@ class SharedExpensesRoute extends ConsumerStatefulWidget {
 }
 
 class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
+  static final _loadingHub = SharedHubPresentation(
+    friends: SharedPage(state: SharedLoadState.loading),
+    groups: SharedPage(state: SharedLoadState.loading),
+    activity: SharedPage(state: SharedLoadState.loading),
+  );
+
   /// The last screen we could build. Once there is one, a failed refresh
   /// never replaces it with an error: the person keeps what they were seeing.
   SharedHubPresentation? _data;
@@ -60,10 +66,11 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
 
   void _changed() {
     final runtime = _runtime;
-    if (!mounted || runtime == null || runtime.busy) return;
+    if (!mounted || runtime == null) return;
     // Reload only when the server's data really changed; an idle refresh
-    // used to re-fetch every page each time it finished.
-    if (runtime.dataVersion != _seenVersion) {
+    // used to re-fetch every page each time it finished. Flags (add friend,
+    // create group) can arrive mid-refresh, so a plain rebuild is always safe.
+    if (!runtime.busy && runtime.dataVersion != _seenVersion) {
       _seenVersion = runtime.dataVersion;
       _reload();
     } else {
@@ -89,6 +96,13 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
           setState(() => _data = saved);
         }
       } catch (_) {}
+      // Just loaded live and nothing changed since: ask the server nothing.
+      if (_data != null &&
+          runtime.hubFresh() &&
+          _searches.isEmpty &&
+          _history.values.every((pages) => pages.length == 1)) {
+        return;
+      }
     }
     try {
       final fresh = await _load();
@@ -206,13 +220,12 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
                   },
                 );
               }
-              return const Scaffold(
-                body: Center(child: CircularProgressIndicator()),
-              );
             }
+            // Nothing saved yet (first launch after install): open the page
+            // at once with each tab loading, and let the live data fill in.
             return SharedExpensesScreen(
               key: ValueKey(runtime.store.namespace),
-              data: data,
+              data: data ?? _loadingHub,
               header: SharedInviteInbox(
                 runtime: runtime,
                 onJoined: _reload,
@@ -230,7 +243,7 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
                   : null,
               onRetry: (_) => _reload(),
               onLoadMore: (tab) {
-                final view = data;
+                final view = data ?? _loadingHub;
                 final next = switch (tab) {
                   SharedHubTab.friends => view.friends.nextCursor,
                   SharedHubTab.groups => view.groups.nextCursor,
@@ -353,9 +366,9 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
   void _changed() {
     // A split this person left is gone from their device; do not reload it.
     final runtime = _runtime;
-    if (!mounted || runtime == null || runtime.busy) return;
+    if (!mounted || runtime == null) return;
     if (runtime.store.isContextRevoked(widget.contextId)) return;
-    if (runtime.dataVersion != _seenVersion) {
+    if (!runtime.busy && runtime.dataVersion != _seenVersion) {
       _seenVersion = runtime.dataVersion;
       _reload();
     } else {
@@ -394,6 +407,11 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
           setState(() => _data = saved);
         }
       } catch (_) {}
+      if (_data != null &&
+          runtime.groupFresh(widget.contextId) &&
+          _history.values.every((pages) => pages.length == 1)) {
+        return;
+      }
     }
     try {
       final fresh = await _load();
