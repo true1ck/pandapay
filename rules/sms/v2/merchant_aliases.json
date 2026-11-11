@@ -768,5 +768,65 @@
     "alias": "L N B FILLING ST",
     "merchantKey": "L N B FILLING STAT",
     "kind": "variant"
+  },
+  {
+    "alias": "DOMINOSPIZZA",
+    "merchantKey": "DOMINOS",
+    "kind": "variant"
+  },
+  {
+    "alias": "PIZZAHUT",
+    "merchantKey": "PIZZA HUT",
+    "kind": "variant"
+  },
+  {
+    "alias": "BURGERKING",
+    "merchantKey": "BURGER KING",
+    "kind": "variant"
+  },
+  {
+    "alias": "CAFECOFFEEDAY",
+    "merchantKey": "CAFE COFFEE DAY",
+    "kind": "variant"
+  },
+  {
+    "alias": "ZEPTO MARKETPLAC",
+    "merchantKey": "ZEPTO",
+    "kind": "variant"
+  },
+  {
+    "alias": "ZEPTO MA",
+    "merchantKey": "ZEPTO",
+    "kind": "variant"
+  },
+  {
+    "alias": "FLIPKART INTERNE",
+    "merchantKey": "FLIPKART",
+    "kind": "variant"
+  },
+  {
+    "alias": "AMAZON SELLER SE",
+    "merchantKey": "AMAZON",
+    "kind": "variant"
+  },
+  {
+    "alias": "AIR FIBER PAYMEN",
+    "merchantKey": "AIR FIBER",
+    "kind": "variant"
+  },
+  {
+    "alias": "AIRFIBER",
+    "merchantKey": "AIR FIBER",
+    "kind": "variant"
+  },
+  {
+    "alias": "ROPPEN TRANSPORT",
+    "merchantKey": "RAPIDO",
+    "kind": "variant"
+  },
+  {
+    "alias": "THE SOULED STOR",
+    "merchantKey": "THE SOULED STORE",
+    "kind": "variant"
   }
 ]

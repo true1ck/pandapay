@@ -4987,5 +4987,1666 @@
     "category": "government",
     "priority": 800,
     "source": "catalogue"
+  },
+  {
+    "merchantKey": "POPEYES",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BAKEHOUSE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BAKERS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PATISSERIE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PIZZERIA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "EATERY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "EATERIES",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CAFES",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CAFETERIA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "NON VEG",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PURE VEG",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "OVEN STORY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "LA PINOZ",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TACO BELL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "KRISPY KREME",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TIM HORTONS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CHAI SUTTA BAR",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DISTRICT DINING",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "WOW CHINA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BIRYANI BY KILO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "EAT FIT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FRESHMENU",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "LUNCHBOX",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SMOOR",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MAGNOLIA BAKERY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CINNABON",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CLINICS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "HOSPITALS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PHARMACIES",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DENTIST",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "OPTICALS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PATHLABS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PATH LAB",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PHYSIOTHERAPY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MEDIBUDDY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "METROPOLIS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ANYTIME FITNESS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "GOLDS GYM",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "HEALTHIANS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "REDCLIFFE LABS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "AGILUS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "LYBRATE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "EYE CARE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SKIN CLINIC",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DIAGNOSTIC CENTRE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DIAGNOSTIC CENTER",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "AIR FIBER",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "XSTREAM FIBER",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "XSTREAM",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "D2H",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "AIRTEL DIGITAL TV",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BWSSB",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BHARATGAS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ADANI TOTAL GAS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MEGHBELA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "YOU BROADBAND",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TIKONA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SPECTRANET",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TATA POWER DELHI",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MSEDCL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BSNL FTTH",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SITI BROADBAND",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "HATHWAY BROADBAND",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TRULYMADLY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BUMBLE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TINDER",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SHAADI",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "JEEVANSATHI",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BHARATMATRIMONY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "HAPPN",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "APPLE MUSIC",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "KUKU FM",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PRATILIPI",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CRUNCHYROLL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DISCOVERY PLUS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "LIONSGATE PLAY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SUN NXT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "HOICHOI",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MUBI",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "STEAM GAMES",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PLAYSTATION",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "XBOX",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "EPIC GAMES",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "NINTENDO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TICKETNEW",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PAYTM INSIDER",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "INSIDER IN",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TUTEDUDE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SKILLSHARE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DUOLINGO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "LEETCODE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CODING NINJAS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "NEWTON SCHOOL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "GREAT LEARNING",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "KHAN ACADEMY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TESTBOOK",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ADDA247",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "GRADEUP",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CAREERS360",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "EDX",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MASAI SCHOOL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ALMABETTER",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CODEACADEMY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DATACAMP",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PLURALSIGHT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MASTERCLASS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "WAKEFIT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SLEEPYCAT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "THE SOULED STORE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BOAT LIFESTYLE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PURPLLE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SUGAR COSMETICS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BLUESTONE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CARATLANE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "VIJAY SALES",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "LIFESTYLE STORES",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MAX FASHION",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "H M HENNES",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CROSSWORD",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "HOME CENTRE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PURE COTTON",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FABINDIA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "LIBAS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "RATNADEEP",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "NATURE S BASKET",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SPAR HYPERMARKET",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BIG BAZAAR",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FRESHWORLD",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ORGANIC INDIA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DUNZO DAILY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "LE TRAVENUES",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "IBIBO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ZOOMCAR",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MAKEMYTRIP INDIA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "NHAI",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TREEBO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FABHOTELS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "LEMON TREE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "RELIANCE BP",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PETROL PUMP",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FUEL STATION",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "NYKAA",
+    "match": "prefix",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DOMINOS",
+    "match": "prefix",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "STARBUCKS",
+    "match": "prefix",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MCDONALD",
+    "match": "prefix",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BURGERKING",
+    "match": "prefix",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PIZZAHUT",
+    "match": "prefix",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "AIRFIBER",
+    "match": "prefix",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MAKEMYTRIP",
+    "match": "prefix",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BIGBASKET",
+    "match": "prefix",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MYNTRA",
+    "match": "prefix",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 600,
+    "source": "catalogue"
   }
 ]

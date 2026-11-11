@@ -88,6 +88,15 @@
     }
   },
   {
+    "id": "CPP-KIWI-CARD-PAY",
+    "vpaPattern": null,
+    "namePattern": "^GO ?KIWI TECH\\b",
+    "purpose": "card_payment",
+    "targetInstrument": {
+      "kind": "credit_card"
+    }
+  },
+  {
     "id": "CPP-BBPS-BILLDESK-CARD",
     "vpaPattern": "^(?:bbps|billdesk)[\\w.-]*(?:creditcard|ccbill|cc)[\\w.-]*@",
     "namePattern": "^(?:BBPS|BILL ?DESK)\\b[^\\n]{0,30}?\\b(?:CREDIT ?CARD|CC)\\b",

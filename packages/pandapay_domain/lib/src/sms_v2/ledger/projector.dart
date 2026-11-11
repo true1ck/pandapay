@@ -6,7 +6,7 @@ import '../contract/fact.dart';
 import '../contract/instrument.dart';
 import '../contract/interfaces.dart';
 import '../contract/ledger_entry.dart';
-import '../instruments/instrument_resolver.dart' show instrumentByNumberOnly;
+import '../instruments/instrument_resolver.dart' show instrumentByNumberOnly, rejectedByNumberOnly;
 import '../category/merchant_key.dart';
 
 const spendEventTypes = {
@@ -72,7 +72,11 @@ Instrument? instrumentForFact(
   if (m == null) return null;
   // A notice that names no bank points at an account by its number alone.
   if (m.issuerSlug == null) {
-    return instrumentByNumberOnly(m.kind, m.maskDigits, instruments.values);
+    // A live account wins. When the only matches are rejected ones, return the
+    // rejected account so the caller hides the movement instead of counting it
+    // to an account nobody can name.
+    return instrumentByNumberOnly(m.kind, m.maskDigits, instruments.values) ??
+        rejectedByNumberOnly(m.kind, m.maskDigits, instruments.values);
   }
   final matches = instruments.values
       .where(
@@ -216,9 +220,46 @@ class DefaultLedgerProjector implements LedgerProjector {
       return matches.length == 1 ? matches.single : null;
     }
 
+    /// A card bill paid through a bill-pay app: the app's receipt names the card
+    /// ("Your <issuer> credit card ending 1234 bill ... has been paid"), though
+    /// the bank debit only names the app. The receipt joined the event as a
+    /// `duplicate_notice`; it picks the destination card when exactly one card
+    /// fits its number (and its issuer name, when two cards share the digits).
+    Instrument? receiptCard() {
+      if (event.type != EventType.cardBillPayment) return null;
+      for (final leg in event.legs) {
+        if (leg.role != LegRole.duplicateNotice) continue;
+        final receipt = factsById[leg.factId];
+        if (receipt is! MovementFact ||
+            receipt.evidenceOnly != true ||
+            receipt.purpose != MovementPurpose.cardPayment) {
+          continue;
+        }
+        final mask = receipt.counterparty?.accountMask;
+        if (mask == null || mask.isEmpty) continue;
+        final name = normalizeMerchantText(receipt.counterparty?.name ?? '');
+        final cards = instrumentsById.values
+            .where(
+              (i) =>
+                  i.kind == InstrumentKind.creditCard &&
+                  i.status != InstrumentStatus.rejected &&
+                  i.maskDigits == mask,
+            )
+            .toList();
+        if (cards.length == 1 && name.isEmpty) return cards.single;
+        final named = cards
+            .where(
+              (i) => name.contains(normalizeMerchantText(i.issuerSlug)),
+            )
+            .toList();
+        if (named.length == 1) return named.single;
+      }
+      return null;
+    }
+
     final broker = investment ? uniqueTarget(InstrumentKind.broker) : null;
     final destination = transfer && credit == null
-        ? uniqueTarget(fallbackTarget)
+        ? uniqueTarget(fallbackTarget) ?? receiptCard()
         : null;
     final from = transfer
         ? own(debit, InstrumentKind.bankAccount)

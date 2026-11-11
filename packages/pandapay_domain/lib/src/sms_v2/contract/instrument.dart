@@ -115,6 +115,8 @@ final class Instrument extends JsonValue {
   /// A copy with the given fields replaced. Pass `null` explicitly through the
   /// `clear*` flags to null a nullable field.
   Instrument copyWith({
+    String? maskDigits,
+    int? maskLength,
     InstrumentStatus? status,
     String? displayName,
     String? userCardId,
@@ -135,8 +137,8 @@ final class Instrument extends JsonValue {
         instrumentId: instrumentId,
         kind: kind,
         issuerSlug: issuerSlug,
-        maskDigits: maskDigits,
-        maskLength: maskLength,
+        maskDigits: maskDigits ?? this.maskDigits,
+        maskLength: maskLength ?? this.maskLength,
         displayName: displayName ?? this.displayName,
         status: status ?? this.status,
         userCardId: userCardId ?? this.userCardId,

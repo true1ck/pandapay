@@ -530,6 +530,15 @@ class SmsV2Pipeline {
               ? namespace.substring(5)
               : namespace,
           observedAt: fact.observedAt,
+          // Money that moved on a card is proof the card exists, even when the
+          // issuer never prints its number. A statement, a balance or a hint is
+          // not: those never create a card without a number.
+          createWithoutMask: fact is MovementFact && fact.evidenceOnly != true,
+          // A card payment receipt may print the card ACCOUNT number, not the
+          // card's own: it must not complete a card that has no number yet.
+          adoptNumberlessCard: !(fact is MovementFact &&
+              fact.direction == Direction.credit &&
+              fact.purpose == MovementPurpose.cardPayment),
         );
         switch (outcome) {
           case InstrumentResolved(:final resolution)
@@ -569,6 +578,19 @@ class SmsV2Pipeline {
                 : mention.kind == null
                 ? 'issuer_mask'
                 : 'exact_key';
+          case InstrumentReviewNeeded(
+            reason: InstrumentReviewReason.rejected,
+            :final candidates,
+          ):
+            // The user said this account or card is not theirs ("Not mine"). A
+            // later message about it is not a question: link the fact to it so
+            // its money stays hidden (the ledger drops movements on a rejected
+            // instrument) and raise nothing for the person to answer. The
+            // instrument itself is not written or uploaded again.
+            if (candidates.isNotEmpty) {
+              instrumentIds[fact.factId] = candidates.first.instrumentId;
+              steps[fact.factId] = 'rejected';
+            }
           case InstrumentReviewNeeded(:final reason):
             review.add(
               ReviewItem(
