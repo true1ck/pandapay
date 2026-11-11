@@ -73,7 +73,7 @@ services:
       PANDAPAY_GIT_SHA: '${PANDAPAY_GIT_SHA:-}'
       PANDAPAY_GIT_REF: '${PANDAPAY_GIT_REF:-}'
       PANDAPAY_DEPLOYED_AT: '${PANDAPAY_DEPLOYED_AT:-}'
-      ADMIN_HEALTH_PROBES: '${ADMIN_HEALTH_PROBES:-api=https://api.pandapath.site/ready,auth=https://auth.pandapath.site/ready}'
+      ADMIN_HEALTH_PROBES: '${ADMIN_HEALTH_PROBES:-api=https://api.${PANDAPAY_DOMAIN:?Set PANDAPAY_DOMAIN in .env.prod}/ready,auth=https://auth.${PANDAPAY_DOMAIN}/ready}'
       ADMIN_INTROSPECTION_SERVICE_SECRET: '${ADMIN_INTROSPECTION_SERVICE_SECRET:?}'
       # Signs SMS rule sets on publish, pause and rollback. Never on the public API host.
       SMS_RULES_SIGNING_KEY: '${SMS_RULES_SIGNING_KEY:?}'

@@ -2,9 +2,11 @@ default_platform(:android)
 
 platform :android do
   APP_ID = "app.pandapay.pandapay"
-  PROD_API_URL = "https://api.pandapath.site"
-  PROD_AUTH_URL = "https://auth.pandapath.site"
-  PROD_LEGAL_URL = "https://api.pandapath.site/legal/"
+  # One setting for the deployment: export PANDAPAY_DOMAIN=example.com before running a lane.
+  PANDAPAY_DOMAIN = ENV.fetch("PANDAPAY_DOMAIN") { UI.user_error!("Set PANDAPAY_DOMAIN (e.g. example.com)") }
+  PROD_API_URL = "https://api.#{PANDAPAY_DOMAIN}"
+  PROD_AUTH_URL = "https://auth.#{PANDAPAY_DOMAIN}"
+  PROD_LEGAL_URL = "#{PROD_API_URL}/legal/"
 
   private_lane :build_prod_bundle do |options|
     build_number = Integer(options.fetch(:build_number))

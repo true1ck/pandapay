@@ -73,14 +73,14 @@ Map<String, Object?> _status() {
     'checks': [
       {
         'key': 'api',
-        'host': 'api.pandapath.site',
+        'host': 'api.pandapath.live',
         'ok': true,
         'httpStatus': 200,
         'latencyMs': 113,
       },
       {
         'key': 'auth',
-        'host': 'auth.pandapath.site',
+        'host': 'auth.pandapath.live',
         'ok': false,
         'httpStatus': null,
         'latencyMs': 3000,
