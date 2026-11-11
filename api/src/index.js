@@ -215,8 +215,10 @@ app.get('/profile', requireAuth, async (req, res) => {
 
 /**
  * PATCH /profile — the signed-in user edits their own display name. Only the
- * name is writable here; the row is found by the authenticated id (never the
- * body) and RLS keeps it to their own row.
+ * name is writable here, and the row is the authenticated user's (never an id
+ * from the body). app_user has no UPDATE on profiles (setup_app_role.sql), so the
+ * write goes through promotions.set_current_user_display_name, which changes just
+ * that one column of the caller's own row.
  */
 app.patch('/profile', requireAuth, async (req, res) => {
   const body = req.body;
@@ -230,15 +232,15 @@ app.patch('/profile', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'display_name_invalid' });
   }
   try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
-        'UPDATE profiles SET display_name = $2, updated_at = now() WHERE id = $1 RETURNING *',
-        [req.userId, name],
-      )
-    );
+    const result = await withUserClient(req.userId, async (client) => {
+      await client.query('SELECT promotions.set_current_user_display_name($1::text)', [name]);
+      return client.query('SELECT * FROM profiles WHERE id = $1', [req.userId]);
+    });
     if (result.rows.length === 0) return res.status(404).json({ error: 'profile_not_found' });
     return res.json({ profile: result.rows[0] });
   } catch (err) {
+    if (err?.code === '22023') return res.status(400).json({ error: 'display_name_invalid' });
+    if (err?.code === 'P0002') return res.status(404).json({ error: 'profile_not_found' });
     console.error('PATCH /profile error', safeErrorCode(err));
     return res.status(500).json({ error: 'internal_error' });
   }
