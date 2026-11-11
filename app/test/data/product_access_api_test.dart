@@ -218,7 +218,7 @@ void main() {
 
     test('accepts only PandaPay invite links and normalizes their code', () {
       expect(
-        invitationCodeFromUri(Uri.parse('https://pandapay.app/i/panda-abc123')),
+        invitationCodeFromUri(Uri.parse('https://pandapay.pandapath.live/i/panda-abc123')),
         'PANDA-ABC123',
       );
       expect(

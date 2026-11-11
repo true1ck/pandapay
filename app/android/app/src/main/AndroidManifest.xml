@@ -108,7 +108,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
                     android:scheme="https"
-                    android:host="pandapay.app"
+                    android:host="pandapay.pandapath.live"
                     android:pathPrefix="/i/" />
             </intent-filter>
             <intent-filter>

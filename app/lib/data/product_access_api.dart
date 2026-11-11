@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_exception.dart';
 import 'consent_policy.dart';
+import '../features/shared_expenses/data/shared_invitations.dart' show sharedInviteHost;
 
 /// The terms version recorded at activation. The API compares it with its
 /// `PRODUCT_TERMS_VERSION`, which must be the same date.
@@ -372,7 +373,7 @@ class PendingInvitationStore {
 String? invitationCodeFromUri(Uri uri) {
   final segments = uri.pathSegments;
   if (uri.scheme == 'https' &&
-      uri.host.toLowerCase() == 'pandapay.app' &&
+      uri.host.toLowerCase() == sharedInviteHost &&
       segments.length == 2 &&
       segments.first.toLowerCase() == 'i') {
     return PendingInvitationStore.normalizeCode(segments[1]);

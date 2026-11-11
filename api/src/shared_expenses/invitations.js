@@ -5,9 +5,7 @@ const {record,fail}=require('./validation');
 const {encryptPhone,decryptPhone}=require('./phone_crypto');
 const {cleanLabel}=require('./label');
 const {describePhone}=require('./phone_display');
-// Public origin of split invite links. Must match the host in the app's Android
-// manifest and assetlinks; override per environment.
-const INVITE_BASE_URL=(process.env.INVITE_BASE_URL||'https://pandapay.pandapath.live').replace(/\/+$/,'');
+const {PUBLIC_LINK_BASE_URL:INVITE_BASE_URL}=require('../public_links');
 const TOKEN=/^[A-Za-z0-9_-]{43}$/;
 function normalizePhone(value) {
   if(typeof value!=='string'||value.length>40||!/^[+0-9 ()-]+$/.test(value))fail('INVALID_INPUT','phoneNumber');
@@ -116,19 +114,19 @@ function requestHash(body) {return crypto.createHash('sha256').update(JSON.strin
  * touches the database: opening or crawling a link must not change any state.
  * The Play Store referrer carries the token so the installed app can resume it.
  */
-function landingPage(token,packageId) {
-  const store='https://play.google.com/store/apps/details?id='+encodeURIComponent(packageId)+'&referrer='+encodeURIComponent('split_join='+token);
-  const open='pandapay://split/join/'+token;
+function landingPage(token,packageId,kind='split') {
+  const referral=kind==='referral';
+  const store='https://play.google.com/store/apps/details?id='+encodeURIComponent(packageId)+'&referrer='+encodeURIComponent((referral?'invite_code=':'split_join=')+token);
+  const open=referral?'pandapay://i/'+token:'pandapay://split/join/'+token;
   return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'+
   '<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><title>Join on PandaPay</title>'+
   '<style>body{margin:0;font-family:system-ui,sans-serif;background:#f6f8f4;color:#2a313b;display:flex;min-height:100vh;align-items:center;justify-content:center}'+
   'main{max-width:380px;padding:28px;text-align:center}h1{font-size:22px;margin:0 0 10px}p{color:#3c4652;line-height:1.5}'+
   'a.btn{display:block;margin-top:14px;padding:14px;border-radius:14px;text-decoration:none;font-weight:600}'+
   'a.p{background:#2a313b;color:#c9f55a}a.s{border:1px solid #aeb8c2;color:#2a313b}small{display:block;margin-top:18px;color:#6b7684}</style></head><body><main>'+
-  '<h1>You’ve been invited to split expenses</h1>'+
-  '<p>Install PandaPay, sign in, and you’ll be asked to join. Joining never accepts any expense or debt on its own.</p>'+
+  (referral?'<h1>You’ve been invited to PandaPay</h1><p>Install PandaPay and your invite will be applied when you sign up.</p>':'<h1>You’ve been invited to split expenses</h1><p>Install PandaPay, sign in, and you’ll be asked to join. Joining never accepts any expense or debt on its own.</p>')+
   '<a class="btn p" href="'+store+'">Install PandaPay</a><a class="btn s" href="'+open+'">Already have the app? Open it</a>'+
-  '<small>Opening this page does not join anyone.</small></main></body></html>';
+  '<small>'+(referral?'Opening this page does not create an account.':'Opening this page does not join anyone.')+'</small></main></body></html>';
 }
 function stripPhone(items) {return (items||[]).map(({claimantPhone,...rest})=>rest);}
 function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,androidPackageId='app.pandapay.pandapay',notify=async()=>0,phone:phoneOpts={enabled:()=>false,ring:()=>null},poolBusy=()=>false}) {
@@ -139,6 +137,12 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
   app.get('/.well-known/assetlinks.json',(req,res)=>{
     const fingerprints=(process.env.ANDROID_CERT_SHA256||'').split(',').map(s=>s.trim().toUpperCase()).filter(Boolean);
     res.set('Cache-Control','public, max-age=300').json(fingerprints.length?[{relation:['delegate_permission/common.handle_all_urls'],target:{namespace:'android_app',package_name:androidPackageId,sha256_cert_fingerprints:fingerprints}}]:[]);
+  });
+  app.get('/i/:code',(req,res)=>{
+    res.set({'Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Robots-Tag':'noindex, nofollow','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"});
+    const code=String(req.params.code).trim().toUpperCase();
+    if(code.length<6||code.length>32||!/^[A-Z0-9]+(?:-[A-Z0-9]+)*$/.test(code))return res.status(404).type('text/plain').send('Not found');
+    res.type('html').send(landingPage(code,androidPackageId,'referral'));
   });
   app.get('/split/join/:token',(req,res)=>{
     res.set({'Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Robots-Tag':'noindex, nofollow','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"});

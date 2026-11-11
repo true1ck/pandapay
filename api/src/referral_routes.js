@@ -1,4 +1,5 @@
 'use strict';
+const { PUBLIC_LINK_BASE_URL } = require('./public_links');
 
 const crypto = require('node:crypto');
 const config = require('./config');
@@ -289,7 +290,7 @@ function registerReferralRoutes(app) {
       const code = await jsonRoutine(req.userId,
         'SELECT promotions.ensure_current_invitation_code() AS result');
       if (typeof code !== 'string') return res.status(503).json({ error: 'referral_code_unavailable' });
-      res.json({ code, shareLink: `https://pandapay.app/i/${encodeURIComponent(code)}` });
+      res.json({ code, shareLink: `${PUBLIC_LINK_BASE_URL}/i/${encodeURIComponent(code)}` });
     } catch (error) {
       databaseError(res, error);
     }

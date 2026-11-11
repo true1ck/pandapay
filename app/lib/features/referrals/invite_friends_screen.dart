@@ -8,6 +8,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/referral_repository.dart';
+import '../shared_expenses/data/shared_invitations.dart' show sharedInviteHost;
 import 'reward_spin_dialog.dart';
 import '../subscription_credits/subscription_credits_screen.dart';
 
@@ -301,7 +302,7 @@ class _InviteFriendsScreenState extends ConsumerState<InviteFriendsScreen>
         .toList();
     final shareLink = dashboard.code == null
         ? null
-        : 'https://pandapay.app/i/${dashboard.code}';
+        : 'https://$sharedInviteHost/i/${dashboard.code}';
 
     return RefreshIndicator(
       onRefresh: () => _refresh(year),
