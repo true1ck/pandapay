@@ -214,6 +214,15 @@ List<LintIssue> lintBundle(RuleBundle bundle) {
       for (final k in const ['maskFrom', 'maskLengthFrom', 'productNameFrom', 'issuerSlugFrom']) {
         need(e.instrument?[k] as String?, 'emit[$i].instrument.$k');
       }
+      final maskGroup = e.instrument?['maskFrom'] as String?;
+      if (maskGroup != null && maskFollowsOpenSkip(r.match.pattern, maskGroup)) {
+        out.add(LintIssue(
+          'lint.mask.open_skip',
+          'emit[$i] takes its mask from "$maskGroup", which follows a wide skip over arbitrary text; '
+          'the digits can be a reference number. Introduce the mask with a closed list (ending, no, number) and mask characters',
+          ruleId: r.id,
+        ));
+      }
       for (final k in const ['nameFrom', 'vpaFrom', 'accountMaskFrom']) {
         need(e.counterparty?[k] as String?, 'emit[$i].counterparty.$k');
       }

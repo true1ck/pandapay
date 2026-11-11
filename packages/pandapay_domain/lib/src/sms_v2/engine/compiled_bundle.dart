@@ -19,7 +19,13 @@ import 'transforms.dart';
 /// (a markup fee and the transaction it was charged on, CCR-005). An older
 /// linker would join such a rule on its parameters alone, so the bundle that
 /// ships it requires 2.3.0.
-const String smsEngineVersion = '2.4.0';
+///
+/// 2.5.0: an emit `instrument` may say `issuerFromSender: false`, so a notice
+/// that never names the bank holding the account (a payer's "transferred to
+/// your account XXXX1234", sent by the payer's bank) does not take the sender's
+/// bank as the account's issuer; and a link-rule leg may match on `issuerKnown`.
+/// A 2.4.x engine refuses a bundle that uses either field.
+const String smsEngineVersion = '2.5.0';
 
 /// Why a bundle cannot be used.
 class BundleRefusedException implements Exception {

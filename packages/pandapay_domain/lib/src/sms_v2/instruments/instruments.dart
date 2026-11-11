@@ -2,3 +2,4 @@
 export 'apply_fact.dart';
 export 'golden_support.dart';
 export 'instrument_resolver.dart';
+export 'payment_pairing.dart';

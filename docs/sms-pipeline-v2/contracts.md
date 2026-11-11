@@ -248,6 +248,13 @@ A bundle is data, never code. The phone downloads it, checks the signature and r
 }
 ```
 
+Two optional fields tell the engine when a message does not speak for the account's own bank (engine 2.5.0; an older engine refuses a bundle that uses them, so `meta.json` requires 2.5.0):
+
+- `emit[].instrument.issuerFromSender: false` stops the sender's bank from becoming the account's issuer. Use it for a notice that comes from the payer's side ("transferred to your account XXXX1234 ... check with your bank"), where the number is the user's but the bank is not the sender. The fact then carries kind and number only; the resolver points it at the one account of that kind ending in that number (any issuer), and never creates an account from it. With none or several matches it stays unresolved.
+- `linkRules[].legs[].match.issuerKnown` accepts only movements whose instrument names its issuer (`true`) or does not (`false`). `LINK-DUP-ACCOUNT-CREDIT` uses it to join a payer-side notice to the bank's own record of the same credit: one money leg (the bank's record) and one `duplicate_notice`, in either arrival order.
+
+A mask capture must be introduced by a closed list (`ending`, `no`, `number`, mask characters), never by a wide skip over other text; `lint.mask.open_skip` refuses a rule whose mask group follows one, because the digits can then be a reference number.
+
 How the engine runs a message:
 
 1. Normalise the sender brand.

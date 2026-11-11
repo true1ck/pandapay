@@ -293,3 +293,37 @@ final RegExp _groupNameInPattern = RegExp(r'\(\?<([A-Za-z_]\w*)>');
 /// Names of the named groups declared in [pattern].
 Set<String> patternGroupNames(String pattern) =>
     {for (final m in _groupNameInPattern.allMatches(pattern)) m.group(1)!};
+
+/// How wide a skip may be before a mask capture. A gap of a few characters
+/// holds an introducer such as "no." or "ending"; anything wider can step over
+/// words and land on another number.
+const int maxMaskSkip = 6;
+
+final RegExp _openSkipBeforeCapture = RegExp(
+  r'(?:\[\^[^\]]*\]|\[\\s\\S\]|\[\\S\\s\]|\\S|\\W|\\D|\.)'
+  r'(\{\d*,?\d*\}|\*|\+)\??'
+  r'(?:\s|\\s\*|\(\?:[^()]*\)\??)*$',
+);
+
+/// True when the capture group [group] sits right behind a wide open skip (a
+/// negated class, `.`, `\S`, ... repeated more than [maxMaskSkip] times).
+///
+/// A mask that follows such a skip can latch onto any number after the card
+/// or account word: a reference, a UPI id, an amount. The digits printed after
+/// "card ending from UPI CR ADJ" are not a card. A mask must be introduced by
+/// a closed list of words (`ending`, `no`, `number`, ...) and mask characters.
+bool maskFollowsOpenSkip(String pattern, String group) {
+  final at = pattern.indexOf('(?<$group>');
+  if (at <= 0) return false;
+  final before = pattern.substring(at > 120 ? at - 120 : 0, at);
+  final m = _openSkipBeforeCapture.firstMatch(before);
+  if (m == null) return false;
+  final q = m.group(1)!;
+  if (q == '*' || q == '+') return true;
+  final bounds = RegExp(r'^\{(\d*),?(\d*)\}$').firstMatch(q);
+  if (bounds == null) return true;
+  final hasComma = q.contains(',');
+  final hi = hasComma ? bounds.group(2)! : bounds.group(1)!;
+  if (hi.isEmpty) return true; // {n,} has no upper bound
+  return int.parse(hi) > maxMaskSkip;
+}

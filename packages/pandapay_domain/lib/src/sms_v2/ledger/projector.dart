@@ -6,6 +6,7 @@ import '../contract/fact.dart';
 import '../contract/instrument.dart';
 import '../contract/interfaces.dart';
 import '../contract/ledger_entry.dart';
+import '../instruments/instrument_resolver.dart' show instrumentByNumberOnly;
 import '../category/merchant_key.dart';
 
 const spendEventTypes = {
@@ -68,7 +69,11 @@ Instrument? instrumentForFact(
   final resolved = instrumentIdByFactId[fact.factId];
   if (resolved != null) return instruments[resolved];
   final m = fact.instrument;
-  if (m == null || m.issuerSlug == null) return null;
+  if (m == null) return null;
+  // A notice that names no bank points at an account by its number alone.
+  if (m.issuerSlug == null) {
+    return instrumentByNumberOnly(m.kind, m.maskDigits, instruments.values);
+  }
   final matches = instruments.values
       .where(
         (i) =>

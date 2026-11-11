@@ -439,6 +439,7 @@ final class LinkLegMatch extends JsonValue {
     List<InstrumentKind>? instrumentKind,
     List<HoldPhase>? phase,
     this.evidenceOnly,
+    this.issuerKnown,
   })  : purpose = purpose == null ? null : List.unmodifiable(purpose),
         instrumentKind = instrumentKind == null ? null : List.unmodifiable(instrumentKind),
         phase = phase == null ? null : List.unmodifiable(phase);
@@ -454,6 +455,7 @@ final class LinkLegMatch extends JsonValue {
             ? null
             : [for (final k in j['phase'] as List) HoldPhase.fromWire(k as String)],
         evidenceOnly: j['evidenceOnly'] as bool?,
+        issuerKnown: j['issuerKnown'] as bool?,
       );
 
   final FactType? factType;
@@ -465,6 +467,11 @@ final class LinkLegMatch extends JsonValue {
   final List<HoldPhase>? phase;
   final bool? evidenceOnly;
 
+  /// True: only a movement whose instrument names its issuer. False: only one
+  /// that does not (a notice that never says which bank holds the account).
+  /// Null: either.
+  final bool? issuerKnown;
+
   @override
   Json toJson() => {
         if (factType != null) 'factType': factType!.wire,
@@ -473,6 +480,7 @@ final class LinkLegMatch extends JsonValue {
         if (instrumentKind != null) 'instrumentKind': [for (final k in instrumentKind!) k.wire],
         if (phase != null) 'phase': [for (final k in phase!) k.wire],
         if (evidenceOnly != null) 'evidenceOnly': evidenceOnly,
+        if (issuerKnown != null) 'issuerKnown': issuerKnown,
       };
 }
 

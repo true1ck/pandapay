@@ -427,5 +427,85 @@
     },
     "singleLeg": "complete",
     "priority": 55
+  },
+  {
+    "id": "LINK-DUP-ACCOUNT-CREDIT",
+    "eventType": "p2p_in",
+    "legs": [
+      {
+        "role": "credit_leg",
+        "match": {
+          "factType": "movement",
+          "direction": "credit",
+          "instrumentKind": [
+            "bank_account"
+          ],
+          "evidenceOnly": false,
+          "issuerKnown": true
+        }
+      },
+      {
+        "role": "duplicate_notice",
+        "match": {
+          "factType": "movement",
+          "direction": "credit",
+          "instrumentKind": [
+            "bank_account"
+          ],
+          "evidenceOnly": false,
+          "issuerKnown": false
+        }
+      }
+    ],
+    "join": {
+      "amountRole": "posted",
+      "amountTolerancePct": 0,
+      "windowHours": 72,
+      "reference": "prefer"
+    },
+    "singleLeg": "complete",
+    "priority": 54
+  },
+  {
+    "id": "LINK-DUP-CARD-PAYMENT",
+    "eventType": "card_bill_payment",
+    "legs": [
+      {
+        "role": "credit_leg",
+        "match": {
+          "factType": "movement",
+          "direction": "credit",
+          "purpose": [
+            "card_payment"
+          ],
+          "instrumentKind": [
+            "credit_card"
+          ],
+          "evidenceOnly": false
+        }
+      },
+      {
+        "role": "duplicate_notice",
+        "match": {
+          "factType": "movement",
+          "direction": "credit",
+          "purpose": [
+            "card_payment"
+          ],
+          "instrumentKind": [
+            "credit_card"
+          ],
+          "evidenceOnly": false
+        }
+      }
+    ],
+    "join": {
+      "amountRole": "posted",
+      "amountTolerancePct": 0,
+      "windowHours": 12,
+      "reference": "prefer"
+    },
+    "singleLeg": "complete",
+    "priority": 53
   }
 ]

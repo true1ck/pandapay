@@ -1469,6 +1469,8 @@ void main() {
         'LINK-DUP-NOTIFY': LinkRuleKind.duplicateNotice,
         'LINK-DUP-INVEST-DEBIT': LinkRuleKind.duplicateNotice,
         'LINK-DUP-INVEST-CREDIT': LinkRuleKind.duplicateNotice,
+        'LINK-DUP-ACCOUNT-CREDIT': LinkRuleKind.duplicateNotice,
+        'LINK-DUP-CARD-PAYMENT': LinkRuleKind.duplicateNotice,
       },
     );
   });

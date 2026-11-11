@@ -532,6 +532,13 @@ class SmsV2Pipeline {
           observedAt: fact.observedAt,
         );
         switch (outcome) {
+          case InstrumentResolved(:final resolution)
+              when resolution.created &&
+                  !cardPaymentMayCreateCard(fact, instrumentsById.values):
+            // A payment receipt does not create a second card for an issuer that
+            // already has one (it may name the card's account number). It stays
+            // unresolved; a spend alert or a statement creates the card.
+            break;
           case InstrumentResolved(:final resolution):
             final base = resolution.instrument;
             final update = applyFact(

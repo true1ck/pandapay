@@ -20,7 +20,7 @@
       },
       "trace": {
        "appVersion": "2",
-       "engineVersion": "2.4.0",
+       "engineVersion": "2.5.0",
        "bundleVersion": 0,
        "ruleId": null,
        "ruleVersion": null,
@@ -50,7 +50,7 @@
       },
       "trace": {
        "appVersion": "2",
-       "engineVersion": "2.4.0",
+       "engineVersion": "2.5.0",
        "bundleVersion": 0,
        "ruleId": "BRK-DEMAT-CREDIT-01",
        "ruleVersion": 1,
@@ -80,7 +80,7 @@
       },
       "trace": {
        "appVersion": "2",
-       "engineVersion": "2.4.0",
+       "engineVersion": "2.5.0",
        "bundleVersion": 0,
        "ruleId": null,
        "ruleVersion": null,
@@ -145,7 +145,7 @@
            "ruleId": "SUB-CC-STMT-SENT-01",
            "ruleVersion": 1,
            "bundleVersion": 0,
-           "engineVersion": "2.4.0",
+           "engineVersion": "2.5.0",
            "appVersion": "2"
           },
           "evidence": [],
@@ -177,7 +177,7 @@
       },
       "trace": {
        "appVersion": "2",
-       "engineVersion": "2.4.0",
+       "engineVersion": "2.5.0",
        "bundleVersion": 0,
        "ruleId": "SUB-CC-STMT-SENT-01",
        "ruleVersion": 1,
@@ -244,7 +244,7 @@
            "ruleId": "HDFC-CARD-SPEND-SPENTFIRST-CC",
            "ruleVersion": 1,
            "bundleVersion": 0,
-           "engineVersion": "2.4.0",
+           "engineVersion": "2.5.0",
            "appVersion": "2"
           },
           "evidence": [],
@@ -374,7 +374,7 @@
            "ruleId": "USER-CORRECTION",
            "ruleVersion": 1,
            "bundleVersion": 0,
-           "engineVersion": "2.4.0",
+           "engineVersion": "2.5.0",
            "appVersion": "2"
           },
           "evidence": [],
@@ -447,7 +447,7 @@
       },
       "trace": {
        "appVersion": "2",
-       "engineVersion": "2.4.0",
+       "engineVersion": "2.5.0",
        "bundleVersion": 0,
        "ruleId": "HDFC-CARD-SPEND-SPENTFIRST-CC",
        "ruleVersion": 1,
@@ -477,7 +477,7 @@
       },
       "trace": {
        "appVersion": "2",
-       "engineVersion": "2.4.0",
+       "engineVersion": "2.5.0",
        "bundleVersion": 0,
        "ruleId": "HDFC-CARD-SPEND-SPENTFIRST-CC",
        "ruleVersion": 1,

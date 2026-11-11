@@ -382,6 +382,9 @@
               "type": "string",
               "minLength": 1
             },
+            "issuerFromSender": {
+              "type": "boolean"
+            },
             "maskFrom": {
               "type": "string",
               "minLength": 1
@@ -841,6 +844,9 @@
                     }
                   },
                   "evidenceOnly": {
+                    "type": "boolean"
+                  },
+                  "issuerKnown": {
                     "type": "boolean"
                   }
                 }

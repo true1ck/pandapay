@@ -897,7 +897,9 @@ class RuleEngine implements SmsInterpreter {
         if (issuer == null && inst['issuerSlugFrom'] != null) {
           issuer = ctx.group(inst['issuerSlugFrom'] as String)?.toLowerCase();
         }
-        issuer ??= sender?.issuerSlug;
+        // The sender's bank is the account's issuer unless the rule says the
+        // message does not tell which bank holds the account.
+        if (inst['issuerFromSender'] != false) issuer ??= sender?.issuerSlug;
         String? maskDigits, raw;
         int? maskLength;
         final maskGroup = inst['maskFrom'] as String?;

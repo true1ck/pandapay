@@ -5,6 +5,7 @@ import '../contract/instrument.dart';
 import '../contract/interfaces.dart';
 import '../contract/rule_bundle.dart';
 import '../contract/types.dart';
+import '../instruments/instrument_resolver.dart' show instrumentByNumberOnly;
 import 'link_context.dart';
 import 'person_name.dart';
 import 'receipt_policy.dart';
@@ -628,6 +629,7 @@ class _Run {
       final ev = f is MovementFact && f.evidenceOnly == true;
       if (ev != m.evidenceOnly) return false;
     }
+    if (m.issuerKnown != null && _issuerKnown(f) != m.issuerKnown) return false;
     if (kinds[rule] == LinkRuleKind.mandateCharge &&
         leg.role == LegRole.charge) {
       if (f is! MovementFact || f.direction != Direction.debit) return false;
@@ -923,11 +925,13 @@ class _Run {
     final moneyLeg = rule.legs
         .where((l) => l.role != LegRole.duplicateNotice)
         .firstOrNull;
-    if (noticeLeg == null ||
-        moneyLeg == null ||
-        !_legMatches(rule, noticeLeg, f)) {
-      return const [];
-    }
+    if (noticeLeg == null || moneyLeg == null) return const [];
+    // A fact joins as the notice, or, when the rule tells the two apart (a
+    // notice that names no bank against a record that does), as the record
+    // that an earlier notice was waiting for. Arrival order never matters.
+    final asNotice = _legMatches(rule, noticeLeg, f);
+    if (!asNotice && !_legMatches(rule, moneyLeg, f)) return const [];
+    final otherLeg = asNotice ? moneyLeg : noticeLeg;
     final byEvent = <String, _Cand>{};
     for (final g in byAmount[a] ?? const <Fact>[]) {
       if (g is! MovementFact ||
@@ -935,7 +939,7 @@ class _Run {
           g.sourceKey == f.sourceKey)
         continue;
       if (!processed.contains(g.factId)) continue;
-      if (!_legMatches(rule, moneyLeg, g)) continue;
+      if (!_legMatches(rule, otherLeg, g)) continue;
       if (!_within(f, g, rule.join.windowHours)) continue;
       final eventId = eventOfFact[g.factId];
       if (eventId == null || byEvent.containsKey(eventId)) continue;
@@ -1416,7 +1420,15 @@ class _Run {
     // Otherwise the one that comes first in time, so arrival order cannot
     // change which notice is the money.
     final gi = _instId(g), fi = _instId(f);
-    final swap = (gi == null) != (fi == null) ? gi == null : _order(f, g) < 0;
+    // A notice that says which bank holds the account is the record of the
+    // money; one that does not (a payer's "transferred to your account") only
+    // confirms it. Then the one that names the account; then the earlier one.
+    final gKnown = _issuerKnown(g), fKnown = _issuerKnown(f);
+    final swap = gKnown != fKnown
+        ? !gKnown
+        : (gi == null) != (fi == null)
+        ? gi == null
+        : _order(f, g) < 0;
     final legs = <EventLeg>[
       for (final l in e.legs)
         if (swap && l.factId == g.factId)
@@ -1427,6 +1439,12 @@ class _Run {
     ];
     var type = e.type;
     if (type == EventType.unknown) type = _fallback(f)?.type ?? type;
+    // The record names the money: when it replaces a notice that never named
+    // the bank, an event typed only by the notice's own purpose (no link rule
+    // gave it a type) is retyped by the record.
+    if (swap && !gKnown && fKnown && e.linkRuleId == null) {
+      type = _fallback(f)?.type ?? type;
+    }
     _put(
       _build(
         e.eventId,
@@ -2019,7 +2037,15 @@ class _Run {
     final id = idByFact[f.factId];
     if (id != null) return context.instrumentsById[id];
     final m = f.instrument;
-    if (m == null || m.issuerSlug == null) return null;
+    if (m == null) return null;
+    // A notice that names no bank points at an account by its number alone.
+    if (m.issuerSlug == null) {
+      return instrumentByNumberOnly(
+        m.kind,
+        m.maskDigits,
+        context.instrumentsById.values,
+      );
+    }
     if (m.maskDigits == null && m.kind == null) return null;
     Instrument? found;
     for (final i in context.instrumentsById.values) {
@@ -2036,6 +2062,11 @@ class _Run {
   String? _instId(Fact f) => _inst(f)?.instrumentId;
 
   InstrumentKind? _instKind(Fact f) => _inst(f)?.kind ?? f.instrument?.kind;
+
+  /// True when the fact's own text names the issuer of the instrument. A notice
+  /// that gives only a number ("to your account XXXX1234") does not, even when
+  /// the number later resolves to a known account.
+  bool _issuerKnown(Fact f) => f.instrument?.issuerSlug != null;
 
   bool _sameInstrument(Fact a, Fact b) {
     final x = _instId(a);

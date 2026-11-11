@@ -173,7 +173,13 @@ class DefaultInstrumentResolver implements InstrumentResolver {
   }) {
     final issuer = mention.issuerSlug;
     if (issuer == null || issuer.isEmpty) {
-      return const InstrumentNotCreated(InstrumentNotCreatedReason.noIssuer);
+      // A notice that gives only a number ("transferred to your account
+      // XXXX1234", sent by the payer's bank) names no issuer. It can only point
+      // at an account the user already has; it never creates one.
+      final only = instrumentByNumberOnly(mention.kind, mention.maskDigits, known);
+      return only == null
+          ? const InstrumentNotCreated(InstrumentNotCreatedReason.noIssuer)
+          : InstrumentResolved(InstrumentResolution(instrument: only, created: false));
     }
     final kind = mention.kind;
     final mask = _cleanMask(mention.maskDigits);
@@ -295,6 +301,29 @@ class DefaultInstrumentResolver implements InstrumentResolver {
     if (mask == null) return null;
     return RegExp(r'^\d{2,6}$').hasMatch(mask) ? mask : null;
   }
+}
+
+/// The one instrument of [kind] whose number [maskDigits] ends, across issuers,
+/// for a mention that names no issuer. Null when the number or kind is missing,
+/// when nothing matches, and when two or more do: a number printed without a
+/// bank is evidence for an account the user has, never a reason to pick between
+/// two of them. Instruments the user rejected are not candidates.
+Instrument? instrumentByNumberOnly(
+  InstrumentKind? kind,
+  String? maskDigits,
+  Iterable<Instrument> known,
+) {
+  final mask = DefaultInstrumentResolver._cleanMask(maskDigits);
+  if (kind == null || mask == null) return null;
+  final matches = [
+    for (final i in known)
+      if (i.kind == kind &&
+          i.status != InstrumentStatus.rejected &&
+          i.maskDigits != null &&
+          (i.maskDigits == mask || DefaultInstrumentResolver._sameNumberEnding(i.maskDigits, mask)))
+        i,
+  ];
+  return matches.length == 1 ? matches.single : null;
 }
 
 /// Issuer plus kind plus `••` plus digits, for example `HDFC Bank credit card ••5678`.

@@ -4500,7 +4500,7 @@
     ],
     "priority": 620,
     "match": {
-      "pattern": "^(?=[\\s\\S]{0,300}?\\bstatement\\b)(?=[\\s\\S]{0,300}?card\\b[^\\d\\n]{0,30}?(?:[x*•.]+\\s*)?(?<mask>\\d{4,16})\\b)(?=[\\s\\S]{0,300}?\\b(?:total\\s+(?:amount\\s+|amt\\s+|payment\\s+|payable\\s+)?(?:due|payable|outstanding|dues)|new\\s+balance|outstanding(?:\\s+balance|\\s+amount|\\s+amt)?|closing\\s+balance|amount\\s+due)\\b[^\\d\\n]{0,40}?(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?))(?:(?=[\\s\\S]{0,300}?\\bmin(?:imum)?\\b[^\\d\\n]{0,40}?(?:rs\\.?|inr|₹)\\s*(?<min>[\\d,]+(?:\\.\\d{1,2})?))|)(?=[\\s\\S]{0,320}?\\b(?:due(?:\\s+(?:date|on|by))?|pay(?:ment)?\\s+(?:by|before|on)|by|before)\\b[^\\d\\n]{0,12}?(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))",
+      "pattern": "^(?=[\\s\\S]{0,300}?\\bstatement\\b)(?=[\\s\\S]{0,300}?card\\b(?:\\s*(?:no|number)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{4,16})\\b)(?=[\\s\\S]{0,300}?\\b(?:total\\s+(?:amount\\s+|amt\\s+|payment\\s+|payable\\s+)?(?:due|payable|outstanding|dues)|new\\s+balance|outstanding(?:\\s+balance|\\s+amount|\\s+amt)?|closing\\s+balance|amount\\s+due)\\b[^\\d\\n]{0,40}?(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?))(?:(?=[\\s\\S]{0,300}?\\bmin(?:imum)?\\b[^\\d\\n]{0,40}?(?:rs\\.?|inr|₹)\\s*(?<min>[\\d,]+(?:\\.\\d{1,2})?))|)(?=[\\s\\S]{0,320}?\\b(?:due(?:\\s+(?:date|on|by))?|pay(?:ment)?\\s+(?:by|before|on)|by|before)\\b[^\\d\\n]{0,12}?(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))",
       "flags": "i",
       "rejectAny": [
         "payment received",
@@ -4568,7 +4568,7 @@
     ],
     "priority": 610,
     "match": {
-      "pattern": "^(?=[\\s\\S]{0,300}?card\\b[^\\d\\n]{0,30}?(?:[x*•.]+\\s*)?(?<mask>\\d{4,16})\\b)(?=[\\s\\S]*?\\bmin(?:imum)?\\b[^\\d\\n]{0,40}?(?:rs\\.?|inr|₹)\\s*(?<min>[\\d,]+(?:\\.\\d{1,2})?))(?=[\\s\\S]*?\\b(?:total\\s+(?:amount\\s+|amt\\s+|payment\\s+|payable\\s+)?(?:due|payable|outstanding|dues)|new\\s+balance|outstanding(?:\\s+balance|\\s+amount|\\s+amt)?|closing\\s+balance|amount\\s+due)\\b[^\\d\\n]{0,40}?(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?))(?=[\\s\\S]*?\\b(?:due(?:\\s+(?:date|on|by))?|pay(?:ment)?\\s+(?:by|before|on)|by|before)\\b[^\\d\\n]{0,12}?(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))",
+      "pattern": "^(?=[\\s\\S]{0,300}?card\\b(?:\\s*(?:no|number)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{4,16})\\b)(?=[\\s\\S]*?\\bmin(?:imum)?\\b[^\\d\\n]{0,40}?(?:rs\\.?|inr|₹)\\s*(?<min>[\\d,]+(?:\\.\\d{1,2})?))(?=[\\s\\S]*?\\b(?:total\\s+(?:amount\\s+|amt\\s+|payment\\s+|payable\\s+)?(?:due|payable|outstanding|dues)|new\\s+balance|outstanding(?:\\s+balance|\\s+amount|\\s+amt)?|closing\\s+balance|amount\\s+due)\\b[^\\d\\n]{0,40}?(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?))(?=[\\s\\S]*?\\b(?:due(?:\\s+(?:date|on|by))?|pay(?:ment)?\\s+(?:by|before|on)|by|before)\\b[^\\d\\n]{0,12}?(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))",
       "flags": "i",
       "rejectAny": [
         "payment received",
