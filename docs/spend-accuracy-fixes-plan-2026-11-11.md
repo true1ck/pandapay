@@ -140,6 +140,14 @@ Two differences from the one-off measurement quoted above: it now refuses an SMS
 
 Not done: reading a PDF into rows (E1), writing anything, the new source value, the screen (E3). `app/lib/data/statement_reconciler.dart` already checks a statement against itself at parse time (totals, transposed digits, refund and transfer pairs on `ParsedStatementLine`); E1 should feed its lines to `verifyStatement` rather than keep two checks that can disagree.
 
+**E1 built (12 Nov 2026), readers and the double-count guard; not yet tried on a real PDF.** The server never reads a PDF (`POST /statement-imports` takes rows the phone already parsed, and the password stays on the phone), and the phone's generic parser rejected every SBI-style row and read ICICI-style credits as debits. So:
+
+- `packages/pandapay_domain/lib/src/sms_v2/ledger/statement_layouts.dart`: `readBankStatement` picks the layout by counting row-shaped lines (not by a bank name) and returns `StatementRow`s plus the account, opening and closing balance and printed totals where a labelled line gives them. SBI style: two dates, debit and credit columns with a dash for empty, direction printed, narration that may wrap, a signed footer balance glued to the last row removed. ICICI style: serial number, dot dates, amount and balance, no direction; direction comes from the running balance through `verifyStatement`, and the first row needs the opening balance. A dated line that cannot be read is listed in `skipped`, never dropped or guessed.
+- `app/lib/data/pdf_statement_parser.dart`: `parseStatementText` tries these readers first and falls back to the generic reader. Rows that do not follow the running balance, or whose direction cannot be read, carry a review reason; the statement's problems are warnings; the account is labelled `SBI ••8648` or `ICICI ••4911`.
+- `app/lib/data/statement_sms_match.dart` and `TransactionImportSession.checkSavedDuplicates`: a row that an SMS-derived bank transaction already explains (amount, direction, account, within two days, one saved transaction per row) is shown as "Probably already in your SMS history" and left out unless the person keeps both. This is the guard against adding every SMS-known row twice, and it applies to every import source, not only these two.
+
+What is not done or not proven: the layouts are written from real statements but tested only on invented text in those layouts, and the PDF library may order a table's words differently from the text the tests use; printed row counts are not read; a statement-only row is still saved as an ordinary imported transaction, not yet marked with the new source value from precedence rule 5; the E3 "N rows came from your statement" card is not built; card statements are not read.
+
 ## Order of work
 
 1. C1 and the one-time name prompt (largest effect, no rule release).

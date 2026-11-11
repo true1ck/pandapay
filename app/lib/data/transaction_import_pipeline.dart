@@ -14,6 +14,7 @@ import 'user_cards_repository.dart';
 import 'pdf_statement_parser.dart'
     show parseStatementText, StatementParseException;
 import 'spreadsheet_statement_parser.dart';
+import 'statement_sms_match.dart';
 
 enum ImportDocumentKind { pdf, spreadsheet, delimited, json }
 
@@ -493,6 +494,15 @@ class TransactionImportSession {
         savedDuplicates[i] =
             'Possible duplicate of saved ${saved.entryKind.label.toLowerCase()} transaction ${saved.id}: exact amount, merchant and account, within 10 minutes. Review it, keep both, edit or skip it.';
       }
+    }
+    // A row an SMS already explains: the same amount, direction, account and day,
+    // which the exact-merchant check above cannot see.
+    for (final entry in rowsExplainedBySms(rows, existing).entries) {
+      if (_confirmedSeparate.contains(entry.key) ||
+          savedDuplicates.containsKey(entry.key)) {
+        continue;
+      }
+      savedDuplicates[entry.key] = entry.value;
     }
   }
 
