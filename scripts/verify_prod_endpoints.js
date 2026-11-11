@@ -13,8 +13,14 @@
 
 const { performance } = require('perf_hooks');
 
-const API_BASE = process.env.API_URL || process.argv.find((a, i) => process.argv[i - 1] === '--api') || 'https://api.pandapath.site';
-const AUTH_BASE = process.env.AUTH_URL || process.argv.find((a, i) => process.argv[i - 1] === '--auth') || 'https://auth.pandapath.site';
+const DOMAIN = process.env.PANDAPAY_DOMAIN;
+const arg = name => process.argv.find((a, i) => process.argv[i - 1] === name);
+const API_BASE = process.env.API_URL || arg('--api') || (DOMAIN && `https://api.${DOMAIN}`);
+const AUTH_BASE = process.env.AUTH_URL || arg('--auth') || (DOMAIN && `https://auth.${DOMAIN}`);
+if (!API_BASE || !AUTH_BASE) {
+  console.error('Set PANDAPAY_DOMAIN (e.g. example.com) or pass --api <url> --auth <url>.');
+  process.exit(2);
+}
 const OUTPUT_JSON = process.argv.includes('--json');
 
 async function testEndpoint({ name, category, url, method = 'GET', headers = {}, body = null, expectedStatus = [200], validator = null }) {

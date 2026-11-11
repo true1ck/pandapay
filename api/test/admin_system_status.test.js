@@ -40,7 +40,7 @@ test('route is classified as a read for operations staff', () => {
 
 test('probe config only accepts https or loopback http, without credentials', () => {
   const parsed = parseProbes([
-    'api=https://api.pandapath.site/ready',
+    'api=https://api.pandapath.live/ready',
     'local=http://127.0.0.1:4000/ready',
     'lan=http://192.168.1.5/ready',
     'creds=https://user:pass@example.com/',
@@ -51,7 +51,15 @@ test('probe config only accepts https or loopback http, without credentials', ()
   assert.equal(parsed.ignored, 4);
   assert.deepEqual(parseProbes('none'), { probes: [], ignored: 0 });
   assert.equal(parseProbes(Array.from({ length: 20 }, (_, i) => `p${i}=https://h${i}.test/`).join(',')).probes.length, 12);
-  assert.deepEqual(parseProbes(undefined).probes.map(p => p.host), ['api.pandapath.site', 'auth.pandapath.site']);
+  const prior = process.env.PANDAPAY_DOMAIN;
+  process.env.PANDAPAY_DOMAIN = 'example.test';
+  try {
+    assert.deepEqual(parseProbes(undefined).probes.map(p => p.host), ['api.example.test', 'auth.example.test']);
+    delete process.env.PANDAPAY_DOMAIN;
+    assert.deepEqual(parseProbes(undefined), { probes: [], ignored: 0 });
+  } finally {
+    if (prior === undefined) delete process.env.PANDAPAY_DOMAIN; else process.env.PANDAPAY_DOMAIN = prior;
+  }
 });
 
 test('status reports jobs the role may read, marks overdue/failed/unavailable, and never reads probe bodies', async () => {
