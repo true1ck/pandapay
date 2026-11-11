@@ -47,7 +47,7 @@ Future<_Run> mount(
   run.container = ProviderContainer(
     overrides: [
       recoveryEmailApiProvider.overrideWithValue(api),
-      localDeviceIdProvider.overrideWith((ref) async => 'device-1'),
+      accountDeviceIdProvider.overrideWith((ref) async => 'device-1'),
     ],
   );
   addTearDown(run.container.dispose);

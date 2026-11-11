@@ -369,6 +369,10 @@ services:
       # is switched on. 0 turns the check off. See .env.prod.example.
       DEVICE_ACCOUNT_LIMIT: "${DEVICE_ACCOUNT_LIMIT:-3}"
       DEVICE_ACCOUNT_LIMIT_ENFORCE: "${DEVICE_ACCOUNT_LIMIT_ENFORCE:-false}"
+      # Count deleted accounts toward the limit (default), and with enforcement on refuse a
+      # NEW account from a build that sends no phone id. See .env.prod.example.
+      DEVICE_ACCOUNT_LIMIT_COUNT_DELETED: "${DEVICE_ACCOUNT_LIMIT_COUNT_DELETED:-true}"
+      DEVICE_REQUIRE_STRONG_ID: "${DEVICE_REQUIRE_STRONG_ID:-false}"
     ports:
       - "127.0.0.1:3210:3210"
 

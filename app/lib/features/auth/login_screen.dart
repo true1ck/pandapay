@@ -252,7 +252,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     try {
       final auth = ref.read(authApiProvider);
       final deviceId = auth.versionedOtpEnabled
-          ? await ref.read(localDeviceIdProvider.future)
+          ? await ref.read(accountDeviceIdProvider.future)
           : null;
       _challenge = await auth.requestEmailOtp(
         identifier,
@@ -345,7 +345,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       var tokens = _verifiedTokens;
       if (tokens == null) {
-        final deviceId = await ref.read(localDeviceIdProvider.future);
+        final deviceId = await ref.read(accountDeviceIdProvider.future);
         final deviceInfo = await ref.read(deviceMetadataProvider.future);
         tokens = await authApi.verifyEmailOtp(
           identifier,

@@ -166,7 +166,7 @@ class _CantSignInScreenState extends ConsumerState<CantSignInScreen> {
       return;
     }
     final started = await _guard(() async {
-      final deviceId = await ref.read(localDeviceIdProvider.future);
+      final deviceId = await ref.read(accountDeviceIdProvider.future);
       return ref
           .read(accountRecoveryApiProvider)
           .start(
@@ -198,7 +198,7 @@ class _CantSignInScreenState extends ConsumerState<CantSignInScreen> {
           .verifyCode(
             attemptId: _attemptId!,
             code: code,
-            deviceId: await ref.read(localDeviceIdProvider.future),
+            deviceId: await ref.read(accountDeviceIdProvider.future),
           );
       return true;
     });
@@ -217,7 +217,7 @@ class _CantSignInScreenState extends ConsumerState<CantSignInScreen> {
           .read(accountRecoveryApiProvider)
           .noRecoveryEmail(
             attemptId: _attemptId!,
-            deviceId: await ref.read(localDeviceIdProvider.future),
+            deviceId: await ref.read(accountDeviceIdProvider.future),
           );
       return true;
     });
@@ -241,7 +241,7 @@ class _CantSignInScreenState extends ConsumerState<CantSignInScreen> {
       return;
     }
     final result = await _guard(() async {
-      final deviceId = await ref.read(localDeviceIdProvider.future);
+      final deviceId = await ref.read(accountDeviceIdProvider.future);
       final api = ref.read(accountRecoveryApiProvider);
       final set = await api.setNewEmail(
         attemptId: _attemptId!,
@@ -279,7 +279,7 @@ class _CantSignInScreenState extends ConsumerState<CantSignInScreen> {
           .read(accountRecoveryApiProvider)
           .complete(
             attemptId: _attemptId!,
-            deviceId: await ref.read(localDeviceIdProvider.future),
+            deviceId: await ref.read(accountDeviceIdProvider.future),
             code: code,
           ),
     );
@@ -295,7 +295,7 @@ class _CantSignInScreenState extends ConsumerState<CantSignInScreen> {
           .read(accountRecoveryApiProvider)
           .finish(
             attemptId: hold.attemptId,
-            deviceId: await ref.read(localDeviceIdProvider.future),
+            deviceId: await ref.read(accountDeviceIdProvider.future),
             resumeToken: hold.resumeToken,
           ),
     );

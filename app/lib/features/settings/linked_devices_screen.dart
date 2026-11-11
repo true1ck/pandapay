@@ -146,7 +146,7 @@ class _LinkedDevicesScreenState extends ConsumerState<LinkedDevicesScreen> {
   @override
   Widget build(BuildContext context) {
     final devices = ref.watch(linkedDevicesProvider);
-    final localDeviceId = ref.watch(localDeviceIdProvider).valueOrNull;
+    final localDeviceId = ref.watch(accountDeviceIdProvider).valueOrNull;
 
     return Scaffold(
       backgroundColor: BambooInk.paper,

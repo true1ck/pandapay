@@ -151,7 +151,7 @@ void main() {
         ProviderScope(
           overrides: [
             authApiProvider.overrideWithValue(auth),
-            localDeviceIdProvider.overrideWith((ref) async => 'test-device'),
+            accountDeviceIdProvider.overrideWith((ref) async => 'test-device'),
             deviceMetadataProvider.overrideWith(
               (ref) async => const {'platform': 'test'},
             ),

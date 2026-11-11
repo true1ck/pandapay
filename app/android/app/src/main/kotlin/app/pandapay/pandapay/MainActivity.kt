@@ -15,6 +15,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Process
 import android.os.SystemClock
+import android.provider.Settings
 import android.os.Trace
 import android.util.Log
 import com.android.installreferrer.api.InstallReferrerClient
@@ -200,6 +201,16 @@ class MainActivity : FlutterFragmentActivity() {
                                 .trim(),
                             "os_version" to "Android ${Build.VERSION.RELEASE}",
                         ),
+                    )
+                    // The phone's Android ID: kept across uninstall and reinstall of this
+                    // app (same signing key), changed only by a factory reset. The Dart side
+                    // hashes it before it leaves the phone; see device_identity.dart.
+                    "getHardwareId" -> result.success(
+                        try {
+                            Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+                        } catch (_: Exception) {
+                            null
+                        },
                     )
                     else -> result.notImplemented()
                 }

@@ -67,7 +67,7 @@ void main() {
       overrides: [
         // OTP verification attaches device metadata in production. Keep this
         // widget test independent of the host's native package-info channel.
-        localDeviceIdProvider.overrideWith((ref) async => 'test-device'),
+        accountDeviceIdProvider.overrideWith((ref) async => 'test-device'),
         deviceMetadataProvider.overrideWith(
           (ref) async => const {'platform': 'test'},
         ),

@@ -55,7 +55,7 @@ Future<_Run> mount(WidgetTester tester, http.Response Function(http.Request) rep
           }),
         ),
       ),
-      localDeviceIdProvider.overrideWith((ref) async => 'device-1'),
+      accountDeviceIdProvider.overrideWith((ref) async => 'device-1'),
       tokenStoreProvider.overrideWith((ref) async => TokenStore(pandaPaySecureStorage)),
     ],
   );

@@ -156,6 +156,8 @@ const deviceAccountLimit = createDeviceAccountLimit({
   audit: (event) => logAuthEvent(event),
   limit: config.deviceAccountLimit ?? 0,
   enforce: config.deviceAccountLimitEnforce === true,
+  countDeleted: config.deviceAccountLimitCountDeleted !== false,
+  requireStrongId: config.deviceRequireStrongId === true,
 });
 
 function sanitizeDeviceId(deviceId) {
@@ -976,6 +978,12 @@ router.post(
           deviceId: devId, ip: clientIp, userAgent: req.headers['user-agent'],
         });
         if (!deviceAdmission.allowed) {
+          if (deviceAdmission.reason === 'weak_device_id') {
+            return res.status(403).json({
+              error: 'Please update PandaPay to the latest version to create an account.',
+              code: 'DEVICE_ID_UPDATE_REQUIRED',
+            });
+          }
           return res.status(403).json({
             error: 'Too many accounts have been created on this phone. Please contact support.',
             code: 'DEVICE_ACCOUNT_LIMIT',

@@ -41,7 +41,7 @@ void main() {
       ProviderScope(
         overrides: [
           authApiProvider.overrideWithValue(api),
-          localDeviceIdProvider.overrideWith((ref) async => 'test-device'),
+          accountDeviceIdProvider.overrideWith((ref) async => 'test-device'),
         ],
         child: const MaterialApp(home: Scaffold(body: LoginScreen())),
       ),

@@ -25,12 +25,12 @@ async function accountOn(deviceId, { deleted = false } = {}) {
   return id;
 }
 
-function limiter({ limit = 3, enforce = false, failQuery = false } = {}) {
+function limiter({ limit = 3, enforce = false, failQuery = false, countDeleted = true } = {}) {
   const events = [];
   const svc = createDeviceAccountLimit({
     query: failQuery ? async () => { throw new Error('db down'); } : (...a) => pool.query(...a),
     audit: async e => { events.push(e); },
-    limit, enforce, logger: { warn() {} },
+    limit, enforce, countDeleted, logger: { warn() {} },
   });
   return { svc, events };
 }
@@ -63,13 +63,22 @@ test('enforced: the fourth account is refused and recorded as blocked', async ()
   assert.equal(events[0].meta.enforced, true);
 });
 
-test('deleted accounts do not count, and one user on one phone counts once', async () => {
-  const { svc } = limiter({ limit: 2, enforce: true });
+test('live-only counting: deleted accounts do not count, and one user on one phone counts once', async () => {
+  const { svc } = limiter({ limit: 2, enforce: true, countDeleted: false });
   await accountOn('phone-d', { deleted: true }); await accountOn('phone-d', { deleted: true });
   const live = await accountOn('phone-d');
   await pool.query(`INSERT INTO user_devices (user_id, device_identifier, device_platform) VALUES ($1, 'phone-d-other', 'android')`, [live]);
-  assert.equal(await svc.liveAccountsOn('phone-d'), 1);
+  assert.equal(await svc.accountsOn('phone-d'), 1);
   assert.equal((await svc.admitNewAccount({ deviceId: 'phone-d' })).allowed, true);
+});
+
+test('by default deleted accounts count, so delete-and-recreate does not give a phone a fresh start', async () => {
+  const { svc } = limiter({ limit: 2, enforce: true });
+  await accountOn('phone-d2', { deleted: true });
+  await accountOn('phone-d2');
+  assert.equal(await svc.accountsOn('phone-d2'), 2);
+  const refused = await svc.admitNewAccount({ deviceId: 'phone-d2' });
+  assert.deepEqual([refused.allowed, refused.reason], [false, 'device_account_limit']);
 });
 
 test('placeholders shared by many installs are never counted as one phone', async () => {

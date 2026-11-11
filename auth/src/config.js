@@ -148,5 +148,14 @@ module.exports = {
   // logged, until DEVICE_ACCOUNT_LIMIT_ENFORCE=true. See services/deviceAccountLimit.js.
   deviceAccountLimit: boundedInteger(process.env.DEVICE_ACCOUNT_LIMIT, 3, 0, 50, 'DEVICE_ACCOUNT_LIMIT'),
   deviceAccountLimitEnforce: retirementFlag(process.env.DEVICE_ACCOUNT_LIMIT_ENFORCE, 'DEVICE_ACCOUNT_LIMIT_ENFORCE'),
+  // Count deleted accounts too (default true), so deleting an account and making a new one
+  // does not give a phone a fresh start. Set false to count only live accounts.
+  deviceAccountLimitCountDeleted: process.env.DEVICE_ACCOUNT_LIMIT_COUNT_DELETED === undefined || process.env.DEVICE_ACCOUNT_LIMIT_COUNT_DELETED === ''
+    ? true
+    : retirementFlag(process.env.DEVICE_ACCOUNT_LIMIT_COUNT_DELETED, 'DEVICE_ACCOUNT_LIMIT_COUNT_DELETED'),
+  // With enforcement on, refuse a NEW account from a build that sends no phone id (an older
+  // build, whose per-install id a reinstall replaces). Turn on only once the app with the
+  // phone id is the minimum supported version.
+  deviceRequireStrongId: retirementFlag(process.env.DEVICE_REQUIRE_STRONG_ID, 'DEVICE_REQUIRE_STRONG_ID'),
 };
 

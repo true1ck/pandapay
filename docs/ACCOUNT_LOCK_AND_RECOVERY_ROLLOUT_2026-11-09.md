@@ -45,6 +45,37 @@ not built into an app**. Nothing has touched production. Plans and designs this 
    sign-up returns 403 `DEVICE_ACCOUNT_LIMIT`; the app has no special wording for it yet,
    so it shows a generic sign-in failure.
 
+## One phone, many accounts: the phone id (added 11 Nov 2026)
+
+Why: to stop one person opening account after account on the same phone for a free trial.
+The old `device_id` was a random code made per install, so deleting the app gave a new
+one. From app 1.0.18 build 154 the sign-in `device_id` is the phone's own id
+(`accountDeviceId` in `app/lib/data/device_identity.dart`). The per-install id is kept
+unchanged for the local database key and the SMS runtime; do not merge the two.
+
+| Platform | The id | Survives reinstall | Changes when |
+|---|---|---|---|
+| iPhone | `k2-` + a random UUID in the Keychain, service `app.pandapay.device-identity` (not the service InstallGuard wipes), `first_unlock_this_device` | yes | the phone is erased; also once if the signing team changes |
+| Android | `a2-` + first 32 hex of sha256("pandapay-device-v1:" + ANDROID_ID); the raw value never leaves the phone | yes (same signing key) | factory reset; a different signing key (sideloaded build vs Play build); a second user profile or Secure Folder |
+
+Server side (`auth/src/services/deviceAccountLimit.js`), all behind the existing switches:
+`DEVICE_ACCOUNT_LIMIT` (accounts per phone), `DEVICE_ACCOUNT_LIMIT_ENFORCE` (refuse, not just
+log), `DEVICE_ACCOUNT_LIMIT_COUNT_DELETED` (default true: deleted accounts still count, so
+delete-and-recreate gives no fresh start), `DEVICE_REQUIRE_STRONG_ID` (with enforcement on,
+a new account from a build without the phone id is refused with `DEVICE_ID_UPDATE_REQUIRED`).
+
+Order: ship the build; raise `min_supported_version` to it; watch `account_clusters.js flags`
+for a week (counts only `k2-`/`a2-` ids as trustworthy); then `DEVICE_REQUIRE_STRONG_ID=true`
+and `DEVICE_ACCOUNT_LIMIT_ENFORCE=true`. Never enforce before the minimum version is raised: an
+old build sends a per-install id and could simply be reinstalled. Sign-in to an existing account
+is never blocked; only creating a new one. Test phones and emulators hold many accounts: raise
+the limit while testing. A Google sign-up only records, it is not refused.
+
+Limits, honestly: both ids come from the app, so a rooted phone or a rewritten app can send any
+value, and a factory reset or a second Android profile starts over. Play Integrity (Android) and
+App Attest (iOS, needs the paid Apple Developer Program) would bind it to the hardware; they are
+not built.
+
 ## Check on the iPhone before releasing
 
 - Sign up with a new email: phone box shown, number saved, next open does not ask again.

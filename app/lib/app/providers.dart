@@ -243,6 +243,15 @@ final localDeviceIdProvider = FutureProvider<String>(
   (ref) => DeviceIdentity().localDeviceId(),
 );
 
+/// This PHONE's id, sent to the sign-in server as `device_id` so it can count
+/// the accounts made on one phone. Unlike [localDeviceIdProvider] it survives
+/// deleting and reinstalling the app (see device_identity.dart). Sign-in,
+/// recovery and the Linked devices screen use this one; the local database key
+/// and the SMS runtime keep using the per-install id.
+final accountDeviceIdProvider = FutureProvider<String>(
+  (ref) => DeviceIdentity().accountDeviceId(),
+);
+
 /// Device description sent alongside the install ID when an OTP is verified.
 final deviceMetadataProvider = FutureProvider<Map<String, Object?>>(
   (ref) => loadDeviceMetadata(),

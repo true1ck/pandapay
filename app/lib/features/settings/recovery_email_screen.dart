@@ -86,7 +86,7 @@ class _RecoveryEmailScreenState extends ConsumerState<RecoveryEmailScreen> {
       _error = null;
     });
     try {
-      final deviceId = await ref.read(localDeviceIdProvider.future);
+      final deviceId = await ref.read(accountDeviceIdProvider.future);
       final challenge = await api.requestChange(
         _emailController.text,
         deviceId: deviceId,
@@ -121,7 +121,7 @@ class _RecoveryEmailScreenState extends ConsumerState<RecoveryEmailScreen> {
       _error = null;
     });
     try {
-      final deviceId = await ref.read(localDeviceIdProvider.future);
+      final deviceId = await ref.read(accountDeviceIdProvider.future);
       final hint = await api.confirm(
         challenge,
         signInCode: signIn,

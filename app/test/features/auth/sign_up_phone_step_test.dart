@@ -59,7 +59,7 @@ Future<_Run> signIn(
     ProviderScope(
       overrides: [
         authApiProvider.overrideWithValue(auth),
-        localDeviceIdProvider.overrideWith((ref) async => 'test-device'),
+        accountDeviceIdProvider.overrideWith((ref) async => 'test-device'),
         deviceMetadataProvider.overrideWith((ref) async => const {'platform': 'test'}),
         phoneGateProvider.overrideWith((ref) => PhoneGateController(ref)),
         profileApiProvider.overrideWith(
