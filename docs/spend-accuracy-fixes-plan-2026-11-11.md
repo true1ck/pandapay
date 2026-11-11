@@ -118,6 +118,28 @@ Checked against two real bank statements covering 2026 so far (about 600 rows, p
 | E2 | Match statement rows to SMS by amount and date (plus or minus two days). Take care that amounts printed as "Rs.12345.00" match, which a naive pattern misses. Verify the parse with the statement's own running balance and printed totals before trusting any row. | pure functions in `packages/pandapay_domain/lib/src/sms_v2/ledger/` | Unit tests with an invented statement: balance chain intact, a row with and without SMS, a statement with printed totals that do not match. |
 | E3 | After an import, show "N rows came from your statement, M have no SMS" and the money in and out they add. | Home or Needs review | The count is visible and dismissible. |
 
+**What exists today, and why it cannot simply be switched on.** The PDF import (`app/lib/features/import/statement_pdf_import_screen.dart`, `app/lib/data/transaction_import_pipeline.dart`) only calls a row a duplicate of a saved one when amount, merchant text and account are identical and the time is within 10 minutes. A statement row carries a bank narration and a date with no time, while the SMS row carries the merchant name and a time, so almost nothing would match and every row SMS already has would be added a second time. E2 (the matcher) has to land before E1 is turned on.
+
+**Precedence (decided 11 Nov 2026).** Field by field, never record by record:
+
+1. The person's own edits (category, tag, payee label, "this is family") always win. An import never overwrites one, and a matched row keeps the transaction it matched, so the edit stays attached.
+2. The statement beats SMS for whether the transaction exists, its amount, date, direction, account and the bank's narration.
+3. SMS beats the statement for time of day and for the richer merchant name.
+4. If SMS and the statement disagree on the amount, take the statement and raise one review item.
+5. A statement row with no SMS becomes a new transaction marked as coming from the statement. That needs a new source value in the SMS v2 data contract (provenance today is `rules`, `ai` or `user`), so it ships with an app build.
+
+Match rule to start from: same amount, same direction, within two days, one SMS per row, an amount counted only as a decimal or after a currency or debit/credit word and not before a month name, and an SMS whose direction word contradicts the row is never a match. Own transfers between the person's own accounts match each other first, and only then are the leftovers compared with SMS.
+
+**E2 built (12 Nov 2026), pure and not yet wired to anything.** `packages/pandapay_domain/lib/src/sms_v2/ledger/statement_check.dart` and `statement_match.dart`, exported from `sms_v2_ledger.dart`, tested in `test/sms_v2/ledger/statement_check_test.dart` and `statement_match_test.dart` with invented statements only.
+
+- `verifyStatement(rows, opening, closing, printed totals and counts)` checks the running balance row by row. One misread amount marks one row; a dropped row marks the row after the gap; a statement printed newest first is turned around; a layout with no debit/credit column has its directions read from the balance; a statement that prints nothing to check against is never trusted. Only a `trusted` statement should be imported; `suspectRows` are shown to the person instead.
+- `reconcileWithSms(rows, candidates, ownerNames)` pairs transfers between the person's own accounts (one partner each side, or a narration naming the owner or the account), then links rows to SMS by shared reference (an amount disagreement is flagged, rule 4), then by amount, direction, account and Indian calendar day within two days. Every compatible pair is ranked by day gap and the closest are taken first, so a row never takes the SMS another row needs; one SMS explains one row. The summary gives the E3 numbers: rows with and without SMS, own-transfer rows, conflicts, and the money in and out an import would add. Linear in rows plus candidates (an index by amount); 1,000 rows against 20,000 messages runs well under a second.
+- Candidates: `StatementCandidate.fromFact` for a parsed movement on a bank account (a card spend, a wallet, an evidence-only receipt or a foreign amount is not one), and `StatementCandidate.fromText` for an SMS the phone could not parse. Text amounts count only as a decimal or after a currency or movement word, never before a month name and never after a balance, limit or due word.
+
+Two differences from the one-off measurement quoted above: it now refuses an SMS from another account (the measurement did not), and it ignores balances printed in a message. Both make "no SMS" counts a little higher. Matching parsed movements only, without `fromText`, will report more rows without SMS than the roughly half measured on raw messages.
+
+Not done: reading a PDF into rows (E1), writing anything, the new source value, the screen (E3). `app/lib/data/statement_reconciler.dart` already checks a statement against itself at parse time (totals, transposed digits, refund and transfer pairs on `ParsedStatementLine`); E1 should feed its lines to `verifyStatement` rather than keep two checks that can disagree.
+
 ## Order of work
 
 1. C1 and the one-time name prompt (largest effect, no rule release).
