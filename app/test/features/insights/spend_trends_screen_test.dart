@@ -1934,6 +1934,42 @@ void main() {
     expect(position.maxScrollExtent, 0);
   });
 
+  test('a tiny monthly bar sits on the x-axis, never below it', () {
+    const chartHeight = 85.0;
+    // Baseline = top pad (22) + chartHeight.
+    const baseline = 22 + chartHeight;
+    // ₹500 next to a ₹1.9L month: true height is ~0.2px, so the minimum
+    // stub applies. It must grow up from the axis, not down through it.
+    final tiny = monthlyBarRect(
+      x: 0,
+      width: 40,
+      spendPaise: 50000,
+      maxPaise: 19000000,
+      chartHeight: chartHeight,
+    );
+    expect(tiny.bottom, baseline);
+    expect(tiny.top, lessThan(baseline));
+
+    final tallest = monthlyBarRect(
+      x: 0,
+      width: 40,
+      spendPaise: 19000000,
+      maxPaise: 19000000,
+      chartHeight: chartHeight,
+    );
+    expect(tallest.bottom, baseline);
+    expect(tallest.height, chartHeight);
+
+    final zero = monthlyBarRect(
+      x: 0,
+      width: 40,
+      spendPaise: 0,
+      maxPaise: 19000000,
+      chartHeight: chartHeight,
+    );
+    expect(zero.bottom, baseline);
+  });
+
   testWidgets('monthly chart scrolls sideways when months stop fitting', (
     tester,
   ) async {
