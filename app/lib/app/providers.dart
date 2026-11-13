@@ -7170,7 +7170,7 @@ final pushNotificationServiceProvider = Provider<PushNotificationService?>((
 final pushNotificationLifecycleProvider = Provider<void>((ref) {
   final service = ref.watch(pushNotificationServiceProvider);
   if (service == null) return;
-  unawaited(service.start());
+  unawaited(AuthenticatedHttpTimeoutPolicy.runBackground(service.start));
   // WP-C4: retry token registration the moment the network is back, instead
   // of waiting for the next backoff timer.
   ref.listen<AsyncValue<bool>>(isOnlineProvider, (previous, next) {

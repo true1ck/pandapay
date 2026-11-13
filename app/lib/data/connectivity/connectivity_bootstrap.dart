@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/crash_reporter.dart' show crashReporter;
 import '../../app/providers.dart';
 import 'known_connectivity.dart';
 import 'online_stream.dart';
@@ -90,7 +91,11 @@ final connectivityBootstrapProvider = Provider<void>((ref) {
     syncRepollTimer();
     final cameOnline =
         previous?.valueOrNull == false && next.valueOrNull == true;
-    if (cameOnline) unawaited(recheckAppStatus(force: true));
+    if (cameOnline) {
+      unawaited(recheckAppStatus(force: true));
+      // WP-C12b: send crash reports that queued while offline.
+      crashReporter.start();
+    }
   });
 
   final lifecycle = AppLifecycleListener(

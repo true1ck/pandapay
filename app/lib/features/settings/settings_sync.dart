@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/providers.dart';
+import '../../data/authenticated_http_client.dart';
+import '../../data/connectivity/reachability.dart';
 import '../../data/user_settings_api.dart';
 import '../account/account_local_first.dart' show kAccountLocalFirst;
 import 'appearance_providers.dart';
@@ -260,11 +262,19 @@ final settingsSyncProvider = Provider<SettingsSync>(SettingsSync.new);
 /// sign-ins rather than every rotation.
 final settingsSyncLifecycleProvider = Provider<void>((ref) {
   var running = false;
-  Future<void> sync() async {
+  Future<void> sync({bool coldStart = false}) async {
     if (running || ref.read(cacheNamespaceProvider) == 'signed-out') return;
+    // WP-C12b: the sign-in/cold-start pull is a background read; skip it while
+    // the server is known unreachable (reconnect and resume still run it).
+    if (coldStart &&
+        ref.read(serverReachabilityProvider).shouldSkipBackgroundReads) {
+      return;
+    }
     running = true;
     try {
-      final applied = await ref.read(settingsSyncProvider).pullAndApply();
+      final applied = await AuthenticatedHttpTimeoutPolicy.runBackground(
+        () => ref.read(settingsSyncProvider).pullAndApply(),
+      );
       if (applied.isEmpty) return;
       // The preference controllers load from SharedPreferences once, at
       // construction, so a value written underneath them is invisible until
@@ -289,7 +299,7 @@ final settingsSyncLifecycleProvider = Provider<void>((ref) {
 
   ref.listen<String>(cacheNamespaceProvider, (previous, next) {
     if (previous != 'signed-out' || next == 'signed-out') return;
-    unawaited(sync());
+    unawaited(sync(coldStart: true));
   });
   // WP-C11: also replay dirty preferences and pull when the phone comes back
   // online and when the app returns to the foreground.
