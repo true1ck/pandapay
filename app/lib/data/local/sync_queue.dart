@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 
+import '../server_clock.dart';
 import '../sync_api.dart';
 import 'app_database.dart';
 
@@ -22,7 +23,18 @@ class SyncQueue {
   final AppDatabase _appDb;
   final String namespace;
   final void Function()? onChanged;
-  SyncQueue(this._appDb, {this.namespace = 'legacy', this.onChanged}) {
+
+  /// Source of field clocks when a call does not pass `at`. Defaults to the
+  /// process-wide [ServerClock], which is exactly `DateTime.now()` until an
+  /// API response has revealed a clock skew.
+  final ServerClock _clock;
+
+  SyncQueue(
+    this._appDb, {
+    this.namespace = 'legacy',
+    this.onChanged,
+    ServerClock? serverClock,
+  }) : _clock = serverClock ?? ServerClock.instance {
     final columns = _appDb.db.select('PRAGMA table_info(sync_pending_changes)');
     if (!columns.any((c) => c['name'] == 'namespace')) {
       _appDb.db.execute(
@@ -52,7 +64,7 @@ class SyncQueue {
     DateTime? at,
   }) {
     if (fields.isEmpty) return 0;
-    final clockMs = (at ?? DateTime.now()).millisecondsSinceEpoch;
+    final clockMs = (at ?? _clock.now()).millisecondsSinceEpoch;
 
     final existing = _appDb.db.select(
       "SELECT client_seq, payload_json, field_clocks_json FROM sync_pending_changes "
@@ -109,7 +121,7 @@ class SyncQueue {
     DateTime? at,
   }) {
     if (fields.isEmpty) return;
-    final clockMs = (at ?? DateTime.now()).millisecondsSinceEpoch;
+    final clockMs = (at ?? _clock.now()).millisecondsSinceEpoch;
     _appDb.db.execute(
       'INSERT INTO sync_pending_changes '
       '(namespace, entity, entity_id, op, payload_json, field_clocks_json, created_at) '
@@ -149,7 +161,7 @@ class SyncQueue {
         namespace,
         entity,
         entityId,
-        (at ?? DateTime.now()).millisecondsSinceEpoch,
+        (at ?? _clock.now()).millisecondsSinceEpoch,
       ],
     );
     onChanged?.call();
