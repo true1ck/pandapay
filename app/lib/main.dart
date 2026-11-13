@@ -23,6 +23,7 @@ import 'app/assistant_action.dart';
 import 'app/router.dart';
 import 'app/startup_timing.dart';
 import 'data/api_request_headers_client.dart';
+import 'data/connectivity/connectivity_bootstrap.dart';
 import 'data/local/database_key.dart';
 import 'data/secure_storage/install_guard.dart';
 import 'data/spend_reports_repository.dart';
@@ -430,6 +431,9 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
   Widget build(BuildContext context) {
     final ref = this.ref;
     final textScale = ref.watch(textScaleProvider);
+    // Subscribe isOnlineProvider (seeded with the current connectivity) and
+    // re-check appStatus on reconnect, before the shell starts its listeners.
+    ref.watch(connectivityBootstrapProvider);
     // Keep push registration attached to the application root. The service
     // is still gated by the authenticated access token, but it must not wait
     // for a particular tab/shell route to finish rendering after a cold
