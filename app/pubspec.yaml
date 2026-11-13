@@ -116,7 +116,6 @@ dependencies:
   firebase_core: ^4.1.1
   firebase_messaging: ^16.0.2
   home_widget: ^0.7.0
-  rive: ^0.14.11
   flex_color_scheme: ^8.4.0
   responsive_framework: ^1.5.1
 
