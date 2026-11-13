@@ -18,6 +18,12 @@ class TokenStore {
   static const _refreshKey = 'pandapay_app.refresh_token';
   static const _requestKey = 'pandapay_app.refresh_request';
 
+  /// Held only between the first two writes of a sign-in (see [save]): the new
+  /// access token, in the same Keychain/Keystore as the other two secrets.
+  /// Promoted to [_accessKey] by [load] when the process died before the
+  /// access write landed; removed as soon as the real entry exists.
+  static const _pendingAccessKey = 'pandapay_app.access_token_pending';
+
   /// A non-sensitive, best-effort hint that this install previously had a
   /// persisted session. It is never used to authorize an API call. The
   /// router uses it only to paint the authenticated shell while the (occasionally
@@ -45,10 +51,32 @@ class TokenStore {
     // returns only this plugin's prefixed keys and keeps the same encrypted
     // storage and error behavior.
     final secureValues = await secureStorage.readAll();
-    final accessToken = secureValues[_accessKey];
+    var accessToken = secureValues[_accessKey];
     markStartup('access token read complete');
     final refreshToken = secureValues[_refreshKey];
     markStartup('refresh token read complete');
+
+    // L-11: a sign-in that died after the refresh token was stored but before
+    // the access token was leaves a refresh token with no access token, and
+    // the router then shows /welcome while the phone is offline (the namespace
+    // comes from the access token). `save` leaves the new access token under
+    // a pending key until both are stored, so finish the interrupted write.
+    // The hint is only trusted next to a refresh token; alone it is dropped.
+    final pendingAccess = secureValues[_pendingAccessKey];
+    if (pendingAccess != null) {
+      try {
+        if (accessToken == null && refreshToken != null) {
+          await secureStorage.write(key: _accessKey, value: pendingAccess);
+          accessToken = pendingAccess;
+        }
+        await secureStorage.delete(key: _pendingAccessKey);
+      } catch (_) {
+        // Best effort: the in-memory value still restores this launch.
+        if (accessToken == null && refreshToken != null) {
+          accessToken = pendingAccess;
+        }
+      }
+    }
 
     final prefs = await SharedPreferences.getInstance();
     markStartup('token preferences ready');
@@ -94,12 +122,31 @@ class TokenStore {
     // the server accepts a refresh. Persist the replacement first so a process
     // death between the two writes can recover with the new credential rather
     // than leaving the device holding an already-spent refresh token.
+    //
+    // L-11: when there is no access token yet (a fresh sign-in) a death
+    // between the two writes would leave a refresh token alone. Park the new
+    // access token under a pending key first (same secure storage, never
+    // plaintext) so `load` can finish the job. A rotation keeps the previous
+    // access token until the new one is written, so it needs no hint and
+    // costs no extra write.
+    final firstWrite = _cachedAccessToken == null && refreshToken != null;
+    if (firstWrite) {
+      await _secureStorage.write(key: _pendingAccessKey, value: accessToken);
+    }
     if (refreshToken != null) {
       _cachedRefreshToken = refreshToken;
       await _secureStorage.write(key: _refreshKey, value: refreshToken);
     }
     _cachedAccessToken = accessToken;
     await _secureStorage.write(key: _accessKey, value: accessToken);
+    if (firstWrite) {
+      try {
+        await _secureStorage.delete(key: _pendingAccessKey);
+      } catch (_) {
+        // A stale hint is harmless: `load` ignores it next to an access token
+        // and removes it.
+      }
+    }
 
     // Do this only after both secure writes have succeeded. The hint can
     // shorten the next launch, but it must never make a partially persisted
@@ -131,5 +178,6 @@ class TokenStore {
     await _secureStorage.delete(key: _accessKey);
     await _secureStorage.delete(key: _refreshKey);
     await _secureStorage.delete(key: _requestKey);
+    await _secureStorage.delete(key: _pendingAccessKey);
   }
 }
