@@ -103,6 +103,11 @@ class FakeServer {
   final List<Map<String, dynamic>> changeLog = [];
   final Map<String, Object?> profile = {'displayName': 'Test Person'};
   final Set<String> pushedSeqs = {};
+  final Set<String> pointsMutations = {};
+  int pointsAdjustments = 0;
+
+  /// An older server: ignores the client's card id and assigns its own.
+  bool assignOwnCardIds = false;
 
   /// Anything the real server would store twice.
   final List<String> duplicates = [];
@@ -112,6 +117,12 @@ class FakeServer {
 
   /// Requests no route knew (the scenario touched something unmodelled).
   final List<String> unhandled = [];
+
+  /// Unmodelled requests that would have changed server state.
+  List<String> get unhandledWrites => [
+    for (final u in unhandled)
+      if (!u.startsWith('GET ')) u,
+  ];
 
   /// Extra routes a scenario can add: (method path-prefix) -> handler.
   final Map<String, FutureOr<http.Response> Function(RecordedRequest req)>
@@ -407,8 +418,12 @@ class FakeServer {
           c['is_default'] = true;
           return _json(200, {'ok': true});
         case 'points-adjustment':
-          c['points_balance'] = r.body?['newBalance'];
-          return _json(200, {'ok': true});
+          final m = r.body?['clientMutationId'] as String?;
+          if (m == null || pointsMutations.add(m)) {
+            c['points_balance'] = r.body?['newBalance'];
+            pointsAdjustments++;
+          }
+          return _json(201, {'pointsLedgerEntry': {'id': newId()}});
       }
     }
     unhandled.add('${r.method} ${r.path}');
@@ -429,6 +444,10 @@ class FakeServer {
       'creditLimitInr': 'credit_limit_inr',
       'statement_day': 'statement_day',
       'due_day': 'due_day',
+      'statementDay': 'statement_day',
+      'dueDay': 'due_day',
+      'autopayMode': 'autopay_mode',
+      'autopay_mode': 'autopay_mode',
     };
     return {
       for (final e in b.entries)
@@ -455,7 +474,7 @@ class FakeServer {
       invalidIdRequests.add('POST /user-cards id=$id');
       return _json(400, {'error': 'invalid_id'});
     }
-    if (id != null && cards.containsKey(id)) {
+    if (!assignOwnCardIds && id != null && cards.containsKey(id)) {
       return _json(200, {'userCard': cards[id], 'replayed': true});
     }
     final product = b['cardProductId'] as String?;
@@ -485,7 +504,7 @@ class FakeServer {
       }
     }
     final row = seedCard(
-      id: id,
+      id: assignOwnCardIds ? null : id,
       product: product,
       nickname: b['nickname'] as String?,
       last4: last4,
@@ -706,6 +725,7 @@ class FakeServer {
       if (!cards.containsKey(b['userCardId'])) {
         return _json(404, {'error': 'card not found'});
       }
+      final card = cards[b['userCardId']]!;
       overrides[id] = {
         'id': id,
         'user_card_id': b['userCardId'],
@@ -713,10 +733,22 @@ class FakeServer {
         'vpa': b['vpa'],
         'merchant_name': b['merchantName'],
         'category_id': b['categoryId'],
+        'category_name': null,
         'reason_note': b['reasonNote'],
-        'is_active': true,
+        'is_enabled': true,
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+        'card_name': card['card_name'],
+        'card_nickname': card['nickname'],
       };
       return _json(201, {'override': overrides[id]});
+    }
+    if (segs.length == 2 && r.method == 'PATCH') {
+      final o = overrides[segs[1]];
+      if (o == null) return _json(404, {'error': 'override not found'});
+      final b = r.body ?? {};
+      if (b.containsKey('isEnabled')) o['is_enabled'] = b['isEnabled'];
+      if (b.containsKey('reasonNote')) o['reason_note'] = b['reasonNote'];
+      return _json(200, {'override': o});
     }
     if (segs.length == 2 && r.method == 'DELETE') {
       if (overrides.remove(segs[1]) == null) {

@@ -306,7 +306,7 @@ class OfflineApp {
       last = now;
     }
     if (expectDrain) {
-      expect(pending, 0, reason: 'queues should be empty: $queueDump');
+      expect(pending, 0, reason: 'queues should be empty: $queueDump ${commandRows()}');
     }
   }
 
@@ -338,6 +338,8 @@ class OfflineApp {
     await c.read(homeSummaryProvider.future);
     await c.read(categorySpendProvider.future);
     await c.read(syncEngineProvider).sync();
+    // Let the refresh the sync triggered finish before a test cuts the net.
+    await Future<void>.delayed(const Duration(milliseconds: 400));
   }
 }
 
@@ -351,4 +353,44 @@ extension OfflineAppViews on OfflineApp {
     c.invalidate(userCardsProvider);
     c.invalidate(budgetsProvider);
   }
+}
+
+/// The app's helpers take a `WidgetRef`; this one reads a [ProviderContainer].
+/// (No `context`: the helpers under test must not need one.)
+class ContainerRef implements WidgetRef {
+  ContainerRef(this.container);
+  final ProviderContainer container;
+
+  @override
+  T read<T>(ProviderListenable<T> provider) => container.read(provider);
+
+  @override
+  T watch<T>(ProviderListenable<T> provider) => container.read(provider);
+
+  @override
+  void invalidate(ProviderOrFamily provider) =>
+      container.invalidate(provider);
+
+  @override
+  R refresh<R>(Refreshable<R> provider) => container.refresh(provider);
+
+  @override
+  bool exists(ProviderBase<Object?> provider) => container.exists(provider);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+extension OfflineAppRef on OfflineApp {
+  WidgetRef get ref => ContainerRef(c);
+}
+
+extension OfflineAppDebug on OfflineApp {
+  /// Every row left in the command outbox with its last error (for messages).
+  List<String> commandRows() => [
+    for (final r in db.db.select(
+      'SELECT kind, target, attempts, parked, last_error FROM command_outbox',
+    ))
+      '${r['kind']} ${r['target']} attempts=${r['attempts']} parked=${r['parked']} err=${r['last_error']}',
+  ];
 }
