@@ -80,7 +80,7 @@ void main() {
 
     expect(
       find.text(
-        'Something went wrong. Please check your connection and try again.',
+        offlineErrorMessage,
       ),
       findsOneWidget,
     );

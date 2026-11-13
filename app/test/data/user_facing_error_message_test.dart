@@ -14,7 +14,7 @@ void main() {
   test('an unknown failure still gets the generic copy', () {
     expect(
       userFacingErrorMessage(Exception('boom')),
-      'Something went wrong. Please check your connection and try again.',
+      'Something went wrong. Try again.',
     );
   });
 }
