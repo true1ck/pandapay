@@ -149,6 +149,7 @@ dependencies:
   share_plus: ^13.3.0
   package_info_plus: ^10.2.1
   intl: ^0.20.3
+  timezone: ^0.10.1
 
   # UA-0.3 offline-first local cache (GAP_ANALYSIS.md §2, plan
   # docs/superpowers/plans/2026-08-08-offline-first-local-cache.md): raw

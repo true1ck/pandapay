@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -10,6 +11,9 @@ import UIKit
 #if !PANDAPAY_DEVICE_IMPORT_PROBE
     SmsImportBackgroundHost.register()
 #endif
+    // WP-C14: lets flutter_local_notifications present while foregrounded
+    // (needs a device check).
+    UNUserNotificationCenter.current().delegate = self
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
