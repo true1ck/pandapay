@@ -17,6 +17,11 @@ import '../storage/outbox_store.dart';
 /// lost). Sending the same records again is safe: the server treats an
 /// identical record as a duplicate.
 ///
+/// The entries start over (no attempts, no wait) even when they are byte for
+/// byte what is already queued: a source that waited out a back-off while the
+/// phone was offline has to go now, since the caller is a correction that is
+/// held back until it has gone (Q-09).
+///
 /// Returns how many queue entries were written.
 int requeueForUpload({
   required OutboxStore queue,
@@ -67,17 +72,17 @@ int requeueForUpload({
               'instrument': {...fact.instrument!.toJson(), 'raw': null},
           },
       ],
-    });
+    }, restart: true);
     written++;
   }
   if (event != null) {
-    queue.enqueue('event', event.eventId, event.toJson());
+    queue.enqueue('event', event.eventId, event.toJson(), restart: true);
     written++;
     for (final entry in LedgerStore(
       db,
       namespace: namespace,
     ).forEvent(event.eventId)) {
-      queue.enqueue('ledger', entry.entryId, entry.toJson());
+      queue.enqueue('ledger', entry.entryId, entry.toJson(), restart: true);
       written++;
     }
   }
