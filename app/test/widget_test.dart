@@ -13,6 +13,7 @@ import 'package:pandapay/app/startup_work_scheduler.dart';
 import 'package:pandapay/data/auth_api.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/features/auth/login_screen.dart';
+import 'package:pandapay/features/sync_status/sync_status_providers.dart';
 import 'package:pandapay/features/account/account_screen.dart';
 import 'package:pandapay/features/account/avatar_providers.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
@@ -162,6 +163,12 @@ void main() {
           smsBackgroundFlushProvider.overrideWith((ref) {}),
           startupWorkSchedulerProvider.overrideWithValue(
             _testStartupWorkScheduler,
+          ),
+          // The global sync strip polls queue counts on timers; this
+          // container is disposed after the pending-timer check, so keep the
+          // strip healthy (hidden) and timer-free here.
+          syncStatusSummaryProvider.overrideWithValue(
+            const SyncStatusSummary(mode: SyncStatusMode.hidden),
           ),
         ],
       );
