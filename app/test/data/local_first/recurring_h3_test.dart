@@ -143,4 +143,53 @@ void main() {
     expect(body['id'], 'local-1');
     expect(body['clientEditedAt'], '2026-11-14T10:00:00.000Z');
   });
+
+  group('budget tag_unknown (H3-5c)', () {
+    const payload = {
+      'id': 'b1',
+      'scope': 'tag',
+      'scopeRefId': 'tag-1',
+      'period': 'monthly',
+      'amountInr': 500,
+      'rollover': false,
+    };
+    late AppDatabase db;
+    late CommandOutbox outbox;
+    setUp(() {
+      db = openInMemoryForTesting();
+      outbox = CommandOutbox(db, namespace: 'a');
+      outbox.enqueue(kind: OverlayCommand.budgetSave, target: 'tag|tag-1|monthly', payload: payload);
+    });
+    tearDown(() => db.close());
+
+    Map<String, CommandHandler> handlers(SpendReportsRepository spend, Future<bool> Function(String) ready) =>
+        commandHandlersFor(
+          UserCardsRepository(apiBaseUrl: 'http://t', accessToken: 'tok'),
+          spend: spend,
+          tagReady: ready,
+        );
+
+    test('the tag is sent first, then the budget is retried once', () async {
+      var calls = 0;
+      final spend = repo((_) => ++calls == 1
+          ? http.Response(jsonEncode({'error': 'tag_unknown'}), 422)
+          : http.Response(jsonEncode({'budget': {}}), 201));
+      final readied = <String>[];
+      final n = await outbox.flush(handlers(spend, (id) async { readied.add(id); return true; }));
+      expect(n, 1);
+      expect(calls, 2);
+      expect(readied, ['tag-1']);
+    });
+
+    test('a tag that does not exist parks the budget with a plain reason', () async {
+      var calls = 0;
+      final spend = repo((_) {
+        calls++;
+        return http.Response(jsonEncode({'error': 'tag_unknown'}), 422);
+      });
+      expect(await outbox.flush(handlers(spend, (_) async => false)), 0);
+      expect(calls, 1);
+      expect(outbox.parked().single.error, contains('no longer exists'));
+    });
+  });
 }

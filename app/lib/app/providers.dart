@@ -3133,6 +3133,7 @@ Map<String, CommandHandler> commandHandlersFor(
   void Function()? onNotificationInboxSynced,
   Map<String, CommandHandler> accountHandlers = const {},
   CardCommandContext? cards,
+  Future<bool> Function(String tagId)? tagReady,
 }) => {
   // WP-C11: consents, name, opt-in, tickets, card reports, inbox read marks.
   ...accountHandlers,
@@ -3186,16 +3187,22 @@ Map<String, CommandHandler> commandHandlersFor(
             clientEditedAt: _editedAt(p['clientEditedAt']),
           ),
         ),
-    OverlayCommand.budgetSave: (p) => spend.saveBudget(
-      scope: BudgetScope.values.firstWhere((s) => s.wireValue == p['scope']),
-      scopeRefId: p['scopeRefId'] as String?,
-      period: BudgetPeriod.values.firstWhere(
-        (x) => x.wireValue == p['period'],
+    OverlayCommand.budgetSave: (p) => saveBudgetResolvingTag(
+      () => spend.saveBudget(
+        scope: BudgetScope.values.firstWhere((s) => s.wireValue == p['scope']),
+        scopeRefId: p['scopeRefId'] as String?,
+        period: BudgetPeriod.values.firstWhere(
+          (x) => x.wireValue == p['period'],
+        ),
+        amount: Money.fromRupees((p['amountInr'] as num).toDouble()),
+        rollover: p['rollover'] as bool? ?? false,
+        id: p['id'] as String?,
+        clientEditedAt: _editedAt(p['clientEditedAt']),
       ),
-      amount: Money.fromRupees((p['amountInr'] as num).toDouble()),
-      rollover: p['rollover'] as bool? ?? false,
-      id: p['id'] as String?,
-      clientEditedAt: _editedAt(p['clientEditedAt']),
+      tagId: p['scope'] == BudgetScope.tag.wireValue
+          ? p['scopeRefId'] as String?
+          : null,
+      tagReady: tagReady,
     ),
     // H3: client uuid + clock; the server's series id wins (a replay or an
     // existing merchant series answers 200 and is success). A queued edit of
@@ -3227,6 +3234,34 @@ Map<String, CommandHandler> commandHandlersFor(
     ),
   },
 };
+
+/// H3-5c: a budget on a tag the server does not know yet (the tag is still in
+/// the tag outbox) is refused with 422 `tag_unknown`. Send the tag first
+/// ([tagReady] syncs tags and says whether the tag exists), then retry once.
+/// A tag that really is gone parks the budget with a plain reason.
+Future<void> saveBudgetResolvingTag(
+  Future<void> Function() save, {
+  String? tagId,
+  Future<bool> Function(String tagId)? tagReady,
+}) async {
+  try {
+    await save();
+  } on ApiException catch (e) {
+    if (tagId == null ||
+        tagReady == null ||
+        e.statusCode != 422 ||
+        e.errorCode != 'tag_unknown') {
+      rethrow;
+    }
+    if (!await tagReady(tagId)) {
+      throw ApiException(
+        'The tag for this budget no longer exists, so the budget was not '
+        'saved. (POST /budgets failed: 422 tag_unknown)',
+      );
+    }
+    await save();
+  }
+}
 
 DateTime? _editedAt(Object? v) => v is String ? DateTime.tryParse(v) : null;
 
@@ -3268,6 +3303,12 @@ final outboxFlushProvider = Provider<void>((ref) {
         onNotificationInboxSynced: () => ref.invalidate(notificationsProvider),
         accountHandlers: accountCommandHandlers(ref),
         cards: await cardCommandContext(ref),
+        tagReady: (tagId) async {
+          final tags = ref.read(transactionTagsProvider);
+          if (tags == null) return false;
+          await tags.sync();
+          return tags.allTags.any((t) => t.id == tagId && !t.isArchived);
+        },
       );
       // WP-C6: a card added offline must exist on the server (and its id be
       // remapped) before queued transactions that name it are sent.
