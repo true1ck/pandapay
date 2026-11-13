@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../data/local/financial_store.dart';
+import 'card_bill_payment.dart';
 import 'insights_local_first.dart';
 
 import '../../app/design/app_theme.dart';
@@ -1562,9 +1563,29 @@ class _CardBillDetailSheetState extends ConsumerState<_CardBillDetailSheet> {
           userCardId: card.id,
           cardLast4: card.last4,
         );
-        store.saveTransactions(namespace, [paymentTxn]);
+        if (kInsightsLocalFirst) {
+          await enqueueCardBillPayment(
+            await ref.read(outboxRepositoryProvider.future),
+            txnId: txnId,
+            amount: Money.fromPaise(amountPaise),
+            cardId: card.id,
+            cardName: card.cardName,
+            last4: card.last4,
+          );
+        } else {
+          store.saveTransactions(namespace, [paymentTxn]);
+        }
       } else if (!_isPaid && _initialIsPaid) {
-        store.deleteTransaction(namespace, txnId);
+        if (kInsightsLocalFirst) {
+          undoCardBillPayment(
+            await ref.read(outboxRepositoryProvider.future),
+            store,
+            namespace,
+            txnId,
+          );
+        } else {
+          store.deleteTransaction(namespace, txnId);
+        }
       }
 
       ref.invalidate(cardBillLedgerProvider);
@@ -1601,7 +1622,16 @@ class _CardBillDetailSheetState extends ConsumerState<_CardBillDetailSheet> {
 
       store.removeCardBillAssignment(namespace, manualId);
       store.deleteObservation(namespace, manualId);
-      store.deleteTransaction(namespace, txnId);
+      if (kInsightsLocalFirst) {
+        undoCardBillPayment(
+          await ref.read(outboxRepositoryProvider.future),
+          store,
+          namespace,
+          txnId,
+        );
+      } else {
+        store.deleteTransaction(namespace, txnId);
+      }
       if (_selectedObservationId != null) {
         store.removeCardBillAssignment(namespace, _selectedObservationId!);
       }
