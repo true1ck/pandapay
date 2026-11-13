@@ -661,8 +661,11 @@ class FinancialStore {
     _transaction(() {
       if (completeQuery != null) {
         final ids = rows.map((r) => r.id).toSet();
+        // WP-C7 (L-04): 'v2:<eventId>' rows are projected from on-phone SMS
+        // facts the server may not hold yet; absence from a server list says
+        // nothing about them, so they are never pruned here.
         final existing = database.db.select(
-          "SELECT id, payload FROM financial_entities WHERE namespace=? AND entity='transactions' AND pending=0 AND observed_at <= ? AND NOT EXISTS (SELECT 1 FROM sync_pending_changes p WHERE p.namespace=financial_entities.namespace AND p.entity='transactions' AND p.entity_id=financial_entities.id)",
+          "SELECT id, payload FROM financial_entities WHERE namespace=? AND entity='transactions' AND pending=0 AND observed_at <= ? AND id NOT LIKE 'v2:%' AND NOT EXISTS (SELECT 1 FROM sync_pending_changes p WHERE p.namespace=financial_entities.namespace AND p.entity='transactions' AND p.entity_id=financial_entities.id)",
           [ns, timestamp],
         );
         for (final old in existing) {

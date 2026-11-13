@@ -15,6 +15,9 @@ import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:crypto/crypto.dart';
+import '../data/local/subscription_overrides_store.dart';
+import '../features/insights/insights_local_first.dart';
+import '../features/insights/local_budgets.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1437,14 +1440,21 @@ final commitmentsProvider = FutureProvider<List<Commitment>>((ref) async {
   if (ref.watch(smsV2ReportingEnabledProvider)) {
     final model = await ref.watch(smsV2LedgerReadModelProvider.future);
     final manual = await ref.watch(commitmentsRepositoryProvider).fetchAll();
+    // WP-C7: a saved 'v2:' copy of a derived bill is the person's mark-paid /
+    // dismiss; it overrides the derived bill instead of listing twice.
+    bool isCopy(Commitment c) =>
+        c.source == CommitmentSource.sms && c.id.startsWith('v2:');
     return [
       ...manual.where(
-        (item) => item.source != CommitmentSource.sms || item.isUserConfirmed,
+        (item) =>
+            !isCopy(item) &&
+            (item.source != CommitmentSource.sms || item.isUserConfirmed),
       ),
       ...sms_v2_adapters.billsFromFacts(
         model.facts,
         model.ledger.events,
         transactionIdByEvent: model.transactionIdByEvent,
+        manualCopies: manual.where((c) => isCopy(c) && c.isUserConfirmed),
       ),
     ];
   }
@@ -2107,9 +2117,25 @@ final selectedSpendQueryProvider = StateProvider<SpendReportQuery>(
 /// watch this; the server list underneath is [budgetsServerProvider].
 final budgetsProvider = FutureProvider<List<BudgetStatus>>((ref) async {
   ref.watch(commandOutboxRevisionProvider);
-  final base = await ref.watch(budgetsServerProvider.future);
+  // WP-C7: budgets created on the phone (spent computed locally) join the
+  // server list; with no server list at all they are the source.
+  var server = const <BudgetStatus>[];
+  Object? serverError;
+  try {
+    server = await ref.watch(budgetsServerProvider.future);
+  } catch (error) {
+    if (!kInsightsLocalFirst) rethrow;
+    serverError = error;
+  }
+  final local = kInsightsLocalFirst
+      ? await localBudgetsFor(ref, server)
+      : const <BudgetStatus>[];
+  if (serverError != null && local.isEmpty) throw serverError;
   final commands = await ref.watch(commandOutboxProvider.future);
-  return overlayBudgets(base, commands.pendingOf(OverlayCommand.budgetKinds));
+  return overlayBudgets([
+    ...server,
+    ...local,
+  ], commands.pendingOf(OverlayCommand.budgetKinds));
 });
 
 final budgetsServerProvider = FutureProvider<List<BudgetStatus>>((ref) async {
@@ -2174,10 +2200,22 @@ recurringReportProvider = FutureProvider<RecurringReport?>((ref) async {
   final base = await ref.watch(recurringReportServerProvider.future);
   if (base == null) return null;
   final commands = await ref.watch(commandOutboxProvider.future);
-  return overlayRecurring(
+  final overlaid = overlayRecurring(
     base,
     commands.pendingOf(OverlayCommand.recurringKinds),
   );
+  // WP-C7: device-local hide/edit/manual-add (SMS-v2 and projection series
+  // have no server row, so they never go through the command outbox).
+  try {
+    final cache = await ref.watch(responseCacheProvider.future);
+    final ns = ref.watch(cacheNamespaceProvider);
+    return applySubscriptionOverrides(
+      overlaid,
+      SubscriptionOverridesStore(cache.financialStore.database, ns).all(),
+    );
+  } catch (_) {
+    return overlaid;
+  }
 });
 
 /// The saved subscription rows (see `SubscriptionStore`): the one source every
@@ -3142,7 +3180,12 @@ Map<String, CommandHandler> commandHandlersFor(
   if (spend != null) ...{
     // Deleting something the server no longer has is already done.
     OverlayCommand.budgetDelete: (p) =>
-        _goneIsDone(() => spend.deleteBudget(p['id'] as String)),
+        _goneIsDone(
+          () => spend.deleteBudget(
+            p['id'] as String,
+            clientEditedAt: _editedAt(p['clientEditedAt']),
+          ),
+        ),
     OverlayCommand.budgetSave: (p) => spend.saveBudget(
       scope: BudgetScope.values.firstWhere((s) => s.wireValue == p['scope']),
       scopeRefId: p['scopeRefId'] as String?,
@@ -3151,6 +3194,8 @@ Map<String, CommandHandler> commandHandlersFor(
       ),
       amount: Money.fromRupees((p['amountInr'] as num).toDouble()),
       rollover: p['rollover'] as bool? ?? false,
+      id: p['id'] as String?,
+      clientEditedAt: _editedAt(p['clientEditedAt']),
     ),
     OverlayCommand.recurringDismiss: (p) =>
         _goneIsDone(() => spend.dismissRecurring(p['id'] as String)),
@@ -3164,6 +3209,8 @@ Map<String, CommandHandler> commandHandlersFor(
     ),
   },
 };
+
+DateTime? _editedAt(Object? v) => v is String ? DateTime.tryParse(v) : null;
 
 Future<void> _goneIsDone(Future<void> Function() call) => goneIsDone(call);
 

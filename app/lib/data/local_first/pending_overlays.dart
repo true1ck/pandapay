@@ -70,6 +70,7 @@ BudgetStatus _withAmount(BudgetStatus b, double amountRupees) {
     consumedFraction: amount.paise == 0 ? 0 : b.spent.paise / amount.paise,
     elapsedFraction: b.elapsedFraction,
     projected: b.projected,
+    isEstimate: b.isEstimate,
   );
 }
 
@@ -109,6 +110,10 @@ RecurringReport overlayRecurring(
         : Money.fromPaise(annualPaise),
   );
 }
+
+/// Public for the device-local subscription overrides (WP-C7).
+RecurringSeries editedSeries(RecurringSeries s, Map<String, Object?> p) =>
+    _edited(s, p);
 
 RecurringSeries _edited(RecurringSeries s, Map<String, Object?> p) {
   final amount = Money.fromRupees((p['amountInr'] as num).toDouble());

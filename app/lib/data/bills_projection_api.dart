@@ -112,6 +112,7 @@ class BillsProjectionApi {
     bool includeMandates = true,
     bool includeClosed = false,
     int limit = 100,
+    void Function(String body)? onBody,
   }) async {
     final kinds = includeMandates
         ? 'bill_obligation,bill_payment,mandate'
@@ -133,6 +134,7 @@ class BillsProjectionApi {
       );
     }
     final decoded = jsonDecode(response.body);
+    onBody?.call(response.body);
     if (decoded is! Map) {
       throw ApiException('GET /bills/projections returned an invalid response');
     }

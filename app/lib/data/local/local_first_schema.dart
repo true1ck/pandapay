@@ -37,12 +37,16 @@ abstract final class LocalFirstSchema {
 
   /// Tables owned by this module (excluding [versionTable]). Append-only,
   /// same order as the migrations that create them.
-  static const List<String> tableNames = <String>[];
+  static const List<String> tableNames = <String>[
+    'subscription_overrides',
+    'user_budgets',
+  ];
 
   /// The migration list. Index 0 is migration number 1.
   static final List<LocalFirstMigration> _migrations = <LocalFirstMigration>[
     _addTagAndForeignOutboxRetryColumns,
     _addOutboxPaymentSentColumns,
+    _addSubscriptionOverridesAndUserBudgets,
   ];
 
   /// Current module version: the number of shipped migrations.
@@ -182,6 +186,32 @@ void _addOutboxPaymentSentColumns(Database db) {
       'TEXT',
     );
   }
+}
+
+/// Migration 3 (WP-C7): two device-local stores, namespace first.
+///
+/// `subscription_overrides`: the person's hide/edit/manual-add of subscriptions
+/// whose ids the server cannot know (`v2:`, `projection:`, `manual:`).
+/// `user_budgets`: budgets created on the phone and not yet confirmed by the
+/// server (the queued `budget_save` command delivers them; the row is dropped
+/// once the server list carries the same id). Neither is a send queue.
+void _addSubscriptionOverridesAndUserBudgets(Database db) {
+  db.execute(
+    'CREATE TABLE IF NOT EXISTS subscription_overrides ('
+    'namespace TEXT NOT NULL, '
+    'series_id TEXT NOT NULL, '
+    'payload TEXT NOT NULL, '
+    'updated_at INTEGER NOT NULL, '
+    'PRIMARY KEY (namespace, series_id))',
+  );
+  db.execute(
+    'CREATE TABLE IF NOT EXISTS user_budgets ('
+    'namespace TEXT NOT NULL, '
+    'id TEXT NOT NULL, '
+    'payload TEXT NOT NULL, '
+    'edited_at INTEGER NOT NULL, '
+    'PRIMARY KEY (namespace, id))',
+  );
 }
 
 /// One numbered, append-only step of [LocalFirstSchema]. Must be idempotent.

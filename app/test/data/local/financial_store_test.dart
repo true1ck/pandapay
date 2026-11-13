@@ -244,6 +244,17 @@ void main() {
       expect(result.complete, isTrue);
     },
   );
+  test(
+    'WP-C7 L-04: an SMS-projected v2 row survives a complete refresh that does not list it yet',
+    () {
+      store.saveTransactions('a', [row('v2:evt-1'), row('srv')], completeQuery: all);
+      store.saveTransactions('a', [row('srv')], completeQuery: all);
+      expect(
+        store.transactions('a', all)!.rows.map((r) => r.id).toSet(),
+        {'v2:evt-1', 'srv'},
+      );
+    },
+  );
   test('range replacement cannot remove rows outside its scope', () {
     store.saveTransactions('a', [
       row('early', day: 1),

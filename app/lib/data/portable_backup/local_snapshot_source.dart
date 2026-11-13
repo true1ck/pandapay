@@ -60,6 +60,10 @@ class LocalPortableSnapshotSource implements PortableLocalSnapshotSource {
         'not part of the archive contract)',
     'user_merchant_category_rules (locally learned merchant categories; never '
         'synced, not part of the archive contract)',
+    'subscription_overrides (hide/edit/manual-add of SMS-derived subscriptions; '
+        'device-local by design, the server has no such series)',
+    'user_budgets (budgets created on the phone and awaiting delivery through '
+        'the command outbox, which must drain before a backup)',
     'command_outbox (queued server commands are not exported: they must drain '
         'before a backup, see the outbox check)',
   ];

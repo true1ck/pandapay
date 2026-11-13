@@ -12,6 +12,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import 'as_of_caption.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart' show MonthlyReport, TxnEntryKind;
 import '../../main.dart' show MoneyText;
@@ -198,6 +199,7 @@ class MonthlySavingsScreen extends ConsumerWidget {
                   AppSpace.lg,
                 ),
                 children: [
+            const AsOfLastSyncCaption(),
                   // Design 32's shareable card. Only what's inside this
                   // RepaintBoundary lands in the PNG — the breakdown and the
                   // referral prompt below it are for the person reading the
