@@ -405,11 +405,18 @@ enum TxnInstrument {
   final String label;
   const TxnInstrument(this.wireValue, this.label);
 
-  static TxnInstrument fromJson(String? value) =>
-      TxnInstrument.values.firstWhere(
-        (i) => i.wireValue == value,
-        orElse: () => TxnInstrument.creditCard,
-      );
+  /// A missing value (older API images omit `instrument`) keeps the historical
+  /// credit-card default, which callers pair with `instrumentKnown == false`.
+  /// A present but unrecognised value (a newer server's instrument) must NOT
+  /// be read as a credit card — that would feed reward/card-state logic — so
+  /// it becomes [other], which moves no card state.
+  static TxnInstrument fromJson(String? value) {
+    if (value == null) return TxnInstrument.creditCard;
+    return TxnInstrument.values.firstWhere(
+      (i) => i.wireValue == value,
+      orElse: () => TxnInstrument.other,
+    );
+  }
 }
 
 /// Whether an entry is spending at all — migration 0040's
@@ -1713,6 +1720,7 @@ class UserCardsRepository {
     TxnInstrument instrument = TxnInstrument.creditCard,
     TxnEntryKind entryKind = TxnEntryKind.spend,
     String? clientMutationId,
+    String? paymentMethod,
   }) async {
     final mutationId = clientMutationId ?? const Uuid().v4();
     final customCategoryId =
@@ -1741,6 +1749,9 @@ class UserCardsRepository {
             'rail': ?rail,
             'instrument': instrument.wireValue,
             'entryKind': entryKind.wireValue,
+            // Only sent when the user chose one, so the body stays
+            // byte-identical to the pre-payment-method request otherwise.
+            'paymentMethod': ?paymentMethod,
             'clientMutationId': mutationId,
           }),
         )
@@ -2058,10 +2069,17 @@ class UserCardsRepository {
     TxnInstrument? instrument,
     TxnEntryKind? entryKind,
     Map<String, dynamic>? selfTransfer,
+    String? paymentMethod,
+    bool clearPaymentMethod = false,
   }) async {
     if (clearCategory && (categoryId != null || userCategoryId != null)) {
       throw ArgumentError(
         'clearCategory cannot be combined with categoryId or userCategoryId',
+      );
+    }
+    if (clearPaymentMethod && paymentMethod != null) {
+      throw ArgumentError(
+        'clearPaymentMethod cannot be combined with paymentMethod',
       );
     }
     final customCategoryId =
@@ -2086,6 +2104,10 @@ class UserCardsRepository {
       if (instrument != null) 'instrument': instrument.wireValue,
       if (entryKind != null) 'entryKind': entryKind.wireValue,
       if (selfTransfer != null) 'selfTransfer': selfTransfer,
+      // Absent = leave the saved method alone. Only an explicit
+      // clearPaymentMethod sends null (the user removed it).
+      if (clearPaymentMethod) 'paymentMethod': null,
+      if (!clearPaymentMethod) 'paymentMethod': ?paymentMethod,
     };
     final response = await _client.patch(
       Uri.parse('$apiBaseUrl/transactions/$id'),
@@ -2923,6 +2945,30 @@ class TransactionEntry {
     return buffer.toString();
   }
 
+  /// The transaction payment-method vocabulary (frozen contract
+  /// `app/test/fixtures/payment_methods_v1.json`; a test asserts parity).
+  /// 'upi' predates the contract (SMS v2 writes it) and keeps its meaning.
+  static const Set<String> knownPaymentMethods = {
+    'upi',
+    'net_banking',
+    'neft',
+    'imps',
+    'rtgs',
+    'cheque',
+    'demand_draft',
+    'auto_debit',
+    'emi',
+    'pay_later',
+    'prepaid_card',
+    'gift_card',
+    'reward_points',
+  };
+
+  /// Anything not in the contract (null, wrong type, a value from a newer
+  /// server) is treated as "no method" and never throws.
+  static String? _parsePaymentMethod(Object? raw) =>
+      raw is String && knownPaymentMethods.contains(raw) ? raw : null;
+
   factory TransactionEntry.fromJson(Map<String, dynamic> json) {
     final nickname = json['card_nickname'] as String?;
     final cardName = json['card_name'] as String?;
@@ -2956,7 +3002,7 @@ class TransactionEntry {
       accountLast4: json['account_last4'] as String?,
       userCardId: json['user_card_id'] as String?,
       rail: _parseRail(json['rail'] as String?),
-      paymentMethod: json['payment_method'] == 'upi' ? 'upi' : null,
+      paymentMethod: _parsePaymentMethod(json['payment_method']),
       instrument: TxnInstrument.fromJson(json['instrument'] as String?),
       instrumentKnown: json['instrument'] != null,
       entryKind: TxnEntryKind.fromJson(json['entry_kind'] as String?),

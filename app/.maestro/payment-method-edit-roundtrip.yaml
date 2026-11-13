@@ -1,0 +1,30 @@
+# Edit transaction: a saved NEFT entry keeps its method when you tap Cash and then back to UPI / bank.
+# Run payment-method-neft.yaml first (it creates the "Maestro NEFT" entry).
+# Nothing is saved: the flow leaves the editor with Cancel.
+# Run: maestro --device emulator-5554 test app/.maestro/payment-method-edit-roundtrip.yaml
+appId: app.pandapay.pandapay.dev2
+---
+- stopApp
+- launchApp
+- tapOn: "TOTAL SPENT.*"
+- tapOn: "100, Other.*"
+- scrollUntilVisible:
+    element: "Maestro NEFT.*"
+- tapOn: "Maestro NEFT.*"
+- scrollUntilVisible:
+    element: "13/11/2026.*UPI from bank.*"
+- tapOn: "13/11/2026.*UPI from bank.*"
+- assertVisible: "NEFT"
+- tapOn: "Edit"
+- assertVisible: "Edit transaction"
+# Cash hides the bank-only methods.
+- tapOn: "Cash"
+- assertNotVisible: "Cheque"
+- assertNotVisible: "NEFT"
+# Back to UPI / bank: the saved NEFT comes back.
+- tapOn: "UPI / bank"
+- swipe:
+    from: "UPI / bank"
+    direction: LEFT
+- assertVisible: "NEFT"
+- tapOn: "Cancel"

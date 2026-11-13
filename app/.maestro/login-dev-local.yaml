@@ -1,0 +1,40 @@
+# Sign in to the dev build on an emulator against the LOCAL stack (docker compose, ALLOW_TEST_OTP=true).
+# The fixed test code 1234 only works for test identifiers such as test@example.com, never in production.
+# Run: maestro --device emulator-5554 test app/.maestro/login-dev-local.yaml
+appId: app.pandapay.pandapay.dev2
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "I already have an account"
+    timeout: 20000
+    optional: true
+- swipe:
+    direction: LEFT
+- swipe:
+    direction: LEFT
+- tapOn: "I already have an account"
+- tapOn:
+    point: 50%,27%
+- eraseText: 40
+- inputText: "test@example.com"
+- tapOn: "Send code"
+- extendedWaitUntil:
+    visible: "Verify.*"
+    timeout: 15000
+- tapOn:
+    point: 50%,52%
+- inputText: "1234"
+- tapOn: "Verify.*continue"
+# First run after a clean install: onboarding. Skip SMS, keep the defaults, add no card.
+- tapOn: "Continue setup"
+- tapOn: "I.ll add spends myself"
+- tapOn: "Continue to my cards"
+- tapOn: "I.ll do this later"
+- tapOn: "Take me Home"
+- tapOn:
+    text: "Skip tour"
+    optional: true
+- extendedWaitUntil:
+    visible: "Add transaction"
+    timeout: 30000

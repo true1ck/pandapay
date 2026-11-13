@@ -1,0 +1,29 @@
+# Quick Add: pick UPI / bank, then NEFT from More, save, and see the confirmation.
+# Needs the dev build signed in on an emulator (see login-test-account.yaml) and the local API running.
+# Run: maestro --device emulator-5554 test app/.maestro/payment-method-neft.yaml
+appId: app.pandapay.pandapay.dev2
+---
+- stopApp
+- launchApp
+- tapOn: "Add transaction"
+- tapOn: "0.00"
+- inputText: "2750"
+- tapOn: "Search or enter a merchant"
+- inputText: "Maestro NEFT"
+- tapOn: "Merchant or payee"
+- scrollUntilVisible:
+    element: "UPI / bank"
+- tapOn: "UPI / bank"
+- swipe:
+    from: "UPI / bank"
+    direction: LEFT
+- assertVisible: "Cheque"
+- swipe:
+    from: "Cheque"
+    direction: LEFT
+- tapOn: "More"
+- assertVisible: "How was it paid?"
+- tapOn: "NEFT"
+- assertVisible: "NEFT"
+- tapOn: "Save expense.*"
+- assertVisible: "Logged.*spend"

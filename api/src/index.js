@@ -69,6 +69,7 @@ const nearbyGoogle = require('./nearby_google');
 const { registerRuleFamilyRoutes, validateField } = require('./admin_rule_families');
 const { registerAdminReferralOperationsRoutes } = require('./admin_referral_operations');
 const rewardMath = require('./reward_math');
+const paymentMethods = require('./payment_methods');
 // card-rewards v2 (WP8): v2-shaped cards record in native units; see the hooks
 // in applyTransactionState, reconcileCurrentCapStates and GET /user-cards.
 const cardStateV2 = require('./card_state_v2');
@@ -4732,6 +4733,15 @@ app.post('/transactions', requireAuth, async (req, res) => {
   if (!TXN_ENTRY_KINDS.includes(entryKind)) {
     return res.status(400).json({ error: `entryKind must be one of ${TXN_ENTRY_KINDS.join(', ')}` });
   }
+  // Optional: how the entry was paid (cheque, NEFT, ...). Never changes the
+  // instrument; null/absent stores nothing, exactly as before.
+  const createMethod = paymentMethods.resolvePaymentMethodForCreate(
+    (req.body || {}).paymentMethod,
+    instrument,
+  );
+  if (createMethod.error) {
+    return res.status(400).json({ error: createMethod.error });
+  }
   // A credit-card entry still requires a saved card because the database
   // treats that row as card spend. Debit-card entries may be cardless when
   // the user is logging a one-off purchase, but a supplied debit-card id is
@@ -4816,7 +4826,7 @@ app.post('/transactions', requireAuth, async (req, res) => {
                 }),
                 userCategoryId: null,
               });
-      return insertTransactionAndUpdateState(client, req.userId, {
+      const inserted = await insertTransactionAndUpdateState(client, req.userId, {
         userCardId: instrument === 'credit_card' || instrument === 'debit_card'
           ? userCardId
           : null,
@@ -4841,6 +4851,20 @@ app.post('/transactions', requireAuth, async (req, res) => {
         },
         instrument, entryKind,
       });
+      // The shared insert helper (also used by the SMS paths) is left untouched,
+      // so the method is written in the same database transaction right after
+      // it. Only a row created by THIS request gets it (201); an exact retry or
+      // a matched duplicate returns the existing row, which keeps its own value.
+      if (createMethod.value !== null && inserted.status === 201 && inserted.transaction?.id) {
+        const written = await client.query(
+          `UPDATE transactions SET payment_method = $1
+            WHERE id = $2 AND profile_id = $3
+        RETURNING payment_method`,
+          [createMethod.value, inserted.transaction.id, req.userId],
+        );
+        inserted.transaction.payment_method = written.rows[0]?.payment_method ?? createMethod.value;
+      }
+      return inserted;
     });
 
     if (result.status !== 200 && result.status !== 201) {
@@ -5660,7 +5684,7 @@ app.post('/duplicate-candidates/:id/resolve', requireAuth, async (req, res) => {
 app.patch('/transactions/:id', requireAuth, async (req, res) => {
   const {
     amountInr, occurredAt, categoryId, userCategoryId, rail, merchantName, userCardId,
-    instrument, entryKind, selfTransfer,
+    instrument, entryKind, selfTransfer, paymentMethod,
   } = req.body || {};
   const disablingSelfTransfer = selfTransfer?.action === 'disable';
   if (selfTransfer !== undefined && ((!disablingSelfTransfer && entryKind !== 'transfer')
@@ -5675,6 +5699,12 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
   }
   if (entryKind !== undefined && !TXN_ENTRY_KINDS.includes(entryKind)) {
     return res.status(400).json({ error: `entryKind must be one of ${TXN_ENTRY_KINDS.join(', ')}` });
+  }
+  // Shape check only (unknown value / wrong type). Compatibility with the
+  // effective instrument needs the stored row, so it is checked in the handler.
+  const patchMethodShape = paymentMethods.normalisePaymentMethodInput(paymentMethod);
+  if (patchMethodShape.error) {
+    return res.status(400).json({ error: patchMethodShape.error });
   }
   if (amountInr !== undefined && (!Number.isFinite(Number(amountInr)) || Number(amountInr) <= 0)) {
     return res.status(400).json({ error: 'amountInr must be a positive number' });
@@ -5704,7 +5734,7 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
       // transaction, released on COMMIT/ROLLBACK by withUserClient.
       const existing = await client.query(
         `SELECT id, user_card_id, amount_inr, occurred_at, category_id, user_category_id, rail, merchant_name, status,
-                instrument, entry_kind, state_applied, is_backfill
+                instrument, entry_kind, state_applied, is_backfill, payment_method
            FROM transactions WHERE id = $1 AND profile_id = $2 FOR UPDATE`,
         [req.params.id, req.userId]
       );
@@ -5713,6 +5743,16 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
       if (old.status !== 'active') {
         return { status: 409, error: `cannot edit a transaction with status '${old.status}'` };
       }
+      // Validated before any write or state reversal below: withUserClient
+      // commits whatever the callback returns, so a 400 must come first.
+      // An absent field keeps the stored method; an instrument change that the
+      // stored method does not fit is rejected (see payment_methods.js).
+      const methodResolution = paymentMethods.resolvePaymentMethodForPatch(
+        paymentMethod,
+        old.payment_method,
+        instrument ?? old.instrument,
+      );
+      if (methodResolution.error) return { status: 400, error: methodResolution.error };
       let selfTransferRule = null;
       if (selfTransfer !== undefined) {
         if (disablingSelfTransfer || selfTransfer.remember === true) {
@@ -5849,14 +5889,14 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
         `UPDATE transactions
             SET user_card_id = $1, amount_inr = $2, occurred_at = $3, category_id = $4,
                 user_category_id = $5, rail = $6,
-                merchant_name = $7, instrument = $8, entry_kind = $9
+                merchant_name = $7, instrument = $8, entry_kind = $9, payment_method = $11
           WHERE id = $10
           RETURNING id, user_card_id, amount_inr, occurred_at, category_id, user_category_id,
-                    rail, merchant_name, instrument, entry_kind, status`,
+                    rail, merchant_name, instrument, entry_kind, status, payment_method`,
         [
           newValues.userCardId, newValues.amount, newValues.occurred, newValues.categoryId,
           newValues.userCategoryId, newValues.rail, newValues.merchantName,
-          newValues.instrument, newValues.entryKind, old.id,
+          newValues.instrument, newValues.entryKind, old.id, methodResolution.value,
         ]
       );
 

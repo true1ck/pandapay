@@ -26,6 +26,7 @@ class _FakeUserCardsRepository extends UserCardsRepository {
     TxnInstrument instrument = TxnInstrument.creditCard,
     TxnEntryKind entryKind = TxnEntryKind.spend,
     String? clientMutationId,
+    String? paymentMethod,
   }) async {
     if (shouldFail) throw ApiException('offline');
     sent.add({
@@ -34,6 +35,7 @@ class _FakeUserCardsRepository extends UserCardsRepository {
       'instrument': instrument,
       'entryKind': entryKind,
       'clientMutationId': clientMutationId,
+      'paymentMethod': paymentMethod,
     });
     return 'fake-txn-id';
   }

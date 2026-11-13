@@ -150,6 +150,8 @@ Future<bool> sharedEnsureContactsAccess(BuildContext context) async {
   final needsSettings = status.isPermanentlyDenied || status.isRestricted;
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
+      // Flutter 3.29+ keeps a snackbar with an action until dismissed.
+      persist: false,
       content: Text(
         needsSettings
             ? 'Contacts access is off. Turn it on in Settings, or type a name and number.'
@@ -173,7 +175,9 @@ Future<(String, String)?> sharedPickContact(BuildContext context) async {
     );
     final rawName = picked?.displayName?.trim() ?? '';
     if (picked == null || rawName.isEmpty) return null;
-    final name = rawName.length > 40 ? rawName.substring(0, 40).trim() : rawName;
+    final name = rawName.length > 40
+        ? rawName.substring(0, 40).trim()
+        : rawName;
     final numbers = [
       for (final p in picked.phones)
         if (sharedCleanPhone(p.number) != null) sharedCleanPhone(p.number)!,
@@ -304,8 +308,8 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
     final lower = name.toLowerCase();
     if (lower == 'you' || lower == 'me' || lower == 'myself') {
       setState(
-        () => _error =
-            'That name cannot be used. Please choose a different one.',
+        () =>
+            _error = 'That name cannot be used. Please choose a different one.',
       );
       return;
     }
@@ -512,6 +516,8 @@ Future<String?> runAddFriendFlow(
     } else if (added.inviteIssue != null) {
       messenger.showSnackBar(
         SnackBar(
+          // Flutter 3.29+ keeps a snackbar with an action until dismissed.
+          persist: false,
           content: Text('Friend saved. ${added.inviteIssue}'),
           duration: const Duration(seconds: 8),
           action: added.phone == null

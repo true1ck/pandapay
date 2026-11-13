@@ -18,13 +18,16 @@ import '../../app/transaction_tag_picker.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart'
-    show categoryIdForServer, userCategoryIdForServer;
+    show SpendCategory, categoryIdForServer, userCategoryIdForServer;
 import '../../data/merchant_category_rules_repository.dart';
 import '../../data/user_cards_repository.dart';
 import '../../data/self_transfer.dart';
 import '../../data/local/financial_store.dart' show canonicalBankSender;
 import '../../data/local/self_transfer_rules.dart';
 import '../../data/local/sms_intake_repository.dart';
+import '../payments/payment_method_catalogue.dart';
+import '../payments/payment_method_picker.dart';
+import '../payments/payment_method_rules.dart';
 import 'category_bulk_review_sheet.dart';
 import '../sms_v2/similar/similar_runner.dart';
 import '../sms_v2/storage/event_store.dart';
@@ -60,6 +63,10 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   TransactionEntry? _originalEntry;
   DateTime? _occurredAt;
   TxnInstrument? _instrument;
+
+  /// How it was paid (cheque, NEFT...). Starts as what is saved; only sent
+  /// when the person changes it, so an edit that never touches it is unchanged.
+  String? _paymentMethod;
   TxnEntryKind _entryKind = TxnEntryKind.spend;
   SelfTransferDestination? _selfTransfer;
   SelfTransferDestination? _clearedSelfTransfer;
@@ -115,6 +122,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       );
     }
     _instrument = entry.instrumentKnown ? entry.instrument : null;
+    _paymentMethod = entry.paymentMethod;
     _rail = entry.rail;
     if (entry.pipelineVersion == 2 && entry.eventId != null) {
       try {
@@ -139,6 +147,32 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     });
   }
 
+  /// The method to send: only when the person set one that differs from what
+  /// is saved. An SMS-ledger row is edited through the ledger, which has no
+  /// method field, so nothing is sent for it.
+  String? get _methodToSend {
+    final original = _originalEntry;
+    if (original == null || original.pipelineVersion == 2) return null;
+    final method = _paymentMethod;
+    if (method == null || method == original.paymentMethod) return null;
+    return paymentMethodByWire(method) == null ? null : method;
+  }
+
+  /// The person removed a saved method (for example by switching to cash).
+  bool get _clearMethod {
+    final original = _originalEntry;
+    // A saved plain `upi` is the SMS reader's evidence, not a choice the
+    // person made, so changing the instrument never counts as clearing it
+    // (the server keeps it, exactly as before this feature existed).
+    return original != null &&
+        original.pipelineVersion != 2 &&
+        original.paymentMethod != null &&
+        original.paymentMethod != 'upi' &&
+        _paymentMethod == null;
+  }
+
+  bool get _methodChanged => _methodToSend != null || _clearMethod;
+
   Future<void> _save() async {
     final amount = double.tryParse(_amountController.text.trim());
     if (amount == null || !amount.isFinite || amount <= 0) {
@@ -150,6 +184,15 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       setState(
         () => _error =
             'Connect to the internet to confirm or undo this self-transfer.',
+      );
+      return;
+    }
+    // A payment method is not part of the offline edit queue, so changing it
+    // needs the server rather than being dropped silently.
+    if (_methodChanged &&
+        ref.read(isOnlineProvider).valueOrNull == false) {
+      setState(
+        () => _error = 'Connect to the internet to change how this was paid.',
       );
       return;
     }
@@ -172,7 +215,8 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
             : _instrument != null) ||
         original.entryKind != _entryKind ||
         _cardBill != _originalCardBill ||
-        original.rail != _rail;
+        original.rail != _rail ||
+        _methodChanged;
     try {
       final categoryChanged =
           original != null && original.categoryId != _categoryId;
@@ -244,7 +288,8 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       if (offline &&
           original?.pipelineVersion != 2 &&
           _selfTransfer == null &&
-          _clearedSelfTransfer == null) {
+          _clearedSelfTransfer == null &&
+          !_methodChanged) {
         final queue = await ref.read(syncQueueProvider.future);
         queue.enqueueUpdate(
           entity: 'transactions',
@@ -454,6 +499,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     // the direct call below.
     if (_selfTransfer == null &&
         _clearedSelfTransfer == null &&
+        !_methodChanged &&
         !widget.transactionId.startsWith('local')) {
       final fields = _changedServerFields(original, amount);
       if (fields.isNotEmpty) {
@@ -485,6 +531,8 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       userCardId: _userCardId,
       instrument: _selfTransfer != null ? TxnInstrument.upiBank : _instrument,
       entryKind: _entryKind,
+      paymentMethod: _methodToSend,
+      clearPaymentMethod: _clearMethod,
       selfTransfer: _selfTransfer == null && _clearedSelfTransfer == null
           ? null
           : {
@@ -813,6 +861,24 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     );
   }
 
+  String? _categorySlug(List<SpendCategory> categories) {
+    final id = _categoryId;
+    if (id == null) return null;
+    for (final category in categories) {
+      if (category.id == id) return category.slug;
+    }
+    return null;
+  }
+
+  static bool _hasCardOfType(List<UserCard> cards, String kind) {
+    for (final card in cards) {
+      if (card.cardType == null || card.cardType!.toLowerCase() == kind) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final tagRepository = ref.watch(transactionTagsProvider);
@@ -970,6 +1036,13 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                           }
                           if (_entryKind != TxnEntryKind.spend &&
                               _instrument == TxnInstrument.creditCard) {
+                            _paymentMethod = selectPaymentInstrument(
+                              PaymentSelection(
+                                instrument: _instrument,
+                                method: _paymentMethod,
+                              ),
+                              TxnInstrument.upiBank,
+                            ).method;
                             _instrument = TxnInstrument.upiBank;
                             _userCardId = null;
                           }
@@ -1037,27 +1110,58 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                         ),
                         controlAffinity: ListTileControlAffinity.leading,
                       ),
-                    DropdownButtonFormField<TxnInstrument?>(
-                      initialValue: _instrument,
-                      hint: const Text('Unknown — choose a method'),
-                      style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-                      decoration: inputDecoration('Paid with'),
-                      items: [
-                        for (final instrument in TxnInstrument.values)
-                          if (instrument != TxnInstrument.creditCard ||
-                              _entryKind == TxnEntryKind.spend)
-                            DropdownMenuItem(
-                              value: instrument,
-                              child: Text(instrument.label),
-                            ),
-                      ],
-                      onChanged: (value) {
-                        setState(() {
-                          _instrument = value;
-                          if (_instrument != TxnInstrument.creditCard)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Paid with',
+                        style: BambooFonts.ui(13.5, color: BambooInk.ink500),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: PaymentMethodPicker(
+                        entryKind: _entryKind,
+                        selection: PaymentSelection(
+                          instrument: _instrument,
+                          method: _paymentMethod,
+                        ),
+                        savedInstrument: entry.instrumentKnown
+                            ? entry.instrument
+                            : null,
+                        savedMethod: entry.paymentMethod,
+                        amountController: _amountController,
+                        categorySlug: _categorySlug(categories),
+                        hasCreditCards: _hasCardOfType(cards, 'credit'),
+                        hasDebitCards: _hasCardOfType(cards, 'debit'),
+                        cardSelected: _userCardId != null,
+                        // An SMS-ledger row is edited through the ledger,
+                        // which cannot store a method.
+                        methodsEnabled: entry.pipelineVersion != 2,
+                        unknownHint: 'Unknown — choose a method',
+                        onChanged: (next) => setState(() {
+                          final instrumentChanged =
+                              next.instrument != _instrument;
+                          if (instrumentChanged &&
+                              next.instrument != TxnInstrument.creditCard) {
                             _userCardId = null;
-                        });
-                      },
+                          }
+                          _instrument = next.instrument;
+                          _paymentMethod = next.method;
+                          // Tapping away and back to the saved instrument
+                          // must not lose the saved method. Only an
+                          // instrument tap restores it: clearing the method
+                          // on the same instrument is the person's choice.
+                          final saved = entry.paymentMethod;
+                          if (instrumentChanged &&
+                              _paymentMethod == null &&
+                              saved != null &&
+                              entry.instrumentKnown &&
+                              next.instrument == entry.instrument) {
+                            _paymentMethod = saved;
+                          }
+                        }),
+                      ),
                     ),
                     const SizedBox(height: AppSpace.lg),
                     DropdownButtonFormField<TxnRail>(

@@ -1,0 +1,29 @@
+{
+  "contractId": "transaction-payment-methods",
+  "version": 1,
+  "status": "frozen",
+  "note": "transactions.payment_method vocabulary. The stored instrument never changes. Only these wire values may be written by the app/API. 'upi' predates this contract (SMS v2 writes it) and keeps its meaning.",
+  "methods": [
+    {"wire": "upi",           "label": "UPI",            "group": "bank",   "instruments": ["upi_bank", "credit_card", "debit_card"], "mainChip": false},
+    {"wire": "net_banking",   "label": "Net banking",    "group": "bank",   "instruments": ["upi_bank"], "mainChip": false},
+    {"wire": "neft",          "label": "NEFT",           "group": "bank",   "instruments": ["upi_bank"], "mainChip": false},
+    {"wire": "imps",          "label": "IMPS",           "group": "bank",   "instruments": ["upi_bank"], "mainChip": false},
+    {"wire": "rtgs",          "label": "RTGS",           "group": "bank",   "instruments": ["upi_bank"], "mainChip": false, "minAmountInr": 200000},
+    {"wire": "cheque",        "label": "Cheque",         "group": "bank",   "instruments": ["upi_bank"], "mainChip": true},
+    {"wire": "demand_draft",  "label": "Demand draft",   "group": "bank",   "instruments": ["upi_bank"], "mainChip": false},
+    {"wire": "auto_debit",    "label": "Auto-debit (NACH / standing instruction)", "group": "bank", "instruments": ["upi_bank"], "mainChip": false},
+    {"wire": "emi",           "label": "EMI",            "group": "credit", "instruments": ["credit_card", "debit_card", "upi_bank", "other"], "mainChip": false},
+    {"wire": "pay_later",     "label": "Pay later",      "group": "credit", "instruments": ["other"], "mainChip": false},
+    {"wire": "prepaid_card",  "label": "Prepaid / forex card", "group": "cards", "instruments": ["wallet"], "mainChip": false},
+    {"wire": "gift_card",     "label": "Gift card / voucher", "group": "other", "instruments": ["other"], "mainChip": false},
+    {"wire": "reward_points", "label": "Reward points",  "group": "other",  "instruments": ["other"], "mainChip": false}
+  ],
+  "groups": ["bank", "credit", "cards", "other"],
+  "instruments": ["credit_card", "debit_card", "cash", "upi_bank", "wallet", "other"],
+  "hardHiddenRules": [
+    "instrument credit_card or debit_card or cash or wallet => bank-only methods (net_banking, neft, imps, rtgs, cheque, demand_draft, auto_debit) are not offered",
+    "instrument cash => no method and no card picker",
+    "entry kind income, transfer or investment => credit_card instrument is not offered (existing rule)",
+    "rtgs is not offered below minAmountInr when an amount is entered"
+  ]
+}

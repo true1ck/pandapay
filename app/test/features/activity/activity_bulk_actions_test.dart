@@ -41,6 +41,8 @@ class _FakeUserCardsRepository implements UserCardsRepository {
     TxnInstrument? instrument,
     TxnEntryKind? entryKind,
     Map<String, dynamic>? selfTransfer,
+    String? paymentMethod,
+    bool clearPaymentMethod = false,
   }) async {
     editedIds.add(id);
   }

@@ -33,6 +33,7 @@ import 'foreign_payments_screen.dart';
 import '../sync/split_sync.dart';
 import '../insights/spend_trends_screen.dart';
 import '../quickadd/quick_add_screen.dart';
+import '../payments/payment_method_catalogue.dart';
 import '../shared_expenses/runtime/shared_providers.dart';
 import '../shared_expenses/composer/shared_source_seed.dart';
 
@@ -132,10 +133,14 @@ class TransactionDetailScreen extends ConsumerWidget {
                               ),
                             ),
                           ],
-                          if (entry.paymentMethod == 'upi') ...[
+                          if (entry.paymentMethod == 'upi' ||
+                              _DetailBodyState._methodLabel(entry) !=
+                                  null) ...[
                             const SizedBox(height: AppSpace.sm),
                             Text(
-                              'UPI',
+                              entry.paymentMethod == 'upi'
+                                  ? 'UPI'
+                                  : _DetailBodyState._methodLabel(entry)!,
                               style: BambooFonts.ui(
                                 14,
                                 color: BambooInk.ink700,
@@ -1820,10 +1825,28 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     return received.toString().split('.').first;
   }
 
-  static String _cardOrPaymentLabel(TransactionEntry entry) {
-    if (entry.cardDisplayName != null && entry.cardDisplayName!.isNotEmpty) {
-      return entry.cardDisplayName!;
+  /// The stored payment method's label ("Cheque", "NEFT", "EMI"...), or null
+  /// when there is none to show: no method, the legacy SMS `upi` (its own
+  /// "Rail" row already says UPI), an unknown value, or a method that does not
+  /// fit the entry's instrument (so a stale value is never shown).
+  static String? _methodLabel(TransactionEntry entry) {
+    final method = paymentMethodByWire(entry.paymentMethod);
+    if (method == null || method.wire == 'upi') return null;
+    if (entry.instrumentKnown &&
+        !method.instruments.contains(entry.instrument)) {
+      return null;
     }
+    return method.label;
+  }
+
+  static String _cardOrPaymentLabel(TransactionEntry entry) {
+    final methodLabel = _methodLabel(entry);
+    if (entry.cardDisplayName != null && entry.cardDisplayName!.isNotEmpty) {
+      return methodLabel == null
+          ? entry.cardDisplayName!
+          : '${entry.cardDisplayName!} · $methodLabel';
+    }
+    if (methodLabel != null) return methodLabel;
     // A UPI bank debit is intentionally cardless. It is not a missing card
     // and must not be displayed as a blank field or attached to a random
     // saved credit card.
