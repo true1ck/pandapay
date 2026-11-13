@@ -8,6 +8,7 @@ import '../user_cards_repository.dart';
 import 'app_database.dart';
 import 'financial_store.dart';
 import 'queue_retry_policy.dart';
+import '../local_first/provisional_cards.dart';
 
 /// Plain value holder for one queued row — mirrors the
 /// transaction_outbox_entries columns 1:1 (see app_database.dart).
@@ -383,7 +384,22 @@ class TransactionOutboxRepository {
     required int maxEntries,
   }) async {
     var sent = 0;
+    // H3-2: a card that is only on the phone is not on the server yet.
+    final provisional = provisionalCardIds(_appDb.db, namespace);
     for (final entry in await pending(limit: maxEntries)) {
+      final card = entry.userCardId;
+      if (card != null && provisional.contains(card)) {
+        if (cardAddParked(_appDb.db, namespace, card)) {
+          _appDb.db.execute(
+            'UPDATE transaction_outbox_entries SET last_error = ?, parked = 1 WHERE id = ?',
+            [
+              'The card this was added for could not be saved. Fix or remove the card, then retry.',
+              entry.id,
+            ],
+          );
+        }
+        continue; // waits for the remap; no attempt counted
+      }
       try {
         final id = await repo.logTransaction(
           userCardId: entry.userCardId,
