@@ -96,10 +96,10 @@ function routeFixture(begin, end, method, url) {
 }
 
 const VALID_RECURRING = { displayName: 'Synthetic plan', typicalAmountInr: 100, cadenceDays: 30, nextExpectedOn: '2027-01-01' };
+// DELETE /budgets/:id moved to budgets_write.js (covered in budgets_write.test.js).
 const ROUTES = [
   { name: 'PATCH /card-overrides/:id', begin: "app.patch('/card-overrides/:id'", end: "app.delete('/card-overrides/:id'", method: 'patch', url: '/card-overrides/:id', request: (id) => ({ params: { id }, body: { isEnabled: true } }) },
   { name: 'DELETE /card-overrides/:id', begin: "app.delete('/card-overrides/:id'", end: '\napp.', method: 'delete', url: '/card-overrides/:id', request: (id) => ({ params: { id } }) },
-  { name: 'DELETE /budgets/:id', begin: "app.delete('/budgets/:id'", end: '\napp.', method: 'delete', url: '/budgets/:id', request: (id) => ({ params: { id } }) },
   { name: 'PATCH /recurring/:id', begin: "app.patch('/recurring/:id'", end: "app.post('/recurring/:id/dismiss'", method: 'patch', url: '/recurring/:id', request: (id) => ({ params: { id }, body: VALID_RECURRING }) },
   { name: 'POST /recurring/:id/dismiss', begin: "app.post('/recurring/:id/dismiss'", end: '\napp.', method: 'post', url: '/recurring/:id/dismiss', request: (id) => ({ params: { id } }) },
   { name: 'POST /notifications/read', begin: "app.post('/notifications/read'", end: '\n/**', method: 'post', url: '/notifications/read', request: (id) => ({ body: { id } }) },
