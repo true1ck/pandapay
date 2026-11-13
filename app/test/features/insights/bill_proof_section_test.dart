@@ -101,6 +101,11 @@ void main() {
     await tester.pumpWidget(_host(const BillProofSection()));
     await tester.pumpAndSettle();
     expect(find.textContaining('Added by you'), findsOneWidget);
+    await tester.pumpWidget(
+      _host(const BillProofSection(sourceKey: 'manual-bill-c1-2026-11')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Added by you'), findsOneWidget);
     expect(find.textContaining('View payment'), findsNothing);
 
     await tester.pumpWidget(_host(const BillProofSection(sourceKey: 'gone')));

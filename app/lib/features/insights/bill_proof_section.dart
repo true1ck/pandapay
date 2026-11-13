@@ -49,9 +49,8 @@ class BillProofSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final key = sourceKey;
-    final sms = key == null || key.isEmpty
-        ? null
-        : ref.watch(billProofSmsProvider(key));
+    final isManual = key == null || key.isEmpty || key.startsWith('manual-');
+    final sms = isManual ? null : ref.watch(billProofSmsProvider(key));
     final message = sms?.valueOrNull?.message;
     final loading = sms?.isLoading ?? false;
     final payId = paymentTransactionId;
@@ -143,7 +142,7 @@ class BillProofSection extends ConsumerWidget {
             ),
           ] else
             Text(
-              key == null || key.isEmpty
+              isManual
                   ? 'Added by you, so there is no bill SMS to show.'
                   : 'The original bill SMS is not on this phone.',
               style: BambooFonts.ui(12, color: BambooInk.ink500),
