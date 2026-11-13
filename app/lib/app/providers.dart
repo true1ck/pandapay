@@ -1,6 +1,7 @@
 import '../features/sms_v2/providers/data_providers.dart' as sms_v2_data;
 import '../features/sms_v2/instruments/bank_summary_adapter.dart';
 import '../features/sms_v2/providers/runtime_provider.dart';
+import '../features/import/statement_import_continuation_provider.dart' show statementImportAutoResumeProvider;
 import '../features/consent/sms_reading_consent.dart';
 import '../features/sms_v2/ledger/providers.dart';
 import '../features/sms_v2/ledger/adapters.dart' as sms_v2_adapters;
@@ -3022,6 +3023,8 @@ const outboxDueRecheckInterval = Duration(minutes: 5);
 final outboxFlushRequestProvider = StateProvider<int>((ref) => 0);
 
 final outboxFlushProvider = Provider<void>((ref) {
+  // WP-C10: saved statement imports resume on the same triggers.
+  ref.read(statementImportAutoResumeProvider);
   var running = false;
   var disposed = false;
   final startup = ref.read(startupWorkSchedulerProvider);
@@ -4625,18 +4628,67 @@ final inboundEmailsProvider = FutureProvider<List<InboundEmail>>((ref) async {
   }
 });
 
+const _statementImportsCacheKey = 'statement_imports';
+const _smsImportBatchesCacheKey = 'sms_import_batches';
+
+/// WP-C10: fetch an import-history list, remember the raw body, and fall back
+/// to the last one when the server cannot be reached (never on an auth failure).
+Future<List<T>> _cachedImportList<T>(
+  Ref ref,
+  String key,
+  Future<List<T>> Function(void Function(String) onRaw) fetch,
+  List<T> Function(String raw) parse,
+) async {
+  final cache = await _cacheOrNull(ref);
+  String? raw;
+  try {
+    final list = await fetch((body) => raw = body);
+    final body = raw;
+    if (body != null) {
+      try {
+        await cache?.put(key, body);
+      } catch (_) {}
+    }
+    return list;
+  } catch (error) {
+    if (isAuthenticationFailure(error)) return const [];
+    final cached = await cache?.read(key);
+    if (cached != null && isOfflineLike(error)) {
+      try {
+        return parse(cached.rawJson);
+      } catch (_) {}
+    }
+    rethrow;
+  }
+}
+
+/// When the cached import-history list was fetched (null = nothing cached).
+final importListFetchedAtProvider = FutureProvider.family<DateTime?, String>((
+  ref,
+  which,
+) async {
+  ref.watch(which == 'sms' ? smsImportBatchesProvider : statementImportsProvider);
+  final cache = await _cacheOrNull(ref);
+  final key = _scopedCacheKey(
+    ref,
+    which == 'sms' ? _smsImportBatchesCacheKey : _statementImportsCacheKey,
+  );
+  return (await cache?.read(key))?.fetchedAt;
+});
+
 /// F2/F1: recent statement imports, newest first.
 final statementImportsProvider = FutureProvider<List<StatementImport>>((
   ref,
 ) async {
   final repo = ref.watch(importRepositoryProvider);
   if (repo == null) return const [];
-  try {
-    return await repo.fetchStatementImports();
-  } catch (error) {
-    if (isAuthenticationFailure(error)) return const [];
-    rethrow;
-  }
+  final key = _scopedCacheKey(ref, _statementImportsCacheKey);
+  return _cachedImportList(
+    ref,
+    key,
+    (onRaw) => repo.fetchStatementImports(onRaw: onRaw),
+    ImportRepository.parseStatementImports,
+  );
 });
 
 /// F4/F1: recent SMS backup-file import batches.
@@ -4645,12 +4697,13 @@ final smsImportBatchesProvider = FutureProvider<List<SmsImportBatch>>((
 ) async {
   final repo = ref.watch(importRepositoryProvider);
   if (repo == null) return const [];
-  try {
-    return await repo.fetchSmsImportBatches();
-  } catch (error) {
-    if (isAuthenticationFailure(error)) return const [];
-    rethrow;
-  }
+  final key = _scopedCacheKey(ref, _smsImportBatchesCacheKey);
+  return _cachedImportList(
+    ref,
+    key,
+    (onRaw) => repo.fetchSmsImportBatches(onRaw: onRaw),
+    ImportRepository.parseSmsImportBatches,
+  );
 });
 
 /// F5: backup/restore status + this user's sync-conflict log.

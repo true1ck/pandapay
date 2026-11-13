@@ -204,7 +204,9 @@ class ImportRepository {
 
   // ---- F2 Statement PDF Import ----------------------------------------------
 
-  Future<List<StatementImport>> fetchStatementImports() async {
+  Future<List<StatementImport>> fetchStatementImports({
+    void Function(String rawBody)? onRaw,
+  }) async {
     final response = await _client.get(
       Uri.parse('$apiBaseUrl/statement-imports'),
       headers: _headers,
@@ -214,12 +216,15 @@ class ImportRepository {
         'GET /statement-imports failed: ${response.statusCode} ${response.body}',
       );
     }
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return (body['statementImports'] as List)
-        .cast<Map<String, dynamic>>()
-        .map(StatementImport.fromJson)
-        .toList();
+    onRaw?.call(response.body);
+    return parseStatementImports(response.body);
   }
+
+  static List<StatementImport> parseStatementImports(String raw) =>
+      ((jsonDecode(raw) as Map<String, dynamic>)['statementImports'] as List)
+          .cast<Map<String, dynamic>>()
+          .map(StatementImport.fromJson)
+          .toList();
 
   Future<StatementImport> confirmStatementImport({
     required String? userCardId,
@@ -318,7 +323,7 @@ class ImportRepository {
     );
     if (response.statusCode != 200 && response.statusCode != 201) {
       throw ApiException(
-        'POST /statement-imports failed: ${response.statusCode}',
+        'POST /statement-imports failed: ${response.statusCode} ${response.body}',
       );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
@@ -359,7 +364,9 @@ class ImportRepository {
 
   // ---- F4 SMS backup-file import --------------------------------------------
 
-  Future<List<SmsImportBatch>> fetchSmsImportBatches() async {
+  Future<List<SmsImportBatch>> fetchSmsImportBatches({
+    void Function(String rawBody)? onRaw,
+  }) async {
     final response = await _client.get(
       Uri.parse('$apiBaseUrl/sms-import-batches'),
       headers: _headers,
@@ -369,12 +376,15 @@ class ImportRepository {
         'GET /sms-import-batches failed: ${response.statusCode} ${response.body}',
       );
     }
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return (body['smsImportBatches'] as List)
-        .cast<Map<String, dynamic>>()
-        .map(SmsImportBatch.fromJson)
-        .toList();
+    onRaw?.call(response.body);
+    return parseSmsImportBatches(response.body);
   }
+
+  static List<SmsImportBatch> parseSmsImportBatches(String raw) =>
+      ((jsonDecode(raw) as Map<String, dynamic>)['smsImportBatches'] as List)
+          .cast<Map<String, dynamic>>()
+          .map(SmsImportBatch.fromJson)
+          .toList();
 
   Future<SmsImportBatch> recordSmsImportBatch({
     required int messageCount,

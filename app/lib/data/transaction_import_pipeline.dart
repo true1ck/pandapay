@@ -525,7 +525,7 @@ class TransactionImportSession {
 
   /// Stable for this in-memory review preview; restored sessions use their
   /// already-persisted id and encrypted plan instead.
-  final String continuationSessionId = const Uuid().v4();
+  String continuationSessionId = const Uuid().v4();
   bool submitting = false;
   bool _submissionStarted = false;
   bool get reviewLocked => _submissionStarted;
@@ -1007,6 +1007,23 @@ class TransactionImportSession {
           error is ApiException &&
           error.statusCode != null) {
         _submissionStarted = false;
+      }
+      // Same rule with the saved plan (WP-C10): a definite server refusal
+      // (not a gateway 502-504, not 409 key-reused) with nothing confirmed
+      // discards the saved plan and unlocks the preview under a fresh session
+      // id, so the corrected rows are saved as a new plan.
+      if (continuation != null &&
+          progress.completedBatches == 0 &&
+          error is ApiException &&
+          error.statusCode != null &&
+          !const {409, 502, 503, 504}.contains(error.statusCode)) {
+        try {
+          continuation.outbox.cancel(continuationSessionId);
+          continuationSessionId = const Uuid().v4();
+          _submissionStarted = false;
+        } catch (_) {
+          // Busy/unavailable: keep the plan and the lock; Retry stays safe.
+        }
       }
       rethrow;
     } finally {

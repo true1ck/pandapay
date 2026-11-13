@@ -4,12 +4,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../../support/memory_import_continuation.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/app/design/app_theme.dart';
 import 'package:pandapay/data/import_repository.dart';
 import 'package:pandapay/data/import_models.dart';
-import 'package:pandapay/data/user_cards_repository.dart'
-    show TxnInstrument, UserCard;
+import 'package:pandapay/data/user_cards_repository.dart' show UserCard;
 import 'package:pandapay/features/import/statement_pdf_import_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
@@ -67,42 +67,31 @@ class _RecordingImportRepository extends ImportRepository {
     : super(apiBaseUrl: 'http://test', accessToken: 'tok');
 
   @override
-  Future<StatementImport> confirmStatementImport({
-    required String? userCardId,
-    TxnInstrument instrument = TxnInstrument.other,
-    required DateTime statementFrom,
-    required DateTime statementTo,
-    Money? closingBalance,
-    double? pointsPosted,
-    required int txnCount,
-    required int reconciledCount,
-    String? issuerFormatId,
-    String importSource = 'statement',
-    required String importKey,
-    required List<StatementTransactionInput> transactions,
-  }) async {
+  Future<StatementImport> confirmPreparedStatementImport(
+    Map<String, dynamic> payload,
+  ) async {
+    final closing = payload['closingBalanceInr'];
     lastConfirmArgs = {
-      'userCardId': userCardId,
-      'closingBalance': closingBalance,
-      'txnCount': txnCount,
-      'reconciledCount': reconciledCount,
-      'importKey': importKey,
-      'transactions': transactions,
+      'userCardId': payload['userCardId'],
+      'closingBalance': closing == null
+          ? null
+          : Money.fromRupees((closing as num).toDouble()),
+      'txnCount': payload['txnCount'],
+      'reconciledCount': payload['reconciledCount'],
+      'importKey': payload['importKey'],
+      'transactions': payload['transactions'],
     };
     calls.add(lastConfirmArgs!);
+    final count = payload['txnCount'] as int;
     return StatementImport.fromJson({
       'id': 'si1',
-      'user_card_id': userCardId,
-      'statement_from': statementFrom.toIso8601String(),
-      'statement_to': statementTo.toIso8601String(),
-      'txn_count': txnCount,
-      'reconciled_count': reconciledCount,
+      'user_card_id': payload['userCardId'],
+      'statement_from': payload['statementFrom'],
+      'statement_to': payload['statementTo'],
+      'txn_count': count,
+      'reconciled_count': payload['reconciledCount'],
       'imported_at': DateTime.now().toIso8601String(),
-      'summary': {
-        'imported': txnCount,
-        'pendingDuplicates': 0,
-        'exactRetries': 0,
-      },
+      'summary': {'imported': count, 'pendingDuplicates': 0, 'exactRetries': 0},
     });
   }
 }
@@ -147,6 +136,7 @@ void main() {
           overrides: [
             userCardsProvider.overrideWith((ref) async => const []),
             importRepositoryProvider.overrideWithValue(repo),
+            memoryContinuationOverride(repo),
           ],
           child: const MaterialApp(home: StatementPdfImportScreen()),
         ),
@@ -183,11 +173,11 @@ void main() {
       expect(repo.lastConfirmArgs!['userCardId'], isNull);
       expect(repo.calls, hasLength(2));
       final rows =
-          repo.calls.first['transactions'] as List<StatementTransactionInput>;
+          (repo.calls.first["transactions"] as List).cast<Map<String, dynamic>>();
       expect(rows, hasLength(1));
-      expect(rows.single.merchantName, 'COFFEE');
-      expect(rows.single.importRowKey, matches(RegExp(r'^[a-f0-9]{64}$')));
-      expect(rows.single.occurredAt, DateTime(2026, 10, 2, 20, 32));
+      expect(rows.single["merchantName"], 'COFFEE');
+      expect(rows.single["importRowKey"], matches(RegExp(r'^[a-f0-9]{64}$')));
+      expect(DateTime.parse(rows.single["occurredAt"] as String).toLocal(), DateTime(2026, 10, 2, 20, 32));
     },
   );
   testWidgets(
@@ -207,6 +197,7 @@ void main() {
           overrides: [
             userCardsProvider.overrideWith((ref) async => const [card]),
             importRepositoryProvider.overrideWithValue(repo),
+            memoryContinuationOverride(repo),
           ],
           child: const MaterialApp(home: StatementPdfImportScreen()),
         ),

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'api_exception.dart';
 import 'import_repository.dart';
 import 'local/statement_import_outbox.dart';
 import 'portable_backup/account_recovery_operation_gate.dart';
@@ -14,6 +15,12 @@ class StatementImportContinuation {
   final Future<StatementImport> Function(Map<String, dynamic>) sendPrepared;
   final AccountRecoveryOperationGate gate;
   bool _running = false;
+
+  /// Sessions the server refused for good (same importKey, different body).
+  /// In memory only: the encrypted rows stay on the phone untouched and a
+  /// restart re-learns the refusal on the next attempt. Never retried
+  /// automatically; shown on the pending-imports card.
+  final Map<String, String> parkedReasons = {};
 
   StatementImportContinuation({
     required this.outbox,
@@ -56,6 +63,31 @@ class StatementImportContinuation {
     checkAccountUnchanged();
     return _drain(sessionId: sessionId, onProgress: onProgress);
   });
+
+  /// Background resume (reconnect / app resume / startup). Drains every pending
+  /// session that is not parked, one at a time. A transport failure stops the
+  /// pass (the rest would fail the same way); a server refusal of one session
+  /// parks it and moves on. Returns batches confirmed.
+  Future<int> autoResume({void Function(ImportProgress)? onProgress}) =>
+      _exclusive(() async {
+        var confirmed = 0;
+        for (final session in outbox.listSessions().where(
+          (s) => !s.needsReview && !parkedReasons.containsKey(s.sessionId),
+        )) {
+          final before = session.completedBatches;
+          try {
+            final p = await _drain(
+              sessionId: session.sessionId,
+              onProgress: onProgress,
+            );
+            confirmed += p.completedBatches - before;
+          } on ApiException {
+            if (parkedReasons.containsKey(session.sessionId)) continue;
+            rethrow;
+          }
+        }
+        return confirmed;
+      });
 
   Future<T> _exclusive<T>(Future<T> Function() operation) async {
     if (_running) {
@@ -162,7 +194,12 @@ class StatementImportContinuation {
         completedThisRun++;
         checkAccountUnchanged();
         report();
-      } catch (_) {
+      } catch (error) {
+        if (error is ApiException &&
+            error.errorCode == 'statement_import_key_reused') {
+          parkedReasons[lease.sessionId] =
+              'The server already holds a different import under the same key. Your rows are kept on this phone and were not uploaded.';
+        }
         // Never release a lease while its HTTP future is still running. If it
         // settled but account/lease fencing failed, preserve the same payload
         // for a later replay using the stable server importKey.

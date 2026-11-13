@@ -1,10 +1,13 @@
 import 'dart:async';
 
+import 'package:flutter/widgets.dart' show AppLifecycleListener;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
 import '../../app/env.dart';
 import '../../app/providers.dart';
+import '../../data/api_exception.dart';
 import '../../data/authenticated_http_client.dart';
 import '../../data/import_repository.dart';
 import '../../data/local/statement_import_outbox.dart';
@@ -115,3 +118,93 @@ final statementImportContinuationProvider =
         },
       );
     });
+
+/// Bumped after a background resume so the pending-imports card rebuilds.
+final statementImportRevisionProvider = StateProvider<int>((ref) => 0);
+
+/// True when [error] means "could not reach the server" rather than a real
+/// answer. A client-side timeout surfaces as an [ApiException] with no HTTP
+/// status, so it counts here too.
+bool isImportTransportFailure(Object error) {
+  if (error is ApiException) {
+    final status = error.statusCode;
+    return status == null || status == 502 || status == 503 || status == 504;
+  }
+  return isOfflineLike(error);
+}
+
+/// Resumes saved statement imports without the user asking: when the device
+/// comes back online, the app resumes, an outbox flush is requested and shortly
+/// after startup (WP-C10). Idempotent: the server replays a batch by its
+/// deterministic importKey. Never blocks the UI and keeps no timer.
+final statementImportAutoResumeProvider = Provider<void>((ref) {
+  if (!Env.statementImportContinuationEnabled) return;
+  var running = false;
+  var disposed = false;
+  final startup = ref.read(startupWorkSchedulerProvider);
+
+  Future<void> resume() async {
+    if (running || disposed) return;
+    final namespace = ref.read(cacheNamespaceProvider);
+    if (!namespace.startsWith('user:') ||
+        ref.read(accessTokenProvider) == null ||
+        ref.read(isOnlineProvider).valueOrNull == false) {
+      return;
+    }
+    running = true;
+    try {
+      final database = await ref.read(appDatabaseProvider.future);
+      if (disposed ||
+          pendingStatementImportBatches(
+                database.db,
+                namespace.toLowerCase(),
+              ) ==
+              0) {
+        return;
+      }
+      // Keep the autoDispose continuation alive for the whole pass.
+      final keepAlive = ref.listen(
+        statementImportContinuationProvider,
+        (_, _) {},
+      );
+      try {
+        final continuation = await ref.read(
+          statementImportContinuationProvider.future,
+        );
+        if (continuation == null || disposed) return;
+        final confirmed = await continuation.autoResume();
+        if (confirmed > 0 && !disposed) {
+          ref.invalidate(transactionsProvider);
+          ref.invalidate(homeSummaryProvider);
+          ref.invalidate(userCardsProvider);
+          ref.invalidate(statementImportsProvider);
+        }
+      } finally {
+        keepAlive.close();
+        if (!disposed) ref.read(statementImportRevisionProvider.notifier).state++;
+      }
+    } catch (_) {
+      // Transport failure, busy gate or account change: the encrypted batches
+      // stay saved and the next trigger tries again.
+    } finally {
+      running = false;
+    }
+  }
+
+  ref.listen(isOnlineProvider, (_, next) {
+    if (next.valueOrNull == true) unawaited(resume());
+  });
+  ref.listen(outboxFlushRequestProvider, (_, _) => unawaited(resume()));
+  ref.listen(cacheNamespaceProvider, (_, next) {
+    if (next.startsWith('user:')) {
+      startup.enqueue('statement-import-resume', resume);
+    }
+  });
+  final lifecycle = AppLifecycleListener(onResume: () => unawaited(resume()));
+  ref.onDispose(() {
+    disposed = true;
+    startup.cancel('statement-import-resume');
+    lifecycle.dispose();
+  });
+  startup.enqueue('statement-import-resume', resume);
+});
