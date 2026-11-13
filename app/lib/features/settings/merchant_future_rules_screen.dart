@@ -305,7 +305,7 @@ class _MerchantFutureRulesScreenState
               const LinearProgressIndicator()
             else if (_pending.contains(rule.id))
               Text(
-                'Saved — waiting to send',
+                'Saved â€” waiting to send',
                 style: BambooFonts.ui(12, color: BambooInk.ink500),
               )
             else
