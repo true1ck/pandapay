@@ -7,6 +7,8 @@ const express = require('express');
 const { createCorsPolicy } = require('./cors_policy');
 const { jsonBodyParser, jsonBodyErrorHandler } = require('./request_limits');
 const { rejectInvalidUuid } = require('./http_db_errors');
+const { createUserCardsAddHandler } = require('./user_cards_add');
+const { createCardOverridesPostHandler } = require('./card_overrides_write');
 const { syncPushBodyParser } = require('./sync_push_body');
 const { validateSyncRegistration, validateSyncPushRequest, validateSyncPushChange, validateSyncPullQuery, validateSyncAck, validateSyncConflictId, syncRejectionDetail, createSyncPushContext, processSyncPushItem, syncDeviceExists, respondUnknownSyncDevice, respondDbError } = require('./sync_request_validation');
 const { createLoungeUsagePostHandler } = require('./lounge_usage_route');
@@ -1943,128 +1945,8 @@ app.get('/user-cards', requireAuth, async (req, res) => {
  * pattern as POST /profile, so a user can never add a card to someone
  * else's wallet even if they tampered with the request.
  */
-app.post('/user-cards', requireAuth, async (req, res) => {
-  const { cardProductId, nickname, last4 } = req.body || {};
-  const normalizedLast4 = normalizeCardLast4(last4);
-  if (!cardProductId || typeof cardProductId !== 'string') {
-    return res.status(400).json({ error: 'cardProductId is required' });
-  }
-  // Four digits or nothing. Validated here as well as by the column CHECK so
-  // the caller gets a clear 400 rather than a 500 from a constraint
-  // violation — and so this route can never be the way a longer number
-  // reaches a column that must only ever hold a matching key.
-  if (normalizedLast4 !== null && !/^[0-9]{4}$/.test(normalizedLast4)) {
-    return res.status(400).json({ error: 'last4 must be exactly 4 digits' });
-  }
-  // The whole-history repair is scheduled after the response is sent. Running
-  // it inside this request held the card add (and the app's spinner) for
-  // minutes on an account with a long SMS history.
-  let deferredRepair = null;
-  try {
-    const result = await withUserClient(req.userId, async (client) => {
-      // Serialize adds for the same account/product pair. The UI performs a
-      // fast local duplicate check, but this transaction-level lock is the
-      // authoritative guard for two scans/taps racing each other.
-      await client.query(
-        'SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))',
-        [req.userId, cardProductId],
-      );
-      const card = await client.query(
-        `SELECT id, issuer_id, card_type
-           FROM card_products
-          WHERE id = $1 AND status = 'published'`,
-        [cardProductId]
-      );
-      if (card.rows.length === 0) return null;
-
-      // Serialize physical-card adds as well as product adds. This closes the
-      // race where two catalogue variants for the same bank card are tapped
-      // at nearly the same time.
-      await client.query(
-        `SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`,
-        [`card-identity:${req.userId}:${card.rows[0].issuer_id || ''}:${card.rows[0].card_type || ''}:${normalizedLast4 || ''}`],
-      );
-
-      const existing = await client.query(
-        `SELECT uc.id, uc.card_product_id, uc.nickname, uc.last4,
-                uc.is_default, uc.sort_order, uc.created_at,
-                 uc.is_archived, cp.name AS card_name,
-                 cp.issuer_id, cp.card_type
-           FROM user_cards uc
-           JOIN card_products cp ON cp.id = uc.card_product_id
-          WHERE uc.profile_id = $1 AND uc.is_archived = false
-          ORDER BY uc.created_at ASC, uc.id ASC`,
-        [req.userId],
-      );
-      const conflict = findCardAddConflict(existing.rows, {
-        cardProductId,
-        last4: normalizedLast4,
-        issuerId: card.rows[0].issuer_id,
-        cardType: card.rows[0].card_type,
-      });
-      if (conflict?.kind === 'already_present') {
-        return { alreadyPresent: true, userCard: conflict.userCard };
-      }
-      if (conflict?.kind === 'link_existing') {
-        const linked = await client.query(
-          `UPDATE user_cards
-              SET last4 = $1,
-                  nickname = COALESCE(NULLIF($2, ''), nickname)
-            WHERE id = $3 AND profile_id = $4 AND is_archived = false
-            RETURNING id, card_product_id, nickname, last4, is_default, sort_order, created_at`,
-          [normalizedLast4, nickname || null, conflict.userCard.id, req.userId],
-        );
-        if (linked.rows.length > 0) {
-          deferredRepair = { reviewCrossSource: true, reviewCardId: linked.rows[0].id };
-          return { linkedExisting: true, userCard: linked.rows[0] };
-        }
-      }
-
-      const inserted = await client.query(
-        `INSERT INTO user_cards (profile_id, card_product_id, nickname, last4)
-         VALUES ($1, $2, $3, $4)
-         RETURNING id, card_product_id, nickname, last4, is_default, sort_order, created_at`,
-        [req.userId, cardProductId, nickname || null, normalizedLast4]
-      );
-      // When SMS history arrived before the user added this card, repair
-      // attribution in the same transaction so Spending stops showing the
-      // matching suffix as "unlinked" immediately after card creation.
-      // A camera/manual add has no reliable card suffix, so there is nothing
-      // for repairSmsHistory to match and the full repair scan only adds
-      // latency. Discovery/import paths that know the suffix still get the
-      // immediate attribution repair.
-      if (inserted.rows.length > 0 && normalizedLast4) {
-        deferredRepair = { reviewCrossSource: true, reviewCardId: inserted.rows[0].id };
-      }
-      return inserted.rows[0];
-    });
-
-    if (!result) return res.status(404).json({ error: 'card_product not found or not published' });
-    if (result.alreadyPresent) {
-      return res.status(409).json({
-        error: 'card_already_added',
-        message: 'This card is already in your wallet.',
-        userCard: result.userCard,
-      });
-    }
-    if (result.linkedExisting) {
-      res.status(200).json({ userCard: result.userCard, linkedExisting: true });
-      if (deferredRepair) scheduleSmsRepair(req.userId, deferredRepair, 'POST /user-cards');
-      return;
-    }
-    res.status(201).json({ userCard: result });
-    if (deferredRepair) scheduleSmsRepair(req.userId, deferredRepair, 'POST /user-cards');
-  } catch (err) {
-    if (err && err.code === '23505' && err.constraint === 'uq_user_cards_active_identity') {
-      return res.status(409).json({
-        error: 'card_already_added',
-        message: 'This physical card is already in your wallet.',
-      });
-    }
-    console.error('POST /user-cards error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+// Logic lives in user_cards_add.js (WP-S2: optional client `id` makes the add idempotent).
+app.post('/user-cards', requireAuth, createUserCardsAddHandler({ withUserClient, scheduleSmsRepair, safeErrorCode }));
 
 /**
  * POST /user-cards/import — plan Phase 1.2. Hands a guest's on-device
@@ -2357,48 +2239,8 @@ app.get('/card-overrides', requireAuth, async (req, res) => {
  * override_scope_populated CHECK constraint exactly so a bad request fails
  * with a clear 400 instead of a raw constraint-violation 500.
  */
-app.post('/card-overrides', requireAuth, async (req, res) => {
-  const { userCardId, scope, vpa, merchantName, categoryId, reasonNote } = req.body || {};
-  if (!userCardId || typeof userCardId !== 'string') {
-    return res.status(400).json({ error: 'userCardId is required' });
-  }
-  if (!['vpa', 'merchant_name', 'category'].includes(scope)) {
-    return res.status(400).json({ error: "scope must be 'vpa', 'merchant_name', or 'category'" });
-  }
-  if (scope === 'vpa' && !vpa) {
-    return res.status(400).json({ error: 'vpa is required when scope is vpa' });
-  }
-  if (scope === 'merchant_name' && !merchantName) {
-    return res.status(400).json({ error: 'merchantName is required when scope is merchant_name' });
-  }
-  if (scope === 'category' && !categoryId) {
-    return res.status(400).json({ error: 'categoryId is required when scope is category' });
-  }
-
-  try {
-    const result = await withUserClient(req.userId, async (client) => {
-      const owns = await client.query(
-        `SELECT id FROM user_cards WHERE id = $1 AND profile_id = $2 AND is_archived = false`,
-        [userCardId, req.userId]
-      );
-      if (owns.rows.length === 0) return null;
-
-      const inserted = await client.query(
-        `INSERT INTO card_overrides (profile_id, user_card_id, scope, vpa, merchant_name, category_id, reason_note)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         RETURNING id, user_card_id, scope, vpa, merchant_name, category_id, reason_note, is_enabled, created_at`,
-        [req.userId, userCardId, scope, vpa || null, merchantName || null, categoryId || null, reasonNote || null]
-      );
-      return inserted.rows[0];
-    });
-
-    if (!result) return res.status(404).json({ error: 'user_card not found or not owned by you' });
-    res.status(201).json({ override: result });
-  } catch (err) {
-    console.error('POST /card-overrides error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+// Logic lives in card_overrides_write.js (WP-S2: optional client `id` makes the create idempotent).
+app.post('/card-overrides', requireAuth, createCardOverridesPostHandler({ withUserClient, safeErrorCode }));
 
 /**
  * PATCH /card-overrides/:id — B8's edit + enable/disable toggle. Only
@@ -2676,6 +2518,9 @@ app.patch('/user-cards/:id', requireAuth, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ error: 'user_card not found' });
     res.json({ userCard: result.rows[0] });
   } catch (err) {
+    if (err?.code === '23505' && err.constraint === 'uq_user_cards_active_identity') {
+      return res.status(409).json({ error: 'card_already_added' });
+    }
     console.error('PATCH /user-cards/:id error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
