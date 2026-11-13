@@ -216,34 +216,45 @@ class FoundInstrumentsList extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(
         AppSpace.lg,
-        AppSpace.sm,
+        AppSpace.xs,
         AppSpace.lg,
-        AppSpace.xxl,
+        AppSpace.xl,
       ),
       children: [
         Text(
           'Confirm what belongs to you. Credit cards are added to your wallet. You can change these choices later.',
-          style: BambooFonts.ui(14, color: BambooInk.ink700, height: 1.45),
+          style: BambooFonts.ui(13, color: BambooInk.ink700, height: 1.4),
         ),
         for (final kind in InstrumentKind.values)
           if (visible.any((i) => i.kind == kind)) ...[
-            BambooSectionLabel(instrumentKindLabel(kind), asTitle: true),
+            BambooSectionLabel(
+              instrumentKindLabel(kind),
+              asTitle: true,
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.xs,
+                AppSpace.lg,
+                AppSpace.xs,
+                AppSpace.sm,
+              ),
+            ),
             for (final instrument in visible.where((i) => i.kind == kind))
               Padding(
-                padding: const EdgeInsets.only(bottom: AppSpace.md),
-                child: onResolveKind != null &&
+                padding: const EdgeInsets.only(bottom: AppSpace.sm),
+                child:
+                    onResolveKind != null &&
                         isShadowedByCard(instrument, visible)
                     ? _KindQuestionPanel(
                         account: instrument,
-                        onChoose: (isCard) => onResolveKind!(instrument, isCard),
+                        onChoose: (isCard) =>
+                            onResolveKind!(instrument, isCard),
                       )
                     : _InstrumentPanel(
-                  instrument: instrument,
-                  onConfirm: onConfirm,
-                  onReject: onReject,
-                  onRename: onRename,
-                  onOpen: onOpen,
-                ),
+                        instrument: instrument,
+                        onConfirm: onConfirm,
+                        onReject: onReject,
+                        onRename: onRename,
+                        onOpen: onOpen,
+                      ),
               ),
           ],
       ],
@@ -269,39 +280,129 @@ class _KindQuestionPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BambooPanel(
+      padding: _panelPadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            '${account.issuerSlug.toUpperCase()} ••${account.maskDigits}',
-            style: BambooFonts.ui(
-              15.5,
-              weight: FontWeight.w700,
-              color: BambooInk.ink900,
-            ),
+          Row(
+            children: [
+              BambooIconTile(instrumentKindIcon(account.kind), size: 36),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Text(
+                  '${account.issuerSlug.toUpperCase()} ••${account.maskDigits}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: BambooFonts.ui(
+                    15,
+                    weight: FontWeight.w700,
+                    color: BambooInk.ink900,
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: AppSpace.xs),
+          const SizedBox(height: AppSpace.sm),
           Text(
             'Your messages call this both a credit card and a bank account. Which is it?',
-            style: BambooFonts.ui(14, color: BambooInk.ink700, height: 1.45),
+            style: BambooFonts.ui(13, color: BambooInk.ink700, height: 1.4),
           ),
-          const SizedBox(height: AppSpace.md),
-          BambooActionBar(
-            primary: FilledButton(
-              style: BambooButtons.primary,
-              onPressed: () => onChoose(true),
-              child: const Text('Credit card'),
-            ),
+          const SizedBox(height: AppSpace.sm),
+          _ActionRow(
             quiet: [
               TextButton(
-                style: BambooButtons.quiet,
+                style: _compactQuiet,
                 onPressed: () => onChoose(false),
                 child: const Text('Bank account'),
               ),
             ],
+            primary: FilledButton(
+              style: _compactPrimary,
+              onPressed: () => onChoose(true),
+              child: const Text('Credit card'),
+            ),
           ),
         ],
       ),
+    );
+  }
+}
+
+const _panelPadding = EdgeInsets.fromLTRB(
+  AppSpace.md,
+  AppSpace.md,
+  AppSpace.md,
+  AppSpace.xs,
+);
+
+/// Small-looking buttons for the dense cards on this page. The theme's 52pt
+/// full-width button would dominate a card this size. They draw 36pt tall but
+/// keep Material's padded tap area, so the touch target stays the 44pt+ the
+/// mobile UI guide asks for. No `visualDensity: compact`: it would shrink the
+/// drawn button and the tap area with it.
+final _compactPrimary = FilledButton.styleFrom(
+  minimumSize: const Size(0, 36),
+  padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
+  tapTargetSize: MaterialTapTargetSize.padded,
+  textStyle: BambooFonts.ui(13.5, weight: FontWeight.w700),
+);
+
+final _compactQuiet = TextButton.styleFrom(
+  minimumSize: const Size(0, 36),
+  padding: const EdgeInsets.symmetric(horizontal: AppSpace.md),
+  tapTargetSize: MaterialTapTargetSize.padded,
+  foregroundColor: BambooInk.ink700,
+  textStyle: BambooFonts.ui(13.5, weight: FontWeight.w600),
+);
+
+/// Quiet text actions on the left, the one primary action (when there is one)
+/// on the right, all on a single line. Wraps rather than overflows on a narrow
+/// screen or a large text size.
+class _ActionRow extends StatelessWidget {
+  const _ActionRow({required this.quiet, this.primary});
+  final List<Widget> quiet;
+  final Widget? primary;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: quiet,
+          ),
+        ),
+        ?primary,
+      ],
+    );
+  }
+}
+
+/// One label above one figure, for the strip under an account's name.
+class _Stat extends StatelessWidget {
+  const _Stat(this.label, this.value);
+  final String label, value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: BambooFonts.ui(11.5, color: BambooInk.ink500)),
+        const SizedBox(height: 1),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: BambooFonts.money(
+            13.5,
+            weight: FontWeight.w700,
+            color: BambooInk.ink900,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -326,85 +427,126 @@ class _InstrumentPanel extends StatelessWidget {
     // not mean it is in the wallet.
     final inWallet = isCard && !detected && instrument.userCardId != null;
     final needsAction = isCard ? !inWallet : detected;
-    final quiet = [
-      TextButton(
-        style: BambooButtons.quiet,
-        onPressed: () => onReject(instrument),
-        child: const Text('Not mine'),
-      ),
-      TextButton(
-        style: BambooButtons.quiet,
-        onPressed: () => onRename(instrument),
-        child: const Text('Rename'),
-      ),
-    ];
     return BambooPanel(
+      padding: _panelPadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Pressable(
             onTap: () => onOpen(instrument),
             semanticLabel: 'Open ${instrument.displayName}',
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                BambooIconTile(instrumentKindIcon(instrument.kind)),
-                const SizedBox(width: AppSpace.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                Row(
+                  children: [
+                    BambooIconTile(
+                      instrumentKindIcon(instrument.kind),
+                      size: 36,
+                    ),
+                    const SizedBox(width: AppSpace.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            instrument.displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: BambooFonts.ui(
+                              15,
+                              weight: FontWeight.w700,
+                              color: BambooInk.ink900,
+                            ),
+                          ),
+                          Text(
+                            '${instrument.issuerSlug.toUpperCase()} ••${instrument.maskDigits ?? 'unknown'}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: BambooFonts.ui(
+                              12.5,
+                              color: BambooInk.ink500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (isCard ? inWallet : !detected) ...[
+                      const SizedBox(width: AppSpace.sm),
+                      StatusPill(
+                        label: isCard ? 'In wallet' : 'Confirmed',
+                        icon: Icons.check_rounded,
+                        foreground: BambooInk.rankBadgeInk,
+                        background: BambooInk.rankBadgeBg,
+                      ),
+                    ],
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      size: 20,
+                      color: BambooInk.ink500,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpace.sm),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpace.md,
+                    vertical: AppSpace.sm,
+                  ),
+                  decoration: BoxDecoration(
+                    color: BambooInk.paperMuted,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                  ),
+                  child: Row(
                     children: [
-                      Text(
-                        instrument.displayName,
-                        style: BambooFonts.ui(
-                          15.5,
-                          weight: FontWeight.w700,
-                          color: BambooInk.ink900,
+                      Expanded(
+                        child: _Stat(
+                          isCard ? 'Limit' : 'Available',
+                          smsMoney(
+                            isCard
+                                ? instrument.creditLimitMinor
+                                : instrument.availableMinor,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${instrument.issuerSlug.toUpperCase()} ••${instrument.maskDigits ?? 'unknown'}',
-                        style: BambooFonts.ui(13, color: BambooInk.ink500),
+                      Container(
+                        width: 1,
+                        height: 26,
+                        margin: const EdgeInsets.only(right: AppSpace.md),
+                        color: BambooInk.hairlineOnPaper,
+                      ),
+                      Expanded(
+                        child: _Stat(
+                          'Last activity',
+                          smsDate(instrument.lastSeenAt),
+                        ),
                       ),
                     ],
                   ),
                 ),
-                if (isCard ? inWallet : !detected) ...[
-                  StatusPill(
-                    label: isCard ? 'In wallet' : 'Confirmed',
-                    icon: Icons.check_rounded,
-                    foreground: BambooInk.rankBadgeInk,
-                    background: BambooInk.rankBadgeBg,
-                  ),
-                  const SizedBox(width: AppSpace.xs),
-                ],
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: BambooInk.ink500,
-                ),
               ],
             ),
           ),
-          const SizedBox(height: AppSpace.md),
-          const Divider(),
-          const SizedBox(height: AppSpace.xs),
-          BambooFigureRow(
-            isCard ? 'Limit' : 'Available',
-            smsMoney(
-              isCard ? instrument.creditLimitMinor : instrument.availableMinor,
-            ),
-          ),
-          BambooFigureRow('Last activity', smsDate(instrument.lastSeenAt)),
-          const SizedBox(height: AppSpace.md),
-          BambooActionBar(
+          _ActionRow(
+            quiet: [
+              TextButton(
+                style: _compactQuiet,
+                onPressed: () => onReject(instrument),
+                child: const Text('Not mine'),
+              ),
+              TextButton(
+                style: _compactQuiet,
+                onPressed: () => onRename(instrument),
+                child: const Text('Rename'),
+              ),
+            ],
             primary: needsAction
                 ? FilledButton(
-                    style: BambooButtons.primary,
+                    style: _compactPrimary,
                     onPressed: () => onConfirm(instrument),
                     child: Text(isCard ? 'Add to wallet' : 'Confirm'),
                   )
                 : null,
-            quiet: quiet,
           ),
         ],
       ),

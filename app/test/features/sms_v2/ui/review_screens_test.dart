@@ -57,6 +57,41 @@ void main() {
     await tester.tap(find.text('Rename'));
     expect(action, 'rename');
   });
+  testWidgets('tapping a found account opens its detail page', (tester) async {
+    final instrument = Instrument(
+      instrumentId: '55555555-5555-4555-8555-555555555555',
+      kind: InstrumentKind.bankAccount,
+      issuerSlug: 'axis',
+      maskDigits: '2468',
+      displayName: 'AXIS account ••2468',
+      status: InstrumentStatus.confirmed,
+      availableMinor: 12745,
+      firstSeenAt: DateTime.utc(2026, 11, 1),
+      lastSeenAt: DateTime.utc(2026, 11, 9),
+      evidenceCount: 2,
+    );
+    Instrument? opened;
+    await tester.pumpWidget(
+      app(
+        FoundInstrumentsList(
+          instruments: [instrument],
+          onConfirm: (_) {},
+          onReject: (_) {},
+          onRename: (_) {},
+          onOpen: (i) => opened = i,
+        ),
+      ),
+    );
+    await tester.tap(find.text('AXIS account ••2468'));
+    expect(opened?.instrumentId, instrument.instrumentId);
+    opened = null;
+    await tester.tap(find.text('Available'));
+    expect(opened?.instrumentId, instrument.instrumentId);
+    // The action buttons must not also open the page.
+    opened = null;
+    await tester.tap(find.text('Rename'));
+    expect(opened, isNull);
+  });
   testWidgets('a number that is both a card and an account asks which it is', (
     tester,
   ) async {
