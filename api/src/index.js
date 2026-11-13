@@ -8,6 +8,7 @@ const { createCorsPolicy } = require('./cors_policy');
 const { jsonBodyParser, jsonBodyErrorHandler } = require('./request_limits');
 const { rejectInvalidUuid } = require('./http_db_errors');
 const { createBudgetPostHandler, createBudgetDeleteHandler } = require('./budgets_write');
+const { createRecurringPostHandler, createRecurringPatchHandler } = require('./recurring_write');
 const { syncPushBodyParser } = require('./sync_push_body');
 const { validateSyncRegistration, validateSyncPushRequest, validateSyncPushChange, validateSyncPullQuery, validateSyncAck, validateSyncConflictId, syncRejectionDetail, createSyncPushContext, processSyncPushItem, syncDeviceExists, respondUnknownSyncDevice, respondDbError } = require('./sync_request_validation');
 const { createLoungeUsagePostHandler } = require('./lounge_usage_route');
@@ -7518,87 +7519,9 @@ app.get('/recurring', requireAuth, async (req, res) => {
   }
 });
 
-app.post('/recurring', requireAuth, async (req, res) => {
-  const { displayName, typicalAmountInr, cadenceDays, nextExpectedOn } = req.body || {};
-  const autopayStatus = req.body?.autopayStatus || 'unknown';
-  const name = typeof displayName === 'string' ? displayName.trim() : '';
-  const amount = Number(typicalAmountInr);
-  const cadence = Number(cadenceDays);
-  const dateIsValid = typeof nextExpectedOn === 'string'
-    && /^\d{4}-\d{2}-\d{2}$/.test(nextExpectedOn)
-    && !Number.isNaN(Date.parse(`${nextExpectedOn}T00:00:00Z`))
-    && new Date(`${nextExpectedOn}T00:00:00Z`).toISOString().slice(0, 10) === nextExpectedOn;
+app.post('/recurring', requireAuth, createRecurringPostHandler({ withUserClient }));
 
-  if (!isUsableSubscriptionName(name) || name.length > 80 ||
-      !Number.isFinite(amount) || amount <= 0 || amount > 10000000 ||
-      ![30, 365].includes(cadence) ||
-      !['active', 'cancelled', 'unknown'].includes(autopayStatus) ||
-      !dateIsValid) {
-    return res.status(400).json({ error: 'invalid_subscription' });
-  }
-
-  const merchantKey = merchantSeriesKey(name);
-  if (!merchantKey) return res.status(400).json({ error: 'invalid_subscription' });
-
-  try {
-    const result = await withUserClient(req.userId, (client) => client.query(
-      `INSERT INTO recurring_series
-         (profile_id, merchant_key, display_name, typical_amount_inr,
-          cadence_days, occurrence_count, first_seen_on, last_seen_on,
-          next_expected_on, detection_source, user_edited, autopay_status)
-       VALUES ($1, $2, $3, $4, $5, 0, NULL, NULL, $6, 'manual', true, $7)
-       ON CONFLICT (profile_id, merchant_key) DO UPDATE SET
-         display_name = EXCLUDED.display_name,
-         typical_amount_inr = EXCLUDED.typical_amount_inr,
-         cadence_days = EXCLUDED.cadence_days,
-         next_expected_on = EXCLUDED.next_expected_on,
-         detection_source = 'manual',
-         user_edited = true,
-         lifecycle_status = 'active',
-         autopay_status = EXCLUDED.autopay_status,
-         mandate_reference = NULL,
-         mandate_started_on = NULL,
-         mandate_cancelled_at = NULL,
-         is_active = true,
-         dismissed_at = NULL,
-         updated_at = now()
-       RETURNING id`,
-      [req.userId, merchantKey, name, amount, cadence, nextExpectedOn, autopayStatus]
-    ));
-    res.status(201).json({ id: result.rows[0].id });
-  } catch (err) {
-    console.error('POST /recurring error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
-
-app.patch('/recurring/:id', requireAuth, async (req, res) => {
-  if (rejectInvalidUuid(res, req.params.id)) return;
-  const { displayName, typicalAmountInr, cadenceDays, nextExpectedOn } = req.body || {};
-  const autopayStatus = req.body?.autopayStatus;
-  if (typeof displayName !== 'string' || displayName.trim().length < 2 || displayName.trim().length > 80 ||
-      !Number.isFinite(Number(typicalAmountInr)) || Number(typicalAmountInr) <= 0 || Number(typicalAmountInr) > 10000000 ||
-      !Number.isInteger(Number(cadenceDays)) || Number(cadenceDays) < 1 || Number(cadenceDays) > 3650 ||
-      (autopayStatus !== undefined && !['active', 'cancelled', 'unknown'].includes(autopayStatus)) ||
-      typeof nextExpectedOn !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(nextExpectedOn) || Number.isNaN(Date.parse(`${nextExpectedOn}T00:00:00Z`))) {
-    return res.status(400).json({ error: 'invalid_subscription' });
-  }
-  try {
-    const result = await withUserClient(req.userId, (client) => client.query(
-      `UPDATE recurring_series SET display_name = $1, typical_amount_inr = $2,
-              cadence_days = $3, next_expected_on = $4,
-              autopay_status = COALESCE($5, autopay_status), user_edited = true,
-              cadence_confirmed = true
-        WHERE id = $6 AND profile_id = $7 AND dismissed_at IS NULL RETURNING id`,
-      [displayName.trim(), Number(typicalAmountInr), Number(cadenceDays), nextExpectedOn, autopayStatus ?? null, req.params.id, req.userId]
-    ));
-    if (!result.rows.length) return res.status(404).json({ error: 'not_found' });
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('PATCH /recurring error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+app.patch('/recurring/:id', requireAuth, createRecurringPatchHandler({ withUserClient }));
 
 /**
  * POST /recurring/:id/dismiss — "I cancelled this."
