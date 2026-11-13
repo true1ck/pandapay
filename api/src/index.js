@@ -7,6 +7,7 @@ const express = require('express');
 const { createCorsPolicy } = require('./cors_policy');
 const { jsonBodyParser, jsonBodyErrorHandler } = require('./request_limits');
 const { rejectInvalidUuid } = require('./http_db_errors');
+const { createBudgetPostHandler, createBudgetDeleteHandler } = require('./budgets_write');
 const { syncPushBodyParser } = require('./sync_push_body');
 const { validateSyncRegistration, validateSyncPushRequest, validateSyncPushChange, validateSyncPullQuery, validateSyncAck, validateSyncConflictId, syncRejectionDetail, createSyncPushContext, processSyncPushItem, syncDeviceExists, respondUnknownSyncDevice, respondDbError } = require('./sync_request_validation');
 const { createLoungeUsagePostHandler } = require('./lounge_usage_route');
@@ -7165,74 +7166,7 @@ app.get('/budgets', requireAuth, async (req, res) => {
  * it", not "fail". The old row is DEACTIVATED, not deleted, so the
  * `budget_periods` history that references it survives.
  */
-app.post('/budgets', requireAuth, async (req, res) => {
-  const { scope, scopeRefId, period, amountInr, startsOn, rollover } = req.body || {};
-  if (!BUDGET_SCOPES.includes(scope)) {
-    return res.status(400).json({ error: `scope must be one of ${BUDGET_SCOPES.join(', ')}` });
-  }
-  if (!BUDGET_PERIODS.includes(period)) {
-    return res.status(400).json({ error: `period must be one of ${BUDGET_PERIODS.join(', ')}` });
-  }
-  const amount = Number(amountInr);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return res.status(400).json({ error: 'amountInr must be a positive number' });
-  }
-  if (scope === 'overall' && scopeRefId) {
-    return res.status(400).json({ error: 'an overall budget takes no scopeRefId' });
-  }
-  if (scope !== 'overall' && (!scopeRefId || typeof scopeRefId !== 'string')) {
-    return res.status(400).json({ error: 'scopeRefId is required for a category or card budget' });
-  }
-
-  try {
-    const result = await withUserClient(req.userId, async (client) => {
-      // Validate the referent exists and, for a card, belongs to this user.
-      // The column is deliberately not a foreign key (it points at two
-      // different tables depending on scope), so this check is the only
-      // thing standing between a typo and a budget that can never match
-      // any spend.
-      if (scope === 'category') {
-        const found = await client.query(
-          `SELECT id FROM spend_categories WHERE id = $1
-           UNION ALL
-           SELECT id FROM user_categories WHERE id = $1 AND profile_id = $2`,
-          [scopeRefId, req.userId],
-        );
-        if (found.rows.length === 0) return { status: 404, error: 'category not found' };
-      } else if (scope === 'tag') {
-        const found = await client.query('SELECT id FROM transaction_tags WHERE id=$1 AND profile_id=$2 AND archived_at IS NULL', [scopeRefId,req.userId]);
-        if (!found.rows.length) return { status:404,error:'tag not found' };
-      } else if (scope === 'card') {
-        const found = await client.query(
-          `SELECT id FROM user_cards WHERE id = $1 AND profile_id = $2 AND is_archived = false`,
-          [scopeRefId, req.userId]
-        );
-        if (found.rows.length === 0) return { status: 404, error: 'card not found' };
-      }
-
-      await client.query(
-        `UPDATE budgets SET is_active = false
-          WHERE profile_id = $1 AND is_active AND scope = $2 AND period = $3
-            AND scope_ref_id IS NOT DISTINCT FROM $4`,
-        [req.userId, scope, period, scopeRefId || null]
-      );
-
-      const inserted = await client.query(
-        `INSERT INTO budgets (profile_id, scope, scope_ref_id, period, amount_inr, starts_on, rollover)
-         VALUES ($1, $2, $3, $4, $5, COALESCE($6::date, CURRENT_DATE), COALESCE($7, false))
-         RETURNING id, scope, scope_ref_id, period, amount_inr, starts_on, rollover, is_active`,
-        [req.userId, scope, scopeRefId || null, period, amount, startsOn || null, rollover]
-      );
-      return { status: 201, budget: inserted.rows[0] };
-    });
-
-    if (result.status !== 201) return res.status(result.status).json({ error: result.error });
-    res.status(201).json({ budget: result.budget });
-  } catch (err) {
-    console.error('POST /budgets error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+app.post('/budgets', requireAuth, createBudgetPostHandler({ withUserClient, BUDGET_SCOPES, BUDGET_PERIODS }));
 
 /**
  * DELETE /budgets/:id — deactivates rather than deletes, so any
@@ -7240,24 +7174,7 @@ app.post('/budgets', requireAuth, async (req, res) => {
  * budget last March?" must not become unanswerable because the budget was
  * removed in April.
  */
-app.delete('/budgets/:id', requireAuth, async (req, res) => {
-  if (rejectInvalidUuid(res, req.params.id)) return;
-  try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
-        `UPDATE budgets SET is_active = false
-          WHERE id = $1 AND profile_id = $2 AND is_active
-          RETURNING id`,
-        [req.params.id, req.userId]
-      )
-    );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'budget not found' });
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('DELETE /budgets/:id error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+app.delete('/budgets/:id', requireAuth, createBudgetDeleteHandler({ withUserClient }));
 
 /**
  * GET /recurring — the user's subscriptions, detected from their own
