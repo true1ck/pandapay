@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:uuid/uuid.dart';
 
 final _uuid = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
@@ -15,6 +16,15 @@ const sharedCommandKinds = {
   'settlement.report',
   'settlement.respond',
 };
+/// The server picks the owner's member id when it creates a context, so a
+/// group created offline cannot know it. Commands queued against that group
+/// carry this stable stand-in instead; when the create commits, the store
+/// swaps it for the real id in every waiting command (see
+/// `SharedExpensesStore.complete`).
+String sharedPendingOwnerMemberId(String contextId) => const Uuid().v5(
+  Namespace.url.value,
+  'pandapay:pending-owner-member:v1:$contextId',
+);
 bool sharedUuid(Object? value) =>
     value is String && _uuid.firstMatch(value)?.group(0) == value;
 void _validString(String value) {
