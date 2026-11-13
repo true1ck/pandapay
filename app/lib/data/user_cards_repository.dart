@@ -1763,7 +1763,9 @@ class UserCardsRepository {
             'merchantName': ?merchantName,
             'merchantVpa': ?merchantVpa,
             'mcc': ?mcc,
-            'occurredAt': occurredAt?.toIso8601String(),
+            // UTC with a 'Z': a local DateTime has no offset, which the server
+            // could read in its own zone (SRV-21).
+            'occurredAt': occurredAt?.toUtc().toIso8601String(),
             'note': ?note,
             'rail': ?rail,
             'instrument': instrument.wireValue,
@@ -2112,7 +2114,7 @@ class UserCardsRepository {
         : categoryId;
     final body = <String, dynamic>{
       'amountInr': ?amountInr,
-      if (occurredAt != null) 'occurredAt': occurredAt.toIso8601String(),
+      if (occurredAt != null) 'occurredAt': occurredAt.toUtc().toIso8601String(),
       if (clearCategory) 'categoryId': null,
       if (clearCategory) 'userCategoryId': null,
       if (!clearCategory) 'categoryId': ?serverCategoryId,
