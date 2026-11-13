@@ -10,6 +10,7 @@ library;
 
 import 'dart:math' as math;
 
+import '../engine/transforms.dart' show sanitizeNarration;
 import 'solver_pack.dart';
 import 'solver_text.dart';
 
@@ -1867,7 +1868,11 @@ class _Run {
         pieces[last + 1].sentence == pieces[last].sentence) {
       return null;
     }
-    return words.join(' ');
+    // The same cleaning every rule gives a counterparty ("ACME TECHNOLOGIES PVT
+    // LTD" -> "ACME TECHNOLOGIES"), so one employer is one name whichever path
+    // read the salary. Nothing left after cleaning means it was only a suffix.
+    final cleaned = sanitizeNarration(words.join(' ')).trim();
+    return cleaned.length < 3 ? null : cleaned;
   }
 
   // ---- results ----

@@ -37237,7 +37237,7 @@
   },
   {
     "id": "GEN-ACCT-SALARY-NARRATION-C1-B",
-    "version": 1,
+    "version": 2,
     "family": "salary",
     "senders": [
       "*"
@@ -37383,8 +37383,8 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-13T00:00:00Z"
+    "updatedAt": "2026-11-14T00:00:00Z"
   }
 ]

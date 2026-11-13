@@ -205,17 +205,21 @@ void main() {
       // The weak last-resort rules and the rules that could not name a purpose
       // are the ones corroborated. Zero would mean the second opinion is off.
       expect(allowed['corroborated'] ?? 0, greaterThan(20));
-      // Reviewed: these autopay debits were plain unknown-purpose debits that a
-      // generic catch-all rule read and the solver enriched.
       // Reviewed: these are salary examples whose rule printed no payer; the
       // evidence reader names the employer next to the salary word and changes
       // nothing else. A new rule id here needs the same hand review.
+      // GEN-ACCT-SALARY-NARRATION-C1-B is retired: its own example is now read
+      // by the generic salary rule and named the same way (checked identical on
+      // a 6,023-message real inbox, apart from the winning rule's id).
       expect(named.toSet(), {
         'BRK-DIV-NACH-NARR-01',
+        'GEN-ACCT-SALARY-NARRATION-C1-B',
         'SBI-ACCT-CREDIT-DIVIDEND-NAMED',
         'SBI-STYLE-CR-SAL',
         'SBI-STYLE-CR-SAL-B',
       });
+      // Reviewed: these autopay debits were plain unknown-purpose debits that a
+      // generic catch-all rule read and the solver enriched.
       expect(refined.map((e) => e.split(':').first).toSet(), {
         'MND-UPCOMING-01',
         'MND-UPCOMING-01-INV',
