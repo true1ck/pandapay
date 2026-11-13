@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/widgets.dart' show AppLifecycleListener;
 
 import '../../app/providers.dart';
+import '../../data/session_end_reason.dart';
 import '../../data/api_exception.dart';
 import '../../data/local/sync_queue.dart';
 import '../../data/sync_api.dart';
@@ -678,7 +679,18 @@ final syncLifecycleProvider = Provider<void>((ref) {
         }
       });
     }
-    if (previous != 'signed-out' && next == 'signed-out') {
+    if (previous == 'signed-out' && next != 'signed-out') {
+      // A session started again; the cache lifecycle forgets it too.
+      ref.read(sessionEndReasonProvider).clear();
+    }
+    if (previous != 'signed-out' &&
+        next == 'signed-out' &&
+        // WP-C3 (L-01): after a session the server rejected, the same person
+        // signs in again and resumes. Keep the device id and cursor with the
+        // queued edits (they are keyed by namespace and survive), so the
+        // device is not registered afresh and the history is not pulled again.
+        // An explicit sign-out wipes the file, so this reset only matters there.
+        ref.read(sessionEndReasonProvider).mayWipeAccountData) {
       // Sign-out: the queue and cursor belong to the account that just left.
       final db = await ref.read(appDatabaseProvider.future);
       SyncQueue(db, namespace: previous!).resetCursor();
