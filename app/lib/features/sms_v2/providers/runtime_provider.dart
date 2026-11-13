@@ -72,6 +72,8 @@ smsV2RuntimeProvider = FutureProvider<SmsV2Runtime?>((ref) async {
     loadShippedBundle: () =>
         rootBundle.loadString('assets/sms_rules/baseline_bundle.json'),
     accountIsCurrent: current,
+    // Known offline: reading messages carries on, the network steps wait.
+    isOffline: () => ref.read(app.isOnlineProvider).valueOrNull == false,
     // Who the account owner is: the profile name when it is a real name (a
     // username is ignored), the names they typed, the payees they marked and
     // the names learned from their greetings.
@@ -98,10 +100,15 @@ smsV2RuntimeProvider = FutureProvider<SmsV2Runtime?>((ref) async {
 final smsV2LifecycleProvider = Provider<void>((ref) {
   var disposed = false;
   ref.onDispose(() => disposed = true);
-  Future<void> run() async {
+  Future<void> run({bool reconnected = false}) async {
     if (disposed) return;
     try {
       final runtime = await ref.read(smsV2RuntimeProvider.future);
+      // Waits set while the phone had no connection say nothing about the
+      // server: when it returns, everything queued is tried at once (Q-08).
+      if (!disposed && runtime != null && reconnected) {
+        runtime.resetUploadBackoff();
+      }
       if (!disposed && runtime != null) await runtime.sync();
     } catch (_) {
       // Local intake and the queue retain failed work for the next trigger.
@@ -113,7 +120,7 @@ final smsV2LifecycleProvider = Provider<void>((ref) {
   }, fireImmediately: true);
   ref.listen(app.isOnlineProvider, (previous, next) {
     if (previous?.valueOrNull == false && next.valueOrNull == true) {
-      unawaited(run());
+      unawaited(run(reconnected: true));
     }
   });
   ref.listen(app.smsFlushTriggerProvider, (_, _) => unawaited(run()));

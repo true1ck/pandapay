@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -109,6 +110,33 @@ void main() {
         fetchLimitedUseToken: () async => 'not-a-token-' * 1000,
       );
       expect(await malformed.limitedUseHeaders(), {'X-Sms-Device-Id': device});
+    },
+  );
+
+  test(
+    'a token fetch that never answers falls through with the device id only '
+    '(C-04)',
+    () async {
+      var fetches = 0;
+      final hanging = DeviceAttestation(
+        deviceId: device,
+        fetchTimeout: const Duration(milliseconds: 40),
+        fetchToken: (_) {
+          fetches++;
+          return Completer<String?>().future;
+        },
+        fetchLimitedUseToken: () => Completer<String?>().future,
+      );
+      expect(await hanging.headers().timeout(const Duration(seconds: 5)), {
+        'X-Sms-Device-Id': device,
+      });
+      expect(
+        await hanging.limitedUseHeaders().timeout(const Duration(seconds: 5)),
+        {'X-Sms-Device-Id': device},
+      );
+      // The failed fetch is not repeated on every request.
+      await hanging.headers();
+      expect(fetches, 1);
     },
   );
 
