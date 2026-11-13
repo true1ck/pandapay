@@ -920,6 +920,12 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                   children: [
                     Expanded(child: _SearchField(key: _searchKey)),
                     if (!searching) ...[
+                      IconButton(
+                        key: const Key('activity-history'),
+                        tooltip: 'History',
+                        icon: const Icon(Icons.history_rounded),
+                        onPressed: () => context.push('/activity/history'),
+                      ),
                       const SizedBox(width: AppSpace.xs),
                       PopupMenuButton<String>(
                         key: const Key('activity-more-menu'),

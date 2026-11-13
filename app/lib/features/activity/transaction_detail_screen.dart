@@ -1,7 +1,9 @@
 import '../sms_v2/ledger/providers.dart' show suspectedRefundsProvider;
 import 'spend_exclusion_matches.dart';
 import 'transaction_badge.dart';
-import 'transfer_mark_panel.dart';
+import 'transaction_action_flow.dart';
+import 'transaction_action_ui.dart';
+import '../sms_v2/ui/owner_identity_actions.dart';
 import '../sms_v2/ui/review_controller.dart';
 import '../sms_v2/ui/transaction_actions.dart';
 import '../sms_v2/ui/why_sheet.dart';
@@ -15,7 +17,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
-import 'package:pandapay_domain/sms_v2.dart' as v2;
 import 'package:share_plus/share_plus.dart';
 
 import '../../app/design/app_theme.dart';
@@ -31,7 +32,6 @@ import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
 import '../account/account_screen.dart' show AccountTile;
 import '../cards/card_summary.dart';
-import 'mark_transaction_kind.dart';
 import 'spend_exclusion.dart';
 import 'report_transaction_screen.dart';
 import 'suspected_refund_banner.dart';
@@ -90,6 +90,14 @@ class TransactionDetailScreen extends ConsumerWidget {
           style: BambooFonts.heading(18, color: BambooInk.ink900),
         ),
         actions: [
+          IconButton(
+            key: const Key('transaction-history'),
+            tooltip: 'History',
+            icon: const Icon(Icons.history_rounded),
+            onPressed: () => context.push(
+              '/activity/history?tx=${Uri.encodeQueryComponent(transactionId)}',
+            ),
+          ),
           if (entry?.status == 'active' && !transactionId.startsWith('local-'))
             IconButton(
               tooltip: 'Edit',
@@ -627,26 +635,6 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     }
   }
 
-  Future<void> _markKind(v2.EventType type) async {
-    try {
-      final namespace = ref.read(cacheNamespaceProvider);
-      final controller = await smsReviewController(ref);
-      if (!mounted || namespace != ref.read(cacheNamespaceProvider)) return;
-      await markTransactionKind(
-        context: context,
-        controller: controller,
-        entry: widget.entry,
-        type: type,
-      );
-      ref.invalidate(transactionDetailProvider(widget.entry.id));
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
-    }
-  }
-
   /// "Was this refunded?" for a card spend whose limit came back with no
   /// message explaining it. Nothing for any other row.
   Widget _suspectedRefundBanner(TransactionEntry entry) {
@@ -703,8 +691,12 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           widget.entry.id,
           reason: deleting ? null : reason,
         );
-        ref.invalidate(transactionDetailProvider(widget.entry.id));
-        if (mounted) context.pop(true);
+        // Stay on this screen unless the person deleted it: a refund, reversal
+        // or report keeps the page open, badge and Restore button showing.
+        if (deleting) {
+          ref.invalidate(transactionDetailProvider(widget.entry.id));
+          if (mounted) context.pop(true);
+        }
         return;
       }
       final repo = ref.read(userCardsRepositoryProvider);
@@ -924,141 +916,35 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   }
 
   Future<void> _showIgnoreSheet() async {
-    final reason = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: BambooInk.paper,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
-      ),
-      isScrollControlled: true,
-      builder: (context) => SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(AppSpace.lg),
-                child: Text(
-                  'Choose an action',
-                  style: BambooFonts.heading(16, color: BambooInk.ink900),
-                ),
-              ),
-              // An SMS payment can be marked as a move between the person's own
-              // accounts or a credit card bill. Both leave spending, so they are
-              // plain choices here rather than something to find in Edit.
-              if (widget.entry.pipelineVersion == 2) ...[
-                ListTile(
-                  key: const Key('mark-own-transfer'),
-                  leading: const Icon(Icons.swap_horiz_rounded),
-                  title: Text(
-                    'Transfer between my accounts',
-                    style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-                  ),
-                  subtitle: Text(
-                    'Money moved between your own accounts. Not counted as spending.',
-                    style: BambooFonts.ui(12, color: BambooInk.ink500),
-                  ),
-                  onTap: () => Navigator.of(context).pop('mark_own_transfer'),
-                ),
-                ListTile(
-                  key: const Key('mark-card-bill'),
-                  leading: const Icon(Icons.credit_card_rounded),
-                  title: Text(
-                    'Credit card bill payment',
-                    style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-                  ),
-                  subtitle: Text(
-                    'Paying off a card. Not counted again as spending.',
-                    style: BambooFonts.ui(12, color: BambooInk.ink500),
-                  ),
-                  onTap: () => Navigator.of(context).pop('mark_card_bill'),
-                ),
-                const Divider(height: 1),
-              ],
-              // Leaves the transaction out of spending totals and trends on
-              // this phone (and out of server budgets for synced entries; not
-              // yet for entries read from SMS). It stays in history, in Money
-              // out and on the card, and keeps its rewards, unlike Refund /
-              // Reversal / Delete below.
-              if (canExcludeFromSpend(_entry))
-                ListTile(
-                  key: const Key('toggle-spend-exclusion'),
-                  leading: Icon(
-                    _entry.excludeFromSpend
-                        ? Icons.add_circle_outline_rounded
-                        : Icons.visibility_off_outlined,
-                  ),
-                  title: Text(
-                    _entry.excludeFromSpend
-                        ? 'Count in spending again'
-                        : "Don't count in spending",
-                    style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-                  ),
-                  subtitle: Text(
-                    _entry.excludeFromSpend
-                        ? 'Add it back to your spending totals.'
-                        : 'Stays in your history and Money out, and keeps its '
-                              'rewards. Left out of spending totals and trends '
-                              'on this phone. ${spendExclusionBudgetNote(_entry)}',
-                    style: BambooFonts.ui(12, color: BambooInk.ink500),
-                  ),
-                  onTap: () =>
-                      Navigator.of(context).pop('toggle_spend_exclusion'),
-                ),
-              for (final r in const [
-                'refund',
-                'reversal',
-                'wrong_transaction',
-                'transfer',
-              ])
-                ListTile(
-                  leading: r == 'transfer'
-                      ? const Icon(
-                          Icons.delete_outline,
-                          color: BambooInk.clayInk,
-                        )
-                      : r == 'wrong_transaction'
-                      ? const Icon(
-                          Icons.flag_outlined,
-                          color: BambooInk.clayInk,
-                        )
-                      : null,
-                  title: Text(
-                    _reasonLabel(r),
-                    style: BambooFonts.ui(
-                      14.5,
-                      color: r == 'transfer' || r == 'wrong_transaction'
-                          ? BambooInk.clayInk
-                          : BambooInk.ink900,
-                    ),
-                  ),
-                  subtitle: r == 'wrong_transaction'
-                      ? Text(
-                          'This is not a transaction I recognise. It is excluded '
-                          'from spend and reviewed with your consent.',
-                          style: BambooFonts.ui(12, color: BambooInk.ink500),
-                        )
-                      : null,
-                  onTap: () => Navigator.of(context).pop(r),
-                ),
-            ],
-          ),
-        ),
-      ),
+    final all = ref.read(transactionsProvider).valueOrNull ?? const [];
+    // A transfer asks the identity what it can remember; only that decides
+    // whether "past and future" is offered and whether this is a shop.
+    MarkPlan? plan;
+    if (widget.entry.pipelineVersion == 2) {
+      try {
+        plan = await OwnerIdentityActions(ref).plan(_entry);
+      } catch (_) {
+        plan = null;
+      }
+    }
+    if (!mounted) return;
+    final choice = await showTransactionActionSheet(
+      context,
+      entry: _entry,
+      offerSelf: plan?.offerSelf ?? true,
+      offerFamily: plan?.offerFamily ?? true,
     );
-    if (reason == 'toggle_spend_exclusion') {
-      await _setSpendExclusion(!_entry.excludeFromSpend);
+    if (choice == null || !mounted) return;
+
+    if (choice == kActionCountAgain) {
+      await _setSpendExclusion(false);
       return;
     }
-    if (reason == 'mark_own_transfer' || reason == 'mark_card_bill') {
-      await _markKind(
-        reason == 'mark_card_bill'
-            ? v2.EventType.cardBillPayment
-            : v2.EventType.ownTransfer,
-      );
+    if (choice == kActionUnmarkTransfer) {
+      await _unmarkTransfer();
       return;
     }
-    if (reason == 'transfer') {
+    if (choice == kActionDelete) {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
@@ -1101,19 +987,131 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           ],
         ),
       );
-      if (confirmed == true) await _markIgnored(reason!);
-    } else if (reason != null) {
-      await _markIgnored(reason);
+      if (confirmed == true) await _markIgnored('transfer');
+      return;
+    }
+
+    final action = TxnAction.values.firstWhere((a) => a.name == choice);
+    final candidates = actionCandidates(_entry, action, all);
+    // Transfers always ask (a tap must never silently rewrite a payee's whole
+    // history); the rest ask only when there is something else to include.
+    ActionScope scope = const ActionScope();
+    if (action.isTransfer || candidates.isNotEmpty) {
+      if (action.isTransfer &&
+          plan != null &&
+          !plan.canMarkOnce &&
+          !plan.canRemember) {
+        _toast(
+          'This message does not show a name, UPI ID or account, so it cannot '
+          'be marked. Use Edit and change the type to Transfer for this one.',
+        );
+        return;
+      }
+      final picked = await showActionScopePage(
+        context,
+        entry: _entry,
+        action: action,
+        candidates: candidates,
+        plan: action.isTransfer ? plan : null,
+      );
+      if (picked == null || !mounted) return;
+      scope = picked;
+    }
+    await _runAction(action, scope);
+  }
+
+  void _toast(String text, {SnackBarAction? action}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text), action: action));
+  }
+
+  /// Applies [action] and stays on this screen: the page only closes when the
+  /// person goes back. What changed is shown here at once, with an Undo.
+  Future<void> _runAction(TxnAction action, ActionScope scope) async {
+    if (_ignoring) return;
+    setState(() => _ignoring = true);
+    final before = _entry;
+    try {
+      final record = await applyTxnAction(ref, before, action, scope);
+      if (!mounted) return;
+      final reason = action.ignoreReason;
+      if (reason != null) {
+        // The row is hidden from the lists; this screen keeps its own copy so
+        // the badge and the restore button show right away.
+        final note = '[ignored: $reason]${before.note == null ? '' : ' ${before.note}'}';
+        setState(() {
+          _entry = _entry.copyWith(status: 'ignored', note: note);
+          _note = note;
+        });
+      } else if (action == TxnAction.excludeSpend) {
+        setState(() => _entry = _entry.copyWith(excludeFromSpend: true));
+      } else {
+        ref.invalidate(transactionDetailProvider(widget.entry.id));
+      }
+      _toast(
+        '${action.label}: done. ${record.scope}.',
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () async {
+            try {
+              await undoTxnAction(ref, record);
+              if (!mounted) return;
+              setState(() {
+                _entry = before;
+                _note = before.note;
+              });
+              ref.invalidate(transactionDetailProvider(widget.entry.id));
+              _toast('Undone.');
+            } catch (_) {
+              _toast('That could not be undone. Try again.');
+            }
+          },
+        ),
+      );
+    } on StateError catch (e) {
+      _toast(e.message);
+    } catch (e) {
+      _toast(userFacingErrorMessage(e));
+    } finally {
+      if (mounted) setState(() => _ignoring = false);
     }
   }
 
-  static String _reasonLabel(String r) => switch (r) {
-    'refund' => 'Refund',
-    'reversal' => 'Reversal',
-    'wrong_transaction' => 'Report wrong transaction',
-    'transfer' => 'Delete transaction',
-    _ => r,
-  };
+  Future<void> _unmarkTransfer() async {
+    final before = txnBadgeKind(_entry);
+    final actions = OwnerIdentityActions(ref);
+    try {
+      final n = await actions.unmark(_entry);
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(homeSummaryProvider);
+      ref.invalidate(spendReportProvider);
+      ref.invalidate(categorySpendProvider);
+      ref.invalidate(transactionDetailProvider(widget.entry.id));
+      _toast(
+        'Not a transfer any more.${n > 1 ? ' $n payments were updated.' : ''}',
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () async {
+            final mark = before == TxnBadgeKind.familyTransfer
+                ? TransferMark.family
+                : TransferMark.self;
+            final p = await actions.plan(_entry);
+            await actions.mark(
+              _entry,
+              mark,
+              p.canRemember ? MarkScope.always : MarkScope.once,
+            );
+            ref.invalidate(transactionsProvider);
+            ref.invalidate(transactionDetailProvider(widget.entry.id));
+          },
+        ),
+      );
+    } catch (_) {
+      _toast('That did not work. Try again.');
+    }
+  }
 
   Future<void> _openEdit() async {
     final changed = await context.push<bool>(
@@ -1413,11 +1411,6 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                   ForeignTransactionInfo(transactionId: entry.id),
                   const SizedBox(height: AppSpace.md),
                   _suspectedRefundBanner(entry),
-                  TransferMarkPanel(
-                    entry: entry,
-                    onChanged: () =>
-                        ref.invalidate(transactionDetailProvider(widget.entry.id)),
-                  ),
                   _DetailRow(label: 'Card', value: _cardOrPaymentLabel(entry)),
                   if (transactionRewardLabel(entry) case final reward?)
                     _DetailRow(

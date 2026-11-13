@@ -37,7 +37,20 @@ class MarkPlan {
     required this.canRemember,
     required this.canMarkOnce,
     required this.earlier,
+    this.isShop = false,
+    this.offerSelf = true,
+    this.offerFamily = true,
   });
+
+  /// The message names a shop (Amazon, Flipkart, a sea park), not a person or
+  /// one of the owner's accounts: neither transfer is offered for it.
+  final bool isShop;
+
+  /// "Transfer between my accounts" fits: not a shop, not clearly a person.
+  final bool offerSelf;
+
+  /// "Transfer to family" fits: not a shop, not clearly the owner's own account.
+  final bool offerFamily;
 
   /// The payee as printed, for the question.
   final String? payee;
@@ -59,7 +72,8 @@ class OwnerIdentityActions {
   OwnerIdentityActions(this._ref);
   final WidgetRef _ref;
 
-  Future<({OwnerIdentityStore store, Database db, String namespace})> _open() async {
+  Future<({OwnerIdentityStore store, Database db, String namespace})>
+  _open() async {
     final cache = await _ref.read(app.responseCacheProvider.future);
     final namespace = _ref.read(app.cacheNamespaceProvider);
     final db = cache.financialStore.database.db;
@@ -141,20 +155,39 @@ class OwnerIdentityActions {
         final anchor = FactStore(o.db, namespace: o.namespace).get(id);
         final key = anchor == null ? null : FactKeys.of(anchor).merchantKey;
         if (key != null) {
-          earlier = SimilarFinder(o.db, namespace: o.namespace).count(
-            SimilarCriteria.shop(key),
-            excludeEventId: id,
-          );
+          earlier = SimilarFinder(
+            o.db,
+            namespace: o.namespace,
+          ).count(SimilarCriteria.shop(key), excludeEventId: id);
         }
       } catch (_) {
         earlier = 0;
       }
     }
+    // A shop is what the reader says it is, or a printed name that is not a
+    // person's name (one word, a brand) with no account number behind it.
+    final kind = cp?.kind;
+    final hasName = (cp?.name ?? '').trim().isNotEmpty;
+    final hasMask = _digits.hasMatch(cp?.accountMask ?? '');
+    final looksShop =
+        kind == CounterpartyKind.merchant ||
+        (kind != CounterpartyKind.person &&
+            kind != CounterpartyKind.own &&
+            kind != CounterpartyKind.bank &&
+            hasName &&
+            OwnerName.parse(cp!.name) == null &&
+            !hasMask);
     return MarkPlan(
+      offerSelf: !looksShop && kind != CounterpartyKind.person,
+      offerFamily:
+          !looksShop &&
+          kind != CounterpartyKind.own &&
+          kind != CounterpartyKind.bank,
       payee: (cp?.name ?? '').trim().isNotEmpty ? cp!.name!.trim() : cp?.vpa,
       canRemember: remember,
       canMarkOnce: (entry.sourceKey ?? '').isNotEmpty,
       earlier: earlier,
+      isShop: looksShop,
     );
   }
 
@@ -174,7 +207,8 @@ class OwnerIdentityActions {
     MarkScope scope,
   ) async {
     final id = entry.eventId;
-    if (id == null) return (outcome: MarkOutcome.nothingToRecognise, changed: 0);
+    if (id == null)
+      return (outcome: MarkOutcome.nothingToRecognise, changed: 0);
     final o = await _open();
     if (scope == MarkScope.once) {
       final key = entry.sourceKey;
@@ -219,7 +253,11 @@ class OwnerIdentityActions {
           case TransferMark.self:
             o.store.unmarkOwn(name: cp.name, vpa: cp.vpa, mask: cp.accountMask);
           case TransferMark.family:
-            o.store.unmarkFamily(name: cp.name, vpa: cp.vpa, mask: cp.accountMask);
+            o.store.unmarkFamily(
+              name: cp.name,
+              vpa: cp.vpa,
+              mask: cp.accountMask,
+            );
         }
       }
     }
@@ -257,7 +295,8 @@ class OwnerIdentityActions {
     if (rows.isEmpty) return null;
     try {
       final t = TransactionEntry.fromJson(
-        (jsonDecode(rows.first['payload'] as String) as Map).cast<String, dynamic>(),
+        (jsonDecode(rows.first['payload'] as String) as Map)
+            .cast<String, dynamic>(),
       );
       final d = t.occurredAt.toLocal();
       final who = (t.merchantName ?? '').trim();

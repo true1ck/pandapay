@@ -32,6 +32,7 @@ import '../features/activity/duplicate_review_screen.dart';
 import '../features/activity/edit_transaction_screen.dart';
 import '../features/activity/foreign_payments_screen.dart';
 import '../features/activity/transaction_detail_screen.dart';
+import '../features/activity/transaction_history_screen.dart';
 import '../features/auth/add_phone_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/phone_gate_provider.dart';
@@ -138,6 +139,7 @@ abstract final class AppRoute {
   static const foreignPayments = '/activity/foreign';
   static const foreignPaymentDetail = '/activity/foreign/:id';
   static const duplicateReview = '/activity/duplicates';
+  static const actionHistory = '/activity/history';
   static const missedOpportunities = '/insights/missed-opportunities';
 
   /// Task 7: no longer a bottom-nav destination — Material's 5-item ceiling
@@ -772,6 +774,12 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoute.duplicateReview,
         builder: (context, state) => const DuplicateReviewScreen(),
+      ),
+      GoRoute(
+        path: AppRoute.actionHistory,
+        builder: (context, state) => TransactionHistoryScreen(
+          transactionId: state.uri.queryParameters['tx'],
+        ),
       ),
       GoRoute(
         path: AppRoute.foreignPayments,
