@@ -190,6 +190,12 @@ class UserCard {
   milestonePeriodEnd; // milestoneRule.id -> this period's deadline (E4)
   final double
   totalPointsEarned; // lifetime, in the reward's own native unit — not an INR Money
+
+  /// Points the bank itself says it credited (read from its SMS, e.g.
+  /// "Reward Points Credited: 2500 …"). Kept apart from [totalPointsEarned]:
+  /// a statement credit usually pays out points the spends already estimated,
+  /// so adding the two would count them twice.
+  final double creditedPoints;
   /// The current starting/estimated balance entered for this card. This is
   /// intentionally separate from [totalPointsEarned], which also includes
   /// the points ledger and is therefore not a form value the user entered.
@@ -268,6 +274,7 @@ class UserCard {
     this.milestoneQualifiedSpend = const {},
     this.milestonePeriodEnd = const {},
     this.totalPointsEarned = 0,
+    this.creditedPoints = 0,
     this.pointsBalance,
     this.feeWaiverStates = const [],
     this.statementDay,
@@ -316,6 +323,7 @@ class UserCard {
             ),
       },
       totalPointsEarned: _num(json['total_points_earned']),
+      creditedPoints: _num(json['credited_points']),
       pointsBalance: json['points_balance'] == null
           ? null
           : _num(json['points_balance']),
@@ -373,6 +381,7 @@ class UserCard {
     ],
     'fee_waiver_states': feeWaiverStates.map((fw) => fw.toJson()).toList(),
     'total_points_earned': totalPointsEarned,
+    'credited_points': creditedPoints,
     'points_balance': pointsBalance,
     'statement_day': statementDay,
     'statement_day_source': statementDaySource,

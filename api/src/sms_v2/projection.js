@@ -116,7 +116,12 @@ function projectEvent({ event, ledger, instruments, anchor }) {
     entryKind,
     amountMinor: event.amountMinor,
     occurredAt: event.occurredAt,
-    merchantName: merchant ? String(merchant).slice(0, 200) : null,
+    // The bank's own cashback credit names no shop ("UNKNOWN" read as a failed parse); it is a reward the bank paid.
+    merchantName: event.type === 'cashback' && (!merchant || String(merchant).toUpperCase() === 'UNKNOWN')
+      ? 'Cashback received'
+      : (merchant ? String(merchant).slice(0, 200) : null),
+    // A cashback the bank credited is a confirmed reward, not an estimate.
+    rewardState: event.type === 'cashback' ? 'confirmed' : 'estimated',
     categorySlug: category,
     // transactions_card_matches_instrument: only a credit or debit card row may carry a user card.
     userCardId: instrument && instrument.userCardId && CARD_ENUMS.has(instrumentEnum) ? instrument.userCardId : null,

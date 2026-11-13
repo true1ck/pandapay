@@ -164,11 +164,14 @@ class VoiceAnswerService {
     final lines = <PointsLine>[];
     for (final (card, product) in owned) {
       if (ids.isNotEmpty && !ids.contains(card.id)) continue;
-      // The same figure the card screen shows: the saved balance, else what
-      // has been earned so far. A card with neither is "unknown", not zero.
+      // The same figure the card screen shows: what the card has earned (the
+      // points ledger plus any starting balance the user typed in). The server
+      // always sends a saved balance, 0 by default, so that cannot come first.
+      // A card with nothing at all is "unknown", not zero.
       final saved = card.pointsBalance;
-      final points =
-          saved ?? (card.totalPointsEarned > 0 ? card.totalPointsEarned : null);
+      final points = card.totalPointsEarned > 0
+          ? card.totalPointsEarned
+          : (saved != null && saved > 0 ? saved : null);
       DateTime? expiry;
       final ledger = ref.read(pointsLedgerProvider(card.id)).valueOrNull;
       if (ledger != null) {

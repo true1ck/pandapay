@@ -129,13 +129,18 @@ test('neighbor held by another pending candidate is restored only when the final
   assert.deepEqual(h.applied, [smsA, smsB]);
 });
 
-test('backfills and non-credit neighbors reactivate without applying credit-card state', async () => {
-  for (const options of [{ backfill: true }, { instrument: 'debit_card' }]) {
-    const h = harness(options);
-    assert.equal((await h.resolve('merged', smsA)).status, 200);
-    assert.equal(h.rows.get(smsB).status, 'active');
-    assert.deepEqual(h.applied, []);
-  }
+test('non-credit neighbors reactivate without applying credit-card state', async () => {
+  const h = harness({ instrument: 'debit_card' });
+  assert.equal((await h.resolve('merged', smsA)).status, 200);
+  assert.equal(h.rows.get(smsB).status, 'active');
+  assert.deepEqual(h.applied, []);
+});
+
+test('a history (backfill) card spend reactivates and is priced like any other', async () => {
+  const h = harness({ backfill: true });
+  assert.equal((await h.resolve('merged', smsA)).status, 200);
+  assert.equal(h.rows.get(smsB).status, 'active');
+  assert.ok(h.applied.includes(smsB), 'the reactivated history spend is priced');
 });
 
 test('failed reactivation rolls back the decision and retains suppression markers', async () => {

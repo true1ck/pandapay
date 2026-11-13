@@ -57,6 +57,10 @@ TransactionEntry? transactionForEvent(
   // (bank transfer, CHEQ, CRED, BBPS), so it is labelled as one.
   final merchant = event.type == v2.EventType.cardBillPayment
       ? 'Credit card payment'
+      // The bank's own cashback credit names no shop; "UNKNOWN" read as a
+      // failed parse. It is a reward the bank paid, so say so.
+      : event.type == v2.EventType.cashback && printed == null
+      ? 'Cashback received'
       : event.type == v2.EventType.ownTransfer && printed == null
       ? 'Transfer between your accounts'
       : fact.purpose == v2.MovementPurpose.walletTopup &&
@@ -104,6 +108,8 @@ TransactionEntry? transactionForEvent(
     source: 'sms',
     smsReceivedAt: fact.observedAt,
     status: 'active',
+    // A cashback the bank credited is a confirmed reward, not an estimate.
+    rewardState: event.type == v2.EventType.cashback ? 'confirmed' : 'estimated',
   );
 }
 

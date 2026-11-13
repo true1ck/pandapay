@@ -356,9 +356,21 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
     }
     final utilization = ref.watch(creditUtilizationProvider)[card.id];
     final spendSummary = ref.watch(cardSpendSummaryProvider)[card.id];
+    final pairsForBadge =
+        ref.watch(myCardsWithProductProvider).valueOrNull ?? const [];
+    final badgeProduct = pairsForBadge
+        .where((p) => p.$1.id == card.id)
+        .map((p) => p.$2)
+        .firstOrNull;
+    // A cashback card keeps its earnings in rupees, never in "pts".
+    final earnsCashback =
+        badgeProduct?.baseRewardUnit == RewardUnit.cashbackPercent ||
+        badgeProduct?.baseRewardUnit == RewardUnit.discountPercent;
     final badges = <String>[
       if (card.totalPointsEarned > 0)
-        '${card.totalPointsEarned.toStringAsFixed(0)} pts earned',
+        earnsCashback
+            ? '₹${card.totalPointsEarned.toStringAsFixed(0)} cashback earned'
+            : '${card.totalPointsEarned.toStringAsFixed(0)} pts earned',
       for (final fw in card.feeWaiverStates)
         fw.waivedAt != null
             ? 'Fee waived (${fw.qualifiedSpend.format()} spent)'

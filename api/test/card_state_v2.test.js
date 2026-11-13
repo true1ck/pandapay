@@ -474,3 +474,137 @@ test('capNativeAmount: legacy caps convert like the engine (reward value on poin
   assert.equal(cardStateV2.capNativeAmount({ cap_kind: null, measure: 'reward_value', cap_value: '500' }, 'total_cashback', card), 500);
   assert.equal(cardStateV2.capNativeAmount({ cap_kind: null, measure: 'spend_amount', cap_value: '20000' }, 'eligible_spend', card), 20000);
 });
+
+test('history rows (is_backfill) earn rewards and count toward their own period', () => {
+  const v2 = v2card();
+  const history = dining('2026-10-05', 2000);
+  history.is_backfill = true;
+  const live = dining('2026-11-03', 2000);
+  const range = cardStateV2.rebuildRange(v2, { asOf: new Date('2026-11-20T12:00:00Z'), caps: true, expected: true, since: '2026-10-01' });
+  const plan = cardStateV2.planReplay({ v2, directory, range, transactions: [history, live], expected: true });
+  assert.equal(plan.txnExpectedUpdates.length, 2, 'both the history row and the live row are priced');
+  const octRow = plan.capRows.find((r) => r.cap_rule_id === F.CAP.parent && r.period_start === '2026-10-01');
+  const novRow = plan.capRows.find((r) => r.cap_rule_id === F.CAP.parent && r.period_start === '2026-11-01');
+  assert.equal(octRow.consumed, 100);
+  assert.equal(novRow.consumed, 100, 'October history never leaks into November');
+  assert.deepEqual([...plan.replayedIds].sort(), [history.id, live.id].sort());
+});
+
+function refundScenario(refundAmount, refundExtra = {}) {
+  const v2 = v2card();
+  const spendRow = dining('2026-11-03', 2000);
+  spendRow.merchant_name = 'ACME STORE';
+  const refundRow = txn('2026-11-08', refundAmount, { entry_kind: 'refund', merchant_name: 'ACME STORE', ...refundExtra });
+  const range = cardStateV2.rebuildRange(v2, { asOf: new Date('2026-11-20T12:00:00Z'), caps: true, expected: true });
+  const withRefund = cardStateV2.planReplay({ v2, directory, range, transactions: [spendRow, refundRow], expected: true });
+  const without = cardStateV2.planReplay({ v2, directory, range, transactions: [spendRow], expected: true });
+  return { spendRow, withRefund, without };
+}
+
+test('a fully refunded spend earns nothing and uses no cap', () => {
+  const { spendRow, withRefund } = refundScenario(2000);
+  assert.equal(withRefund.capRows.length, 0, 'a refunded purchase consumes no cap');
+  const update = withRefund.txnExpectedUpdates.find((u) => u.id === spendRow.id);
+  assert.ok(update, 'its expected value is rewritten');
+  assert.equal(update.value, 0);
+  assert.equal(update.native, 0);
+});
+
+test('a partly refunded spend is priced on what is left', () => {
+  const { spendRow, withRefund, without } = refundScenario(1000);
+  const halfValue = withRefund.txnExpectedUpdates.find((u) => u.id === spendRow.id).value;
+  const wholeValue = without.txnExpectedUpdates.find((u) => u.id === spendRow.id).value;
+  assert.ok(halfValue > 0 && halfValue < wholeValue, `${halfValue} should be between 0 and ${wholeValue}`);
+});
+
+test('an ignored refund no longer reverses the purchase', () => {
+  const { withRefund } = refundScenario(2000, { status: 'ignored' });
+  assert.ok(withRefund.capRows.length > 0);
+});
+
+test('inferRail: a payment-gateway merchant is online; a stated rail is never overridden', () => {
+  for (const name of ['PYU*Flipkar', 'RAZ*Alegra', 'PHP*Wellnes', 'Runnr Razorpay', 'CCAV*Hotel', 'BILLDESK*Shop', 'payu*store']) {
+    assert.equal(cardStateV2.inferRail('unknown', name), 'online', name);
+    assert.equal(cardStateV2.inferRail(null, name), 'online', name);
+  }
+  assert.equal(cardStateV2.inferRail('upi_qr', 'PYU*Flipkar'), 'upi_qr');
+  assert.equal(cardStateV2.inferRail('swipe', 'RAZ*Alegra'), 'swipe');
+  for (const name of ['FLIPKART', 'ACME PETROLEU', 'Sample super store', 'RAZORBLADE SALON', 'PHPCLINIC', null, '']) {
+    assert.equal(cardStateV2.inferRail('unknown', name), 'unknown', String(name));
+  }
+});
+
+test('the rail a card spend is priced with comes from the gateway when the SMS stated none', () => {
+  const ctx = cardStateV2.transactionContext({ amount_inr: 100, occurred_at: new Date(), merchant_name: 'PYU*Flipkar', rail: 'unknown' });
+  assert.equal(ctx.rail, 'online');
+});
+
+test('history spends count toward the CURRENT milestone window (the quarterly voucher progress)', () => {
+  const v2 = v2card();
+  const history = dining('2026-10-05', 40000);
+  history.is_backfill = true;
+  const live = dining('2026-11-03', 20000);
+  const range = cardStateV2.rebuildRange(v2, { asOf: new Date('2026-11-20T12:00:00Z'), caps: true, milestones: true, expected: true, since: '2026-10-01' });
+  const plan = cardStateV2.planReplay({ v2, directory, range, transactions: [history, live], expected: true });
+  const annual = plan.milestoneRows.find((r) => r.milestone_rule_id === F.MILESTONE.annual);
+  assert.ok(annual, 'the annual milestone window is rebuilt');
+  assert.equal(annual.qualified_spend, 60000, 'the history spend is in the progress, not just the live one');
+});
+
+test('a refunded purchase takes its spend back out of the milestone progress', () => {
+  const v2 = v2card();
+  const spendRow = dining('2026-10-05', 40000);
+  spendRow.merchant_name = 'ACME STORE';
+  spendRow.is_backfill = true;
+  const refundRow = txn('2026-10-20', 40000, { entry_kind: 'refund', merchant_name: 'ACME STORE' });
+  const range = cardStateV2.rebuildRange(v2, { asOf: new Date('2026-11-20T12:00:00Z'), caps: true, milestones: true, expected: true, since: '2026-10-01' });
+  const plan = cardStateV2.planReplay({ v2, directory, range, transactions: [spendRow, refundRow], expected: true });
+  const annual = plan.milestoneRows.find((r) => r.milestone_rule_id === F.MILESTONE.annual);
+  assert.equal(annual, undefined, 'nothing qualified: the whole purchase was refunded');
+});
+
+test('fee-waiver progress counts history spends and nets a refund', () => {
+  const rule = { id: '00000000-0000-4000-8000-0000000000fa', period: 'calendar_month', threshold_spend_inr: '5000', excluded_categories: [] };
+  const asOf = new Date('2026-11-20T12:00:00Z');
+  const windows = cardStateV2.feeWaiverWindows([rule], asOf, null);
+  const history = txn('2026-11-02', 3000, { is_backfill: true, merchant_name: 'SHOP ONE' });
+  const refunded = txn('2026-11-05', 2500, { is_backfill: true, merchant_name: 'SHOP TWO' });
+  const refund = txn('2026-11-09', 2500, { entry_kind: 'refund', merchant_name: 'SHOP TWO' });
+  const live = txn('2026-11-12', 1000);
+  const plan = cardStateV2.planFeeWaivers({ windows, transactions: [history, refunded, refund, live], statementDay: null });
+  assert.equal(plan.rows[0].qualified_spend, 4000, '3,000 + 1,000: the refunded 2,500 is back out');
+  assert.equal(plan.rows[0].waived, false);
+});
+
+test('replay with history, a partial refund and an ignored refund is idempotent and independent of row order', () => {
+  const v2 = v2card();
+  const a = dining('2026-10-05', 5000); a.is_backfill = true; a.merchant_name = 'SHOP ONE';
+  const b = dining('2026-10-20', 3000); b.is_backfill = true; b.merchant_name = 'SHOP TWO';
+  const c = dining('2026-11-03', 2000); c.merchant_name = 'SHOP THREE';
+  const partial = txn('2026-10-25', 1000, { entry_kind: 'refund', merchant_name: 'SHOP TWO' });
+  const ignoredRefund = txn('2026-11-04', 2000, { entry_kind: 'refund', merchant_name: 'SHOP THREE', status: 'ignored' });
+  const rows = [a, b, c, partial, ignoredRefund];
+  const asOf = new Date('2026-11-20T12:00:00Z');
+  const range = cardStateV2.rebuildRange(v2, { asOf, caps: true, milestones: true, expected: true, since: '2026-10-01' });
+  const plan = (list, extra = {}) => cardStateV2.planReplay({ v2, directory, range, transactions: list, expected: true, ...extra });
+
+  const first = plan(rows);
+  const reversed = plan([...rows].reverse());
+  const value = (p, id) => p.txnExpectedUpdates.find((u) => u.id === id).value;
+  for (const row of [a, b, c]) assert.equal(value(first, row.id), value(reversed, row.id), 'input order does not matter');
+  assert.ok(value(first, b.id) < value(plan([a, b, c]), b.id), 'the partly refunded spend earns less than it would unrefunded');
+  assert.equal(value(first, c.id), value(plan([a, b, c]), c.id), 'an ignored refund changes nothing');
+
+  const recorded = rows.map((r) => {
+    const rec = first.txnRecordUpdates.find((u) => u.id === r.id);
+    const exp = first.txnExpectedUpdates.find((u) => u.id === r.id);
+    return rec || exp ? { ...r, card_state_v2: rec ? rec.record : r.card_state_v2, expected_points: exp ? String(exp.native) : r.expected_points, expected_value_inr: exp ? String(exp.value) : r.expected_value_inr, expected_cashback_inr: exp && exp.cashback != null ? String(exp.cashback) : null } : r;
+  });
+  const second = plan(recorded, {
+    existingCapRows: first.capRows.map((r) => ({ ...r, consumed: String(r.consumed), cap_amount: String(r.cap_amount) })),
+    existingMilestoneRows: first.milestoneRows.map((r) => ({ ...r, qualified_spend: String(r.qualified_spend) })),
+  });
+  assert.deepEqual(second.txnExpectedUpdates, [], 'a second pass writes no prices');
+  assert.deepEqual(second.diff.caps, []);
+  assert.deepEqual(second.diff.milestones, []);
+});

@@ -36,7 +36,9 @@ void main() {
     // HUNGERBOX, CAPITAL FLOAT, CAPITALFLOAT, PAYU FINANCE, GODIGIT, LIBERTY
     // GENERAL. They are exact, whole-token or full-name keys on purpose: a bare
     // stem such as WELLNES or ALEGRA would also take WELLNESS SPA or ALEGRA FOODS.
-    expect(rules.length, 618);
+    // Plus 2 whole-token names the bank cuts short that the exact keys miss when the
+    // name is not the whole merchant text: PETROLE and FLIPKAR (PYU*Flipkar).
+    expect(rules.length, 620);
     expect(aliases.length, 166);
     expect(rules.every((r) => r.source == CategorySource.catalogue), isTrue);
     expect(rules.every((r) => r.senders.length == 1 && r.senders.single == '*'), isTrue);
