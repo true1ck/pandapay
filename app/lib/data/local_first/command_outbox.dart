@@ -76,6 +76,11 @@ class CommandOutbox {
 
   static const _maxBackoffSeconds = 1800;
 
+  /// True when the last [flush] stopped because the server could not be
+  /// reached (H3-3): a second pass right after it would only cost another
+  /// timeout.
+  bool lastFlushUnreachable = false;
+
   /// Queues [kind] for [target]. A queued command of the same kind and target
   /// is replaced, since only the latest intent matters. Any queued command in
   /// [cancels] for the same target is removed, and when one was, nothing is
@@ -182,6 +187,7 @@ class CommandOutbox {
     int limit = 20,
     Set<String>? onlyKinds,
   }) async {
+    lastFlushUnreachable = false;
     final now = _now().millisecondsSinceEpoch;
     final due = _appDb.db.select(
       'SELECT id, kind, target, payload_json, attempts FROM command_outbox '
@@ -198,7 +204,11 @@ class CommandOutbox {
       if (onlyKinds != null && !onlyKinds.contains(row['kind'])) continue;
       final handler = handlers[row['kind'] as String];
       if (handler == null) {
-        _park(id, 'No handler for ${row['kind']}');
+        // H3-4: no handler means the command context was unavailable (a
+        // database error while building it), not that the command is bad.
+        // Leave it queued, count nothing, keep later commands of the target
+        // behind it. ponytail: an unknown kind therefore stays queued.
+        blocked.add(target);
         continue;
       }
       try {
@@ -214,6 +224,7 @@ class CommandOutbox {
           case QueueFailure.network:
             // Could not reach the server: not the command's fault. Keep it
             // due and stop; the other commands would fail the same way.
+            lastFlushUnreachable = true;
             _appDb.db.execute(
               'UPDATE command_outbox SET last_error=? WHERE id=?',
               ['$error', id],

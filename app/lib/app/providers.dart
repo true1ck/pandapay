@@ -3258,7 +3258,10 @@ final outboxFlushProvider = Provider<void>((ref) {
         onlyKinds: CardCommand.addFirst,
       );
       final sent = await outbox.flush(repo);
-      final commandsSent = addedCards + await commands.flush(handlers);
+      // H3-3: one pass per trigger. A dead network already cost one timeout.
+      final commandsSent =
+          addedCards +
+          (commands.lastFlushUnreachable ? 0 : await commands.flush(handlers));
       if (commandsSent > 0) {
         // Drop the cached server lists so the next read shows what the server
         // now holds, not the snapshot taken before these changes.
