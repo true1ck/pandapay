@@ -5,10 +5,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../app/providers.dart'
     show
         notificationPreferencesProvider,
-        notificationPreferencesRepositoryProvider,
-        recordAppNotification;
+        notificationPreferencesRepositoryProvider;
 import '../../data/notification_preferences_repository.dart';
 import 'notification_branding.dart';
+import 'notification_commands.dart';
+import 'notification_local_state.dart';
 
 /// Userappimplementation_plan.md UA-8.3: "Quiet hours + daily frequency cap
 /// enforced centrally in a NotificationGate that every notification path
@@ -30,9 +31,22 @@ class NotificationGate {
   final Ref ref;
   final FlutterLocalNotificationsPlugin notifications;
 
+  /// How long the inbox write may try the network before it is queued instead.
+  /// The OS banner is already on screen by then; this only bounds how long
+  /// [fire] itself takes to return on a dead connection.
+  final Duration inboxTimeout;
+
   bool _pluginInitialized = false;
 
-  NotificationGate({required this.ref, required this.notifications});
+  /// Dedupe keys being delivered right now, so two overlapping sweeps cannot
+  /// both pass the "already fired" check while the first is still showing.
+  final Set<String> _inFlight = {};
+
+  NotificationGate({
+    required this.ref,
+    required this.notifications,
+    this.inboxTimeout = const Duration(seconds: 4),
+  });
 
   /// Pure — same "testable without a real plugin/ref" split
   /// GeofenceMonitorService.shouldNotify already established for its own
@@ -103,12 +117,19 @@ class NotificationGate {
   }
 
   /// Attempts to deliver [category]'s notification. Returns true if it was
-  /// actually shown (OS banner + inbox row written), false if a preference
-  /// suppressed it (category off, quiet hours, daily cap reached, already
-  /// fired for this [dedupeKey], or — for [merchantId]-scoped ones — that
-  /// merchant muted) or the user is signed out (guest mode has no
+  /// actually delivered (OS banner shown, and/or inbox row written or queued),
+  /// false if a preference suppressed it (category off, quiet hours, daily cap
+  /// reached, already fired for this [dedupeKey], or — for [merchantId]-scoped
+  /// ones — that merchant muted) or the user is signed out (guest mode has no
   /// server-side preferences to check, so this no-ops rather than guessing
   /// what a signed-out user would want).
+  ///
+  /// Works with no network: preferences and muted merchants come from the
+  /// phone's own copy (or the defaults), the OS banner is shown before the
+  /// inbox is touched, and an inbox write that cannot be made is queued
+  /// durably. The dedupe key and the daily count are only recorded once the
+  /// notification reached the person (banner) or the inbox (sent or queued),
+  /// so a failure can never both suppress a notification and lose it.
   Future<bool> fire({
     required String category,
     required String title,
@@ -123,49 +144,85 @@ class NotificationGate {
     /// replaces the earlier one instead of stacking beside it.
     int? notificationId,
   }) async {
-    final prefs = await ref.read(notificationPreferencesProvider.future);
+    NotificationPreferences? prefs;
+    try {
+      prefs = await ref.read(notificationPreferencesProvider.future);
+    } catch (_) {
+      // The provider no longer throws; if something else does, decide with
+      // the conservative defaults rather than going silent.
+      prefs = NotificationPreferences.defaults;
+    }
     if (prefs == null) return false;
 
     final effectiveNow = now ?? DateTime.now();
     if (!categoryEnabled(prefs, category)) return false;
     if (merchantId != null && await _merchantMuted(merchantId)) return false;
     if (inQuietHours(prefs, effectiveNow)) return false;
-    if (await _alreadyFired(dedupeKey)) return false;
+    if (_inFlight.contains(dedupeKey) || await _alreadyFired(dedupeKey)) {
+      return false;
+    }
     if (dailyCapReached(await _todayCount(effectiveNow), prefs.dailyCap)) {
       return false;
     }
 
+    _inFlight.add(dedupeKey);
+    try {
+      // The banner comes first: it needs no network.
+      final shown = await _showBanner(
+        notificationId ?? dedupeKey.hashCode,
+        title,
+        body,
+      );
+      var recorded = false;
+      if (shown) {
+        await _markDelivered(dedupeKey, effectiveNow);
+        recorded = true;
+      }
+
+      final inbox = await recordAppNotificationOutcome(
+        ref,
+        category: category,
+        title: title,
+        body: body,
+        severity: severity,
+        deepLink: deepLink,
+        dedupeKey: dedupeKey,
+        timeout: inboxTimeout,
+      );
+      if (inbox == InboxWrite.lost && !shown) {
+        // Neither the person nor the inbox has it: leave the key unset so the
+        // next check tries again.
+        return false;
+      }
+      if (!recorded) await _markDelivered(dedupeKey, effectiveNow);
+      return true;
+    } finally {
+      _inFlight.remove(dedupeKey);
+    }
+  }
+
+  Future<void> _markDelivered(String dedupeKey, DateTime now) async {
     await _markFired(dedupeKey);
-    await _incrementTodayCount(effectiveNow);
+    await _incrementTodayCount(now);
+  }
 
-    await recordAppNotification(
-      ref,
-      category: category,
-      title: title,
-      body: body,
-      severity: severity,
-      deepLink: deepLink,
-      dedupeKey: dedupeKey,
-    );
-
-    // Everything from here down is best-effort, same "must never fail the
-    // action that earned it" posture as recordAppNotification above — the
-    // inbox row already landed either way, so a platform-channel failure
-    // (initialize() included: it throws on a plugin with no real platform
-    // behind it, e.g. in a widget test) means a missed banner, not a
-    // missed record, and fire() still honestly reports success.
+  /// Best effort, same "must never fail the action that earned it" posture as
+  /// the inbox write: a platform-channel failure (initialize() included: it
+  /// throws on a plugin with no real platform behind it, e.g. in a widget
+  /// test) means a missed banner, not an error.
+  Future<bool> _showBanner(int id, String title, String body) async {
     try {
       await _ensurePluginInitialized();
       await notifications.show(
-        notificationId ?? dedupeKey.hashCode,
+        id,
         title,
         body,
         NotificationBranding.alertDetails,
       );
+      return true;
     } catch (_) {
-      // See the comment above.
+      return false;
     }
-    return true;
   }
 
   /// Shows a notification received from the server while the app is in the
@@ -202,10 +259,12 @@ class NotificationGate {
     final repo = ref.read(notificationPreferencesRepositoryProvider);
     if (repo == null) return false;
     try {
-      final muted = await repo.fetchMutedMerchants();
+      // Cache first, so a mute made on this phone (or synced earlier) still
+      // applies with no network. A failed check never blocks a notification.
+      final muted = await loadMutedMerchants(ref, repo);
       return muted.any((m) => m.merchantId == merchantId);
     } catch (_) {
-      return false; // a failed check must never block an otherwise-valid notification
+      return false;
     }
   }
 
