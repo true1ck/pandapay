@@ -1,5 +1,6 @@
 import 'transaction_badge.dart';
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +14,7 @@ import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
 import '../../data/api_exception.dart' show userFacingErrorMessage;
 import '../../main.dart' show MoneyText;
+import '../sync_status/saved_data_caption.dart';
 import 'transaction_detail_screen.dart' show transactionDetailProvider;
 
 class DeletedTransactionsScreen extends ConsumerStatefulWidget {
@@ -34,16 +36,68 @@ class _DeletedTransactionsScreenState
     _load();
   }
 
+  DateTime? _savedAt;
+
   Future<void> _load() async {
     setState(() {
       _entries = null;
       _error = null;
+      _savedAt = null;
     });
+    // Local first (WP-C16): rows deleted on this phone, including ones the
+    // server has not been told about yet, then the server list, then the
+    // last saved server list when the server cannot be reached.
+    final namespace = ref.read(cacheNamespaceProvider);
+    final cacheKey = '$namespace:deleted_transactions';
     try {
       final repository = ref.read(userCardsRepositoryProvider);
       if (repository == null) throw StateError('Account is unavailable.');
-      final entries = await repository.fetchDeletedTransactions();
-      if (mounted) setState(() => _entries = entries);
+      final cache = await ref.read(responseCacheProvider.future);
+      final store = cache.financialStore;
+      List<TransactionEntry> local;
+      try {
+        local = store.deletedTransactions(namespace);
+      } catch (_) {
+        local = const [];
+      }
+      List<TransactionEntry> merge(List<TransactionEntry> remote) {
+        final localIds = {for (final row in local) row.id};
+        final kept = remote.where((row) {
+          if (localIds.contains(row.id)) return false;
+          // Restored on this phone but not yet confirmed by the server.
+          final mine = store.entities(namespace, 'transactions', id: row.id);
+          return !mine.any((m) => m['status'] == 'active');
+        });
+        return [...local, ...kept];
+      }
+
+      try {
+        final entries = await repository.fetchDeletedTransactions();
+        try {
+          await cache.put(
+            cacheKey,
+            jsonEncode({'transactions': entries.map((e) => e.toJson()).toList()}),
+          );
+        } catch (_) {}
+        if (mounted) setState(() => _entries = merge(entries));
+      } catch (error) {
+        if (isAuthenticationFailure(error) || !isOfflineLike(error)) rethrow;
+        final saved = await cache.read(cacheKey);
+        if (saved == null && local.isEmpty) rethrow;
+        final remote = saved == null
+            ? <TransactionEntry>[]
+            : ((jsonDecode(saved.rawJson) as Map<String, dynamic>)['transactions']
+                      as List)
+                  .cast<Map<String, dynamic>>()
+                  .map(TransactionEntry.fromJson)
+                  .toList();
+        if (mounted) {
+          setState(() {
+            _entries = merge(remote);
+            _savedAt = saved?.fetchedAt;
+          });
+        }
+      }
     } catch (error) {
       if (mounted) setState(() => _error = error);
     }
@@ -124,15 +178,25 @@ class _DeletedTransactionsScreenState
               message:
                   'Transactions you delete or remove from spending will appear here for recovery.',
             )
-          : ListView.separated(
-              padding: const EdgeInsets.all(AppSpace.lg),
-              itemCount: entries.length,
-              separatorBuilder: (_, _) => const SizedBox(height: AppSpace.sm),
-              itemBuilder: (context, index) => _DeletedTransactionCard(
-                entry: entries[index],
-                onRestore: () => _restore(entries[index]),
-                onRestoreAndEdit: () => _restore(entries[index], edit: true),
-              ),
+          : Column(
+              children: [
+                if (_savedAt != null)
+                  SavedDataCaption(updatedAt: _savedAt),
+                Expanded(
+                  child: ListView.separated(
+                    padding: const EdgeInsets.all(AppSpace.lg),
+                    itemCount: entries.length,
+                    separatorBuilder: (_, _) =>
+                        const SizedBox(height: AppSpace.sm),
+                    itemBuilder: (context, index) => _DeletedTransactionCard(
+                      entry: entries[index],
+                      onRestore: () => _restore(entries[index]),
+                      onRestoreAndEdit: () =>
+                          _restore(entries[index], edit: true),
+                    ),
+                  ),
+                ),
+              ],
             ),
     );
   }
