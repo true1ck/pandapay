@@ -1037,6 +1037,23 @@ class FinancialStore {
     if (database.db.updatedRows > 0) _notify(ns);
   }
 
+  /// Rows that were deleted or taken out of spending on this phone (status
+  /// `ignored`, refund/reversal excluded as those stay visible in Activity).
+  /// Backs the Deleted transactions list when the server list is not reachable.
+  List<TransactionEntry> deletedTransactions(String ns) => database.db
+      .select(
+        "SELECT payload FROM financial_entities WHERE namespace=? AND entity='transactions' AND json_extract(payload, '\$.status')='ignored'",
+        [ns],
+      )
+      .map(
+        (r) => TransactionEntry.fromJson(
+          jsonDecode(r['payload'] as String) as Map<String, dynamic>,
+        ),
+      )
+      .where((r) => !_isDisplayable(r))
+      .toList()
+    ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+
   void markInactive(String ns, String id, {String? reason}) {
     final rows = database.db.select(
       "SELECT payload FROM financial_entities WHERE namespace=? AND entity='transactions' AND id=?",

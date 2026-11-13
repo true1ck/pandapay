@@ -33,6 +33,7 @@ import '../data/api_exception.dart';
 import '../data/auth_api.dart';
 import '../data/connectivity/known_connectivity.dart';
 import '../data/connectivity/online_stream.dart';
+import '../data/connectivity/reachability.dart';
 import '../data/product_access_api.dart';
 import '../data/api_request_headers_client.dart';
 import '../data/authenticated_http_client.dart';
@@ -493,6 +494,12 @@ final categorySpendProvider = FutureProvider<List<CategorySpend>>((ref) async {
       if (_isAuthenticationFailure(error)) {
         return const [];
       }
+      // WP-C16: no snapshot and the server is unreachable: derive the same
+      // trailing-12-month totals from the transactions saved on this phone.
+      if (cached == null && isOfflineLike(error)) {
+        final local = await _localCategorySpend(ref);
+        if (local != null) return local;
+      }
       rethrow;
     }
     try {
@@ -503,6 +510,33 @@ final categorySpendProvider = FutureProvider<List<CategorySpend>>((ref) async {
     }
   }
 });
+
+/// Trailing-12-month spend by category from locally saved transactions, or
+/// null when nothing has ever been saved (so the caller keeps its error).
+Future<List<CategorySpend>?> _localCategorySpend(Ref ref) async {
+  final rows = await _cachedTransactionsForReports(ref);
+  if (rows == null) return null;
+  final now = DateTime.now();
+  final spend = _activeLocalRows(
+    rows,
+    DateTime(now.year, now.month - 12, now.day),
+    now.add(const Duration(days: 1)),
+  ).where((row) => row.countsAsSpend);
+  final groups = <String?, List<TransactionEntry>>{};
+  for (final row in spend) {
+    (groups[row.categoryId] ??= []).add(row);
+  }
+  return [
+    for (final entry in groups.entries)
+      CategorySpend(
+        categoryId: entry.key,
+        categorySlug: null,
+        categoryName: entry.value.first.categoryName,
+        totalSpend: _sumLocalAmounts(entry.value),
+        txnCount: entry.value.length,
+      ),
+  ]..sort((a, b) => b.totalSpend.paise.compareTo(a.totalSpend.paise));
+}
 
 final acquisitionRecommenderProvider = Provider<CardAcquisitionRecommender>((
   ref,
@@ -1801,7 +1835,7 @@ final profileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   // Offline with nothing cached: a profile row is display metadata, not the
   // session itself. Render the signed-in shell instead of waiting out a
   // request that cannot succeed.
-  if (_isKnownOffline()) return null;
+  if (_skipBackgroundRead(ref)) return null;
 
   try {
     final profile = await fetch();
@@ -2602,17 +2636,24 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
   final userRepo = ref.watch(userCardsRepositoryProvider);
   final cache = await _cacheOrNull(ref);
   if (cache == null) return;
+  // WP-C16: no refresh burst while the radio is down or the API is known
+  // unreachable; saved data stays on screen and nothing is invalidated.
+  if (_skipBackgroundRead(ref)) return;
+  var anyOk = false;
+  final startedAt = DateTime.now();
+  _lastHomeRefresh = (ref.read(cacheNamespaceProvider), startedAt);
 
   Future<void> refreshUserCards() async {
     if (userRepo == null) return;
     try {
       final cards = await userRepo.fetchUserCards().timeout(
-        _homeRequestTimeout,
+        _backgroundReadTimeout,
       );
       await cache.put(
         _scopedCacheKey(ref, _userCardsCacheKey),
         jsonEncode({'userCards': cards.map((c) => c.toJson()).toList()}),
       );
+      anyOk = true;
     } catch (_) {}
   }
 
@@ -2623,9 +2664,10 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
           .read(catalogueRepositoryProvider)
           .loader(
             cache: ResponseCacheCatalogueStore(cache),
-            timeout: _homeRequestTimeout,
+            timeout: _backgroundReadTimeout,
           )
           .refreshCache();
+      anyOk = true;
     } catch (_) {}
   }
 
@@ -2634,11 +2676,12 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
       final categories = await ref
           .read(categoryRepositoryProvider)
           .fetchCategories()
-          .timeout(_homeRequestTimeout);
+          .timeout(_backgroundReadTimeout);
       await cache.put(
         _categoriesCacheKey,
         jsonEncode({'categories': categories.map((c) => c.toJson()).toList()}),
       );
+      anyOk = true;
     } catch (_) {}
   }
 
@@ -2648,12 +2691,13 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
     if (overridesRepo == null) return;
     try {
       final overrides = await overridesRepo.fetchOverrides().timeout(
-        _homeRequestTimeout,
+        _backgroundReadTimeout,
       );
       await cache.put(
         _scopedCacheKey(ref, _cardOverridesCacheKey),
         jsonEncode({'overrides': overrides.map((o) => o.toJson()).toList()}),
       );
+      anyOk = true;
     } catch (_) {}
   }
 
@@ -2665,7 +2709,8 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
             anchor: DateTime.now().toUtc(),
             timeZone: ref.read(deviceTimeZoneProvider),
           )
-          .timeout(_homeRequestTimeout);
+          .timeout(_backgroundReadTimeout);
+      anyOk = true;
       if (summary != null) {
         await cache.put(
           _scopedCacheKey(ref, 'home_summary'),
@@ -2688,7 +2733,8 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
       // freshly fetched rows to every consumer rather than leaving an older
       // in-memory Activity result alive beside a newer SQLite snapshot.
       ref.invalidate(transactionsProvider);
-      await ref.read(transactionsProvider.future).timeout(_homeRequestTimeout);
+      await ref.read(transactionsProvider.future).timeout(_backgroundReadTimeout);
+      anyOk = true;
     } catch (_) {}
   }
 
@@ -2718,6 +2764,12 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
     refreshHomeSummary(),
     refreshTransactions(),
   ]);
+  if (!anyOk) {
+    // Every request failed: keep the snapshots on screen, and let a later
+    // reconnect refresh straight away instead of treating this as done.
+    _lastHomeRefresh = null;
+    return;
+  }
   ref.invalidate(userCardsProvider);
   ref.invalidate(catalogueProvider);
   ref.invalidate(categoriesProvider);
@@ -2742,6 +2794,12 @@ final displayDataSyncLifecycleProvider = Provider<void>((ref) {
     if (ref.read(isOnlineProvider).valueOrNull == false) return;
     final namespace = ref.read(cacheNamespaceProvider);
     final now = DateTime.now();
+    final homeRefresh = _lastHomeRefresh;
+    if (homeRefresh != null &&
+        homeRefresh.$1 == namespace &&
+        now.difference(homeRefresh.$2) < const Duration(seconds: 15)) {
+      return;
+    }
     if (!force &&
         lastNamespace == namespace &&
         lastStarted != null &&
@@ -3603,7 +3661,7 @@ final loungeUsageServerProvider = FutureProvider<List<LoungeVisit>>((ref) async 
           .cast<Map<String, dynamic>>()
           .map(LoungeVisit.fromJson)
           .toList();
-  if (_isKnownOffline() && cached != null) return decode(cached);
+  if (_skipBackgroundRead(ref) && cached != null) return decode(cached);
   try {
     final visits = await repo.fetchLoungeUsage();
     try {
@@ -3651,7 +3709,7 @@ final pointsLedgerProvider =
               .cast<Map<String, dynamic>>()
               .map(PointsLedgerEntry.fromJson)
               .toList();
-      if (_isKnownOffline() && cached != null) return decode(cached);
+      if (_skipBackgroundRead(ref) && cached != null) return decode(cached);
       try {
         final entries = await repo.fetchPointsLedger(userCardId);
         try {
@@ -4023,7 +4081,7 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
     );
   }).toList();
 
-  if (_isKnownOffline()) {
+  if (_skipBackgroundRead(ref)) {
     final offlineAccounts = localAccounts != null && localAccounts.isNotEmpty
         ? localAccounts
         : cached != null
@@ -4540,6 +4598,7 @@ final contributionNetworkStatsProvider =
         );
       }
 
+      if (_skipBackgroundRead(ref) && cached != null) return decodeCached();
       try {
         final stats = await repo.fetchContributionNetworkStats();
         try {
@@ -4952,6 +5011,19 @@ bool _isAuthenticationFailure(Object error) {
 /// reachability probe) reads the same state.
 bool _isKnownOffline() => KnownConnectivity.knownOffline;
 
+/// WP-C16: radio known down, or the reachability probe says the API is not
+/// serving (captive/dead Wi-Fi). Unknown reachability is NOT a reason to skip,
+/// so an unprobed healthy user behaves exactly as before. Background and
+/// cache-backed reads use this to serve saved data instead of waiting 15 s.
+bool _skipBackgroundRead(Ref ref) {
+  if (_isKnownOffline()) return true;
+  try {
+    return ref.read(serverReachabilityProvider).shouldSkipBackgroundReads;
+  } catch (_) {
+    return false;
+  }
+}
+
 /// The cache is always best-effort — every offline-cache-aware provider
 /// below calls this instead of watching responseCacheProvider directly, so
 /// a local-DB init failure (an unavailable platform channel in a plain
@@ -5092,6 +5164,12 @@ const _cardOverridesCacheKey = 'card_overrides';
 // completes must become a cache/fallback/error state instead of leaving the
 // recommendation section in AsyncLoading forever.
 const _homeRequestTimeout = Duration(seconds: 15);
+// WP-C16: cold-start background reads give up sooner than user-initiated ones
+// (a hung socket must not hold the refresh burst for 15 s).
+const _backgroundReadTimeout = Duration(seconds: 8);
+// Namespace + start of Home's own refresh, so the lifecycle provider does not
+// fire a second forced burst right behind it.
+(String, DateTime)? _lastHomeRefresh;
 const _spendReportCacheKey = 'spend_report';
 const _transactionsCacheKey = 'transactions';
 
@@ -5118,7 +5196,7 @@ void _warmDisplay<T>(
   Object? Function(T) encode,
 ) {
   if (cache == null ||
-      _isKnownOffline() ||
+      _skipBackgroundRead(ref) ||
       _backgroundDisplayRefreshes.containsKey(key) ||
       (!cache.needsRefresh(key) &&
           DateTime.now().difference(fetchedAt) < const Duration(seconds: 15))) {
@@ -6230,6 +6308,13 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
     if (isAuthenticationFailure(error)) {
       throw const AuthenticationUnavailableException();
     }
+    // WP-C16: a store that has synced before knows this filter matches nothing
+    // locally; offline that is an honest empty list, not an error. Only a
+    // never-synced store (local == null) still surfaces the failure.
+    if (local != null && isOfflineLike(error)) {
+      ready = true;
+      return local.rows;
+    }
     rethrow;
   }
 }
@@ -6404,6 +6489,13 @@ final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
       }
     } catch (_) {}
   }
+  // WP-C16: first-ever launch with no network and nothing cached: serve the
+  // bundled built-in categories instead of waiting out a request that cannot
+  // succeed. Not cached, so the first online refresh replaces it.
+  if (cached == null && _skipBackgroundRead(ref)) {
+    final bundled = await loadBundledCategories();
+    if (bundled.isNotEmpty) return [...bundled, ...customCategories];
+  }
   try {
     final categories = await ref
         .watch(categoryRepositoryProvider)
@@ -6436,7 +6528,7 @@ final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
     // Category ids improve the ranking but are not required to produce a
     // truthful base-rate recommendation. The engine safely falls back to
     // catch-all card rules until the next refresh can load the ids.
-    return customCategories;
+    return [...await loadBundledCategories(), ...customCategories];
   }
 });
 

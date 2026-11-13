@@ -264,6 +264,7 @@ flutter:
     - assets/illustrations/
     - assets/avatars/
     - assets/data/bundled_catalogue.json
+    - assets/data/bundled_categories.json
     - assets/sms_rules/
     - assets/google_fonts/
 
