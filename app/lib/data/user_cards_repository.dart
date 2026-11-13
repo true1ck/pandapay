@@ -1580,6 +1580,54 @@ class UserCardsRepository {
     return (body['userCard'] as Map<String, dynamic>)['id'] as String;
   }
 
+  /// WP-C6: [addCard] for the offline queue. Sends the phone's own [clientId]
+  /// so a replay cannot create a second card. Returns the id the SERVER uses:
+  /// an old server ignores `id` and answers with its own, and a card the person
+  /// already had (409 `card_already_added`, or a natural-key 200) answers with
+  /// that card's id and `existing: true`. The caller remaps its local id.
+  Future<({String id, bool existing})> addCardWithClientId(
+    String clientId,
+    String cardProductId, {
+    String? nickname,
+    String? last4,
+    // A queued replay merges into the card the person already has (409
+    // card_already_added); a direct tap keeps showing that as an error.
+    bool mergeExisting = true,
+  }) async {
+    final response = await _client
+        .post(
+          Uri.parse('$apiBaseUrl/user-cards'),
+          headers: _headers,
+          body: jsonEncode({
+            'id': clientId,
+            'cardProductId': cardProductId,
+            'nickname': ?nickname,
+            'last4': ?last4,
+          }),
+        )
+        .timeout(const Duration(seconds: 60));
+    Map<String, dynamic>? decoded;
+    try {
+      final raw = jsonDecode(response.body);
+      if (raw is Map<String, dynamic>) decoded = raw;
+    } catch (_) {}
+    final userCard = decoded?['userCard'];
+    final returned = userCard is Map ? userCard['id'] as String? : null;
+    if ((response.statusCode == 200 || response.statusCode == 201) &&
+        returned != null) {
+      return (id: returned, existing: decoded?['linkedExisting'] == true);
+    }
+    if (mergeExisting &&
+        response.statusCode == 409 &&
+        decoded?['error'] == 'card_already_added' &&
+        returned != null) {
+      return (id: returned, existing: true);
+    }
+    throw ApiException(
+      'POST /user-cards failed: ${response.statusCode} ${response.body}',
+    );
+  }
+
   Future<void> archiveCard(String userCardId) async {
     final response = await _client
         .post(
@@ -3213,6 +3261,17 @@ class DuplicateTransactionSummary {
       cardDisplayName: (nickname?.isNotEmpty == true) ? nickname : cardName,
     );
   }
+
+  /// Cache round-trip (WP-C6): [fromJson] reads it back unchanged.
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'amount_inr': amount.rupees,
+    'occurred_at': occurredAt.toIso8601String(),
+    'merchant_name': merchantName,
+    'source': source,
+    'status': status,
+    'card_name': cardDisplayName,
+  };
 }
 
 class DuplicateCandidate {
@@ -3243,4 +3302,12 @@ class DuplicateCandidate {
       matchReason: json['match_reason'] as String,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'txn_a': txnA.toJson(),
+    'txn_b': txnB.toJson(),
+    'match_score': matchScore,
+    'match_reason': matchReason,
+  };
 }

@@ -22,7 +22,9 @@ import '../../data/scanned_merchant_category.dart';
 import '../../data/upi_payment_service.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
 import '../../main.dart' show MoneyText;
+import '../cards/add_card_local_first.dart';
 import '../cards/card_visual.dart';
+import '../overrides/override_local_first.dart';
 import '../cards/recommendation_confidence.dart';
 import '../cards/card_picker_screen.dart';
 import '../comparison/comparison_view_screen.dart';
@@ -822,13 +824,13 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       // scope (see override_resolver.dart's priority doc comment), matching
       // "Always use this card here" meaning "at this exact payee", not this
       // merchant's name (which can vary) or this whole category.
-      await repo.createOverride(
-        userCardId: owned.id,
+      // Local-first (WP-C6): queued when the server is not reachable.
+      await createOverrideLocalFirst(
+        ref,
+        card: owned,
         scope: OverrideScope.vpa,
         vpa: widget.parsed.pa,
       );
-      ref.invalidate(cardOverridesProvider);
-      ref.invalidate(rankedRecommendationsProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -856,19 +858,12 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       ),
     );
     if (picked == null || picked.isEmpty || !mounted) return;
-    final repo = ref.read(userCardsRepositoryProvider);
     try {
-      if (repo != null) {
-        for (final c in picked) {
-          await repo.addCard(c.id);
-        }
-      } else {
-        final local = await ref.read(localUserCardsRepositoryProvider.future);
-        for (final c in picked) {
-          await local.addCard(c.id);
-        }
+      for (final c in picked) {
+        await addCardLocalFirst(ref, cardProductId: c.id, product: c);
       }
       ref.invalidate(userCardsProvider);
+      ref.invalidate(myCardsProvider);
       ref.invalidate(rankedRecommendationsProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

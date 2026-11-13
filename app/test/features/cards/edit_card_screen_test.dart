@@ -5,7 +5,10 @@ import 'package:go_router/go_router.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay/data/local/financial_store.dart';
 import 'package:pandapay/data/local/sync_queue.dart';
+import 'package:pandapay/data/local_first/local_first_cards.dart';
+import 'package:pandapay/data/local_first/command_outbox.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/cards/edit_card_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -156,6 +159,8 @@ class _WarmIsOnline extends ConsumerWidget {
 /// starts at a real placeholder `/home` and pushes to `/edit`, so there's
 /// a genuine prior route on the stack for these offline tests to pop back
 /// to, matching the app's actual navigation shape.
+CommandOutbox? _lastCommands;
+
 Future<(GoRouter, SyncQueue)> _pumpOffline(
   WidgetTester tester, {
   required List<CardProduct> catalogue,
@@ -175,7 +180,12 @@ Future<(GoRouter, SyncQueue)> _pumpOffline(
       ),
     ],
   );
-  final queue = SyncQueue(openInMemoryForTesting());
+  final testDb = openInMemoryForTesting();
+  final queue = SyncQueue(testDb);
+  final commands = CommandOutbox(testDb, namespace: 'legacy');
+  _lastCommands = commands;
+  final store = FinancialStore(testDb)..replaceCards('legacy', owned);
+  addTearDown(store.dispose);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -189,6 +199,11 @@ Future<(GoRouter, SyncQueue)> _pumpOffline(
         ),
         isOnlineProvider.overrideWith((ref) => Stream.value(false)),
         syncQueueProvider.overrideWith((ref) async => queue),
+        commandOutboxProvider.overrideWith((ref) async => commands),
+        localFirstCardsProvider.overrideWith(
+          (ref) async =>
+              LocalFirstCards(store: store, queue: queue, namespace: 'legacy'),
+        ),
       ],
       child: MaterialApp.router(routerConfig: router),
     ),
@@ -616,13 +631,58 @@ void main() {
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
+      // WP-C6: the points balance is queued as a points adjustment (with a
+      // client mutation id) instead of being refused offline.
       expect(
         find.textContaining('Points balance needs a live connection'),
+        findsNothing,
+      );
+      expect(
+        find.text('Saved offline — will sync when you reconnect.'),
         findsOneWidget,
       );
-      // The rest of the edit (even though unchanged here) still queues —
-      // only the points balance itself is excluded.
+      final adjust = _lastCommands!.pendingOf({'points_adjust'}).single;
+      expect(adjust.target, 'uc1');
+      expect(adjust.payload['newBalance'], 500);
+      expect(adjust.payload['clientMutationId'], isA<String>());
       expect(queue.pending(), hasLength(1));
+    },
+  );
+
+  testWidgets(
+    'Save while offline sends last4 through the card PATCH too, since an old server drops it from /sync/push',
+    (tester) async {
+      final product = CardProduct(
+        id: 'p1',
+        name: 'Test Card',
+        network: CardNetwork.rupay,
+      );
+      final owned = [
+        const UserCard(
+          id: 'uc1',
+          cardProductId: 'p1',
+          cardName: 'Test Card',
+          isDefault: false,
+        ),
+      ];
+      final (_, queue) = await _pumpOffline(
+        tester,
+        catalogue: [product],
+        owned: owned,
+      );
+      await tester.enterText(find.widgetWithText(TextField, 'Last 4 digits'), '4321');
+      await tester.scrollUntilVisible(
+        find.text('Save'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(queue.pending().single.payload['last4'], '4321');
+      final patch = _lastCommands!.pendingOf({'card_fields_patch'}).single;
+      expect(patch.target, 'uc1');
+      expect(patch.payload, {'cardId': 'uc1', 'last4': '4321'});
     },
   );
 
@@ -674,7 +734,7 @@ void main() {
   );
 
   testWidgets(
-    'Set as default while offline asks for connectivity rather than queuing an unsafe change',
+    'Set as default while offline is saved on the phone and queued like Card actions (WP-C6)',
     (tester) async {
       final product = CardProduct(
         id: 'p1',
@@ -703,13 +763,12 @@ void main() {
       await tester.tap(find.text('Set as default card'));
       await tester.pumpAndSettle();
 
-      expect(
-        find.textContaining('needs an internet connection'),
-        findsOneWidget,
-      );
-      // Deliberately nothing queued — see the source comment: queuing just
-      // this row's is_default=true could leave two cards flagged default.
-      expect(queue.pending(), isEmpty);
+      expect(find.text('Set as your default card.'), findsOneWidget);
+      // LocalFirstCards clears any other default in the same step, so two
+      // cards can never end up flagged default.
+      final pending = queue.pending();
+      expect(pending.single.entityId, 'uc1');
+      expect(pending.single.payload, {'is_default': true});
     },
   );
 }

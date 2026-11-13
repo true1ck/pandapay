@@ -4,6 +4,7 @@ import 'package:sqlite3/sqlite3.dart';
 import '../../app/providers.dart';
 import '../../data/local/queue_registry.dart';
 import '../account/account_commands.dart';
+import '../cards/add_card_local_first.dart';
 import '../import/statement_import_continuation_provider.dart';
 import '../shared_expenses/runtime/shared_providers.dart';
 import '../sms_v2/providers/runtime_provider.dart';
@@ -176,7 +177,10 @@ Future<QueueFlushReport> flushSignOutQueues(
         spend: ref.read(spendReportsRepositoryProvider),
         notificationPrefs: ref.read(notificationPreferencesRepositoryProvider),
         accountHandlers: accountCommandHandlers(ref),
+        cards: await cardCommandContext(ref),
       );
+      // Queued card adds go first: transactions and overrides may name them.
+      await commands.flush(handlers, onlyKinds: CardCommand.addFirst);
       return drain(() => commands.flush(handlers));
     })
     ..attachFlush('transaction_tag_outbox', () async {

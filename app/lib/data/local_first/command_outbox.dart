@@ -174,9 +174,13 @@ class CommandOutbox {
 
   /// Sends due commands, oldest first, at most [limit] in this pass. Returns
   /// how many were delivered. Never throws: a failure is recorded on the row.
+  ///
+  /// [onlyKinds] limits the pass to those kinds (WP-C6 sends queued card adds
+  /// before the transactions that may name those cards); the rest stay queued.
   Future<int> flush(
     Map<String, CommandHandler> handlers, {
     int limit = 20,
+    Set<String>? onlyKinds,
   }) async {
     final now = _now().millisecondsSinceEpoch;
     final due = _appDb.db.select(
@@ -191,6 +195,7 @@ class CommandOutbox {
       final id = row['id'] as int;
       final target = row['target'] as String;
       if (blocked.contains(target)) continue;
+      if (onlyKinds != null && !onlyKinds.contains(row['kind'])) continue;
       final handler = handlers[row['kind'] as String];
       if (handler == null) {
         _park(id, 'No handler for ${row['kind']}');

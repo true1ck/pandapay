@@ -12,7 +12,7 @@ import '../../app/router.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
 import '../overrides/manual_overrides_screen.dart';
-import '../sync/sync_engine.dart';
+import 'card_state_local_first.dart';
 
 /// Design 23 "Card actions · freeze or remove" — everything you can do to
 /// one card that isn't editing its details.
@@ -81,66 +81,25 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
   /// and in how loudly they say so, which is why Remove confirms first.
   Future<bool> _setPaused(bool paused) async {
     if (_busy) return false;
-    final repo = ref.read(userCardsRepositoryProvider);
-    final local = repo == null
-        ? await ref.read(localUserCardsRepositoryProvider.future)
-        : null;
-    if (!mounted) return false;
     setState(() => _busy = true);
     final messenger = ScaffoldMessenger.of(context);
-    var queuedOffline = false;
     try {
-      try {
-        if (paused) {
-          if (repo != null) {
-            await repo.archiveCard(widget.card.id);
-          } else {
-            await local!.archiveCard(widget.card.id);
-          }
-        } else {
-          if (repo != null) {
-            await repo.unarchiveCard(widget.card.id);
-          } else {
-            await local!.unarchiveCard(widget.card.id);
-          }
-        }
-      } catch (error) {
-        final offline = ref.read(isOnlineProvider).valueOrNull == false;
-        if (!paused ||
-            repo == null ||
-            !(offline || isTransientNetworkFailure(error))) {
-          rethrow;
-        }
-        final queue = await ref.read(syncQueueProvider.future);
-        queue.enqueueUpdate(
-          entity: 'user_cards',
-          entityId: widget.card.id,
-          fields: {'is_archived': true},
-        );
-        queuedOffline = true;
-        ref.invalidate(pendingSyncCountProvider);
-        unawaited(ref.read(syncEngineProvider).sync());
-      }
-
-      await applyUserCardArchiveToCache(
+      // One shared path (WP-C6): the server first when it is reachable,
+      // otherwise saved on the phone and queued.
+      final change = await setCardArchived(
         ref,
-        userCardId: widget.card.id,
+        widget.card.id,
         archived: paused,
       );
-      await clearUserCardsCache(ref);
-      ref.invalidate(myCardsProvider);
-      ref.invalidate(userCardsProvider);
-      ref.invalidate(transactionsProvider);
-      ref.invalidate(utilizationTransactionsProvider);
-      ref.invalidate(homeSummaryProvider);
-      ref.invalidate(spendReportProvider);
-      ref.invalidate(budgetsProvider);
-      ref.invalidate(recurringReportProvider);
+      await refreshAfterCardChange(ref);
+      final queued = change == CardChange.queued;
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            queuedOffline
+            queued && paused
                 ? 'Card removed on this device. It will sync when the server is available.'
+                : queued
+                ? '$_displayName is back on this device. It will sync when the server is available.'
                 : paused
                 ? '$_displayName paused — it will not be ranked.'
                 : '$_displayName is back in the ranking.',
@@ -159,23 +118,8 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
   }
 
   Future<void> _setDefault() async {
-    final repo = ref.read(userCardsRepositoryProvider);
-    final local = repo == null
-        ? await ref.read(localUserCardsRepositoryProvider.future)
-        : null;
-    // Signed in: save on the phone and let the sync queue carry it to the
-    // server. The button must not wait on the network.
-    final localFirst = repo != null
-        ? await ref.read(localFirstCardsProvider.future)
-        : null;
     await _run(() async {
-      if (localFirst != null) {
-        localFirst.setDefault(widget.card.id);
-        ref.invalidate(pendingSyncCountProvider);
-        unawaited(ref.read(syncEngineProvider).sync());
-      } else {
-        await local!.setDefaultCard(widget.card.id);
-      }
+      await setCardDefault(ref, widget.card.id);
     }, '$_displayName is now your default card.');
   }
 
