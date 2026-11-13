@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+// ignore: implementation_imports
+import 'package:google_fonts/src/google_fonts_base.dart' as google_fonts_base;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pandapay/app/design/app_theme.dart';
 
@@ -45,6 +47,9 @@ void main() {
   ];
 
   setUp(() {
+    // flutter_test_config.dart installs an empty manifest for widget tests;
+    // this test needs google_fonts to read the real one.
+    google_fonts_base.assetManifest = null;
     GoogleFonts.config.allowRuntimeFetching = false;
   });
 
