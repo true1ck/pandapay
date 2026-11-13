@@ -30,6 +30,7 @@ import 'data/secure_storage/install_guard.dart';
 import 'data/spend_reports_repository.dart';
 import 'data/product_access_api.dart';
 import 'features/settings/appearance_providers.dart';
+import 'features/sync_status/sync_status_banner.dart';
 import 'features/sms_import/ios_sms_background.dart' as ios_background;
 
 @pragma('vm:entry-point')
@@ -453,6 +454,7 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
     // Restore saved location monitoring for every entry point, including
     // assistant links that open a screen outside the tab shell.
     ref.watch(backgroundAlertsLifecycleProvider);
+    final router = ref.watch(goRouterProvider);
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'PandaPay',
@@ -463,9 +465,19 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
       builder: (context, child) => GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-        child: _scaledTextMediaQuery(context, child, textScale),
+        // The sync-status strip (offline / can't reach / syncing / needs
+        // attention) lives above every route. Zero-size and layout-neutral
+        // while healthy; see features/sync_status/sync_status_banner.dart.
+        child: _scaledTextMediaQuery(
+          context,
+          SyncStatusBanner(
+            navigatorKey: router.routerDelegate.navigatorKey,
+            child: child,
+          ),
+          textScale,
+        ),
       ),
-      routerConfig: ref.watch(goRouterProvider),
+      routerConfig: router,
     );
   }
 }
