@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../data/user_cards_repository.dart' show TxnInstrument, UserCard;
 import 'follow_up/follow_up.dart';
@@ -32,6 +33,14 @@ class VoiceDraftEditor {
       occurredAt = draft.occurredAt;
 
   final VoiceActionDraft draft;
+
+  /// One identity per entry for the life of the sheet, reused on every Save
+  /// attempt so a retry can never make a second transaction (WP-C5).
+  final String clientMutationId = const Uuid().v4();
+
+  /// Set once this entry has been written (to the outbox or the command
+  /// queue); a retry after a partial failure skips it.
+  bool saved = false;
   VoiceActionType type;
   final TextEditingController amountController;
   final TextEditingController pointsController;

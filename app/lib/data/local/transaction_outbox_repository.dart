@@ -41,6 +41,11 @@ class TransactionOutboxEntry {
   /// row queued before the column existed and whenever the user chose none.
   final String? paymentMethod;
 
+  /// Set only by a payment-sent "log it" (reward matching needs them).
+  final String? merchantVpa;
+  final String? mcc;
+  final String? rail;
+
   const TransactionOutboxEntry({
     required this.id,
     required this.clientMutationId,
@@ -56,6 +61,9 @@ class TransactionOutboxEntry {
     required this.createdAt,
     this.lastError,
     this.paymentMethod,
+    this.merchantVpa,
+    this.mcc,
+    this.rail,
     this.attempts = 0,
     this.nextAttemptAt,
     this.parked = false,
@@ -96,32 +104,71 @@ class TransactionOutboxRepository {
         .toString();
   }
 
+  TransactionEntry _provisional(TransactionOutboxEntry entry) =>
+      TransactionEntry(
+        id: 'local-outbox:${entry.clientMutationId}',
+        sourceKey: _sourceKey(entry.clientMutationId),
+        amount: Money.fromPaise(entry.amountPaise),
+        occurredAt: entry.occurredAt ?? entry.createdAt,
+        userCardId: entry.userCardId,
+        categoryId: entry.categoryId ??
+            (entry.userCategoryId == null
+                ? null
+                : 'custom:${entry.userCategoryId}'),
+        merchantName: entry.merchantName,
+        note: entry.note,
+        instrument: entry.instrument,
+        paymentMethod: entry.paymentMethod,
+        entryKind: entry.entryKind,
+        source: 'manual',
+        status: 'active',
+      );
+
   Future<void> restoreLocalEntries() async {
     // Every queued entry, including parked ones and ones waiting out a
     // backoff: the person still sees what they saved until it is delivered.
     for (final entry in await all()) {
-      financialStore?.saveProvisional(
-        namespace,
-        TransactionEntry(
-          id: 'local-outbox:${entry.clientMutationId}',
-          sourceKey: _sourceKey(entry.clientMutationId),
-          amount: Money.fromPaise(entry.amountPaise),
-          occurredAt: entry.occurredAt ?? entry.createdAt,
-          userCardId: entry.userCardId,
-          categoryId: entry.categoryId ??
-              (entry.userCategoryId == null
-                  ? null
-                  : 'custom:${entry.userCategoryId}'),
-          merchantName: entry.merchantName,
-          note: entry.note,
-          instrument: entry.instrument,
-          paymentMethod: entry.paymentMethod,
-          entryKind: entry.entryKind,
-          source: 'manual',
-          status: 'active',
-        ),
-      );
+      financialStore?.saveProvisional(namespace, _provisional(entry));
     }
+  }
+
+  /// Changes the category and/or card of an entry that has not been sent yet
+  /// (a bulk edit that includes a row saved offline). [categoryId] may be a
+  /// `custom:<id>` value. Returns false when the entry is no longer queued, i.e.
+  /// it has been delivered and the caller should edit the server row instead.
+  Future<bool> editQueued(
+    String clientMutationId, {
+    String? categoryId,
+    String? userCardId,
+  }) async {
+    final custom = categoryId != null && categoryId.startsWith('custom:');
+    if (categoryId != null) {
+      _appDb.db.execute(
+        'UPDATE transaction_outbox_entries SET category_id=?, user_category_id=? '
+        'WHERE namespace=? AND client_mutation_id=?',
+        [
+          custom ? null : categoryId,
+          custom ? categoryId.substring('custom:'.length) : null,
+          namespace,
+          clientMutationId,
+        ],
+      );
+      if (_appDb.db.updatedRows == 0) return false;
+    }
+    if (userCardId != null) {
+      _appDb.db.execute(
+        'UPDATE transaction_outbox_entries SET user_card_id=? '
+        'WHERE namespace=? AND client_mutation_id=?',
+        [userCardId, namespace, clientMutationId],
+      );
+      if (_appDb.db.updatedRows == 0) return false;
+    }
+    for (final entry in await all()) {
+      if (entry.clientMutationId == clientMutationId) {
+        financialStore?.saveProvisional(namespace, _provisional(entry));
+      }
+    }
+    return true;
   }
 
   Future<void> enqueue({
@@ -136,18 +183,24 @@ class TransactionOutboxRepository {
     TxnEntryKind entryKind = TxnEntryKind.spend,
     String? clientMutationId,
     String? paymentMethod,
+    String? merchantVpa,
+    String? mcc,
+    String? rail,
   }) async {
     final mutationId = clientMutationId ?? const Uuid().v4();
     final effectiveUserCategoryId = userCategoryId ??
         (categoryId != null && categoryId.startsWith('custom:')
             ? categoryId.substring('custom:'.length)
             : null);
+    // OR IGNORE: the same clientMutationId queued twice (a retried Save) is
+    // one entry. The server also dedupes on the id if the first was delivered.
     _appDb.db.execute(
       '''
-      INSERT INTO transaction_outbox_entries
+      INSERT OR IGNORE INTO transaction_outbox_entries
         (namespace, user_card_id, client_mutation_id, amount_paise, category_id, user_category_id, merchant_name,
-         occurred_at, note, instrument, entry_kind, created_at, payment_method)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         occurred_at, note, instrument, entry_kind, created_at, payment_method,
+         merchant_vpa, mcc, rail)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ''',
       [
         namespace,
@@ -163,6 +216,9 @@ class TransactionOutboxRepository {
         entryKind.wireValue,
         DateTime.now().millisecondsSinceEpoch,
         paymentMethod,
+        merchantVpa,
+        mcc,
+        rail,
       ],
     );
     financialStore?.saveProvisional(
@@ -291,6 +347,9 @@ class TransactionOutboxRepository {
         ),
         lastError: row['last_error'] as String?,
         paymentMethod: row['payment_method'] as String?,
+        merchantVpa: row['merchant_vpa'] as String?,
+        mcc: row['mcc'] as String?,
+        rail: row['rail'] as String?,
         attempts: row['attempts'] as int? ?? 0,
         nextAttemptAt: nextAttemptAt == 0
             ? null
@@ -341,6 +400,9 @@ class TransactionOutboxRepository {
           entryKind: entry.entryKind,
           clientMutationId: entry.clientMutationId,
           paymentMethod: entry.paymentMethod,
+          merchantVpa: entry.merchantVpa,
+          mcc: entry.mcc,
+          rail: entry.rail,
         );
         financialStore?.saveTransactions(namespace, [
           TransactionEntry(

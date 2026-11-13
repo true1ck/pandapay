@@ -24,6 +24,8 @@ import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
 import '../auth/login_screen.dart';
 import 'activity_projection.dart';
+import '../sync/sync_engine.dart';
+import 'bulk_transaction_actions.dart';
 import 'spend_exclusion.dart';
 import 'transaction_reward_label.dart';
 import 'foreign_payments_screen.dart';
@@ -396,9 +398,48 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     }
   }
 
+  /// WP-C5: the local-first bulk helper for the current account. The SMS
+  /// controller is only built when the selection holds SMS rows.
+  Future<BulkTransactionActions> _bulkHelper(
+    List<TransactionEntry> selected,
+  ) async {
+    final namespace = ref.read(cacheNamespaceProvider);
+    final cache = await ref.read(responseCacheProvider.future);
+    final queue = await ref.read(syncQueueProvider.future);
+    final commands = await ref.read(commandOutboxProvider.future);
+    final outbox = await ref.read(outboxRepositoryProvider.future);
+    final controller = selected.any(BulkTransactionActions.isSms)
+        ? await smsReviewController(ref)
+        : null;
+    return BulkTransactionActions(
+      namespace: namespace,
+      store: cache.financialStore,
+      queue: queue,
+      commands: commands,
+      outbox: outbox,
+      smsSetCategory: controller == null
+          ? null
+          : (rows, slug) =>
+                SmsTransactionActions(controller: controller).setCategory(rows, slug),
+      smsHide: controller == null
+          ? null
+          : (row) => SmsTransactionActions(controller: controller).hide(row),
+    );
+  }
+
+  void _afterBulkWrite() {
+    ref.read(outboxFlushRequestProvider.notifier).state++;
+    ref.invalidate(pendingOutboxCountProvider);
+    ref.invalidate(pendingSyncCountProvider);
+    unawaited(ref.read(syncEngineProvider).sync());
+  }
+
+  String _failedNote(BulkOutcome r) => r.failed.isEmpty
+      ? ''
+      : ' ${r.failed.length} could not be changed. Try those again.';
+
   Future<void> _bulkCategorize(List<TransactionEntry> visible) async {
-    final repo = ref.read(userCardsRepositoryProvider);
-    if (repo == null || _isBulkOperating) return;
+    if (_isBulkOperating) return;
     final ids = visible
         .where((entry) => _selectedIds.contains(entry.id))
         .map((entry) => entry.id)
@@ -424,30 +465,20 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 
     setState(() => _isBulkOperating = true);
     try {
-      // SMS transactions (`v2:` ids) live on this phone and sync from there;
-      // the server has no such id and answers 400. Save them locally and send
-      // only the rest to the API.
-      final selected = visible.where((e) => _selectedIds.contains(e.id));
-      final local = selected.where((e) => e.pipelineVersion == 2).toList();
-      final localIds = {for (final e in local) e.id};
-      if (local.isNotEmpty) {
-        final slug = categories
-            .where((c) => c.id == chosen)
-            .map((c) => c.slug)
-            .firstOrNull;
-        if (slug == null) {
-          throw ArgumentError(
-            'Choose a supported category for SMS transactions',
-          );
-        }
-        final controller = await smsReviewController(ref);
-        SmsTransactionActions(controller: controller).setCategory(local, slug);
-      }
-      await Future.wait(
-        ids
-            .where((id) => !localIds.contains(id))
-            .map((id) => repo.editTransaction(id, categoryId: chosen)),
+      final selected = visible
+          .where((e) => _selectedIds.contains(e.id))
+          .toList();
+      final slug = categories
+          .where((c) => c.id == chosen)
+          .map((c) => c.slug)
+          .firstOrNull;
+      final outcome = await (await _bulkHelper(selected)).setCategory(
+        selected,
+        chosen,
+        slug: slug,
+        categories: categories,
       );
+      _afterBulkWrite();
       unawaited(_teachLocalCategoryRules(visible, chosen));
       unawaited(_shareCategoryChoices(visible, chosen));
       if (mounted) {
@@ -461,7 +492,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Category updated for ${ids.length} transaction${ids.length == 1 ? '' : 's'}',
+              'Category updated for ${outcome.done} transaction${outcome.done == 1 ? '' : 's'}.${_failedNote(outcome)}',
             ),
           ),
         );
@@ -620,18 +651,15 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 
     setState(() => _isBulkOperating = true);
     try {
-      // An SMS transaction's account is confirmed in Needs review or its own
-      // Edit screen; the server cannot take a `v2:` id, so skip those rather
-      // than failing the whole batch.
-      final skipped = visible
-          .where((e) => _selectedIds.contains(e.id) && e.pipelineVersion == 2)
-          .map((e) => e.id)
-          .toSet();
-      await Future.wait(
-        ids
-            .where((id) => !skipped.contains(id))
-            .map((id) => repo.editTransaction(id, userCardId: chosen.id)),
+      final selected = visible
+          .where((e) => _selectedIds.contains(e.id))
+          .toList();
+      final outcome = await (await _bulkHelper(selected)).assignCard(
+        selected,
+        chosen.id,
       );
+      _afterBulkWrite();
+      final skipped = List.filled(outcome.skipped, '');
       if (mounted) {
         setState(() {
           _selectedIds.clear();
@@ -648,8 +676,8 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
           SnackBar(
             content: Text(
               skipped.isEmpty
-                  ? 'Assigned ${ids.length} transaction${ids.length == 1 ? '' : 's'} to $cardTitle'
-                  : 'Assigned ${ids.length - skipped.length} to $cardTitle. ${skipped.length} SMS transaction${skipped.length == 1 ? '' : 's'} skipped: change those from their own Edit screen.',
+                  ? 'Assigned ${outcome.done} transaction${outcome.done == 1 ? '' : 's'} to $cardTitle.${_failedNote(outcome)}'
+                  : 'Assigned ${outcome.done} to $cardTitle. ${skipped.length} SMS transaction${skipped.length == 1 ? '' : 's'} skipped: change those from their own Edit screen.${_failedNote(outcome)}',
             ),
           ),
         );
@@ -666,8 +694,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   }
 
   Future<void> _bulkDelete(List<TransactionEntry> visible) async {
-    final repo = ref.read(userCardsRepositoryProvider);
-    if (repo == null || _isBulkOperating) return;
+    if (_isBulkOperating) return;
     final ids = visible
         .where((entry) => _selectedIds.contains(entry.id))
         .map((entry) => entry.id)
@@ -700,9 +727,11 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 
     setState(() => _isBulkOperating = true);
     try {
-      await Future.wait(
-        ids.map((id) => repo.ignoreTransaction(id, reason: 'manual')),
-      );
+      final selected = visible
+          .where((e) => _selectedIds.contains(e.id))
+          .toList();
+      final outcome = await (await _bulkHelper(selected)).delete(selected);
+      _afterBulkWrite();
       if (mounted) {
         setState(() {
           _selectedIds.clear();
@@ -715,7 +744,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              '${ids.length} transaction${ids.length == 1 ? '' : 's'} deleted',
+              '${outcome.done} transaction${outcome.done == 1 ? '' : 's'} deleted.${_failedNote(outcome)}',
             ),
           ),
         );

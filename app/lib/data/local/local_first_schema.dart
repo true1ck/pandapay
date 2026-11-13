@@ -42,6 +42,7 @@ abstract final class LocalFirstSchema {
   /// The migration list. Index 0 is migration number 1.
   static final List<LocalFirstMigration> _migrations = <LocalFirstMigration>[
     _addTagAndForeignOutboxRetryColumns,
+    _addOutboxPaymentSentColumns,
   ];
 
   /// Current module version: the number of shipped migrations.
@@ -166,6 +167,21 @@ void _addTagAndForeignOutboxRetryColumns(Database db) {
     'last_error',
     'TEXT',
   );
+}
+
+/// Migration 2 (WP-C5): a "log it" from the payment-sent screen carries the
+/// merchant VPA, the MCC and the rail (they drive reward matching), which the
+/// transaction outbox could not hold. Nullable, so every queued row keeps
+/// flushing exactly as before.
+void _addOutboxPaymentSentColumns(Database db) {
+  for (final column in ['merchant_vpa', 'mcc', 'rail']) {
+    LocalFirstSchema.addColumnIfMissing(
+      db,
+      'transaction_outbox_entries',
+      column,
+      'TEXT',
+    );
+  }
 }
 
 /// One numbered, append-only step of [LocalFirstSchema]. Must be idempotent.

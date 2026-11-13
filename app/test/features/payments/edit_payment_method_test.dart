@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,6 +10,7 @@ import 'package:pandapay/data/local/response_cache.dart';
 import 'package:pandapay/data/local/sync_queue.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/activity/edit_transaction_screen.dart';
+import 'package:pandapay/features/payments/payment_method_command.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 /// Edit transaction "Paid with": the same chips as Quick Add, and a saved
@@ -77,6 +80,7 @@ Future<void> _pump(
   WidgetTester tester,
   _Repo repo, {
   bool online = true,
+  List<Override> extra = const [],
 }) async {
   tester.view.physicalSize = const Size(2400, 3600);
   tester.view.devicePixelRatio = 1;
@@ -106,6 +110,7 @@ Future<void> _pump(
         userCardsProvider.overrideWith((ref) async => const []),
         categoriesProvider.overrideWith((ref) async => const []),
         isOnlineProvider.overrideWith((ref) => Stream.value(online)),
+        ...extra,
       ],
       // The app keeps the connectivity provider alive; do the same here so
       // the screen's one-off read sees the emitted value.
@@ -177,10 +182,12 @@ void main() {
     await _tapKey(tester, 'payment-chip-instrument-cash');
     await _save(tester);
 
-    expect(repo.editCalls, 0);
-    final queued = _queued()!;
-    expect(queued['instrument'], 'cash');
-    expect(queued.containsKey('payment_method'), isFalse);
+    // WP-C5: while online an instrument change goes through the domain PATCH
+    // route (the sync writer may refuse typed columns), so it is never lost.
+    expect(repo.editCalls, 1);
+    expect(repo.last!['instrument'], TxnInstrument.cash);
+    expect(repo.last!['paymentMethod'], isNull);
+    expect(_queued(), isNull);
   });
 
   testWidgets('choosing NEFT from More saves it through the direct update', (
@@ -235,7 +242,7 @@ void main() {
     expect(repo.last!['paymentMethod'], isNull);
   });
 
-  testWidgets('a method change offline is refused, never dropped', (
+  testWidgets('a method change offline is queued as a command, never dropped', (
     tester,
   ) async {
     final repo = _Repo(_entry());
@@ -244,11 +251,83 @@ void main() {
     await _save(tester);
 
     expect(repo.editCalls, 0);
-    expect(_queued(), isNull);
-    expect(
-      find.text('Connect to the internet to change how this was paid.'),
-      findsOneWidget,
+    final commands = _db.db.select(
+      'SELECT kind, target, payload_json FROM command_outbox',
     );
+    expect(commands, hasLength(1));
+    expect(commands.single['kind'], 'transaction_payment_method');
+    expect(commands.single['target'], 't1');
+    expect(jsonDecode(commands.single['payload_json'] as String)['paymentMethod'], 'cheque');
+    expect(find.textContaining('Connect to the internet'), findsNothing);
+  });
+
+  testWidgets('the queued method command sends the same PATCH when delivered', (
+    tester,
+  ) async {
+    final repo = _Repo(_entry());
+    final handlers = paymentMethodCommandHandlers(repo);
+    await handlers[PaymentMethodCommand.set]!({'id': 't1', 'paymentMethod': 'neft'});
+    expect(repo.last!['paymentMethod'], 'neft');
+    expect(repo.last!['clearPaymentMethod'], isFalse);
+    await handlers[PaymentMethodCommand.set]!({'id': 't1', 'paymentMethod': null});
+    expect(repo.last!['clearPaymentMethod'], isTrue);
+  });
+
+  testWidgets('instrument change while offline is queued for the sync writer', (
+    tester,
+  ) async {
+    final repo = _Repo(_entry());
+    await _pump(tester, repo, online: false);
+    await _tapKey(tester, 'payment-chip-instrument-cash');
+    await _save(tester);
+
+    expect(repo.editCalls, 0);
+    expect(_queued()!['instrument'], 'cash');
+  });
+
+  testWidgets('self-transfer confirm offline is refused in plain words', (
+    tester,
+  ) async {
+    final repo = _Repo(
+      TransactionEntry(
+        id: 't1',
+        amount: Money.fromRupees(10000),
+        occurredAt: DateTime(2026, 11, 1),
+        merchantName: 'Transfer to slice small finance bank',
+        accountLast4: '1797',
+        instrument: TxnInstrument.upiBank,
+        source: 'sms',
+        status: 'active',
+      ),
+    );
+    await _pump(
+      tester,
+      repo,
+      online: false,
+      extra: [
+        bankAccountSummariesProvider.overrideWith(
+          (ref) async => const [
+            BankAccountSummary(
+              accountLast4: '5799',
+              availableBalance: null,
+              latestSmsAt: null,
+              smsCount: 1,
+              issuerSlug: 'slcbnk',
+            ),
+          ],
+        ),
+      ],
+    );
+    await tester.tap(find.byKey(const ValueKey('self-transfer-account:null')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Slice •5799').last);
+    await tester.pumpAndSettle();
+    await _save(tester);
+
+    expect(repo.editCalls, 0);
+    expect(_queued(), isNull);
+    expect(find.textContaining('You are offline'), findsOneWidget);
+    expect(find.textContaining('Exception'), findsNothing);
   });
 
   testWidgets('a legacy UPI row keeps its method on an unrelated edit', (

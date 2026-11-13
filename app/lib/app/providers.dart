@@ -108,6 +108,7 @@ import '../features/geofence/geofence_monitor_service.dart';
 import '../features/geofence/background_alerts_controller.dart';
 import '../features/geofence/nearby_merchants_repository.dart';
 import '../features/home_widget/home_widget_service.dart';
+import '../features/payments/payment_method_command.dart';
 import '../features/notifications/notification_commands.dart';
 import '../features/notifications/notification_gate.dart';
 import '../features/notifications/notification_local_state.dart';
@@ -1882,6 +1883,20 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
       ref
           .read(transactionTagsProvider)
           ?.remapTransaction('local-outbox:$mutationId', transactionId);
+      // A receipt saved offline under the queued alias follows the
+      // transaction to its real id (WP-C5). Fire and forget: a failure leaves
+      // the receipt under the alias and the next delivery repeat retries it.
+      unawaited(
+        ref
+            .read(transactionAttachmentsRepositoryProvider.future)
+            .then(
+              (attachments) => attachments.remapTransaction(
+                'local-outbox:$mutationId',
+                transactionId,
+              ),
+            )
+            .catchError((Object _) {}),
+      );
     },
   );
   return repository;
@@ -3007,6 +3022,8 @@ Map<String, CommandHandler> commandHandlersFor(
     prefs: notificationPrefs,
     onInboxSynced: onNotificationInboxSynced,
   ),
+  // WP-C5: payment-method change queued while offline.
+  ...paymentMethodCommandHandlers(repo),
   // A repeat answers 409/404 although the state the person wanted is already
   // in place; that is success, not a refusal (SRV-17).
   OutboxCommand.ignoreTransaction: (p) => ignoreAlreadyDoneIsDone(
@@ -3035,6 +3052,7 @@ Map<String, CommandHandler> commandHandlersFor(
   OverlayCommand.pointsAdjust: (p) => repo.adjustPointsBalance(
     p['userCardId'] as String,
     newBalance: (p['newBalance'] as num).toDouble(),
+    reason: p['reason'] as String?,
     clientMutationId: p['clientMutationId'] as String,
   ),
   if (spend != null) ...{

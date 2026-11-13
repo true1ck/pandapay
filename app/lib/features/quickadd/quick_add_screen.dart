@@ -20,6 +20,7 @@ import '../../app/category_picker.dart';
 import '../../app/providers.dart';
 import '../../app/transaction_tag_picker.dart';
 import '../../data/api_exception.dart';
+import '../../data/connectivity/reachability.dart' show serverReachabilityProvider;
 import '../../data/catalogue_repository.dart' show SpendCategory;
 import '../../data/receipt_parser.dart' show parseReceiptFields;
 import '../../data/receipt_ocr.dart' show ReceiptOcr;
@@ -1279,7 +1280,11 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       // background; the screen never waits on the API. A receipt needs the
       // server's transaction id to attach to, so that case keeps the direct
       // call below.
-      if (_receipt == null) {
+      // With a receipt the direct call is kept while the network is there, but
+      // when the phone is known to be offline (or the server unreachable) the
+      // receipt is stored on the phone under the queued entry's alias and
+      // moved to the real transaction once the outbox delivers it.
+      if (_receipt == null || _knownOffline()) {
         await _saveLocalFirst(
           repo: repo,
           amount: amount,
@@ -1382,10 +1387,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
               // counts anywhere. No DELETE route needed.
               onPressed: () async {
                 try {
-                  await repo.ignoreTransaction(
-                    transactionId,
-                    reason: 'reversal',
-                  );
+                  // Local first: hide the row now and let the command outbox
+                  // tell the server (retried until it accepts).
+                  await _undoDelivered(container, transactionId);
                   container.invalidate(userCardsProvider);
                   container.invalidate(transactionsProvider);
                   container.invalidate(utilizationTransactionsProvider);
@@ -1415,18 +1419,6 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       // just fail identically on retry.
       final isOnline = ref.read(isOnlineProvider).valueOrNull ?? true;
       if (!isOnline) {
-        if (_receipt != null) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Connect to the internet to save this transaction with its receipt.',
-                ),
-              ),
-            );
-          }
-          return;
-        }
         // A second try/catch, deliberately nested here rather than left to
         // propagate: this branch is ALREADY inside the outer catch, so an
         // exception from the outbox write itself (a full local queue, a
@@ -1460,6 +1452,12 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
               'local-outbox:$clientMutationId',
             ], _selectedTagIds.toList());
           }
+          try {
+            await _saveReceipt('local-outbox:$clientMutationId');
+          } catch (_) {
+            // The spend is queued; the receipt can be added again from its
+            // detail screen.
+          }
           if (mounted) {
             // Same "capture before pop" reasoning as the success path above —
             // ScaffoldMessenger.of(context) after pop() would attach to a
@@ -1492,6 +1490,31 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       if (mounted) setState(() => _saving = false);
     }
   }
+
+  /// Undo of a transaction the server already has: queued as an ignore
+  /// command with the row hidden on the phone at once (same as the detail
+  /// screen's delete), so it also works offline. Uses the container, not this
+  /// State, because the screen is gone by the time Undo is tapped.
+  Future<void> _undoDelivered(ProviderContainer container, String id) async {
+    final namespace = container.read(cacheNamespaceProvider);
+    final commands = await container.read(commandOutboxProvider.future);
+    final cache = await container.read(responseCacheProvider.future);
+    commands.enqueue(
+      kind: OutboxCommand.ignoreTransaction,
+      target: id,
+      payload: {'id': id, 'reason': 'reversal'},
+      cancels: const [OutboxCommand.restoreTransaction],
+    );
+    cache.financialStore.markInactive(namespace, id, reason: 'reversal');
+    container.read(commandOutboxRevisionProvider.notifier).state++;
+    container.read(outboxFlushRequestProvider.notifier).state++;
+    container.invalidate(pendingOutboxCountProvider);
+  }
+
+  /// The phone is known to be offline, or the server cannot be reached.
+  bool _knownOffline() =>
+      ref.read(isOnlineProvider).valueOrNull == false ||
+      ref.read(serverReachabilityProvider).serverReachable == false;
 
   Future<void> _saveLocalFirst({
     required UserCardsRepository repo,
@@ -1527,6 +1550,16 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       } catch (error) {
         tagError =
             'Transaction saved. Tags could not be saved: ${userFacingErrorMessage(error)}';
+      }
+    }
+    if (_receipt != null) {
+      try {
+        // Keyed by the queued entry's alias; remapped to the server id when
+        // the outbox delivers it (see userCardsRepositoryProvider).
+        await _saveReceipt('local-outbox:$clientMutationId');
+      } catch (_) {
+        tagError =
+            'Transaction saved, but its receipt could not be attached. Add it again from the transaction.';
       }
     }
     if (_selectedUserCardId != null &&
@@ -1571,7 +1604,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                     'It is still being saved. Try again in a moment.',
                   );
                 }
-                await repo.ignoreTransaction(id, reason: 'reversal');
+                await _undoDelivered(container, id);
               }
               container.invalidate(userCardsProvider);
               container.invalidate(transactionsProvider);
