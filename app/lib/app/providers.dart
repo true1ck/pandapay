@@ -1469,6 +1469,7 @@ final commitmentsProvider = FutureProvider<List<Commitment>>((ref) async {
         cadence: cadence,
         status: CommitmentStatus.due,
         source: CommitmentSource.sms,
+        sourceKey: obs['id'] as String?,
         confidence: identifiedLicPolicy && confidence < 0.85
             ? 0.85
             : confidence,

@@ -372,6 +372,9 @@ class Commitment {
   final bool isUserConfirmed;
   final double confidence;
 
+  /// Message key of the SMS this bill was read from. Derived, never synced.
+  final String? sourceKey;
+
   const Commitment({
     required this.id,
     required this.title,
@@ -389,6 +392,7 @@ class Commitment {
     this.linkedTransactionId,
     this.isUserConfirmed = false,
     this.confidence = 1.0,
+    this.sourceKey,
   });
 
   Commitment copyWith({
@@ -408,6 +412,7 @@ class Commitment {
     String? linkedTransactionId,
     bool? isUserConfirmed,
     double? confidence,
+    String? sourceKey,
   }) {
     return Commitment(
       id: id ?? this.id,
@@ -426,6 +431,7 @@ class Commitment {
       linkedTransactionId: linkedTransactionId ?? this.linkedTransactionId,
       isUserConfirmed: isUserConfirmed ?? this.isUserConfirmed,
       confidence: confidence ?? this.confidence,
+      sourceKey: sourceKey ?? this.sourceKey,
     );
   }
 

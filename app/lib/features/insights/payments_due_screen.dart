@@ -12,12 +12,14 @@ import '../../data/local/financial_store.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../app/required_field.dart';
 import '../../data/api_exception.dart';
 import '../../data/card_bill_ledger.dart';
 import '../../data/bills_projection_api.dart';
 import '../../data/commitments_repository.dart';
 import '../../data/past_bill_receipts.dart';
 import '../../data/user_cards_repository.dart';
+import 'bill_proof_section.dart';
 import 'bills_horizon.dart';
 import 'central_bills_section.dart';
 import 'card_bill_review_section.dart';
@@ -1340,6 +1342,7 @@ class _CardBillDetailSheetState extends ConsumerState<_CardBillDetailSheet> {
   late bool _isPaid;
   late bool _initialIsPaid;
   bool _saving = false;
+  bool _submitted = false;
   String? _error;
   String? _selectedObservationId;
   Map<String, dynamic>? _detectedSmsObs;
@@ -1448,7 +1451,9 @@ class _CardBillDetailSheetState extends ConsumerState<_CardBillDetailSheet> {
   }
 
   Future<void> _save() async {
+    setState(() => _submitted = true);
     final rawText = _amountCtrl.text.trim().replaceAll(',', '');
+    if (rawText.isEmpty) return;
     final amount = double.tryParse(rawText);
     if (amount == null || amount <= 0) {
       setState(() => _error = 'Please enter a valid statement amount.');
@@ -1785,14 +1790,26 @@ class _CardBillDetailSheetState extends ConsumerState<_CardBillDetailSheet> {
                 const SizedBox(height: AppSpace.md),
               ],
 
+              BillProofSection(
+                sourceKey: (_detectedSmsObs?['id'] as String?) ??
+                    widget.row.bill?.sourceIds
+                        .where((s) => s.isNotEmpty)
+                        .firstOrNull,
+              ),
+              const SizedBox(height: AppSpace.md),
+
               // Total amount due input
               TextField(
                 controller: _amountCtrl,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 style: BambooFonts.money(20, color: BambooInk.ink900),
+                onChanged: (_) {
+                  if (_submitted) setState(() {});
+                },
                 decoration: InputDecoration(
-                  labelText: 'Total amount due',
+                  label: requiredLabel('Total amount due'),
+                  errorText: requiredError(_submitted, _amountCtrl.text),
                   hintText: 'e.g. 8,331',
                   prefixText: '₹ ',
                   prefixStyle:
@@ -2302,7 +2319,8 @@ class _CommitmentDetailSheet extends ConsumerWidget {
     final isPaid = commitment.status == CommitmentStatus.paid;
 
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
+       child: Padding(
         padding: const EdgeInsets.fromLTRB(
           AppSpace.lg,
           AppSpace.md,
@@ -2401,6 +2419,14 @@ class _CommitmentDetailSheet extends ConsumerWidget {
                   : inGrace
                   ? 'In grace window'
                   : 'Due date recorded · payment status unknown',
+            ),
+            const SizedBox(height: AppSpace.md),
+
+            BillProofSection(
+              sourceKey: commitment.sourceKey,
+              paymentTransactionId: commitment.linkedTransactionId,
+              paidOn: commitment.paidOn,
+              onBeforeNavigate: () => Navigator.of(context).pop(),
             ),
             const SizedBox(height: AppSpace.md),
 
@@ -2514,6 +2540,7 @@ class _CommitmentDetailSheet extends ConsumerWidget {
             ),
           ],
         ),
+       ),
       ),
     );
   }
@@ -2598,6 +2625,7 @@ class _AddCommitmentSheetState extends ConsumerState<_AddCommitmentSheet> {
   CommitmentCategory _category = CommitmentCategory.utility;
   CommitmentCadence _cadence = CommitmentCadence.monthly;
   DateTime _selectedDate = DateTime.now().add(const Duration(days: 7));
+  bool _submitted = false;
 
   @override
   void dispose() {
@@ -2634,6 +2662,7 @@ class _AddCommitmentSheetState extends ConsumerState<_AddCommitmentSheet> {
   }
 
   Future<void> _submit() async {
+    setState(() => _submitted = true);
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) return;
 
@@ -2731,10 +2760,16 @@ class _AddCommitmentSheetState extends ConsumerState<_AddCommitmentSheet> {
             // Name
             TextField(
               controller: _nameCtrl,
+              onChanged: (_) {
+                if (_submitted) setState(() {});
+              },
               decoration: InputDecoration(
-                labelText: _category == CommitmentCategory.insurance
-                    ? 'Insurer or Policy Name (e.g. LIC Jeevan Labh)'
-                    : 'Biller or Entity (e.g. Bescom, Airtel, HDFC Loan)',
+                label: requiredLabel(
+                  _category == CommitmentCategory.insurance
+                      ? 'Insurer or Policy Name (e.g. LIC Jeevan Labh)'
+                      : 'Biller or Entity (e.g. Bescom, Airtel, HDFC Loan)',
+                ),
+                errorText: requiredError(_submitted, _nameCtrl.text),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
