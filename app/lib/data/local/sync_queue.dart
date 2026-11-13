@@ -5,6 +5,7 @@ import '../server_clock.dart';
 import '../sync_api.dart';
 import 'app_database.dart';
 import 'queue_retry_policy.dart';
+import '../local_first/provisional_cards.dart';
 
 /// Plan Phase 4 — the local half of the change queue.
 ///
@@ -216,7 +217,9 @@ class SyncQueue {
       'AND (next_attempt_at IS NULL OR next_attempt_at <= ?) ORDER BY client_seq LIMIT ?',
       [namespace, _clock.now().millisecondsSinceEpoch, limit],
     );
-    return rows.map((r) {
+    // H3-1: an edit for a card that is only on the phone waits for its add.
+    final held = provisionalCardIds(_appDb.db, namespace);
+    return rows.where((r) => !(r['entity'] == 'user_cards' && held.contains(r['entity_id']))).map((r) {
       return SyncChange(
         entity: r['entity'] as String,
         entityId: r['entity_id'] as String,
