@@ -2,17 +2,11 @@
 // WP-S4: POST /recurring and PATCH /recurring/:id with an optional client edit
 // clock. Without `id` / `clientEditedAt` the behaviour is unchanged (201 {id}).
 const { safeErrorCode } = require('./safeErrorCode');
-const { isUuid, rejectInvalidUuid, respondDbError } = require('./http_db_errors');
+const { isUuid, rejectInvalidUuid, respondDbError, parseClientClock: parseClock } = require('./http_db_errors');
 const { merchantSeriesKey, isUsableSubscriptionName } = require('./recurring');
 
 const SERIES_COLS = `id, merchant_key, display_name, typical_amount_inr, cadence_days,
   next_expected_on, autopay_status, is_active, dismissed_at`;
-
-function parseClock(v) {
-  if (v === undefined || v === null || v === '') return { ok: true, value: null };
-  if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(v) || Number.isNaN(Date.parse(v))) return { ok: false };
-  return { ok: true, value: new Date(v).toISOString() };
-}
 
 function createRecurringPostHandler({ withUserClient }) {
   return async (req, res) => {

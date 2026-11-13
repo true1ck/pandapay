@@ -687,6 +687,14 @@
     {
       "role": "app_user",
       "identity": "shared_expenses._can_read_invitation(uuid)"
+    },
+    {
+      "role": "app_user",
+      "identity": "pandapay.sync_apply_user_commitment(uuid,uuid,uuid,public.sync_op,jsonb,bigint)"
+    },
+    {
+      "role": "app_user",
+      "identity": "pandapay.sync_apply_change_v2(uuid,uuid,text,uuid,public.sync_op,jsonb,jsonb,bigint)"
     }
   ],
   "acceptedFindings": [],
@@ -938,6 +946,14 @@
     {
       "role": "authenticated",
       "identity": "shared_expenses._can_read_invitation(uuid)"
+    },
+    {
+      "role": "anon",
+      "identity": "pandapay.sync_apply_user_commitment(uuid,uuid,uuid,public.sync_op,jsonb,bigint)"
+    },
+    {
+      "role": "authenticated",
+      "identity": "pandapay.sync_apply_user_commitment(uuid,uuid,uuid,public.sync_op,jsonb,bigint)"
     }
   ]
 }

@@ -66,7 +66,21 @@ function rejectInvalidUuid(res, value) {
   return true;
 }
 
+/**
+ * Parses an optional client edit clock (ISO string) into {ok, value}; value is
+ * null when absent. A clock more than 5 minutes ahead of the server is clamped to
+ * the server time (same rule as /sync/push), so a wrong phone clock cannot make
+ * its edit win every later edit from other devices.
+ */
+function parseClientClock(v, nowMs = Date.now()) {
+  if (v === undefined || v === null || v === '') return { ok: true, value: null };
+  if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(v) || Number.isNaN(Date.parse(v))) return { ok: false };
+  const ms = Date.parse(v);
+  return { ok: true, value: new Date(ms > nowMs + 5 * 60 * 1000 ? nowMs : ms).toISOString() };
+}
+
 module.exports = {
+  parseClientClock,
   TRANSIENT_DB_CODES,
   isUuid,
   isTransientDbError,

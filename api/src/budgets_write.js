@@ -3,15 +3,9 @@
 // clock. Without `id` / `clientEditedAt` / `X-Client-Edited-At` the behaviour is
 // the pre-existing replace-the-active-budget semantics.
 const { safeErrorCode } = require('./safeErrorCode');
-const { isUuid, rejectInvalidUuid, respondDbError } = require('./http_db_errors');
+const { isUuid, rejectInvalidUuid, respondDbError, parseClientClock: parseClock } = require('./http_db_errors');
 
 const COLS = 'id, scope, scope_ref_id, period, amount_inr, starts_on, rollover, is_active';
-
-function parseClock(v) {
-  if (v === undefined || v === null || v === '') return { ok: true, value: null };
-  if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(v) || Number.isNaN(Date.parse(v))) return { ok: false };
-  return { ok: true, value: new Date(v).toISOString() };
-}
 
 function createBudgetPostHandler({ withUserClient, BUDGET_SCOPES, BUDGET_PERIODS }) {
   return async (req, res) => {
