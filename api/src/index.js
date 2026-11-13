@@ -6,7 +6,9 @@ const crypto = require('crypto');
 const express = require('express');
 const { createCorsPolicy } = require('./cors_policy');
 const { jsonBodyParser, jsonBodyErrorHandler } = require('./request_limits');
-const { validateSyncRegistration, validateSyncPushRequest, validateSyncPushChange, validateSyncPullQuery, validateSyncAck, validateSyncConflictId, syncRejectionDetail } = require('./sync_request_validation');
+const { rejectInvalidUuid } = require('./http_db_errors');
+const { syncPushBodyParser } = require('./sync_push_body');
+const { validateSyncRegistration, validateSyncPushRequest, validateSyncPushChange, validateSyncPullQuery, validateSyncAck, validateSyncConflictId, syncRejectionDetail, createSyncPushContext, processSyncPushItem, syncDeviceExists, respondUnknownSyncDevice, respondDbError } = require('./sync_request_validation');
 const { createLoungeUsagePostHandler } = require('./lounge_usage_route');
 const { createCatalogueHandler } = require('./catalogue_route');
 const config = require('./config');
@@ -154,6 +156,8 @@ app.use(...createCorsPolicy());
 require('./sms_v2').registerSmsV2(app, { requireAuth, requireAdmin, withUserClient, loadUserCardForState, applyTransactionState, reverseTransactionState });
 // LANE-D-1: clients that do not send `X-Sms-Pipeline: v2` (every shipped app) get `transfer` instead of `refund` in JSON answers.
 app.use(require('./legacy_entry_kind').legacyEntryKindFilter);
+// /sync/push carries up to 200 changes (16 KiB commitment documents): larger, explicit limit, mounted first so the 100 KiB global parser skips the parsed body.
+app.use('/sync/push', syncPushBodyParser);
 app.use(jsonBodyParser);
 app.use(jsonBodyErrorHandler);
 
@@ -1130,6 +1134,7 @@ app.post('/sync/register-device', requireAuth, async (req, res) => {
     res.status(201).json({ deviceId: result.rows[0].device_id });
   } catch (err) {
     console.error('POST /sync/register-device error', safeErrorCode(err));
+    if (respondDbError(res, err)) return;
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -1278,10 +1283,17 @@ app.post('/notifications/test', requireAuth, async (req, res) => {
 app.post('/sync/push', requireAuth, async (req, res) => {
   const checked = validateSyncPushRequest(req.body);
   if (checked.error) return res.status(checked.status).json({ error: checked.error });
-  const { deviceId, changes } = checked.value;
+  const { deviceId, changes, strict } = checked.value;
 
   try {
     const results = await withUserClient(req.userId, async (client) => {
+      // Opt-in (strict) pre-check: refuse the whole batch, before anything is
+      // applied, when this device id is unknown to the account. Without it the
+      // per-item RPCs reject every change as a permanent 'rejected'.
+      if (strict === true && !(await syncDeviceExists(client, req.userId, deviceId))) return null;
+      const ctx = createSyncPushContext({
+        userId: req.userId, deviceId, config, applyTransactionSync, strict, rejectionDetail: syncRejectionDetail,
+      });
       const out = [];
       for (const change of changes) {
         const item = validateSyncPushChange(change);
@@ -1289,162 +1301,20 @@ app.post('/sync/push', requireAuth, async (req, res) => {
           out.push({ clientSeq: Number.isSafeInteger(change?.clientSeq) ? change.clientSeq : null, applied: false, reason: 'malformed' });
           continue;
         }
-        const { entity, entityId, op, payload, fieldClocks, clientSeq } = item.value;
-        await client.query('SAVEPOINT sync_item');
-        try {
-          // Transaction status and deletion require the ordinary domain route,
-          // whose reversal work cannot be replaced by a raw sync UPDATE/DELETE.
-          if (entity === 'transactions' && (op === 'delete' || Object.hasOwn(payload, 'status'))) {
-            throw Object.assign(new Error('Use the transaction status route'), { code: 'SYNC_TRANSACTION_DOMAIN_REQUIRED' });
-          }
-          if (entity === 'user_categories' && op === 'insert') {
-            const categoryResult = await client.query(
-              `SELECT out_applied, out_reason
-                 FROM pandapay.sync_insert_user_category(
-                   $1, $2, $3, $4, $5, $6::uuid, $7::uuid, $8::text[], $9::jsonb, $10)`,
-              [
-                req.userId,
-                deviceId,
-                entityId,
-                typeof payload?.name === 'string' ? payload.name : null,
-                typeof payload?.slug === 'string' ? payload.slug : null,
-                typeof payload?.parent_category_id === 'string' ? payload.parent_category_id : null,
-                typeof payload?.parent_user_category_id === 'string' ? payload.parent_user_category_id : null,
-                Array.isArray(payload?.match_terms) ? payload.match_terms.filter((term) => typeof term === 'string') : [],
-                JSON.stringify(fieldClocks || {}),
-                Number.isFinite(clientSeq) ? clientSeq : 0,
-              ]
-            );
-            const categoryRow = categoryResult.rows[0];
-            await client.query('RELEASE SAVEPOINT sync_item');
-            out.push({
-              clientSeq: clientSeq ?? null,
-              entityId,
-              applied: categoryRow.out_applied,
-              conflicts: 0,
-              reason: categoryRow.out_reason,
-            });
-            continue;
-          }
-          if (entity === 'user_commitments') {
-            const billResult = await client.query(
-              `SELECT out_applied, out_conflicts, out_reason
-                 FROM pandapay.sync_apply_user_commitment(
-                   $1, $2, $3, $4, $5::jsonb, $6
-                 )`,
-              [
-                req.userId,
-                deviceId,
-                entityId,
-                op,
-                JSON.stringify(payload || {}),
-                Number.isFinite(clientSeq) ? clientSeq : 0,
-              ],
-            );
-            const billRow = billResult.rows[0];
-            await client.query('RELEASE SAVEPOINT sync_item');
-            out.push({
-              clientSeq: clientSeq ?? null,
-              entityId,
-              applied: billRow.out_applied,
-              conflicts: billRow.out_conflicts,
-              reason: billRow.out_reason,
-            });
-            continue;
-          }
-          if (entity === 'user_merchant_category_rules') {
-            const ruleResult = await client.query(
-              `SELECT out_applied, out_conflicts, out_reason
-                 FROM pandapay.sync_apply_user_merchant_category_rule(
-                   $1, $2, $3, $4, $5::jsonb, $6
-                 )`,
-              [
-                req.userId,
-                deviceId,
-                entityId,
-                op,
-                JSON.stringify(payload || {}),
-                Number.isFinite(clientSeq) ? clientSeq : 0,
-              ],
-            );
-            const ruleRow = ruleResult.rows[0];
-            await client.query('RELEASE SAVEPOINT sync_item');
-            out.push({
-              clientSeq: clientSeq ?? null,
-              entityId,
-              applied: ruleRow.out_applied,
-              conflicts: ruleRow.out_conflicts,
-              reason: ruleRow.out_reason,
-            });
-            continue;
-          }
-          const args = [
-            req.userId, deviceId, entity, entityId, op,
-            JSON.stringify(payload), JSON.stringify(fieldClocks),
-            Number.isFinite(clientSeq) ? clientSeq : 0,
-          ];
-          // card-rewards (WP8, C8 D23d): the typed applier locks the row and
-          // reverses/re-applies card state; take the user's ingest lock first.
-          if (config.syncTypedWritesEnabled && entity === 'transactions') {
-            await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [
-              `transaction-ingest:${req.userId}`,
-            ]);
-          }
-          const row = config.syncTypedWritesEnabled && entity === 'transactions'
-            ? await applyTransactionSync(client, {
-                userId: req.userId, deviceId, entityId, op, payload, fieldClocks, clientSeq,
-              })
-            : (await client.query(
-                config.syncTypedWritesEnabled
-                  ? `SELECT out_applied, out_conflicts, out_reason FROM pandapay.sync_apply_change_v2($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8)`
-                  : `SELECT out_applied, out_conflicts, out_reason FROM pandapay.sync_apply_change($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8)`,
-                args,
-              )).rows[0];
-          // Offline transaction edits use this RPC rather than PATCH. Enforce
-          // the same split invariant before accepting the item; a failure
-          // rolls back the entire item, including its sync log/reward state.
-          if (!config.syncTypedWritesEnabled && row.out_applied && entity === 'transactions' && payload?.amount_inr != null) {
-            const splitCheck = await client.query(
-              `SELECT t.amount_inr, COALESCE((SELECT SUM(s.amount_inr)
-                 FROM transaction_splits s WHERE s.transaction_id=t.id), 0) AS split_total
-                 FROM transactions t WHERE t.id=$1 AND t.profile_id=$2 FOR UPDATE`,
-              [entityId, req.userId]
-            );
-            const checked = splitCheck.rows[0];
-            if (checked && Math.round(Number(checked.split_total) * 100) > Math.round(Number(checked.amount_inr) * 100)) {
-              throw Object.assign(new Error('amount is less than saved split shares; edit or clear the split first'), { code: 'SYNC_SPLIT_TOTAL_CONFLICT' });
-            }
-          }
-          await client.query('RELEASE SAVEPOINT sync_item');
-          out.push({
-            clientSeq: clientSeq ?? null,
-            entityId,
-            applied: row.out_applied,
-            conflicts: row.out_conflicts,
-            reason: row.out_reason,
-          });
-        } catch (itemErr) {
-          await client.query('ROLLBACK TO SAVEPOINT sync_item');
-          // Keep per-item rejection semantics while excluding PostgreSQL
-          // messages, constraint names and submitted values from the response.
-          out.push({
-            clientSeq: clientSeq ?? null,
-            entityId,
-            applied: false,
-            reason: 'rejected',
-            detail: syncRejectionDetail(itemErr),
-          });
-        }
+        // Per-entity dispatch lives in sync_push_handlers.js (registry).
+        out.push(await processSyncPushItem(client, item.value, ctx));
       }
       return out;
     });
 
+    if (results === null) return res.status(409).json({ error: 'device_not_registered' });
     res.json({
       results,
       appliedCount: results.filter((r) => r.applied).length,
     });
   } catch (err) {
     console.error('POST /sync/push error', safeErrorCode(err));
+    if (respondDbError(res, err)) return;
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -1490,6 +1360,8 @@ app.get('/sync/pull', requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('GET /sync/pull error', safeErrorCode(err));
+    if (await respondUnknownSyncDevice({ withUserClient, userId: req.userId, res, err, deviceId })) return;
+    if (respondDbError(res, err)) return;
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -1541,6 +1413,8 @@ app.post('/sync/ack', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('POST /sync/ack error', safeErrorCode(err));
+    if (await respondUnknownSyncDevice({ withUserClient, userId: req.userId, res, err, deviceId })) return;
+    if (respondDbError(res, err)) return;
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -1561,6 +1435,7 @@ app.post('/sync/conflicts/:id/acknowledge', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('POST /sync/conflicts/:id/acknowledge error', safeErrorCode(err));
+    if (respondDbError(res, err)) return;
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -2535,6 +2410,7 @@ app.post('/card-overrides', requireAuth, async (req, res) => {
  * scope-defining columns).
  */
 app.patch('/card-overrides/:id', requireAuth, async (req, res) => {
+  if (rejectInvalidUuid(res, req.params.id)) return;
   const { isEnabled, reasonNote, userCardId } = req.body || {};
   const sets = [];
   const params = [];
@@ -2590,6 +2466,7 @@ app.patch('/card-overrides/:id', requireAuth, async (req, res) => {
  * dialog per this plan's Global Constraints).
  */
 app.delete('/card-overrides/:id', requireAuth, async (req, res) => {
+  if (rejectInvalidUuid(res, req.params.id)) return;
   try {
     const result = await withUserClient(req.userId, (client) =>
       client.query(
@@ -7364,6 +7241,7 @@ app.post('/budgets', requireAuth, async (req, res) => {
  * removed in April.
  */
 app.delete('/budgets/:id', requireAuth, async (req, res) => {
+  if (rejectInvalidUuid(res, req.params.id)) return;
   try {
     const result = await withUserClient(req.userId, (client) =>
       client.query(
@@ -7778,6 +7656,7 @@ app.post('/recurring', requireAuth, async (req, res) => {
 });
 
 app.patch('/recurring/:id', requireAuth, async (req, res) => {
+  if (rejectInvalidUuid(res, req.params.id)) return;
   const { displayName, typicalAmountInr, cadenceDays, nextExpectedOn } = req.body || {};
   const autopayStatus = req.body?.autopayStatus;
   if (typeof displayName !== 'string' || displayName.trim().length < 2 || displayName.trim().length > 80 ||
@@ -7812,6 +7691,7 @@ app.patch('/recurring/:id', requireAuth, async (req, res) => {
  * exactly until the user next opened the screen.
  */
 app.post('/recurring/:id/dismiss', requireAuth, async (req, res) => {
+  if (rejectInvalidUuid(res, req.params.id)) return;
   try {
     const result = await withUserClient(req.userId, (client) =>
       client.query(
@@ -8022,6 +7902,7 @@ app.get('/notifications', requireAuth, async (req, res) => {
  */
 app.post('/notifications/read', requireAuth, async (req, res) => {
   const { id } = req.body || {};
+  if (id && rejectInvalidUuid(res, id)) return;
   try {
     const result = await withUserClient(req.userId, (client) =>
       id

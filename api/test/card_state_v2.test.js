@@ -385,19 +385,22 @@ test('records keep entries for periods the replay did not rebuild', () => {
 });
 
 test('C8 D23d: every route that changes a transaction takes the ingest lock before its row locks and state writes', () => {
-  const source = require('node:fs').readFileSync(require('node:path').join(__dirname, '../src/index.js'), 'utf8');
-  // [where the code starts, markers that must all come after the ingest lock]
+  const readSource = (file) => require('node:fs').readFileSync(require('node:path').join(__dirname, '../src', file), 'utf8');
+  const source = readSource('index.js');
+  // [where the code starts, markers that must all come after the ingest lock, optional source file]
   const sites = [
     ["app.patch('/transactions/:id', ", ['FOR UPDATE', 'reverseTransactionState(']],
     ["app.post('/transactions/:id/ignore'", ['FOR UPDATE', 'reverseTransactionState(']],
     ["app.post('/transactions/:id/restore'", ['FOR UPDATE', 'applyTransactionState(']],
-    ["app.post('/sync/push'", ['applyTransactionSync(client']],
+    // The /sync/push per-entity dispatch lives in the handler registry (WP-S1).
+    ['async function applyGenericChange(', ['ctx.applyTransactionSync(client'], 'sync_push_handlers.js'],
     ["app.post('/duplicate-candidates/:id/resolve'", ["'duplicate-review:'", 'FOR UPDATE', 'reverseTransactionState(']],
     ["app.post('/transactions/category-bulk-apply'", ['transaction-category-bulk:', 'FOR UPDATE', 'reverseTransactionState(']],
     ['async function reconcileArchivedCardReferences(client, userId)', ['UPDATE transactions', 'DELETE FROM ${table}', 'reconcileCurrentCapStates(']],
     ['async function repairSmsHistory(client, userId', ['reconcileArchivedCardReferences(client', 'FOR UPDATE', 'reverseTransactionState(']],
   ];
-  for (const [site, laterMarkers] of sites) {
+  for (const [site, laterMarkers, file] of sites) {
+    const source = file ? readSource(file) : readSource('index.js');
     const start = source.indexOf(site);
     assert.ok(start >= 0, site);
     const lock = Math.min(...['`transaction-ingest:${req.userId}`', '`transaction-ingest:${userId}`']
