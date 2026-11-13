@@ -320,6 +320,16 @@ class FinancialStore {
     _cardDateSyncFingerprints[ns] = _repairFingerprint(ns);
   }
 
+  /// Stored transaction rows (incl. pending); one COUNT, no row decode.
+  int transactionCount(String ns) =>
+      database.db
+              .select(
+                "SELECT COUNT(*) AS n FROM financial_entities WHERE namespace=? AND entity='transactions'",
+                [ns],
+              )
+              .single['n']
+          as int;
+
   bool hasPendingTransactions(String ns) => database.db.select(
     "SELECT 1 FROM financial_entities WHERE namespace=? AND entity='transactions' AND pending=1 LIMIT 1",
     [ns],
