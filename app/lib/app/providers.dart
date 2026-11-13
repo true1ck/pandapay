@@ -494,6 +494,12 @@ final categorySpendProvider = FutureProvider<List<CategorySpend>>((ref) async {
       if (_isAuthenticationFailure(error)) {
         return const [];
       }
+      // WP-C16: no snapshot and the server is unreachable: derive the same
+      // trailing-12-month totals from the transactions saved on this phone.
+      if (cached == null && isOfflineLike(error)) {
+        final local = await _localCategorySpend(ref);
+        if (local != null) return local;
+      }
       rethrow;
     }
     try {
@@ -504,6 +510,33 @@ final categorySpendProvider = FutureProvider<List<CategorySpend>>((ref) async {
     }
   }
 });
+
+/// Trailing-12-month spend by category from locally saved transactions, or
+/// null when nothing has ever been saved (so the caller keeps its error).
+Future<List<CategorySpend>?> _localCategorySpend(Ref ref) async {
+  final rows = await _cachedTransactionsForReports(ref);
+  if (rows == null) return null;
+  final now = DateTime.now();
+  final spend = _activeLocalRows(
+    rows,
+    DateTime(now.year, now.month - 12, now.day),
+    now.add(const Duration(days: 1)),
+  ).where((row) => row.countsAsSpend);
+  final groups = <String?, List<TransactionEntry>>{};
+  for (final row in spend) {
+    (groups[row.categoryId] ??= []).add(row);
+  }
+  return [
+    for (final entry in groups.entries)
+      CategorySpend(
+        categoryId: entry.key,
+        categorySlug: null,
+        categoryName: entry.value.first.categoryName,
+        totalSpend: _sumLocalAmounts(entry.value),
+        txnCount: entry.value.length,
+      ),
+  ]..sort((a, b) => b.totalSpend.paise.compareTo(a.totalSpend.paise));
+}
 
 final acquisitionRecommenderProvider = Provider<CardAcquisitionRecommender>((
   ref,
