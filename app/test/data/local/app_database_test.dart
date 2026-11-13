@@ -11,7 +11,7 @@ void main() {
 
   test('records the local schema version after initialization', () {
     final version = appDb.db.select('PRAGMA user_version').single.values.first;
-    expect(version, 2);
+    expect(version, 3);
   });
 
   test('cached_responses table accepts an upsert and reads it back', () {
