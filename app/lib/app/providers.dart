@@ -104,7 +104,9 @@ import '../features/geofence/geofence_monitor_service.dart';
 import '../features/geofence/background_alerts_controller.dart';
 import '../features/geofence/nearby_merchants_repository.dart';
 import '../features/home_widget/home_widget_service.dart';
+import '../features/notifications/notification_commands.dart';
 import '../features/notifications/notification_gate.dart';
+import '../features/notifications/notification_local_state.dart';
 import '../features/notifications/notification_triggers.dart';
 import '../features/notifications/push_notification_service.dart';
 import '../features/sms_import/sms_listener_service.dart';
@@ -2881,7 +2883,15 @@ abstract final class OutboxCommand {
 Map<String, CommandHandler> commandHandlersFor(
   UserCardsRepository repo, {
   SpendReportsRepository? spend,
+  NotificationPreferencesRepository? notificationPrefs,
+  void Function()? onNotificationInboxSynced,
 }) => {
+  // WP-C4: inbox rows and notification settings queued while offline.
+  ...notificationCommandHandlers(
+    userCards: repo,
+    prefs: notificationPrefs,
+    onInboxSynced: onNotificationInboxSynced,
+  ),
   OutboxCommand.ignoreTransaction: (p) => repo.ignoreTransaction(
     p['id'] as String,
     reason: p['reason'] as String,
@@ -2960,7 +2970,12 @@ final outboxFlushProvider = Provider<void>((ref) {
       final sent = await outbox.flush(repo);
       final commands = await ref.read(commandOutboxProvider.future);
       final commandsSent = await commands.flush(
-        commandHandlersFor(repo, spend: ref.read(spendReportsRepositoryProvider)),
+        commandHandlersFor(
+          repo,
+          spend: ref.read(spendReportsRepositoryProvider),
+          notificationPrefs: ref.read(notificationPreferencesRepositoryProvider),
+          onNotificationInboxSynced: () => ref.invalidate(notificationsProvider),
+        ),
       );
       if (commandsSent > 0) {
         // Drop the cached server lists so the next read shows what the server
@@ -4289,21 +4304,17 @@ Future<void> recordAppNotification(
   String? deepLink,
   String? dedupeKey,
 }) async {
-  final repo = ref.read(userCardsRepositoryProvider);
-  if (repo == null) return; // guest mode has no server-side inbox
-  try {
-    await repo.recordNotification(
-      category: category,
-      title: title,
-      body: body,
-      severity: severity,
-      deepLink: deepLink,
-      dedupeKey: dedupeKey,
-    );
-    ref.invalidate(notificationsProvider);
-  } catch (_) {
-    // Intentionally silent — see the doc comment.
-  }
+  // One immediate attempt, as before; if it cannot be made the row is queued
+  // durably (WP-C4, notification_commands.dart) and still never throws.
+  await recordAppNotificationOutcome(
+    ref,
+    category: category,
+    title: title,
+    body: body,
+    severity: severity,
+    deepLink: deepLink,
+    dedupeKey: dedupeKey,
+  );
 }
 
 /// Just the badge count, so a widget showing the badge doesn't rebuild on
@@ -4332,12 +4343,9 @@ final notificationPreferencesProvider =
     FutureProvider<NotificationPreferences?>((ref) async {
       final repo = ref.watch(notificationPreferencesRepositoryProvider);
       if (repo == null) return null;
-      try {
-        return await repo.fetch();
-      } catch (error) {
-        if (isAuthenticationFailure(error)) return null;
-        rethrow;
-      }
+      // WP-C4: cache first, then the live fetch, then the defaults; never an
+      // error. See notification_local_state.dart.
+      return loadNotificationPreferences(ref, repo);
     });
 
 /// Design 25's Invite friends payload. Null when signed out — an invite
@@ -6702,6 +6710,13 @@ final pushNotificationLifecycleProvider = Provider<void>((ref) {
   final service = ref.watch(pushNotificationServiceProvider);
   if (service == null) return;
   unawaited(service.start());
+  // WP-C4: retry token registration the moment the network is back, instead
+  // of waiting for the next backoff timer.
+  ref.listen<AsyncValue<bool>>(isOnlineProvider, (previous, next) {
+    if (next.valueOrNull == true && previous?.valueOrNull == false) {
+      unawaited(service.onReconnected());
+    }
+  });
   ref.listen<String>(cacheNamespaceProvider, (previous, next) {
     if (next == 'signed-out') {
       unawaited(service.stop());

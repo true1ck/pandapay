@@ -179,6 +179,34 @@ class PushNotificationService {
     });
   }
 
+  /// The network came back. If token registration (or the whole push startup)
+  /// was waiting on a backoff timer, try again now instead of when it fires.
+  /// A healthy, already-registered service does nothing here.
+  Future<void> onReconnected() async {
+    if (!_started) {
+      if (_startupRetryTimer == null) return;
+      _startupRetryTimer?.cancel();
+      _startupRetryTimer = null;
+      _startupRetryAttempt = 0;
+      await start();
+      return;
+    }
+    final token = _lastToken;
+    if (token == null || _registrationRetryTimer == null) return;
+    _registrationRetryTimer?.cancel();
+    _registrationRetryTimer = null;
+    _registrationRetryAttempt = 0;
+    await _registerToken(token);
+  }
+
+  /// Registers [token] as if Firebase had produced it. Lets a test exercise
+  /// the registration retry without native Firebase.
+  @visibleForTesting
+  Future<void> debugRegisterToken(String token) {
+    _started = true;
+    return _registerToken(token);
+  }
+
   void _scheduleStartupRetry() {
     if (_startupRetryTimer != null) return;
     final exponent = _startupRetryAttempt.clamp(0, 5).toInt();
