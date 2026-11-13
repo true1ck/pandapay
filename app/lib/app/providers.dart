@@ -33,6 +33,7 @@ import '../data/api_exception.dart';
 import '../data/auth_api.dart';
 import '../data/connectivity/known_connectivity.dart';
 import '../data/connectivity/online_stream.dart';
+import '../data/connectivity/reachability.dart';
 import '../data/product_access_api.dart';
 import '../data/api_request_headers_client.dart';
 import '../data/authenticated_http_client.dart';
@@ -1801,7 +1802,7 @@ final profileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   // Offline with nothing cached: a profile row is display metadata, not the
   // session itself. Render the signed-in shell instead of waiting out a
   // request that cannot succeed.
-  if (_isKnownOffline()) return null;
+  if (_skipBackgroundRead(ref)) return null;
 
   try {
     final profile = await fetch();
@@ -3603,7 +3604,7 @@ final loungeUsageServerProvider = FutureProvider<List<LoungeVisit>>((ref) async 
           .cast<Map<String, dynamic>>()
           .map(LoungeVisit.fromJson)
           .toList();
-  if (_isKnownOffline() && cached != null) return decode(cached);
+  if (_skipBackgroundRead(ref) && cached != null) return decode(cached);
   try {
     final visits = await repo.fetchLoungeUsage();
     try {
@@ -3651,7 +3652,7 @@ final pointsLedgerProvider =
               .cast<Map<String, dynamic>>()
               .map(PointsLedgerEntry.fromJson)
               .toList();
-      if (_isKnownOffline() && cached != null) return decode(cached);
+      if (_skipBackgroundRead(ref) && cached != null) return decode(cached);
       try {
         final entries = await repo.fetchPointsLedger(userCardId);
         try {
@@ -4023,7 +4024,7 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
     );
   }).toList();
 
-  if (_isKnownOffline()) {
+  if (_skipBackgroundRead(ref)) {
     final offlineAccounts = localAccounts != null && localAccounts.isNotEmpty
         ? localAccounts
         : cached != null
@@ -4540,6 +4541,7 @@ final contributionNetworkStatsProvider =
         );
       }
 
+      if (_skipBackgroundRead(ref) && cached != null) return decodeCached();
       try {
         final stats = await repo.fetchContributionNetworkStats();
         try {
@@ -4952,6 +4954,19 @@ bool _isAuthenticationFailure(Object error) {
 /// reachability probe) reads the same state.
 bool _isKnownOffline() => KnownConnectivity.knownOffline;
 
+/// WP-C16: radio known down, or the reachability probe says the API is not
+/// serving (captive/dead Wi-Fi). Unknown reachability is NOT a reason to skip,
+/// so an unprobed healthy user behaves exactly as before. Background and
+/// cache-backed reads use this to serve saved data instead of waiting 15 s.
+bool _skipBackgroundRead(Ref ref) {
+  if (_isKnownOffline()) return true;
+  try {
+    return ref.read(serverReachabilityProvider).shouldSkipBackgroundReads;
+  } catch (_) {
+    return false;
+  }
+}
+
 /// The cache is always best-effort — every offline-cache-aware provider
 /// below calls this instead of watching responseCacheProvider directly, so
 /// a local-DB init failure (an unavailable platform channel in a plain
@@ -5118,7 +5133,7 @@ void _warmDisplay<T>(
   Object? Function(T) encode,
 ) {
   if (cache == null ||
-      _isKnownOffline() ||
+      _skipBackgroundRead(ref) ||
       _backgroundDisplayRefreshes.containsKey(key) ||
       (!cache.needsRefresh(key) &&
           DateTime.now().difference(fetchedAt) < const Duration(seconds: 15))) {
