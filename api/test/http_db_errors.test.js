@@ -128,3 +128,13 @@ test('POST /notifications/read without an id still marks everything read', async
   assert.equal(res.code, 200);
   assert.equal(f.calls.length, 1);
 });
+
+test('parseClientClock clamps a clock more than 5 minutes ahead and rejects junk', () => {
+  const { parseClientClock } = require('../src/http_db_errors');
+  const now = Date.parse('2026-11-14T10:00:00Z');
+  assert.deepEqual(parseClientClock(undefined, now), { ok: true, value: null });
+  assert.equal(parseClientClock('nope', now).ok, false);
+  assert.equal(parseClientClock('2026-11-14T09:00:00Z', now).value, '2026-11-14T09:00:00.000Z');
+  assert.equal(parseClientClock('2026-11-14T10:04:00Z', now).value, '2026-11-14T10:04:00.000Z');
+  assert.equal(parseClientClock('2031-01-01T00:00:00Z', now).value, '2026-11-14T10:00:00.000Z');
+});
