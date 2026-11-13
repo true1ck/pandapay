@@ -107,6 +107,7 @@ import '../features/geofence/geofence_monitor_service.dart';
 import '../features/geofence/background_alerts_controller.dart';
 import '../features/geofence/nearby_merchants_repository.dart';
 import '../features/home_widget/home_widget_service.dart';
+import '../features/account/account_commands.dart';
 import '../features/notifications/notification_commands.dart';
 import '../features/notifications/notification_gate.dart';
 import '../features/notifications/notification_local_state.dart';
@@ -2942,7 +2943,10 @@ Map<String, CommandHandler> commandHandlersFor(
   SpendReportsRepository? spend,
   NotificationPreferencesRepository? notificationPrefs,
   void Function()? onNotificationInboxSynced,
+  Map<String, CommandHandler> accountHandlers = const {},
 }) => {
+  // WP-C11: consents, name, opt-in, tickets, card reports, inbox read marks.
+  ...accountHandlers,
   // WP-C4: inbox rows and notification settings queued while offline.
   ...notificationCommandHandlers(
     userCards: repo,
@@ -3047,6 +3051,7 @@ final outboxFlushProvider = Provider<void>((ref) {
           spend: ref.read(spendReportsRepositoryProvider),
           notificationPrefs: ref.read(notificationPreferencesRepositoryProvider),
           onNotificationInboxSynced: () => ref.invalidate(notificationsProvider),
+          accountHandlers: accountCommandHandlers(ref),
         ),
       );
       if (commandsSent > 0) {

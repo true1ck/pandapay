@@ -5,6 +5,7 @@ import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/consents_api.dart';
+import 'consent_commands.dart';
 
 /// The strings are fixed by the learning-loop plan (L1, Task A2). The footer
 /// names the AI provider, so it must change together with the server's
@@ -79,11 +80,11 @@ class _TemplateSharingDisclosureState
     }
     setState(() => _saving = true);
     try {
-      await api.submit(
+      // The database matches this exact policy string (not the shared date).
+      await submitConsentLocalFirst(
+        ref,
         purpose: smsSharedLearningPurpose,
         granted: true,
-        // The database matches this exact string, so it is not the shared
-        // policy date.
         policyVersion: smsSharedLearningPolicyVersion,
         sourceScreen: widget.sourceScreen,
       );

@@ -6,6 +6,7 @@ import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/consent_policy.dart';
+import 'consent_commands.dart';
 import 'sms_reading_consent.dart';
 
 /// Standalone disclosure shown before PandaPay touches SMS: before every
@@ -107,16 +108,17 @@ class _SmsAccessDisclosureState extends ConsumerState<SmsAccessDisclosure> {
       _showError('Sign in to turn on SMS reading.');
       return;
     }
-    final namespace = ref.read(cacheNamespaceProvider);
     setState(() => _saving = true);
     try {
-      await api.submit(
+      // WP-C11 (D8): this screen is the policy text, so agreeing offline is
+      // allowed; the audit row is queued and the mirror is set at once.
+      await submitConsentLocalFirst(
+        ref,
         purpose: smsReadingConsentPurpose,
         granted: true,
         policyVersion: consentPolicyVersion,
         sourceScreen: widget.sourceScreen,
       );
-      await SmsReadingConsentMirror.set(namespace, true);
       ref.invalidate(smsReadingConsentProvider);
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
