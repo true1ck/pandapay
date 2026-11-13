@@ -110,6 +110,14 @@ class FakeServer {
   int pointsAdjustments = 0;
   int pushReplays = 0;
 
+  /// Path prefix -> status answered with a NON-JSON body (a gateway, proxy or
+  /// captive-portal page).
+  final Map<String, int> htmlFailPrefix = {};
+
+  /// When set, only these bearer tokens are accepted (everything else is 401).
+  Set<String>? acceptedTokens;
+  int unauthorizedAnswers = 0;
+
   void loseNext(int n, List<String> prefixes) {
     loseNextResponses = n;
     losePrefixes = prefixes;
@@ -267,6 +275,20 @@ class FakeServer {
         break;
     }
     log.add(rec);
+    final tokens = acceptedTokens;
+    if (tokens != null && rec.path != '/app-status') {
+      final auth = request.headers['Authorization'] ?? request.headers['authorization'] ?? '';
+      if (!tokens.contains(auth.replaceFirst('Bearer ', ''))) {
+        unauthorizedAnswers++;
+        return _json(401, {'error': 'Missing or invalid access token'});
+      }
+    }
+    for (final e in htmlFailPrefix.entries) {
+      if (rec.path.startsWith(e.key)) {
+        return http.Response('<html>gateway says no</html>', e.value,
+            headers: {'content-type': 'text/html'});
+      }
+    }
     // Health probe and public reads are never forced to fail.
     final forced = _forcedFailure(rec);
     if (forced != null) {

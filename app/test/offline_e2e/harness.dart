@@ -20,6 +20,7 @@ import 'package:pandapay/data/authenticated_http_client.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/data/connectivity/connectivity_bootstrap.dart';
 import 'package:pandapay/data/connectivity/known_connectivity.dart';
+import 'package:pandapay/data/session_end_reason.dart';
 import 'package:pandapay/data/connectivity/online_stream.dart';
 import 'package:pandapay/data/connectivity/reachability.dart';
 import 'package:pandapay/data/local/app_database.dart';
@@ -90,6 +91,10 @@ class OfflineApp {
   String token = '';
   int refreshCalls = 0;
 
+  /// When true the refresh token is refused: the session is rejected (the
+  /// access token is dropped, as SessionRefreshCoordinator does).
+  bool refreshRejected = false;
+
   /// Harness view of "the server answers the probe".
   bool? reachableOverride;
 
@@ -107,6 +112,7 @@ class OfflineApp {
     bool online = true,
     List<Override> overrides = const [],
     bool listenConnectivity = true,
+    bool backgroundFlush = true,
   }) async {
     assert(_container == null, 'stop() the previous process first');
     conn.current = [online ? ConnectivityResult.wifi : ConnectivityResult.none];
@@ -114,15 +120,29 @@ class OfflineApp {
     if (token.isEmpty) token = jwtFor(userId);
     KnownConnectivity.online = online;
     late final ProviderContainer container;
+    Future<String?> refresh() async {
+      refreshCalls++;
+      if (refreshRejected) {
+        container.read(sessionEndReasonProvider).markSessionRejected();
+        container.read(accessTokenProvider.notifier).state = null;
+        return null;
+      }
+      final fresh = jwtFor(userId, salt: 'r$refreshCalls');
+      token = fresh;
+      container.read(accessTokenProvider.notifier).state = fresh;
+      return fresh;
+    }
+
     final client = AuthenticatedHttpClient(
       inner: server.client,
       timeoutFor: captivePolicy == null ? null : (_) => captivePolicy!,
-      refreshAccessToken: () async {
-        refreshCalls++;
-        final fresh = jwtFor(userId, salt: 'r$refreshCalls');
-        token = fresh;
-        container.read(accessTokenProvider.notifier).state = fresh;
-        return fresh;
+      refreshAccessToken: refresh,
+      // Like the app: a request rejected with an OLD token reuses the token a
+      // refresh already produced instead of rotating the session again.
+      refreshAccessTokenForToken: (rejected) async {
+        final live = container.read(accessTokenProvider);
+        if (live != null && live != rejected) return live;
+        return refresh();
       },
       currentAccessToken: () => container.read(accessTokenProvider),
     );
@@ -197,8 +217,18 @@ class OfflineApp {
     await _until(() => container.read(isOnlineProvider).hasValue,
         what: 'connectivity seed');
     if (signedIn) {
+      // The database is open before the shell starts its listeners (in the app
+      // it is opened at splash); otherwise providers that watch it rebuild
+      // under the first connectivity event.
+      await container.read(appDatabaseProvider.future);
+      await container.read(responseCacheProvider.future);
       // What _AppShell reads for the whole signed-in lifetime.
-      container.read(outboxFlushProvider);
+      container.listen(cacheLifecycleProvider, (_, _) {});
+      if (backgroundFlush) {
+        container.listen(outboxFlushProvider, (_, _) {});
+        container.listen(syncLifecycleProvider, (_, _) {});
+        container.listen(displayDataSyncLifecycleProvider, (_, _) {});
+      }
       container.listen(syncQueueTotalsProvider, (_, _) {});
     }
     return container;
@@ -391,4 +421,13 @@ extension OfflineAppDebug on OfflineApp {
     ))
       '${r['kind']} ${r['target']} attempts=${r['attempts']} parked=${r['parked']} err=${r['last_error']}',
   ];
+}
+
+extension OfflineAppSession on OfflineApp {
+  /// The person signs in again (same account): a fresh token on the live app.
+  void signInAgain() {
+    refreshRejected = false;
+    token = jwtFor(userId, salt: 'login${++refreshCalls}');
+    c.read(accessTokenProvider.notifier).state = token;
+  }
 }
