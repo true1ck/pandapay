@@ -5,6 +5,7 @@ import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/cards/points_expiry_screen.dart';
+import 'package:pandapay/features/sync_status/sync_status_providers.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 class _FakeCatalogueRepository implements CatalogueRepository {
@@ -19,10 +20,12 @@ Future<void> _pump(
   required List<CardProduct> catalogue,
   required List<UserCard> owned,
   Map<String, List<PointsLedgerEntry>> ledgers = const {},
+  SyncStatusMode mode = SyncStatusMode.hidden,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        syncStatusSummaryProvider.overrideWithValue(SyncStatusSummary(mode: mode)),
         catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository(catalogue)),
         userCardsProvider.overrideWith((ref) async => owned),
         for (final entry in ledgers.entries)
@@ -35,6 +38,17 @@ Future<void> _pump(
 }
 
 void main() {
+  testWidgets('offline: the points list says it is saved data; online it does not', (tester) async {
+    final product = CardProduct(id: 'p1', name: 'Test Card', network: CardNetwork.rupay, pointValueInr: 0.25);
+    final owned = [
+      const UserCard(id: 'uc1', cardProductId: 'p1', cardName: 'Test Card', isDefault: false, totalPointsEarned: 10),
+    ];
+    await _pump(tester, catalogue: [product], owned: owned, ledgers: {'uc1': const []}, mode: SyncStatusMode.offline);
+    expect(find.textContaining('Saved data'), findsOneWidget);
+    await _pump(tester, catalogue: [product], owned: owned, ledgers: {'uc1': const []});
+    expect(find.textContaining('Saved data'), findsNothing);
+  });
+
   testWidgets('shows an empty state with no owned cards', (tester) async {
     await _pump(tester, catalogue: const [], owned: const []);
     expect(find.text('No points to track yet'), findsOneWidget);

@@ -10,6 +10,7 @@ import '../../data/local_first/pending_overlays.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
+import '../insights/as_of_caption.dart';
 import 'card_summary.dart';
 import 'card_visual.dart';
 
@@ -56,9 +57,12 @@ class PointsExpiryScreen extends ConsumerWidget {
             }
             return ListView.builder(
               padding: const EdgeInsets.all(AppSpace.lg),
-              itemCount: owned.length,
+              itemCount: owned.length + 1,
               itemBuilder: (context, index) {
-                final (userCard, product) = owned[index];
+                // H3: "Saved data, as of last sync" while offline (zero height
+                // otherwise).
+                if (index == 0) return const AsOfLastSyncCaption();
+                final (userCard, product) = owned[index - 1];
                 return Padding(
                   padding: const EdgeInsets.only(bottom: AppSpace.md),
                   child: _ProgramCard(userCard: userCard, product: product),
