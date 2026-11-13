@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' show UncontrolledProviderScope;
+
+import '../../data/api_exception.dart' show isOfflineLike;
+import '../../data/connectivity/known_connectivity.dart';
+import '../../data/connectivity/reachability.dart' show serverReachabilityProvider;
 
 import 'app_theme.dart';
 
@@ -461,10 +466,36 @@ class ErrorState extends StatelessWidget {
   final String message;
   final VoidCallback? onRetry;
 
-  const ErrorState({super.key, required this.message, this.onRetry});
+  /// The failure behind this state, when the caller has it (WP-C12b).
+  final Object? error;
+
+  /// True when the screen still shows saved data under this state.
+  final bool hasCachedData;
+
+  const ErrorState({
+    super.key,
+    required this.message,
+    this.onRetry,
+    this.error,
+    this.hasCachedData = false,
+  });
+
+  // Offline when the error says so, or the app already knows the phone is
+  // offline or the server unreachable. Unknown is online (old behaviour).
+  bool _offline(BuildContext context) {
+    final e = error;
+    if (e != null && isOfflineLike(e)) return true;
+    if (KnownConnectivity.knownOffline) return true;
+    final scope = context
+        .getElementForInheritedWidgetOfExactType<UncontrolledProviderScope>();
+    if (scope == null) return false;
+    final container = (scope.widget as UncontrolledProviderScope).container;
+    return container.read(serverReachabilityProvider).serverReachable == false;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final offline = _offline(context);
     // See EmptyState's build() for why this scrolls rather than overflows.
     return Center(
       child: SingleChildScrollView(
@@ -479,17 +510,25 @@ class ErrorState extends StatelessWidget {
                 color: BambooInk.clay.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.error_outline_rounded, size: 30, color: BambooInk.clay),
+              child: Icon(
+                offline ? Icons.cloud_off_rounded : Icons.error_outline_rounded,
+                size: 30,
+                color: offline ? BambooInk.ink500 : BambooInk.clay,
+              ),
             ),
             const SizedBox(height: AppSpace.lg),
             Text(
-              'Something went wrong',
+              offline ? "Can't reach PandaPay" : 'Something went wrong',
               style: BambooFonts.heading(16, color: BambooInk.ink900),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: AppSpace.sm),
             Text(
-              message,
+              offline
+                  ? (hasCachedData
+                        ? "Showing what's saved on this phone."
+                        : 'Connect to the internet and try again.')
+                  : message,
               style: BambooFonts.ui(13.5, color: BambooInk.ink500),
               textAlign: TextAlign.center,
             ),

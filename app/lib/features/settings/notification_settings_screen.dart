@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../app/design/saved_offline.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart'
@@ -110,11 +111,7 @@ class _NotificationSettingsBodyState
       // with no connection, queued and sent later (WP-C4).
       final result = await updateNotificationPreferences(ref, changes);
       if (result == SettingsWrite.queued && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Saved on this phone. It will sync when you are back online.'),
-          ),
-        );
+        showSavedOfflineSnack(context);
       }
     } catch (e) {
       if (context.mounted) {

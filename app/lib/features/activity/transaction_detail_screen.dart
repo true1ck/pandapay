@@ -1,3 +1,4 @@
+import '../../app/design/saved_offline.dart';
 import '../sms_v2/ledger/providers.dart' show suspectedRefundsProvider;
 import 'spend_exclusion_matches.dart';
 import 'transaction_badge.dart';
@@ -550,13 +551,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         ref.invalidate(pendingSyncCountProvider);
         if (mounted) {
           setState(() => _note = note.isEmpty ? null : note);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Note saved offline — will sync when you reconnect.',
-              ),
-            ),
-          );
+          showSavedOfflineSnack(context, what: 'Note');
         }
         return;
       }
@@ -1777,7 +1772,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                     const SizedBox(height: AppSpace.xs),
                     Text(
                       _localSplit!.error ??
-                          'Saved on this device — waiting to sync.',
+                          savedOfflineCopy,
                       style: BambooFonts.ui(
                         12,
                         color: _localSplit!.blocked

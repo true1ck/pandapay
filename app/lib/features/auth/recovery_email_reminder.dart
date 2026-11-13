@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/providers.dart';
+import '../../data/authenticated_http_client.dart';
+import '../../data/connectivity/reachability.dart';
 
 /// Reminders to add a recovery email, after sign-up: 1 hour, 1 day, 3 days and 7
 /// days. They stop the moment a recovery email exists.
@@ -115,7 +117,15 @@ Future<bool> evaluateRecoveryReminders(Ref ref, {DateTime? now}) async {
 
   // The person may have added one on another device. Ask before nagging.
   try {
-    final status = await ref.read(recoveryEmailApiProvider)?.status();
+    final api = ref.read(recoveryEmailApiProvider);
+    // WP-C12b: cold-start background read: short timeout, skipped while the
+    // server is known unreachable (the stage is retried next resume).
+    if (ref.read(serverReachabilityProvider).shouldSkipBackgroundReads) {
+      return false;
+    }
+    final status = await AuthenticatedHttpTimeoutPolicy.runBackground(
+      () async => api?.status(),
+    );
     if (status == null) return false;
     if (status.hasRecoveryEmail) {
       await store.markAdded();

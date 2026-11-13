@@ -112,6 +112,9 @@ class AuthenticationUnavailableException implements Exception {
   String toString() => message;
 }
 
+/// Shared offline copy (WP-C12b); `ErrorState` uses the same wording.
+const offlineErrorMessage = "You're offline. Try again when you're connected.";
+
 /// Converts any caught error into UI-safe copy. Use this at every screen's
 /// catch site instead of `e.toString()`.
 ///
@@ -120,6 +123,12 @@ class AuthenticationUnavailableException implements Exception {
 /// purpose (see nearby_merchants_screen.dart's location-permission checks).
 String userFacingErrorMessage(Object error) {
   if (error is ApiException) return error.userMessage;
+  // WP-C12b: a dead network is not "something went wrong".
+  if (error is http.ClientException ||
+      error is TimeoutException ||
+      error is SocketException) {
+    return offlineErrorMessage;
+  }
   if (error is AuthenticationUnavailableException) return error.message;
   if (error is CardAlreadyAddedException) return error.message;
   if (error is StateError) return error.message;
@@ -131,7 +140,8 @@ String userFacingErrorMessage(Object error) {
     final text = error.message as String;
     if (text.isNotEmpty) return text;
   }
-  return 'Something went wrong. Please check your connection and try again.';
+  if (KnownConnectivity.knownOffline) return offlineErrorMessage;
+  return 'Something went wrong. Try again.';
 }
 
 /// Transport failures can happen while the device still has Wi-Fi or mobile

@@ -312,7 +312,7 @@ void main() {
   testWidgets('a network failure is a plain message, not a stack trace', (tester) async {
     await mount(tester, (_) => throw http.ClientException('offline'));
     await fillDetails(tester);
-    expect(find.textContaining('check your connection'), findsOneWidget);
+    expect(find.textContaining('offline'), findsOneWidget);
     await end(tester);
   });
 }

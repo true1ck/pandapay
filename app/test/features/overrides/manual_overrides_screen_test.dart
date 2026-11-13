@@ -349,7 +349,7 @@ void main() {
     await tester.tap(find.text('Disable')); // currently enabled, so the action label is "Disable"
     await tester.pumpAndSettle();
 
-    expect(find.text('Saved offline — will sync when you reconnect.'), findsOneWidget);
+    expect(find.text("Saved on this phone. It will sync when you're online."), findsOneWidget);
     final pending = queue.pending();
     expect(pending, hasLength(1));
     expect(pending.single.entity, 'card_overrides');
@@ -405,7 +405,7 @@ void main() {
     await tester.tap(find.text('Save changes'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Saved offline — will sync when you reconnect.'), findsOneWidget);
+    expect(find.text("Saved on this phone. It will sync when you're online."), findsOneWidget);
     expect(find.text('Edit override'), findsNothing); // sheet closed, same as the online-success case
     final pending = queue.pending();
     expect(pending, hasLength(1));
