@@ -16,6 +16,7 @@ import '../pipeline/sms_v2_runtime.dart';
 import '../sync/bundle_verifier.dart';
 import '../sync/rule_keys.dart';
 import '../sync/attestation.dart';
+import '../sync/sharing_consent_mirror.dart';
 
 final FutureProvider<SmsV2Runtime?>
 smsV2RuntimeProvider = FutureProvider<SmsV2Runtime?>((ref) async {
@@ -86,10 +87,12 @@ smsV2RuntimeProvider = FutureProvider<SmsV2Runtime?>((ref) async {
     },
     hasSharingConsent: () async {
       if (!current()) return false;
-      final granted = await ref.read(
-        app.smsSharedLearningConsentProvider.future,
+      // The server's answer, or its local mirror when it cannot be reached.
+      final granted = await sharingConsentWithMirror(
+        namespace: namespace,
+        read: () => ref.read(app.smsSharedLearningConsentProvider.future),
       );
-      return current() && granted != null;
+      return current() && granted;
     },
     categoryIdBySlug: {
       for (final category in categories) category.slug: category.id,

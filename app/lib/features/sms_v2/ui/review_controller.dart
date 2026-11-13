@@ -16,6 +16,7 @@ import '../personal/personal_merchant_aliases.dart';
 import '../pipeline/trace.dart';
 import '../providers/data_providers.dart';
 import '../providers/runtime_provider.dart';
+import '../providers/sharing_consent_provider.dart';
 import '../storage/event_store.dart';
 import '../storage/fact_store.dart';
 import '../storage/ledger_store.dart';
@@ -359,15 +360,16 @@ extension ReviewRestore on ReviewController {
 /// Loads the sharing opt-in even when no screen is watching it. Reading an
 /// autoDispose provider nobody listens to returns "loading", not the value,
 /// which silently turned every fix into a local-only fix.
+///
+/// Offline, the local mirror of the last server answer decides, so a fix made
+/// without a connection keeps the "share with the community" part for someone
+/// who agreed; any other failure shares nothing.
 Future<bool> readSharingConsent(WidgetRef ref) async {
-  final keepAlive = ref.listenManual(
-    app.smsSharedLearningConsentProvider,
-    (_, _) {},
-  );
+  final keepAlive = ref.listenManual(smsSharingGrantedProvider, (_, _) {});
   try {
-    return await ref.read(app.smsSharedLearningConsentProvider.future) != null;
+    return await ref.read(smsSharingGrantedProvider.future);
   } catch (_) {
-    return false; // Offline or failed: share nothing.
+    return false; // Failed: share nothing.
   } finally {
     keepAlive.close();
   }
