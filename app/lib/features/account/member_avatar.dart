@@ -54,7 +54,7 @@ class _Loaded extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = self
-        ? ref.watch(avatarProvider).valueOrNull
+        ? ref.watch(displayAvatarProvider)
         : ref.watch(memberAvatarProvider(profileId)).valueOrNull;
     return UserAvatar(
       name: name,

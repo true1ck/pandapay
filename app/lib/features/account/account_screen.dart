@@ -366,7 +366,7 @@ class _ProfileHero extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final summary = ref.watch(homeSummaryProvider).valueOrNull;
     final cards = ref.watch(userCardsProvider).valueOrNull ?? const [];
-    final avatar = ref.watch(avatarProvider).valueOrNull;
+    final avatar = ref.watch(displayAvatarProvider);
 
     final displayName = (profile?['display_name'] as String?)?.trim();
     final email = (profile?['email'] as String?)?.trim();

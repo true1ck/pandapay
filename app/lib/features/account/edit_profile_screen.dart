@@ -98,32 +98,38 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     final api = ref.read(avatarApiProvider);
     if (api == null) return;
     final messenger = ScaffoldMessenger.of(context);
-    setState(() => _avatarBusy = true);
+    final presets = ref.read(avatarPresetSelectionProvider.notifier);
     try {
       switch (choice) {
         case ChoosePreset(:final id):
-          // A photo beats a preset on screen, so picking a preset replaces it.
-          if (current?.photo != null) await api.removePhoto();
-          await api.setPreset(id);
+          await presets.choose(id);
+          return;
         case UseInitial():
-          if (current?.photo != null) await api.removePhoto();
-          if (current?.preset != null) await api.setPreset(null);
+          await presets.choose(null);
+          return;
         case RemovePhoto():
+          setState(() => _avatarBusy = true);
           await api.removePhoto();
         case ChoosePhoto(:final source):
+          setState(() => _avatarBusy = true);
           final picked = await ref.read(avatarPhotoPickerProvider).pick(source);
           if (picked == null) return; // backed out of the picker
           final jpeg = await prepareAvatarPhoto(picked);
-          await api.uploadPhoto(jpeg);
+          await presets.uploadPhoto(jpeg);
       }
+      if (!mounted) return;
       ref.invalidate(avatarProvider);
       await ref.read(avatarProvider.future);
-      if (mounted) messenger.showSnackBar(const SnackBar(content: Text('Avatar updated')));
+      if (mounted) {
+        messenger.showSnackBar(const SnackBar(content: Text('Avatar updated')));
+      }
     } catch (error) {
-      final text = error is AvatarPhotoException ? error.message : userFacingErrorMessage(error);
+      final text = error is AvatarPhotoException
+          ? error.message
+          : userFacingErrorMessage(error);
       if (mounted) messenger.showSnackBar(SnackBar(content: Text(text)));
     } finally {
-      if (mounted) setState(() => _avatarBusy = false);
+      if (mounted && _avatarBusy) setState(() => _avatarBusy = false);
     }
   }
 
@@ -164,7 +170,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   Widget build(BuildContext context) {
     final profile = ref.watch(profileProvider);
     final phone = ref.watch(phoneStatusProvider).valueOrNull;
-    final avatar = ref.watch(avatarProvider).valueOrNull;
+    final avatar = ref.watch(displayAvatarProvider);
+    final presetSelection = ref.watch(avatarPresetSelectionProvider);
 
     return Scaffold(
       backgroundColor: BambooInk.paper,
@@ -252,6 +259,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                     style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                   ),
                 ),
+                if (presetSelection?.pending == true)
+                  Center(
+                    child: Text(
+                      presetSelection?.error ??
+                          'Saved on this phone · Sync pending',
+                      textAlign: TextAlign.center,
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                    ),
+                  ),
                 if (avatar?.photo != null) ...[
                   const SizedBox(height: AppSpace.lg),
                   _Card(

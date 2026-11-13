@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -18,6 +19,7 @@ import 'package:pandapay/features/account/avatar_presets.dart';
 import 'package:pandapay/features/account/avatar_providers.dart';
 import 'package:pandapay/features/account/edit_profile_screen.dart';
 import 'package:pandapay/features/account/user_avatar.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 http.Response json(Object body, [int status = 200]) => http.Response(
   jsonEncode(body),
@@ -190,11 +192,14 @@ void main() {
   });
 
   group('Edit profile avatar', () {
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
     Future<List<http.Request>> mount(
       WidgetTester tester, {
       required AvatarState? state,
       required AvatarPhotoPicker picker,
-      http.Response Function(http.Request)? reply,
+      FutureOr<http.Response> Function(http.Request)? reply,
+      Stream<bool>? online,
     }) async {
       await tester.binding.setSurfaceSize(const Size(800, 2400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -204,7 +209,7 @@ void main() {
         accessToken: 'tok',
         client: MockClient((request) async {
           requests.add(request);
-          return reply != null ? reply(request) : json({'preset': null, 'has_photo': false, 'version': 1});
+          return reply != null ? await reply(request) : json({'preset': null, 'has_photo': false, 'version': 1});
         }),
       );
       await tester.pumpWidget(
@@ -219,6 +224,7 @@ void main() {
             ),
             avatarApiProvider.overrideWithValue(avatarApi),
             avatarProvider.overrideWith((ref) async => state),
+            isOnlineProvider.overrideWith((ref) => online ?? const Stream.empty()),
             avatarPhotoPickerProvider.overrideWithValue(picker),
           ],
           child: const MaterialApp(home: EditProfileScreen()),
@@ -243,8 +249,16 @@ void main() {
       expect(find.byKey(const Key('avatar-use-initial')), findsOneWidget);
     });
 
-    testWidgets('picking a preset saves just that id', (tester) async {
-      final requests = await mount(tester, state: null, picker: _FakePicker(null));
+    testWidgets('picking a preset changes the avatar before the server replies', (
+      tester,
+    ) async {
+      final response = Completer<http.Response>();
+      final requests = await mount(
+        tester,
+        state: null,
+        picker: _FakePicker(null),
+        reply: (_) => response.future,
+      );
       await tester.tap(find.byKey(const Key('edit-avatar')));
       await tester.pumpAndSettle();
       // The last avatar is off the right edge of the carousel until it is scrolled to.
@@ -253,9 +267,20 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(last);
       await tester.pumpAndSettle();
-      expect(requests.map((r) => '${r.method} ${r.url.path}'), ['PUT /users/me/avatar/preset']);
-      expect(jsonDecode(requests.single.body), {'preset': avatarPresets.last.id});
-      expect(find.text('Avatar updated'), findsOneWidget);
+      expect(requests.map((r) => '${r.method} ${r.url.path}'), [
+        'PUT /users/me/avatar/preset',
+      ]);
+      expect(jsonDecode(requests.single.body), {
+        'preset': avatarPresets.last.id,
+      });
+      expect(
+        tester.widget<UserAvatar>(find.byKey(const Key('edit-avatar'))).preset,
+        avatarPresets.last.id,
+      );
+      expect(find.textContaining('Sync pending'), findsOneWidget);
+      response.complete(json({'preset': avatarPresets.last.id}));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Sync pending'), findsNothing);
     });
 
     testWidgets('choosing a photo prepares a square JPEG and uploads it', (tester) async {
@@ -302,36 +327,104 @@ void main() {
       expect(requests.map((r) => '${r.method} ${r.url.path}'), ['DELETE /users/me/avatar/photo']);
     });
 
-    testWidgets('picking a preset while a photo exists removes the photo first', (tester) async {
-      final requests = await mount(
-        tester,
-        state: AvatarState(preset: null, photo: png(64, 64)),
-        picker: _FakePicker(null),
-      );
-      await tester.tap(find.byKey(const Key('edit-avatar')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('avatar-preset-cool')));
-      await tester.pumpAndSettle();
-      expect(requests.map((r) => '${r.method} ${r.url.path}'), [
-        'DELETE /users/me/avatar/photo',
-        'PUT /users/me/avatar/preset',
-      ]);
-    });
+    testWidgets(
+      'picking a preset removes the server photo even before it was loaded locally',
+      (tester) async {
+        final requests = await mount(
+          tester,
+          state: null,
+          picker: _FakePicker(null),
+          reply: (request) =>
+              json({'preset': 'cool', 'has_photo': request.method == 'PUT'}),
+        );
+        await tester.tap(find.byKey(const Key('edit-avatar')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('avatar-preset-cool')));
+        await tester.pumpAndSettle();
+        expect(requests.map((r) => '${r.method} ${r.url.path}'), [
+          'PUT /users/me/avatar/preset',
+          'DELETE /users/me/avatar/photo',
+        ]);
+      },
+    );
 
-    testWidgets('a server refusal shows its message and keeps the screen usable', (tester) async {
-      await mount(
-        tester,
-        state: null,
-        picker: _FakePicker(null),
-        reply: (_) => json({'error': 'preset_invalid', 'message': 'Choose one of the avatars on the list.'}, 400),
-      );
-      await tester.tap(find.byKey(const Key('edit-avatar')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('avatar-preset-cool')));
-      await tester.pumpAndSettle();
-      expect(find.text('Choose one of the avatars on the list.'), findsOneWidget);
-      expect(find.byKey(const Key('edit-name-field')), findsOneWidget);
-    });
+    testWidgets(
+      'a server refusal shows its message and keeps the screen usable',
+      (tester) async {
+        await mount(
+          tester,
+          state: null,
+          picker: _FakePicker(null),
+          reply: (_) => json({
+            'error': 'preset_invalid',
+            'message': 'Choose one of the avatars on the list.',
+          }, 400),
+        );
+        await tester.tap(find.byKey(const Key('edit-avatar')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('avatar-preset-cool')));
+        await tester.pumpAndSettle();
+        expect(
+          find.text('Choose one of the avatars on the list.'),
+          findsOneWidget,
+        );
+        expect(
+          tester
+              .widget<UserAvatar>(find.byKey(const Key('edit-avatar')))
+              .preset,
+          'cool',
+        );
+        expect(find.byKey(const Key('edit-name-field')), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'an offline selection survives reopening and syncs on reconnect',
+      (tester) async {
+        final offline = await mount(
+          tester,
+          state: null,
+          picker: _FakePicker(null),
+          online: Stream.value(false),
+        );
+        await tester.tap(find.byKey(const Key('edit-avatar')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('avatar-preset-cool')));
+        await tester.pumpAndSettle();
+        expect(offline, isEmpty);
+        expect(
+          tester
+              .widget<UserAvatar>(find.byKey(const Key('edit-avatar')))
+              .preset,
+          'cool',
+        );
+        await tester.pumpWidget(const SizedBox());
+
+        final online = StreamController<bool>(sync: true);
+        addTearDown(online.close);
+        final requests = await mount(
+          tester,
+          state: null,
+          picker: _FakePicker(null),
+          online: Stream.multi((events) {
+            events.addSync(false);
+            final subscription = online.stream.listen(events.addSync);
+            events.onCancel = subscription.cancel;
+          }),
+        );
+        expect(
+          tester
+              .widget<UserAvatar>(find.byKey(const Key('edit-avatar')))
+              .preset,
+          'cool',
+        );
+        expect(requests, isEmpty);
+        online.add(true);
+        await tester.pumpAndSettle();
+        expect(jsonDecode(requests.single.body), {'preset': 'cool'});
+        expect(find.textContaining('Sync pending'), findsNothing);
+      },
+    );
 
     testWidgets('a file that is not an image is explained, nothing is uploaded', (tester) async {
       final requests = await mount(

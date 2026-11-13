@@ -26,6 +26,7 @@ import '../data/user_cards_repository.dart' show TransactionEntry;
 import 'design/app_theme.dart';
 import 'error_handling.dart';
 import '../features/account/account_screen.dart';
+import '../features/account/avatar_providers.dart';
 import '../features/activity/activity_screen.dart';
 import '../features/activity/duplicate_review_screen.dart';
 import '../features/activity/edit_transaction_screen.dart';
@@ -1340,6 +1341,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
       ref.watch(recoveryEmailReminderLifecycleProvider);
       ref.watch(sharedExpensesLifecycleProvider);
       ref.watch(outboxFlushProvider);
+      ref.watch(avatarPresetSelectionProvider);
       // Plan Phase 1.1: on each sign-in, pull the account's preference blob
       // down onto this device. Anonymous wallet migration is intentionally
       // gone because this build does not permit guest sessions.
