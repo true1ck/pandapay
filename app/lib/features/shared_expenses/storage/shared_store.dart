@@ -562,8 +562,60 @@ ORDER BY c.created_at,c.operation_id LIMIT 1''',
       'DELETE FROM shared_provisional WHERE namespace=? AND operation_id=?',
       [namespace, receipt.operationId],
     );
+    if (receipt.kind == 'context.create') _adoptOwnerMemberId(receipt);
     return true;
   });
+
+  /// Commands queued against a group that was created offline name its owner
+  /// by [sharedPendingOwnerMemberId]; now the server's real id is known, so
+  /// rewrite them (same operation id, new bytes and hash) before they send.
+  void _adoptOwnerMemberId(SharedOperationReceipt receipt) {
+    final result = receipt.result;
+    final real = result is Map ? result['memberId'] : null;
+    if (!sharedUuid(real)) return;
+    final stand = sharedPendingOwnerMemberId(receipt.contextId);
+    final rows = database.db.select(
+      "SELECT * FROM shared_commands WHERE namespace=? AND context_id=? AND state!='committed' AND instr(request_json,?)>0",
+      [namespace, receipt.contextId, stand],
+    );
+    Object? swap(Object? v) => v is String
+        ? (v == stand ? real : v)
+        : v is List
+        ? [for (final e in v) swap(e)]
+        : v is Map
+        ? {for (final e in v.entries) e.key: swap(e.value)}
+        : v;
+    for (final row in rows) {
+      final next = SharedCommand.fromJson(
+        swap(jsonDecode(row['request_json'] as String)),
+      );
+      // The immutability trigger guards UPDATEs; the row is replaced whole
+      // (same key, same state, attempts and dependencies) in this transaction.
+      final key = [namespace, row['operation_id']];
+      database.db.execute(
+        'DELETE FROM shared_commands WHERE namespace=? AND operation_id=?',
+        key,
+      );
+      database.db.execute(
+        'INSERT INTO shared_commands(namespace,operation_id,context_id,kind,request_json,request_hash,state,created_at,attempts,next_attempt,lease_id,lease_expires,error_code) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
+        [
+          namespace,
+          row['operation_id'],
+          row['context_id'],
+          row['kind'],
+          next.canonicalJson,
+          next.requestHash,
+          row['state'],
+          row['created_at'],
+          row['attempts'],
+          row['next_attempt'],
+          row['lease_id'],
+          row['lease_expires'],
+          row['error_code'],
+        ],
+      );
+    }
+  }
   Future<void> fail(
     SharedCommandClaim claim, {
     int? statusCode,
