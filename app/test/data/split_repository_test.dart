@@ -309,6 +309,27 @@ void main() {
     },
   );
 
+  test('blockedCount counts only refused documents of this account', () async {
+    await store.read('t1');
+    await store.read('t2');
+    store.save('t1', [share(100)], Money.fromRupees(1000));
+    store.save('t2', [share(100)], Money.fromRupees(1000));
+    expect(store.pendingCount, 2);
+    expect(store.blockedCount, 0);
+    remote.failure = ApiException('PUT splits failed: 400 {}');
+    await store.sync();
+    // A 4xx is permanent for that document: both stay unsent but are blocked.
+    expect(store.blockedCount, 2);
+    expect(store.pendingCount, 2);
+    expect(create('account-b').blockedCount, 0);
+    remote.failure = null;
+    await store.sync(reconnect: true);
+    // Blocked ones are left alone until the person resolves them.
+    expect(store.blockedCount, 2);
+    await store.resolve('t1', keepLocal: false);
+    expect(store.blockedCount, 1);
+  });
+
   test(
     'unknown offline documents remain unknown and can retry on reconnect',
     () async {

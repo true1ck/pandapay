@@ -146,6 +146,16 @@ class SharedExpensesRuntime extends ChangeNotifier {
   bool get proposalsEnabled => capabilities?['proposals'] == true;
   bool get settlementsEnabled => capabilities?['settlements'] == true;
   bool get sourceFundingEnabled => capabilities?['sourceFunding'] == true;
+
+  /// Saving a change on this phone (create a group, add a friend, rename,
+  /// respond) only needs the feature not to be known-off. With no flags yet
+  /// (never loaded, or a bad connection at launch) the change is queued and
+  /// the server decides when it is sent; hiding the button would lose it.
+  bool get canQueueProposals => capabilities == null || proposalsEnabled;
+  bool get canQueueSettlements => capabilities == null || settlementsEnabled;
+
+  /// Saved changes the server refused (see [SharedExpensesStore.attentionCount]).
+  int get attentionCount => store.attentionCount;
   int get accessGeneration => _accessGeneration;
   String get accountId => store.namespace.substring(5);
   void _current() {
@@ -156,13 +166,22 @@ class SharedExpensesRuntime extends ChangeNotifier {
     if (!_disposed && isCurrent()) notifyListeners();
   }
 
+  /// Drops the saved query copies for this account but keeps the saved feature
+  /// flags: they are not private data, and losing them would make the next
+  /// offline launch treat the feature as unknown.
+  Future<void> _clearSharedCache() async {
+    await cache.clearPrefix('${store.namespace}:shared:');
+    final flags = capabilities;
+    if (flags != null) await _saveCapabilities(flags);
+  }
+
   /// Invalidate in-flight aggregates before any asynchronous purge. A late
   /// authorized-at-start response must never resurrect revoked private data.
   Future<void> revokeContext(String contextId) async {
     _current();
     _accessGeneration++;
     await store.recoveryGate.run(() async {
-      await cache.clearPrefix('${store.namespace}:shared:');
+      await _clearSharedCache();
       _current();
       await store.revokeContext(contextId);
       dataVersion++;
@@ -248,6 +267,21 @@ class SharedExpensesRuntime extends ChangeNotifier {
     return _running = _refreshLoop(maxPullPages);
   }
 
+  /// The network came back (or the app returned to the foreground): do not
+  /// wait out a backoff earned while it was down. Due rows go now; the attempt
+  /// cap still applies. Never throws, so a listener can fire and forget.
+  Future<void> reconnect() async {
+    try {
+      _current();
+      await store.resetBackoff();
+      _retryAt = null;
+      _failures = 0;
+      await refresh();
+    } catch (_) {
+      // A disposed runtime or a busy recovery: the next resume tries again.
+    }
+  }
+
   Future<void> _refreshLoop(int maxPullPages) async {
     do {
       _again = false;
@@ -293,7 +327,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
           if (page.revokedContextIds.isNotEmpty) {
             // Remove stale query summaries before acknowledging access loss.
             _accessGeneration++;
-            await cache.clearPrefix('${store.namespace}:shared:');
+            await _clearSharedCache();
             _current();
           }
           await store.applyPageOffThread(page, expectedCursor: before);
@@ -337,10 +371,10 @@ class SharedExpensesRuntime extends ChangeNotifier {
     Map<String, Object?>? provisional,
   }) async {
     _current();
-    if (!readsEnabled ||
+    if (capabilities != null && !readsEnabled ||
         (kind.startsWith('settlement.')
-            ? !settlementsEnabled
-            : !proposalsEnabled)) {
+            ? !canQueueSettlements
+            : !canQueueProposals)) {
       throw const SharedRuntimeUnavailable();
     }
     final command = SharedCommand(
@@ -370,7 +404,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     String name,
   ) async {
     _current();
-    if (!proposalsEnabled ||
+    if (!canQueueProposals ||
         name.trim().isEmpty ||
         name.length > 120 ||
         RegExp(r'[\x00-\x1f\x7f]').hasMatch(name)) {
@@ -397,7 +431,11 @@ class SharedExpensesRuntime extends ChangeNotifier {
     // friend, so the person just picks another name.
     final refused =
         nameFailure(context.operationId) ?? nameFailure(member.operationId);
-    if (refused != null) throw refused;
+    if (refused != null) {
+      // The screen tells the person now; it is not also a leftover "not synced".
+      await acknowledgeRefusal(context.operationId);
+      throw refused;
+    }
     return (contextId: id, memberId: memberId);
   }
 
@@ -626,6 +664,36 @@ class SharedExpensesRuntime extends ChangeNotifier {
       return null;
     }
     return SharedNameException.fromStored(op.errorCode);
+  }
+
+  /// A refusal the screen has already explained (a taken name) is dealt with:
+  /// forget the command so it does not also show up as "not synced".
+  Future<void> acknowledgeRefusal(String operationId) async {
+    try {
+      await store.discard(operationId);
+    } catch (_) {}
+    _notify();
+  }
+
+  /// Needs-attention "Retry": back into the queue with a fresh budget, sent now.
+  Future<void> retryRefused(String operationId) async {
+    _current();
+    if (await store.requeue(operationId)) {
+      syncLag = true;
+      _notify();
+      await refresh();
+      dataVersion++;
+      _notify();
+    }
+  }
+
+  /// Needs-attention "Discard": forget it (the server never accepted it).
+  Future<void> discardRefused(String operationId) async {
+    _current();
+    if (await store.discard(operationId)) {
+      dataVersion++;
+      _notify();
+    }
   }
 
   /// The last list fetched in this session, so the requests page can show
@@ -887,7 +955,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     if (clean == null || clean.length > sharedMemberNameMax) {
       throw const FormatException('Invalid member name');
     }
-    if (!proposalsEnabled || store.isContextRevoked(contextId)) {
+    if (!canQueueProposals || store.isContextRevoked(contextId)) {
       throw const SharedRuntimeUnavailable();
     }
     final command = SharedCommand(
@@ -913,6 +981,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
       _renameOverlay.remove('$contextId:$memberId');
       if (directCounterpart) _directTitles.remove(contextId);
       _notify();
+      await acknowledgeRefusal(command.operationId);
       throw refused;
     }
     // Once the server has it, its roster is the truth again.
@@ -987,7 +1056,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
       members: List<SharedEditorMember>.unmodifiable(roster),
       direct: current['kind'] == 'direct',
       canInvite:
-          proposalsEnabled &&
+          canQueueProposals &&
           ownMember.role == 'owner' &&
           (current['kind'] != 'direct' || roster.length < 2),
       canShareLink: proposalsEnabled && ownMember.role == 'owner',
@@ -1022,7 +1091,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     String decision,
   ) async {
     _current();
-    if (!proposalsEnabled || !{'approve', 'reject'}.contains(decision)) {
+    if (!canQueueProposals || !{'approve', 'reject'}.contains(decision)) {
       throw const SharedRuntimeUnavailable();
     }
     final command = SharedCommand(
@@ -1052,7 +1121,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     String decision,
   ) async {
     _current();
-    if (!settlementsEnabled || !{'confirm', 'reject'}.contains(decision)) {
+    if (!canQueueSettlements || !{'confirm', 'reject'}.contains(decision)) {
       throw const SharedRuntimeUnavailable();
     }
     final command = SharedCommand(
@@ -1080,7 +1149,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     String? reference,
   }) async {
     _current();
-    if (!settlementsEnabled) {
+    if (!canQueueSettlements) {
       throw const SharedRuntimeUnavailable();
     }
     final command = SharedCommand(
@@ -1136,7 +1205,10 @@ class SharedExpensesRuntime extends ChangeNotifier {
         'Not accepted. Open the item to review it.',
       SharedCommandState.awaitingAuth =>
         'Saved on this device. Sign in to sync.',
-      _ => 'Saved on this device · waiting to sync',
+      _ =>
+        offline
+            ? sharedSavedOfflineCopy
+            : 'Saved on this device · waiting to sync',
     };
   }
 

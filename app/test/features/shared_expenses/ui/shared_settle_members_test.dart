@@ -599,6 +599,25 @@ void main() {
       expect(find.textContaining('1,00,00,000'), findsOneWidget);
     },
   );
+  testWidgets(
+    'offline: confirming a payment report is allowed and says it is saved on this phone',
+    (tester) async {
+      runtime.offline = true;
+      await show(
+        tester,
+        SharedSettlementsSheet(
+          runtime: runtime,
+          contextId: group,
+          groupName: 'Trip Group',
+        ),
+      );
+      expect(find.text('Confirm received'), findsOneWidget);
+      await tap(tester, 'Confirm received');
+      expect(runtime.store.pendingCount, 1);
+      expect(find.text(sharedSavedOfflineCopy), findsWidgets);
+      expect(find.text('Confirm received'), findsNothing);
+    },
+  );
 }
 
 class _FakeUpi implements UpiPaymentService {

@@ -71,6 +71,15 @@ class SplitRepository extends ChangeNotifier {
             [namespace],
           ).single['count']
           as int;
+
+  /// Documents the server refused for good or flagged as a conflict. They are
+  /// still pending (never sent) but will not retry by themselves.
+  int get blockedCount =>
+      database.db.select(
+            'SELECT COUNT(*) AS count FROM split_documents WHERE namespace=? AND pending=1 AND blocked=1',
+            [namespace],
+          ).single['count']
+          as int;
   void _changed() {
     if (!_disposed) notifyListeners();
   }

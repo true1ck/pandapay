@@ -5,6 +5,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../../app/design/app_theme.dart';
 import '../storage/shared_store.dart';
 import '../ui/shared_components.dart';
+import '../ui/shared_presentation.dart' show sharedSavedOfflineCopy;
 import 'shared_runtime.dart';
 
 /// Reuses the group route. Accepted money and proposed revisions are separate;
@@ -80,6 +81,8 @@ class _SharedExpenseReviewSheetState extends State<SharedExpenseReviewSheet> {
             ? 'All approvals received. Expense accepted.'
             : receipt != null
             ? 'Response saved. Balances change only after acceptance.'
+            : widget.runtime.offline
+            ? sharedSavedOfflineCopy
             : 'Response saved on this device · waiting to sync';
         _page = _load();
       });
@@ -121,10 +124,9 @@ class _SharedExpenseReviewSheetState extends State<SharedExpenseReviewSheet> {
     final residual = fullPaid.paise - paid.paise;
     final canRespond =
         row['canRespond'] == true &&
-        runtime.proposalsEnabled &&
+        runtime.canQueueProposals &&
         operation == null &&
-        !_saving &&
-        !runtime.offline;
+        !_saving;
     return SharedPanel(
       child: Material(
         color: Colors.transparent,
@@ -311,7 +313,7 @@ class _SharedExpenseReviewSheetState extends State<SharedExpenseReviewSheet> {
                     children: [
                       if (runtime.offline)
                         const SharedNotice(
-                          'Offline · saved revisions shown. Connect before reviewing.',
+                          "Offline · saved revisions shown. Your response is saved on this phone and sent when you're online.",
                         ),
                       if ((page['items'] as List).isEmpty)
                         const SharedNotice(

@@ -162,6 +162,11 @@ class SharedExpenseTotals {
   });
 }
 
+/// Shown when a change was kept on this phone because the server cannot be
+/// reached: it is safe, and it goes out by itself.
+const sharedSavedOfflineCopy =
+    "Saved on this phone — will send when you're online";
+
 class SharedHubPresentation {
   final SharedBalanceSummary? summary;
   final SharedPage<SharedContextRow> friends;
