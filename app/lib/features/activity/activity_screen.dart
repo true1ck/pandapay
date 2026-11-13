@@ -3834,6 +3834,9 @@ class _TransactionTile extends StatelessWidget {
                                 ? 'Transfer'
                                 : 'Payment',
                           ),
+                        ] else if (bankPaymentLabel(entry) case final method?) ...[
+                          const SizedBox(width: AppSpace.xs),
+                          TransactionBadgePill.plain(method),
                         ] else if (showInvestmentChip) ...[
                           const SizedBox(width: AppSpace.xs),
                           TransactionBadgePill.plain(

@@ -49,6 +49,16 @@ TxnBadgeKind? txnBadgeKind(TransactionEntry entry) {
   };
 }
 
+/// A label for a payment made by NEFT, IMPS, RTGS or cheque, so the row says
+/// how it was paid. Only a label: it never changes spending or asks anything.
+String? bankPaymentLabel(TransactionEntry entry) => switch (entry.paymentMethod) {
+  'neft' => 'NEFT',
+  'imps' => 'IMPS',
+  'rtgs' => 'RTGS',
+  'cheque' => 'Cheque',
+  _ => null,
+};
+
 /// The badge as plain text, for places that cannot draw a pill (exports,
 /// reports, spoken answers). Null for an ordinary payment.
 String? txnBadgeLabel(TransactionEntry entry) => txnBadgeKind(entry)?.label;

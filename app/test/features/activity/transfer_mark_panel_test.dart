@@ -13,6 +13,7 @@ TransactionEntry _entry({
   TxnEntryKind kind = TxnEntryKind.spend,
   String? transferType,
   String? note,
+  String? paymentMethod,
   int pipelineVersion = 2,
   String? eventId = 'e1',
 }) => TransactionEntry(
@@ -26,6 +27,7 @@ TransactionEntry _entry({
   entryKind: kind,
   transferType: transferType,
   note: note,
+  paymentMethod: paymentMethod,
   source: 'sms',
   status: 'active',
 );
@@ -219,5 +221,12 @@ void main() {
         TxnBadgeKind.walletTopup,
       ]);
     });
+  });
+
+  test('a bank payment method is only a label', () {
+    expect(bankPaymentLabel(_entry(paymentMethod: 'neft')), 'NEFT');
+    expect(bankPaymentLabel(_entry(paymentMethod: 'cheque')), 'Cheque');
+    expect(bankPaymentLabel(_entry(paymentMethod: 'upi')), isNull);
+    expect(bankPaymentLabel(_entry()), isNull);
   });
 }
