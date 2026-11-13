@@ -3834,11 +3834,6 @@ class _TransactionTile extends StatelessWidget {
                                 ? 'Transfer'
                                 : 'Payment',
                           ),
-                        ] else if (transferCheckMethod(entry) case final method?) ...[
-                          // Paid by NEFT, IMPS, RTGS or cheque to a named payee:
-                          // worth a look, spending is not changed.
-                          const SizedBox(width: AppSpace.xs),
-                          TransactionBadgePill.plain('Check · $method'),
                         ] else if (showInvestmentChip) ...[
                           const SizedBox(width: AppSpace.xs),
                           TransactionBadgePill.plain(

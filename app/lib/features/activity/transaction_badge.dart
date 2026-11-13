@@ -49,24 +49,6 @@ TxnBadgeKind? txnBadgeKind(TransactionEntry entry) {
   };
 }
 
-/// Payment methods that move money between accounts and are often a transfer
-/// between people, so the person is asked instead of the app guessing.
-const _bankTransferMethods = {'neft': 'NEFT', 'imps': 'IMPS', 'rtgs': 'RTGS', 'cheque': 'Cheque'};
-
-/// The method name (NEFT, IMPS, RTGS, Cheque) when [entry] is an SMS payment by
-/// one of them to or from a named payee that is not yet a transfer, so it is
-/// worth a look. It never changes spending: it only says "check this".
-String? transferCheckMethod(TransactionEntry entry) {
-  if (entry.pipelineVersion != 2 || txnBadgeKind(entry) != null) return null;
-  if (entry.entryKind != TxnEntryKind.spend &&
-      entry.entryKind != TxnEntryKind.income) {
-    return null;
-  }
-  final name = (entry.merchantName ?? '').trim();
-  if (name.isEmpty || name.toUpperCase() == 'UNKNOWN') return null;
-  return _bankTransferMethods[entry.paymentMethod];
-}
-
 /// The badge as plain text, for places that cannot draw a pill (exports,
 /// reports, spoken answers). Null for an ordinary payment.
 String? txnBadgeLabel(TransactionEntry entry) => txnBadgeKind(entry)?.label;

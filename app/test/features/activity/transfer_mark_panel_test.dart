@@ -13,7 +13,6 @@ TransactionEntry _entry({
   TxnEntryKind kind = TxnEntryKind.spend,
   String? transferType,
   String? note,
-  String? paymentMethod,
   int pipelineVersion = 2,
   String? eventId = 'e1',
 }) => TransactionEntry(
@@ -27,7 +26,6 @@ TransactionEntry _entry({
   entryKind: kind,
   transferType: transferType,
   note: note,
-  paymentMethod: paymentMethod,
   source: 'sms',
   status: 'active',
 );
@@ -220,28 +218,6 @@ void main() {
         TxnBadgeKind.cardBill,
         TxnBadgeKind.walletTopup,
       ]);
-    });
-  });
-
-  group('payment by NEFT, IMPS, RTGS or cheque', () {
-    test('is flagged for a check only when it is an SMS payment to a named payee', () {
-      expect(transferCheckMethod(_entry(paymentMethod: 'neft')), 'NEFT');
-      expect(transferCheckMethod(_entry(paymentMethod: 'cheque')), 'Cheque');
-      expect(transferCheckMethod(_entry(paymentMethod: 'upi')), isNull);
-      expect(transferCheckMethod(_entry(paymentMethod: 'neft', merchant: 'UNKNOWN')), isNull);
-      expect(transferCheckMethod(_entry(paymentMethod: 'neft', pipelineVersion: 1, eventId: null)), isNull);
-      expect(
-        transferCheckMethod(_entry(paymentMethod: 'neft', kind: TxnEntryKind.transfer, transferType: 'self')),
-        isNull,
-        reason: 'already a transfer',
-      );
-    });
-
-    testWidgets('the panel names the method and still offers both marks', (tester) async {
-      await _pump(tester, _entry(paymentMethod: 'rtgs'));
-      expect(find.text('Paid by RTGS. Is this a transfer?'), findsOneWidget);
-      expect(find.text('Mark as self transfer'), findsOneWidget);
-      expect(find.text('Mark as family transfer'), findsOneWidget);
     });
   });
 }
