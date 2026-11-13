@@ -156,6 +156,9 @@ void main() {
     expect((await repo().find('a' * 64))!.syncError, isNotNull);
     expect(db.db.select('SELECT * FROM foreign_payments_outbox'), hasLength(1));
     service.rejectedKey = null;
+    // The failed change is waiting out its backoff; coming back online
+    // (SyncEngine / connectivity) makes it due again.
+    await repo().resetBackoff();
     await repo().sync();
     expect(db.db.select('SELECT * FROM foreign_payments_outbox'), isEmpty);
   });

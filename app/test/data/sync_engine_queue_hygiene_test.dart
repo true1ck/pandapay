@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/api_exception.dart';
+import 'package:pandapay/data/foreign_payments_repository.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/financial_store.dart';
 import 'package:pandapay/data/local/response_cache.dart';
@@ -123,6 +124,28 @@ class _HangingSplitRepository implements SplitRepository {
     events.add('split-sync');
     return Completer<void>().future;
   }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// Records when its outbox is asked to drain.
+class _FakeForeignPayments implements ForeignPaymentsRepository {
+  _FakeForeignPayments(this.events, {this.hang = false, this.fail = false});
+  final List<String> events;
+  final bool hang;
+  final bool fail;
+  int resets = 0;
+
+  @override
+  Future<void> sync() {
+    events.add('foreign-sync');
+    if (fail) return Future.error(StateError('service unavailable'));
+    return hang ? Completer<void>().future : Future.value();
+  }
+
+  @override
+  Future<void> resetBackoff() async => resets++;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -623,6 +646,75 @@ void main() {
       final result = await scope.read(syncEngineProvider).sync();
       expect(result.ranToCompletion, isFalse);
       expect(api.pullDevices, hasLength(1));
+    });
+  });
+
+  group('foreign payments drain with the sync (W-17)', () {
+    test('sync() drains the foreign-payments outbox after the edit push',
+        () async {
+      enqueue('t1');
+      final events = <String>[];
+      final api = _ScriptedApi(
+        onPush: (device, changes) {
+          events.add('push');
+          return [for (final c in changes) _applied(c)];
+        },
+      );
+      final scope = scripted(
+        api,
+        extra: [
+          foreignPaymentsRepositoryProvider.overrideWithValue(
+            _FakeForeignPayments(events),
+          ),
+        ],
+      );
+      addTearDown(scope.dispose);
+      final result = await scope.read(syncEngineProvider).sync();
+      await Future<void>.delayed(Duration.zero);
+      expect(result.ranToCompletion, isTrue);
+      expect(events.indexOf('push'), lessThan(events.indexOf('foreign-sync')));
+    });
+
+    test('a hung or failing foreign sync cannot block or fail the sync',
+        () async {
+      for (final hang in [true, false]) {
+        enqueue('t${hang ? 1 : 2}');
+        final events = <String>[];
+        final api = _ScriptedApi();
+        final scope = scripted(
+          api,
+          extra: [
+            foreignPaymentsRepositoryProvider.overrideWithValue(
+              _FakeForeignPayments(events, hang: hang, fail: !hang),
+            ),
+          ],
+        );
+        addTearDown(scope.dispose);
+        final result = await scope
+            .read(syncEngineProvider)
+            .sync()
+            .timeout(const Duration(seconds: 5));
+        expect(result.ranToCompletion, isTrue, reason: 'hang=$hang');
+        expect(result.pushed, 1, reason: 'hang=$hang');
+      }
+    });
+
+    test('foreign sync still starts when the edit push fails', () async {
+      enqueue('t1');
+      final events = <String>[];
+      final api = _ScriptedApi(onPush: (device, changes) => throw _http(503));
+      final scope = scripted(
+        api,
+        extra: [
+          foreignPaymentsRepositoryProvider.overrideWithValue(
+            _FakeForeignPayments(events),
+          ),
+        ],
+      );
+      addTearDown(scope.dispose);
+      await scope.read(syncEngineProvider).sync();
+      await Future<void>.delayed(Duration.zero);
+      expect(events, ['foreign-sync']);
     });
   });
 }

@@ -30,13 +30,22 @@ enum QueueFailure {
 }
 
 /// Classifies [error] for queue bookkeeping. See [QueueFailure].
-QueueFailure classifyQueueFailure(Object error) {
+///
+/// [retryableStatuses] lists 4xx statuses that a particular endpoint uses for
+/// "try again later" (for example a 409 that only means a concurrent change);
+/// they back off instead of parking.
+QueueFailure classifyQueueFailure(
+  Object error, {
+  Set<int> retryableStatuses = const {},
+}) {
   if (error is SocketException ||
       error is TimeoutException ||
       error is http.ClientException ||
       error is TlsException) {
     return QueueFailure.network;
   }
+  // A request that could not even be authorised says nothing about the row.
+  if (error is AuthenticationUnavailableException) return QueueFailure.network;
   if (error is ApiException) {
     final status = error.statusCode;
     // No status and no transport exception: unknown, so it counts.
@@ -44,6 +53,7 @@ QueueFailure classifyQueueFailure(Object error) {
     // The session was rejected; the row says nothing about it.
     if (status == 401) return QueueFailure.network;
     if (status == 408 || status == 429) return QueueFailure.retryable;
+    if (retryableStatuses.contains(status)) return QueueFailure.retryable;
     if (status >= 400 && status < 500) return QueueFailure.permanent;
     return QueueFailure.retryable;
   }

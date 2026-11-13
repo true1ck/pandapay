@@ -145,11 +145,12 @@ class SyncEngine {
       try {
         pushed = await _push(api, queue, deviceId);
       } finally {
-        // Split documents are independent of field edits. Start their sync
-        // after the edit push, without waiting for it: a hung or failing
-        // split sync must never hold up (or abort) the push, the pull or the
-        // next sync cycle.
+        // Split documents and foreign-payment changes are independent of
+        // field edits. Start their sync after the edit push, without waiting
+        // for it: a hung or failing one must never hold up (or abort) the
+        // push, the pull or the next sync cycle.
         _startSplitSync();
+        _startForeignPaymentsSync();
       }
       // A re-registration during the push may have issued a new device id.
       deviceId = queue.deviceId ?? deviceId;
@@ -197,6 +198,18 @@ class SyncEngine {
         )).sync(reconnect: true);
       } catch (_) {
         // Split documents stay durable and retry on the next trigger.
+      }
+    }());
+  }
+
+  /// Drains the foreign-payments outbox (it used to drain only when its
+  /// screen read it or a change was made, so a reconnect never sent it).
+  void _startForeignPaymentsSync() {
+    unawaited(() async {
+      try {
+        await _ref.read(foreignPaymentsRepositoryProvider).sync();
+      } catch (_) {
+        // Changes stay durable and retry on the next trigger.
       }
     }());
   }
@@ -674,6 +687,14 @@ final syncLifecycleProvider = Provider<void>((ref) {
     final cameOnline =
         previous?.valueOrNull == false && next.valueOrNull == true;
     if (cameOnline) {
+      // Backoffs were about problems that may have passed; do not wait them
+      // out a second time after being offline.
+      ref.read(transactionTagsProvider)?.resetBackoff();
+      try {
+        await ref.read(foreignPaymentsRepositoryProvider).resetBackoff();
+      } catch (_) {
+        // Entries keep their backoff; the sync below still runs.
+      }
       await ref.read(syncEngineProvider).sync();
     }
   });

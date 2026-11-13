@@ -40,8 +40,9 @@ abstract final class LocalFirstSchema {
   static const List<String> tableNames = <String>[];
 
   /// The migration list. Index 0 is migration number 1.
-  static final List<LocalFirstMigration> _migrations =
-      <LocalFirstMigration>[];
+  static final List<LocalFirstMigration> _migrations = <LocalFirstMigration>[
+    _addTagAndForeignOutboxRetryColumns,
+  ];
 
   /// Current module version: the number of shipped migrations.
   static int get version => _migrations.length;
@@ -130,6 +131,41 @@ abstract final class LocalFirstSchema {
       if (!has()) rethrow;
     }
   }
+}
+
+/// Migration 1: the tag outbox and the foreign-payments outbox gain the same
+/// retry bookkeeping as the transaction outbox (next attempt / park, plus
+/// attempts and last_error for the foreign one). The foreign table is created
+/// lazily by its repository, which also adds these columns when it creates the
+/// table, so a table that does not exist yet is skipped here.
+void _addTagAndForeignOutboxRetryColumns(Database db) {
+  const counter = 'INTEGER NOT NULL DEFAULT 0';
+  LocalFirstSchema.addColumnIfMissing(
+    db,
+    'transaction_tag_outbox',
+    'next_attempt_at',
+    counter,
+  );
+  LocalFirstSchema.addColumnIfMissing(
+    db,
+    'transaction_tag_outbox',
+    'parked',
+    counter,
+  );
+  for (final column in ['attempts', 'next_attempt_at', 'parked']) {
+    LocalFirstSchema.addColumnIfMissing(
+      db,
+      'foreign_payments_outbox',
+      column,
+      counter,
+    );
+  }
+  LocalFirstSchema.addColumnIfMissing(
+    db,
+    'foreign_payments_outbox',
+    'last_error',
+    'TEXT',
+  );
 }
 
 /// One numbered, append-only step of [LocalFirstSchema]. Must be idempotent.

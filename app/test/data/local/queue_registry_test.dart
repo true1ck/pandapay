@@ -224,6 +224,27 @@ void main() {
       );
     });
 
+    test('tag and foreign outboxes count parked rows once migrated', () {
+      db.db.execute(
+        'INSERT INTO transaction_tag_outbox (namespace, mutation_id, payload_json, parked) '
+        "VALUES (?, 'm1', '{}', 0), (?, 'm2', '{}', 1)",
+        [_a, _a],
+      );
+      db.db.execute(
+        'INSERT INTO foreign_payments_outbox (namespace, source_key, kind, payload, parked) '
+        "VALUES (?, 's1', 'k', '{}', 1)",
+        [_a],
+      );
+      expect(
+        registry.countsFor('transaction_tag_outbox', _a),
+        const QueueCounts(pending: 1, parked: 1),
+      );
+      expect(
+        registry.countsFor('foreign_payments_outbox', _a),
+        const QueueCounts(parked: 1),
+      );
+    });
+
     test('shared_commands: committed is history, awaitingAuth blocks', () {
       const states = [
         'pending',
