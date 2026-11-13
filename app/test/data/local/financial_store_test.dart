@@ -255,6 +255,27 @@ void main() {
       );
     },
   );
+  test(
+    'H3-6: a v2 row whose source event is gone from the v2 ledger is pruned; one with its event is kept',
+    () {
+      db.db.execute(
+        'CREATE TABLE IF NOT EXISTS v2_events (namespace TEXT NOT NULL, event_id TEXT NOT NULL, '
+        "type TEXT NOT NULL DEFAULT 't', status TEXT NOT NULL DEFAULT 's', payload TEXT NOT NULL DEFAULT '{}', "
+        'dirty INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (namespace, event_id))',
+      );
+      db.db.execute("INSERT INTO v2_events(namespace,event_id) VALUES ('a','evt-live')");
+      store.saveTransactions(
+        'a',
+        [row('v2:evt-live'), row('v2:evt-deleted'), row('srv')],
+        completeQuery: all,
+      );
+      store.saveTransactions('a', [row('srv')], completeQuery: all);
+      expect(
+        store.transactions('a', all)!.rows.map((r) => r.id).toSet(),
+        {'v2:evt-live', 'srv'},
+      );
+    },
+  );
   test('range replacement cannot remove rows outside its scope', () {
     store.saveTransactions('a', [
       row('early', day: 1),

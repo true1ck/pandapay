@@ -663,9 +663,17 @@ class FinancialStore {
         final ids = rows.map((r) => r.id).toSet();
         // WP-C7 (L-04): 'v2:<eventId>' rows are projected from on-phone SMS
         // facts the server may not hold yet; absence from a server list says
-        // nothing about them, so they are never pruned here.
+        // nothing about them, so they are not pruned here. H3-6: unless the
+        // source event is gone from the phone's own v2 ledger (a deleted
+        // event); then the projection is stale and is pruned like any row.
+        final hasV2Events = database.db.select(
+          "SELECT 1 FROM sqlite_master WHERE type='table' AND name='v2_events'",
+        ).isNotEmpty;
+        final pruneCandidate = hasV2Events
+            ? "(id NOT LIKE 'v2:%' OR NOT EXISTS (SELECT 1 FROM v2_events e WHERE e.namespace=financial_entities.namespace AND e.event_id=substr(financial_entities.id,4)))"
+            : "id NOT LIKE 'v2:%'";
         final existing = database.db.select(
-          "SELECT id, payload FROM financial_entities WHERE namespace=? AND entity='transactions' AND pending=0 AND observed_at <= ? AND id NOT LIKE 'v2:%' AND NOT EXISTS (SELECT 1 FROM sync_pending_changes p WHERE p.namespace=financial_entities.namespace AND p.entity='transactions' AND p.entity_id=financial_entities.id)",
+          "SELECT id, payload FROM financial_entities WHERE namespace=? AND entity='transactions' AND pending=0 AND observed_at <= ? AND $pruneCandidate AND NOT EXISTS (SELECT 1 FROM sync_pending_changes p WHERE p.namespace=financial_entities.namespace AND p.entity='transactions' AND p.entity_id=financial_entities.id)",
           [ns, timestamp],
         );
         for (final old in existing) {
