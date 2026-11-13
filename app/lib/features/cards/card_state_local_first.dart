@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../app/providers.dart';
-import '../../data/api_exception.dart';
 import '../../data/local_first/pending_overlays.dart';
 import '../sync/sync_engine.dart';
 import 'add_card_local_first.dart';
