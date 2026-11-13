@@ -846,7 +846,7 @@ async function resolveCategoryForImport(client, userId, {
     }
   }
 
-  if (entryKind === 'investment') {
+  if (entryKind === 'investment' || entryKind === 'investment_return') {
     const inv = await client.query(
       `SELECT id FROM spend_categories WHERE slug IN ('investments', 'investment') LIMIT 1`
     );

@@ -18,12 +18,15 @@ import '../ui/shared_add_friend_sheet.dart';
 import '../ui/shared_invite_inbox.dart';
 import '../ui/shared_join_requests_page.dart';
 import '../ui/shared_settlements_sheet.dart';
+import '../ui/shared_tap_gate.dart';
 
 /// Production-backed screen adapter. App router supplies destinations; this
 /// layer never adds an app dock, invents balances or writes bank transactions.
 class SharedExpensesRoute extends ConsumerStatefulWidget {
-  final ValueChanged<String> onOpenContext;
-  final VoidCallback onAddExpense;
+  /// The openers may return the page's future (go_router's `push` does); the
+  /// hub keeps its buttons single-flight until that page is closed again.
+  final FutureOr<void> Function(String) onOpenContext;
+  final FutureOr<void> Function() onAddExpense;
 
   /// Opens the join-requests page.
   final Future<void> Function()? onOpenRequests;
@@ -56,7 +59,9 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
   };
   final _searches = <SharedHubTab, String>{};
   Timer? _searchDebounce;
-  bool _creatingFriend = false;
+
+  /// One page, sheet or dialog at a time: repeated taps must not stack copies.
+  final _gate = SharedTapGate();
   @override
   void dispose() {
     _searchDebounce?.cancel();
@@ -163,15 +168,12 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
   }
 
   Future<void> _createFriend(SharedExpensesRuntime runtime) async {
-    if (_creatingFriend) return;
-    _creatingFriend = true;
-    try {
-      final id = await runAddFriendFlow(context, runtime);
-      if (id != null && mounted) _reload();
-    } finally {
-      _creatingFriend = false;
-    }
+    final id = await runAddFriendFlow(context, runtime);
+    if (id != null && mounted) _reload();
   }
+
+  void _open(String id) =>
+      unawaited(_gate.run(() => widget.onOpenContext(id)));
 
   @override
   Widget build(BuildContext context) {
@@ -229,17 +231,19 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
               header: SharedInviteInbox(
                 runtime: runtime,
                 onJoined: _reload,
-                onReviewRequests: widget.onOpenRequests,
+                onReviewRequests: widget.onOpenRequests == null
+                    ? null
+                    : () => _gate.run(widget.onOpenRequests!),
               ),
-              onOpenFriend: widget.onOpenContext,
-              onOpenGroup: widget.onOpenContext,
-              onOpenActivity: widget.onOpenContext,
-              onAddExpense: widget.onAddExpense,
+              onOpenFriend: _open,
+              onOpenGroup: _open,
+              onOpenActivity: _open,
+              onAddExpense: () => unawaited(_gate.run(widget.onAddExpense)),
               onCreateGroup: runtime.proposalsEnabled
-                  ? () => _create(runtime)
+                  ? () => unawaited(_gate.run(() => _create(runtime)))
                   : null,
               onAddFriend: runtime.proposalsEnabled
-                  ? () => _createFriend(runtime)
+                  ? () => unawaited(_gate.run(() => _createFriend(runtime)))
                   : null,
               onRetry: (_) => _reload(),
               onLoadMore: (tab) {
@@ -305,8 +309,8 @@ class SharedJoinRequestsRoute extends ConsumerWidget {
 
 class SharedContextRoute extends ConsumerStatefulWidget {
   final String contextId;
-  final VoidCallback onAddExpense;
-  final ValueChanged<String>? onOpenExpense;
+  final FutureOr<void> Function() onAddExpense;
+  final FutureOr<void> Function(String)? onOpenExpense;
   const SharedContextRoute({
     super.key,
     required this.contextId,
@@ -322,7 +326,7 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
   /// still only invited, say so instead of opening a sheet that cannot work.
   Future<void> _settleIfPossible(
     SharedExpensesRuntime runtime,
-    VoidCallback open,
+    Future<void> Function() open,
   ) async {
     try {
       final roster = await runtime.contextRoster(widget.contextId);
@@ -346,8 +350,11 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
     } catch (_) {
       // Fall through: the settle sheet shows its own recoverable error.
     }
-    if (mounted) open();
+    if (mounted) await open();
   }
+
+  /// One page, sheet or dialog at a time: repeated taps must not stack copies.
+  final _gate = SharedTapGate();
 
   SharedGroupPresentation? _data;
   Object? _error;
@@ -483,43 +490,47 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
               return SharedGroupScreen(
                 key: ValueKey('${runtime.store.namespace}:${widget.contextId}'),
                 data: data,
-                onAddExpense: widget.onAddExpense,
+                onAddExpense: () => unawaited(_gate.run(widget.onAddExpense)),
                 onMembers: () => unawaited(
-                  SharedMembersSheet.show(
-                    context,
-                    runtime: runtime,
-                    contextId: widget.contextId,
-                    groupName: data.title,
-                  ).then((left) {
+                  _gate.run(() async {
+                    final navigator = Navigator.of(context);
+                    final left = await SharedMembersSheet.show(
+                      context,
+                      runtime: runtime,
+                      contextId: widget.contextId,
+                      groupName: data.title,
+                    );
                     // Left the split: this screen has nothing left to show.
-                    if (left == true && mounted) {
-                      Navigator.of(context).maybePop();
-                    }
+                    if (left == true && mounted) unawaited(navigator.maybePop());
                   }),
                 ),
                 onOpenBalance: !runtime.settlementsEnabled
                     ? null
                     : (memberId) {
-                        final row = data.balances.items.firstWhere(
-                          (row) => row.id == memberId,
-                        );
+                        // The list may have reloaded since the tap was drawn.
+                        final row = data.balances.items
+                            .where((row) => row.id == memberId)
+                            .firstOrNull;
+                        if (row == null) return;
                         // Opposite obligations can coexist. Prefill one gross
                         // direction rather than offsetting debts or choosing
                         // the same member on both sides of the payment.
                         final paying = !row.balance.youOwe.isZero;
-                        return unawaited(
-                          _settleIfPossible(
-                            runtime,
-                            () => SharedSettleSheet.show(
-                              context,
-                              runtime: runtime,
-                              contextId: widget.contextId,
-                              upi: ref.read(upiPaymentServiceProvider),
-                              initialPayerId: paying ? null : memberId,
-                              initialReceiverId: paying ? memberId : null,
-                              initialAmount: paying
-                                  ? row.balance.youOwe
-                                  : row.balance.owedToYou,
+                        unawaited(
+                          _gate.run(
+                            () => _settleIfPossible(
+                              runtime,
+                              () => SharedSettleSheet.show(
+                                context,
+                                runtime: runtime,
+                                contextId: widget.contextId,
+                                upi: ref.read(upiPaymentServiceProvider),
+                                initialPayerId: paying ? null : memberId,
+                                initialReceiverId: paying ? memberId : null,
+                                initialAmount: paying
+                                    ? row.balance.youOwe
+                                    : row.balance.owedToYou,
+                              ),
                             ),
                           ),
                         );
@@ -527,22 +538,26 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
                 onSettleUp: !runtime.settlementsEnabled
                     ? null
                     : () => unawaited(
-                        _settleIfPossible(
-                          runtime,
-                          () => SharedSettleSheet.show(
-                            context,
-                            runtime: runtime,
-                            contextId: widget.contextId,
-                            upi: ref.read(upiPaymentServiceProvider),
+                        _gate.run(
+                          () => _settleIfPossible(
+                            runtime,
+                            () => SharedSettleSheet.show(
+                              context,
+                              runtime: runtime,
+                              contextId: widget.contextId,
+                              upi: ref.read(upiPaymentServiceProvider),
+                            ),
                           ),
                         ),
                       ),
                 onViewSettlements: () => unawaited(
-                  SharedSettlementsSheet.show(
-                    context,
-                    runtime: runtime,
-                    contextId: widget.contextId,
-                    groupName: data.title,
+                  _gate.run(
+                    () => SharedSettlementsSheet.show(
+                      context,
+                      runtime: runtime,
+                      contextId: widget.contextId,
+                      groupName: data.title,
+                    ),
                   ),
                 ),
                 onRetry: (_) => _reload(),
@@ -564,20 +579,22 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
                     _reload();
                   }
                 },
-                onOpenExpense:
-                    widget.onOpenExpense ??
-                    (id) => unawaited(
-                      showModalBottomSheet<void>(
-                        context: context,
-                        isScrollControlled: true,
-                        backgroundColor: BambooInk.paper,
-                        builder: (_) => SharedExpenseReviewSheet(
-                          runtime: runtime,
-                          contextId: widget.contextId,
-                          expenseId: id,
-                        ),
+                onOpenExpense: (id) => unawaited(
+                  _gate.run(() async {
+                    final open = widget.onOpenExpense;
+                    if (open != null) return open(id);
+                    await showModalBottomSheet<void>(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: BambooInk.paper,
+                      builder: (_) => SharedExpenseReviewSheet(
+                        runtime: runtime,
+                        contextId: widget.contextId,
+                        expenseId: id,
                       ),
-                    ),
+                    );
+                  }),
+                ),
               );
             },
           );

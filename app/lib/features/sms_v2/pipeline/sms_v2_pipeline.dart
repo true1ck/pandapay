@@ -10,6 +10,8 @@ import '../../../data/local/financial_store.dart';
 import '../../../data/local/sms_intake_repository.dart';
 import '../ledger/foreign_payment_bridge.dart';
 import '../ledger/projection_writer.dart';
+import '../ledger/subscription_projection.dart';
+import '../storage/subscription_store.dart';
 import '../storage/event_store.dart';
 import '../storage/fact_store.dart';
 import '../storage/instrument_store.dart';
@@ -79,10 +81,15 @@ class SmsV2Pipeline {
 
   /// A history chunk shares one link pass and one local transaction.
   /// Callers yield to the UI between chunks of at most 500 messages.
+  ///
+  /// [deferSubscriptionNotice]: the caller tells the readers of the saved
+  /// subscription rows itself, once, after a whole import (SmsV2Runtime.capture)
+  /// instead of once per chunk. Every other caller leaves it false.
   int processBatch(
     List<SmsMessage> messages, {
     bool backfill = false,
     bool retry = false,
+    bool deferSubscriptionNotice = false,
   }) {
     if (messages.length > 500) {
       throw ArgumentError('Maximum chunk is 500 messages');
@@ -321,8 +328,36 @@ class SmsV2Pipeline {
             ],
           );
         }
+        // Saved subscription rows follow the ledger, but capture never derives
+        // them: that is O(history), would hold the write lock, and a failure in
+        // it must not roll back (and so forever retry) the messages. Capture only
+        // marks them dirty (two small upserts); the next reader derives them
+        // once, off the UI isolate. Nothing here may fail the chunk.
+        var subscriptionsChanged = false;
+        try {
+          subscriptionsChanged = SubscriptionProjection.touchesSubscriptions(
+            _db,
+            namespace,
+            incoming,
+          );
+        } catch (_) {
+          subscriptionsChanged = true; // unsure: say so, derive later
+        }
+        if (subscriptionsChanged) {
+          try {
+            SubscriptionStore(_db, namespace: namespace).markDirty();
+          } catch (_) {
+            // The rows are derived data; a reader rebuilds them if ever missing.
+          }
+        }
         _db.execute('RELEASE SAVEPOINT sms_v2_process');
-        financial.notifyExternalChanges(namespace, const ['observations']);
+        // Open screens refresh once the chunk is committed (the capture worker
+        // hands these names back after its COMMIT). A history import in capture
+        // says so once, at its end, instead of once per chunk.
+        financial.notifyExternalChanges(namespace, [
+          'observations',
+          if (subscriptionsChanged && !deferSubscriptionNotice) 'subscriptions',
+        ]);
       } catch (_) {
         _db.execute('ROLLBACK TO SAVEPOINT sms_v2_process');
         _db.execute('RELEASE SAVEPOINT sms_v2_process');
@@ -331,6 +366,7 @@ class SmsV2Pipeline {
     });
     if (!retry && brokeNewHistory) {
       _retryWaitingForHistory(
+        deferSubscriptionNotice: deferSubscriptionNotice,
         backfill: backfill,
         newest: newest!,
         justRead: unique.keys.toSet(),
@@ -348,6 +384,7 @@ class SmsV2Pipeline {
   /// before the chunk that holds its statement. A message whose capture is gone,
   /// or that is older than the history window, is forgotten.
   void _retryWaitingForHistory({
+    required bool deferSubscriptionNotice,
     required bool backfill,
     required DateTime newest,
     required Set<String> justRead,
@@ -383,7 +420,12 @@ class SmsV2Pipeline {
       if (messages.length >= _retryLimit) break;
     }
     if (messages.isNotEmpty) {
-      processBatch(messages, backfill: backfill, retry: true);
+      processBatch(
+        messages,
+        backfill: backfill,
+        retry: true,
+        deferSubscriptionNotice: deferSubscriptionNotice,
+      );
     }
   }
 
@@ -724,6 +766,8 @@ class SmsV2Pipeline {
       instrumentsById: instrumentsById,
       categoryIdBySlug: categoryIdBySlug,
       instrumentIdByFactId: instrumentIds,
+      // Capture marks the subscription rows dirty itself, once per chunk.
+      markSubscriptionsDirty: false,
     );
     for (final entry in changed.entries) {
       _outbox.enqueue(

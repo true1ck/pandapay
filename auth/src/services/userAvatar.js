@@ -6,7 +6,13 @@
 
 // The app draws these; the server only needs to know the ids are real, so a
 // client cannot store arbitrary text in the column.
-const PRESETS = Object.freeze(['panda', 'bamboo', 'sun', 'wave', 'berry', 'forest', 'dusk', 'night']);
+// The first line is the older symbol avatars (still valid, so nobody loses theirs);
+// the rest are the panda illustrations the picker offers now (app/assets/avatars).
+const PRESETS = Object.freeze([
+  'panda', 'bamboo', 'sun', 'wave', 'berry', 'forest', 'dusk', 'night',
+  'cool', 'coin', 'explorer', 'snack', 'verified', 'party',
+  'phone', 'sleepy', 'hero', 'shopper', 'secure', 'music',
+]);
 
 const MAX_PHOTO_BYTES = 200 * 1024;
 const MIN_PHOTO_BYTES = 100;

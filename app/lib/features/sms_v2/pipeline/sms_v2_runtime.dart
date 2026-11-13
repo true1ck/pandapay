@@ -26,6 +26,7 @@ import '../../sms_import/sms_text_hint.dart';
 import '../storage/bundle_store.dart';
 import '../storage/outbox_store.dart';
 import '../storage/schema.dart';
+import '../storage/subscription_store.dart';
 import '../storage/sync_state_store.dart';
 import '../storage/provisional_store.dart';
 import '../storage/stats_store.dart';
@@ -41,6 +42,7 @@ import '../sync/sync_pull.dart';
 import 'capture_executor.dart';
 import 'capture_worker.dart';
 import 'receipt_review.dart';
+import 'owner_recheck.dart';
 import 'rules_refresh.dart';
 
 /// One foreground account owner. Capture is available offline, and the
@@ -243,6 +245,12 @@ class SmsV2Runtime {
               financial.notifyExternalChanges(namespace, entities),
         ),
       );
+    }
+    // A history import marked the saved subscription rows dirty instead of
+    // re-deriving them per chunk. Tell the readers once, now that it is over.
+    if (SubscriptionStore(financial.database.db, namespace: namespace)
+        .isDirty) {
+      financial.notifyExternalChanges(namespace, const ['subscriptions']);
     }
   }
 
@@ -533,6 +541,7 @@ class SmsV2Runtime {
       }
     });
     await guarded(_withdrawRejectedAiReadings);
+    await guarded(_recheckIfRequested);
     final active = ProvisionalStore(_state).overlay(_bundle!);
     final previousRevision = _state.get('pipeline:revision');
     if (previousRevision != _revision(active.revision)) {
@@ -580,6 +589,71 @@ class SmsV2Runtime {
       }
     }
     return read;
+  }
+
+  /// Asks the next sync to read again the messages whose reading depends on who
+  /// the account owner is (their name, or a payee they marked). [revert] also
+  /// re-reads own transfers whose name no longer matches (a name was removed).
+  void requestOwnerRecheck({bool revert = false}) {
+    final pending = _state.get('owner:recheck');
+    _state.put('owner:recheck', revert || pending == 'revert' ? 'revert' : '1');
+  }
+
+  Future<void> _recheckIfRequested() async {
+    final flag = _state.get('owner:recheck');
+    if (flag == null || flag.isEmpty) return;
+    await _recheckOwnTransfers(revertUnmatched: flag == 'revert');
+    _state.put('owner:recheck', '');
+  }
+
+  /// Reads again every earlier message whose reading changes with the owner's
+  /// identity, now. Serialized with sync. Returns how many messages were read
+  /// again.
+  Future<int> recheckOwnTransfers({bool revertUnmatched = false}) async {
+    final running = _running;
+    if (running != null) {
+      try {
+        await running;
+      } catch (_) {}
+    }
+    final done = Completer<void>();
+    final marker = done.future;
+    _running = marker;
+    try {
+      final n = await _recheckOwnTransfers(revertUnmatched: revertUnmatched);
+      _state.put('owner:recheck', '');
+      return n;
+    } finally {
+      done.complete();
+      if (identical(_running, marker)) _running = null;
+    }
+  }
+
+  Future<int> _recheckOwnTransfers({required bool revertUnmatched}) async {
+    _checkAccount();
+    final active = await activeBundle();
+    final identity = OwnerIdentity.fromEntries(ownerNames());
+    final sources = OwnerRecheck(
+      financial: financial,
+      namespace: namespace,
+      bundle: active,
+      categoryIdBySlug: categoryIdBySlug,
+    ).sourcesToRecheck(identity, revertUnmatched: revertUnmatched);
+    if (sources.isEmpty) return 0;
+    final intake = SmsIntakeRepository(financial.database);
+    final taken = AiWithdrawal(
+      financial: financial,
+      namespace: namespace,
+      bundle: active,
+      categoryIdBySlug: categoryIdBySlug,
+    ).withdraw(sources);
+    final messages = <QueuedSms>[
+      for (final source in taken)
+        if (intake.capturedById(namespace, source) case final entry?)
+          entry.message,
+    ];
+    if (messages.isNotEmpty) await capture(messages, backfill: true);
+    return taken.length;
   }
 
   /// Once the server says a layout's AI rule was rejected (or could not be

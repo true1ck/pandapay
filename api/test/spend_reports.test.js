@@ -13,6 +13,8 @@ const {
   spendByInstrument,
   spendByCardCategory,
   spendSeries,
+  periodTotals,
+  spendByMerchant,
 } = require('../src/spend_reports');
 
 /**
@@ -359,4 +361,44 @@ test('card/category breakdown preserves payment method and category together', a
       },
     ],
   );
+});
+
+test('periodTotals keeps spend the person left out of spending apart, and keeps its rewards', async () => {
+  const client = {
+    query: async () => ({
+      rows: [
+        { entry_kind: 'spend', exclude_from_spend: false, total: '1000', txn_count: '2', rewards: '10' },
+        { entry_kind: 'spend', exclude_from_spend: true, total: '400', txn_count: '1', rewards: '4' },
+        { entry_kind: 'income', exclude_from_spend: false, total: '5000', txn_count: '1', rewards: '0' },
+        { entry_kind: 'investment', exclude_from_spend: false, total: '700', txn_count: '1', rewards: '0' },
+        { entry_kind: 'investment_return', exclude_from_spend: false, total: '300', txn_count: '1', rewards: '0' },
+      ],
+    }),
+  };
+  const t = await periodTotals(client, 'u', { start: new Date(0), end: new Date(1) });
+  // Spending leaves the excluded 400 out ...
+  assert.equal(t.spend.totalInr, 1000);
+  assert.equal(t.spend.txnCount, 2);
+  // ... but it is still money that left the account, and it still earned rewards.
+  assert.equal(t.excludedSpend.totalInr, 400);
+  assert.equal(t.spend.rewardsInr, 14);
+  assert.equal(t.income.totalInr, 5000);
+  assert.equal(t.investment.totalInr, 700);
+  assert.equal(t.investmentReturn.totalInr, 300);
+});
+
+test('every spending query leaves out transactions excluded from spending', async () => {
+  const seen = [];
+  const client = { query: async (sql) => { seen.push(sql); return { rows: [{ total: 0, txn_count: 0 }] }; } };
+  const range = { start: new Date(0), end: new Date(1) };
+  await spendByCategory(client, 'u', range);
+  await spendByMerchant(client, 'u', range);
+  await spendByInstrument(client, 'u', range);
+  await spendByCard(client, 'u', range);
+  await spendByCardCategory(client, 'u', range);
+  await budgetSpend(client, 'u', { scope: 'overall' }, range);
+  assert.equal(seen.length, 6);
+  for (const sql of seen) {
+    assert.match(sql, /NOT (t\.)?exclude_from_spend/, sql.slice(0, 80));
+  }
 });

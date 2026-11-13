@@ -571,6 +571,50 @@ class FinancialStore {
     );
   }
 
+  /// Re-keys a server [row] onto the existing local row [localId]. The server
+  /// twin of an SMS (`v2:`) row never carries "don't count in spending" (the
+  /// choice is not sent for SMS rows), so the phone's value wins; otherwise a
+  /// refresh would silently count the amount in spending again.
+  static TransactionEntry _remapOntoLocal(
+    TransactionEntry row,
+    String localId,
+    Map<String, bool> localExcluded,
+  ) => TransactionEntry.fromJson({
+    ...row.toJson(),
+    'id': localId,
+    if (localId.startsWith('v2:'))
+      'exclude_from_spend': localExcluded[localId] == true,
+  });
+
+  /// A "don't count in spending" choice still waiting in the command outbox is
+  /// newer than any server row, so it wins over what a refresh brings back.
+  /// Without this the flag flickers off between the tap and the flush. One read
+  /// of the (tiny) outbox per save, never per row.
+  List<TransactionEntry> _keepPendingSpendExclusions(
+    String ns,
+    List<TransactionEntry> rows,
+  ) {
+    if (rows.isEmpty) return rows;
+    final pending = <String, bool>{};
+    for (final command in database.db.select(
+      "SELECT target, payload_json FROM command_outbox WHERE namespace=? AND kind='set_spend_exclusion' ORDER BY id",
+      [ns],
+    )) {
+      final payload = jsonDecode(command['payload_json'] as String);
+      if (payload is Map && payload['excluded'] is bool) {
+        pending[command['target'] as String] = payload['excluded'] as bool;
+      }
+    }
+    if (pending.isEmpty) return rows;
+    return [
+      for (final row in rows)
+        if (pending[row.id] != null && pending[row.id] != row.excludeFromSpend)
+          row.copyWith(excludeFromSpend: pending[row.id])
+        else
+          row,
+    ];
+  }
+
   void saveTransactions(
     String ns,
     List<TransactionEntry> rows, {
@@ -580,23 +624,28 @@ class FinancialStore {
     final remoteEvents = rows.where((row) => row.eventId != null && row.id != 'v2:${row.eventId}').map((row) => row.eventId!).toSet().toList();
     if (remoteEvents.isNotEmpty) {
       final byEvent = <String, String>{};
+      // The "don't count in spending" choice of each local row a server row is
+      // remapped onto. For an SMS (v2) row it exists only on the phone.
+      final localExcluded = <String, bool>{};
       for (var offset = 0; offset < remoteEvents.length; offset += 400) {
         final chunk = remoteEvents.skip(offset).take(400).toList();
         final marks = List.filled(chunk.length, '?').join(',');
         for (final row in database.db.select(
-          "SELECT id,json_extract(payload,'\$.event_id') AS event_id FROM financial_entities WHERE namespace=? AND entity='transactions' AND json_extract(payload,'\$.event_id') IN ($marks)",
+          "SELECT id,json_extract(payload,'\$.event_id') AS event_id,json_extract(payload,'\$.exclude_from_spend') AS excluded FROM financial_entities WHERE namespace=? AND entity='transactions' AND json_extract(payload,'\$.event_id') IN ($marks)",
           [ns, ...chunk],
         )) {
           byEvent[row['event_id'] as String] = row['id'] as String;
+          localExcluded[row['id'] as String] = row['excluded'] == 1;
         }
       }
       rows = [
         for (final row in rows)
           if (byEvent[row.eventId] != null && byEvent[row.eventId] != row.id)
-            TransactionEntry.fromJson({...row.toJson(), 'id': byEvent[row.eventId]})
+            _remapOntoLocal(row, byEvent[row.eventId]!, localExcluded)
           else row,
       ];
     }
+    rows = _keepPendingSpendExclusions(ns, rows);
     var changed = false;
     final timestamp = (at ?? DateTime.now()).millisecondsSinceEpoch;
     _transaction(() {
@@ -1050,6 +1099,33 @@ class FinancialStore {
             ? restoredNote
             : null,
       },
+      DateTime.now().millisecondsSinceEpoch,
+      sourceKey: body['source_key'] as String?,
+    );
+    _notify(ns);
+  }
+
+  /// Sets the "don't count in spending" choice on the stored row. Nothing else
+  /// about the row changes: it stays active, visible and in Money out.
+  void setExcludeFromSpend(String ns, String id, bool excluded) {
+    final rows = database.db.select(
+      "SELECT payload FROM financial_entities WHERE namespace=? AND entity='transactions' AND id=?",
+      [ns, id],
+    );
+    if (rows.isEmpty) return;
+    final body =
+        jsonDecode(rows.single['payload'] as String) as Map<String, dynamic>;
+    final next = {...body};
+    if (excluded) {
+      next['exclude_from_spend'] = true;
+    } else {
+      next.remove('exclude_from_spend');
+    }
+    _upsert(
+      ns,
+      'transactions',
+      id,
+      next,
       DateTime.now().millisecondsSinceEpoch,
       sourceKey: body['source_key'] as String?,
     );

@@ -15,6 +15,7 @@ import 'package:pandapay/features/shared_expenses/runtime/shared_runtime.dart';
 import 'package:pandapay/features/shared_expenses/runtime/shared_providers.dart';
 import 'package:pandapay/features/shared_expenses/storage/shared_store.dart';
 import 'package:pandapay/features/shared_expenses/data/shared_directory.dart';
+import 'package:pandapay/features/shared_expenses/data/shared_invitations.dart';
 import 'package:pandapay/features/shared_expenses/ui/shared_invite_inbox.dart';
 import 'package:pandapay/features/shared_expenses/ui/shared_members_sheet.dart';
 import 'package:pandapay/features/shared_expenses/ui/shared_settle_sheet.dart';
@@ -35,6 +36,23 @@ class Runtime extends SharedExpensesRuntime {
   List<SharedInboxInvite> invites = const [];
   final answered = <String>[];
   final left = <String>[];
+  final linkModes = <bool>[];
+  @override
+  Future<SharedGroupLinkStatus> groupLinkStatus(String contextId) async =>
+      const SharedGroupLinkStatus(active: false, expired: false);
+  @override
+  Future<SharedInviteLink> createGroupLink(
+    String contextId, {
+    bool autoJoin = false,
+  }) async {
+    linkModes.add(autoJoin);
+    return SharedInviteLink(
+      invitationId: report,
+      token: 'a' * 43,
+      url: 'https://example.test/split/join/${'a' * 43}',
+    );
+  }
+
   Object? leaveError;
   @override
   Future<void> leaveContext(String contextId) async {
@@ -151,6 +169,48 @@ void main() {
     expect(find.text('Make owner'), findsOneWidget);
     expect(find.text('Leave this split'), findsNothing);
     expect(find.textContaining('Take over'), findsNothing);
+  });
+
+  testWidgets('creating a link asks who may join, open by default', (
+    tester,
+  ) async {
+    runtime.people = [
+      const SharedEditorMember(me, 'You', profileId: account, role: 'owner'),
+    ];
+    await openMembers(tester);
+    await tester.tap(find.text('Create link'));
+    await tester.pumpAndSettle();
+    expect(find.text('Who can join with this link?'), findsOneWidget);
+    expect(runtime.linkModes, isEmpty, reason: 'nothing is made before asking');
+    await tester.tap(find.byKey(const Key('link-mode-open')));
+    await tester.pumpAndSettle();
+    expect(runtime.linkModes, [true]);
+  });
+
+  testWidgets('the owner can choose to approve each person instead', (
+    tester,
+  ) async {
+    runtime.people = [
+      const SharedEditorMember(me, 'You', profileId: account, role: 'owner'),
+    ];
+    await openMembers(tester);
+    await tester.tap(find.text('Create link'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('link-mode-approve')));
+    await tester.pumpAndSettle();
+    expect(runtime.linkModes, [false]);
+  });
+
+  testWidgets('dismissing the question makes no link', (tester) async {
+    runtime.people = [
+      const SharedEditorMember(me, 'You', profileId: account, role: 'owner'),
+    ];
+    await openMembers(tester);
+    await tester.tap(find.text('Create link'));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
+    expect(runtime.linkModes, isEmpty);
   });
 
   testWidgets('a member can leave, and sees a deleted account as history', (

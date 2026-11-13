@@ -262,6 +262,7 @@ flutter:
   assets:
     - assets/logo/pandapay_mark.png
     - assets/illustrations/
+    - assets/avatars/
     - assets/data/bundled_catalogue.json
     - assets/sms_rules/
 

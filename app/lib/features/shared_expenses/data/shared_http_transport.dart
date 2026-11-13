@@ -472,9 +472,13 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
 
   /// Owner-only: creates (or, with a new [linkId], replaces) the group's
   /// shared join link. The previous link stops working immediately.
+  ///
+  /// [autoJoin] true: anyone with the link joins at once. false: the owner
+  /// approves each person (what every link did before).
   Future<SharedInviteLink> createGroupLink({
     required String contextId,
     required String linkId,
+    bool autoJoin = false,
   }) async {
     if (!sharedUuid(contextId) || !sharedUuid(linkId)) {
       throw ArgumentError('Invalid identifier');
@@ -482,7 +486,11 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
     final value = (await _request(
       'POST',
       '/shared-expenses/groups/link',
-      body: jsonEncode({'contextId': contextId, 'linkId': linkId}),
+      body: jsonEncode({
+        'contextId': contextId,
+        'linkId': linkId,
+        'autoJoin': autoJoin,
+      }),
     ))!;
     final url = value['joinUrl'];
     final token = url is String

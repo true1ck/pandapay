@@ -136,7 +136,12 @@ class ActivityProjection {
         continue;
       activeCount++;
       if (entry.amount.paise <= 0) continue;
-      if (entry.entryKind == TxnEntryKind.income) {
+      // Money in is income plus money back from investments; Money out is
+      // spending plus money put into investments. Transfers, card bills and
+      // refunds (netted inside spend) are in neither. The ledger path and this
+      // fallback must agree, so both use the same two definitions.
+      if (entry.entryKind == TxnEntryKind.income ||
+          entry.entryKind == TxnEntryKind.investmentReturn) {
         incomingPaise += entry.amount.paise;
       } else if (entry.entryKind == TxnEntryKind.spend ||
           entry.entryKind == TxnEntryKind.investment) {
@@ -144,9 +149,11 @@ class ActivityProjection {
       }
     }
     final incoming = Money.fromPaise(
-      ledgerTotals?.incomeMinor ?? incomingPaise,
+      ledgerTotals?.moneyInMinor ?? incomingPaise,
     );
-    final outgoing = Money.fromPaise(ledgerTotals?.spendMinor ?? outgoingPaise);
+    final outgoing = Money.fromPaise(
+      ledgerTotals?.moneyOutMinor ?? outgoingPaise,
+    );
     activeCount = ledgerTotals?.transactionCount ?? activeCount;
     final summary = ActivityListRow.summary(
       totalIncoming: incoming,

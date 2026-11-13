@@ -24,10 +24,13 @@ import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
 import '../auth/login_screen.dart';
 import 'activity_projection.dart';
+import 'spend_exclusion.dart';
+import 'transaction_reward_label.dart';
 import 'foreign_payments_screen.dart';
 import 'deleted_transactions_screen.dart';
 import 'local_category_learning.dart';
 import '../../data/local/sms_intake_repository.dart';
+import 'transaction_badge.dart';
 import '../sms_v2/storage/outbox_store.dart';
 import '../sms_v2/sync/learning_signals.dart';
 import '../sms_v2/ui/review_controller.dart'
@@ -728,6 +731,49 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     }
   }
 
+  /// Leaves the selected spend transactions out of (or back in) the person's
+  /// spending. Other kinds in the selection are skipped and counted.
+  Future<void> _bulkSpendExclusion(
+    List<TransactionEntry> visible, {
+    required bool excluded,
+  }) async {
+    if (_isBulkOperating) return;
+    final selected = visible
+        .where((entry) => _selectedIds.contains(entry.id))
+        .toList();
+    if (selected.isEmpty) return;
+    setState(() => _isBulkOperating = true);
+    try {
+      final changed = await setSpendExclusion(ref, selected, excluded: excluded);
+      ref.invalidate(activityTransactionsProvider);
+      if (!mounted) return;
+      final skipped = selected.where((e) => !canExcludeFromSpend(e)).length;
+      setState(() {
+        _selectedIds.clear();
+        _selecting = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            changed == 0
+                ? 'Nothing to change: only settled spending can be left out of spending.'
+                : '${excluded ? 'Left' : 'Added'} $changed transaction${changed == 1 ? '' : 's'} '
+                      '${excluded ? 'out of' : 'back to'} your spending'
+                      '${skipped > 0 ? '. $skipped other${skipped == 1 ? '' : 's'} skipped.' : ''}',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _isBulkOperating = false);
+    }
+  }
+
   void _openBulkEditSheet(List<TransactionEntry> visible) {
     final tagsAvailable = ref.read(transactionTagsProvider) != null;
     showModalBottomSheet<void>(
@@ -760,6 +806,14 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         onAssignCard: () {
           Navigator.of(sheetContext).pop();
           _bulkAssignCard(visible);
+        },
+        onLeaveOutOfSpending: () {
+          Navigator.of(sheetContext).pop();
+          _bulkSpendExclusion(visible, excluded: true);
+        },
+        onCountInSpending: () {
+          Navigator.of(sheetContext).pop();
+          _bulkSpendExclusion(visible, excluded: false);
         },
       ),
     );
@@ -1802,14 +1856,17 @@ extension on _ActivityTypeFilter {
 
   bool matches(TransactionEntry entry) => switch (this) {
     _ActivityTypeFilter.all => true,
-    _ActivityTypeFilter.spending => entry.entryKind == TxnEntryKind.spend,
-    _ActivityTypeFilter.moneyIn => entry.entryKind == TxnEntryKind.income,
+    _ActivityTypeFilter.spending => entry.countsAsSpend,
+    _ActivityTypeFilter.moneyIn =>
+      entry.entryKind == TxnEntryKind.income ||
+          entry.entryKind == TxnEntryKind.investmentReturn,
     _ActivityTypeFilter.moneyOut =>
       entry.entryKind == TxnEntryKind.spend ||
           entry.entryKind == TxnEntryKind.investment,
     _ActivityTypeFilter.transfers => entry.entryKind == TxnEntryKind.transfer,
     _ActivityTypeFilter.investments =>
       entry.entryKind == TxnEntryKind.investment ||
+          entry.entryKind == TxnEntryKind.investmentReturn ||
           entry.categoryId == 'investments' ||
           (entry.categoryName?.toLowerCase() == 'investments'),
   };
@@ -3517,47 +3574,6 @@ class _SummaryMetric extends StatelessWidget {
   }
 }
 
-/// The tinted pill beside a transaction title — Refund, Reversal or Transfer.
-class _MovementChip extends StatelessWidget {
-  const _MovementChip({
-    required this.label,
-    required this.tint,
-    required this.fillAlpha,
-    required this.borderAlpha,
-    this.textColor,
-  });
-
-  final String label;
-  final Color tint;
-  final double fillAlpha;
-  final double borderAlpha;
-  final Color? textColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(top: 2),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-      decoration: BoxDecoration(
-        color: tint.withValues(alpha: fillAlpha),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: tint.withValues(alpha: borderAlpha),
-          width: 0.8,
-        ),
-      ),
-      child: Text(
-        label,
-        style: BambooFonts.ui(
-          10.5,
-          weight: FontWeight.w700,
-          color: textColor ?? tint,
-        ),
-      ),
-    );
-  }
-}
-
 class _TransactionTile extends StatelessWidget {
   final TransactionEntry entry;
   final ForeignPayment? foreignPayment;
@@ -3582,7 +3598,12 @@ class _TransactionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isIncome = entry.entryKind == TxnEntryKind.income;
+    final isInvestmentReturn =
+        entry.entryKind == TxnEntryKind.investmentReturn;
+    // Money back from an investment reads as money in (+, downward arrow) even
+    // though it is never earned income.
+    final isIncome =
+        entry.entryKind == TxnEntryKind.income || isInvestmentReturn;
     final isInvestmentCategory =
         entry.categoryId == 'investments' ||
         entry.categoryName?.toLowerCase() == 'investments';
@@ -3634,12 +3655,26 @@ class _TransactionTile extends StatelessWidget {
     // Reversal claims it, the name keeps its verb — a row must not lose the
     // transfer cue and the chip in the same breath.
     final showTransferChip = transferPayee != null && !isRefund && !isReversal;
+    // Investments carry their own chip, the same way Refund and Reversal do, so
+    // a SIP or a redemption is recognisable in the list without opening it.
+    final showInvestmentChip =
+        (entry.entryKind == TxnEntryKind.investment || isInvestmentReturn) &&
+        !isRefund &&
+        !isReversal &&
+        !showTransferChip;
+    // Money that moved between the person's own accounts, to family, to a card
+    // bill or into a wallet says so on the row, so it is never mistaken for
+    // spending or income.
+    final badge = txnBadgeKind(entry);
+    final showSelfChip = badge != null && badge.isTransfer;
     final nameDisplay = showTransferChip ? transferPayee : merchantDisplay;
     final subtitleParts = <String>[
       if (foreignPayment != null)
         '${foreignPayment!.originalLabel} · Foreign currency',
       isSmsImported ? '$timeLabel · SMS' : timeLabel,
-      if (entry.entryKind != TxnEntryKind.spend || isInvestmentCategory)
+      if ((entry.entryKind != TxnEntryKind.spend || isInvestmentCategory) &&
+          !showInvestmentChip &&
+          !showSelfChip)
         entryLabel,
       if (entry.cardDisplayName != null) entry.cardDisplayName!,
       if (entry.cardDisplayName == null &&
@@ -3658,10 +3693,10 @@ class _TransactionTile extends StatelessWidget {
               entry.merchantName == 'Amazon Pay Later'))
         'Amazon Pay Later',
       if (isIgnored) 'Excluded from spend',
-      if (entry.status == 'active' &&
-          entry.rewardState == 'estimated' &&
-          (entry.source == 'sms' || entry.source == 'sms_bulk'))
-        'Pending confirmation',
+      if (!isIgnored && entry.excludeFromSpend) 'Not counted in spending',
+      // The reward this card spend earned (priced by the server). Nothing for a
+      // payment that cannot earn one, and nothing until it has been priced.
+      if (activityRewardChip(entry) case final chip?) chip,
       // The Transfer chip is what replaces this segment, so the category goes
       // only when the chip is actually on the row. `other` is one of the
       // canonical fifteen and a user can pick it deliberately — nothing here
@@ -3713,7 +3748,8 @@ class _TransactionTile extends StatelessWidget {
                           ? Icons.undo_rounded
                           : isIgnored
                           ? Icons.block_rounded
-                          : (isInvestmentCategory && isIncome)
+                          : ((isInvestmentCategory || isInvestmentReturn) &&
+                                isIncome)
                           ? Icons.trending_up_rounded
                           : isIncome
                           ? Icons.arrow_downward_rounded
@@ -3786,34 +3822,24 @@ class _TransactionTile extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (isRefund) ...[
+                        if (badge != null) ...[
                           const SizedBox(width: AppSpace.xs),
-                          const _MovementChip(
-                            label: 'Refund',
-                            tint: BambooInk.jade,
-                            fillAlpha: 0.12,
-                            borderAlpha: 0.3,
-                          ),
-                        ] else if (isReversal) ...[
-                          const SizedBox(width: AppSpace.xs),
-                          const _MovementChip(
-                            label: 'Reversal',
-                            tint: BambooInk.amber,
-                            fillAlpha: 0.15,
-                            borderAlpha: 0.35,
-                          ),
+                          TransactionBadgePill(kind: badge),
                         ] else if (showTransferChip) ...[
                           // Neutral: jade and amber stay reserved for the
                           // Refund/Reversal money moves.
                           const SizedBox(width: AppSpace.xs),
-                          _MovementChip(
-                            label: entry.entryKind == TxnEntryKind.transfer
+                          TransactionBadgePill.plain(
+                            entry.entryKind == TxnEntryKind.transfer
                                 ? 'Transfer'
                                 : 'Payment',
-                            tint: BambooInk.ink900,
-                            fillAlpha: 0.07,
-                            borderAlpha: 0.14,
-                            textColor: BambooInk.ink700,
+                          ),
+                        ] else if (showInvestmentChip) ...[
+                          const SizedBox(width: AppSpace.xs),
+                          TransactionBadgePill.plain(
+                            isInvestmentReturn
+                                ? 'Investment return'
+                                : 'Investment',
                           ),
                         ],
                       ],
@@ -3848,8 +3874,7 @@ class _TransactionTile extends StatelessWidget {
                     entry.amount,
                     prefix: amountPrefix,
                     confidence: Confidence.estimated,
-                    // The subtitle already carries "Pending confirmation", so the
-                    // hourglass only pushed the figure off the row's right edge.
+                    // The hourglass only pushed the figure off the row's right edge.
                     showConfidenceIcon: false,
                     style:
                         BambooFonts.money(
@@ -4066,6 +4091,8 @@ class _BulkEditSheet extends StatelessWidget {
   final VoidCallback? onAddTags;
   final VoidCallback? onRemoveTags;
   final VoidCallback onAssignCard;
+  final VoidCallback onLeaveOutOfSpending;
+  final VoidCallback onCountInSpending;
 
   const _BulkEditSheet({
     required this.count,
@@ -4074,6 +4101,8 @@ class _BulkEditSheet extends StatelessWidget {
     this.onAddTags,
     this.onRemoveTags,
     required this.onAssignCard,
+    required this.onLeaveOutOfSpending,
+    required this.onCountInSpending,
   });
 
   @override
@@ -4128,6 +4157,20 @@ class _BulkEditSheet extends StatelessWidget {
               title: 'Assign to a card',
               subtitle: 'Move all $n under one card',
               onTap: onAssignCard,
+            ),
+            const SizedBox(height: AppSpace.xs),
+            _BulkEditTile(
+              icon: Icons.visibility_off_outlined,
+              title: "Don't count in spending",
+              subtitle: 'Keep all $n in history and Money out, not in spending',
+              onTap: onLeaveOutOfSpending,
+            ),
+            const SizedBox(height: AppSpace.xs),
+            _BulkEditTile(
+              icon: Icons.add_circle_outline_rounded,
+              title: 'Count in spending again',
+              subtitle: 'Add all $n back to your spending',
+              onTap: onCountInSpending,
             ),
           ],
         ),

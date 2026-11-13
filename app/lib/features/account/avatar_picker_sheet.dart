@@ -81,17 +81,9 @@ class _AvatarPickerSheet extends StatelessWidget {
               style: BambooFonts.ui(13, color: BambooInk.ink500, height: 1.5),
             ),
             const SizedBox(height: AppSpace.lg),
-            Wrap(
-              spacing: 14,
-              runSpacing: 14,
-              children: [
-                for (final preset in avatarPresets)
-                  _PresetTile(
-                    preset: preset,
-                    selected: !hasPhoto && currentPreset == preset.id,
-                    onTap: () => Navigator.of(context).pop(ChoosePreset(preset.id)),
-                  ),
-              ],
+            _PresetCarousel(
+              currentPreset: hasPhoto ? null : currentPreset,
+              onPick: (id) => Navigator.of(context).pop(ChoosePreset(id)),
             ),
             const SizedBox(height: AppSpace.xl),
             _SheetButton(
@@ -130,6 +122,80 @@ class _AvatarPickerSheet extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The avatars in two rows that scroll sideways together. The next column peeks in
+/// at the edge so it is obvious there are more, and it opens already scrolled to the
+/// person's current avatar. Every tile is built up front (a couple of dozen, each a
+/// single emoji), so none is missing from the tree while off screen.
+class _PresetCarousel extends StatefulWidget {
+  final String? currentPreset;
+  final ValueChanged<String> onPick;
+  const _PresetCarousel({required this.currentPreset, required this.onPick});
+
+  @override
+  State<_PresetCarousel> createState() => _PresetCarouselState();
+}
+
+class _PresetCarouselState extends State<_PresetCarousel> {
+  static const double _tile = 68; // avatar 58 + 3 padding + 2 border, each side
+  static const double _gap = 12;
+  static const double _rowGap = 12;
+
+  late final ScrollController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    final index = avatarPresets.indexWhere((p) => p.id == widget.currentPreset);
+    // Two avatars per column. Put the chosen one's column second from the left so a
+    // neighbour is visible on each side.
+    final column = index < 0 ? 0 : index ~/ 2;
+    final offset = (column - 1) * (_tile + _gap);
+    _controller = ScrollController(initialScrollOffset: offset < 0 ? 0 : offset);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final columns = <Widget>[];
+    for (var i = 0; i < avatarPresets.length; i += 2) {
+      if (columns.isNotEmpty) columns.add(const SizedBox(width: _gap));
+      columns.add(
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _tileFor(avatarPresets[i]),
+            if (i + 1 < avatarPresets.length) ...[
+              const SizedBox(height: _rowGap),
+              _tileFor(avatarPresets[i + 1]),
+            ],
+          ],
+        ),
+      );
+    }
+    return SizedBox(
+      key: const Key('avatar-carousel'),
+      height: _tile * 2 + _rowGap + 4,
+      child: SingleChildScrollView(
+        controller: _controller,
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: columns),
+      ),
+    );
+  }
+
+  Widget _tileFor(AvatarPreset preset) => _PresetTile(
+    preset: preset,
+    selected: widget.currentPreset == preset.id,
+    onTap: () => widget.onPick(preset.id),
+  );
 }
 
 class _PresetTile extends StatelessWidget {

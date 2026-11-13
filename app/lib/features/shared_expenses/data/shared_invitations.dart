@@ -80,6 +80,10 @@ final class SharedInvitePreview {
   /// the account has no verified phone. Never a full number.
   final String? ownPhoneMask;
 
+  /// A group link the owner opened to everyone: opening it joins at once, with
+  /// no request for the owner to answer. False for approval links and invites.
+  final bool autoJoin;
+
   /// `group_link` for a group's shared link, otherwise `invitation`.
   final String kind;
   bool get isGroupLink => kind == 'group_link';
@@ -89,6 +93,7 @@ final class SharedInvitePreview {
     required this.memberName,
     required this.status,
     required this.phoneBound,
+    this.autoJoin = false,
     this.phoneSharing = false,
     this.ownerName,
     this.ownPhoneMask,
@@ -120,6 +125,7 @@ final class SharedInvitePreview {
       memberName: text('memberName'),
       status: text('status'),
       phoneBound: value['phoneBound'] as bool,
+      autoJoin: value['autoJoin'] == true,
       phoneSharing: value['phoneSharing'] == true,
       ownerName: optional('ownerName', 100),
       ownPhoneMask: optional('ownPhoneMask', 40),

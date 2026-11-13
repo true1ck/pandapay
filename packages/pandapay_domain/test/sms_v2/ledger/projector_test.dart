@@ -523,6 +523,123 @@ void main() {
     },
   );
 
+  test(
+    'Money out counts gross investments and Money in counts investment returns, never income',
+    () {
+      final invest = event(EventType.investment, [debit]);
+      final payout = event(
+        EventType.investmentWithdrawal,
+        [credit],
+        roles: [LegRole.creditLeg],
+      );
+      final rows = [
+        for (final e in [invest, payout])
+          ...projector.project(
+            e,
+            facts([debit, credit]),
+            h.allInstruments,
+            null,
+          ),
+      ];
+      final t = projector.totals(
+        rows,
+        [invest, payout],
+        at,
+        at.add(const Duration(days: 1)),
+      );
+      // The net figure still cancels, but the two gross figures do not: the
+      // withdrawal must not shrink Money out, and must not become income.
+      expect(t.investmentMinor, 0);
+      expect(t.investmentOutMinor, greaterThan(0));
+      expect(t.investmentReturnMinor, greaterThan(0));
+      expect(t.incomeMinor, 0);
+      expect(t.spendMinor, 0);
+      expect(t.moneyOutMinor, t.investmentOutMinor);
+      expect(t.moneyInMinor, t.investmentReturnMinor);
+    },
+  );
+
+  test(
+    'spend left out of spending moves to excludedSpend: Money out is unchanged, spending drops',
+    () {
+      final purchase = event(EventType.purchase, [debit]);
+      final rows = projector.project(
+        purchase,
+        facts([debit]),
+        h.allInstruments,
+        dining,
+      );
+      final from = at.subtract(const Duration(days: 1));
+      final to = at.add(const Duration(days: 1));
+      final counted = projector.totals(rows, [purchase], from, to);
+      final left = DefaultLedgerProjector(
+        excludedEventIds: {purchase.eventId},
+      ).totals(rows, [purchase], from, to);
+
+      expect(counted.spendMinor, 10000);
+      expect(counted.excludedSpendMinor, 0);
+      // Left out of spending: no spend, no category, still counted as money out
+      // and still one transaction.
+      expect(left.spendMinor, 0);
+      expect(left.byCategory, isEmpty);
+      expect(left.excludedSpendMinor, 10000);
+      expect(left.allSpendMinor, counted.allSpendMinor);
+      expect(left.moneyOutMinor, counted.moneyOutMinor);
+      expect(left.transactionCount, counted.transactionCount);
+    },
+  );
+
+  test(
+    'a refund of spend left out of spending comes off the excluded amount, not off spending',
+    () {
+      final purchase = event(
+        EventType.purchase,
+        [debit],
+        roles: [LegRole.debitLeg],
+      );
+      final refund = event(
+        EventType.refund,
+        [credit, debit],
+        roles: [LegRole.reversal, LegRole.original],
+      );
+      final rows = [
+        for (final e in [purchase, refund])
+          ...projector.project(
+            e,
+            facts([debit, credit]),
+            h.allInstruments,
+            dining,
+          ),
+      ];
+      final from = at.subtract(const Duration(days: 1));
+      final to = at.add(const Duration(days: 1));
+      final t = DefaultLedgerProjector(
+        excludedEventIds: {purchase.eventId, refund.eventId},
+      ).totals(rows, [purchase, refund], from, to);
+
+      // Neither spending nor the category goes negative for it.
+      expect(t.spendMinor, 0);
+      expect(t.byCategory, isEmpty);
+      expect(t.excludedSpendMinor, 0);
+      expect(t.refundMinor, 10000);
+    },
+  );
+
+  test('an investment withdrawal is its own kind, not a transfer', () {
+    expect(
+      transactionKindForEvent(
+        event(
+          EventType.investmentWithdrawal,
+          [credit],
+          roles: [LegRole.creditLeg],
+        ),
+      ),
+      'investment_return',
+    );
+    expect(transactionKindForEvent(event(EventType.investment, [debit])),
+        'investment');
+  });
+
   test('partial IPO allotments sum actual debit legs, never the block', () {
     final first = h.debit(
       'investment',

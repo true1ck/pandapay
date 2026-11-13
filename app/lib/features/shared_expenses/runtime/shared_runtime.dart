@@ -114,9 +114,11 @@ class SharedExpensesRuntime extends ChangeNotifier {
     }
     final future = fetch();
     _single[key] = (at: DateTime.now(), future: future);
-    future.catchError((_) {
+    // A failed fetch must not be reused. (The old catchError returned
+    // `null as T`, which itself threw for a non-null T: an uncaught async
+    // error on every failed invite-inbox or join-request fetch.)
+    future.then<void>((_) {}, onError: (Object _) {
       if (_single[key]?.future == future) _single.remove(key);
-      return null as T;
     });
     return future;
   }
@@ -579,7 +581,10 @@ class SharedExpensesRuntime extends ChangeNotifier {
   }
 
   /// A new link each time: creating replaces the old one.
-  Future<SharedInviteLink> createGroupLink(String contextId) async {
+  Future<SharedInviteLink> createGroupLink(
+    String contextId, {
+    bool autoJoin = false,
+  }) async {
     _current();
     if (!proposalsEnabled || store.isContextRevoked(contextId)) {
       throw const SharedRuntimeUnavailable();
@@ -587,6 +592,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     final link = await remote.createGroupLink(
       contextId: contextId,
       linkId: const Uuid().v4(),
+      autoJoin: autoJoin,
     );
     _current();
     return link;
@@ -924,7 +930,20 @@ class SharedExpensesRuntime extends ChangeNotifier {
     return command.operationId;
   }
 
+  /// The roster is read in pages between two reads of the split's sequence
+  /// number, and refused if a change landed in between. On an active split (or
+  /// while this phone's own change is syncing) that happens for no reason the
+  /// person can see, so read once more before giving up.
   Future<SharedRoster> contextRoster(String id) async {
+    try {
+      return await _contextRosterOnce(id);
+    } on SharedRuntimeUnavailable {
+      _current();
+      return _contextRosterOnce(id);
+    }
+  }
+
+  Future<SharedRoster> _contextRosterOnce(String id) async {
     final before = await context(id);
     final pendingRenames = _pendingRenames(id);
     final roster = <SharedEditorMember>[];
@@ -1015,6 +1034,39 @@ class SharedExpensesRuntime extends ChangeNotifier {
     Namespace.url.value,
     'pandapay:expense-review:v1:$accountId:$contextId:$expenseId:$revisionId',
   );
+  /// Removes an accepted expense by proposing a void revision over it. History
+  /// is kept: the earlier revision stays, and the money is taken back out of
+  /// the balances only when the server accepts the removal (at once when
+  /// expenses post instantly, after everyone approves otherwise).
+  Future<String> removeExpense({
+    required String contextId,
+    required String expenseId,
+    required String headRevisionId,
+    required String title,
+    required String occurredOn,
+  }) async {
+    _current();
+    if (!proposalsEnabled) throw const SharedRuntimeUnavailable();
+    final command = SharedCommand(
+      operationId: const Uuid().v4(),
+      kind: 'expense.propose',
+      payload: {
+        'contextId': contextId,
+        'expenseId': expenseId,
+        'revisionId': const Uuid().v4(),
+        'expectedHeadRevisionId': headRevisionId,
+        'title': title,
+        'occurredOn': occurredOn,
+        'snapshot': null,
+        'sources': <Object?>[],
+        'void': true,
+      },
+    );
+    await store.enqueue(command);
+    await flushEditor();
+    return command.operationId;
+  }
+
   Future<String> respondToExpense(
     String contextId,
     String expenseId,
@@ -1666,7 +1718,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     'member.renamed' => 'Name changed',
     'expense.proposed' => 'Expense submitted for review',
     'expense.responded' => 'Expense review updated',
-    'settlement.reported' => 'Payment reported Â· awaiting confirmation',
+    'settlement.reported' => 'Payment reported · awaiting confirmation',
     'settlement.confirmed' => 'Payment confirmed',
     'settlement.rejected' => 'Payment report rejected',
     _ => 'Shared expense updated',

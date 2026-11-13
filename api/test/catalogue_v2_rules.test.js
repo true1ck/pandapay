@@ -1597,3 +1597,38 @@ test('D13d overrides may replace whole arrays, set nulls and set rule_role; stat
   assert.equal(r.card.points_expiry_months, null);
   assert.equal(r.card.model_coverage.overrides_applied.length, 5);
 });
+
+// ── Rewards fix: restrictions the engine can honour must not switch a bonus off ──
+
+test('an "emi_excluded" flag on a partner accelerator keeps the bonus live and excludes EMI spends', () => {
+  const record = card({
+    rules: [rule({
+      id: 'partner-10x', category_id: 'swiggy',
+      conditions: { emi_excluded: true },
+      action: { multiplier: null, points_per_block: 20, cashback_percent: null, cap_reference: null, reason: 'test' },
+    })],
+  });
+  const result = run(record);
+  const rows = only(result, 'partner-10x');
+  assert.ok(rows.some((r) => r.rule_role === 'earn'), 'the bonus is an earning rule, not info');
+  assert.ok(rows.every((r) => !((r.conditions && r.conditions.info_reasons) || []).some((x) => /emi_excluded/.test(x))));
+});
+
+test('EMI-exclusion flag spellings are all understood; false and unknown flags are not', () => {
+  const { EMI_EXCLUSION_FLAG } = require('../scripts/catalogue_v2/conditions');
+  for (const k of ['emi_excluded', 'exclude_emi', 'not_emi', 'emi_conversions_excluded', 'excludes_emi', 'transaction_not_converted_to_emi', 'no_emi', 'instant_emi_excluded']) {
+    assert.equal(EMI_EXCLUSION_FLAG.test(k), true, k);
+  }
+  for (const k of ['emi_eligible', 'emi_origin', 'emi_channel', 'eligible_emi_types', 'emi_tenure']) {
+    assert.equal(EMI_EXCLUSION_FLAG.test(k), false, k);
+  }
+});
+
+test('a region/geography/scope condition stays a blocker (a confirmed foreign payment reaches reward state)', () => {
+  // A user-confirmed foreign payment is recorded as an ordinary card spend, so the engine cannot
+  // assume every spend it prices is domestic: "domestic only" and "international only" both stay info.
+  for (const conditions of [{ transaction_region: 'domestic' }, { geography: 'Domestic spends' }, { transaction_scope: 'India' }, { transaction_region: 'international' }]) {
+    const rows = only(run(card({ rules: [rule({ id: 'reg', conditions })] })), 'reg');
+    assert.ok(rows.every((r) => r.rule_role === 'info'), JSON.stringify(conditions));
+  }
+});

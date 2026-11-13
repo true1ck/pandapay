@@ -25,6 +25,10 @@ class TransactionOutboxEntry {
   final DateTime createdAt;
   final String? lastError;
 
+  /// Optional contract wire value (payment_methods_v1.json); null for every
+  /// row queued before the column existed and whenever the user chose none.
+  final String? paymentMethod;
+
   const TransactionOutboxEntry({
     required this.id,
     required this.clientMutationId,
@@ -39,6 +43,7 @@ class TransactionOutboxEntry {
     required this.entryKind,
     required this.createdAt,
     this.lastError,
+    this.paymentMethod,
   });
 }
 
@@ -91,6 +96,7 @@ class TransactionOutboxRepository {
           merchantName: entry.merchantName,
           note: entry.note,
           instrument: entry.instrument,
+          paymentMethod: entry.paymentMethod,
           entryKind: entry.entryKind,
           source: 'manual',
           status: 'active',
@@ -110,6 +116,7 @@ class TransactionOutboxRepository {
     TxnInstrument instrument = TxnInstrument.creditCard,
     TxnEntryKind entryKind = TxnEntryKind.spend,
     String? clientMutationId,
+    String? paymentMethod,
   }) async {
     final mutationId = clientMutationId ?? const Uuid().v4();
     final effectiveUserCategoryId = userCategoryId ??
@@ -120,8 +127,8 @@ class TransactionOutboxRepository {
       '''
       INSERT INTO transaction_outbox_entries
         (namespace, user_card_id, client_mutation_id, amount_paise, category_id, user_category_id, merchant_name,
-         occurred_at, note, instrument, entry_kind, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         occurred_at, note, instrument, entry_kind, created_at, payment_method)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ''',
       [
         namespace,
@@ -136,6 +143,7 @@ class TransactionOutboxRepository {
         instrument.wireValue,
         entryKind.wireValue,
         DateTime.now().millisecondsSinceEpoch,
+        paymentMethod,
       ],
     );
     financialStore?.saveProvisional(
@@ -150,6 +158,7 @@ class TransactionOutboxRepository {
         merchantName: merchantName,
         note: note,
         instrument: instrument,
+        paymentMethod: paymentMethod,
         entryKind: entryKind,
         source: 'manual',
         status: 'active',
@@ -208,6 +217,7 @@ class TransactionOutboxRepository {
           row['created_at'] as int,
         ),
         lastError: row['last_error'] as String?,
+        paymentMethod: row['payment_method'] as String?,
       );
     }).toList();
   }
@@ -249,6 +259,7 @@ class TransactionOutboxRepository {
           instrument: entry.instrument,
           entryKind: entry.entryKind,
           clientMutationId: entry.clientMutationId,
+          paymentMethod: entry.paymentMethod,
         );
         financialStore?.saveTransactions(namespace, [
           TransactionEntry(
@@ -261,6 +272,7 @@ class TransactionOutboxRepository {
             merchantName: entry.merchantName,
             note: entry.note,
             instrument: entry.instrument,
+            paymentMethod: entry.paymentMethod,
             entryKind: entry.entryKind,
             source: 'manual',
             status: 'active',

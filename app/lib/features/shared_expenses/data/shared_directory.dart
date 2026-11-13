@@ -271,10 +271,15 @@ final class SharedJoinRequest {
 /// Owner's view of a group's shared link.
 final class SharedGroupLinkStatus {
   final bool active, expired;
+
+  /// True when anyone with the link joins at once; false when the owner
+  /// approves each person.
+  final bool autoJoin;
   final DateTime? expiresAt;
   const SharedGroupLinkStatus({
     required this.active,
     required this.expired,
+    this.autoJoin = false,
     this.expiresAt,
   });
   factory SharedGroupLinkStatus.fromJson(Map<String, Object?> value) {
@@ -285,6 +290,7 @@ final class SharedGroupLinkStatus {
     return SharedGroupLinkStatus(
       active: active,
       expired: expired == true,
+      autoJoin: value['autoJoin'] == true,
       expiresAt: DateTime.tryParse(value['expiresAt'] as String? ?? ''),
     );
   }

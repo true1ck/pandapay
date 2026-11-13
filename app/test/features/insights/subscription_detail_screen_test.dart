@@ -207,6 +207,36 @@ void main() {
       },
     );
 
+    testWidgets('the detail page can edit and ignore the subscription', (tester) async {
+      final series = RecurringSeries(
+        id: 'sub-edit',
+        displayName: 'Notion Plus',
+        typicalAmount: Money.fromRupees(400),
+        cadenceDays: 30,
+        occurrenceCount: 3,
+        annualCost: Money.fromRupees(4800),
+        nextExpectedOn: DateTime.now().add(const Duration(days: 10)),
+        cadenceConfirmed: true,
+        engineStatus: 'confirmed',
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [cacheNamespaceProvider.overrideWithValue('user:test')],
+          child: MaterialApp(home: SubscriptionDetailScreen(series: series)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Edit subscription'));
+      await tester.pumpAndSettle();
+      expect(find.text('Service name'), findsOneWidget);
+      expect(find.text('Save'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Ignore subscription'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ignore this subscription?'), findsOneWidget);
+    });
+
     testWidgets(
       'tapping subscription card navigates seamlessly to SubscriptionDetailScreen',
       (tester) async {
@@ -242,9 +272,8 @@ void main() {
         // Verify card is on screen
         expect(find.text('Disney+ Hotstar'), findsOneWidget);
         expect(find.text('Yearly'), findsOneWidget);
-        expect(find.text('AutoPay Active'), findsOneWidget);
 
-        // Tap the card
+        // Tap the row
         await tester.tap(find.text('Disney+ Hotstar'));
         await tester.pumpAndSettle();
 

@@ -214,7 +214,7 @@ void main() {
         'Quarterly settlement payout of INR 14,500 credited to your bank account',
       );
       expect(settlement.eventType, equals(BrokerEventType.brokerSettlement));
-      expect(settlement.suggestedKind, equals(TxnEntryKind.income));
+      expect(settlement.suggestedKind, equals(TxnEntryKind.investmentReturn));
 
       // 3. Dividend income
       final dividend = SpecializedDomainClassifiers.classifyBrokerMessage(

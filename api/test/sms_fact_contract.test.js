@@ -379,3 +379,14 @@ test('category, isComplete and confidence are part of the payload contract', () 
   assert.equal(badConfidence.valid, false);
   assert.ok(badConfidence.errors.some((error) => error.includes('confidence must be a number')));
 });
+
+test('the mobile and API fact contracts list the same entry kinds', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const dart = fs.readFileSync(path.join(__dirname, '..', '..', 'app', 'lib', 'data', 'sms_fact_contract.dart'), 'utf8');
+  const match = dart.match(/const List<String> smsEntryKinds\s*=\s*\[([\s\S]*?)\]/);
+  assert.ok(match, 'missing smsEntryKinds in sms_fact_contract.dart');
+  const mobile = [...match[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  assert.deepEqual(mobile, smsFacts.ENTRY_KINDS);
+  assert.ok(mobile.includes('investment_return'));
+});

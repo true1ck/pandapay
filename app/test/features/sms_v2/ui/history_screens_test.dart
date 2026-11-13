@@ -6,7 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/testing.dart';
 import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay/app/providers.dart' show recurringReportProvider;
+import 'package:pandapay/features/insights/subscriptions_screen.dart';
+import 'package:pandapay/features/sms_v2/ledger/adapters.dart'
+    show recurringReportFromSubscriptionStates;
 import 'package:pandapay/data/local/financial_store.dart';
+import 'package:pandapay/features/sms_v2/ledger/subscription_projection.dart';
+import 'package:pandapay/features/sms_v2/storage/subscription_store.dart';
 import 'package:pandapay/features/sms_import/sms_background_queue.dart';
 import 'package:pandapay/features/sms_v2/ledger/providers.dart';
 import 'package:pandapay/features/sms_v2/ledger/reports.dart';
@@ -95,6 +101,16 @@ void main() {
         ProviderScope(
           overrides: [
             smsV2LedgerReadModelProvider.overrideWith((_) async => model),
+            // The subscriptions page reads the rows capture saved: this proves
+            // the replay itself wrote them.
+            recurringReportProvider.overrideWith((_) async {
+              // A history import leaves the rows to be derived once, afterwards.
+              SubscriptionProjection.rebuildIfNeeded(db, namespace);
+              return recurringReportFromSubscriptionStates(
+                SubscriptionStore(db, namespace: namespace).states(),
+                now: DateTime.now(),
+              );
+            }),
             instrumentsProvider.overrideWith((_) async => instruments),
           ],
           child: MaterialApp(home: screen),
@@ -107,11 +123,13 @@ void main() {
       (SmsLedgerScreen.investments, 'Net invested'),
       (SmsLedgerScreen.ipos, 'Blocked'),
       (SmsLedgerScreen.moneyIn, 'Salary'),
-      (SmsLedgerScreen.subscriptions, 'Netflix'),
     ]) {
       await show(SmsLedgerScreenView(screen: screen));
       expect(find.textContaining(evidence, findRichText: true), findsWidgets);
     }
+    // The one Subscriptions page, fed by the rows the replay saved.
+    await show(const SubscriptionsScreen());
+    expect(find.textContaining('Netflix', findRichText: true), findsWidgets);
     await show(const FoundInstrumentsScreen());
     expect(find.text('Bank accounts'), findsOneWidget);
     // Accounts with an SMS balance are confirmed on their own; the rest ask.

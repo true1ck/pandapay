@@ -1,3 +1,7 @@
+import '../sms_v2/ledger/providers.dart' show suspectedRefundsProvider;
+import 'spend_exclusion_matches.dart';
+import 'transaction_badge.dart';
+import 'transfer_mark_panel.dart';
 import '../sms_v2/ui/review_controller.dart';
 import '../sms_v2/ui/transaction_actions.dart';
 import '../sms_v2/ui/why_sheet.dart';
@@ -28,11 +32,15 @@ import '../../main.dart' show MoneyText;
 import '../account/account_screen.dart' show AccountTile;
 import '../cards/card_summary.dart';
 import 'mark_transaction_kind.dart';
+import 'spend_exclusion.dart';
 import 'report_transaction_screen.dart';
+import 'suspected_refund_banner.dart';
+import 'transaction_reward_label.dart';
 import 'foreign_payments_screen.dart';
 import '../sync/split_sync.dart';
 import '../insights/spend_trends_screen.dart';
 import '../quickadd/quick_add_screen.dart';
+import '../payments/payment_method_catalogue.dart';
 import '../shared_expenses/runtime/shared_providers.dart';
 import '../shared_expenses/composer/shared_source_seed.dart';
 
@@ -110,7 +118,7 @@ class TransactionDetailScreen extends ConsumerWidget {
                           Text(
                             MerchantIdentity.displayName(
                                   entry.merchantName,
-                                  incoming: entry.entryKind == TxnEntryKind.income,
+                                  incoming: entry.entryKind.isMoneyIn,
                                 ) ??
                                 'Saved transaction',
                             style: BambooFonts.heading(20),
@@ -132,10 +140,14 @@ class TransactionDetailScreen extends ConsumerWidget {
                               ),
                             ),
                           ],
-                          if (entry.paymentMethod == 'upi') ...[
+                          if (entry.paymentMethod == 'upi' ||
+                              _DetailBodyState._methodLabel(entry) !=
+                                  null) ...[
                             const SizedBox(height: AppSpace.sm),
                             Text(
-                              'UPI',
+                              entry.paymentMethod == 'upi'
+                                  ? 'UPI'
+                                  : _DetailBodyState._methodLabel(entry)!,
                               style: BambooFonts.ui(
                                 14,
                                 color: BambooInk.ink700,
@@ -702,6 +714,24 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     }
   }
 
+  /// "Was this refunded?" for a card spend whose limit came back with no
+  /// message explaining it. Nothing for any other row.
+  Widget _suspectedRefundBanner(TransactionEntry entry) {
+    final eventId = entry.eventId;
+    if (eventId == null ||
+        entry.entryKind != TxnEntryKind.spend ||
+        entry.status != 'active' ||
+        entry.instrument != TxnInstrument.creditCard) {
+      return const SizedBox.shrink();
+    }
+    final suspected = ref.watch(suspectedRefundsProvider)[eventId];
+    if (suspected == null) return const SizedBox.shrink();
+    return SuspectedRefundBanner(
+      info: suspected,
+      onConfirmRefunded: () => _markIgnored('refund'),
+    );
+  }
+
   Future<void> _markIgnored(String reason) async {
     final deleting = reason == 'transfer';
     setState(() => _ignoring = true);
@@ -915,6 +945,51 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     return 'Restore transaction';
   }
 
+  /// Counts this transaction in, or leaves it out of, the person's spending.
+  Future<void> _setSpendExclusion(bool excluded) async {
+    final previous = _entry;
+    setState(() => _entry = _entry.copyWith(excludeFromSpend: excluded));
+    try {
+      await setSpendExclusion(ref, [previous], excluded: excluded);
+      ref.invalidate(transactionDetailProvider(widget.entry.id));
+      if (excluded) await _offerSimilarExclusions(previous);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              excluded
+                  ? "Won't count in your spending. It stays in your history and Money out."
+                  : 'Counted in your spending again.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _entry = previous);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+    }
+  }
+
+  /// After leaving one transaction out, offers the other open ones with the same
+  /// merchant or tag. Applied only after the person ticks and confirms.
+  Future<void> _offerSimilarExclusions(TransactionEntry source) async {
+    final loaded = ref.read(transactionsProvider).valueOrNull;
+    if (loaded == null || !mounted) return;
+    final groups = exclusionMatches(source, loaded);
+    if (groups.isEmpty) return;
+    final chosen = await showExclusionMatchesSheet(context, groups);
+    if (chosen == null || chosen.isEmpty || !mounted) return;
+    final n = await setSpendExclusion(ref, chosen, excluded: true);
+    if (mounted && n > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("$n more won't count in your spending.")),
+      );
+    }
+  }
+
   Future<void> _showIgnoreSheet() async {
     final reason = await showModalBottomSheet<String>(
       context: context,
@@ -967,6 +1042,36 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                 ),
                 const Divider(height: 1),
               ],
+              // Leaves the transaction out of spending totals and trends on
+              // this phone (and out of server budgets for synced entries; not
+              // yet for entries read from SMS). It stays in history, in Money
+              // out and on the card, and keeps its rewards, unlike Refund /
+              // Reversal / Delete below.
+              if (canExcludeFromSpend(_entry))
+                ListTile(
+                  key: const Key('toggle-spend-exclusion'),
+                  leading: Icon(
+                    _entry.excludeFromSpend
+                        ? Icons.add_circle_outline_rounded
+                        : Icons.visibility_off_outlined,
+                  ),
+                  title: Text(
+                    _entry.excludeFromSpend
+                        ? 'Count in spending again'
+                        : "Don't count in spending",
+                    style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                  ),
+                  subtitle: Text(
+                    _entry.excludeFromSpend
+                        ? 'Add it back to your spending totals.'
+                        : 'Stays in your history and Money out, and keeps its '
+                              'rewards. Left out of spending totals and trends '
+                              'on this phone. ${spendExclusionBudgetNote(_entry)}',
+                    style: BambooFonts.ui(12, color: BambooInk.ink500),
+                  ),
+                  onTap: () =>
+                      Navigator.of(context).pop('toggle_spend_exclusion'),
+                ),
               for (final r in const [
                 'refund',
                 'reversal',
@@ -1008,6 +1113,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         ),
       ),
     );
+    if (reason == 'toggle_spend_exclusion') {
+      await _setSpendExclusion(!_entry.excludeFromSpend);
+      return;
+    }
     if (reason == 'mark_own_transfer' || reason == 'mark_card_bill') {
       await _markKind(
         reason == 'mark_card_bill'
@@ -1352,20 +1461,39 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                         Text(
                           MerchantIdentity.displayName(
                                 entry.merchantName,
-                                incoming: entry.entryKind == TxnEntryKind.income,
+                                incoming: entry.entryKind.isMoneyIn,
                               ) ??
                               (entry.entryKind == TxnEntryKind.income
                                   ? 'Income'
                                   : entry.entryKind.label),
                           style: BambooFonts.ui(13.5, color: BambooInk.ink500),
                         ),
+                        // The same label the Activity row carries.
+                        if (txnBadgeKind(entry) != null) ...[
+                          const SizedBox(height: AppSpace.xs),
+                          TransactionBadge(entry: entry),
+                        ],
                       ],
                     ),
                   ),
                   const SizedBox(height: AppSpace.md),
                   ForeignTransactionInfo(transactionId: entry.id),
                   const SizedBox(height: AppSpace.md),
+                  _suspectedRefundBanner(entry),
+                  TransferMarkPanel(
+                    entry: entry,
+                    onChanged: () =>
+                        ref.invalidate(transactionDetailProvider(widget.entry.id)),
+                  ),
                   _DetailRow(label: 'Card', value: _cardOrPaymentLabel(entry)),
+                  if (transactionRewardLabel(entry) case final reward?)
+                    _DetailRow(
+                      key: const ValueKey('transaction-reward-row'),
+                      label: 'Reward',
+                      value: reward.note == null
+                          ? reward.value
+                          : '${reward.value}\n${reward.note}',
+                    ),
                   _DetailRow(
                     label: 'Category',
                     value: entry.categoryLabel,
@@ -1538,6 +1666,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                               : entry.status[0].toUpperCase() +
                                     entry.status.substring(1)),
                   ),
+                  if (entry.excludeFromSpend)
+                    const _DetailRow(
+                      label: 'Spending',
+                      value: 'Not counted in your spending',
+                    ),
                   if (_note != null && _note!.isNotEmpty)
                     _DetailRow(label: 'Note', value: _note!),
                   if (entry.source == 'sms' ||
@@ -1820,10 +1953,28 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     return received.toString().split('.').first;
   }
 
-  static String _cardOrPaymentLabel(TransactionEntry entry) {
-    if (entry.cardDisplayName != null && entry.cardDisplayName!.isNotEmpty) {
-      return entry.cardDisplayName!;
+  /// The stored payment method's label ("Cheque", "NEFT", "EMI"...), or null
+  /// when there is none to show: no method, the legacy SMS `upi` (its own
+  /// "Rail" row already says UPI), an unknown value, or a method that does not
+  /// fit the entry's instrument (so a stale value is never shown).
+  static String? _methodLabel(TransactionEntry entry) {
+    final method = paymentMethodByWire(entry.paymentMethod);
+    if (method == null || method.wire == 'upi') return null;
+    if (entry.instrumentKnown &&
+        !method.instruments.contains(entry.instrument)) {
+      return null;
     }
+    return method.label;
+  }
+
+  static String _cardOrPaymentLabel(TransactionEntry entry) {
+    final methodLabel = _methodLabel(entry);
+    if (entry.cardDisplayName != null && entry.cardDisplayName!.isNotEmpty) {
+      return methodLabel == null
+          ? entry.cardDisplayName!
+          : '${entry.cardDisplayName!} · $methodLabel';
+    }
+    if (methodLabel != null) return methodLabel;
     // A UPI bank debit is intentionally cardless. It is not a missing card
     // and must not be displayed as a blank field or attached to a random
     // saved credit card.
@@ -2025,7 +2176,7 @@ class _SmsEvidenceSection extends ConsumerWidget {
               value:
                   MerchantIdentity.displayName(
                     entry.merchantName,
-                    incoming: entry.entryKind == TxnEntryKind.income,
+                    incoming: entry.entryKind.isMoneyIn,
                   ) ??
                   'Not provided by SMS',
             ),
@@ -2438,7 +2589,7 @@ class _DetailRow extends StatelessWidget {
   final String label;
   final String? value;
   final Widget? trailing;
-  const _DetailRow({required this.label, this.value, this.trailing});
+  const _DetailRow({super.key, required this.label, this.value, this.trailing});
 
   @override
   Widget build(BuildContext context) {

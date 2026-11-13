@@ -7,6 +7,7 @@ import '../contract/rule_bundle.dart';
 import '../contract/types.dart';
 import '../instruments/instrument_resolver.dart' show instrumentByNumberOnly;
 import 'link_context.dart';
+import 'owner_identity.dart';
 import 'person_name.dart';
 import 'receipt_policy.dart';
 
@@ -2124,19 +2125,33 @@ class _Run {
     return false;
   }
 
+  /// A payment between the person and themselves, or between the person and a
+  /// family member they marked: neither is spending or money in. Family is only
+  /// ever a person's mark, never a guess ([OwnerIdentity.isFamilyTransfer]).
   bool _isOwnDebit(Fact d) =>
       d.counterparty?.kind == CounterpartyKind.own ||
       _ownMask(d.counterparty?.accountMask, d) ||
-      _namedAsOwner(d.counterparty?.name);
+      _identity.matchesAccountMask(d.counterparty?.accountMask) ||
+      _namedAsOwner(d.counterparty?.name) ||
+      _identity.matchesVpa(d.counterparty?.vpa) ||
+      _identity.isMarkedSelfOnce(d.sourceKey) ||
+      _identity.isFamilyTransfer(
+        name: d.counterparty?.name,
+        vpa: d.counterparty?.vpa,
+        mask: d.counterparty?.accountMask,
+        sourceKey: d.sourceKey,
+      );
 
-  /// The account owner's names, from the profile.
-  List<String> get _ownerNames {
-    final c = context;
-    return c is RuleLinkContext ? c.ownerNames : const [];
-  }
+  /// Who the account owner is: their names, their own handles and the payees
+  /// and accounts they marked as theirs ([OwnerIdentity.fromEntries]).
+  late final OwnerIdentity _identity = context is RuleLinkContext
+      ? OwnerIdentity.fromEntries((context as RuleLinkContext).ownerNames)
+      : OwnerIdentity();
 
-  /// The counterparty is the account owner under their own name.
-  bool _namedAsOwner(String? name) => nameIsOneOf(name, _ownerNames);
+  /// The counterparty is the account owner under their own name (or a UPI
+  /// handle built from it). A first name alone, a shared surname or a sibling
+  /// with the same middle and last name never counts ([OwnerIdentity]).
+  bool _namedAsOwner(String? name) => _identity.matchesName(name);
 
   /// A debit "to NAME" on one bank account and a credit "from NAME" on a
   /// different one: the bank prints the holder's name on both sides, so this

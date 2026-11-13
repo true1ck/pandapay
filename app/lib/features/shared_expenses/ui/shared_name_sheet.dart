@@ -44,17 +44,21 @@ class _SharedNameSheetState extends State<SharedNameSheet> {
     super.dispose();
   }
 
+  bool _closed = false;
+
   void _submit() {
+    if (_closed) return;
     final value = _controller.text.trim();
     if (value.isEmpty || RegExp(r'[\x00-\x1f\x7f]').hasMatch(value)) {
       setState(() => _error = 'Enter a name.');
       return;
     }
+    _closed = true;
     Navigator.pop(context, value);
   }
 
   @override
-  Widget build(BuildContext context) => Padding(
+  Widget build(BuildContext context) => SingleChildScrollView(
     padding: EdgeInsets.fromLTRB(
       16,
       12,

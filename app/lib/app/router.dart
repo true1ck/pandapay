@@ -2,6 +2,7 @@ import '../features/sms_v2/ui/corrections_status_screen.dart';
 import '../features/sms_v2/ui/migration_report_screen.dart';
 import '../features/sms_v2/ui/found_instruments_screen.dart';
 import '../features/sms_v2/ui/review_inbox_screen.dart';
+import '../features/insights/subscriptions_screen.dart';
 import '../features/sms_v2/ui/ledger_screens.dart';
 import '../features/shared_expenses/data/shared_invitations.dart'
     show splitJoinLocationForUri;
@@ -625,9 +626,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             const SmsLedgerScreenView(screen: SmsLedgerScreen.moneyIn),
       ),
       GoRoute(
+        // The home chip opens the one Subscriptions page, the same body the
+        // Payments tab shows.
         path: '/sms-v2/subscriptions',
-        builder: (_, _) =>
-            const SmsLedgerScreenView(screen: SmsLedgerScreen.subscriptions),
+        builder: (_, _) => const SubscriptionsScreen(),
       ),
       GoRoute(
         path: AppRoute.splash,
@@ -954,7 +956,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoute.splitJoin,
+        // Keyed by token: a second invite link must start a fresh screen, not
+        // inherit the first link's preview, consent choice and result.
         builder: (context, state) => SharedJoinRoute(
+          key: ValueKey(state.pathParameters['token']!),
           token: state.pathParameters['token']!,
           onDone: () => context.go(AppRoute.splits),
         ),

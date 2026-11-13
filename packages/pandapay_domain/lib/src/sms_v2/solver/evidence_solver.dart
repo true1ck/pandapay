@@ -976,6 +976,12 @@ class _Run {
       final m = _merchantNear(cue.start);
       if (m != null) merchantParty = (m, false);
     }
+    // What is reported as the payee. Scoring below keeps using [party] alone.
+    final cuePartyOk = merchantParty != null &&
+        !(merchantParty == party && _partyOffSentence);
+    final reportedParty = cuePartyOk
+        ? merchantParty
+        : (debitDir == true ? _partyAfterClock() : null);
     final rail = hits('rail').isNotEmpty;
     final owns = hits('ownMarker');
     final named =
@@ -1173,8 +1179,10 @@ class _Run {
       mask: mask?.$1,
       instrumentKind:
           _instrumentWire(mask?.$2, kind) ?? (senderKind == 'wallet' ? 'wallet' : null),
-      party: merchantParty?.$1,
-      partyIsVpa: merchantParty?.$2 ?? false,
+      // Scoring above used the cue name; a footer sentence is not reported as a
+      // payee, and a layout name (card alert) is reported but never scored.
+      party: reportedParty?.$1,
+      partyIsVpa: reportedParty?.$2 ?? false,
       debitDirection: kind == SolverRead.cardPayment && cue.how == 'biller'
           ? false
           : debitDir,
@@ -1550,6 +1558,7 @@ class _Run {
 
   /// (name or VPA, isVpa).
   (String, bool)? _party(bool debit, int amtIdx) {
+    _partyOffSentence = false;
     final cues = hits(debit ? 'payeeDebit' : 'payeeCredit');
     final stop = {for (final h in hits('partyStop')) h.start};
     // Once a name has begun, a mandate word ("UPI AutoPay-Bank") or a frequency
@@ -1593,6 +1602,63 @@ class _Run {
       // name the user's own account, not a payee.
       if (words.isNotEmpty && i < toks.length && toks[i].kind == TokKind.mask) {
         continue;
+      }
+      if (words.isNotEmpty) {
+        // The name came from a sentence AFTER the amount's ("... To report
+        // misuse call 1800"): a footer, not a payee. A name before or in the
+        // amount's sentence ("Your subscription to X has been renewed. Rs 119
+        // charged ...") is kept. A footer name still counts as evidence when
+        // scoring; it is just not reported as the payee.
+        _partyOffSentence = toks[c.start].sentence > toks[amtIdx].sentence;
+        return (words.join(' '), false);
+      }
+    }
+    return null;
+  }
+
+  /// Set by [_party]: the name it returned sits in a sentence after the amount's.
+  bool _partyOffSentence = false;
+
+  static final _clockOnly = RegExp(r'^\d{1,2}:\d{2}(?::\d{2})?$');
+  static final _zoneLabel = RegExp(r'^(?:IST|UTC|GMT)$', caseSensitive: false);
+
+  /// Card alerts often read "... 05-10-26 07:13:35 IST SOME SHOP Avl Limit:
+  /// INR 77853": no cue word, the layout is the cue. The name is the words
+  /// after a clock that is directly followed by a time-zone label ("IST"), up
+  /// to the first stop word. A clock with no zone label ("12:30 PM", "12:30
+  /// hrs") is never a layout cue. It is only reported as the payee (the caller
+  /// uses it after scoring), so it never makes a message more acceptable.
+  (String, bool)? _partyAfterClock() {
+    final stop = {for (final h in hits('partyStop')) h.start};
+    // A merchant may carry a bill word ("City Bill Pay"), but never starts with
+    // one, so a bill noun only ends the name when it is the first word.
+    final billNoun = {for (final h in hits('billNoun')) h.start};
+    final nonParty = {for (final h in hits('nonParty')) h.start};
+    for (var k = 0; k < toks.length - 1; k++) {
+      final clock = toks[k];
+      if (clock.kind != TokKind.date || !_clockOnly.hasMatch(clock.text)) {
+        continue;
+      }
+      var i = k + 1;
+      if (i >= toks.length ||
+          !same(k, i) ||
+          toks[i].kind != TokKind.word ||
+          !_zoneLabel.hasMatch(toks[i].text)) {
+        continue;
+      }
+      i++;
+      final words = <String>[];
+      while (i < toks.length &&
+          words.length < p.partyMaxWords &&
+          same(k, i)) {
+        final t = toks[i];
+        if (t.kind != TokKind.word) break;
+        if (stop.contains(i) && !(words.isNotEmpty && billNoun.contains(i))) {
+          break;
+        }
+        if (words.isEmpty && nonParty.contains(i)) break;
+        words.add(t.text);
+        i++;
       }
       if (words.isNotEmpty) return (words.join(' '), false);
     }

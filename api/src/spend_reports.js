@@ -215,7 +215,7 @@ function previousPeriodBounds(period, anchor = new Date(), options = {}) {
  */
 async function periodTotals(client, userId, { start, end }) {
   const result = await client.query(
-    `SELECT entry_kind,
+    `SELECT entry_kind, exclude_from_spend,
             COALESCE(SUM(amount_inr), 0) AS total,
             COUNT(*) AS txn_count,
             COALESCE(SUM(GREATEST(COALESCE(expected_value_inr, 0), 0))
@@ -223,24 +223,33 @@ async function periodTotals(client, userId, { start, end }) {
        FROM transactions
       WHERE profile_id = $1 AND status = 'active'
         AND occurred_at >= $2 AND occurred_at < $3
-      GROUP BY entry_kind`,
+      GROUP BY entry_kind, exclude_from_spend`,
     [userId, start, end]
   );
 
+  const zero = () => ({ totalInr: 0, txnCount: 0, rewardsInr: 0 });
   const byKind = {};
+  // A spend row the person left out of their spending is kept apart: it is
+  // not in `spend`, but it did leave their account, so Money out adds it back.
+  // Its rewards were still earned, so they stay in the spend rewards figure.
+  const excludedSpend = zero();
   for (const row of result.rows) {
-    byKind[row.entry_kind] = {
-      totalInr: Number(row.total),
-      txnCount: Number(row.txn_count),
-      rewardsInr: Number(row.rewards),
-    };
+    const bucket = row.entry_kind === 'spend' && row.exclude_from_spend
+      ? excludedSpend
+      : (byKind[row.entry_kind] ||= zero());
+    bucket.totalInr += Number(row.total);
+    bucket.txnCount += Number(row.txn_count);
+    bucket.rewardsInr += Number(row.rewards);
   }
-  const zero = { totalInr: 0, txnCount: 0, rewardsInr: 0 };
+  const spend = byKind.spend || zero();
+  spend.rewardsInr += excludedSpend.rewardsInr;
   return {
-    spend: byKind.spend || zero,
-    income: byKind.income || zero,
-    investment: byKind.investment || zero,
-    transfer: byKind.transfer || zero,
+    spend,
+    excludedSpend: { ...excludedSpend, rewardsInr: 0 },
+    income: byKind.income || zero(),
+    investment: byKind.investment || zero(),
+    investmentReturn: byKind.investment_return || zero(),
+    transfer: byKind.transfer || zero(),
   };
 }
 
@@ -257,6 +266,7 @@ async function spendByCategory(client, userId, { start, end }) {
        LEFT JOIN spend_categories parent_sc ON parent_sc.id = ucat.parent_category_id
        LEFT JOIN user_categories parent_uc ON parent_uc.id = ucat.parent_user_category_id AND parent_uc.profile_id = t.profile_id
       WHERE t.profile_id = $1 AND t.status = 'active' AND t.entry_kind = 'spend'
+        AND NOT t.exclude_from_spend
         AND t.occurred_at >= $2 AND t.occurred_at < $3
       GROUP BY COALESCE(t.category_id, ucat.parent_user_category_id, t.user_category_id),
                COALESCE(sc.slug, parent_uc.slug, ucat.slug),
@@ -295,6 +305,7 @@ async function spendBySubcategory(client, userId, { start, end }) {
        LEFT JOIN spend_categories parent_sc ON parent_sc.id = ucat.parent_category_id
        LEFT JOIN user_categories parent_uc ON parent_uc.id = ucat.parent_user_category_id AND parent_uc.profile_id = t.profile_id
       WHERE t.profile_id = $1 AND t.status = 'active' AND t.entry_kind = 'spend'
+        AND NOT t.exclude_from_spend
         AND (ucat.parent_category_id IS NOT NULL OR ucat.parent_user_category_id IS NOT NULL)
         AND t.occurred_at >= $2 AND t.occurred_at < $3
       GROUP BY t.user_category_id,
@@ -319,6 +330,7 @@ async function spendByMerchant(client, userId, { start, end }, limit = 15) {
             COALESCE(SUM(amount_inr), 0) AS total, COUNT(*) AS txn_count
        FROM transactions
       WHERE profile_id = $1 AND status = 'active' AND entry_kind = 'spend'
+        AND NOT exclude_from_spend
         AND occurred_at >= $2 AND occurred_at < $3
       GROUP BY 1
       ORDER BY total DESC
@@ -398,6 +410,7 @@ async function spendByCard(client, userId, { start, end }) {
            ON uc.id = COALESCE(replacement.active_card_id, t.user_card_id)
          LEFT JOIN card_products cp ON cp.id = uc.card_product_id
         WHERE t.profile_id = $1 AND t.status = 'active' AND t.entry_kind = 'spend'
+        AND NOT t.exclude_from_spend
           AND t.amount_inr > 0
           AND t.occurred_at >= $2 AND t.occurred_at < $3
      ), labeled_rows AS (
@@ -459,6 +472,7 @@ async function spendByInstrument(client, userId, { start, end }) {
             COUNT(*) AS txn_count
        FROM transactions t
       WHERE t.profile_id = $1 AND t.status = 'active' AND t.entry_kind = 'spend'
+        AND NOT t.exclude_from_spend
         AND t.occurred_at >= $2 AND t.occurred_at < $3
       GROUP BY 1
       ORDER BY total DESC`,
@@ -529,6 +543,7 @@ async function spendByCardCategory(client, userId, { start, end }) {
          LEFT JOIN spend_categories parent_sc ON parent_sc.id = ucat.parent_category_id
          LEFT JOIN user_categories parent_uc ON parent_uc.id = ucat.parent_user_category_id AND parent_uc.profile_id = t.profile_id
         WHERE t.profile_id = $1 AND t.status = 'active' AND t.entry_kind = 'spend'
+        AND NOT t.exclude_from_spend
           AND t.occurred_at >= $2 AND t.occurred_at < $3
      )
      SELECT user_card_id, instrument, card_name, card_nickname,
@@ -610,9 +625,9 @@ async function spendSeries(client, userId, period, buckets, anchor = new Date(),
          ) AS local_bucket_start
      )
      SELECT b.bucket_start,
-            COALESCE(SUM(t.amount_inr) FILTER (WHERE t.entry_kind = 'spend'), 0) AS spend,
+            COALESCE(SUM(t.amount_inr) FILTER (WHERE t.entry_kind = 'spend' AND NOT t.exclude_from_spend), 0) AS spend,
             COALESCE(SUM(GREATEST(COALESCE(t.expected_value_inr, 0), 0)) FILTER (WHERE t.entry_kind = 'spend'), 0) AS rewards,
-            COUNT(t.id) FILTER (WHERE t.entry_kind = 'spend') AS txn_count
+            COUNT(t.id) FILTER (WHERE t.entry_kind = 'spend' AND NOT t.exclude_from_spend) AS txn_count
        FROM buckets b
        LEFT JOIN transactions t
          ON t.profile_id = $1
@@ -645,6 +660,8 @@ async function budgetSpend(client, userId, budget, { start, end }) {
     `profile_id = $1`,
     `status = 'active'`,
     `entry_kind = 'spend'`,
+    // Left out of spending by the person's choice: it must not use up a budget.
+    `NOT exclude_from_spend`,
     // Keep reports safe for databases created before the positive-amount
     // constraint was deployed.
     `amount_inr > 0`,

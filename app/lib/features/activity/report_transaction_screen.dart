@@ -1,3 +1,4 @@
+import 'transaction_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -363,6 +364,8 @@ class _TransactionContextCard extends StatelessWidget {
                   DateFormat("d MMM, h:mm a").format(entry.occurredAt.toLocal()),
                   style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                 ),
+                if (txnBadgeKind(entry) case final badge?)
+                  TransactionBadgePill(kind: badge),
               ],
             ),
           ),

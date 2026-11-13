@@ -238,7 +238,7 @@
     "senders": [
       "*"
     ],
-    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b|\\b(?:total\\s+amount\\s+due|minimum\\s+(?:amount\\s+)?due|amount\\s+payable|payment\\s+due|due\\s+(?:date|on|by)|due\\s+for\\s+payment|statement\\s+(?:for|dated|generated))\\b|\\b(?:upi\\s*ref|utr|rrn|ref(?:erence)?\\s*(?:no|number|id))\\.?\\s*[:.-]?\\s*\\w*\\d{5,}|\\bpayment\\s+of\\s*(?:rs\\.?|inr|₹)|\\b(?:received|processed)\\s+your\\s+payment\\b|\\b(?:cashback|rewards?|refund|points?)\\b[^\\n]{0,50}\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|received|reversed|redeemed|earned)\\b|\\b(?:earned|credited|awarded|redeemed|accrued)\\s+[\\d,]*\\s*(?:[a-z0-9+&' -]{0,40}?\\s)?(?:cashback|rewards?|points?|coins?)\\b|\\b(?:mandate|autopay|auto[- ]?debit|standing\\s+instruction|e-?nach|asba|lien|funds?\\s+blocked|amount\\s+blocked)\\b|\\b(?:recharge|payment|transaction|purchase|settlement|payout)\\b[^\\n]{0,45}\\b(?:successful|completed|processed)\\b))[\\s\\S]*?(?:\\b(?:sale|discounts?|vouchers?|coupons?|buy\\s+now|shop\\s+(?:now|at)|grab\\s+(?:now|the|your)|festive\\s+(?:offer|sale|shopping)|prices?\\s+slashed|treat\\s+yourself|limited[- ](?:period|time)\\s+offer|exclusive\\s+offer|hurry|use\\s+code|promo\\s*code)\\b|\\bflat\\s+\\d+%\\s*off\\b|\\bupto\\s+\\d+%\\s*off\\b|\\bup\\s+to\\s+\\d+%\\s*off\\b|\\b\\d+%\\s*off\\b|\\boffers?\\b[^\\n]{0,60}\\b(?:valid|expires?|ends?|till|until|t&c|click|visit|download|apply)\\b|\\b(?:reply|sms)\\s+stop\\s+to\\b|\\bto\\s+(?:opt[- ]?out|unsubscribe)\\b|\\bclaim\\s+(?:your\\s+)?(?:free|gift|reward)\\b)",
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b|\\b(?:total\\s+amount\\s+due|minimum\\s+(?:amount\\s+)?due|amount\\s+payable|payment\\s+due|due\\s+(?:date|on|by)|due\\s+for\\s+payment|statement\\s+(?:for|dated|generated))\\b|\\b(?:upi\\s*ref|utr|rrn|ref(?:erence)?\\s*(?:no|number|id))\\.?\\s*[:.-]?\\s*\\w*\\d{5,}|\\bpayment\\s+of\\s*(?:rs\\.?|inr|₹)|\\b(?:received|processed)\\s+your\\s+payment\\b|\\b(?:cashback|rewards?|refund|points?)\\b[^\\n]{0,50}\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|received|reversed|redeemed|earned)\\b|\\b(?:earned|credited|awarded|redeemed|accrued)\\s+[\\d,]*\\s*(?:[a-z0-9+&' -]{0,40}?\\s)?(?:cashback|rewards?|points?|coins?)\\b|\\bsubscription\\s+is\\s+now\\s+activ|\\b(?:mandate|autopay|auto[- ]?debit|standing\\s+instruction|e-?nach|asba|lien|funds?\\s+blocked|amount\\s+blocked)\\b|\\b(?:recharge|payment|transaction|purchase|settlement|payout)\\b[^\\n]{0,45}\\b(?:successful|completed|processed)\\b))[\\s\\S]*?(?:\\b(?:sale|discounts?|vouchers?|coupons?|buy\\s+now|shop\\s+(?:now|at)|grab\\s+(?:now|the|your)|festive\\s+(?:offer|sale|shopping)|prices?\\s+slashed|treat\\s+yourself|limited[- ](?:period|time)\\s+offer|exclusive\\s+offer|hurry|use\\s+code|promo\\s*code)\\b|\\b\\d+%\\s*off\\b|\\boffers?\\b[^\\n]{0,60}\\b(?:valid|expires?|ends?|till|until|t&c|click|visit|download|apply)\\b|\\b(?:reply|sms)\\s+stop\\s+to\\b|\\bto\\s+(?:opt[- ]?out|unsubscribe)\\b|\\bclaim\\s+(?:your\\s+)?(?:free|gift|reward)\\b)",
     "flags": "i",
     "reason": "promotion"
   },
@@ -718,7 +718,7 @@
       "JIOPAY",
       "JIOVOC"
     ],
-    "pattern": "^(?![\\s\\S]*?\\b(?:debited|credited|deducted|withdrawn|charged|spent|refund(?:ed|s)?|reversed|reversal|blocked|unblocked|unblock|mandates?|autopay|auto[- ]?debit|e-?nach|standing\\s+instruction|utr|rrn|upi\\s*ref|asba|lien|avl\\.?\\s*(?:bal|lmt|limit)|available\\s+(?:bal|balance|limit)|total\\s+(?:amount\\s+)?due|min(?:imum)?\\.?\\s*(?:amount\\s+)?due|statement\\s+(?:for|dated|generated|is)|payment\\s+of|paid|cashback|cash\\s+back|points?\\s+(?:earned|credited)|success(?:ful|fully)?|converted|processed|approved|booked|sanctioned|disbursed)\\b)[\\s\\S]*?(?:\\bjiotunes?\\b|\\bsubscription\\b[^\\n]{0,40}\\b(?:is\\s+now\\s+)?(?:activated|active)\\b|\\bnew\\s+message\\s+from\\b|\\bvip\\s+numbers?\\b)",
+    "pattern": "^(?![\\s\\S]*?\\b(?:debited|credited|deducted|withdrawn|charged|spent|refund(?:ed|s)?|reversed|reversal|blocked|unblocked|unblock|mandates?|autopay|auto[- ]?debit|e-?nach|standing\\s+instruction|utr|rrn|upi\\s*ref|asba|lien|avl\\.?\\s*(?:bal|lmt|limit)|available\\s+(?:bal|balance|limit)|total\\s+(?:amount\\s+)?due|min(?:imum)?\\.?\\s*(?:amount\\s+)?due|statement\\s+(?:for|dated|generated|is)|payment\\s+of|paid|cashback|cash\\s+back|points?\\s+(?:earned|credited)|success(?:ful|fully)?|converted|processed|approved|booked|sanctioned|disbursed|jiohotstar|hotstar|netflix|disney|sony\\s*liv|zee5|youtube|spotify)\\b)[\\s\\S]*?(?:\\bjiotunes?\\b|\\bsubscription\\b[^\\n]{0,40}\\b(?:is\\s+now\\s+)?(?:activated|active)\\b|\\bnew\\s+message\\s+from\\b|\\bvip\\s+numbers?\\b)",
     "flags": "i",
     "reason": "promotion"
   },
@@ -1025,7 +1025,7 @@
     "senders": [
       "*"
     ],
-    "pattern": "(?:\\btransaction\\s+no\\.?\\s*\\d+\\s+for\\s+[^\\n]{0,30}done\\s+for\\s+[^\\n]{0,60}has\\s+succeeded\\b|\\bthank\\s+you\\s+for\\s+making\\s+a\\s+successful\\s+transaction\\.\\s+your\\s+transaction\\s+with\\s+txn\\s+id\\b|\\bhas\\s+requested\\s+payment\\s+of\\s+[^\\n]{0,30}you\\s+can\\s+pay\\s+through\\s+this\\s+link\\b|\\byour\\s+payment\\s+of\\s+[^\\n]{0,30}for\\s+the\\s+subscription\\s+to\\s+[^\\n]{0,40}is\\s+successful\\b|\\bis\\s+requesting\\s+a\\s+payment\\s+of\\b[^\\n]{0,30}tap\\s+on\\s+the\\s+link\\b|\\bthanks\\s+for\\s+shopping\\s+at\\s+[^\\n]{0,40}paid\\.\\s+view\\s+your\\s+invoice\\b|\\bthank\\s+you\\s+for\\s+shopping\\s+at\\s+levi'?s\\b|\\bwe\\s+have\\s+successfully\\s+received\\s+it\\s+for\\s+your\\s+order\\b|\\bwe\\s+have\\s+received\\s+payment\\s+of\\b[^\\n]{0,30}for\\s+your\\s+car\\s+insurance\\b|\\bcongratulations\\s+on\\s+booking\\s+your\\b[^\\n]{0,60}received\\s+the\\s+booking\\s+amount\\b|\\breceived\\s+(?:rs\\.?|inr)\\s*[\\d,.]+/-\\s+against\\s+new\\s+registration\\s+fee\\b|\\byour\\s+application\\s+for\\s+[^\\n]{0,40}is\\s+due\\s+for\\s+payment\\s+with\\s+the\\s+following\\s+remarks\\b|\\bsbcollect\\s+txn\\b[^\\n]{0,80}is\\s+successful\\b|\\byour\\s+payment\\s+towards\\s+[^\\n]{0,40}fixed\\s+deposit\\s+of\\b[^\\n]{0,30}has\\s+been\\s+processed\\s+successfully\\b|\\bchallan\\s+payment\\s+of\\b[^\\n]{0,110}has\\s+been\\s+successfully\\s+paid\\b|\\bloan\\s+payment\\s+of\\b[^\\n]{0,30}is\\s+due\\s+today\\b|\\bis\\s+scheduled\\s+for\\s+renewal\\s+in\\b[^\\n]{0,60}maintain\\s+sufficient\\b)",
+    "pattern": "(?:\\btransaction\\s+no\\.?\\s*\\d+\\s+for\\s+[^\\n]{0,30}done\\s+for\\s+[^\\n]{0,60}has\\s+succeeded\\b|\\bthank\\s+you\\s+for\\s+making\\s+a\\s+successful\\s+transaction\\.\\s+your\\s+transaction\\s+with\\s+txn\\s+id\\b|\\bhas\\s+requested\\s+payment\\s+of\\s+[^\\n]{0,30}you\\s+can\\s+pay\\s+through\\s+this\\s+link\\b|\\bis\\s+requesting\\s+a\\s+payment\\s+of\\b[^\\n]{0,30}tap\\s+on\\s+the\\s+link\\b|\\bthanks\\s+for\\s+shopping\\s+at\\s+[^\\n]{0,40}paid\\.\\s+view\\s+your\\s+invoice\\b|\\bthank\\s+you\\s+for\\s+shopping\\s+at\\s+levi'?s\\b|\\bwe\\s+have\\s+successfully\\s+received\\s+it\\s+for\\s+your\\s+order\\b|\\bwe\\s+have\\s+received\\s+payment\\s+of\\b[^\\n]{0,30}for\\s+your\\s+car\\s+insurance\\b|\\bcongratulations\\s+on\\s+booking\\s+your\\b[^\\n]{0,60}received\\s+the\\s+booking\\s+amount\\b|\\breceived\\s+(?:rs\\.?|inr)\\s*[\\d,.]+/-\\s+against\\s+new\\s+registration\\s+fee\\b|\\byour\\s+application\\s+for\\s+[^\\n]{0,40}is\\s+due\\s+for\\s+payment\\s+with\\s+the\\s+following\\s+remarks\\b|\\bsbcollect\\s+txn\\b[^\\n]{0,80}is\\s+successful\\b|\\byour\\s+payment\\s+towards\\s+[^\\n]{0,40}fixed\\s+deposit\\s+of\\b[^\\n]{0,30}has\\s+been\\s+processed\\s+successfully\\b|\\bchallan\\s+payment\\s+of\\b[^\\n]{0,110}has\\s+been\\s+successfully\\s+paid\\b|\\bloan\\s+payment\\s+of\\b[^\\n]{0,30}is\\s+due\\s+today\\b|\\bis\\s+scheduled\\s+for\\s+renewal\\s+in\\b[^\\n]{0,60}maintain\\s+sufficient\\b)",
     "flags": "i",
     "reason": "service"
   },
@@ -1298,5 +1298,23 @@
     "pattern": "APY\\(PRAN[^\\)]+\\)\\s+Contribution\\s+of\\s+(?:Rs\\.?|INR|₹)[\\s\\S]*?credited\\s+to\\s+your\\s+PRAN",
     "flags": "i",
     "reason": "service"
+  },
+  {
+    "id": "IGN-LOAN-LURE-WALLET-CREDIT",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?=[\\s\\S]*\\b(?:wallet|successfully\\s+credited)\\b)(?=[\\s\\S]*\\b(?:credited|received)\\b)(?=[\\s\\S]*\\b(?:claim|check|verify|log\\s*in|click|tap|open|visit|withdraw)\\b[\\s\\S]{0,40}https?://[a-z0-9]{1,4}\\.in/[a-z]{4,8}/[a-z0-9]{4,})(?![\\s\\S]*(?:[x*•]{2,}\\s?\\d{2,}|\\bavl\\b|\\bavail|\\bbal(?:ance)?\\b|\\bupi\\b|\\bref\\b|\\butr\\b|\\bnarration\\b|\\brepayment\\b|\\bpay\\s*later\\b|\\bloan\\s+offer\\b|\\ba/?c\\s*(?:no\\.?)?\\s*\\d{4,}))",
+    "flags": "i",
+    "reason": "promotion"
+  },
+  {
+    "id": "IGN-LOAN-OFFER-CREDITED",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?=[\\s\\S]*\\b(?:limited\\s+period\\s+offer|special\\s+offer|pre-?approved)\\b)(?=[\\s\\S]*\\bget\\s+(?:rs|inr)\\.?\\s*[\\d,]+\\s+credited\\b)(?=[\\s\\S]*https?://[a-z0-9]{1,4}\\.in/[a-z]{4,8}/[a-z0-9]{4,})",
+    "flags": "i",
+    "reason": "promotion"
   }
 ]

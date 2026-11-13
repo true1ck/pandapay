@@ -94,7 +94,7 @@ test('all event leg source keys supersede exactly active legacy SMS rows, preser
   await assert.rejects(own(p, c => c.query("UPDATE transactions SET status='active',superseded_by_event_id=NULL WHERE id=$1", [idA])), { code: '42501' });
 });
 
-test('legacy source history suppresses card state even when live upload omits backfill', { skip }, async () => {
+test('legacy source history is flagged history and priced like any other card spend (the rebuild settles the superseded row)', { skip }, async () => {
   const p = await profile(); const fact = h.fact({});
   const slug = `wp16-${crypto.randomUUID()}`;
   const issuer = (await pool.query("INSERT INTO issuers(slug,name) VALUES($1,'Synthetic WP16 issuer') RETURNING id", [slug])).rows[0].id;
@@ -106,8 +106,8 @@ test('legacy source history suppresses card state even when live upload omits ba
   const baseline = applies;
   await ingest(p, h.batch({ items: [h.item([fact])], instruments: [instrument], events: [event], ledger: [h.ledger(event, { fromInstrumentId: instrument.instrumentId })] }));
   const row = (await pool.query('SELECT is_backfill,state_applied FROM transactions WHERE profile_id=$1 AND event_id=$2', [p, event.eventId])).rows[0];
-  assert.deepEqual(row, { is_backfill: true, state_applied: false });
-  assert.equal(applies, baseline);
+  assert.deepEqual(row, { is_backfill: true, state_applied: true });
+  assert.equal(applies, baseline + 1);
 });
 
 test('actual reports exclude superseded legacy rows while including the v2 replacement', { skip }, async () => {

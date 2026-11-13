@@ -4,6 +4,9 @@ import '../features/sms_v2/providers/runtime_provider.dart';
 import '../features/consent/sms_reading_consent.dart';
 import '../features/sms_v2/ledger/providers.dart';
 import '../features/sms_v2/ledger/adapters.dart' as sms_v2_adapters;
+import '../features/sms_v2/ledger/subscription_rebuild.dart';
+import '../features/sms_v2/ledger/subscription_state.dart';
+import '../features/sms_v2/storage/subscription_store.dart';
 import '../features/sync/invalidation_coalescer.dart';
 import 'package:pandapay_domain/sms_v2_ledger.dart' as sms_v2_ledger;
 import 'dart:async';
@@ -2075,13 +2078,63 @@ recurringReportProvider = FutureProvider<RecurringReport?>((ref) async {
   );
 });
 
+/// The saved subscription rows (see `SubscriptionStore`): the one source every
+/// subscription screen, tile and reminder reads. Reading is a few small rows;
+/// when the ledger changed in a way capture did not already account for (a
+/// correction, a server pull, the first launch after an update) the rows are
+/// re-derived once, off the UI isolate, before they are read.
+final FutureProvider<List<SubscriptionState>> subscriptionStatesProvider =
+    FutureProvider<List<SubscriptionState>>((ref) async {
+      // The narrowest revision: only a change to subscriptions rebuilds this.
+      ref.watch(financialStoreRevisionProvider('subscriptions'));
+      if (!ref.watch(smsV2ReportingEnabledProvider)) return const [];
+      final namespace = ref.watch(cacheNamespaceProvider);
+      final cache = await ref.watch(responseCacheProvider.future);
+      final database = cache.financialStore.database;
+      final store = SubscriptionStore(database.db, namespace: namespace);
+      if (!store.isCurrent) {
+        await rebuildSubscriptionsOffThread(database, namespace);
+      }
+      return store.states();
+    });
+
+/// The story of each subscription (set up, charges, price changes, pauses,
+/// cancellation), keyed by the series id the subscription list uses, newest
+/// first. Read from the saved rows; empty until the SMS ledger is ready.
+final FutureProvider<
+  Map<String, List<sms_v2_adapters.SubscriptionHistoryEntry>>
+>
+subscriptionHistoryProvider =
+    FutureProvider<Map<String, List<sms_v2_adapters.SubscriptionHistoryEntry>>>(
+      (ref) async {
+        // Wait for the rows to be current, then read their history.
+        await ref.watch(subscriptionStatesProvider.future);
+        final namespace = ref.watch(cacheNamespaceProvider);
+        final cache = await ref.watch(responseCacheProvider.future);
+        final now = ref.watch(clockProvider).now();
+        final history = SubscriptionStore(
+          cache.financialStore.database.db,
+          namespace: namespace,
+        ).allHistory();
+        // An announced debit whose date has passed is no longer "upcoming".
+        return {
+          for (final e in history.entries)
+            e.key: [
+              for (final h in e.value)
+                if (h.kind != sms_v2_adapters.SubscriptionHistoryKind.upcoming ||
+                    h.at.isAfter(now))
+                  h,
+            ],
+        };
+      },
+    );
+
 final FutureProvider<RecurringReport?>
 recurringReportServerProvider = FutureProvider<RecurringReport?>((ref) async {
   if (ref.watch(smsV2ReportingEnabledProvider)) {
-    final model = await ref.watch(smsV2LedgerReadModelProvider.future);
-    return sms_v2_adapters.recurringReportFromLedger(
-      model.facts,
-      model.ledger.events,
+    final states = await ref.watch(subscriptionStatesProvider.future);
+    return sms_v2_adapters.recurringReportFromSubscriptionStates(
+      states,
       now: ref.watch(clockProvider).now(),
     );
   }
@@ -2381,8 +2434,10 @@ final cardSpendSummaryProvider = Provider<Map<String, CardSpendSummary>>((ref) {
               .toList()
             ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
       result[card.id] = CardSpendSummary(
+        // Card side: what the bank bills includes spend the person chose not
+        // to count in their own spending.
         cycleTotal: Money.fromPaise(
-          model.totalsForTransactions(rows).spendMinor,
+          model.totalsForTransactions(rows).allSpendMinor,
         ),
         latestSpend: spends.firstOrNull,
       );
@@ -2808,6 +2863,10 @@ Future<bool> queueCommand(
 abstract final class OutboxCommand {
   static const ignoreTransaction = 'ignore_transaction';
   static const restoreTransaction = 'restore_transaction';
+
+  /// Sets whether a transaction counts in the person's spending. A later
+  /// command for the same transaction replaces an earlier unsent one.
+  static const setSpendExclusion = 'set_spend_exclusion';
 }
 
 Map<String, CommandHandler> commandHandlersFor(
@@ -2820,6 +2879,10 @@ Map<String, CommandHandler> commandHandlersFor(
   ),
   OutboxCommand.restoreTransaction: (p) =>
       repo.restoreTransaction(p['id'] as String),
+  OutboxCommand.setSpendExclusion: (p) => repo.setSpendExclusion(
+    p['id'] as String,
+    excluded: p['excluded'] as bool,
+  ),
   // Both carry a client mutation id the server uses to ignore a repeat, so a
   // lost reply cannot count a visit or a correction twice.
   OverlayCommand.loungeVisit: (p) => repo.logLoungeVisit(
@@ -5209,11 +5272,16 @@ EntryKindTotals _localEntryTotals(
   Iterable<TransactionEntry> rows,
   TxnEntryKind kind,
 ) {
-  final matching = rows.where((row) => row.entryKind == kind).toList();
+  final ofKind = rows.where((row) => row.entryKind == kind).toList();
+  // Spending leaves out what the person chose not to count, but the rewards
+  // were earned on it all the same.
+  final matching = kind == TxnEntryKind.spend
+      ? ofKind.where((row) => row.countsAsSpend).toList()
+      : ofKind;
   return EntryKindTotals(
     total: _sumLocalAmounts(matching),
     txnCount: matching.length,
-    rewards: _sumLocalRewards(matching),
+    rewards: _sumLocalRewards(ofKind),
   );
 }
 
@@ -5397,14 +5465,12 @@ List<SpendSeriesPoint> _localSpendSeries(
         return SpendSeriesPoint(
           periodStart: bucketFrom,
           spend: _sumLocalAmounts(
-            bucketRows.where((row) => row.entryKind == TxnEntryKind.spend),
+            bucketRows.where((row) => row.countsAsSpend),
           ),
           rewards: _sumLocalRewards(
             bucketRows.where((row) => row.entryKind == TxnEntryKind.spend),
           ),
-          txnCount: bucketRows
-              .where((row) => row.entryKind == TxnEntryKind.spend)
-              .length,
+          txnCount: bucketRows.where((row) => row.countsAsSpend).length,
         );
       }(),
   ];
@@ -5422,9 +5488,7 @@ SpendReport _makeLocalSpendReport(
     bounds.previousFrom,
     bounds.previousTo,
   );
-  final spendRows = current
-      .where((row) => row.entryKind == TxnEntryKind.spend)
-      .toList();
+  final spendRows = current.where((row) => row.countsAsSpend).toList();
   final elapsed = now.isBefore(bounds.from)
       ? 0.0
       : now.isAfter(bounds.to)

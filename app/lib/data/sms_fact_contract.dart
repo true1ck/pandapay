@@ -32,6 +32,7 @@ const List<String> smsEntryKinds = [
   'income',
   'transfer',
   'investment',
+  'investment_return',
 ];
 
 const List<String> smsInstruments = [

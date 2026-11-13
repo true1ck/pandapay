@@ -45,7 +45,20 @@ class UserAvatar extends StatelessWidget {
       );
     } else if (chosen != null) {
       background = chosen.background;
-      content = Icon(chosen.icon, size: size * 0.5, color: chosen.foreground);
+      final asset = chosen.asset;
+      content = asset != null
+          ? Image.asset(
+              asset,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              // Decode at the size it is drawn, not the 384 px the art ships at:
+              // lists of friends would otherwise hold a full image each.
+              cacheWidth: (size * MediaQuery.devicePixelRatioOf(context)).round(),
+              gaplessPlayback: true,
+              errorBuilder: (_, _, _) => _letter(initial),
+            )
+          : Icon(chosen.icon, size: size * 0.5, color: chosen.foreground);
     } else {
       content = _letter(initial);
     }

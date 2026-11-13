@@ -56,8 +56,18 @@ class _RenameState extends State<SharedRenameMemberDialog> {
     super.dispose();
   }
 
+  bool _closed = false;
+
+  /// Pops once. The dialog stays mounted through its exit animation, and a
+  /// second pop would close the sheet underneath it.
+  void _close([String? name]) {
+    if (_closed) return;
+    _closed = true;
+    Navigator.pop(context, name);
+  }
+
   Future<void> _save() async {
-    if (_saving) return;
+    if (_saving || _closed) return;
     final error = sharedMemberNameError(_field.text);
     if (error != null) {
       setState(() => _error = error);
@@ -66,17 +76,22 @@ class _RenameState extends State<SharedRenameMemberDialog> {
     final name = sharedCleanMemberName(_field.text)!;
     final save = widget.onSave;
     if (save == null) {
-      Navigator.pop(context, name);
+      _close(name);
       return;
     }
     setState(() {
       _saving = true;
       _error = null;
     });
-    final problem = await save(name);
+    String? problem;
+    try {
+      problem = await save(name);
+    } catch (_) {
+      problem = 'Could not save the name yet. Try again.';
+    }
     if (!mounted) return;
     if (problem == null) {
-      Navigator.pop(context, name);
+      _close(name);
     } else {
       setState(() {
         _saving = false;
@@ -118,7 +133,7 @@ class _RenameState extends State<SharedRenameMemberDialog> {
     ),
     actions: [
       TextButton(
-        onPressed: () => Navigator.pop(context),
+        onPressed: _saving ? null : () => _close(),
         child: const Text('Cancel'),
       ),
       TextButton(

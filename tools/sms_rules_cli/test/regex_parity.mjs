@@ -21,10 +21,12 @@ if (!folder) {
 }
 folder = resolve(folder);
 
+// On Windows `dart` is a .bat shim, which spawnSync cannot start without a shell.
 const dump = execFileSync('dart', ['run', 'test/regex_parity_dump.dart', folder], {
   cwd: cliDir,
   maxBuffer: 1 << 30,
   encoding: 'utf8',
+  shell: process.platform === 'win32',
 });
 const cases = JSON.parse(dump);
 

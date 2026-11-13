@@ -103,6 +103,72 @@ void main() {
     expect(find.text('Not a subscription'), findsNothing);
   });
 
+  testWidgets('paused and past subscriptions are never listed as active', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(900, 3200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    RecurringSeries series(
+      String id,
+      String name,
+      String lifecycle, {
+      DateTime? next,
+      DateTime? end,
+    }) => RecurringSeries(
+      id: id,
+      displayName: name,
+      typicalAmount: Money.fromRupees(649),
+      cadenceDays: 30,
+      occurrenceCount: 3,
+      annualCost: Money.fromRupees(7788),
+      lastSeenOn: _d(2026, 8, 5),
+      nextExpectedOn: next,
+      endDate: end,
+      lifecycleStatus: lifecycle,
+      engineStatus: lifecycle == 'active' ? 'confirmed' : lifecycle,
+      detectionSource: 'sms_v2',
+      isMandate: true,
+      autopayStatus: lifecycle,
+      setupConfirmed: true,
+      cadenceConfirmed: true,
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          recurringReportProvider.overrideWith(
+            (ref) async => RecurringReport(
+              series: [
+                series('a', 'Netflix', 'active', next: _d(2026, 11, 20)),
+                series('b', 'Spotify', 'paused'),
+                series('c', 'Cursor', 'cancelled', end: _d(2026, 9, 2)),
+                series('d', 'Claude', 'lapsed'),
+              ],
+              totalAnnual: Money.fromRupees(7788),
+            ),
+          ),
+        ],
+        child: const MaterialApp(home: SubscriptionsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 active · 1 paused · 2 past'), findsOneWidget);
+    // One page, grouped the way a person thinks about it.
+    expect(find.text('Active'), findsOneWidget);
+    expect(find.text('Paused'), findsOneWidget);
+    expect(find.text('Past'), findsOneWidget);
+    for (final name in ['Netflix', 'Spotify', 'Cursor', 'Claude']) {
+      expect(find.text(name), findsOneWidget, reason: name);
+    }
+    // Why each past service is past, in words.
+    expect(find.textContaining('Cancelled on'), findsOneWidget);
+    expect(find.textContaining('No charge for a while'), findsOneWidget);
+    expect(find.textContaining('AutoPay is paused'), findsOneWidget);
+    // Only the active one has a renewal.
+    expect(find.textContaining('Renews around'), findsOneWidget);
+  });
+
   testWidgets('keeps repeated merchant spending in a separate review section', (
     tester,
   ) async {
@@ -131,7 +197,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Recurring payments to review'), findsOneWidget);
+    expect(find.text('Needs your review'), findsOneWidget);
     expect(find.text('4 similar payments · not confirmed'), findsOneWidget);
     expect(find.text('Your recurring spend'), findsNothing);
   });
@@ -432,7 +498,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Needs review'), findsOneWidget);
+      expect(find.textContaining('Needs review'), findsOneWidget);
       expect(
         find.textContaining('No recent charge detected since'),
         findsOneWidget,
@@ -482,7 +548,7 @@ void main() {
   });
 
   testWidgets(
-    'filters by cadence and displays clear AutoPay frequency labels',
+    'shows a clear frequency label for each subscription',
     (tester) async {
       await tester.pumpWidget(
         ProviderScope(
@@ -537,42 +603,7 @@ void main() {
       expect(find.text('Monthly', skipOffstage: false), findsNWidgets(2));
       expect(find.text('Yearly', skipOffstage: false), findsOneWidget);
 
-      // Cadence filter chips present
-      expect(find.text('All (3)'), findsOneWidget);
-      expect(find.text('Monthly (2)'), findsOneWidget);
-      expect(find.text('Quarterly (0)'), findsOneWidget);
-      expect(find.text('Yearly (1)'), findsOneWidget);
-
-      // Tap Monthly filter
-      await tester.tap(find.text('Monthly (2)'));
-      await tester.pumpAndSettle();
-
-      // Monthly items visible, yearly hidden
-      expect(find.text('Netflix'), findsOneWidget);
-      expect(find.text('Cult Fit', skipOffstage: false), findsOneWidget);
-      expect(find.text('Amazon Prime'), findsNothing);
-      expect(find.text('Your monthly spend'), findsOneWidget);
-
-      // Tap Yearly filter
-      await tester.tap(find.text('Yearly (1)'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Amazon Prime'), findsOneWidget);
-      expect(find.text('Netflix'), findsNothing);
-      expect(find.text('Cult Fit'), findsNothing);
-      expect(find.text('Your yearly spend'), findsOneWidget);
-
-      // Tap Quarterly (0) filter
-      await tester.tap(find.text('Quarterly (0)'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('No quarterly subscriptions found'), findsOneWidget);
-      expect(find.text('Netflix'), findsNothing);
-
-      // Tap All filter
-      await tester.tap(find.text('All (3)'));
-      await tester.pumpAndSettle();
-
+      // One list: every subscription is there, no filter hides any.
       expect(find.text('Netflix'), findsOneWidget);
       expect(find.text('Amazon Prime'), findsOneWidget);
       expect(find.text('Cult Fit', skipOffstage: false), findsOneWidget);
@@ -841,7 +872,6 @@ void main() {
 
       expect(find.text('Google Play'), findsOneWidget);
       expect(find.text('Up to ₹4,000'), findsOneWidget);
-      expect(find.text('AutoPay Active'), findsOneWidget);
       expect(find.text('Free'), findsNothing);
       expect(
         find.text('AutoPay limit up to ₹4,000 • Awaiting first charge'),

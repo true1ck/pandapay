@@ -322,7 +322,7 @@ CREATE INDEX IF NOT EXISTS idx_user_merchant_rules_namespace
 ''';
 
 class AppDatabase {
-  static const _schemaVersion = 1;
+  static const _schemaVersion = 2;
   static final Set<AppDatabase> _connections = {};
   static final Set<String> _recoveryPaths = {};
   final Database db;
@@ -343,36 +343,68 @@ class AppDatabase {
       // by SQLite's user_version. Existing installs still run this block once
       // (including all legacy repairs); a known-good database avoids replaying
       // hundreds of CREATE/PRAGMA checks on every first route/provider open.
-      db.execute(_schema);
-      _ensureUserCategoriesSchema();
-      _ensureLocalUserCardsSchema();
-      _ensureAutoResolvedHistorySchema();
-      _ensureOutboxSchema();
-      if (!db
-          .select('PRAGMA table_info(sync_pending_changes)')
-          .any((c) => c['name'] == 'in_flight')) {
-        db.execute(
-          'ALTER TABLE sync_pending_changes ADD COLUMN in_flight INTEGER NOT NULL DEFAULT 0',
-        );
+      //
+      // Versions are cumulative: v1 is the full legacy block below, v2 and
+      // later are small additive steps that run on top of it. A database that
+      // is already at v1 therefore skips the legacy block and only runs the
+      // newer steps.
+      if (version < 1) {
+        _applyLegacySchema();
       }
-      for (final table in [
-        'transaction_outbox_entries',
-        'sync_pending_changes',
-      ]) {
-        if (!db
-            .select('PRAGMA table_info($table)')
-            .any((c) => c['name'] == 'namespace')) {
-          db.execute(
-            "ALTER TABLE $table ADD COLUMN namespace TEXT NOT NULL DEFAULT 'legacy'",
-          );
-        }
-      }
+      // v2: transaction_outbox_entries.payment_method (nullable, additive).
+      // Existing queued rows keep NULL, which flushes exactly as before.
+      _ensureOutboxPaymentMethodColumn();
       db.execute('PRAGMA user_version = $_schemaVersion');
     }
     // Prepare the additive module before account capture/restore can enumerate
     // its tables. Its independent version never changes legacy user_version.
     SharedExpensesSchema.ensure(db, allowNewerVersion: true);
     _connections.add(this);
+  }
+
+  /// The original (v1) schema block, unchanged apart from being a method.
+  void _applyLegacySchema() {
+    db.execute(_schema);
+    _ensureUserCategoriesSchema();
+    _ensureLocalUserCardsSchema();
+    _ensureAutoResolvedHistorySchema();
+    _ensureOutboxSchema();
+    if (!db
+        .select('PRAGMA table_info(sync_pending_changes)')
+        .any((c) => c['name'] == 'in_flight')) {
+      db.execute(
+        'ALTER TABLE sync_pending_changes ADD COLUMN in_flight INTEGER NOT NULL DEFAULT 0',
+      );
+    }
+    for (final table in ['transaction_outbox_entries', 'sync_pending_changes']) {
+      if (!db
+          .select('PRAGMA table_info($table)')
+          .any((c) => c['name'] == 'namespace')) {
+        db.execute(
+          "ALTER TABLE $table ADD COLUMN namespace TEXT NOT NULL DEFAULT 'legacy'",
+        );
+      }
+    }
+  }
+
+  /// Additive v2 step. NULL means "no payment method chosen", which is every
+  /// row that existed before this column and is sent exactly as it always was.
+  void _ensureOutboxPaymentMethodColumn() {
+    final columns = db.select('PRAGMA table_info(transaction_outbox_entries)');
+    if (columns.isEmpty) return;
+    if (columns.any((row) => row['name'] == 'payment_method')) return;
+    try {
+      db.execute(
+        'ALTER TABLE transaction_outbox_entries ADD COLUMN payment_method TEXT',
+      );
+    } catch (_) {
+      // The SMS background isolate opens its own connection and may have
+      // added the column between the check and the ALTER. Only swallow that.
+      final added = db
+          .select('PRAGMA table_info(transaction_outbox_entries)')
+          .any((row) => row['name'] == 'payment_method');
+      if (!added) rethrow;
+    }
   }
 
   /// Drops persisted rows scoped to the account namespace after the server

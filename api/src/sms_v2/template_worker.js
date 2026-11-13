@@ -43,11 +43,14 @@ const isSet = (env, key) => env[key] !== undefined && env[key] !== "";
 // the same request is worth sending again later. This is NOT a bad draft, so it never costs the layout one of its
 // tries; the worker puts the layout back in the queue and waits.
 class ProviderBusyError extends Error {
-  constructor(reason, { retryAfterMs = 0, status = null } = {}) {
+  constructor(reason, { retryAfterMs = 0, status = null, systemic = false } = {}) {
     super(reason);
     this.name = "ProviderBusyError";
     this.retryAfterMs = retryAfterMs;
     this.status = status;
+    // The fault is ours or the account's (bad key, wrong model, billing), not the layout's: it says nothing about
+    // the layout, so it never counts against it however often it repeats.
+    this.systemic = systemic;
   }
 }
 // After this many separate provider failures for one layout (over many waits) it is given up on, so a layout the
@@ -55,6 +58,15 @@ class ProviderBusyError extends Error {
 const MAX_PROVIDER_FAILURES = 8;
 const BUSY_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const BUSY_WAIT_MS = { min: 5000, max: 120000 };
+// Wait before trying again after a key / model / billing problem: it will not fix itself in seconds.
+const SYSTEMIC_WAIT_MS = 300000;
+// Answers that mean the request is refused for reasons unrelated to the layout (key, model, billing).
+const SYSTEMIC_BODY =
+  /API[_ ]?KEY|PERMISSION_DENIED|billing|is not found for API version|models\/\S+ is not found|not supported for generateContent|SERVICE_DISABLED/i;
+function isSystemicProviderAnswer(status, bodyText) {
+  if (status === 401 || status === 403 || status === 404) return true;
+  return status === 400 && SYSTEMIC_BODY.test(String(bodyText ?? ""));
+}
 // How long to wait before the next try, from the provider's own Retry-After when it gives one, else a short
 // pause that grows with the number of failures in a row.
 function busyWaitMs(error, inARow = 1) {
@@ -757,6 +769,27 @@ function createPgWorkerStore({ withAdminClient, adminId, transaction }) {
         ),
       );
     },
+    // Whether the provider answered any layout lately (an attempt that used tokens in the last hour). When it has
+    // not, a failing layout is a victim of an outage, not the cause, and must not be given up on.
+    providerRecentlyWorked() {
+      return tx(
+        async (client) =>
+          Number(
+            (
+              await client.query(
+                "SELECT count(*)::int AS n FROM sms_v2_template_attempts WHERE started_at >= clock_timestamp()-interval '1 hour' AND coalesce(total_tokens,0)>0",
+              )
+            ).rows[0].n,
+          ) > 0,
+      );
+    },
+    // Puts layouts that failed through no fault of their own (provider down, worker restarted or crashed) back in
+    // the queue, a few times each. Returns how many. A layout whose drafts were genuinely rejected stays failed.
+    requeueFailed() {
+      return tx(async (client) =>
+        Number((await client.query("SELECT pandapay.sms_v2_ai_requeue_failed() AS n")).rows[0].n),
+      );
+    },
     async beginAttempt(template, attempt, prompt, config) {
       return tx(async (client) => {
         const row = (
@@ -901,7 +934,7 @@ async function runTemplateWorkerOnce({
         totalTokens,
         latencyMs: Math.max(0, clock() - started),
         promptVersion: PROMPT_VERSION,
-        outcome: errors.length ? "rejected" : "valid",
+        outcome: busy?.systemic ? "provider_error" : errors.length ? "rejected" : "valid",
         costUsd:
           config.inputPrice === null ||
           config.outputPrice === null ||
@@ -914,8 +947,20 @@ async function runTemplateWorkerOnce({
       if (busy) {
         // The provider failed, not the draft. Do not spend the layout's tries on it: put it back in the queue and
         // let the worker wait. Only a layout the provider has failed on many separate times is given up on.
+        if (busy.systemic) {
+          await store.finish(template, { model: config.model, requeue: true });
+          return {
+            status: "provider_busy",
+            retryAfterMs: busy.retryAfterMs || SYSTEMIC_WAIT_MS,
+            providerStatus: busy.status,
+            systemic: true,
+          };
+        }
         const failures = typeof store.providerFailures === "function" ? await store.providerFailures(template) : 0;
-        if (failures >= MAX_PROVIDER_FAILURES) {
+        // With no success anywhere in the last hour this is an outage: wait it out rather than blame the layout.
+        const providerWorked =
+          typeof store.providerRecentlyWorked === "function" ? await store.providerRecentlyWorked() : true;
+        if (failures >= MAX_PROVIDER_FAILURES && providerWorked) {
           await store.finish(template, { model: config.model, code: "provider_unavailable" });
           return { status: "failed", templateHash: template.template_hash };
         }
@@ -985,6 +1030,19 @@ function createGeminiTemplateProvider({
             retryAfterMs: Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 0,
           });
         }
+        // A refused key, model or billing is the same for every layout: wait, never fail layouts for it.
+        let bodyText = "";
+        try {
+          bodyText = (await response.text?.())?.slice(0, 4096) ?? "";
+        } catch {
+          bodyText = "";
+        }
+        if (isSystemicProviderAnswer(response.status, bodyText))
+          throw new ProviderBusyError("template_provider_misconfigured", {
+            status: response.status,
+            retryAfterMs: SYSTEMIC_WAIT_MS,
+            systemic: true,
+          });
         throw new Error("template_provider_failed");
       }
       let size = 0;
@@ -1018,6 +1076,7 @@ module.exports = {
   ProviderBusyError,
   MAX_PROVIDER_FAILURES,
   busyWaitMs,
+  isSystemicProviderAnswer,
   reserveCapacity,
   monthSpendUsd,
   recordUsage,

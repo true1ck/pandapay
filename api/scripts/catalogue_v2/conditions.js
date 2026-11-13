@@ -79,6 +79,8 @@ const DESCRIPTIVE_KEYS = new Set([
   'merchant_id_basis', 'points_basis', 'reward_basis_note',
 ]);
 const DESCRIPTIVE_SUFFIX = /_(definition|description|note|notes|text|explanation|basis|rationale|identification|examples|source)$/;
+// Boolean flags saying EMI-converted spends are left out of a rule.
+const EMI_EXCLUSION_FLAG = /^(?:(?:emi|emis|emi_conversions?|emi_transactions?|emi_spends?|emi_purchases?|instant_emi|merchant_emi|smart_emi)_(?:excluded|not_eligible|ineligible|not_applicable)|(?:exclude|excludes|excluding|excluded|except|no|not|non)_(?:emi|emis|emi_conversions?|emi_transactions?|emi_spends?|instant_emi)|(?:transaction|spend|purchase)s?_not_converted_to_emi|not_converted_to_emi)$/;
 // Boolean flags that only restate that a rule is an exclusion.
 const EXCLUSION_FLAG = /^(excluded|exclusion|excluded_from_.*|.*_excluded_from_.*|is_excluded)$/;
 
@@ -568,6 +570,14 @@ function mapOne(m, key, value, ctx) {
     m.excludedCategorySlugs.push('emi');
     return;
   }
+  // "emi_excluded": true, "exclude_emi": true, "not_emi": true, "emi_conversions_excluded": true,
+  // "transaction_not_converted_to_emi": true ...: the bonus does not apply to EMI-converted
+  // spends. The engine already models that (the `emi` category), so this is a restriction it
+  // can honour, not a reason to switch the whole bonus off.
+  if (value === true && EMI_EXCLUSION_FLAG.test(lower)) {
+    m.excludedCategorySlugs.push('emi');
+    return;
+  }
   if (MERCHANT_KEYS.has(lower)) return mapNameValue(m, k, value, ctx.index, { allowRail: false });
   if (PLATFORM_KEYS.has(lower)) return mapNameValue(m, k, value, ctx.index, { allowRail: true });
   if (CATEGORY_LIST_KEYS.has(lower)) {
@@ -733,6 +743,7 @@ function mapRuleConditions(rule, ctx) {
 
 module.exports = {
   BLOCK_KEYS,
+  EMI_EXCLUSION_FLAG,
   MAX_TXN_KEYS,
   MIN_TXN_KEYS,
   RAIL_WORDS,

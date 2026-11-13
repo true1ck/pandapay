@@ -15,11 +15,26 @@ class PendingSplitInviteStore {
 
   Future<void> capture(String? token, {DateTime? now}) async {
     if (token == null ||
-        sharedInviteTokenFromUri(Uri.parse(sharedInviteUrl(token))) != token)
+        sharedInviteTokenFromUri(Uri.parse(sharedInviteUrl(token))) != token) {
       return;
+    }
     final prefs = await _load();
     await prefs.setString(_tokenKey, token);
     await prefs.setInt(_atKey, (now ?? DateTime.now()).millisecondsSinceEpoch);
+  }
+
+  static const _referrerKey = 'pandapay_app.referrer_split_seen_v1';
+
+  /// Stores a token read from the Play install referrer, once. The referrer
+  /// answers the same on every launch for the life of the install, so without
+  /// this an invite already answered (and cleared) came back at every cold
+  /// start and reopened the Join screen for ever.
+  Future<void> captureFromReferrer(String? token, {DateTime? now}) async {
+    if (token == null) return;
+    final prefs = await _load();
+    if (prefs.getString(_referrerKey) == token) return;
+    await prefs.setString(_referrerKey, token);
+    await capture(token, now: now);
   }
 
   /// The newest stored token, or null if none or older than a week.

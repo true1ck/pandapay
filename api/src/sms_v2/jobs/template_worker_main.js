@@ -86,6 +86,13 @@ async function main() {
         } catch (error) {
           console.error("SMS v2 AI cleanup failed", error.code || error.name);
         }
+        // Layouts that failed through no fault of their own get another go (a few times each).
+        try {
+          if (typeof store.requeueFailed === "function")
+            console.log(JSON.stringify({ event: "sms_v2_ai_requeue", requeued: await store.requeueFailed() }));
+        } catch (error) {
+          console.error("SMS v2 AI requeue failed", error.code || error.name);
+        }
       }
       consecutiveBusy = result.status === "provider_busy" ? consecutiveBusy + 1 : 0;
       if (process.argv.includes("--once") || stopped) break;

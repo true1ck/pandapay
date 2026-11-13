@@ -25,6 +25,7 @@ const MIGRATIONS = [
   '20261114040000_shared_expense_owner_and_former.sql', '20261116080000_shared_expense_invitation_audience.sql',
   '20261116090100_shared_expense_member_labels.sql', '20261116100100_shared_expense_join_identity.sql',
   '20261117010000_shared_expense_command_safety.sql', '20261117020000_shared_expense_privacy_safety.sql',
+  '20261123000000_shared_expense_group_link_join_mode.sql', '20261123010000_shared_expense_instant_expenses.sql',
 ];
 
 function loopbackUrl() {

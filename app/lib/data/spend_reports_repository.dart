@@ -844,6 +844,11 @@ class RecurringSeries {
   /// A transaction pattern without service evidence is a prompt for review,
   /// never proof that the merchant sells a subscription.
   final bool reviewCandidate;
+
+  /// Why a [reviewCandidate] is asked about, in the person's words ("Your bank
+  /// announced 5 debits to Amazon Pay but none was seen"). Null for a row that
+  /// is confirmed or found only by a repeating rhythm.
+  final String? reviewReason;
   final Money annualCost;
   final Money? autopayLimit;
   final DateTime? startDate;
@@ -883,6 +888,7 @@ class RecurringSeries {
     this.cadenceConfirmed = true,
     this.setupConfirmed = false,
     this.reviewCandidate = false,
+    this.reviewReason,
     this.engineStatus,
   });
 
@@ -998,6 +1004,7 @@ class RecurringSeries {
     bool? cadenceConfirmed,
     bool? setupConfirmed,
     bool? reviewCandidate,
+    String? reviewReason,
     String? engineStatus,
   }) {
     return RecurringSeries(
@@ -1028,6 +1035,7 @@ class RecurringSeries {
       cadenceConfirmed: cadenceConfirmed ?? this.cadenceConfirmed,
       setupConfirmed: setupConfirmed ?? this.setupConfirmed,
       reviewCandidate: reviewCandidate ?? this.reviewCandidate,
+      reviewReason: reviewReason ?? this.reviewReason,
       engineStatus: engineStatus ?? this.engineStatus,
     );
   }
@@ -1092,6 +1100,7 @@ class RecurringSeries {
       cadenceConfirmed: cadenceConfirmed,
       setupConfirmed: setupConfirmed,
       reviewCandidate: json['reviewCandidate'] == true,
+      reviewReason: json['reviewReason'] as String?,
       engineStatus: engine,
     );
   }
@@ -1123,6 +1132,7 @@ class RecurringSeries {
     'cadenceConfirmed': cadenceConfirmed,
     'setupConfirmed': setupConfirmed,
     'reviewCandidate': reviewCandidate,
+    if (reviewReason != null) 'reviewReason': reviewReason,
     if (engineStatus != null) 'engineStatus': engineStatus,
   };
 }

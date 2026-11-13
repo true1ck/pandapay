@@ -46,6 +46,8 @@ class _FakeUserCardsRepository implements UserCardsRepository {
     TxnEntryKind? entryKind,
     Map<String, dynamic>? selfTransfer,
     bool clearCategory = false,
+    String? paymentMethod,
+    bool clearPaymentMethod = false,
   }) async {
     editCalls++;
     if (failFirstEditWithAuth && editCalls == 1) {

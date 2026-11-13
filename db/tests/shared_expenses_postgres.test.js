@@ -62,7 +62,7 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114020000_shared_expense_group_links.sql'),'utf8'));
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114030000_shared_expense_membership_exit.sql'),'utf8'));
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114040000_shared_expense_owner_and_former.sql'),'utf8'));
-  for (const file of ['20261116080000_shared_expense_invitation_audience.sql', '20261116090100_shared_expense_member_labels.sql', '20261116100100_shared_expense_join_identity.sql', '20261117010000_shared_expense_command_safety.sql', '20261117020000_shared_expense_privacy_safety.sql']) await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/'+file),'utf8'));
+  for (const file of ['20261116080000_shared_expense_invitation_audience.sql', '20261116090100_shared_expense_member_labels.sql', '20261116100100_shared_expense_join_identity.sql', '20261117010000_shared_expense_command_safety.sql', '20261117020000_shared_expense_privacy_safety.sql', '20261123000000_shared_expense_group_link_join_mode.sql']) await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/'+file),'utf8'));
   // Replay the pre-existing role setup's broad grants. A new isolated schema
   // must retain its ACL even when public and pandapay grants are restored.
   await db.query('GRANT USAGE ON SCHEMA public,pandapay TO app_user; GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO app_user; GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pandapay TO app_user');
@@ -316,6 +316,45 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     await db.query("INSERT INTO shared_expenses.members(context_id,member_id,role,state,display_name) SELECT $1,gen_random_uuid(),'member','invited','x' FROM generate_series(1,20)",[g]);
     await db.query("INSERT INTO shared_expenses.invitations(invitation_id,context_id,member_id,issuer_profile_id,token_hash,claimed_profile_id,state,via_group_link) SELECT gen_random_uuid(),$1,m.member_id,$2,encode(sha256(convert_to(m.member_id::text,'UTF8')),'hex'),$2,'awaiting_owner',true FROM shared_expenses.members m WHERE m.context_id=$1 AND m.display_name='x'",[g,a]);
     await assert.rejects(claim(c,t3),/join_requests_full/);
+  });
+  await t.test('group link join mode: approval is the default, an open link admits at once',async()=>{
+    const H=(ch)=>ch.repeat(64), g=crypto.randomUUID(), tok=()=>crypto.randomBytes(32).toString('hex');
+    await actor(a,()=>db.query("SELECT shared_expenses.create_context($1,'group','Open trip',$2,$3)",[g,crypto.randomUUID(),H('1')]));
+    const link=(who,token)=>actor(who,()=>db.query('SELECT shared_expenses.create_group_link($1,$2,$3,$4) AS v',[g,token,crypto.randomUUID(),H('3')]));
+    const mode=(who,auto,token=null)=>actor(who,()=>db.query('SELECT shared_expenses.set_group_link_mode($1,$2,$3) AS v',[g,auto,token])).then(r=>r.rows[0].v);
+    const claim=(who,token,o=crypto.randomUUID())=>actor(who,()=>db.query('SELECT shared_expenses.claim_invitation($1,$2,$3,$4,$5) AS v',[token,null,null,o,H('4')])).then(r=>r.rows[0].v);
+    const preview=(who,token)=>actor(who,()=>db.query('SELECT shared_expenses.preview_invitation($1) AS v',[token])).then(r=>r.rows[0].v);
+    const status=()=>actor(a,()=>db.query('SELECT shared_expenses.group_link_status($1) AS v',[g])).then(r=>r.rows[0].v);
+    const state=async(who)=>(await db.query('SELECT state FROM shared_expenses.members WHERE context_id=$1 AND profile_id=$2',[g,who])).rows[0]?.state;
+    const t1=tok();
+    await link(a,t1);
+    assert.equal((await status()).autoJoin,false,'a new link needs approval until the owner opens it');
+    assert.equal((await preview(b,t1)).autoJoin,false);
+    assert.equal((await claim(b,t1)).status,'awaiting_owner','approval links still ask the owner');
+    await assert.rejects(mode(b,true),/context_not_authorized/,'only the owner chooses');
+    assert.equal((await mode(a,true)).autoJoin,true);
+    assert.equal((await status()).autoJoin,true);
+    assert.equal((await preview(c,t1)).autoJoin,true,'the join screen can say they will join at once');
+    // Someone who asked while approval was needed is let in when they open the open link.
+    const again=await claim(b,t1);
+    assert.equal(again.status,'joined');
+    assert.equal(await state(b),'active');
+    // A new person joins in one step, with no request left for the owner to answer.
+    const op=crypto.randomUUID();
+    const first=await claim(c,t1,op);
+    assert.equal(first.status,'joined');
+    assert.equal((await claim(c,t1,op)).status,'joined','replay');
+    assert.equal(await state(c),'active');
+    assert.equal((await actor(c,()=>db.query('SELECT * FROM shared_expenses.contexts WHERE context_id=$1',[g]))).rowCount,1,'a member can read the group at once');
+    const requests=await actor(a,()=>db.query('SELECT shared_expenses.list_join_requests() AS v'));
+    assert.equal(requests.rows[0].v.items.find(i=>i.contextId===g),undefined,'nothing waits for the owner');
+    assert.equal((await db.query('SELECT count(*)::int n FROM shared_expenses.journal_entries WHERE context_id=$1',[g])).rows[0].n,0,'joining never posts money');
+    // A replaced link starts as an approval link again, and a stale token cannot change it.
+    const t2=tok();
+    await link(a,t2);
+    assert.equal((await status()).autoJoin,false);
+    await assert.rejects(mode(a,true,t1),/invitation_unavailable/,'the old link is not the current one');
+    assert.equal((await status()).autoJoin,false);
   });
   await t.test('owner transfer, take-over when the owner account is gone, and "Former member" label',async()=>{
     const H=(ch)=>ch.repeat(64), g=crypto.randomUUID(), q=crypto.randomUUID(), i=crypto.randomUUID();

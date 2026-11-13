@@ -1,3 +1,4 @@
+import 'transaction_badge.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -187,6 +188,11 @@ class _DeletedTransactionCard extends StatelessWidget {
                     style: BambooFonts.ui(15, weight: FontWeight.w700),
                   ),
                 ),
+                if (txnBadgeKind(entry) case final badge?) ...[
+                  const SizedBox(width: AppSpace.xs),
+                  TransactionBadgePill(kind: badge, margin: EdgeInsets.zero),
+                  const SizedBox(width: AppSpace.sm),
+                ],
                 MoneyText(
                   entry.amount,
                   confidence: Confidence.estimated,

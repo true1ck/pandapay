@@ -15,6 +15,8 @@ import '../../data/user_cards_repository.dart' show UserCard;
 import '../cards/cap_progress.dart';
 import '../cards/next_best_card.dart';
 import '../insights/payments_due_screen.dart' show paymentsDueProvider;
+import '../../data/spend_reports_repository.dart' show RecurringSeries;
+import '../insights/subscription_view.dart' show buildSubscriptionView;
 import '../sms_v2/providers/runtime_provider.dart' show smsV2RuntimeProvider;
 import '../sms_v2/storage/schema.dart' show SmsV2Schema;
 import '../sms_v2/storage/sync_state_store.dart' show SyncStateStore;
@@ -314,17 +316,41 @@ class NotificationTriggerRunner {
     }
   }
 
+  /// A calendar day, for comparing days. A date-only SMS is midnight in India,
+  /// stored as 18:30 UTC the evening before, so the day is read in local time:
+  /// reading the UTC fields would remind a day early.
+  static DateTime _localDay(DateTime instant) {
+    final local = instant.toLocal();
+    return DateTime.utc(local.year, local.month, local.day);
+  }
+
   /// Catch up the early reminder if the app was not opened exactly three
   /// days before renewal. The final reminder has a separate dedupe bucket.
   static int? subscriptionReminderStage(DateTime renewal, DateTime now) {
-    final days = DateTime.utc(
-      renewal.year,
-      renewal.month,
-      renewal.day,
-    ).difference(DateTime.utc(now.year, now.month, now.day)).inDays;
+    final days = _localDay(renewal).difference(_localDay(now)).inDays;
     if (days == 1) return 1;
     if (days == 2 || days == 3) return 3;
     return null;
+  }
+
+  /// The subscriptions to remind about today, each with its stage (1: renews
+  /// tomorrow, 3: renews in two or three days). Only what the Subscriptions page
+  /// lists as still billing ([buildSubscriptionView]) is eligible, so a telecom,
+  /// lender or insurance row, a possible subscription, or a paused or cancelled
+  /// plan never gets a "renews tomorrow" notice.
+  @visibleForTesting
+  static List<(RecurringSeries, int)> subscriptionsDueForReminder(
+    Iterable<RecurringSeries> series,
+    DateTime now,
+  ) {
+    final due = <(RecurringSeries, int)>[];
+    for (final s in buildSubscriptionView(series).active) {
+      final renewal = s.nextExpectedOn;
+      if (renewal == null || s.typicalAmount.paise <= 0) continue;
+      final stage = subscriptionReminderStage(renewal, now);
+      if (stage != null) due.add((s, stage));
+    }
+    return due;
   }
 
   Future<void> _checkSubscriptions() async {
@@ -332,17 +358,15 @@ class NotificationTriggerRunner {
     if (report == null) return;
     final now = DateTime.now();
     final gate = ref.read(notificationGateProvider);
-    for (final series in report.series) {
-      final renewal = series.nextExpectedOn;
-      if (renewal == null || series.typicalAmount.paise <= 0) continue;
-      // A merchant only suspected of recurring is not something to remind about.
-      if (series.reviewCandidate) continue;
-      final stage = subscriptionReminderStage(renewal, now);
-      if (stage == null) continue;
+    for (final (series, stage) in subscriptionsDueForReminder(
+      report.series,
+      now,
+    )) {
+      final renewal = series.nextExpectedOn!.toLocal();
       final date = DateFormat('yyyy-MM-dd').format(renewal);
       final when = stage == 1
           ? 'tomorrow'
-          : 'in ${DateTime.utc(renewal.year, renewal.month, renewal.day).difference(DateTime.utc(now.year, now.month, now.day)).inDays} days';
+          : 'in ${_localDay(renewal).difference(_localDay(now)).inDays} days';
       await gate.fire(
         category: 'bills',
         title: '${series.displayName} subscription renews $when',

@@ -893,4 +893,66 @@ void main() {
     expect(await _deliver(db, repo), 0);
     expect(CommandOutbox(db, namespace: 'user:test').pendingCount, 1);
   });
+
+  group('payment method label', () {
+    TransactionEntry entryWith({
+      String? method,
+      TxnInstrument instrument = TxnInstrument.upiBank,
+      String? card,
+    }) => TransactionEntry(
+      id: 't1',
+      amount: Money.fromRupees(5000),
+      occurredAt: DateTime(2026, 3, 1),
+      merchantName: 'Landlord',
+      cardDisplayName: card,
+      instrument: instrument,
+      paymentMethod: method,
+      source: 'manual',
+      status: 'active',
+    );
+
+    testWidgets('shows Cheque where the bank account label was', (
+      tester,
+    ) async {
+      await _pump(tester, repo: _FakeUserCardsRepository(entryWith(method: 'cheque')));
+      expect(find.text('Cheque'), findsOneWidget);
+      expect(find.text('UPI / bank account'), findsNothing);
+    });
+
+    testWidgets('falls back to the current label when there is no method', (
+      tester,
+    ) async {
+      await _pump(tester, repo: _FakeUserCardsRepository(entryWith()));
+      expect(find.text('UPI / bank account'), findsOneWidget);
+    });
+
+    testWidgets('a method that does not fit the instrument is not shown', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        repo: _FakeUserCardsRepository(
+          entryWith(method: 'cheque', instrument: TxnInstrument.cash),
+        ),
+      );
+      expect(find.text('Cheque'), findsNothing);
+      expect(find.text('Cash'), findsOneWidget);
+    });
+
+    testWidgets('a card name keeps priority and gains the method', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        repo: _FakeUserCardsRepository(
+          entryWith(
+            method: 'emi',
+            instrument: TxnInstrument.creditCard,
+            card: 'My Axis Card',
+          ),
+        ),
+      );
+      expect(find.text('My Axis Card · EMI'), findsOneWidget);
+    });
+  });
 }

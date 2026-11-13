@@ -8,6 +8,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:pandapay/app/env.dart';
 import 'package:pandapay/app/providers.dart' as app;
+import 'package:pandapay/features/insights/subscriptions_screen.dart';
 import 'package:pandapay/features/sms_import/ios_shortcut_sms.dart';
 import 'package:pandapay/features/sms_v2/providers/runtime_provider.dart';
 import 'package:pandapay/features/sms_v2/storage/ledger_store.dart';
@@ -96,7 +97,6 @@ void main() {
         (SmsLedgerScreen.investments, 'investments', 'Net invested'),
         (SmsLedgerScreen.ipos, 'ipos', 'Blocked'),
         (SmsLedgerScreen.moneyIn, 'money-in', 'salary'),
-        (SmsLedgerScreen.subscriptions, 'subscriptions', 'NETFLIX'),
       ]) {
         await tester.pumpWidget(
           UncontrolledProviderScope(
@@ -108,6 +108,21 @@ void main() {
         expect(find.textContaining(evidence, findRichText: true), findsWidgets);
         await binding.takeScreenshot('local-rig-$label');
       }
+      // The one Subscriptions page (the home chip and the Payments tab share it).
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: SubscriptionsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is Text && (w.data ?? '').toLowerCase().contains('netflix'),
+        ),
+        findsWidgets,
+      );
+      await binding.takeScreenshot('local-rig-subscriptions');
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: container,

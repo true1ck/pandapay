@@ -150,6 +150,13 @@ Still on the UI isolate, in order of cost:
 5. Capture-worker contention: a UI write that lands while the worker commits waits up to 3 s
    (busy_timeout) and then throws SQLITE_BUSY. Watch logcat for `database is locked`; if it
    shows up, shorten worker transactions or queue UI writes behind the worker.
+6. `OwnerRecheck.sourcesToRecheck` (who the account owner is: a typed name, a payee marked as
+   self or family, a single payment marked, a removal) reads every fact and event once plus one
+   transfer-type query, then re-reads only the messages that changed (the re-reading goes to the
+   capture worker). It runs on the person's own action, never on startup, scroll or sync.
+   Measured on a real 3,075-fact, 1,693-event inbox: 338 ms cold (decoding the facts), 14 ms
+   when the decoded facts are already cached, which they are once the read model has run. Move
+   the scan into the worker if it is ever called more often than on a person's own tap.
 
 Split (shared expenses), 12 Nov: the change pull (`/shared-expenses/changes`) used to parse,
 canonicalise and write up to 200 records per refresh on the UI isolate. Large pages are now
@@ -163,6 +170,23 @@ split's screen are one request each (`/shared-expenses/hub`, `/contexts/:id/scre
 `shared_projections` rows are still written but no screen reads them (known debt: either read
 them or stop writing them). Same contention caveat as item 5: a UI write that lands while the
 Split worker commits waits up to the 3 s busy_timeout.
+
+Subscriptions, 13 Nov: a subscription is derived from every mandate, charge, failure and
+announcement in the ledger (O(history)), and three screens plus the Insights tile and the
+reminders each used to derive it again on the UI isolate. It is now derived once, where the ledger
+is written, and saved in `v2_subscriptions` / `v2_subscription_history` (`SubscriptionStore`,
+schema v4). Nothing derives them inside a transaction: capture (when the chunk held a mandate message,
+an announced or failed debit, a mandate-referenced debit, a debit that can join a known mandate, a
+service receipt, or a spend at a shop with enough earlier spends to form a pattern:
+`SubscriptionProjection.touchesSubscriptions`), a correction (always), a server pull and an AI withdrawal
+only `markDirty` (two small upserts that also move a sequence number) and notify `subscriptions`; the next
+reader re-derives the rows once in a short-lived worker isolate (`rebuildSubscriptionsOffThread`). The
+rebuild reads the sequence number before it reads the ledger and saves its rows only if it is unchanged
+(compare-and-set), so a cancellation captured meanwhile is never overwritten by an older rebuild; a caller
+that arrives mid-rebuild gets one more run, not the stale one's result. Anything that depends on today's date is
+decided when a row is read, so a plan that quietly stopped turns past without a new message. Every
+reader goes through `subscriptionStatesProvider`; `performance_guards_test.dart` fails when a screen,
+provider or reminder calls the ledger derivation again.
 
 Not yet verified on a phone: killing the app mid-import and relaunching (messages must be
 retried without duplicates); covered on the host by `capture_worker_test.dart`.

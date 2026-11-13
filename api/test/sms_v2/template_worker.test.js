@@ -602,3 +602,88 @@ test("an overloaded provider makes the layout wait in the queue instead of faili
   assert.equal(busyWaitMs({ retryAfterMs: 90000 }, 1), 90000);
   assert.equal(busyWaitMs({ retryAfterMs: 9e9 }, 1), 120000);
 });
+
+function busyStore(overrides = {}) {
+  const log = { finish: null, attempts: [] };
+  const store = {
+    claim: async () => template,
+    examples: async () => [],
+    beginAttempt: async () => null,
+    recordAttempt: async (_t, _n, usage) => log.attempts.push(usage),
+    providerFailures: async () => 0,
+    finish: async (_t, out) => {
+      log.finish = out;
+    },
+    ...overrides,
+  };
+  return { store, log };
+}
+
+test("a refused key or model is the account's fault: layouts wait, are never failed or given up on", async () => {
+  const { ProviderBusyError, MAX_PROVIDER_FAILURES } = require("../../src/sms_v2/template_worker");
+  // Even with the failure count far past the limit and the provider "working" elsewhere.
+  const { store, log } = busyStore({
+    providerFailures: async () => MAX_PROVIDER_FAILURES + 50,
+    providerRecentlyWorked: async () => true,
+  });
+  const provider = {
+    generate: async () => {
+      throw new ProviderBusyError("template_provider_misconfigured", { status: 403, systemic: true, retryAfterMs: 300000 });
+    },
+  };
+  const result = await runTemplateWorkerOnce({ store, provider, config });
+  assert.equal(result.status, "provider_busy");
+  assert.equal(result.systemic, true);
+  assert.equal(result.retryAfterMs, 300000);
+  assert.equal(log.finish.requeue, true);
+  assert.equal(log.finish.code, undefined);
+  assert.equal(log.attempts[0].outcome, "provider_error", "not counted as a provider failure of the layout");
+});
+
+test("during a provider outage a layout is never given up on, even after many failures", async () => {
+  const { ProviderBusyError, MAX_PROVIDER_FAILURES } = require("../../src/sms_v2/template_worker");
+  const provider = {
+    generate: async () => {
+      throw new ProviderBusyError("template_provider_busy", { status: 503 });
+    },
+  };
+  const outage = busyStore({
+    providerFailures: async () => MAX_PROVIDER_FAILURES,
+    providerRecentlyWorked: async () => false,
+  });
+  assert.equal((await runTemplateWorkerOnce({ store: outage.store, provider, config })).status, "provider_busy");
+  assert.equal(outage.log.finish.requeue, true);
+
+  // The provider answers other layouts, so this one really is the problem.
+  const healthy = busyStore({
+    providerFailures: async () => MAX_PROVIDER_FAILURES,
+    providerRecentlyWorked: async () => true,
+  });
+  assert.equal((await runTemplateWorkerOnce({ store: healthy.store, provider, config })).status, "failed");
+  assert.equal(healthy.log.finish.code, "provider_unavailable");
+});
+
+test("provider answers are told apart: key, model and billing problems versus a bad request", () => {
+  const { isSystemicProviderAnswer } = require("../../src/sms_v2/template_worker");
+  for (const status of [401, 403, 404]) assert.equal(isSystemicProviderAnswer(status, ""), true);
+  assert.equal(isSystemicProviderAnswer(400, '{"error":{"status":"INVALID_ARGUMENT","message":"API key not valid"}}'), true);
+  assert.equal(isSystemicProviderAnswer(400, "models/gemini-x is not found for API version v1beta"), true);
+  assert.equal(isSystemicProviderAnswer(400, '{"error":{"message":"Request contains an invalid argument."}}'), false);
+  assert.equal(isSystemicProviderAnswer(422, "anything"), false);
+});
+
+test("the Gemini provider turns a refused key into a wait and a plain bad request into a draft failure", async () => {
+  const mk = (status, body) =>
+    createGeminiTemplateProvider({
+      apiKey: "k",
+      fetchImpl: async () => ({ ok: false, status, headers: { get: () => null }, text: async () => body }),
+    });
+  await assert.rejects(
+    () => mk(403, "PERMISSION_DENIED").generate({ prompt: "{}", model: "m", maxOutputTokens: 10 }),
+    (error) => error.name === "ProviderBusyError" && error.systemic === true,
+  );
+  await assert.rejects(
+    () => mk(400, "invalid argument").generate({ prompt: "{}", model: "m", maxOutputTokens: 10 }),
+    (error) => error.name === "Error" && error.message === "template_provider_failed",
+  );
+});

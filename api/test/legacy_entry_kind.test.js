@@ -37,6 +37,14 @@ function run(headers) {
   return sent[0].transaction.entry_kind;
 }
 
+test('investment_return downgrades to transfer for a v1 client, never to spend', () => {
+  const out = downgradeRefund({
+    transactions: [{ id: 1, entry_kind: 'investment_return' }, { id: 2, entryKind: 'investment_return' }],
+  });
+  assert.equal(out.transactions[0].entry_kind, 'transfer');
+  assert.equal(out.transactions[1].entryKind, 'transfer');
+});
+
 test('filter downgrades without X-Sms-Pipeline: v2 and passes refund through with it', () => {
   assert.equal(run({}), 'transfer');
   assert.equal(run({ 'x-app-version': '1.0.0' }), 'transfer');

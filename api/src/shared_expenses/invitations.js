@@ -322,10 +322,17 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
     res.json(result);
   });
   route('/shared-expenses/groups/link',async(req,res)=>{
-    const b=req.body;record(b,['contextId','linkId']);uuid(b.contextId,'contextId');uuid(b.linkId,'linkId');
+    const b=req.body;record(b,['contextId','linkId'],'$','INVALID_INPUT',['autoJoin']);uuid(b.contextId,'contextId');uuid(b.linkId,'linkId');
+    // autoJoin: true = anyone with the link joins at once; false (or left out) = the owner approves each person.
+    if(b.autoJoin!==undefined&&typeof b.autoJoin!=='boolean')fail('INVALID_INPUT','autoJoin');
     const creds=groupLinkCredentials(secret,req.userId,b.contextId,b.linkId);
     const rh=requestHash({contextId:b.contextId,linkId:b.linkId,action:'create'});
-    const result=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.create_group_link($1::uuid,$2::text,$3::uuid,$4::text) AS result',[b.contextId,creds.tokenHash,b.linkId,rh])).rows[0].result);
+    const result=await withUserClient(req.userId,async client=>{
+      const created=(await client.query('SELECT shared_expenses.create_group_link($1::uuid,$2::text,$3::uuid,$4::text) AS result',[b.contextId,creds.tokenHash,b.linkId,rh])).rows[0].result;
+      // Same transaction: the link is never visible without its chosen mode.
+      const mode=(await client.query('SELECT shared_expenses.set_group_link_mode($1::uuid,$2::boolean,$3::text) AS result',[b.contextId,b.autoJoin===true,creds.tokenHash])).rows[0].result;
+      return {...created,autoJoin:mode.autoJoin===true};
+    });
     res.json({...result,joinUrl:`${INVITE_BASE_URL}/split/join/${creds.token}`});
   });
   route('/shared-expenses/groups/link/revoke',async(req,res)=>{

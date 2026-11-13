@@ -5,8 +5,10 @@ import 'package:pandapay_domain/sms_v2_category.dart';
 import 'package:pandapay_domain/sms_v2_ledger.dart';
 import '../../../data/local/financial_store.dart';
 import '../../../data/user_cards_repository.dart';
+import '../personal/owner_identity_store.dart';
 import '../personal/personal_merchant_aliases.dart';
 import '../storage/ledger_store.dart';
+import '../storage/subscription_store.dart';
 
 /// Maps the ledger to the existing transaction model. All attribution comes
 /// from a money leg; the anchor's source key is kept even if it was a hold.
@@ -19,6 +21,7 @@ TransactionEntry? transactionForEvent(
   Map<String, String> categoryIdBySlug = const {},
   Map<String, String> instrumentIdByFactId = const {},
   Map<String, PersonalMerchantAlias> merchantAliases = const {},
+  v2.OwnerIdentity? marks,
 }) {
   final kind = transactionKindForEvent(event);
   final fact = moneyFactForEvent(event, facts);
@@ -54,10 +57,24 @@ TransactionEntry? transactionForEvent(
       : printedName;
   // A card bill is a payment to the user's own card, however it was paid
   // (bank transfer, CHEQ, CRED, BBPS), so it is labelled as one.
+  final family =
+      event.type == v2.EventType.ownTransfer &&
+      !(marks?.isMarkedSelfOnce(fact.sourceKey) ?? false) &&
+      (marks?.isFamilyTransfer(
+            name: fact.counterparty?.name,
+            vpa: fact.counterparty?.vpa,
+            mask: fact.counterparty?.accountMask,
+            sourceKey: fact.sourceKey,
+          ) ??
+          false);
   final merchant = event.type == v2.EventType.cardBillPayment
       ? 'Credit card payment'
+      // The bank's own cashback credit names no shop; "UNKNOWN" read as a
+      // failed parse. It is a reward the bank paid, so say so.
+      : event.type == v2.EventType.cashback && printed == null
+      ? 'Cashback received'
       : event.type == v2.EventType.ownTransfer && printed == null
-      ? 'Transfer between your accounts'
+      ? (family ? 'Family transfer' : 'Transfer between your accounts')
       : fact.purpose == v2.MovementPurpose.walletTopup &&
             event.type == v2.EventType.purchase
       ? external?.counterpartyKey
@@ -85,6 +102,14 @@ TransactionEntry? transactionForEvent(
         : TaxonomyRegistry.v1.categoryFor(slug)?.displayName,
     instrument: method,
     entryKind: TxnEntryKind.fromJson(kind),
+    transferType: kind != 'transfer'
+        ? null
+        : switch (event.type) {
+            v2.EventType.ownTransfer => family ? 'family' : 'self',
+            v2.EventType.cardBillPayment => 'card_bill',
+            v2.EventType.walletTopup => 'wallet',
+            _ => null,
+          },
     userCardId:
         method == TxnInstrument.creditCard || method == TxnInstrument.debitCard
         ? instrument?.userCardId
@@ -99,10 +124,22 @@ TransactionEntry? transactionForEvent(
       v2.Rail.upi => TxnRail.upiQr,
       _ => TxnRail.unknown,
     },
-    paymentMethod: fact.rail == v2.Rail.upi ? 'upi' : null,
+    // How it was paid, only when the message says so. Nothing about spending
+    // changes with it; the person can still pick another method.
+    paymentMethod: switch (fact.rail) {
+      v2.Rail.upi => 'upi',
+      v2.Rail.neft => 'neft',
+      v2.Rail.imps => 'imps',
+      v2.Rail.rtgs => 'rtgs',
+      v2.Rail.cheque => 'cheque',
+      v2.Rail.nach => 'auto_debit',
+      _ => null,
+    },
     source: 'sms',
     smsReceivedAt: fact.observedAt,
     status: 'active',
+    // A cashback the bank credited is a confirmed reward, not an estimate.
+    rewardState: event.type == v2.EventType.cashback ? 'confirmed' : 'estimated',
   );
 }
 
@@ -128,11 +165,22 @@ class ProjectionWriter {
     required Map<String, v2.Instrument> instrumentsById,
     Map<String, String> categoryIdBySlug = const {},
     Map<String, String> instrumentIdByFactId = const {},
+    // A correction, a server pull or a withdrawal changes the ledger without
+    // going through capture; the saved subscription rows are then out of date
+    // until the next reader re-derives them. Capture passes false because it
+    // marks them itself, from the facts it stored.
+    bool markSubscriptionsDirty = true,
   }) {
     final merchantAliases = PersonalMerchantAliases(
       ledger.db,
       namespace: ledger.namespace,
     ).load();
+    // The payees and single payments the person marked as family or as their
+    // own decide the badge a transfer carries (see [OwnerIdentity]).
+    final marks = OwnerIdentityStore(
+      ledger.db,
+      namespace: ledger.namespace,
+    ).marksOnly();
     final existing = <String, TransactionEntry>{};
     final legacyBySource = <String, List<TransactionEntry>>{};
     final db = ledger.db;
@@ -201,6 +249,7 @@ class ProjectionWriter {
             categoryIdBySlug: categoryIdBySlug,
             instrumentIdByFactId: instrumentIdByFactId,
             merchantAliases: merchantAliases,
+            marks: marks,
           );
           var old = existing[e.eventId];
           if (old == null && row != null) {
@@ -219,6 +268,9 @@ class ProjectionWriter {
                   'id': old.id,
                   'expected_value_inr': old.rewardValue?.rupees,
                   'note': old.note,
+                  // The person's own choice survives a re-projection, like a
+                  // note or a tag does.
+                  if (old.excludeFromSpend) 'exclude_from_spend': true,
                   'tags': old.tags.map((t) => t.toJson()).toList(),
                   if (old.userCategoryId != null) ...{
                     'category_id': null,
@@ -240,6 +292,13 @@ class ProjectionWriter {
           for (final row in display)
             if (!_unchanged(existing[row.eventId], row)) row,
         ]);
+        // Unconditional: a correction can move an event OUT of subscription_charge
+        // (a wrong-kind fix to p2p_out, a refund, unknown), which the events it
+        // writes no longer show.
+        if (markSubscriptionsDirty) {
+          SubscriptionStore(db, namespace: ledger.namespace).markDirty();
+          financial.notifyExternalChanges(ledger.namespace, const ['subscriptions']);
+        }
         db.execute('RELEASE v2_projection');
       } catch (_) {
         db.execute('ROLLBACK TO v2_projection');

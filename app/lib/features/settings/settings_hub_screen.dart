@@ -13,6 +13,7 @@ import '../import/import_hub_screen.dart';
 import '../sms_import/sms_import_screen.dart';
 import 'account_settings_screen.dart';
 import 'data_storage_screen.dart';
+import 'owner_identity_screen.dart';
 import 'appearance_screen.dart';
 import 'email_phone_screen.dart';
 import 'feedback_support_screen.dart';
@@ -159,6 +160,12 @@ class SettingsHubScreen extends ConsumerWidget {
               icon: Icons.auto_fix_high_outlined,
               label: 'Future category rules',
               onTap: () => open(const MerchantFutureRulesScreen()),
+            ),
+            const SizedBox(height: AppSpace.sm),
+            AccountTile(
+              icon: Icons.swap_horiz_rounded,
+              label: 'Your names & accounts',
+              onTap: () => open(const OwnerIdentityScreen()),
             ),
             const SizedBox(height: AppSpace.sm),
             AccountTile(

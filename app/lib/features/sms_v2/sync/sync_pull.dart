@@ -13,6 +13,7 @@ import '../storage/instrument_store.dart';
 import '../storage/ledger_store.dart';
 import '../storage/outbox_store.dart';
 import '../storage/schema.dart';
+import '../storage/subscription_store.dart';
 import '../storage/sync_state_store.dart';
 import 'corrections_sync.dart';
 
@@ -129,6 +130,12 @@ class SyncPull {
           touchedFacts.add(fact.factId);
           _facts.insert(fact);
           _facts.markUploaded(fact.factId, DateTime.now());
+        }
+        // Facts (mandates, announcements) and events pulled from another device
+        // can start, change or end a subscription; the saved rows follow.
+        if (touchedFacts.isNotEmpty || (body['events'] as List? ?? const []).isNotEmpty) {
+          SubscriptionStore(_db, namespace: namespace).markDirty();
+          financial.notifyExternalChanges(namespace, const ['subscriptions']);
         }
         for (final json in body['instruments'] as List) {
           final incoming = Instrument.fromJson(

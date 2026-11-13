@@ -28,6 +28,17 @@ final Map<String, Object?> mandatePayload = {
 };
 
 void main() {
+  test('investment_return is a valid entry kind, like on the server', () {
+    expect(smsEntryKinds, contains('investment_return'));
+    final result = validateSmsFact(
+      SmsFactValidationEntry(
+        factType: 'posted_movement',
+        payload: {...spendFact(), 'entryKind': 'investment_return'},
+      ),
+    );
+    expect(result.valid, isTrue, reason: result.errors.join('; '));
+  });
+
   test('valid multi-fact set passes validation', () {
     for (final entry in [
       SmsFactValidationEntry(

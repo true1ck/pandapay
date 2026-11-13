@@ -155,7 +155,23 @@ class Totals {
   final int spendMinor;
   final int refundMinor;
   final int incomeMinor;
+
+  /// Net invested: contributions minus withdrawals. Kept for the Investments
+  /// screens and golden fixtures; Money in / Money out use the two gross
+  /// figures below so a withdrawal never makes Money out smaller.
   final int investmentMinor;
+
+  /// Gross money put into investments (SIPs, broker top-ups, IPO debits).
+  final int investmentOutMinor;
+
+  /// Gross money taken back out of investments (redemptions, broker payouts).
+  /// Not earned income: it is mostly the user's own principal coming home.
+  final int investmentReturnMinor;
+
+  /// Spending the person chose not to count ("Don't count in spending"), net
+  /// of refunds against it. It is not in [spendMinor], budgets or breakdowns,
+  /// but it did leave their account, so Money out still includes it.
+  final int excludedSpendMinor;
   final int transactionCount;
   final Map<String, int> byCategory;
   const Totals({
@@ -163,7 +179,24 @@ class Totals {
     required this.refundMinor,
     required this.incomeMinor,
     required this.investmentMinor,
+    this.investmentOutMinor = 0,
+    this.investmentReturnMinor = 0,
+    this.excludedSpendMinor = 0,
     required this.transactionCount,
     required this.byCategory,
   });
+
+  /// Everything that left the user's accounts for spending or investing.
+  /// Transfers between the user's own accounts and card-bill payments are not
+  /// in it. Spend is already net of refunds.
+  int get moneyOutMinor => spendMinor + excludedSpendMinor + investmentOutMinor;
+
+  /// All spend on the cards and accounts, including what the person left out
+  /// of their own spending. Card-side figures (what the bank bills, utilisation)
+  /// use this; spending views use [spendMinor].
+  int get allSpendMinor => spendMinor + excludedSpendMinor;
+
+  /// Everything that arrived from outside: income plus money back from
+  /// investments. Refunds are netted inside [spendMinor] instead.
+  int get moneyInMinor => incomeMinor + investmentReturnMinor;
 }

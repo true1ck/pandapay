@@ -220,7 +220,7 @@ final paymentsDueProvider = FutureProvider<List<DuePayment>>((ref) async {
               (cycleStart == null || !r.occurredAt.isBefore(cycleStart)),
         );
         logged = Money.fromPaise(
-          model.totalsForTransactions(selected).spendMinor,
+          model.totalsForTransactions(selected).allSpendMinor,
         );
       } else if (cycleStart != null) {
       for (final txn in transactions) {

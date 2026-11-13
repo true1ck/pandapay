@@ -35,8 +35,9 @@ import '../cards/card_summary.dart';
 import '../cards/card_visual.dart';
 import '../cards/recommendation_confidence.dart';
 import '../import/import_hub_screen.dart';
-import '../insights/spending_visuals.dart'
-    show spendingCategoryVisual, spendingInstrumentVisual;
+import '../insights/spending_visuals.dart' show spendingCategoryVisual;
+import '../payments/payment_method_picker.dart';
+import '../payments/payment_method_rules.dart';
 import '../../main.dart' show MoneyText;
 import '../shared_expenses/composer/shared_editor.dart';
 import '../shared_expenses/composer/shared_editor_fields.dart';
@@ -260,6 +261,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   /// credit card — which capped a spend tracker at "what my credit cards
   /// did".
   TxnInstrument _instrument = TxnInstrument.creditCard;
+
+  /// How it was paid (cheque, NEFT, EMI...). Null unless the person picked
+  /// one, and then the save is byte-identical to before this field existed.
+  String? _paymentMethod;
   TxnEntryKind _entryKind = TxnEntryKind.spend;
   bool _saving = false;
   bool _recommendationsExpanded = false;
@@ -479,9 +484,22 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     ];
   }
 
+  /// A group picker or members sheet is on screen. A second tap on the same
+  /// button must not stack another one.
+  bool _sharedSheetOpen = false;
+
   Future<void> _chooseSharedContext() async {
     final runtime = _sharedRuntime;
-    if (runtime == null || _sharingLoading) return;
+    if (runtime == null || _sharingLoading || _sharedSheetOpen) return;
+    _sharedSheetOpen = true;
+    try {
+      await _chooseSharedContextSheet(runtime);
+    } finally {
+      _sharedSheetOpen = false;
+    }
+  }
+
+  Future<void> _chooseSharedContextSheet(SharedExpensesRuntime runtime) async {
     final history = <String?>[null];
     var request = runtime.contexts();
     final selected = await showModalBottomSheet<String>(
@@ -643,13 +661,23 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
 
   Future<void> _addSharedMember() async {
     final editor = _sharedEditor, runtime = _sharedRuntime;
-    if (_sharingLoading || editor?.contextId == null || runtime == null) return;
-    await SharedMembersSheet.show(
-      context,
-      runtime: runtime,
-      contextId: editor!.contextId!,
-      groupName: editor.contextName,
-    );
+    if (_sharingLoading ||
+        _sharedSheetOpen ||
+        editor?.contextId == null ||
+        runtime == null) {
+      return;
+    }
+    _sharedSheetOpen = true;
+    try {
+      await SharedMembersSheet.show(
+        context,
+        runtime: runtime,
+        contextId: editor!.contextId!,
+        groupName: editor.contextName,
+      );
+    } finally {
+      _sharedSheetOpen = false;
+    }
     if (mounted && runtime.isCurrent() && _sharedEditor == editor) {
       await _loadSharedContext(editor.contextId!);
     }
@@ -1258,6 +1286,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       note,
       _instrument.wireValue,
       _entryKind.wireValue,
+      // Only when chosen, so a save that never touched it keeps its identity.
+      ?_paymentMethod,
     ].join('|');
     if (_pendingPayloadFingerprint != payloadFingerprint) {
       _pendingPayloadFingerprint = payloadFingerprint;
@@ -1300,6 +1330,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         instrument: _instrument,
         entryKind: _entryKind,
         clientMutationId: clientMutationId,
+        paymentMethod: _paymentMethod,
       );
       String? receiptError;
       if (_selectedTagIds.isNotEmpty) {
@@ -1357,6 +1388,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         Navigator.of(context).pop();
         messenger.showSnackBar(
           SnackBar(
+            // Flutter 3.29+ keeps a snackbar with an action on screen until it
+            // is dismissed; this one must go away on its own like any toast.
+            persist: false,
             content: Text(
               receiptError ??
                   'Logged ${Money.fromRupees(amount).format()} ${_entryKind == TxnEntryKind.income ? 'income' : 'spend'}',
@@ -1441,6 +1475,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
             instrument: _instrument,
             entryKind: _entryKind,
             clientMutationId: clientMutationId,
+            paymentMethod: _paymentMethod,
           );
           ref.invalidate(pendingOutboxCountProvider);
           if (_selectedTagIds.isNotEmpty) {
@@ -1504,6 +1539,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       instrument: _instrument,
       entryKind: _entryKind,
       clientMutationId: clientMutationId,
+      paymentMethod: _paymentMethod,
     );
     String? tagError;
     if (_selectedTagIds.isNotEmpty) {
@@ -1516,7 +1552,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
             'Transaction saved. Tags could not be saved: ${userFacingErrorMessage(error)}';
       }
     }
-    if (_selectedUserCardId != null && _instrument == TxnInstrument.creditCard) {
+    if (_selectedUserCardId != null &&
+        _instrument == TxnInstrument.creditCard) {
       await _rememberLastUsedCard(_selectedUserCardId!);
     }
     if (merchantName != null) await _rememberMerchant(merchantName);
@@ -1533,6 +1570,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     Navigator.of(context).pop();
     messenger.showSnackBar(
       SnackBar(
+        // Flutter 3.29+ keeps a snackbar with an action on screen until it
+        // is dismissed; this one must go away on its own like any toast.
+        persist: false,
         content: Text(
           tagError ??
               (offline
@@ -2322,6 +2362,13 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                             _entryKind = kind;
                             if (kind != TxnEntryKind.spend &&
                                 _instrument == TxnInstrument.creditCard) {
+                              _paymentMethod = selectPaymentInstrument(
+                                PaymentSelection(
+                                  instrument: _instrument,
+                                  method: _paymentMethod,
+                                ),
+                                TxnInstrument.upiBank,
+                              ).method;
                               _instrument = TxnInstrument.upiBank;
                               _selectedUserCardId = null;
                             }
@@ -2441,7 +2488,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
           onPressed: () => categories.whenData(_chooseCategory),
           child: const Text('View all'),
         ),
-        child: categories.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
+        child: categories.when(
+          skipLoadingOnReload: true,
+          skipLoadingOnRefresh: true,
           loading: () => const LinearProgressIndicator(color: BambooInk.slate),
           error: (err, _) => Text(
             userFacingErrorMessage(err),
@@ -2576,42 +2625,34 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SingleChildScrollView(
-          key: const ValueKey('quick-add-payment-methods'),
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              for (final instrument in TxnInstrument.values)
-                if (instrument != TxnInstrument.creditCard ||
-                    _entryKind == TxnEntryKind.spend)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: _SelectChip(
-                      label: switch (instrument) {
-                        TxnInstrument.creditCard => 'Credit card',
-                        TxnInstrument.debitCard => 'Debit',
-                        TxnInstrument.upiBank => 'UPI / bank',
-                        TxnInstrument.cash => 'Cash',
-                        TxnInstrument.wallet => 'Wallet',
-                        TxnInstrument.other => 'Other',
-                      },
-                      icon: spendingInstrumentVisual(instrument.wireValue).icon,
-                      selected: _instrument == instrument,
-                      onTap: () => setState(() {
-                        if (_instrument != instrument) {
-                          _selectedUserCardId = null;
-                        }
-                        _instrument = instrument;
-                      }),
-                    ),
-                  ),
-            ],
+        PaymentMethodPicker(
+          rowKey: const ValueKey('quick-add-payment-methods'),
+          entryKind: _entryKind,
+          selection: PaymentSelection(
+            instrument: _instrument,
+            method: _paymentMethod,
           ),
+          savedInstrument: widget.sharedSourceEntry?.instrument,
+          amountController: _amountController,
+          categorySlug: _selectedCategorySlug(),
+          hasCreditCards: _hasCardOfType(userCards, 'credit'),
+          hasDebitCards: _hasCardOfType(userCards, 'debit'),
+          cardSelected: _selectedUserCardId != null,
+          onChanged: (next) => setState(() {
+            final instrument = next.instrument ?? _instrument;
+            if (_instrument != instrument) {
+              _selectedUserCardId = null;
+            }
+            _instrument = instrument;
+            _paymentMethod = next.method;
+          }),
         ),
         if (_instrument == TxnInstrument.creditCard ||
             _instrument == TxnInstrument.debitCard) ...[
           const SizedBox(height: 12),
-          userCards.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
+          userCards.when(
+            skipLoadingOnReload: true,
+            skipLoadingOnRefresh: true,
             loading: () =>
                 const LinearProgressIndicator(color: BambooInk.slate),
             error: (err, _) => Text(
@@ -2632,6 +2673,30 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       ],
     ),
   );
+
+  /// Slug of the chosen category, for the payment-method suggestions only.
+  /// A scan of the (small) category list, and only when one is chosen.
+  String? _selectedCategorySlug() {
+    final id = _selectedCategoryId;
+    if (id == null) return null;
+    final categories = ref.watch(categoriesProvider).valueOrNull;
+    if (categories == null) return null;
+    for (final category in categories) {
+      if (category.id == id) return category.slug;
+    }
+    return null;
+  }
+
+  static bool _hasCardOfType(AsyncValue<List<UserCard>> cards, String kind) {
+    final list = cards.valueOrNull;
+    if (list == null) return false;
+    for (final card in list) {
+      if (card.cardType == null || card.cardType!.toLowerCase() == kind) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   Widget _buildCardSelector(List<UserCard> cards) {
     final cardKind = _instrument == TxnInstrument.debitCard
@@ -3001,6 +3066,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                                 TxnEntryKind.income => 'Save income',
                                 TxnEntryKind.transfer => 'Save transfer',
                                 TxnEntryKind.investment => 'Save investment',
+                                TxnEntryKind.investmentReturn =>
+                                  'Save investment return',
                                 TxnEntryKind.refund => 'Save refund',
                                 TxnEntryKind.unknown => 'Save entry',
                               },

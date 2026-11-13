@@ -45,6 +45,21 @@ class _ViewState extends State<SharedClaimantPhoneView>
   }
 
   @override
+  void didUpdateWidget(covariant SharedClaimantPhoneView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A refresh can make a row a look-alike (or stop being one) after it was
+    // first drawn; the screen-capture block must follow.
+    final now = widget.request.claimantPhone?.fullNumber != null;
+    if (now && !_lookalikeSecure) {
+      _lookalikeSecure = true;
+      unawaited(SharedSecureScreen.acquire());
+    } else if (!now && _lookalikeSecure) {
+      _lookalikeSecure = false;
+      unawaited(SharedSecureScreen.release());
+    }
+  }
+
+  @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
@@ -57,17 +72,16 @@ class _ViewState extends State<SharedClaimantPhoneView>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // inactive covers the app switcher and permission/system overlays.
-    if (state != AppLifecycleState.resumed) {
-      _hide();
-    } else {
-      unawaited(SharedClipboardGuard.clearNow());
-    }
+    // inactive covers the app switcher and permission/system overlays. The
+    // shown number is hidden at once, but a number the owner just copied stays
+    // on the clipboard until its own 60 s timer: wiping it as they switched to
+    // WhatsApp to paste it made Copy useless.
+    if (state != AppLifecycleState.resumed) _hide(keepClipboard: true);
   }
 
-  void _hide() {
+  void _hide({bool keepClipboard = false}) {
     _timer?.cancel();
-    unawaited(SharedClipboardGuard.clearNow());
+    if (!keepClipboard) unawaited(SharedClipboardGuard.clearNow());
     if (_revealed != null) unawaited(SharedSecureScreen.release());
     if (mounted && (_revealed != null || _copied)) {
       setState(() {

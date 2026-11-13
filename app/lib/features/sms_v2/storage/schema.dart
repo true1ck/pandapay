@@ -11,7 +11,7 @@ abstract final class SmsV2Schema {
 
   /// Bump when a later package adds columns or tables; add the change to
   /// [_migrations] under the new number.
-  static const int version = 3;
+  static const int version = 5;
 
   /// Tables created by this module, in dependency order.
   static const List<String> tableNames = [
@@ -28,12 +28,19 @@ abstract final class SmsV2Schema {
     'v2_personal_merchant_alias',
     'v2_bulk_changes',
     'v2_bulk_change_items',
+    'v2_subscriptions',
+    'v2_subscription_history',
+    'v2_owner_identity',
+    'v2_owner_signals',
   ];
 
   static const String _versionTable = 'sms_v2_schema_version';
 
-  /// Statements that bring a database from version `n - 1` to `n`. All are
-  /// idempotent (`IF NOT EXISTS`), so a crashed run can be repeated.
+  /// Statements that bring a database from version `n - 1` to `n`. A version's
+  /// statements run in one savepoint together with the version row, so a crashed
+  /// run rolls back whole and can be repeated. Most are `IF NOT EXISTS`; the
+  /// `ALTER TABLE ... ADD COLUMN` statements of version 3 are not idempotent on
+  /// their own, they rely on that savepoint and on the version row.
   static const Map<int, List<String>> _migrations = {
     1: [
       '''
@@ -188,6 +195,62 @@ CREATE TABLE IF NOT EXISTS v2_bulk_change_items (
   event_id TEXT NOT NULL,
   previous TEXT NOT NULL,
   PRIMARY KEY (namespace, change_id, event_id)
+)''',
+    ],
+    4: [
+      // What the phone keeps about each subscription, derived once from the
+      // ledger (see SubscriptionStore) so no screen walks the whole history.
+      // One row per service; `payload` is the SubscriptionState JSON. Anything
+      // that depends on today's date is decided when a screen reads the row.
+      '''
+CREATE TABLE IF NOT EXISTS v2_subscriptions (
+  namespace TEXT NOT NULL,
+  series_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  name TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (namespace, series_id)
+)''',
+      // The dated story of each subscription: set up, charged, price changed,
+      // paused, cancelled. `seq` keeps the order of same-day events.
+      '''
+CREATE TABLE IF NOT EXISTS v2_subscription_history (
+  namespace TEXT NOT NULL,
+  series_id TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  at TEXT NOT NULL,
+  amount_minor INTEGER,
+  previous_minor INTEGER,
+  source_key TEXT,
+  PRIMARY KEY (namespace, series_id, seq)
+)''',
+      'CREATE INDEX IF NOT EXISTS idx_v2_subscription_history_at ON v2_subscription_history (namespace, series_id, at)',
+    ],
+    // Version 5 adds who the account owner is. It is its own step because a phone
+    // that already ran version 4 never runs version 4 again.
+    5: [
+      // Who the account owner is, for telling a transfer between their own
+      // accounts from a payment to someone else. `entry` is the string the
+      // linker reads (a name, `vpa:`, `payee:`, `mask:` or a `not:` rejection);
+      // `source` is user (typed), marked (a payment they flagged), inferred
+      // (learned from their messages) or dismissed (an inferred name they
+      // removed, so it is not learned again).
+      '''
+CREATE TABLE IF NOT EXISTS v2_owner_identity (
+  namespace TEXT NOT NULL,
+  entry TEXT NOT NULL,
+  source TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (namespace, entry)
+)''',
+      // How often each greeting name was seen and from how many senders.
+      '''
+CREATE TABLE IF NOT EXISTS v2_owner_signals (
+  namespace TEXT NOT NULL PRIMARY KEY,
+  payload TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 )''',
     ],
   };

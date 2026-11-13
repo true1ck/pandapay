@@ -343,7 +343,7 @@ test('transactions are projected for every event type, per the Contracts table',
   const expectKind = {
     purchase: 'spend', subscription_charge: 'spend', fee: 'spend', emi: 'spend', bill_payment: 'spend', atm_withdrawal: 'spend', p2p_out: 'spend',
     refund: 'refund', cashback: 'income', income: 'income', p2p_in: 'income', dividend: 'income', investment: 'investment',
-    own_transfer: 'transfer', card_bill_payment: 'transfer', wallet_topup: 'transfer', investment_withdrawal: 'transfer',
+    own_transfer: 'transfer', card_bill_payment: 'transfer', wallet_topup: 'transfer', investment_withdrawal: 'investment_return',
   };
   const inflow = new Set(['refund', 'cashback', 'income', 'p2p_in', 'dividend', 'investment_withdrawal']);
   const items = []; const events = []; const ledger = []; const made = new Map();
@@ -390,7 +390,7 @@ test('transactions are projected for every event type, per the Contracts table',
   assert.equal(after.entry_kind, 'investment');
 });
 
-test('card state is applied exactly once for a card spend and never for backfill', { skip }, async () => {
+test('card state is applied exactly once for a card spend, history included', { skip }, async () => {
   const p = await newProfile();
   const userCard = await newCard(p);
   calls.apply.length = 0; calls.reverse.length = 0;
@@ -411,15 +411,16 @@ test('card state is applied exactly once for a card spend and never for backfill
   assert.equal(calls.apply.length, 1);
   assert.equal(calls.reverse.length, 0);
 
-  // Backfill: row recorded, state untouched, and a later live touch does not apply it either.
+  // Backfill (history): the row is recorded AND priced once, like any other card spend; a later touch does not apply it again.
   const old = cardSpend({ userCardId: userCard, inst: live.inst, skipInstrument: true, minor: 7000 });
   await ingest(p, old.body, { backfill: true });
-  assert.equal(calls.apply.length, 1);
+  assert.equal(calls.apply.length, 2);
+  assert.equal(calls.apply[1].amount, 70);
   row = (await txnsFor(p)).find((x) => x.event_id === old.e.eventId);
-  assert.equal(row.state_applied, false);
+  assert.equal(row.state_applied, true);
   assert.equal(row.is_backfill, true);
   await ingest(p, h.batch({ events: [{ ...old.e, confidence: 0.5 }], ledger: [old.l] }));
-  assert.equal(calls.apply.length, 1);
+  assert.equal(calls.apply.length, 2);
 
   // Not a credit-card spend: no state. Same for a refund onto the card.
   const bank = h.instrument({ kind: 'bank_account', issuerSlug: 'sbi', maskDigits: '4321', userCardId: userCard });
@@ -427,15 +428,15 @@ test('card state is applied exactly once for a card spend and never for backfill
   await ingest(p, viaBank.body);
   const refund = cardSpend({ inst: live.inst, skipInstrument: true, type: 'refund', minor: 900 });
   await ingest(p, h.batch({ items: refund.body.items, events: refund.body.events, ledger: [h.ledger(refund.e, { from: { external: 'SYNTHETIC SHOP' }, to: { instrumentId: live.inst.instrumentId }, category: null })] }));
-  assert.equal(calls.apply.length, 1);
+  assert.equal(calls.apply.length, 2);
 
   // A changed amount reverses the old effect, then applies the new one: net still one live application.
   const edited = { ...live.e, amountMinor: 200000 };
   await ingest(p, h.batch({ events: [edited], ledger: [{ ...live.l, amountMinor: 200000 }] }));
   assert.equal(calls.reverse.length, 1);
   assert.equal(calls.reverse[0].txnId, (await txnsFor(p)).find((x) => x.event_id === live.e.eventId).id);
-  assert.equal(calls.apply.length, 2);
-  assert.equal(calls.apply[1].amount, 2000);
+  assert.equal(calls.apply.length, 3);
+  assert.equal(calls.apply[2].amount, 2000);
   assert.equal((await txnsFor(p)).find((x) => x.event_id === live.e.eventId).state_applied, true);
 });
 
@@ -666,12 +667,12 @@ test('POST /sms/v2/facts:batch and GET /sms/v2/sync over HTTP with the real wiri
     const other = await (await fetch(`${base}/sms/v2/sync`, { headers: { 'x-user': b } })).json();
     assert.equal(other.events.length, 0);
 
-    // Backfill flag over HTTP: the row exists, no card state.
+    // Backfill flag over HTTP: the row exists and its card spend is priced once as history.
     const userCard = await newCard(b);
     calls.apply.length = 0;
     const old = cardSpend({ userCardId: userCard });
     assert.equal((await post(old.body, b, '?backfill=true')).status, 200);
-    assert.equal(calls.apply.length, 0);
+    assert.equal(calls.apply.length, 1);
 
     // Exactly 500 items is fine.
     const items = Array.from({ length: 500 }, () => h.item([h.fact({})]));

@@ -39,4 +39,18 @@ void main() {
     await store.capture(other);
     expect(await store.read(), other);
   });
+
+  test('an install-referrer invite is taken once, not at every launch', () async {
+    final store = PendingSplitInviteStore();
+    await store.captureFromReferrer(token);
+    expect(await store.read(), token);
+    // Joined: cleared. The referrer still answers the same on the next launch.
+    await store.clear();
+    await store.captureFromReferrer(token);
+    expect(await store.read(), isNull);
+    // A different referrer value (reinstall from another invite) still works.
+    final other = List.filled(43, 'c').join();
+    await store.captureFromReferrer(other);
+    expect(await store.read(), other);
+  });
 }

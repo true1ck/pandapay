@@ -23,7 +23,8 @@ const ENTRY_KIND_BY_TYPE = Object.freeze({
   own_transfer: 'transfer',
   card_bill_payment: 'transfer',
   wallet_topup: 'transfer',
-  investment_withdrawal: 'transfer',
+  // Money back from an investment: its own kind, matching the phone's projector.
+  investment_withdrawal: 'investment_return',
 });
 
 // Money arrives at one of the user's instruments for these types, so the row's
@@ -115,7 +116,12 @@ function projectEvent({ event, ledger, instruments, anchor }) {
     entryKind,
     amountMinor: event.amountMinor,
     occurredAt: event.occurredAt,
-    merchantName: merchant ? String(merchant).slice(0, 200) : null,
+    // The bank's own cashback credit names no shop ("UNKNOWN" read as a failed parse); it is a reward the bank paid.
+    merchantName: event.type === 'cashback' && (!merchant || String(merchant).toUpperCase() === 'UNKNOWN')
+      ? 'Cashback received'
+      : (merchant ? String(merchant).slice(0, 200) : null),
+    // A cashback the bank credited is a confirmed reward, not an estimate.
+    rewardState: event.type === 'cashback' ? 'confirmed' : 'estimated',
     categorySlug: category,
     // transactions_card_matches_instrument: only a credit or debit card row may carry a user card.
     userCardId: instrument && instrument.userCardId && CARD_ENUMS.has(instrumentEnum) ? instrument.userCardId : null,

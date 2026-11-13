@@ -59,7 +59,9 @@ void main() {
         .widgetList<MoneyText>(find.byType(MoneyText))
         .where((w) => w.prefix == '−')
         .first;
-    expect(out.amount.paise, 6000);
+    // Money out is spending net of the refund (10,000 - 4,000) plus the money
+    // put into investments (50,000). The transfer is in neither.
+    expect(out.amount.paise, 56000);
     expect(find.text('3 txns'), findsOneWidget);
     expect(find.text('transfer'), findsOneWidget);
     expect(tester.takeException(), isNull);

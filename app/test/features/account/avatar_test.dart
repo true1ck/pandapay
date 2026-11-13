@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -72,13 +73,35 @@ void main() {
   });
 
   group('presets', () {
-    test('the ids match the server list and are unique', () {
-      const serverList = ['panda', 'bamboo', 'sun', 'wave', 'berry', 'forest', 'dusk', 'night'];
-      expect(avatarPresets.map((p) => p.id).toList(), serverList);
-      expect(avatarPresets.map((p) => p.id).toSet().length, avatarPresets.length);
+    test('every id is on the server list and ids are unique', () {
+      const serverList = [
+        'panda', 'bamboo', 'sun', 'wave', 'berry', 'forest', 'dusk', 'night',
+        'cool', 'coin', 'explorer', 'snack', 'verified', 'party',
+        'phone', 'sleepy', 'hero', 'shopper', 'secure', 'music',
+      ];
+      final all = [...avatarPresets, ...legacyAvatarPresets].map((p) => p.id).toList();
+      expect(all.toSet().length, all.length);
+      expect(serverList.toSet(), all.toSet(), reason: 'the app and auth/src/services/userAvatar.js must agree');
       expect(avatarPresetFor('panda'), isNotNull);
       expect(avatarPresetFor('nope'), isNull);
       expect(avatarPresetFor(null), isNull);
+    });
+
+    test('every panda illustration the picker offers is a real bundled file', () {
+      expect(avatarPresets.length, 12);
+      for (final p in avatarPresets) {
+        expect(p.asset, 'assets/avatars/${p.id}.webp');
+        expect(File('${p.asset}').existsSync(), isTrue, reason: '${p.asset} is missing');
+      }
+      for (final p in legacyAvatarPresets.where((p) => p.asset != null)) {
+        expect(File(p.asset!).existsSync(), isTrue, reason: '${p.asset} is missing');
+      }
+    });
+
+    test('the picker offers the pandas, not the old symbols', () {
+      expect(avatarPresets.every((p) => p.asset != null), isTrue);
+      expect(avatarPresets.map((p) => p.id), isNot(contains('bamboo')));
+      expect(avatarPresetFor('bamboo'), isNotNull, reason: 'someone who already picked it still sees it');
     });
   });
 
@@ -91,7 +114,20 @@ void main() {
       expect(find.text('A'), findsOneWidget);
     });
 
-    testWidgets('a preset shows its icon, not the letter', (tester) async {
+    testWidgets('a panda avatar shows its illustration, not the letter', (tester) async {
+      await pump(tester, const UserAvatar(name: 'asha', preset: 'coin'));
+      final image = tester.widget<Image>(find.byType(Image));
+      expect((image.image as ResizeImage).imageProvider, isA<AssetImage>());
+      expect(find.text('A'), findsNothing);
+    });
+
+    testWidgets('the old paw avatar now shows a panda', (tester) async {
+      await pump(tester, const UserAvatar(name: 'asha', preset: 'panda'));
+      expect(find.byType(Image), findsOneWidget);
+      expect(find.byIcon(Icons.pets_rounded), findsNothing);
+    });
+
+    testWidgets('an older symbol avatar still shows its icon, not the letter', (tester) async {
       await pump(tester, const UserAvatar(name: 'asha', preset: 'bamboo'));
       expect(find.byIcon(Icons.eco_rounded), findsOneWidget);
       expect(find.text('A'), findsNothing);
@@ -211,10 +247,14 @@ void main() {
       final requests = await mount(tester, state: null, picker: _FakePicker(null));
       await tester.tap(find.byKey(const Key('edit-avatar')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('avatar-preset-wave')));
+      // The last avatar is off the right edge of the carousel until it is scrolled to.
+      final last = find.byKey(Key('avatar-preset-${avatarPresets.last.id}'));
+      await tester.ensureVisible(last);
+      await tester.pumpAndSettle();
+      await tester.tap(last);
       await tester.pumpAndSettle();
       expect(requests.map((r) => '${r.method} ${r.url.path}'), ['PUT /users/me/avatar/preset']);
-      expect(jsonDecode(requests.single.body), {'preset': 'wave'});
+      expect(jsonDecode(requests.single.body), {'preset': avatarPresets.last.id});
       expect(find.text('Avatar updated'), findsOneWidget);
     });
 
@@ -270,7 +310,7 @@ void main() {
       );
       await tester.tap(find.byKey(const Key('edit-avatar')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('avatar-preset-berry')));
+      await tester.tap(find.byKey(const Key('avatar-preset-cool')));
       await tester.pumpAndSettle();
       expect(requests.map((r) => '${r.method} ${r.url.path}'), [
         'DELETE /users/me/avatar/photo',
@@ -287,7 +327,7 @@ void main() {
       );
       await tester.tap(find.byKey(const Key('edit-avatar')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('avatar-preset-panda')));
+      await tester.tap(find.byKey(const Key('avatar-preset-cool')));
       await tester.pumpAndSettle();
       expect(find.text('Choose one of the avatars on the list.'), findsOneWidget);
       expect(find.byKey(const Key('edit-name-field')), findsOneWidget);

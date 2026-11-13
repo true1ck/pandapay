@@ -1,0 +1,32 @@
+# Quick Add offline: save a cheque with no network, see it logged at once, then reconnect.
+# After the flow, the queued entry reaches the server with payment_method = cheque
+# (check: transactions where merchant_name = 'Maestro Offline Cheque').
+# Needs the dev build signed in on an emulator and the local API running.
+# Run: maestro --device emulator-5554 test app/.maestro/payment-method-cheque-offline.yaml
+appId: app.pandapay.pandapay.dev2
+---
+- stopApp
+- launchApp
+- setAirplaneMode: enabled
+- tapOn: "Add transaction"
+# Merchant first: once the account has cards, typing an amount shows a recommendation panel
+# that pushes the merchant field under the keyboard.
+- tapOn: "Search or enter a merchant"
+- inputText: "Maestro Offline Cheque"
+- tapOn: "0.00"
+- inputText: "3300"
+- tapOn: "Add transaction"
+- scrollUntilVisible:
+    element: "UPI / bank"
+- tapOn: "UPI / bank"
+- swipe:
+    from: "UPI / bank"
+    direction: LEFT
+- tapOn: "Cheque"
+- tapOn: "Save expense.*"
+- assertVisible: "Saved offline.*"
+- setAirplaneMode: disabled
+# Give the outbox time to flush once the network is back.
+- extendedWaitUntil:
+    visible: "Add transaction"
+    timeout: 15000

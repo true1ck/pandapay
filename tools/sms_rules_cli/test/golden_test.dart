@@ -505,7 +505,8 @@ void main() {
       () {
         for (final c in bundle.cases) {
           final p = c.path!;
-          expect(p, contains('/cases/${c.brand}/'));
+          // Windows reports backslashes; the folder layout is what matters.
+          expect(p.replaceAll(r'\', '/'), contains('/cases/${c.brand}/'));
           expect(File(p).uri.pathSegments.last, startsWith(c.templateHash));
           expect(c.source, 'synthetic');
           expect(

@@ -1,0 +1,517 @@
+[
+  {
+    "id": "SUB-CREATED-AUTOPAY-ACTIVE-01",
+    "version": 1,
+    "family": "mandate_created",
+    "senders": [
+      "*"
+    ],
+    "priority": 690,
+    "match": {
+      "pattern": "autopay\\s+(?:is\\s+)?active!?\\s+for\\s+(?<m>[a-z0-9&.' _*+-]+?)\\s+starting\\s*:?\\s*(?<date>\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4})\\s+mandate\\s+(?:id|ref(?:erence)?|no\\.?)\\s*:?\\s*(?<ref_umrn>[a-z0-9]{4,40})",
+      "flags": "i",
+      "rejectAny": [
+        "could not",
+        "failed",
+        "cancel",
+        "revoke"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          },
+          "mandatePurpose": "subscription"
+        },
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd/MM/yyyy",
+            "dd-MM-yyyy",
+            "dd/MM/yy",
+            "dd-MM-yy",
+            "dd MMM yyyy",
+            "dd-MMM-yyyy",
+            "dd-MMM-yy"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "AutoPay Active!\nFor OpenAILLC\nStarting:31/10/2026\nMandate ID:Ab12Cd34Ef\nOn HDFC Bank Card 1234\nManage: https://example.invalid/x\nTnC",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "AutoPay Active!\nFor Netflix\nStarting:05/11/2026\nMandate ID:Ab12Cd34Ef\nOn HDFC Bank Card 1234",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "AutoPay Alert!\nYour HDFC Bank Credit Card 1234 bill\nTotal Amt: Rs.5000\nwill be deducted from your A/C 1234 on 08/NOV/2026. Ignore if paid",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-13T00:00:00Z"
+  },
+  {
+    "id": "SUB-END-UPI-CANCELLED-BY-PAYEE-01",
+    "version": 1,
+    "family": "mandate_revoked",
+    "senders": [
+      "*"
+    ],
+    "priority": 690,
+    "match": {
+      "pattern": "upi[- ]?mandate\\s+(?:is\\s+|was\\s+|has\\s+been\\s+)?(?:successfully\\s+)?(?:cancelled|canceled|revoked|deleted|closed)\\s+by\\s+(?<m>[^\\s,;]+?)\\s+for\\s+(?:rs\\.?|inr|₹)\\s*(?<cap>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "revoked",
+          "merchantName": {
+            "from": "m"
+          },
+          "mandatePurpose": "subscription"
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "cap",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "JX-HDFCBK-S",
+        "body": "HDFC Bank: Your UPI-Mandate is successfully cancelled by  someone@examplepsp for Rs 299.00.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "JX-HDFCBK-S",
+        "body": "Your UPI-Mandate is successfully created towards Netflix for Rs 299.00.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-13T00:00:00Z"
+  },
+  {
+    "id": "SUB-END-SERVICE-CANCELLED-01",
+    "version": 1,
+    "family": "mandate_revoked",
+    "senders": [
+      "*"
+    ],
+    "priority": 670,
+    "match": {
+      "pattern": "\\b(?:we(?:'ve|\\s+have)|has\\s+been|have\\s+been)\\s+(?:cancel(?:l)?ed|ended|terminated|discontinued)\\s+(?:your\\s+)?(?<m>[a-z0-9&.' _*+-]{2,40}?)\\s+(?:account\\s+)?(?:subscription|membership|auto-?renewal)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "will be cancelled",
+        "can be cancelled",
+        "to cancel",
+        "how to cancel"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "revoked",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          },
+          "mandatePurpose": "subscription"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "JX-JIOHTT-S",
+        "body": "We're sad to see you go. As you requested, we've cancelled your JioHotstar account subscription linked to 9999999999, effective 6th May, 2026",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-NETFLX-S",
+        "body": "Your Netflix subscription has been cancelled",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-13T00:00:00Z"
+  },
+  {
+    "id": "SUB-END-SUBSCRIPTION-ENDED-01",
+    "version": 1,
+    "family": "mandate_revoked",
+    "senders": [
+      "*"
+    ],
+    "priority": 665,
+    "match": {
+      "pattern": "\\byour\\s+(?:[a-z0-9]+\\s+)?(?<m>[a-z0-9&.' _*+-]{2,40}?)\\s+(?:subscription|membership)(?:\\s+payments?)?\\s+(?:has\\s+|have\\s+|is\\s+|was\\s+)?(?:been\\s+)?(?:successfully\\s+)?(?:cancel(?:l)?ed|terminated|discontinued|deactivated|stopped|expired|ended|lapsed)(?:\\s+on\\s+(?<date>\\d{1,2}\\s+[a-z]{3,9}\\s+\\d{4}))?",
+      "flags": "i",
+      "rejectAny": [
+        "will be",
+        "will expire",
+        "about to",
+        "expires on",
+        "expiring"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "revoked",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          },
+          "mandatePurpose": "subscription"
+        }
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "VM-SPOTFY-S",
+        "body": "Your Spotify subscription has been cancelled. You can resubscribe any time.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-SPOTFY-S",
+        "body": "Your Spotify subscription will be cancelled on 12 Dec",
+        "expectFactTypes": []
+      },
+      {
+        "sender": "VM-SPOTFY-S",
+        "body": "Your Spotify subscription renews on 12 Dec",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-13T00:00:00Z"
+  },
+  {
+    "id": "SUB-END-MEMBERSHIP-EXPIRED-01",
+    "version": 1,
+    "family": "mandate_expired",
+    "senders": [
+      "*"
+    ],
+    "priority": 672,
+    "match": {
+      "pattern": "(?<m>[a-z0-9&.' _*+-]{2,40}?)\\s+membership\\s*[:\\-]\\s*your\\s+(?:[a-z0-9]+\\s+)?membership\\s+(?:has\\s+)?(?:expired|ended|lapsed)(?:\\s+on\\s+(?<date>\\d{1,2}\\s+[a-z]{3,9}\\s+\\d{4}))?",
+      "flags": "i",
+      "rejectAny": [
+        "will expire",
+        "expires on",
+        "expiring"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "expired",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          },
+          "mandatePurpose": "subscription"
+        },
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd/MM/yyyy",
+            "dd-MM-yyyy",
+            "dd/MM/yy",
+            "dd-MM-yy",
+            "dd MMM yyyy",
+            "dd-MMM-yyyy",
+            "dd-MMM-yy"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "VA-FLPKRT-S",
+        "body": "Flipkart Plus Membership : Your Plus membership expired on 07 Jun 2025. To know how to become a member again, click here",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VA-FLPKRT-S",
+        "body": "Flipkart Plus Membership : Your Plus membership will expire on 07 Jun 2025.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-13T00:00:00Z"
+  },
+  {
+    "id": "SUB-CREATED-SERVICE-ACTIVATED-01",
+    "version": 1,
+    "family": "mandate_created",
+    "senders": [
+      "*"
+    ],
+    "priority": 660,
+    "match": {
+      "pattern": "\\byour\\s+(?:\\d+[- ](?:day|week|month|year)s?\\s+)?(?<m>[a-z0-9&.' _*+-]{2,40}?)\\s+subscription\\s+(?:is|has\\s+been)\\s+now\\s+(?:activated|active|live|started)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "not activated",
+        "could not",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          },
+          "mandatePurpose": "subscription"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "JD-JIONET-S",
+        "body": "Congratulations! Your 1-month JioHotstar subscription is now activated on Jio number 9999999999. Please note",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "JD-JIONET-S",
+        "body": "Your JioHotstar subscription is now expired",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-13T00:00:00Z"
+  },
+  {
+    "id": "SUB-END-AUTOPAY-TURNED-OFF-01",
+    "version": 1,
+    "family": "mandate_revoked",
+    "senders": [
+      "*"
+    ],
+    "priority": 665,
+    "match": {
+      "pattern": "(?:auto-?\\s?pay|auto-?\\s?renew(?:al)?|auto-?\\s?debit|standing\\s+instruction|recurring\\s+(?:payment|instruction)s?)\\s+(?:for|to|towards|on)\\s+(?<m>[a-z0-9&.' _*+-]+?)\\s+(?:has\\s+been|is|was|have\\s+been)\\s+(?:successfully\\s+)?(?:turned\\s+off|switched\\s+off|disabled|stopped|removed|discontinued|deregistered|unregistered|deactivated)",
+      "flags": "i",
+      "rejectAny": [
+        "turned on",
+        "enabled",
+        "will be"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "revoked",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          },
+          "mandatePurpose": "subscription"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-CANVAX-S",
+        "body": "Auto-renewal for Canva Pro has been turned off. You will not be charged again.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-CANVAX-S",
+        "body": "Auto-renewal for Canva Pro has been turned on.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-13T00:00:00Z"
+  },
+  {
+    "id": "SUB-UPCOMING-RENEWAL-01",
+    "version": 1,
+    "family": "subscription_upcoming",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "\\byour\\s+(?<m>[a-z0-9&.' _*+-]{2,40}?)\\s+(?:subscription|membership)\\s+(?:will\\s+(?:auto-?\\s?)?renew|renews|is\\s+(?:due\\s+)?(?:to\\s+)?renew(?:ing)?)\\s+on\\s+(?<due>\\d{1,2}[-/ ](?:\\d{1,2}|[a-z]{3,9})[-/ ,]*\\d{2,4})(?:[\\s\\S]{0,80}?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?))?",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "scheduled",
+          "direction": "debit",
+          "purpose": "unknown",
+          "dueAt": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "VM-SPOTFY-S",
+        "body": "Your Spotify subscription will renew on 12-12-2026 for Rs 119.00 using your saved card.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-SPOTFY-S",
+        "body": "Your Spotify subscription has been renewed for Rs 119.00",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-13T00:00:00Z"
+  },
+  {
+    "id": "SUB-RECEIPT-SUBSCRIPTION-PAYMENT-01",
+    "version": 1,
+    "family": "subscription_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 655,
+    "match": {
+      "pattern": "your\\s+payment\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+for\\s+the\\s+subscription\\s+to\\s+(?<m>[a-z0-9&.' _*+-]{2,40}?)\\s+is\\s+successful",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "upi",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VA-RZRPAY-S",
+        "body": "Your payment of Rs.99 for the subscription to Example Labs  is successful. Any recurring subscription payments will be automatically charged to your UPI from now - Razorpay",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VA-RZRPAY-S",
+        "body": "Your payment of Rs.99 for the subscription to Example Labs has failed. Please retry.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-13T00:00:00Z"
+  }
+]

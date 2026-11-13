@@ -69,9 +69,11 @@ const nearbyGoogle = require('./nearby_google');
 const { registerRuleFamilyRoutes, validateField } = require('./admin_rule_families');
 const { registerAdminReferralOperationsRoutes } = require('./admin_referral_operations');
 const rewardMath = require('./reward_math');
+const paymentMethods = require('./payment_methods');
 // card-rewards v2 (WP8): v2-shaped cards record in native units; see the hooks
 // in applyTransactionState, reconcileCurrentCapStates and GET /user-cards.
 const cardStateV2 = require('./card_state_v2');
+const { creditRewardFacts, ISSUER_CREDIT_REASON, estimatedPointsTotal } = require('./reward_credits');
 const { registerSplitRoutes } = require('./transaction_splits');
 const transactionTags = require('./transaction_tags');
 const { registerUserMerchantCategoryRuleRoutes } = require('./user_merchant_category_rules');
@@ -1999,6 +2001,7 @@ app.get('/user-cards', requireAuth, async (req, res) => {
         card.cap_states = [];
         card.milestone_states = [];
         card.total_points_earned = Number(card.points_balance || 0);
+        card.credited_points = 0;
         card.fee_waiver_states = [];
       }
 
@@ -2007,6 +2010,9 @@ app.get('/user-cards', requireAuth, async (req, res) => {
         // Rebuild derived current-period cap state from the canonical ledger.
         // The SMS attribution repair remains an explicit reconciliation task.
         await reconcileCurrentCapStates(client, req.userId);
+        // Points the bank credited by SMS may have arrived before the card was linked:
+        // one sweep for the whole wallet (idempotent), not one scan per card.
+        await creditRewardFacts(client, req.userId);
 
         for (const card of cards.rows) {
           // card-rewards v2 (WP8, C8 D22c): `consumed` keeps its v1 meaning
@@ -2018,11 +2024,17 @@ app.get('/user-cards', requireAuth, async (req, res) => {
           card.cap_states = await cardStateV2.currentCapStates(client, card.id);
           card.milestone_states = await cardStateV2.currentMilestoneStates(client, card.id);
 
+          // Bank-credited rows are kept out of the estimated total: a statement credit
+          // usually pays out points the spends already estimated, so adding both would
+          // count them twice. They are returned separately.
           const pointsTotal = await client.query(
-            `SELECT COALESCE(SUM(delta_points), 0) AS total_points FROM points_ledger WHERE user_card_id = $1`,
-            [card.id]
+            `SELECT COALESCE(SUM(delta_points) FILTER (WHERE reason IS DISTINCT FROM $2), 0) AS total_points,
+                    COALESCE(SUM(delta_points) FILTER (WHERE reason = $2), 0) AS credited_points
+               FROM points_ledger WHERE user_card_id = $1`,
+            [card.id, ISSUER_CREDIT_REASON]
           );
           card.total_points_earned = Number(pointsTotal.rows[0].total_points) + Number(card.points_balance || 0);
+          card.credited_points = Number(pointsTotal.rows[0].credited_points);
 
           const feeWaiverStates = await client.query(
             `SELECT fw.fee_waiver_rule_id, fw.qualified_spend, fw.waived_at, fw.period_end,
@@ -2869,11 +2881,8 @@ app.post('/user-cards/:id/points-adjustment', requireAuth, async (req, res) => {
         if (prior.rows.length > 0) return prior.rows[0];
       }
 
-      const currentLedgerSum = await client.query(
-        `SELECT COALESCE(SUM(delta_points), 0) AS total FROM points_ledger WHERE user_card_id = $1`,
-        [req.params.id]
-      );
-      const currentTotal = Number(currentLedgerSum.rows[0].total) + Number(owns.rows[0].points_balance || 0);
+      // Same total GET /user-cards shows: bank-credited rows are left out.
+      const currentTotal = await estimatedPointsTotal(client, req.params.id, owns.rows[0].points_balance);
       const delta = target - currentTotal;
 
       const adjustmentReason = typeof reason === 'string' && reason.trim()
@@ -3224,7 +3233,7 @@ async function insertTransactionAndUpdateState(client, userId, {
       RETURNING id, amount_inr, occurred_at, instrument, entry_kind, source, status, reward_state, source_account_last4, state_applied, is_backfill`,
       [old.id, userId, resolvedInstrument, userCardId || null, resolvedAccountLast4, refreshedEntryKind, Boolean(shouldReclassify), merchantName || null, merchantLocked]
     );
-    if (shouldReclassify && refreshedMovesCardState && !old.is_backfill) {
+    if (shouldReclassify && refreshedMovesCardState) {
       const card = oldCard || (userCardId ? await loadUserCardForState(client, userId, userCardId) : null);
       if (!card) throw new Error('cannot apply reclassified card transaction without its card state');
       await applyTransactionState(client, userId, card, {
@@ -3772,9 +3781,11 @@ async function repairSmsHistory(client, userId, { reviewCrossSource = false, rev
   for (const row of classificationEvidence.rows) {
     const desiredKind = row.transfer_kind === 'fee' || row.transfer_kind === 'payment_to_person'
       ? 'spend'
+      : row.transfer_kind === 'investment_proceeds'
+      ? 'investment_return'
       : transferKinds.has(row.transfer_kind)
       ? 'transfer'
-      : ['spend', 'income', 'investment', 'transfer'].includes(row.parser_entry_kind)
+      : ['spend', 'income', 'investment', 'investment_return', 'transfer'].includes(row.parser_entry_kind)
       ? row.parser_entry_kind
       : null;
     if (!desiredKind || desiredKind === row.entry_kind) continue;
@@ -3801,8 +3812,7 @@ async function repairSmsHistory(client, userId, { reviewCrossSource = false, rev
     );
     const newMovesCardState = row.instrument === 'credit_card'
       && desiredKind === 'spend'
-      && Boolean(row.user_card_id)
-      && !row.is_backfill;
+      && Boolean(row.user_card_id);
     if (newMovesCardState) {
       const card = oldCard || await loadUserCardForState(client, userId, row.user_card_id);
       if (card) {
@@ -3972,12 +3982,12 @@ async function repairSmsHistory(client, userId, { reviewCrossSource = false, rev
     if (linked.rowCount === 0) continue;
     linkedCards += 1;
 
-    // Historical backfills must never change the current card cycle. A live
-    // credit-card spend, however, was intentionally held out of card state
-    // while unmatched, so apply it exactly once after linking it now.
+    // A credit-card spend (live or history) is held out of card state while
+    // unmatched, so apply it exactly once after linking it now. State is keyed
+    // by the spend's own period, so a history spend never touches the current
+    // cycle.
     if (row.instrument === 'credit_card'
         && row.entry_kind === 'spend'
-        && !row.is_backfill
         && row.state_applied !== true) {
       const card = await loadUserCardForState(client, userId, resolved.userCardId);
       if (card) {
@@ -4165,8 +4175,8 @@ async function repairSmsHistory(client, userId, { reviewCrossSource = false, rev
       reservedRows.add(selected.candidate.id);
 
       // Keep totals and card state count-once while this pair awaits a decision.
-      if (smsRow.instrument === 'credit_card' && !smsRow.is_backfill
-          && smsRow.state_applied !== false) {
+      if (smsRow.instrument === 'credit_card'
+          && (smsRow.state_applied === true || (smsRow.state_applied == null && !smsRow.is_backfill))) {
         const card = await loadUserCardForState(client, userId, smsRow.user_card_id);
         if (!card) throw new Error('cannot suppress historical duplicate without its active card');
         await reverseTransactionState(client, userId, card, smsRow);
@@ -4235,6 +4245,9 @@ async function reconcileCurrentCapStates(client, userId) {
       rebuiltCaps += v2Rebuilt.rebuiltCaps;
       continue;
     }
+    // A v1-shaped card prices its unpriced history spends one by one, oldest
+    // first (each lands in its own period, so the current cycle is untouched).
+    await priceUnpricedHistoryV1(client, userId, card.id);
 
     const rewardRules = await client.query(
       `SELECT id, category_id, merchant_pattern, rail, unit, rate,
@@ -4268,7 +4281,6 @@ async function reconcileCurrentCapStates(client, userId) {
           AND status = 'active'
           AND instrument = 'credit_card'
           AND entry_kind = 'spend'
-          AND COALESCE(is_backfill, false) = false
           AND occurred_at >= $3::date
           AND occurred_at < ($4::date + interval '1 day')
         ORDER BY occurred_at ASC, id ASC`,
@@ -4303,6 +4315,36 @@ async function reconcileCurrentCapStates(client, userId) {
   }
 
   return { rebuiltCaps };
+}
+
+/**
+ * v1-shaped cards: history spends (and spends held out of state while their
+ * card was unmatched) that never got a reward figure are applied once, oldest
+ * first. Bounded per call so one wallet read stays quick; the rest follow on
+ * the next read. v2 cards use cardStateV2.reconcileIfV2 instead.
+ */
+async function priceUnpricedHistoryV1(client, userId, userCardId, limit = 300) {
+  const rows = await client.query(
+    `SELECT id, amount_inr, occurred_at, category_id, merchant_name, rail
+       FROM transactions
+      WHERE profile_id = $1 AND user_card_id = $2 AND status = 'active'
+        AND instrument = 'credit_card' AND entry_kind = 'spend'
+        AND expected_value_inr IS NULL AND state_applied IS DISTINCT FROM true
+      ORDER BY occurred_at ASC, id ASC
+      LIMIT $3`,
+    [userId, userCardId, limit],
+  );
+  if (rows.rows.length === 0) return 0;
+  const card = await loadUserCardForState(client, userId, userCardId);
+  if (!card) return 0;
+  for (const row of rows.rows) {
+    await applyTransactionState(client, userId, card, {
+      txnId: row.id, userCardId, amount: Number(row.amount_inr), occurred: row.occurred_at,
+      categoryId: row.category_id, merchantName: row.merchant_name, rail: row.rail, sign: 1,
+    });
+    await client.query(`UPDATE transactions SET state_applied = true WHERE id = $1 AND profile_id = $2`, [row.id, userId]);
+  }
+  return rows.rows.length;
 }
 
 /**
@@ -4706,7 +4748,7 @@ async function reverseTransactionState(client, userId, userCard, txnRow) {
 
 /** Mirrors the txn_instrument / txn_entry_kind enums in migration 0040. */
 const TXN_INSTRUMENTS = ['credit_card', 'debit_card', 'cash', 'upi_bank', 'wallet', 'other'];
-const TXN_ENTRY_KINDS = ['spend', 'income', 'investment', 'transfer'];
+const TXN_ENTRY_KINDS = ['spend', 'income', 'investment', 'investment_return', 'transfer'];
 
 app.post('/transactions', requireAuth, async (req, res) => {
   const {
@@ -4731,6 +4773,15 @@ app.post('/transactions', requireAuth, async (req, res) => {
   }
   if (!TXN_ENTRY_KINDS.includes(entryKind)) {
     return res.status(400).json({ error: `entryKind must be one of ${TXN_ENTRY_KINDS.join(', ')}` });
+  }
+  // Optional: how the entry was paid (cheque, NEFT, ...). Never changes the
+  // instrument; null/absent stores nothing, exactly as before.
+  const createMethod = paymentMethods.resolvePaymentMethodForCreate(
+    (req.body || {}).paymentMethod,
+    instrument,
+  );
+  if (createMethod.error) {
+    return res.status(400).json({ error: createMethod.error });
   }
   // A credit-card entry still requires a saved card because the database
   // treats that row as card spend. Debit-card entries may be cardless when
@@ -4816,7 +4867,7 @@ app.post('/transactions', requireAuth, async (req, res) => {
                 }),
                 userCategoryId: null,
               });
-      return insertTransactionAndUpdateState(client, req.userId, {
+      const inserted = await insertTransactionAndUpdateState(client, req.userId, {
         userCardId: instrument === 'credit_card' || instrument === 'debit_card'
           ? userCardId
           : null,
@@ -4841,6 +4892,20 @@ app.post('/transactions', requireAuth, async (req, res) => {
         },
         instrument, entryKind,
       });
+      // The shared insert helper (also used by the SMS paths) is left untouched,
+      // so the method is written in the same database transaction right after
+      // it. Only a row created by THIS request gets it (201); an exact retry or
+      // a matched duplicate returns the existing row, which keeps its own value.
+      if (createMethod.value !== null && inserted.status === 201 && inserted.transaction?.id) {
+        const written = await client.query(
+          `UPDATE transactions SET payment_method = $1
+            WHERE id = $2 AND profile_id = $3
+        RETURNING payment_method`,
+          [createMethod.value, inserted.transaction.id, req.userId],
+        );
+        inserted.transaction.payment_method = written.rows[0]?.payment_method ?? createMethod.value;
+      }
+      return inserted;
     });
 
     if (result.status !== 200 && result.status !== 201) {
@@ -5281,7 +5346,7 @@ app.get('/transactions', requireAuth, async (req, res) => {
                 CASE WHEN ucat.parent_category_id IS NOT NULL OR ucat.parent_user_category_id IS NOT NULL THEN ucat.name END AS subcategory_name,
                 t.rail, t.payment_method, t.status, t.source, t.note,
                 t.instrument, t.entry_kind, t.reward_state,
-                t.expected_value_inr,
+                t.expected_value_inr, t.exclude_from_spend,
                 (SELECT o.metadata->'selfTransferRule' FROM transaction_observations o
                   WHERE o.transaction_id=t.id AND o.profile_id=t.profile_id
                     AND o.metadata->'selfTransferRule' IS NOT NULL LIMIT 1) AS self_transfer_rule,
@@ -5376,7 +5441,7 @@ app.get('/transactions/:id', requireAuth, async (req, res) => {
                 CASE WHEN ucat.parent_category_id IS NOT NULL OR ucat.parent_user_category_id IS NOT NULL THEN ucat.name END AS subcategory_name,
                 t.rail, t.payment_method, t.status, t.source, t.note,
                 t.instrument, t.entry_kind, t.reward_state,
-                t.expected_value_inr,
+                t.expected_value_inr, t.exclude_from_spend,
                 COALESCE(t.source_account_last4,
                   (SELECT o.metadata->>'accountLast4'
                      FROM transaction_observations o
@@ -5559,7 +5624,7 @@ app.post('/duplicate-candidates/:id/resolve', requireAuth, async (req, res) => {
         const txn = byId.get(transactionId);
         if (!txn || txn.status !== 'ignored' || txn.suppressed_elsewhere) return;
         const movesCardState = txn.instrument === 'credit_card' && txn.entry_kind === 'spend' && Boolean(txn.user_card_id);
-        if (!txn.is_backfill && movesCardState && txn.state_applied !== true) {
+        if (movesCardState && txn.state_applied !== true) {
           const card = await loadUserCardForState(client, req.userId, txn.user_card_id);
           if (!card) throw new Error('cannot activate duplicate: user card is missing or archived');
           await applyTransactionState(client, req.userId, card, {
@@ -5660,7 +5725,7 @@ app.post('/duplicate-candidates/:id/resolve', requireAuth, async (req, res) => {
 app.patch('/transactions/:id', requireAuth, async (req, res) => {
   const {
     amountInr, occurredAt, categoryId, userCategoryId, rail, merchantName, userCardId,
-    instrument, entryKind, selfTransfer,
+    instrument, entryKind, selfTransfer, paymentMethod,
   } = req.body || {};
   const disablingSelfTransfer = selfTransfer?.action === 'disable';
   if (selfTransfer !== undefined && ((!disablingSelfTransfer && entryKind !== 'transfer')
@@ -5675,6 +5740,12 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
   }
   if (entryKind !== undefined && !TXN_ENTRY_KINDS.includes(entryKind)) {
     return res.status(400).json({ error: `entryKind must be one of ${TXN_ENTRY_KINDS.join(', ')}` });
+  }
+  // Shape check only (unknown value / wrong type). Compatibility with the
+  // effective instrument needs the stored row, so it is checked in the handler.
+  const patchMethodShape = paymentMethods.normalisePaymentMethodInput(paymentMethod);
+  if (patchMethodShape.error) {
+    return res.status(400).json({ error: patchMethodShape.error });
   }
   if (amountInr !== undefined && (!Number.isFinite(Number(amountInr)) || Number(amountInr) <= 0)) {
     return res.status(400).json({ error: 'amountInr must be a positive number' });
@@ -5704,7 +5775,7 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
       // transaction, released on COMMIT/ROLLBACK by withUserClient.
       const existing = await client.query(
         `SELECT id, user_card_id, amount_inr, occurred_at, category_id, user_category_id, rail, merchant_name, status,
-                instrument, entry_kind, state_applied, is_backfill
+                instrument, entry_kind, state_applied, is_backfill, payment_method
            FROM transactions WHERE id = $1 AND profile_id = $2 FOR UPDATE`,
         [req.params.id, req.userId]
       );
@@ -5713,6 +5784,16 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
       if (old.status !== 'active') {
         return { status: 409, error: `cannot edit a transaction with status '${old.status}'` };
       }
+      // Validated before any write or state reversal below: withUserClient
+      // commits whatever the callback returns, so a 400 must come first.
+      // An absent field keeps the stored method; an instrument change that the
+      // stored method does not fit is rejected (see payment_methods.js).
+      const methodResolution = paymentMethods.resolvePaymentMethodForPatch(
+        paymentMethod,
+        old.payment_method,
+        instrument ?? old.instrument,
+      );
+      if (methodResolution.error) return { status: 400, error: methodResolution.error };
       let selfTransferRule = null;
       if (selfTransfer !== undefined) {
         if (disablingSelfTransfer || selfTransfer.remember === true) {
@@ -5849,14 +5930,14 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
         `UPDATE transactions
             SET user_card_id = $1, amount_inr = $2, occurred_at = $3, category_id = $4,
                 user_category_id = $5, rail = $6,
-                merchant_name = $7, instrument = $8, entry_kind = $9
+                merchant_name = $7, instrument = $8, entry_kind = $9, payment_method = $11
           WHERE id = $10
           RETURNING id, user_card_id, amount_inr, occurred_at, category_id, user_category_id,
-                    rail, merchant_name, instrument, entry_kind, status`,
+                    rail, merchant_name, instrument, entry_kind, status, payment_method`,
         [
           newValues.userCardId, newValues.amount, newValues.occurred, newValues.categoryId,
           newValues.userCategoryId, newValues.rail, newValues.merchantName,
-          newValues.instrument, newValues.entryKind, old.id,
+          newValues.instrument, newValues.entryKind, old.id, methodResolution.value,
         ]
       );
 
@@ -5902,7 +5983,7 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
         );
       }
 
-      const stateUpdates = old.is_backfill || !newMovesCardState
+      const stateUpdates = !newMovesCardState
         ? {}
         : await applyTransactionState(client, req.userId, newCard, {
             txnId: old.id, userCardId: newValues.userCardId, amount: newValues.amount,
@@ -5912,7 +5993,7 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
             // merchant has to re-apply against the rule that merchant earns at.
             merchantName: newValues.merchantName, rail: newValues.rail,
           });
-      if (!old.is_backfill) {
+      if (newMovesCardState) {
         await client.query(`UPDATE transactions SET state_applied = true WHERE id = $1`, [old.id]);
       }
 
@@ -6355,14 +6436,14 @@ app.post('/transactions/category-bulk-apply', requireAuth, async (req, res) => {
           [target.categoryId || null, target.userCategoryId || null, old.id, req.userId],
         );
         const newCard = oldMovesCardState ? stateCards.get(id) : null;
-        if (!old.is_backfill && oldMovesCardState) {
+        if (oldMovesCardState) {
           await applyTransactionState(client, req.userId, newCard, {
             txnId: old.id, userCardId: old.user_card_id, amount: Number(old.amount_inr),
             occurred: old.occurred_at, categoryId: target.categoryId || null, sign: 1,
             merchantName: old.merchant_name, rail: old.rail,
           });
         }
-        if (!old.is_backfill) await client.query('UPDATE transactions SET state_applied = true WHERE id = $1', [old.id]);
+        if (oldMovesCardState) await client.query('UPDATE transactions SET state_applied = true WHERE id = $1', [old.id]);
         await client.query(
           `INSERT INTO transaction_category_bulk_operation_items
              (profile_id, operation_id, transaction_id, old_category_id, old_user_category_id,
@@ -6441,6 +6522,55 @@ app.patch('/transactions/:id/note', requireAuth, async (req, res) => {
     res.json({ transaction: result.rows[0] });
   } catch (err) {
     console.error('PATCH /transactions/:id/note error', safeErrorCode(err));
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * PUT /transactions/:id/spend-exclusion — "Don't count in spending".
+ *
+ * Sets, never toggles, so a lost reply that is sent again cannot flip it back.
+ * Deliberately NOT part of POST /transactions/:id/ignore: ignoring reverses
+ * the card's caps, milestones, points and fee-waiver progress and hides the
+ * row, but a purchase the person simply does not want in their spending
+ * (a gift, a reimbursed expense) still happened on the card and still earned
+ * what it earned. This only flips `exclude_from_spend`; spending totals,
+ * breakdowns and budgets read it, and nothing else does.
+ *
+ * Only a spend row can be excluded: for any other kind the flag would mean
+ * nothing, and accepting it would hide a mistake.
+ */
+app.put('/transactions/:id/spend-exclusion', requireAuth, async (req, res) => {
+  const { excluded } = req.body || {};
+  if (typeof excluded !== 'boolean') {
+    return res.status(400).json({ error: 'excluded must be true or false' });
+  }
+  // A malformed id would otherwise reach the uuid cast and surface as a 500.
+  if (!UUID_RE.test(String(req.params.id || ''))) {
+    return res.status(400).json({ error: 'id must be a valid UUID' });
+  }
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const existing = await client.query(
+        `SELECT entry_kind FROM transactions WHERE id = $1 AND profile_id = $2`,
+        [req.params.id, req.userId]
+      );
+      if (existing.rows.length === 0) return { status: 404, error: 'transaction not found' };
+      if (existing.rows[0].entry_kind !== 'spend') {
+        return { status: 409, error: 'only a spend transaction can be left out of spending' };
+      }
+      const updated = await client.query(
+        `UPDATE transactions SET exclude_from_spend = $1
+          WHERE id = $2 AND profile_id = $3
+          RETURNING id, exclude_from_spend`,
+        [excluded, req.params.id, req.userId]
+      );
+      return { status: 200, transaction: updated.rows[0] };
+    });
+    if (result.status !== 200) return res.status(result.status).json({ error: result.error });
+    res.json({ transaction: result.transaction });
+  } catch (err) {
+    console.error('PUT /transactions/:id/spend-exclusion error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -6812,6 +6942,7 @@ app.get('/spend-by-category', requireAuth, async (req, res) => {
            LEFT JOIN user_categories parent_uc ON parent_uc.id = ucat.parent_user_category_id AND parent_uc.profile_id = t.profile_id
           WHERE t.profile_id = $1 AND t.status = 'active'
             AND t.entry_kind = 'spend'
+            AND NOT t.exclude_from_spend
             AND t.occurred_at >= now() - ($2 || ' months')::interval
           GROUP BY COALESCE(t.category_id, ucat.parent_user_category_id, t.user_category_id),
                    COALESCE(sc.slug, parent_uc.slug, ucat.slug),

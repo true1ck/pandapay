@@ -190,6 +190,12 @@ class UserCard {
   milestonePeriodEnd; // milestoneRule.id -> this period's deadline (E4)
   final double
   totalPointsEarned; // lifetime, in the reward's own native unit — not an INR Money
+
+  /// Points the bank itself says it credited (read from its SMS, e.g.
+  /// "Reward Points Credited: 2500 …"). Kept apart from [totalPointsEarned]:
+  /// a statement credit usually pays out points the spends already estimated,
+  /// so adding the two would count them twice.
+  final double creditedPoints;
   /// The current starting/estimated balance entered for this card. This is
   /// intentionally separate from [totalPointsEarned], which also includes
   /// the points ledger and is therefore not a form value the user entered.
@@ -268,6 +274,7 @@ class UserCard {
     this.milestoneQualifiedSpend = const {},
     this.milestonePeriodEnd = const {},
     this.totalPointsEarned = 0,
+    this.creditedPoints = 0,
     this.pointsBalance,
     this.feeWaiverStates = const [],
     this.statementDay,
@@ -316,6 +323,7 @@ class UserCard {
             ),
       },
       totalPointsEarned: _num(json['total_points_earned']),
+      creditedPoints: _num(json['credited_points']),
       pointsBalance: json['points_balance'] == null
           ? null
           : _num(json['points_balance']),
@@ -373,6 +381,7 @@ class UserCard {
     ],
     'fee_waiver_states': feeWaiverStates.map((fw) => fw.toJson()).toList(),
     'total_points_earned': totalPointsEarned,
+    'credited_points': creditedPoints,
     'points_balance': pointsBalance,
     'statement_day': statementDay,
     'statement_day_source': statementDaySource,
@@ -405,11 +414,18 @@ enum TxnInstrument {
   final String label;
   const TxnInstrument(this.wireValue, this.label);
 
-  static TxnInstrument fromJson(String? value) =>
-      TxnInstrument.values.firstWhere(
-        (i) => i.wireValue == value,
-        orElse: () => TxnInstrument.creditCard,
-      );
+  /// A missing value (older API images omit `instrument`) keeps the historical
+  /// credit-card default, which callers pair with `instrumentKnown == false`.
+  /// A present but unrecognised value (a newer server's instrument) must NOT
+  /// be read as a credit card — that would feed reward/card-state logic — so
+  /// it becomes [other], which moves no card state.
+  static TxnInstrument fromJson(String? value) {
+    if (value == null) return TxnInstrument.creditCard;
+    return TxnInstrument.values.firstWhere(
+      (i) => i.wireValue == value,
+      orElse: () => TxnInstrument.other,
+    );
+  }
 }
 
 /// Whether an entry is spending at all — migration 0040's
@@ -423,6 +439,10 @@ enum TxnEntryKind {
   spend('spend', 'Spending'),
   income('income', 'Money in'),
   investment('investment', 'Investment'),
+
+  /// Money coming back from an investment (redemption, sale, broker payout).
+  /// Counts in Money in but is never earned income and never spending.
+  investmentReturn('investment_return', 'Investment return'),
   transfer('transfer', 'Transfer'),
   refund('refund', 'Refund'),
   unknown('unknown', 'Unknown');
@@ -430,6 +450,12 @@ enum TxnEntryKind {
   final String wireValue;
   final String label;
   const TxnEntryKind(this.wireValue, this.label);
+
+  /// Counts toward Money in: income and money back from investments.
+  bool get isMoneyIn => this == income || this == investmentReturn;
+
+  /// Counts toward Money out: spending and money put into investments.
+  bool get isMoneyOut => this == spend || this == investment;
 
   // Historical receipt imports used `payment` for a spend. Keep that known
   // alias explicit; an unrecognised future kind must never become spending.
@@ -1713,6 +1739,7 @@ class UserCardsRepository {
     TxnInstrument instrument = TxnInstrument.creditCard,
     TxnEntryKind entryKind = TxnEntryKind.spend,
     String? clientMutationId,
+    String? paymentMethod,
   }) async {
     final mutationId = clientMutationId ?? const Uuid().v4();
     final customCategoryId =
@@ -1741,6 +1768,9 @@ class UserCardsRepository {
             'rail': ?rail,
             'instrument': instrument.wireValue,
             'entryKind': entryKind.wireValue,
+            // Only sent when the user chose one, so the body stays
+            // byte-identical to the pre-payment-method request otherwise.
+            'paymentMethod': ?paymentMethod,
             'clientMutationId': mutationId,
           }),
         )
@@ -2058,10 +2088,17 @@ class UserCardsRepository {
     TxnInstrument? instrument,
     TxnEntryKind? entryKind,
     Map<String, dynamic>? selfTransfer,
+    String? paymentMethod,
+    bool clearPaymentMethod = false,
   }) async {
     if (clearCategory && (categoryId != null || userCategoryId != null)) {
       throw ArgumentError(
         'clearCategory cannot be combined with categoryId or userCategoryId',
+      );
+    }
+    if (clearPaymentMethod && paymentMethod != null) {
+      throw ArgumentError(
+        'clearPaymentMethod cannot be combined with paymentMethod',
       );
     }
     final customCategoryId =
@@ -2086,6 +2123,10 @@ class UserCardsRepository {
       if (instrument != null) 'instrument': instrument.wireValue,
       if (entryKind != null) 'entryKind': entryKind.wireValue,
       if (selfTransfer != null) 'selfTransfer': selfTransfer,
+      // Absent = leave the saved method alone. Only an explicit
+      // clearPaymentMethod sends null (the user removed it).
+      if (clearPaymentMethod) 'paymentMethod': null,
+      if (!clearPaymentMethod) 'paymentMethod': ?paymentMethod,
     };
     final response = await _client.patch(
       Uri.parse('$apiBaseUrl/transactions/$id'),
@@ -2256,6 +2297,24 @@ class UserCardsRepository {
     if (response.statusCode != 200) {
       throw ApiException(
         'POST /transactions/:id/restore failed: ${response.statusCode} ${response.body}',
+      );
+    }
+  }
+
+  /// Counts the transaction in, or leaves it out of, the person's spending.
+  /// Safe to repeat: it sets a value, it does not toggle. It does not touch
+  /// rewards, caps or card state, so the row stays exactly as the bank has it.
+  Future<void> setSpendExclusion(String id, {required bool excluded}) async {
+    final response = await _client
+        .put(
+          Uri.parse('$apiBaseUrl/transactions/$id/spend-exclusion'),
+          headers: _headers,
+          body: jsonEncode({'excluded': excluded}),
+        )
+        .timeout(_transactionRequestTimeout);
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'PUT /transactions/:id/spend-exclusion failed: ${response.statusCode} ${response.body}',
       );
     }
   }
@@ -2698,6 +2757,12 @@ class TransactionTag {
 
 class TransactionEntry {
   final Map<String, dynamic>? selfTransferRule;
+
+  /// What kind of transfer this is, for a row whose kind is `transfer`:
+  /// `self` (between the person's own accounts), `family` (to or from a family
+  /// member the person marked), `card_bill`, `wallet`. Null
+  /// when the row is not a transfer, or was written before this was recorded.
+  final String? transferType;
   final String? sourceKey;
   final String id;
   final int pipelineVersion;
@@ -2745,6 +2810,18 @@ class TransactionEntry {
   /// for a cardless UPI transaction while the API rolls out.
   final bool instrumentKnown;
   final TxnEntryKind entryKind;
+
+  /// Money the person moved between their own accounts. Rows written before
+  /// [transferType] existed are recognised by the label the ledger gave them.
+  bool get isSelfTransfer =>
+      entryKind == TxnEntryKind.transfer &&
+      (transferType == 'self' ||
+          (transferType == null &&
+              merchantName == 'Transfer between your accounts'));
+
+  /// Money the person moved to or from a family member they marked.
+  bool get isFamilyTransfer =>
+      entryKind == TxnEntryKind.transfer && transferType == 'family';
   final String source;
 
   /// The latest time an SMS observation for this transaction was received by
@@ -2782,8 +2859,22 @@ class TransactionEntry {
   /// "unknown", never as zero earned.
   final Money? rewardValue;
 
+  /// The person chose not to count this in their spending (a gift they paid
+  /// for, a reimbursed expense, something that is not really theirs). The row
+  /// stays in Activity, in Money out, on the card and in rewards; only the
+  /// spending totals, breakdowns and budgets leave it out. Never affects
+  /// subscriptions, recurring detection, card dues or reward state.
+  final bool excludeFromSpend;
+
+  /// Whether this row is part of the person's spending: a spend row that they
+  /// have not excluded. Use this wherever a spending total is built; use
+  /// [entryKind] alone for card-side figures (dues, utilisation, rewards).
+  bool get countsAsSpend =>
+      entryKind == TxnEntryKind.spend && !excludeFromSpend;
+
   const TransactionEntry({
     this.selfTransferRule,
+    this.transferType,
     this.sourceKey,
     required this.id,
     this.pipelineVersion = 1,
@@ -2814,6 +2905,7 @@ class TransactionEntry {
     this.rewardState = 'estimated',
     this.note,
     this.rewardValue,
+    this.excludeFromSpend = false,
     this.tags = const [],
   });
 
@@ -2855,6 +2947,7 @@ class TransactionEntry {
       'instrument': instrumentKnown ? instrument.wireValue : null,
       'entry_kind': entryKind.wireValue,
       'self_transfer_rule': selfTransferRule,
+      if (transferType != null) 'transfer_type': transferType,
       'source': source,
       'sms_received_at': smsReceivedAt?.toIso8601String(),
       'observations': observations
@@ -2864,6 +2957,7 @@ class TransactionEntry {
       'reward_state': rewardState,
       'note': note,
       'expected_value_inr': rewardValue?.rupees,
+      if (excludeFromSpend) 'exclude_from_spend': true,
       'tags': tags.map((tag) => tag.toJson()).toList(),
     };
   }
@@ -2873,10 +2967,12 @@ class TransactionEntry {
     String? note,
     String? merchantName,
     TxnEntryKind? entryKind,
+    bool? excludeFromSpend,
     bool clearNote = false,
   }) {
     return TransactionEntry(
       selfTransferRule: selfTransferRule,
+      transferType: transferType,
       sourceKey: sourceKey,
       id: id,
       pipelineVersion: pipelineVersion,
@@ -2908,6 +3004,7 @@ class TransactionEntry {
       note: clearNote ? null : (note ?? this.note),
       tags: tags,
       rewardValue: rewardValue,
+      excludeFromSpend: excludeFromSpend ?? this.excludeFromSpend,
     );
   }
 
@@ -2923,6 +3020,30 @@ class TransactionEntry {
     return buffer.toString();
   }
 
+  /// The transaction payment-method vocabulary (frozen contract
+  /// `app/test/fixtures/payment_methods_v1.json`; a test asserts parity).
+  /// 'upi' predates the contract (SMS v2 writes it) and keeps its meaning.
+  static const Set<String> knownPaymentMethods = {
+    'upi',
+    'net_banking',
+    'neft',
+    'imps',
+    'rtgs',
+    'cheque',
+    'demand_draft',
+    'auto_debit',
+    'emi',
+    'pay_later',
+    'prepaid_card',
+    'gift_card',
+    'reward_points',
+  };
+
+  /// Anything not in the contract (null, wrong type, a value from a newer
+  /// server) is treated as "no method" and never throws.
+  static String? _parsePaymentMethod(Object? raw) =>
+      raw is String && knownPaymentMethods.contains(raw) ? raw : null;
+
   factory TransactionEntry.fromJson(Map<String, dynamic> json) {
     final nickname = json['card_nickname'] as String?;
     final cardName = json['card_name'] as String?;
@@ -2931,6 +3052,7 @@ class TransactionEntry {
     return TransactionEntry(
       selfTransferRule: (json['self_transfer_rule'] as Map?)
           ?.cast<String, dynamic>(),
+      transferType: json['transfer_type'] as String?,
       sourceKey: json['source_key'] as String?,
       id: json['id'] as String,
       pipelineVersion: (json['pipeline_version'] as num?)?.toInt() ?? 1,
@@ -2956,7 +3078,7 @@ class TransactionEntry {
       accountLast4: json['account_last4'] as String?,
       userCardId: json['user_card_id'] as String?,
       rail: _parseRail(json['rail'] as String?),
-      paymentMethod: json['payment_method'] == 'upi' ? 'upi' : null,
+      paymentMethod: _parsePaymentMethod(json['payment_method']),
       instrument: TxnInstrument.fromJson(json['instrument'] as String?),
       instrumentKnown: json['instrument'] != null,
       entryKind: TxnEntryKind.fromJson(json['entry_kind'] as String?),
@@ -2976,6 +3098,8 @@ class TransactionEntry {
       rewardValue: json['expected_value_inr'] == null
           ? null
           : Money.fromRupees(_num(json['expected_value_inr'])),
+      // Absent on older servers and older stored rows: not excluded.
+      excludeFromSpend: json['exclude_from_spend'] == true,
       tags: (json['tags'] as List? ?? const [])
           .map((item) => TransactionTag.fromJson(item as Map<String, dynamic>))
           .toList(),
