@@ -182,7 +182,9 @@ class CardDetailScreen extends ConsumerWidget {
         child: Column(
           children: [
             Expanded(
-              child: pairs.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
+              child: pairs.when(
+                skipLoadingOnReload: true,
+                skipLoadingOnRefresh: true,
                 loading: () => const Padding(
                   padding: EdgeInsets.symmetric(horizontal: AppSpace.lg),
                   child: SkeletonList(count: 4),
@@ -687,7 +689,9 @@ class _CardSpendingMixSectionState
         .where((e) => e.userCardId == widget.userCard.id)
         .toList();
 
-    final content = reportState.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
+    final content = reportState.when(
+      skipLoadingOnReload: true,
+      skipLoadingOnRefresh: true,
       loading: () => const CardSummaryPanel(
         child: Padding(
           padding: EdgeInsets.symmetric(vertical: AppSpace.md),
@@ -1167,8 +1171,18 @@ class _CardPointsSummaryTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final points = userCard.pointsBalance ?? userCard.totalPointsEarned;
-    final valueEstimate = Money.fromRupees(points * product.pointValueInr);
+    // totalPointsEarned is the points ledger plus the starting figure the user
+    // typed in. pointsBalance is only that starting figure, and the server always
+    // sends it (0 by default), so reading it first hid everything the card earned.
+    final points = userCard.totalPointsEarned;
+    // A cashback card keeps its balance in rupees (1 unit = ₹1), so show it as
+    // money, never as "pts".
+    final isCashbackCard =
+        product.baseRewardUnit == RewardUnit.cashbackPercent ||
+        product.baseRewardUnit == RewardUnit.discountPercent;
+    final valueEstimate = isCashbackCard
+        ? Money.fromRupees(points)
+        : Money.fromRupees(points * product.pointValueInr);
     final ledger =
         ref.watch(pointsLedgerProvider(userCard.id)).valueOrNull ??
         const <PointsLedgerEntry>[];
@@ -1210,20 +1224,35 @@ class _CardPointsSummaryTile extends ConsumerWidget {
                 Row(
                   children: [
                     Text(
-                      '${points.toStringAsFixed(0)} pts',
+                      isCashbackCard
+                          ? '${valueEstimate.format(hidePaise: true)} cashback'
+                          : '${points.toStringAsFixed(0)} pts',
                       style: BambooFonts.heading(15, color: BambooInk.ink900),
                     ),
                     const SizedBox(width: AppSpace.xs),
-                    Text(
-                      '(≈ ${valueEstimate.format(hidePaise: true)})',
-                      style: BambooFonts.ui(
-                        12.5,
-                        weight: FontWeight.w600,
-                        color: BambooInk.jade,
+                    if (!isCashbackCard)
+                      Text(
+                        '(≈ ${valueEstimate.format(hidePaise: true)})',
+                        style: BambooFonts.ui(
+                          12.5,
+                          weight: FontWeight.w600,
+                          color: BambooInk.jade,
+                        ),
                       ),
-                    ),
                   ],
                 ),
+                if (userCard.creditedPoints > 0) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Bank credited ${userCard.creditedPoints.toStringAsFixed(0)} pts (from its SMS)',
+                    key: const ValueKey('points-credited-line'),
+                    style: BambooFonts.ui(
+                      11.5,
+                      weight: FontWeight.w600,
+                      color: BambooInk.jade,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 2),
                 if (nearestExpiry != null && daysToExpiry != null)
                   Text(
@@ -1240,7 +1269,9 @@ class _CardPointsSummaryTile extends ConsumerWidget {
                   )
                 else
                   Text(
-                    '${product.pointValueInr > 0 ? "1 pt = ₹${product.pointValueInr.toStringAsFixed(2)}" : "Rewards balance"} · No expiry on file',
+                    isCashbackCard
+                        ? 'Estimated from your spends · no expiry on file'
+                        : '${product.pointValueInr > 0 ? "1 pt = ₹${product.pointValueInr.toStringAsFixed(2)}" : "Rewards balance"} · No expiry on file',
                     style: BambooFonts.ui(11.5, color: BambooInk.ink500),
                   ),
               ],
@@ -1463,7 +1494,9 @@ class _SpendSection extends ConsumerWidget {
     final selectedQuery = ref.watch(cardDetailSpendQueryProvider(userCard.id));
     final report = ref.watch(spendReportProvider(selectedQuery));
 
-    return report.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
+    return report.when(
+      skipLoadingOnReload: true,
+      skipLoadingOnRefresh: true,
       loading: () => const _SpendDisclosure(
         trailing: 'Loading',
         details: [

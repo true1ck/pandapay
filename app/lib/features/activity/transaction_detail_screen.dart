@@ -1,3 +1,4 @@
+import '../sms_v2/ledger/providers.dart' show suspectedRefundsProvider;
 import '../sms_v2/ui/review_controller.dart';
 import '../sms_v2/ui/transaction_actions.dart';
 import '../sms_v2/ui/why_sheet.dart';
@@ -29,6 +30,8 @@ import '../account/account_screen.dart' show AccountTile;
 import '../cards/card_summary.dart';
 import 'mark_transaction_kind.dart';
 import 'report_transaction_screen.dart';
+import 'suspected_refund_banner.dart';
+import 'transaction_reward_label.dart';
 import 'foreign_payments_screen.dart';
 import '../sync/split_sync.dart';
 import '../insights/spend_trends_screen.dart';
@@ -702,6 +705,24 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     }
   }
 
+  /// "Was this refunded?" for a card spend whose limit came back with no
+  /// message explaining it. Nothing for any other row.
+  Widget _suspectedRefundBanner(TransactionEntry entry) {
+    final eventId = entry.eventId;
+    if (eventId == null ||
+        entry.entryKind != TxnEntryKind.spend ||
+        entry.status != 'active' ||
+        entry.instrument != TxnInstrument.creditCard) {
+      return const SizedBox.shrink();
+    }
+    final suspected = ref.watch(suspectedRefundsProvider)[eventId];
+    if (suspected == null) return const SizedBox.shrink();
+    return SuspectedRefundBanner(
+      info: suspected,
+      onConfirmRefunded: () => _markIgnored('refund'),
+    );
+  }
+
   Future<void> _markIgnored(String reason) async {
     final deleting = reason == 'transfer';
     setState(() => _ignoring = true);
@@ -1365,7 +1386,16 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                   const SizedBox(height: AppSpace.md),
                   ForeignTransactionInfo(transactionId: entry.id),
                   const SizedBox(height: AppSpace.md),
+                  _suspectedRefundBanner(entry),
                   _DetailRow(label: 'Card', value: _cardOrPaymentLabel(entry)),
+                  if (transactionRewardLabel(entry) case final reward?)
+                    _DetailRow(
+                      key: const ValueKey('transaction-reward-row'),
+                      label: 'Reward',
+                      value: reward.note == null
+                          ? reward.value
+                          : '${reward.value}\n${reward.note}',
+                    ),
                   _DetailRow(
                     label: 'Category',
                     value: entry.categoryLabel,
@@ -2438,7 +2468,7 @@ class _DetailRow extends StatelessWidget {
   final String label;
   final String? value;
   final Widget? trailing;
-  const _DetailRow({required this.label, this.value, this.trailing});
+  const _DetailRow({super.key, required this.label, this.value, this.trailing});
 
   @override
   Widget build(BuildContext context) {
