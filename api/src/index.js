@@ -9,6 +9,10 @@ const { jsonBodyParser, jsonBodyErrorHandler } = require('./request_limits');
 const { rejectInvalidUuid } = require('./http_db_errors');
 const { createUserCardsAddHandler } = require('./user_cards_add');
 const { createCardOverridesPostHandler } = require('./card_overrides_write');
+const { createBudgetPostHandler, createBudgetDeleteHandler } = require('./budgets_write');
+const { registerConsentRoute } = require('./consents_route');
+const { createSmsImportBatchPostHandler } = require('./sms_import_batches_route');
+const { createRecurringPostHandler, createRecurringPatchHandler } = require('./recurring_write');
 const { syncPushBodyParser } = require('./sync_push_body');
 const { validateSyncRegistration, validateSyncPushRequest, validateSyncPushChange, validateSyncPullQuery, validateSyncAck, validateSyncConflictId, syncRejectionDetail, createSyncPushContext, processSyncPushItem, syncDeviceExists, respondUnknownSyncDevice, respondDbError } = require('./sync_request_validation');
 const { createLoungeUsagePostHandler } = require('./lounge_usage_route');
@@ -7010,74 +7014,7 @@ app.get('/budgets', requireAuth, async (req, res) => {
  * it", not "fail". The old row is DEACTIVATED, not deleted, so the
  * `budget_periods` history that references it survives.
  */
-app.post('/budgets', requireAuth, async (req, res) => {
-  const { scope, scopeRefId, period, amountInr, startsOn, rollover } = req.body || {};
-  if (!BUDGET_SCOPES.includes(scope)) {
-    return res.status(400).json({ error: `scope must be one of ${BUDGET_SCOPES.join(', ')}` });
-  }
-  if (!BUDGET_PERIODS.includes(period)) {
-    return res.status(400).json({ error: `period must be one of ${BUDGET_PERIODS.join(', ')}` });
-  }
-  const amount = Number(amountInr);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return res.status(400).json({ error: 'amountInr must be a positive number' });
-  }
-  if (scope === 'overall' && scopeRefId) {
-    return res.status(400).json({ error: 'an overall budget takes no scopeRefId' });
-  }
-  if (scope !== 'overall' && (!scopeRefId || typeof scopeRefId !== 'string')) {
-    return res.status(400).json({ error: 'scopeRefId is required for a category or card budget' });
-  }
-
-  try {
-    const result = await withUserClient(req.userId, async (client) => {
-      // Validate the referent exists and, for a card, belongs to this user.
-      // The column is deliberately not a foreign key (it points at two
-      // different tables depending on scope), so this check is the only
-      // thing standing between a typo and a budget that can never match
-      // any spend.
-      if (scope === 'category') {
-        const found = await client.query(
-          `SELECT id FROM spend_categories WHERE id = $1
-           UNION ALL
-           SELECT id FROM user_categories WHERE id = $1 AND profile_id = $2`,
-          [scopeRefId, req.userId],
-        );
-        if (found.rows.length === 0) return { status: 404, error: 'category not found' };
-      } else if (scope === 'tag') {
-        const found = await client.query('SELECT id FROM transaction_tags WHERE id=$1 AND profile_id=$2 AND archived_at IS NULL', [scopeRefId,req.userId]);
-        if (!found.rows.length) return { status:404,error:'tag not found' };
-      } else if (scope === 'card') {
-        const found = await client.query(
-          `SELECT id FROM user_cards WHERE id = $1 AND profile_id = $2 AND is_archived = false`,
-          [scopeRefId, req.userId]
-        );
-        if (found.rows.length === 0) return { status: 404, error: 'card not found' };
-      }
-
-      await client.query(
-        `UPDATE budgets SET is_active = false
-          WHERE profile_id = $1 AND is_active AND scope = $2 AND period = $3
-            AND scope_ref_id IS NOT DISTINCT FROM $4`,
-        [req.userId, scope, period, scopeRefId || null]
-      );
-
-      const inserted = await client.query(
-        `INSERT INTO budgets (profile_id, scope, scope_ref_id, period, amount_inr, starts_on, rollover)
-         VALUES ($1, $2, $3, $4, $5, COALESCE($6::date, CURRENT_DATE), COALESCE($7, false))
-         RETURNING id, scope, scope_ref_id, period, amount_inr, starts_on, rollover, is_active`,
-        [req.userId, scope, scopeRefId || null, period, amount, startsOn || null, rollover]
-      );
-      return { status: 201, budget: inserted.rows[0] };
-    });
-
-    if (result.status !== 201) return res.status(result.status).json({ error: result.error });
-    res.status(201).json({ budget: result.budget });
-  } catch (err) {
-    console.error('POST /budgets error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+app.post('/budgets', requireAuth, createBudgetPostHandler({ withUserClient, BUDGET_SCOPES, BUDGET_PERIODS }));
 
 /**
  * DELETE /budgets/:id — deactivates rather than deletes, so any
@@ -7085,24 +7022,7 @@ app.post('/budgets', requireAuth, async (req, res) => {
  * budget last March?" must not become unanswerable because the budget was
  * removed in April.
  */
-app.delete('/budgets/:id', requireAuth, async (req, res) => {
-  if (rejectInvalidUuid(res, req.params.id)) return;
-  try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
-        `UPDATE budgets SET is_active = false
-          WHERE id = $1 AND profile_id = $2 AND is_active
-          RETURNING id`,
-        [req.params.id, req.userId]
-      )
-    );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'budget not found' });
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('DELETE /budgets/:id error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+app.delete('/budgets/:id', requireAuth, createBudgetDeleteHandler({ withUserClient }));
 
 /**
  * GET /recurring — the user's subscriptions, detected from their own
@@ -7446,87 +7366,9 @@ app.get('/recurring', requireAuth, async (req, res) => {
   }
 });
 
-app.post('/recurring', requireAuth, async (req, res) => {
-  const { displayName, typicalAmountInr, cadenceDays, nextExpectedOn } = req.body || {};
-  const autopayStatus = req.body?.autopayStatus || 'unknown';
-  const name = typeof displayName === 'string' ? displayName.trim() : '';
-  const amount = Number(typicalAmountInr);
-  const cadence = Number(cadenceDays);
-  const dateIsValid = typeof nextExpectedOn === 'string'
-    && /^\d{4}-\d{2}-\d{2}$/.test(nextExpectedOn)
-    && !Number.isNaN(Date.parse(`${nextExpectedOn}T00:00:00Z`))
-    && new Date(`${nextExpectedOn}T00:00:00Z`).toISOString().slice(0, 10) === nextExpectedOn;
+app.post('/recurring', requireAuth, createRecurringPostHandler({ withUserClient }));
 
-  if (!isUsableSubscriptionName(name) || name.length > 80 ||
-      !Number.isFinite(amount) || amount <= 0 || amount > 10000000 ||
-      ![30, 365].includes(cadence) ||
-      !['active', 'cancelled', 'unknown'].includes(autopayStatus) ||
-      !dateIsValid) {
-    return res.status(400).json({ error: 'invalid_subscription' });
-  }
-
-  const merchantKey = merchantSeriesKey(name);
-  if (!merchantKey) return res.status(400).json({ error: 'invalid_subscription' });
-
-  try {
-    const result = await withUserClient(req.userId, (client) => client.query(
-      `INSERT INTO recurring_series
-         (profile_id, merchant_key, display_name, typical_amount_inr,
-          cadence_days, occurrence_count, first_seen_on, last_seen_on,
-          next_expected_on, detection_source, user_edited, autopay_status)
-       VALUES ($1, $2, $3, $4, $5, 0, NULL, NULL, $6, 'manual', true, $7)
-       ON CONFLICT (profile_id, merchant_key) DO UPDATE SET
-         display_name = EXCLUDED.display_name,
-         typical_amount_inr = EXCLUDED.typical_amount_inr,
-         cadence_days = EXCLUDED.cadence_days,
-         next_expected_on = EXCLUDED.next_expected_on,
-         detection_source = 'manual',
-         user_edited = true,
-         lifecycle_status = 'active',
-         autopay_status = EXCLUDED.autopay_status,
-         mandate_reference = NULL,
-         mandate_started_on = NULL,
-         mandate_cancelled_at = NULL,
-         is_active = true,
-         dismissed_at = NULL,
-         updated_at = now()
-       RETURNING id`,
-      [req.userId, merchantKey, name, amount, cadence, nextExpectedOn, autopayStatus]
-    ));
-    res.status(201).json({ id: result.rows[0].id });
-  } catch (err) {
-    console.error('POST /recurring error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
-
-app.patch('/recurring/:id', requireAuth, async (req, res) => {
-  if (rejectInvalidUuid(res, req.params.id)) return;
-  const { displayName, typicalAmountInr, cadenceDays, nextExpectedOn } = req.body || {};
-  const autopayStatus = req.body?.autopayStatus;
-  if (typeof displayName !== 'string' || displayName.trim().length < 2 || displayName.trim().length > 80 ||
-      !Number.isFinite(Number(typicalAmountInr)) || Number(typicalAmountInr) <= 0 || Number(typicalAmountInr) > 10000000 ||
-      !Number.isInteger(Number(cadenceDays)) || Number(cadenceDays) < 1 || Number(cadenceDays) > 3650 ||
-      (autopayStatus !== undefined && !['active', 'cancelled', 'unknown'].includes(autopayStatus)) ||
-      typeof nextExpectedOn !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(nextExpectedOn) || Number.isNaN(Date.parse(`${nextExpectedOn}T00:00:00Z`))) {
-    return res.status(400).json({ error: 'invalid_subscription' });
-  }
-  try {
-    const result = await withUserClient(req.userId, (client) => client.query(
-      `UPDATE recurring_series SET display_name = $1, typical_amount_inr = $2,
-              cadence_days = $3, next_expected_on = $4,
-              autopay_status = COALESCE($5, autopay_status), user_edited = true,
-              cadence_confirmed = true
-        WHERE id = $6 AND profile_id = $7 AND dismissed_at IS NULL RETURNING id`,
-      [displayName.trim(), Number(typicalAmountInr), Number(cadenceDays), nextExpectedOn, autopayStatus ?? null, req.params.id, req.userId]
-    ));
-    if (!result.rows.length) return res.status(404).json({ error: 'not_found' });
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('PATCH /recurring error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+app.patch('/recurring/:id', requireAuth, createRecurringPatchHandler({ withUserClient }));
 
 /**
  * POST /recurring/:id/dismiss — "I cancelled this."
@@ -8041,43 +7883,7 @@ app.get('/consents/history', requireAuth, async (req, res) => {
  * revocation is its own new row with granted=false, not an edit to the
  * grant row.
  */
-app.post('/consents', requireAuth, async (req, res) => {
-  const { purpose, granted, policyVersion, sourceScreen } = req.body || {};
-  if (!CONSENT_PURPOSES.includes(purpose)) {
-    return res.status(400).json({ error: `purpose must be one of ${CONSENT_PURPOSES.join(', ')}` });
-  }
-  if (typeof granted !== 'boolean') {
-    return res.status(400).json({ error: 'granted must be a boolean' });
-  }
-  if (!policyVersion || typeof policyVersion !== 'string') {
-    return res.status(400).json({ error: 'policyVersion is required' });
-  }
-  try {
-    const result = await withUserClient(req.userId, async (client) => {
-      if (purpose === 'sms_shared_learning') {
-        // Match the feedback route's lock so revocation/purge cannot race an
-        // in-flight contribution write under the previous grant.
-        await client.query(
-          'SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))',
-          [`sms-shared-learning-consent:${req.userId}`],
-        );
-      }
-      const inserted = await client.query(
-        `INSERT INTO user_consents (profile_id, purpose, policy_version, granted, source_screen)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING purpose, granted, granted_at, policy_version, source_screen`,
-        [req.userId, purpose, policyVersion, granted, sourceScreen || null]
-      );
-      // Revoking sms_shared_learning purges the v2 template data in the database
-      // (trigger sms_v2_revoke_template_consent), inside this transaction.
-      return inserted;
-    });
-    res.status(201).json({ consent: result.rows[0] });
-  } catch (err) {
-    console.error('POST /consents error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+registerConsentRoute(app, { requireAuth, withUserClient, CONSENT_PURPOSES });
 
 // PATCH /user-cards/:id was independently started here as "Task H-0b" to
 // unblock A9/H — since consolidated into the single Task C-4 implementation
@@ -9081,29 +8887,14 @@ app.get('/statement-imports', requireAuth, async (req, res) => {
  * built, per the plan's explicit instruction), so this table's counts are a
  * true summary, not a guess.
  */
-app.post('/sms-import-batches', requireAuth, async (req, res) => {
-  const { messageCount, parsedCount, failedCount } = req.body || {};
-  try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
-        `INSERT INTO sms_import_batches (profile_id, message_count, parsed_count, failed_count)
-         VALUES ($1, $2, $3, $4) RETURNING *`,
-        [req.userId, messageCount ?? 0, parsedCount ?? 0, failedCount ?? 0]
-      )
-    );
-    res.status(201).json({ smsImportBatch: result.rows[0] });
-  } catch (err) {
-    console.error('POST /sms-import-batches error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+app.post('/sms-import-batches', requireAuth, createSmsImportBatchPostHandler({ withUserClient }));
 
 /** GET /sms-import-batches — F1/F4 history read. */
 app.get('/sms-import-batches', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, (client) =>
       client.query(
-        `SELECT * FROM sms_import_batches WHERE profile_id = $1 ORDER BY imported_at DESC LIMIT 20`,
+        `SELECT id, profile_id, message_count, parsed_count, failed_count, imported_at FROM sms_import_batches WHERE profile_id = $1 ORDER BY imported_at DESC LIMIT 20`,
         [req.userId]
       )
     );

@@ -19,6 +19,10 @@ const INSERT_SUPPORT_TICKET_SQL = `INSERT INTO support_tickets
   (id, profile_id, kind, message, diagnostics, app_version, state, created_at)
   VALUES ($1, $2, $3, $4, $5, $6, 'pending', now())`;
 
+const INSERT_SUPPORT_TICKET_IDEMPOTENT_SQL = `${INSERT_SUPPORT_TICKET_SQL}
+  ON CONFLICT (id) DO NOTHING`;
+const { isUuid } = require('./http_db_errors');
+
 function validateSupportTicketPayload(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return { ok: false, error: 'invalid_request' };
@@ -85,26 +89,42 @@ function createSupportTicketHandler({ withUserClient, limiter = createSupportTic
   if (typeof withUserClient !== 'function') throw new TypeError('withUserClient is required');
   if (!limiter || typeof limiter.consume !== 'function') throw new TypeError('limiter is required');
 
-  return async (req, res) => {
-    const parsed = validateSupportTicketPayload(req.body);
-    if (!parsed.ok) return res.status(400).json({ error: parsed.error });
-
+  // Charges the limiter; returns null when admitted, else a {status, body, retryAfter} refusal.
+  async function admit(req) {
     const authenticated = Boolean(req.userId);
     const identity = authenticated ? req.userId : (req.ip || req.socket?.remoteAddress || '');
     let rate;
     try { rate = await limiter.consume(identity, authenticated, 'support_tickets'); }
     catch (err) {
       console.error('POST /support-tickets admission unavailable', safeErrorCode(err));
-      res.set?.('Retry-After', '5');
-      return res.status(503).json({ error: 'feedback_admission_unavailable' });
+      return { status: 503, body: { error: 'feedback_admission_unavailable' }, retryAfter: '5' };
     }
-    if (rate.unavailable) {
-      res.set?.('Retry-After', '5');
-      return res.status(503).json({ error: 'feedback_admission_unavailable' });
+    if (rate.unavailable) return { status: 503, body: { error: 'feedback_admission_unavailable' }, retryAfter: '5' };
+    if (!rate.allowed) return { status: 429, body: { error: 'support_ticket_rate_limited' }, retryAfter: String(rate.retryAfterSeconds) };
+    return null;
+  }
+  const refuse = (res, r) => {
+    if (r.retryAfter) res.set?.('Retry-After', r.retryAfter);
+    return res.status(r.status).json(r.body);
+  };
+
+  return async (req, res) => {
+    // optionalAuth leaves userId null for a bad token; a present-but-invalid
+    // credential must not silently become an anonymous ticket.
+    if (req.headers?.authorization && !req.userId) {
+      return res.status(401).json({ error: 'Missing or invalid access token' });
     }
-    if (!rate.allowed) {
-      res.set?.('Retry-After', String(rate.retryAfterSeconds));
-      return res.status(429).json({ error: 'support_ticket_rate_limited' });
+    const parsed = validateSupportTicketPayload(req.body);
+    if (!parsed.ok) return res.status(400).json({ error: parsed.error });
+    const clientId = req.body.id;
+    if (clientId !== undefined && clientId !== null && !isUuid(clientId)) {
+      return res.status(400).json({ error: 'invalid_id' });
+    }
+
+    // Without a client id: unchanged (charge first, then insert).
+    if (!clientId) {
+      const refusal = await admit(req);
+      if (refusal) return refuse(res, refusal);
     }
 
     const { kind, message, diagnostics, appVersion } = parsed.value;
@@ -114,12 +134,28 @@ function createSupportTicketHandler({ withUserClient, limiter = createSupportTic
         // defaults, then insert without RETURNING. Anonymous tickets are
         // intentionally unreadable under RLS, including INSERT RETURNING.
         const metadata = (await client.query(SUPPORT_TICKET_METADATA_SQL)).rows[0];
-        await client.query(INSERT_SUPPORT_TICKET_SQL, [metadata.id, req.userId || null, kind,
-          message, diagnostics === null ? null : JSON.stringify(diagnostics), appVersion]);
-        return { id: metadata.id, kind, state: 'pending', created_at: metadata.created_at };
+        const id = clientId || metadata.id;
+        const inserted = await client.query(clientId ? INSERT_SUPPORT_TICKET_IDEMPOTENT_SQL : INSERT_SUPPORT_TICKET_SQL,
+          [id, req.userId || null, kind, message, diagnostics === null ? null : JSON.stringify(diagnostics), appVersion]);
+        if (clientId) {
+          if (inserted.rowCount === 0) {
+            // Replay: same 201 shape, no limiter charge. Authenticated callers can
+            // read the stored row back; anonymous ones cannot (RLS).
+            if (req.userId) {
+              const stored = (await client.query('SELECT id, kind, state, created_at FROM support_tickets WHERE id = $1', [id])).rows[0];
+              if (stored) return { id: stored.id, kind: stored.kind, state: stored.state, created_at: stored.created_at };
+            }
+            return { id, kind, state: 'pending', created_at: metadata.created_at };
+          }
+          // New row: charge now; a refusal rolls the insert back.
+          const refusal = await admit(req);
+          if (refusal) throw Object.assign(new Error('support_ticket_refused'), { refusal });
+        }
+        return { id, kind, state: 'pending', created_at: metadata.created_at };
       });
       return res.status(201).json({ ticket });
     } catch (err) {
+      if (err?.refusal) return refuse(res, err.refusal);
       // Keep request data and PostgreSQL details out of routine logs.
       console.error('POST /support-tickets error', safeErrorCode(err));
       return res.status(500).json({ error: 'internal_error' });
