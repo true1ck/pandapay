@@ -1,5 +1,10 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:pandapay/data/api_exception.dart';
+import 'package:pandapay/data/connectivity/known_connectivity.dart';
 
 void main() {
   test('parses the HTTP status for cache fallback decisions', () {
@@ -43,6 +48,54 @@ void main() {
         ),
         'Something went wrong. Please try again.',
       );
+    });
+  });
+
+  group('isOfflineLike', () {
+    tearDown(KnownConnectivity.reset);
+
+    test('transport failures and 5xx are offline-like', () {
+      expect(isOfflineLike(http.ClientException('connection closed')), isTrue);
+      expect(isOfflineLike(TimeoutException('slow')), isTrue);
+      expect(
+        isOfflineLike(const SocketException('Failed host lookup')),
+        isTrue,
+      );
+      expect(
+        isOfflineLike(ApiException('GET /x failed: 503 unavailable')),
+        isTrue,
+      );
+    });
+
+    test('ordinary failures are not offline-like while online', () {
+      expect(isOfflineLike(ApiException('POST /x failed: 400 {}')), isFalse);
+      expect(isOfflineLike(ApiException('GET /x failed: 401 {}')), isFalse);
+      expect(isOfflineLike(ArgumentError('bad')), isFalse);
+      expect(isOfflineLike(StateError('nope')), isFalse);
+    });
+
+    test('any failure is offline-like once the app is known offline', () {
+      KnownConnectivity.online = false;
+      expect(isOfflineLike(StateError('nope')), isTrue);
+      expect(isOfflineLike(ApiException('POST /x failed: 400 {}')), isTrue);
+      KnownConnectivity.online = true;
+      expect(isOfflineLike(StateError('nope')), isFalse);
+    });
+
+    test('unknown connectivity is treated as online', () {
+      KnownConnectivity.online = null;
+      expect(isOfflineLike(StateError('nope')), isFalse);
+    });
+
+    test('knownOffline can be passed explicitly', () {
+      expect(isOfflineLike(StateError('x'), knownOffline: true), isTrue);
+      KnownConnectivity.online = false;
+      expect(isOfflineLike(StateError('x'), knownOffline: false), isFalse);
+    });
+
+    test('isTransientNetworkFailure is unchanged', () {
+      expect(isTransientNetworkFailure(const SocketException('x')), isFalse);
+      expect(isTransientNetworkFailure(TimeoutException('x')), isTrue);
     });
   });
 }

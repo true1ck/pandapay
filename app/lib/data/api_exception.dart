@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show SocketException;
 
 import 'package:http/http.dart' as http;
+
+import 'connectivity/known_connectivity.dart';
 
 /// Shared HTTP-failure exception for every repository/API client in lib/data/.
 /// Carries a technical [debugMessage] (method, path, status, raw body — for
@@ -142,6 +145,22 @@ bool isTransientNetworkFailure(Object error) {
     return status != null && status >= 500;
   }
   return false;
+}
+
+/// True when [error] looks like "the network or server is not there" rather
+/// than a real answer from the API: a transient network failure
+/// ([isTransientNetworkFailure], plus a raw [SocketException]) or any error
+/// raised while the app already knows the device is offline.
+///
+/// [knownOffline] defaults to what `isOnlineProvider` last reported
+/// ([KnownConnectivity]); an unknown state counts as online. Use this to pick
+/// "saved offline" copy and queue fallbacks; keep [isTransientNetworkFailure]
+/// where the narrower meaning is wanted.
+bool isOfflineLike(Object error, {bool? knownOffline}) {
+  if (isTransientNetworkFailure(error) || error is SocketException) {
+    return true;
+  }
+  return knownOffline ?? KnownConnectivity.knownOffline;
 }
 
 /// True when an authenticated read was rejected by the API rather than
