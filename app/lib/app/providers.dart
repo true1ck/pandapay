@@ -2971,12 +2971,17 @@ final outboxFlushProvider = Provider<void>((ref) {
   var running = false;
   var disposed = false;
   final startup = ref.read(startupWorkSchedulerProvider);
+  // Armed only while something is still queued after a flush (see the end of
+  // flush); an idle outbox keeps no timer running.
+  Timer? dueTimer;
+  late final Future<void> Function() flushRef;
   Future<void> flush() async {
     if (running || disposed) return;
     final namespace = ref.read(cacheNamespaceProvider);
     final repo = ref.read(userCardsRepositoryProvider);
     if (repo == null || ref.read(isOnlineProvider).valueOrNull == false) return;
     running = true;
+    var workRemains = false;
     try {
       final outbox = await ref.read(outboxRepositoryProvider.future);
       if (disposed || outbox.namespace != namespace) return;
@@ -3007,6 +3012,10 @@ final outboxFlushProvider = Provider<void>((ref) {
         duplicateResolutionOutboxRepositoryProvider.future,
       );
       final duplicateSent = await duplicateOutbox.flush(repo);
+      workRemains =
+          commands.pendingCount > 0 ||
+          duplicateOutbox.pendingCount > 0 ||
+          (await outbox.all()).any((entry) => !entry.parked);
       if (!disposed &&
           ref.read(cacheNamespaceProvider) == namespace &&
           (sent > 0 || duplicateSent > 0 || commandsSent > 0)) {
@@ -3020,10 +3029,21 @@ final outboxFlushProvider = Provider<void>((ref) {
       }
     } catch (_) {
       /* Durable entries remain queued. */
+      workRemains = true;
     } finally {
       running = false;
+      // Nothing else triggers a flush between a failure and the next resume or
+      // reconnect, so look again for commands whose backoff has run out. A
+      // flush that finds nothing due does no network work.
+      dueTimer?.cancel();
+      dueTimer = null;
+      if (workRemains && !disposed) {
+        dueTimer = Timer(outboxDueRecheckInterval, () => unawaited(flushRef()));
+      }
     }
   }
+
+  flushRef = flush;
 
   // Coming back online: a backoff was about a server problem that may have
   // passed, and time spent offline must not be waited out a second time.
@@ -3057,16 +3077,9 @@ final outboxFlushProvider = Provider<void>((ref) {
     });
   });
   final lifecycle = AppLifecycleListener(onResume: () => unawaited(flush()));
-  // While the app is open, look again for commands whose backoff has run out:
-  // nothing else triggers a flush between a failure and the next resume or
-  // reconnect. A flush that finds nothing due does no network work.
-  final dueTimer = Timer.periodic(
-    outboxDueRecheckInterval,
-    (_) => unawaited(flush()),
-  );
   ref.onDispose(() {
     disposed = true;
-    dueTimer.cancel();
+    dueTimer?.cancel();
     startup.cancel('outbox-flush');
     lifecycle.dispose();
   });
