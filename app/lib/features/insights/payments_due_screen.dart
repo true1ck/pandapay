@@ -2519,7 +2519,10 @@ class _CommitmentDetailSheet extends ConsumerWidget {
                     // tombstone with the full identity or the next refresh
                     // would recreate the dismissed item.
                     await repository.save(
-                      commitment.copyWith(status: CommitmentStatus.dismissed),
+                      commitment.copyWith(
+                        status: CommitmentStatus.dismissed,
+                        isUserConfirmed: true,
+                      ),
                     );
                   } else {
                     await repository.delete(commitment.id);

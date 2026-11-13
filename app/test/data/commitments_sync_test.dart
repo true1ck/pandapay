@@ -151,4 +151,21 @@ void main() {
     ]);
     expect((await repository.fetchAll()).map((c) => c.id), ['manual-1']);
   });
+
+  test('WP-C7: marking a derived v2 bill paid is confirmed and never queued', () async {
+    final derived = Commitment(
+      id: 'v2:abc',
+      cadence: CommitmentCadence.oneTime,
+      title: 'Synthetic Card',
+      category: CommitmentCategory.utility,
+      dueOn: DateTime(2026, 12, 1),
+      source: CommitmentSource.sms,
+      isUserConfirmed: false,
+    );
+    await repository.markAsPaid(derived.id, detectedCommitment: derived);
+    final saved = (await repository.fetchAll()).single;
+    expect(saved.status, CommitmentStatus.paid);
+    expect(saved.isUserConfirmed, isTrue);
+    expect(queue.pending(), isEmpty);
+  });
 }

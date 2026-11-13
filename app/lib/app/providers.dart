@@ -1396,14 +1396,21 @@ final commitmentsProvider = FutureProvider<List<Commitment>>((ref) async {
   if (ref.watch(smsV2ReportingEnabledProvider)) {
     final model = await ref.watch(smsV2LedgerReadModelProvider.future);
     final manual = await ref.watch(commitmentsRepositoryProvider).fetchAll();
+    // WP-C7: a saved 'v2:' copy of a derived bill is the person's mark-paid /
+    // dismiss; it overrides the derived bill instead of listing twice.
+    bool isCopy(Commitment c) =>
+        c.source == CommitmentSource.sms && c.id.startsWith('v2:');
     return [
       ...manual.where(
-        (item) => item.source != CommitmentSource.sms || item.isUserConfirmed,
+        (item) =>
+            !isCopy(item) &&
+            (item.source != CommitmentSource.sms || item.isUserConfirmed),
       ),
       ...sms_v2_adapters.billsFromFacts(
         model.facts,
         model.ledger.events,
         transactionIdByEvent: model.transactionIdByEvent,
+        manualCopies: manual.where((c) => isCopy(c) && c.isUserConfirmed),
       ),
     ];
   }

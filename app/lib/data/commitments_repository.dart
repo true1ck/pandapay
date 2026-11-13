@@ -651,6 +651,9 @@ class CommitmentsRepository {
         status: CommitmentStatus.paid,
         paidOn: paymentDate,
         linkedTransactionId: linkedTxnId,
+        // WP-C7: a copy of a derived (SMS) bill is the person's own decision;
+        // unconfirmed copies are filtered out of the list.
+        isUserConfirmed: true,
       );
       if (index < 0) {
         updated.add(paid);
@@ -680,6 +683,7 @@ class CommitmentsRepository {
         status: CommitmentStatus.due,
         paidOn: paymentDate,
         linkedTransactionId: linkedTxnId,
+        isUserConfirmed: true,
       );
       if (index < 0) {
         updated.add(rolledForward);
@@ -703,7 +707,7 @@ class CommitmentsRepository {
           'DELETE FROM local_commitments WHERE namespace = ? AND id = ?',
           [namespace, id],
         );
-        if (existed) {
+        if (existed && !id.startsWith('v2:')) {
           (await _syncQueue())?.enqueueDelete(
             entity: commitmentSyncEntity,
             entityId: commitmentSyncId(id),
@@ -739,8 +743,13 @@ class CommitmentsRepository {
   ) async {
     final queue = await _syncQueue();
     if (queue == null) return;
+    // WP-C7: 'v2:<factId>' copies exist only to override a bill derived on
+    // this phone from SMS facts; the server has no such bill, so they are
+    // device-local and never queued.
+    bool local(Commitment c) => c.id.startsWith('v2:');
     final previous = {for (final c in before) c.id: jsonEncode(c.toJson())};
     for (final item in after) {
+      if (local(item)) continue;
       final json = item.toJson();
       final old = previous[item.id];
       if (old == null) {
@@ -759,7 +768,7 @@ class CommitmentsRepository {
     }
     final kept = {for (final c in after) c.id};
     for (final c in before) {
-      if (!kept.contains(c.id)) {
+      if (!kept.contains(c.id) && !local(c)) {
         queue.enqueueDelete(
           entity: commitmentSyncEntity,
           entityId: commitmentSyncId(c.id),
