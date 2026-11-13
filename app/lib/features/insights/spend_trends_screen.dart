@@ -1837,10 +1837,6 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
             (context) => const SizedBox(height: AppSpace.md),
             (context) => _BreakdownPanel(
               title: 'Payment method',
-              visual: const SpendingVisual(
-                icon: Icons.payments_rounded,
-                accent: BambooChartColors.blue,
-              ),
               child: Column(
                 children: [
                   for (final row in instrumentRows)
@@ -1887,10 +1883,6 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
         ] else if (instrumentRows.isNotEmpty) ...[
           (context) => _BreakdownPanel(
             title: 'Payment method',
-            visual: const SpendingVisual(
-              icon: Icons.payments_rounded,
-              accent: BambooChartColors.blue,
-            ),
             child: Column(
               children: [
                 for (final row in instrumentRows)
@@ -4414,47 +4406,20 @@ class _MixLegendRow extends StatelessWidget {
   }
 }
 
+/// A titled group of full-width breakdown cards. The title is the same plain
+/// uppercase heading the Categories section uses, and there is no wrapping card,
+/// so the rows line up edge to edge with the category rows.
 class _BreakdownPanel extends StatelessWidget {
   final String title;
-  final SpendingVisual visual;
   final Widget child;
 
-  const _BreakdownPanel({
-    required this.title,
-    required this.visual,
-    required this.child,
-  });
+  const _BreakdownPanel({required this.title, required this.child});
 
   @override
   Widget build(BuildContext context) {
-    return CardSummaryPanel(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpace.lg,
-        AppSpace.md,
-        AppSpace.lg,
-        AppSpace.sm,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _SpendingVisualBadge(visual: visual, size: 34),
-              const SizedBox(width: AppSpace.md),
-              Text(
-                title.toUpperCase(),
-                style: BambooFonts.ui(
-                  11.5,
-                  weight: FontWeight.w700,
-                  color: BambooInk.ink500,
-                ).copyWith(letterSpacing: 0.8),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpace.md),
-          child,
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [_SectionHeader(title), child],
     );
   }
 }
