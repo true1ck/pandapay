@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/design/saved_offline.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
@@ -184,9 +185,7 @@ class _OverrideTile extends ConsumerWidget {
       // queued and the list shows it at once (queued-work overlay).
       final saved = await updateOverrideLocalFirst(ref, rule, isEnabled: !rule.isEnabled);
       if (!saved && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Saved offline — will sync when you reconnect.')),
-        );
+        showSavedOfflineSnack(context);
       }
     } catch (err) {
       if (context.mounted) {
@@ -295,9 +294,7 @@ class _CreateOverrideSheetState extends ConsumerState<_CreateOverrideSheet> {
       );
       if (mounted) {
         if (!saved) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Saved offline — will sync when you reconnect.')),
-          );
+          showSavedOfflineSnack(context);
         }
         Navigator.of(context).pop();
       }
@@ -492,9 +489,7 @@ class _EditOverrideSheetState extends ConsumerState<_EditOverrideSheet> {
       );
       if (mounted) {
         if (!saved) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Saved offline — will sync when you reconnect.')),
-          );
+          showSavedOfflineSnack(context);
         }
         Navigator.of(context).pop();
       }

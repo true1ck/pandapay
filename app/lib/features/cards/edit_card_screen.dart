@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
+import '../../app/design/saved_offline.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
@@ -246,11 +247,7 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
         }
         refreshCardProviders(ref);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Saved offline — will sync when you reconnect.'),
-            ),
-          );
+          showSavedOfflineSnack(context);
           context.pop();
         }
         return;

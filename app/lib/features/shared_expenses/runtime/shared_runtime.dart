@@ -1218,7 +1218,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
       _ =>
         offline
             ? sharedSavedOfflineCopy
-            : 'Saved on this device · waiting to sync',
+            : sharedSavedOfflineCopy,
     };
   }
 

@@ -10,6 +10,7 @@ import 'package:flutter/widget_previews.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../app/design/saved_offline.dart';
 import '../shared_expenses/ui/shared_name_sheet.dart';
 import '../shared_expenses/ui/shared_add_friend_sheet.dart';
 import 'package:uuid/uuid.dart';
@@ -716,7 +717,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
           ? 'Expense saved locally but not accepted. Review it in Splits.'
           : receipt != null
           ? 'Submitted for review. Balances change after approval.'
-          : 'Saved on this device · waiting to sync';
+          : savedOfflineCopy;
       if (mounted) {
         final messenger = ScaffoldMessenger.of(context);
         setState(() => _allowSharedPop = true);
@@ -1467,7 +1468,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
             messenger.showSnackBar(
               const SnackBar(
                 content: Text(
-                  "Saved offline — this'll sync automatically once you're back online.",
+                  savedOfflineCopy,
                 ),
               ),
             );
@@ -1586,7 +1587,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         content: Text(
           tagError ??
               (offline
-                  ? "Saved offline — this'll sync automatically once you're back online."
+                  ? savedOfflineCopy
                   : 'Logged ${Money.fromRupees(amount).format()} ${_entryKind == TxnEntryKind.income ? 'income' : 'spend'}'),
         ),
         action: SnackBarAction(

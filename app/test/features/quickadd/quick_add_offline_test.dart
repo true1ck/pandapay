@@ -118,7 +118,7 @@ void main() {
       await tester.tap(await _saveButton(tester));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining("Saved offline"), findsOneWidget);
+      expect(find.textContaining("Saved on this phone"), findsOneWidget);
 
       final outbox = await container.read(outboxRepositoryProvider.future);
       final pending = await outbox.pending();

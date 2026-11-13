@@ -576,7 +576,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text('Saved offline — will sync when you reconnect.'),
+        find.text("Saved on this phone. It will sync when you're online."),
         findsOneWidget,
       );
       final pending = queue.pending();
@@ -638,7 +638,7 @@ void main() {
         findsNothing,
       );
       expect(
-        find.text('Saved offline — will sync when you reconnect.'),
+        find.text("Saved on this phone. It will sync when you're online."),
         findsOneWidget,
       );
       final adjust = _lastCommands!.pendingOf({'points_adjust'}).single;

@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../app/design/saved_offline.dart';
 import '../sms_v2/similar/similar_changes.dart';
 import '../sync/sync_engine.dart';
 import '../sms_v2/similar/similar_offer_sheet.dart';
@@ -321,11 +322,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         );
         ref.invalidate(pendingSyncCountProvider);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Saved offline — will sync when you reconnect.'),
-            ),
-          );
+          showSavedOfflineSnack(context);
           context.pop(true);
         }
         return;
@@ -383,10 +380,10 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     final onPhone = original?.pipelineVersion == 2;
     final text = onPhone
         ? (offline
-              ? 'Saved on this phone. It will sync when you are back online.'
+              ? savedOfflineCopy
               : 'Saved on this phone. Syncing in the background.')
         : (offline
-              ? 'Saved on this phone. It will sync when you are back online.'
+              ? savedOfflineCopy
               : 'Saved. Syncing in the background.');
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
