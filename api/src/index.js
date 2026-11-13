@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const express = require('express');
 const { createCorsPolicy } = require('./cors_policy');
 const { jsonBodyParser, jsonBodyErrorHandler } = require('./request_limits');
+const { rejectInvalidUuid } = require('./http_db_errors');
 const { validateSyncRegistration, validateSyncPushRequest, validateSyncPushChange, validateSyncPullQuery, validateSyncAck, validateSyncConflictId, syncRejectionDetail } = require('./sync_request_validation');
 const { createLoungeUsagePostHandler } = require('./lounge_usage_route');
 const { createCatalogueHandler } = require('./catalogue_route');
@@ -2535,6 +2536,7 @@ app.post('/card-overrides', requireAuth, async (req, res) => {
  * scope-defining columns).
  */
 app.patch('/card-overrides/:id', requireAuth, async (req, res) => {
+  if (rejectInvalidUuid(res, req.params.id)) return;
   const { isEnabled, reasonNote, userCardId } = req.body || {};
   const sets = [];
   const params = [];
@@ -2590,6 +2592,7 @@ app.patch('/card-overrides/:id', requireAuth, async (req, res) => {
  * dialog per this plan's Global Constraints).
  */
 app.delete('/card-overrides/:id', requireAuth, async (req, res) => {
+  if (rejectInvalidUuid(res, req.params.id)) return;
   try {
     const result = await withUserClient(req.userId, (client) =>
       client.query(
@@ -7364,6 +7367,7 @@ app.post('/budgets', requireAuth, async (req, res) => {
  * removed in April.
  */
 app.delete('/budgets/:id', requireAuth, async (req, res) => {
+  if (rejectInvalidUuid(res, req.params.id)) return;
   try {
     const result = await withUserClient(req.userId, (client) =>
       client.query(
@@ -7778,6 +7782,7 @@ app.post('/recurring', requireAuth, async (req, res) => {
 });
 
 app.patch('/recurring/:id', requireAuth, async (req, res) => {
+  if (rejectInvalidUuid(res, req.params.id)) return;
   const { displayName, typicalAmountInr, cadenceDays, nextExpectedOn } = req.body || {};
   const autopayStatus = req.body?.autopayStatus;
   if (typeof displayName !== 'string' || displayName.trim().length < 2 || displayName.trim().length > 80 ||
@@ -7812,6 +7817,7 @@ app.patch('/recurring/:id', requireAuth, async (req, res) => {
  * exactly until the user next opened the screen.
  */
 app.post('/recurring/:id/dismiss', requireAuth, async (req, res) => {
+  if (rejectInvalidUuid(res, req.params.id)) return;
   try {
     const result = await withUserClient(req.userId, (client) =>
       client.query(
@@ -8022,6 +8028,7 @@ app.get('/notifications', requireAuth, async (req, res) => {
  */
 app.post('/notifications/read', requireAuth, async (req, res) => {
   const { id } = req.body || {};
+  if (id && rejectInvalidUuid(res, id)) return;
   try {
     const result = await withUserClient(req.userId, (client) =>
       id
