@@ -2537,6 +2537,49 @@ class UserCardsRepository {
     String severity = 'info',
     String? deepLink,
     String? dedupeKey,
+  }) => _postNotification(
+    category: category,
+    title: title,
+    body: body,
+    severity: severity,
+    deepLink: deepLink,
+    dedupeKey: dedupeKey,
+  );
+
+  /// Sends an inbox row that was queued while the phone could not reach the
+  /// server. [dedupeKey] makes the repeat harmless (the server updates the one
+  /// row for that key). [clientMutationId] and [createdAt] ride along as extra
+  /// fields: a server that does not know them ignores them.
+  Future<void> replayQueuedNotification({
+    required String category,
+    required String title,
+    String? body,
+    String severity = 'info',
+    String? deepLink,
+    required String dedupeKey,
+    String? clientMutationId,
+    DateTime? createdAt,
+  }) => _postNotification(
+    category: category,
+    title: title,
+    body: body,
+    severity: severity,
+    deepLink: deepLink,
+    dedupeKey: dedupeKey,
+    extra: {
+      'clientMutationId': ?clientMutationId,
+      'createdAt': ?createdAt?.toUtc().toIso8601String(),
+    },
+  );
+
+  Future<void> _postNotification({
+    required String category,
+    required String title,
+    String? body,
+    String severity = 'info',
+    String? deepLink,
+    String? dedupeKey,
+    Map<String, Object?> extra = const {},
   }) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/notifications'),
@@ -2552,6 +2595,7 @@ class UserCardsRepository {
         // explicit server-side action, otherwise one event becomes two banners
         // after FCM is configured.
         'sendRemote': false,
+        ...extra,
       }),
     );
     if (response.statusCode != 201 && response.statusCode != 204) {
