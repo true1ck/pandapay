@@ -482,7 +482,10 @@ GeminiBarState geminiBarState({
       title: 'Gemini could not draft ${plural(server.failed, 'format')}',
       detail:
           '${server.ready + server.covered} done · ${server.failed} failed'
-          '${server.held > 0 ? ' · ${server.held} held back' : ''}',
+          '${server.held > 0 ? ' · ${server.held} held back' : ''}\n'
+          'Messages in a failed format stay in Needs review for you to '
+          'answer. PandaPay tries failed formats again on its own when '
+          'the cause was a hiccup on our side.',
     );
   }
   if (server.total == 0) {

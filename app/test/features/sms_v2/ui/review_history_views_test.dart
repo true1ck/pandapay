@@ -451,6 +451,9 @@ void main() {
         );
         expect(s.tone, GeminiTone.warn);
         expect(s.title, 'Gemini could not draft 1 format');
+        // Says what happens next, so a failure is not a dead end.
+        expect(s.detail, contains('stay in Needs review'));
+        expect(s.detail, contains('2 done · 1 failed'));
       },
     );
 

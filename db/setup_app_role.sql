@@ -290,6 +290,9 @@ begin
   if to_regprocedure('pandapay.sms_v2_ai_cleanup_decided()') is not null then
     grant execute on function pandapay.sms_v2_ai_cleanup_decided() to sms_ai_worker;
   end if;
+  if to_regprocedure('pandapay.sms_v2_ai_requeue_failed()') is not null then
+    grant execute on function pandapay.sms_v2_ai_requeue_failed() to sms_ai_worker;
+  end if;
 end $$;
 
 -- Production: use a real generated password via your secrets manager, never
