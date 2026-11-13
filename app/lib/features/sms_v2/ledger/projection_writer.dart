@@ -132,7 +132,7 @@ class ProjectionWriter {
     // A correction, a server pull or a withdrawal changes the ledger without
     // going through capture; the saved subscription rows are then out of date
     // until the next reader re-derives them. Capture passes false because it
-    // re-derives them itself.
+    // marks them itself, from the facts it stored.
     bool markSubscriptionsDirty = true,
   }) {
     final merchantAliases = PersonalMerchantAliases(
@@ -249,12 +249,10 @@ class ProjectionWriter {
           for (final row in display)
             if (!_unchanged(existing[row.eventId], row)) row,
         ]);
-        if (markSubscriptionsDirty &&
-            snapshot.events.any(
-              (e) =>
-                  e.type == v2.EventType.subscriptionCharge ||
-                  e.type == v2.EventType.purchase,
-            )) {
+        // Unconditional: a correction can move an event OUT of subscription_charge
+        // (a wrong-kind fix to p2p_out, a refund, unknown), which the events it
+        // writes no longer show.
+        if (markSubscriptionsDirty) {
           SubscriptionStore(db, namespace: ledger.namespace).markDirty();
           financial.notifyExternalChanges(ledger.namespace, const ['subscriptions']);
         }

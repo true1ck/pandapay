@@ -20,11 +20,8 @@ import '../cards/card_summary.dart';
 import '../../main.dart' show MoneyText;
 
 
-String _subscriptionStatus(RecurringSeries series) {
-  final lifecycle = series.lifecycleStatus.trim().toLowerCase();
-  if (lifecycle.isNotEmpty && lifecycle != 'active') return lifecycle;
-  return series.status;
-}
+String _subscriptionStatus(RecurringSeries series) =>
+    subscriptionListStatus(series);
 
 /// Subscriptions — the charges that repeat, found in the user's own history.
 ///
@@ -279,15 +276,8 @@ class SubscriptionsScreen extends ConsumerWidget {
             final past = filteredSubscriptions
                 .where((s) => subscriptionPhase(s) == SubscriptionPhase.past)
                 .toList(growable: false);
-            final billing = live
-                .where(
-                  (s) =>
-                      s.setupConfirmed ||
-                      _subscriptionStatus(s) == 'confirmed' ||
-                      _subscriptionStatus(s) == 'active' ||
-                      subscriptionHasPaymentIssue(s),
-                )
-                .toList(growable: false);
+            // The same definition the Insights tile uses (SubscriptionView).
+            final billing = view.billing;
             // Each live subscription lands in exactly one group: confirmed by a
             // setup or a proven cycle (billing), or one the engine still asks
             // about (flagged, or waiting for a cadence).
@@ -303,10 +293,7 @@ class SubscriptionsScreen extends ConsumerWidget {
                 .toList(growable: false);
             // The server total already counts only proven, still-billing
             // series; re-folding here would put guesses back in the headline.
-            final totalAnnual = billing.fold<Money>(
-              Money.zero(),
-              (sum, s) => sum + s.annualCost,
-            );
+            final totalAnnual = view.billingAnnual;
             return RefreshIndicator(
               onRefresh: () async => ref.invalidate(recurringReportProvider),
               child: ListView(

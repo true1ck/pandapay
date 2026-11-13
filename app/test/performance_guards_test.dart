@@ -185,6 +185,28 @@ void main() {
       expect(offenders, isEmpty, reason: offenders.join('\n'));
     });
 
+    test('capture never derives subscriptions inside its transaction', () {
+      // It only marks them dirty (cheap); a derivation there holds the write lock
+      // for O(history) and a failure in it would roll the whole chunk back.
+      final offenders = _offending(
+        [..._dartFiles('lib/features/sms_v2/pipeline')],
+        (line) => line.contains('SubscriptionProjection.rebuild('),
+      );
+      expect(offenders, isEmpty, reason: offenders.join('\n'));
+    });
+
+    test('the screens that list subscriptions compile their patterns once', () {
+      // They run for every series on every build; only top-level finals may
+      // construct a RegExp.
+      final offenders = _offending(
+        [File('lib/features/insights/subscription_view.dart')],
+        (line) =>
+            RegExp(r'(?<![\w.])RegExp\(').hasMatch(line) &&
+            !line.startsWith('final '),
+      );
+      expect(offenders, isEmpty, reason: offenders.join('\n'));
+    });
+
     test('the subscription history lookup is an index search, not a scan', () {
       final db = sqlite3.openInMemory();
       addTearDown(db.dispose);

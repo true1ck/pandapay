@@ -4,10 +4,40 @@
 // and merge on their own, so the same account could show different rows. Both
 // now call [buildSubscriptionView], so they cannot drift apart.
 
+import 'package:pandapay_domain/pandapay_domain.dart' show Money;
+
 import '../../app/providers.dart' show namedServiceAutoPayName, recurringServiceKey;
 import '../../data/commitments_repository.dart'
     show isNonSubscriptionRecurringPayment, isSubscriptionAutoPay;
 import '../../data/spend_reports_repository.dart';
+
+// Compiled once: these run for every series on every build of a subscription
+// screen (and once per reminder check), so building them per call is waste.
+final _brokerWords = RegExp(
+  r'\b(?:zerodha|groww|upstox|angel\s*one|dhan|paytm\s*money|indmoney|5paisa|motilal\s*oswal|icici\s*direct|hdfc\s*securities|hdfc\s*sky|kotak\s*securities|sharekhan|iifl|geojit|axis\s*direct|demat|trading|broker|portfolio|mutual\s*fund|sip|equity|investment|transfer)\b',
+  caseSensitive: false,
+);
+final _fuelWords = RegExp(
+  r'\b(petroleum|petrol|fuel|gas\s*station|oil\s*co|hpcl|bpcl|iocl)\b',
+  caseSensitive: false,
+);
+final _billOrLenderWords = RegExp(
+  r'\b(?:tad|mad|total\s+amount\s+due|minimum\s+amount\s+due|finserv|fincorp|nbfc|capital\s*float|payu\s+finance)\b'
+  // A lender is a business name ending in a company word; a service that
+  // merely has "finance" or "loan" in its name is not one.
+  r'|\b(?:finance|lending|loans?)\b(?=\s+(?:pvt|private|ltd|limited|india|corp|company|services?)\b)',
+  caseSensitive: false,
+);
+final _shopWords = RegExp(
+  r'\b(?:store|general\s*store|kirana|supermarket|mart|provision|traders|retail|retai|bazaar|tea\s*stall|chai|cafe|coffee|bakery|restaurant|dhaba|hotel|food|canteen|sweets|pharmacy|chemist|medical|hospital|clinic|vending)\b',
+  caseSensitive: false,
+);
+final _hasLetters = RegExp(r'[A-Za-z]{2,}');
+final _nonAlphanumeric = RegExp(r'[^a-z0-9]+');
+final _genericPlanName = RegExp(
+  r'^(daily|weekly|fortnightly|monthly|quarterly|half yearly|yearly|annual)\s*'
+  r'(payment|charge|debit|subscription|mandate|autopay|plan)?$',
+);
 
 bool isExcludedNonSubscription(String name, {bool mandateBacked = false}) {
   final lower = name.toLowerCase();
@@ -17,17 +47,11 @@ bool isExcludedNonSubscription(String name, {bool mandateBacked = false}) {
   }
   if (isNonSubscriptionRecurringPayment(name)) return true;
   // 1. Demat / Broker / Trading / Investment / SIP / Mutual funds are money movements, NEVER subscriptions
-  if (RegExp(
-    r'\b(?:zerodha|groww|upstox|angel\s*one|dhan|paytm\s*money|indmoney|5paisa|motilal\s*oswal|icici\s*direct|hdfc\s*securities|hdfc\s*sky|kotak\s*securities|sharekhan|iifl|geojit|axis\s*direct|demat|trading|broker|portfolio|mutual\s*fund|sip|equity|investment|transfer)\b',
-    caseSensitive: false,
-  ).hasMatch(lower)) {
+  if (_brokerWords.hasMatch(lower)) {
     return true;
   }
   // 2. Fuel fill-ups and petrol pumps are variable spends, not subscriptions
-  if (RegExp(
-    r'\b(petroleum|petrol|fuel|gas\s*station|oil\s*co|hpcl|bpcl|iocl)\b',
-    caseSensitive: false,
-  ).hasMatch(lower)) {
+  if (_fuelWords.hasMatch(lower)) {
     return true;
   }
   // 3. Raw UPI VPAs containing '@' are peer/merchant transfer handles, not
@@ -38,20 +62,11 @@ bool isExcludedNonSubscription(String name, {bool mandateBacked = false}) {
   }
   // 3b. A card-bill AutoPay ("SI-TAD": total amount due, "MAD": minimum due)
   // and a lender's EMI debit are bills and loans, never services.
-  if (RegExp(
-    r'\b(?:tad|mad|total\s+amount\s+due|minimum\s+amount\s+due|finserv|fincorp|nbfc|capital\s*float|payu\s+finance)\b'
-    // A lender is a business name ending in a company word; a service that
-    // merely has "finance" or "loan" in its name is not one.
-    r'|\b(?:finance|lending|loans?)\b(?=\s+(?:pvt|private|ltd|limited|india|corp|company|services?)\b)',
-    caseSensitive: false,
-  ).hasMatch(lower)) {
+  if (_billOrLenderWords.hasMatch(lower)) {
     return true;
   }
   // 4. Retail stores, supermarkets, grocery, provisions, tea stall, cafes, bakeries, restaurants, medical, vending
-  if (RegExp(
-    r'\b(?:store|general\s*store|kirana|supermarket|mart|provision|traders|retail|retai|bazaar|tea\s*stall|chai|cafe|coffee|bakery|restaurant|dhaba|hotel|food|canteen|sweets|pharmacy|chemist|medical|hospital|clinic|vending)\b',
-    caseSensitive: false,
-  ).hasMatch(lower)) {
+  if (_shopWords.hasMatch(lower)) {
     return true;
   }
   return false;
@@ -59,7 +74,7 @@ bool isExcludedNonSubscription(String name, {bool mandateBacked = false}) {
 
 bool isDisplayableSubscription(RecurringSeries series) {
   final name = series.displayName.trim();
-  if (name.length < 2 || !RegExp(r'[A-Za-z]{2,}').hasMatch(name)) {
+  if (name.length < 2 || !_hasLetters.hasMatch(name)) {
     return false;
   }
   if (isExcludedNonSubscription(
@@ -104,12 +119,9 @@ bool isDisplayableSubscription(RecurringSeries series) {
 
   final normalized = name
       .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+      .replaceAll(_nonAlphanumeric, ' ')
       .trim();
-  return !RegExp(
-    r'^(daily|weekly|fortnightly|monthly|quarterly|half yearly|yearly|annual)\s*'
-    r'(payment|charge|debit|subscription|mandate|autopay|plan)?$',
-  ).hasMatch(normalized);
+  return !_genericPlanName.hasMatch(normalized);
 }
 
 /// Where a subscription stands, in the three words a person uses. Every screen
@@ -125,6 +137,14 @@ enum SubscriptionPhase {
 
   /// Cancelled, expired, or no charge for well over its cycle.
   past,
+}
+
+/// A series' status as the lists group it: the lifecycle when it says more than
+/// "active", else the report's own status.
+String subscriptionListStatus(RecurringSeries series) {
+  final lifecycle = series.lifecycleStatus.trim().toLowerCase();
+  if (lifecycle.isNotEmpty && lifecycle != 'active') return lifecycle;
+  return series.status;
 }
 
 /// The phase of [series], from the lifecycle the ledger computed (cancelled,
@@ -180,6 +200,24 @@ class SubscriptionView {
 
   /// Still billing: what the totals, reminders and headlines may count.
   List<RecurringSeries> get active => inPhase(SubscriptionPhase.active);
+
+  /// The active ones that are proven (a setup, a confirmed cycle, or a payment
+  /// that failed): the only ones whose cost is a figure to show.
+  List<RecurringSeries> get billing => [
+    for (final s in active)
+      if (s.setupConfirmed ||
+          subscriptionListStatus(s) == 'confirmed' ||
+          subscriptionListStatus(s) == 'active' ||
+          subscriptionHasPaymentIssue(s))
+        s,
+  ];
+
+  /// What the Subscriptions page, the Insights tile and the reminders call "the
+  /// yearly cost": the sum over [billing]. One definition, so the screens agree.
+  Money get billingAnnual => billing.fold<Money>(
+    Money.zero(),
+    (sum, s) => sum + s.annualCost,
+  );
   List<RecurringSeries> get paused => inPhase(SubscriptionPhase.paused);
   List<RecurringSeries> get past => inPhase(SubscriptionPhase.past);
 }
@@ -274,4 +312,14 @@ SubscriptionView buildSubscriptionView(Iterable<RecurringSeries> series) {
     );
 
   return SubscriptionView(subscriptions, reviewCandidates);
+}
+
+/// The yearly cost on the Insights hub tile ("₹7,788/yr"), or null when no
+/// service is billing. It is [SubscriptionView.billingAnnual] of the same
+/// [buildSubscriptionView] the Subscriptions page uses, so the tile and the page
+/// total can never differ.
+String? subscriptionTileHeadline(RecurringReport? report) {
+  if (report == null) return null;
+  final total = buildSubscriptionView(report.series).billingAnnual;
+  return total.paise <= 0 ? null : '${total.format(compact: true)}/yr';
 }

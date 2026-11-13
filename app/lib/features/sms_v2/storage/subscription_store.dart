@@ -24,6 +24,7 @@ class SubscriptionStore {
 
   static const _versionKey = 'subscriptions_projection_version';
   static const _dirtyKey = 'subscriptions_dirty';
+  static const _seqKey = 'subscriptions_seq';
 
   String? _flag(String key) =>
       db.select('SELECT value FROM v2_sync_state WHERE namespace=? AND key=?', [
@@ -45,22 +46,48 @@ class SubscriptionStore {
   /// the rows have not been re-derived yet.
   bool get isDirty => _flag(_dirtyKey) == '1';
 
+  /// A counter that goes up every time something that may alter a subscription
+  /// changed. A rebuild reads it BEFORE it reads the ledger and writes its rows
+  /// only if it is still the same afterwards ([replaceAll]), so a rebuild that
+  /// raced a cancellation, a correction or a pull can never overwrite newer
+  /// facts with older rows or clear the dirty flag over them.
+  int get seq => int.tryParse(_flag(_seqKey) ?? '') ?? 0;
+
   /// Something that may alter a subscription changed; re-derive before reading.
-  void markDirty() => _setFlag(_dirtyKey, '1');
+  /// Cheap and safe to call from any write path, inside or outside a transaction.
+  void markDirty() {
+    db.execute(
+      'INSERT INTO v2_sync_state(namespace,key,value) VALUES(?,?,?) '
+      'ON CONFLICT(namespace,key) DO UPDATE SET '
+      'value = CAST(CAST(value AS INTEGER) + 1 AS TEXT)',
+      [namespace, _seqKey, '1'],
+    );
+    _setFlag(_dirtyKey, '1');
+  }
 
   /// True when the rows can be read as they are.
   bool get isCurrent => isBuilt && !isDirty;
 
-  /// Every service of this account, in no particular order.
-  List<SubscriptionState> states() => [
+  /// Every service of this account, in no particular order. One row that cannot
+  /// be read is skipped, so the rest still show (the next rebuild rewrites it).
+  List<SubscriptionState> states() {
+    final result = <SubscriptionState>[];
     for (final row in db.select(
       'SELECT payload FROM v2_subscriptions WHERE namespace=?',
       [namespace],
-    ))
-      SubscriptionState.fromJson(
-        (jsonDecode(row['payload'] as String) as Map).cast<String, Object?>(),
-      ),
-  ];
+    )) {
+      try {
+        result.add(
+          SubscriptionState.fromJson(
+            (jsonDecode(row['payload'] as String) as Map).cast<String, Object?>(),
+          ),
+        );
+      } catch (_) {
+        continue;
+      }
+    }
+    return result;
+  }
 
   /// The story of one service, newest first.
   List<SubscriptionHistoryEntry> historyFor(String seriesId) => _entries(
@@ -103,16 +130,32 @@ class SubscriptionStore {
   ];
 
   /// Replaces every row of this account with [states] and [history] in one
-  /// savepoint, then records that they are current. A reader never sees half
+  /// transaction, then records that they are current. A reader never sees half
   /// of a rebuild.
-  void replaceAll(
+  ///
+  /// With [basedOnSeq] (the [seq] read before the ledger was read) the swap is
+  /// a compare-and-set: when something called [markDirty] since, nothing is
+  /// written, the flag stays dirty and false is returned, so the caller derives
+  /// again from the newer ledger. Without it the swap is unconditional.
+  /// Returns true when the rows were saved.
+  bool replaceAll(
     Iterable<SubscriptionState> states,
     Map<String, List<SubscriptionHistoryEntry>> history, {
     DateTime? at,
+    int? basedOnSeq,
   }) {
     final stamp = (at ?? DateTime.now()).toUtc().toIso8601String();
-    db.execute('SAVEPOINT v2_subscriptions_write');
+    // Outside a transaction the write lock is taken up front (BEGIN IMMEDIATE),
+    // so no other connection (the capture worker) can commit between the check
+    // and the swap, and the lock upgrade cannot fail halfway. Inside one, a
+    // savepoint joins the caller's transaction.
+    final ownTransaction = db.autocommit;
+    db.execute(ownTransaction ? 'BEGIN IMMEDIATE' : 'SAVEPOINT v2_subscriptions_write');
     try {
+      if (basedOnSeq != null && seq != basedOnSeq) {
+        _finish(ownTransaction, commit: false);
+        return false;
+      }
       db.execute('DELETE FROM v2_subscriptions WHERE namespace=?', [namespace]);
       db.execute(
         'DELETE FROM v2_subscription_history WHERE namespace=?',
@@ -162,11 +205,20 @@ class SubscriptionStore {
       }
       _setFlag(_versionKey, '$projectionVersion');
       _setFlag(_dirtyKey, '0');
-      db.execute('RELEASE v2_subscriptions_write');
+      _finish(ownTransaction, commit: true);
+      return true;
     } catch (_) {
-      db.execute('ROLLBACK TO v2_subscriptions_write');
-      db.execute('RELEASE v2_subscriptions_write');
+      _finish(ownTransaction, commit: false);
       rethrow;
+    }
+  }
+
+  void _finish(bool ownTransaction, {required bool commit}) {
+    if (ownTransaction) {
+      db.execute(commit ? 'COMMIT' : 'ROLLBACK');
+    } else {
+      if (!commit) db.execute('ROLLBACK TO v2_subscriptions_write');
+      db.execute('RELEASE v2_subscriptions_write');
     }
   }
 }

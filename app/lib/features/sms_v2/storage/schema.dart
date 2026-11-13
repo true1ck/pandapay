@@ -34,8 +34,11 @@ abstract final class SmsV2Schema {
 
   static const String _versionTable = 'sms_v2_schema_version';
 
-  /// Statements that bring a database from version `n - 1` to `n`. All are
-  /// idempotent (`IF NOT EXISTS`), so a crashed run can be repeated.
+  /// Statements that bring a database from version `n - 1` to `n`. A version's
+  /// statements run in one savepoint together with the version row, so a crashed
+  /// run rolls back whole and can be repeated. Most are `IF NOT EXISTS`; the
+  /// `ALTER TABLE ... ADD COLUMN` statements of version 3 are not idempotent on
+  /// their own, they rely on that savepoint and on the version row.
   static const Map<int, List<String>> _migrations = {
     1: [
       '''

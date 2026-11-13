@@ -71,6 +71,9 @@ void main() {
   String debit(String d) =>
       'INR 649.00 debited from your A/c XX1234 on $d towards NETFLIX INDIA for UPI Mandate. UMRN abc@axis. -Axis Bank';
 
+  // Capture only marks the saved rows dirty; the next reader derives them.
+  void derive() => SubscriptionProjection.rebuildIfNeeded(db.db, _ns);
+
   List<Map<String, Object?>> asJson(List<RecurringSeries> series) => [
     for (final s in series) s.toJson(),
   ];
@@ -176,6 +179,8 @@ void main() {
       send('AX-AXISBK-S', debit('03-08-26'), '2026-08-03');
       send('AX-AXISBK-S', debit('03-09-26'), '2026-09-03');
       send('AX-AXISBK-S', debit('03-10-26'), '2026-10-03');
+      expect(store().isDirty, isTrue, reason: 'capture does not derive');
+      derive();
       expect(store().isCurrent, isTrue);
       final now = DateTime.utc(2026, 11, 9);
       final saved = seriesFromSubscriptionStates(store().states(), now);
@@ -192,6 +197,7 @@ void main() {
     test('the same saved row is active today and past months later, with no new message', () {
       send('AX-AXISBK-S', mandate, '2026-08-01');
       send('AX-AXISBK-S', debit('03-10-26'), '2026-10-03');
+      derive();
       final rows = store().states();
       expect(
         seriesFromSubscriptionStates(rows, DateTime.utc(2026, 10, 20)).single.lifecycleStatus,
@@ -211,6 +217,7 @@ void main() {
         'AutoPay mandate for NETFLIX has been revoked successfully. -Axis Bank',
         '2026-09-02',
       );
+      derive();
       final series = seriesFromSubscriptionStates(
         store().states(),
         DateTime.utc(2026, 9, 10),
@@ -246,8 +253,9 @@ void main() {
       expect(store().isCurrent, isTrue);
     });
 
-    test('an ordinary one-off purchase does not re-derive anything', () {
+    test('an ordinary one-off purchase does not mark the rows dirty', () {
       send('AX-AXISBK-S', mandate, '2026-08-01');
+      derive();
       final before = db.db
           .select('SELECT updated_at FROM v2_subscriptions WHERE namespace=?', [_ns])
           .single['updated_at'];
@@ -263,7 +271,7 @@ void main() {
       expect(store().isCurrent, isTrue);
     });
 
-    test('a spend at a shop that now repeats does re-derive', () {
+    test('a spend at a shop that now repeats marks the rows dirty', () {
       for (final (d, day) in [
         ('05-08-26', '2026-08-05'),
         ('05-09-26', '2026-09-05'),
@@ -274,12 +282,15 @@ void main() {
           day,
         );
       }
+      derive();
       expect(store().states(), isEmpty, reason: 'two charges are not a pattern yet');
       send(
         'VM-HDFCBK-S',
         'Rs.649.00 spent on HDFC Bank Card x5678 at NETFLIX on 05-10-26',
         '2026-10-05',
       );
+      expect(store().isDirty, isTrue);
+      derive();
       final rows = store().states();
       expect(rows.single.kind, SubscriptionStateKind.pattern);
       expect(rows.single.chargeCount, 3);
@@ -336,7 +347,7 @@ void main() {
         ),
       );
       final fileStore = SubscriptionStore(file.db, namespace: _ns);
-      expect(fileStore.isCurrent, isTrue);
+      expect(fileStore.isDirty, isTrue);
       file.db.execute('DELETE FROM v2_subscriptions');
       file.db.execute("DELETE FROM v2_sync_state WHERE key LIKE 'subscriptions_%'");
       expect(fileStore.isBuilt, isFalse);
@@ -354,6 +365,302 @@ void main() {
       expect(store().isCurrent, isFalse);
       SubscriptionProjection.rebuildIfNeeded(db.db, _ns);
       expect(store().isCurrent, isTrue);
+    });
+  });
+
+  const revoke =
+      'AutoPay mandate for NETFLIX has been revoked successfully. -Axis Bank';
+
+  group('a rebuild that raced a change (lost update)', () {
+    test('rows from an older rebuild neither overwrite a later cancellation nor clear dirty', () {
+      send('AX-AXISBK-S', mandate, '2026-08-01');
+      send('AX-AXISBK-S', debit('03-08-26'), '2026-08-03');
+      derive();
+      final now = DateTime.utc(2026, 9, 10);
+      expect(
+        seriesFromSubscriptionStates(store().states(), now).single.lifecycleStatus,
+        'active',
+      );
+
+      // An older rebuild starts: it reads the counter, then the ledger...
+      final seqAtStart = store().seq;
+      final facts = FactStore(db.db, namespace: _ns).all();
+      final events = EventStore(db.db, namespace: _ns).listSince(DateTime.utc(1900));
+      final olderStates = subscriptionStatesFromLedger(facts, events);
+      final olderHistory = subscriptionHistoryFromLedger(facts, events, now: now);
+
+      // ...and before it writes, the cancellation is captured.
+      send('AX-AXISBK-S', revoke, '2026-09-02');
+      expect(store().isDirty, isTrue);
+      expect(store().seq, greaterThan(seqAtStart));
+
+      final saved = store().replaceAll(
+        olderStates,
+        olderHistory,
+        basedOnSeq: seqAtStart,
+      );
+      expect(saved, isFalse, reason: 'the ledger moved since it was read');
+      expect(store().isDirty, isTrue, reason: 'an old rebuild must not clear dirty');
+
+      // The next rebuild reads the newer ledger and shows the cancellation.
+      SubscriptionProjection.rebuildIfNeeded(db.db, _ns);
+      expect(store().isCurrent, isTrue);
+      expect(
+        seriesFromSubscriptionStates(store().states(), now).single.lifecycleStatus,
+        'cancelled',
+      );
+    });
+
+    test('with the counter unchanged the swap is saved and clears dirty', () {
+      send('AX-AXISBK-S', mandate, '2026-08-01');
+      final seq = store().seq;
+      expect(store().isDirty, isTrue);
+      expect(
+        store().replaceAll(
+          const [SubscriptionState(kind: SubscriptionStateKind.mandate, key: 'A', name: 'A')],
+          const {},
+          basedOnSeq: seq,
+        ),
+        isTrue,
+      );
+      expect(store().isCurrent, isTrue);
+    });
+
+    test('every markDirty moves the counter, per account', () {
+      final before = store().seq;
+      store().markDirty();
+      store().markDirty();
+      expect(store().seq, before + 2);
+      expect(store('user:other').seq, 0);
+    });
+
+    test('a caller that arrives while a rebuild runs gets a rebuild that sees its change', () async {
+      send('AX-AXISBK-S', mandate, '2026-08-01');
+      send('AX-AXISBK-S', debit('03-08-26'), '2026-08-03');
+      final first = rebuildSubscriptionsOffThread(db, _ns);
+      // The cancellation is captured while the first rebuild is still in flight.
+      send('AX-AXISBK-S', revoke, '2026-09-02');
+      final second = rebuildSubscriptionsOffThread(db, _ns);
+      await Future.wait([first, second]);
+      expect(store().isCurrent, isTrue);
+      expect(
+        seriesFromSubscriptionStates(store().states(), DateTime.utc(2026, 9, 10))
+            .single
+            .lifecycleStatus,
+        'cancelled',
+      );
+    });
+  });
+
+  group('capture never fails because of subscriptions', () {
+    test('a stored fact the derivation cannot read does not fail or roll back the chunk', () {
+      db.db.execute(
+        'INSERT INTO v2_facts (namespace, fact_id, source_key, fact_type, observed_at, payload) '
+        'VALUES (?,?,?,?,?,?)',
+        [_ns, 'broken-fact', 'broken-source', 'movement', '2026-01-01T00:00:00Z', '{not json'],
+      );
+      n++;
+      final key = n.toRadixString(16).padLeft(64, '0');
+      late bool stored;
+      expect(() {
+        stored = pipeline.process(
+          SmsMessage(
+            sender: 'AX-AXISBK-S',
+            body: mandate,
+            sourceKey: key,
+            observedAt: DateTime.utc(2026, 8, 1, 6),
+          ),
+        );
+      }, returnsNormally);
+      expect(stored, isTrue, reason: 'the message was captured, not left pending');
+      expect(FactStore(db.db, namespace: _ns).forSource(key), isNotEmpty);
+      expect(store().isDirty, isTrue, reason: 'left for the lazy rebuild');
+      // The derivation itself does fail on that fact, and leaves the rows dirty.
+      expect(() => SubscriptionProjection.rebuild(db.db, _ns), throwsA(anything));
+      expect(store().isDirty, isTrue);
+    });
+
+    test('capture does not derive: the rows are written only by a rebuild', () {
+      send('AX-AXISBK-S', mandate, '2026-08-01');
+      expect(
+        db.db.select('SELECT * FROM v2_subscriptions WHERE namespace=?', [_ns]),
+        isEmpty,
+      );
+      expect(store().isDirty, isTrue);
+    });
+  });
+
+  group('what marks the rows dirty', () {
+    test('a debit with no mandate reference that joins a known mandate does', () {
+      send('AX-AXISBK-S', mandate, '2026-08-01');
+      derive();
+      expect(store().isCurrent, isTrue);
+      send(
+        'VM-HDFCBK-S',
+        'Rs.649.00 spent on HDFC Bank Card x5678 at NETFLIX on 05-09-26',
+        '2026-09-05',
+      );
+      expect(store().isDirty, isTrue);
+    });
+
+    test('a receipt under the service name (evidence only) does', () {
+      send(
+        'VM-UNIONB-S',
+        'Dear Customer,UPI AutoPay Mandate with MONTHLY is successfully created towards EXAMPLE TEC from 31/03/2026 to 04/03/2036 for Rs.1649.00-Union Bank of India',
+        '2026-03-31',
+      );
+      send(
+        'VM-UNIONB-S',
+        'Dear Customer, Your account has  been successfully debited with Rs.99.00 on 31/03/2026 towards EXAMPLE TEC UPI AutoPay-Union Bank of India',
+        '2026-03-31',
+      );
+      derive();
+      expect(store().isCurrent, isTrue);
+      send(
+        'VA-RZRPAY-S',
+        'Your payment of Rs.99 for the subscription to Example Labs  is successful. Any recurring subscription payments will be automatically charged to your UPI from now - Razorpay',
+        '2026-03-31',
+      );
+      expect(store().isDirty, isTrue);
+    });
+  });
+
+  group('open screens are told, whichever path stored the messages', () {
+    SmsMessage mandateMessage(String key) => SmsMessage(
+      sender: 'AX-AXISBK-S',
+      body: mandate,
+      sourceKey: key.padLeft(64, '0'),
+      observedAt: DateTime.utc(2026, 8, 1, 6),
+    );
+
+    Future<List<String>> entitiesOf(void Function() work) async {
+      final seen = <String>[];
+      final sub = financial.changes.listen((c) => seen.add(c.entity));
+      work();
+      await pumpEventQueue();
+      await sub.cancel();
+      return seen;
+    }
+
+    test('processBatch(backfill: true) called directly notifies subscriptions', () async {
+      final seen = await entitiesOf(
+        () => pipeline.processBatch([mandateMessage('c1')], backfill: true),
+      );
+      expect(seen, contains('subscriptions'));
+    });
+
+    test('a live message notifies subscriptions', () async {
+      final seen = await entitiesOf(
+        () => pipeline.processBatch([mandateMessage('c2')]),
+      );
+      expect(seen, contains('subscriptions'));
+    });
+
+    test('the capture runtime can defer it to the end of a whole import', () async {
+      final seen = await entitiesOf(
+        () => pipeline.processBatch(
+          [mandateMessage('c3')],
+          backfill: true,
+          deferSubscriptionNotice: true,
+        ),
+      );
+      expect(seen, isNot(contains('subscriptions')));
+      expect(store().isDirty, isTrue);
+    });
+  });
+
+  group('rows that cannot be read', () {
+    test('one malformed payload is skipped; the others are still returned', () {
+      store().replaceAll(
+        const [SubscriptionState(kind: SubscriptionStateKind.mandate, key: 'GOOD', name: 'GOOD')],
+        const {},
+      );
+      db.db.execute(
+        'INSERT INTO v2_subscriptions (namespace, series_id, kind, name, payload, updated_at) '
+        "VALUES (?, 'v2:bad', 'mandate', 'BAD', '{not json', '2026-01-01T00:00:00Z')",
+        [_ns],
+      );
+      expect([for (final s in store().states()) s.key], ['GOOD']);
+    });
+  });
+
+  group('upgrading a database that already has rows', () {
+    // The SMS module's own counter. A phone upgrades from whatever it had.
+    Database openWithRows() {
+      final old = sqlite3.openInMemory();
+      addTearDown(old.dispose);
+      SmsV2Schema.ensure(old);
+      old.execute(
+        "INSERT INTO v2_facts (namespace, fact_id, source_key, fact_type, observed_at, payload) VALUES ('a','f1','s1','movement','2026-08-01T00:00:00Z','{}')",
+      );
+      old.execute(
+        "INSERT INTO v2_events (namespace, event_id, type, status, payload, dirty) VALUES ('a','e1','purchase','complete','{}',0)",
+      );
+      old.execute(
+        "INSERT INTO v2_sync_state (namespace, key, value) VALUES ('a','k','v')",
+      );
+      return old;
+    }
+
+    void downTo(Database old, int version) {
+      old.execute('DROP TABLE v2_subscriptions');
+      old.execute('DROP TABLE v2_subscription_history');
+      old.execute("UPDATE sms_v2_schema_version SET version=$version WHERE module='sms_v2'");
+    }
+
+    void expectKept(Database old) {
+      expect(SmsV2Schema.installedVersion(old), 4);
+      expect(old.select('SELECT fact_id FROM v2_facts').single['fact_id'], 'f1');
+      expect(old.select('SELECT event_id FROM v2_events').single['event_id'], 'e1');
+      expect(old.select('SELECT key FROM v2_sync_state').single['key'], 'k');
+      expect(old.select('SELECT * FROM v2_subscriptions'), isEmpty);
+      expect(old.select('SELECT * FROM v2_subscription_history'), isEmpty);
+    }
+
+    test('a version 3 database with facts and events keeps them on the way to 4', () {
+      final old = openWithRows();
+      downTo(old, 3);
+      SmsV2Schema.ensure(old);
+      expectKept(old);
+    });
+
+    test('a version 2 database (before the shop-key columns) reaches 4 with its rows', () {
+      final old = openWithRows();
+      // Rewind the facts table to its version 2 shape: no key columns or indexes.
+      for (final index in [
+        'idx_v2_facts_merchant',
+        'idx_v2_facts_instrument',
+        'idx_v2_facts_rule',
+        'idx_v2_facts_unkeyed',
+      ]) {
+        old.execute('DROP INDEX $index');
+      }
+      for (final column in ['merchant_key', 'rule_id', 'keyed']) {
+        old.execute('ALTER TABLE v2_facts DROP COLUMN $column');
+      }
+      downTo(old, 2);
+      SmsV2Schema.ensure(old);
+      expectKept(old);
+      expect(
+        old.select("SELECT name FROM pragma_table_info('v2_facts')").map((r) => r['name']),
+        containsAll(['merchant_key', 'rule_id', 'keyed']),
+      );
+    });
+
+    test('a database that never had the module reaches 4', () {
+      final fresh = sqlite3.openInMemory();
+      addTearDown(fresh.dispose);
+      expect(SmsV2Schema.installedVersion(fresh), isNull);
+      SmsV2Schema.ensure(fresh);
+      expect(SmsV2Schema.installedVersion(fresh), 4);
+    });
+
+    test('ensure twice changes nothing and keeps the rows', () {
+      final old = openWithRows();
+      downTo(old, 3);
+      SmsV2Schema.ensure(old);
+      SmsV2Schema.ensure(old);
+      expectKept(old);
     });
   });
 }

@@ -168,11 +168,15 @@ Subscriptions, 13 Nov: a subscription is derived from every mandate, charge, fai
 announcement in the ledger (O(history)), and three screens plus the Insights tile and the
 reminders each used to derive it again on the UI isolate. It is now derived once, where the ledger
 is written, and saved in `v2_subscriptions` / `v2_subscription_history` (`SubscriptionStore`,
-schema v4). Capture re-derives it once per chunk, only when the chunk held a mandate message, an
-announced or failed debit, a mandate-referenced debit, or a spend at a shop with enough earlier spends
-to form a pattern (`SubscriptionProjection.touchesSubscriptions`, one indexed count). A correction,
-a server pull or an AI withdrawal only mark the rows dirty; the next reader re-derives them once in a
-short-lived worker isolate (`rebuildSubscriptionsOffThread`). Anything that depends on today's date is
+schema v4). Nothing derives them inside a transaction: capture (when the chunk held a mandate message,
+an announced or failed debit, a mandate-referenced debit, a debit that can join a known mandate, a
+service receipt, or a spend at a shop with enough earlier spends to form a pattern:
+`SubscriptionProjection.touchesSubscriptions`), a correction (always), a server pull and an AI withdrawal
+only `markDirty` (two small upserts that also move a sequence number) and notify `subscriptions`; the next
+reader re-derives the rows once in a short-lived worker isolate (`rebuildSubscriptionsOffThread`). The
+rebuild reads the sequence number before it reads the ledger and saves its rows only if it is unchanged
+(compare-and-set), so a cancellation captured meanwhile is never overwritten by an older rebuild; a caller
+that arrives mid-rebuild gets one more run, not the stale one's result. Anything that depends on today's date is
 decided when a row is read, so a plan that quietly stopped turns past without a new message. Every
 reader goes through `subscriptionStatesProvider`; `performance_guards_test.dart` fails when a screen,
 provider or reminder calls the ledger derivation again.

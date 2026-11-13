@@ -405,7 +405,12 @@ Map<String, List<SubscriptionHistoryEntry>> subscriptionHistoryFromLedger(
 }) {
   final grouped = _groupSubscriptions(facts, events);
   final byId = grouped.byId;
-  final attempts = byId.values.whereType<v2.AttemptFact>().toList();
+  // Bucketed by service once: filtering every attempt per service (and building
+  // the key for each) made this O(services x attempts).
+  final attemptsByKey = <String, List<v2.AttemptFact>>{};
+  for (final a in byId.values.whereType<v2.AttemptFact>()) {
+    attemptsByKey.putIfAbsent(grouped.keyOf(a), () => []).add(a);
+  }
   final history = <String, List<SubscriptionHistoryEntry>>{};
   for (final group in grouped.mergedGroups.entries) {
     final entries = <SubscriptionHistoryEntry>[];
@@ -499,7 +504,7 @@ Map<String, List<SubscriptionHistoryEntry>> subscriptionHistoryFromLedger(
       );
       if (amount != null) previous = amount;
     }
-    for (final f in attempts.where((a) => grouped.keyOf(a) == group.key)) {
+    for (final f in attemptsByKey[group.key] ?? const <v2.AttemptFact>[]) {
       if (f.status == v2.AttemptStatus.failed) {
         entries.add(
           SubscriptionHistoryEntry(

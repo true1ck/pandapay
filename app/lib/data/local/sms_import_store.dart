@@ -106,7 +106,13 @@ class SmsImportStore {
           for (var start = 0; start < candidates.length; start += 500) {
             final end = (start + 500).clamp(0, candidates.length);
             final chunk = candidates.sublist(start, end);
-            pipeline.processBatch(chunk, backfill: v2Backfill);
+            // A history import tells the subscription readers once, at its end
+            // (SmsV2Runtime.capture), not once per chunk.
+            pipeline.processBatch(
+              chunk,
+              backfill: v2Backfill,
+              deferSubscriptionNotice: v2Backfill,
+            );
             for (final message in chunk) {
               intake.acknowledge(namespace, message.sourceKey);
             }
