@@ -417,6 +417,18 @@ class TransactionAttachmentsRepository implements PortableReceiptVault {
     return destination.path;
   }
 
+  /// Moves receipts saved under a queued transaction's alias
+  /// (`local-outbox:<mutation id>`) to its real server id once delivered. The
+  /// stored file paths do not change; only the owning transaction id does.
+  Future<void> remapTransaction(String local, String canonical) =>
+      AccountRecoveryOperationGate.process.run(() async {
+        _database.db.execute(
+          'UPDATE transaction_attachments SET transaction_id = ? '
+          'WHERE transaction_id = ?',
+          [canonical, local],
+        );
+      });
+
   Future<void> delete(TransactionAttachment attachment) =>
       AccountRecoveryOperationGate.process.run(() async {
         _database.db.execute(

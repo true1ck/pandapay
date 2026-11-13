@@ -1132,6 +1132,36 @@ class FinancialStore {
     _notify(ns);
   }
 
+  /// Overlays [fields] on a stored transaction (WP-C5: a queued payment-method
+  /// change). A null value removes the key. Does nothing when the row is not
+  /// stored.
+  void patchTransaction(String ns, String id, Map<String, Object?> fields) {
+    final rows = database.db.select(
+      "SELECT payload FROM financial_entities WHERE namespace=? AND entity='transactions' AND id=?",
+      [ns, id],
+    );
+    if (rows.isEmpty) return;
+    final body =
+        jsonDecode(rows.single['payload'] as String) as Map<String, dynamic>;
+    final next = {...body};
+    fields.forEach((key, value) {
+      if (value == null) {
+        next.remove(key);
+      } else {
+        next[key] = value;
+      }
+    });
+    _upsert(
+      ns,
+      'transactions',
+      id,
+      next,
+      DateTime.now().millisecondsSinceEpoch,
+      sourceKey: body['source_key'] as String?,
+    );
+    _notify(ns);
+  }
+
   void replaceCards(
     String ns,
     List<UserCard> cards, {

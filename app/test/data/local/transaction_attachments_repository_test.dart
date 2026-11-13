@@ -59,6 +59,27 @@ void main() {
     await root.delete(recursive: true);
   });
 
+  test('a receipt saved under a queued alias follows the transaction to its server id', () async {
+    final repo = make();
+    final plain = Uint8List.fromList(List<int>.generate(64, (i) => i));
+    await repo.addFromBytes(
+      transactionId: 'local-outbox:m-1',
+      bytes: plain,
+      fileName: 'r.png',
+      mimeType: 'image/png',
+    );
+    expect(await repo.list('local-outbox:m-1'), hasLength(1));
+
+    await repo.remapTransaction('local-outbox:m-1', 'server-9');
+
+    expect(await repo.list('local-outbox:m-1'), isEmpty);
+    final moved = await repo.list('server-9');
+    expect(moved, hasLength(1));
+    final opened = await repo.decryptForViewing(moved.single);
+    expect(opened.file.readAsBytesSync(), plain);
+    await opened.release();
+  });
+
   test('receipts still open after the app container path changes', () async {
     // iOS may move an app's data container on update; stored paths must not
     // depend on where the container was when the receipt was saved.
