@@ -135,6 +135,24 @@ void remapLocalId(Database db, String ns, String from, String to) {
         'UPDATE transaction_outbox_entries SET user_card_id=? WHERE user_card_id=?',
         [to, from],
       );
+      // H3-8: an SMS instrument linked to the provisional card follows it.
+      if (db.select(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='v2_instruments'",
+      ).isNotEmpty) {
+        for (final row in db.select(
+          'SELECT instrument_id, payload FROM v2_instruments WHERE namespace=? AND payload LIKE ?',
+          [ns, '%$from%'],
+        )) {
+          db.execute(
+            'UPDATE v2_instruments SET payload=? WHERE namespace=? AND instrument_id=?',
+            [
+              remapIdInJsonText(row['payload'] as String, from, to),
+              ns,
+              row['instrument_id'],
+            ],
+          );
+        }
+      }
       final overridesKey = '$ns:card_overrides';
       for (final row in db.select(
         'SELECT raw_json FROM cached_responses WHERE key=?',

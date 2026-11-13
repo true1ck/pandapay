@@ -205,6 +205,22 @@ void main() {
     },
   );
 
+  test('H3-8: remapLocalId moves an SMS instrument link to the server card', () {
+    db.db.execute(
+      'CREATE TABLE v2_instruments (namespace TEXT NOT NULL, instrument_id TEXT NOT NULL, '
+      'kind TEXT NOT NULL, issuer_slug TEXT NOT NULL, mask_digits TEXT, status TEXT NOT NULL, '
+      'payload TEXT NOT NULL, dirty INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (namespace, instrument_id))',
+    );
+    db.db.execute(
+      "INSERT INTO v2_instruments(namespace,instrument_id,kind,issuer_slug,status,payload) "
+      "VALUES (?, 'i1', 'creditCard', 'x', 'confirmed', ?)",
+      [ns, jsonEncode({'userCardId': 'loc'})],
+    );
+    remapLocalId(db.db, ns, 'loc', 'srv');
+    final payload = db.db.select('SELECT payload FROM v2_instruments').single['payload'] as String;
+    expect(jsonDecode(payload)['userCardId'], 'srv');
+  });
+
   test('add_card with the same id on the server settles the provisional card', () async {
     insertProvisionalCard(
       store,
