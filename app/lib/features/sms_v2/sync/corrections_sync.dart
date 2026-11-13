@@ -9,8 +9,11 @@ import '../storage/outbox_store.dart';
 ///
 /// What happens when the server refuses a correction:
 /// * It could not find the facts or the event it names: they are sent again
-///   (see [requeue]) and the correction is tried once more. If that fails too,
-///   the correction stays on this phone only.
+///   (see [requeue]) and the correction is tried again after a growing wait,
+///   up to [maxFactsNotFoundRefusals] times in all. Only then does the
+///   correction stay on this phone only. A correction is never given up for
+///   want of a connection: while the facts it names are still waiting to
+///   upload (even in a back-off) it is not sent at all.
 /// * It did not accept the shared template: the correction is tried once
 ///   more without the template.
 /// * Any other refusal that retrying cannot change: the correction stays on
@@ -43,13 +46,25 @@ class CorrectionsSync {
   final DateTime Function() clock;
   Future<int>? _running;
 
-  /// A refusal marker kept inside the queued payload; never sent.
+  /// A refusal marker kept inside the queued payload; never sent. It counts
+  /// the "facts not found" refusals so far (older builds stored `true`: one).
   static const _resentKey = '_resent';
   static const _noTemplateKey = '_templateDropped';
 
   /// Stop waiting for a source's facts after this many failed uploads of them,
   /// so a source the server refuses for good cannot hold a correction forever.
   static const _waitAttempts = 6;
+
+  /// The server may say "facts not found" this many times for one correction
+  /// (each after the facts were sent again) before it is kept on the phone.
+  static const maxFactsNotFoundRefusals = 4;
+
+  /// Waits after the first, second and third such refusal.
+  static const _factsNotFoundWaits = [
+    Duration(minutes: 1),
+    Duration(minutes: 5),
+    Duration(minutes: 30),
+  ];
 
   static const _factsMissing = {
     'correction_facts_not_found',
@@ -145,7 +160,11 @@ class CorrectionsSync {
 
   /// True while the source or the event the correction names is still waiting
   /// in the upload queue: the server cannot match a correction to facts it has
-  /// not received. A source that keeps failing to upload stops holding it.
+  /// not received. A record that has failed [_waitAttempts] times and is due
+  /// again no longer holds it, so a source the server keeps refusing cannot
+  /// hold a correction for ever. One that is in a back-off still does, however
+  /// many attempts it has: the back-off may only mean the phone was offline,
+  /// and the correction must not be sent (and refused) before the facts (Q-09).
   bool _waitsForUpload(Map<String, Object?> payload) {
     final ids = [
       if (payload['sourceKey'] is String) 'source:${payload['sourceKey']}',
@@ -153,10 +172,15 @@ class CorrectionsSync {
     ];
     if (ids.isEmpty) return false;
     final rows = queue.db.select(
-      'SELECT attempts FROM v2_outbox WHERE namespace=? AND id IN (${List.filled(ids.length, '?').join(',')})',
+      'SELECT attempts, next_attempt_at FROM v2_outbox WHERE namespace=? AND id IN (${List.filled(ids.length, '?').join(',')})',
       [queue.namespace, ...ids],
     );
-    return rows.any((row) => (row['attempts'] as int) < _waitAttempts);
+    final nowMs = clock().millisecondsSinceEpoch;
+    return rows.any(
+      (row) =>
+          (row['attempts'] as int) < _waitAttempts ||
+          (row['next_attempt_at'] as int) > nowMs,
+    );
   }
 
   String? _reason(http.Response response) {
@@ -185,14 +209,25 @@ class CorrectionsSync {
     final reason = _reason(response);
     if (reason == null) return _Next.later;
     if (_factsMissing.contains(reason) && requeue != null) {
-      if (payload[_resentKey] == true) return _park(pending, reason);
+      final refusals =
+          switch (payload[_resentKey]) {
+            final int count => count,
+            true => 1,
+            _ => 0,
+          } +
+          1;
+      if (refusals >= maxFactsNotFoundRefusals) return _park(pending, reason);
       final sourceKey = payload['sourceKey'];
       if (sourceKey is! String) return _park(pending, reason);
       requeue!(sourceKey, payload['eventId'] as String?);
       queue.enqueue('correction', pending.id.substring('correction:'.length), {
         ...payload,
-        _resentKey: true,
+        _resentKey: refusals,
       });
+      queue.deferUntil(
+        pending.id,
+        clock().add(_factsNotFoundWaits[refusals - 1]),
+      );
       return _Next.again;
     }
     if (_templateRefused.contains(reason) &&
@@ -200,7 +235,8 @@ class CorrectionsSync {
         (payload.containsKey('redactedTemplate') ||
             (payload['corrected'] as Map?)?.containsKey('_template') == true)) {
       final corrected = {
-        for (final entry in ((payload['corrected'] as Map?) ?? const {}).entries)
+        for (final entry
+            in ((payload['corrected'] as Map?) ?? const {}).entries)
           if (entry.key != '_template') entry.key as String: entry.value,
       };
       queue.enqueue('correction', pending.id.substring('correction:'.length), {

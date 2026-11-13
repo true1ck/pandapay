@@ -55,7 +55,7 @@ class SmsV2Runtime {
     required this.baseUri,
     required this.deviceId,
     required this.appVersion,
-    required this.headers,
+    required Future<Map<String, String>> Function() headers,
     required this.verify,
     required this.loadShippedBundle,
     required this.accountIsCurrent,
@@ -67,10 +67,29 @@ class SmsV2Runtime {
     this.categoryIdBySlug = const {},
     this.autoApplyResort = false,
     this.captureExecutor,
+    this.isOffline = _neverOffline,
+    Duration headersTimeout = defaultHeadersTimeout,
     DateTime Function()? clock,
-  }) : clock = clock ?? DateTime.now {
+  }) : headers = _bounded(headers, headersTimeout),
+       clock = clock ?? DateTime.now {
     SmsV2Schema.ensure(financial.database.db);
   }
+
+  /// How long acquiring request headers (the App Check token) may take before
+  /// the request is abandoned. Without a bound a black-holed network held every
+  /// network step of a sync for as long as the platform took to give up (C-04).
+  static const defaultHeadersTimeout = Duration(seconds: 8);
+
+  static Future<Map<String, String>> Function() _bounded(
+    Future<Map<String, String>> Function() headers,
+    Duration limit,
+  ) => () => headers().timeout(limit);
+
+  static bool _neverOffline() => false;
+
+  /// True while the phone knows it has no connection. Network steps of a sync
+  /// are skipped then; reading messages never waits on the network.
+  final bool Function() isOffline;
 
   static Future<bool> _noConsent() async => false;
   static List<String> _noOwnerNames() => const [];
@@ -328,17 +347,26 @@ class SmsV2Runtime {
     return _running = operation;
   }
 
+  /// Makes every upload that was waiting out a back-off due again. Called when
+  /// the connection returns: the waits were set while the phone had no network
+  /// and say nothing about the server (Q-08).
+  void resetUploadBackoff() {
+    OutboxStore(financial.database.db, namespace: namespace).resetBackoff();
+  }
+
   Future<void> _syncAndReport() async {
     try {
       await _metrics.measureSync(_sync);
     } finally {
-      await _metrics.upload(
-        client: client,
-        baseUri: baseUri,
-        headers: headers,
-        appVersion: appVersion,
-        accountIsCurrent: accountIsCurrent,
-      );
+      if (!isOffline()) {
+        await _metrics.upload(
+          client: client,
+          baseUri: baseUri,
+          headers: headers,
+          appVersion: appVersion,
+          accountIsCurrent: accountIsCurrent,
+        );
+      }
     }
   }
 
@@ -394,13 +422,9 @@ class SmsV2Runtime {
   Future<void> _sync() async {
     _checkAccount();
     await _loadBundle();
-    try {
-      await _refreshRules();
-    } catch (_) {
-      /* Retain the verified cache. */
-      await _metrics.bundleDownloadFailed();
-    }
-    _checkAccount();
+    // Reading the messages already on the phone comes first and never waits on
+    // the network: the rules refresh and the request headers (App Check) can
+    // take as long as the platform needs to give up on a dead connection.
     final intake = SmsIntakeRepository(financial.database);
     Set<String>? previousBatch;
     while (accountIsCurrent()) {
@@ -455,15 +479,31 @@ class SmsV2Runtime {
       }
     }
 
-    await _applyCardState();
+    // The steps below that talk to the server are skipped while the phone
+    // knows it has no connection; nothing is lost, they run on the next pass.
+    Future<void> networked(Future<void> Function() step) async {
+      if (isOffline()) return;
+      await guarded(step);
+    }
+
+    if (!isOffline()) {
+      try {
+        await _refreshRules();
+      } catch (_) {
+        /* Retain the verified cache. */
+        await _metrics.bundleDownloadFailed();
+      }
+      _checkAccount();
+      await _applyCardState();
+    }
     _keyFacts();
-    await guarded(() => _upload.drain());
+    await networked(() => _upload.drain());
     final senders = (await activeBundle()).senders;
     final correctionQueue = OutboxStore(
       financial.database.db,
       namespace: namespace,
     );
-    await guarded(
+    await networked(
       () => CorrectionsSync(
         queue: correctionQueue,
         client: client,
@@ -480,7 +520,7 @@ class SmsV2Runtime {
         clock: clock,
       ).drain(),
     );
-    await guarded(
+    await networked(
       () => TemplateUpload(
         intake: intake,
         queue: OutboxStore(financial.database.db, namespace: namespace),
@@ -492,7 +532,7 @@ class SmsV2Runtime {
         clock: clock,
       ).drain(),
     );
-    await guarded(
+    await networked(
       () => LearningSignalUpload(
         intake: intake,
         queue: OutboxStore(financial.database.db, namespace: namespace),
@@ -505,7 +545,7 @@ class SmsV2Runtime {
         clock: clock,
       ).drain(),
     );
-    await guarded(
+    await networked(
       () =>
           StatsUpload(
             stats: StatsStore(financial.database.db, namespace: namespace),
@@ -521,7 +561,7 @@ class SmsV2Runtime {
           ),
     );
     _checkAccount();
-    await guarded(
+    await networked(
       () => SyncPull(
         financial: financial,
         namespace: namespace,
@@ -533,7 +573,7 @@ class SmsV2Runtime {
         accountIsCurrent: accountIsCurrent,
       ).pull(),
     );
-    await guarded(() async {
+    await networked(() async {
       final available = int.tryParse(_state.get('rules:latest') ?? '') ?? 0;
       if (available > _bundle!.bundleVersion) {
         _state.put('rules:last-check', DateTime.utc(1970).toIso8601String());

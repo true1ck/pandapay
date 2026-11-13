@@ -14,11 +14,19 @@ final class DeviceAttestation {
     DateTime Function()? now,
     this._fetchToken,
     this._fetchLimitedUseToken,
+    this.fetchTimeout = defaultFetchTimeout,
   }) : _now = now ?? DateTime.now {
     if (!RegExp(r'^[A-Za-z0-9_-]{8,128}$').hasMatch(deviceId)) {
       throw ArgumentError.value(deviceId, 'deviceId');
     }
   }
+
+  /// App Check can wait on Play Integrity or Firebase initialisation for as
+  /// long as the platform takes to give up on a dead connection. Past this the
+  /// request goes out with the installation ID alone, like any other failure
+  /// to get a token (C-04).
+  static const defaultFetchTimeout = Duration(seconds: 8);
+  final Duration fetchTimeout;
 
   final String deviceId;
   final DateTime Function() _now;
@@ -31,7 +39,12 @@ final class DeviceAttestation {
   Future<void>? _activation;
 
   Future<Map<String, String>> headers() async {
-    final token = await _getToken();
+    String? token;
+    try {
+      token = await _getToken().timeout(fetchTimeout);
+    } on TimeoutException {
+      token = null;
+    }
     return {'X-Sms-Device-Id': deviceId, 'X-Device-Attestation': ?token};
   }
 
@@ -43,7 +56,8 @@ final class DeviceAttestation {
   Future<Map<String, String>> limitedUseHeaders() async {
     String? token;
     try {
-      token = await (_fetchLimitedUseToken ?? _fetchFirebaseLimitedUseToken)();
+      token = await (_fetchLimitedUseToken ?? _fetchFirebaseLimitedUseToken)()
+          .timeout(fetchTimeout);
     } catch (_) {
       token = null;
     }
@@ -66,7 +80,9 @@ final class DeviceAttestation {
   Future<String?> _refresh() async {
     _nextAttemptAt = _now().add(const Duration(seconds: 30));
     try {
-      final token = await (_fetchToken ?? _fetchFirebaseToken)(_token != null);
+      final token = await (_fetchToken ?? _fetchFirebaseToken)(
+        _token != null,
+      ).timeout(fetchTimeout);
       final expiry = _expiry(token);
       if (token != null && expiry != null && expiry.isAfter(_now())) {
         _token = token;
