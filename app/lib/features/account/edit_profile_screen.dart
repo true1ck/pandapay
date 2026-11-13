@@ -321,8 +321,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       onChanged: (_) => setState(() => _error = null), // also clears Required
                       style: BambooFonts.ui(16, color: BambooInk.ink900),
                       decoration: InputDecoration(
-                        label: requiredLabel('First name'),
-                        errorText: requiredError(_submitted, _nameController.text) ?? _error,
+                        labelText: 'First name',
+                        errorText: _error,
                         errorMaxLines: 3,
                         border: const OutlineInputBorder(),
                       ),

@@ -83,7 +83,7 @@ void main() {
     expect(find.text('Add phone number'), findsOneWidget);
   });
 
-  testWidgets('Save stays enabled, nothing is sent for an unchanged name, then saves the cleaned name', (tester) async {
+  testWidgets('Save is disabled until the name changes, then saves the cleaned name', (tester) async {
     final requests = await mount(
       tester,
       profile: {'id': 'p1', 'display_name': 'Asha', 'email': 'asha@example.com'},
@@ -92,7 +92,7 @@ void main() {
     FilledButton save() => tester.widget<FilledButton>(
       find.descendant(of: find.byKey(const Key('edit-name-save')), matching: find.byType(FilledButton)),
     );
-    expect(save().onPressed, isNotNull);
+    expect(save().onPressed, isNull);
 
     await tester.enterText(find.byKey(const Key('edit-name-field')), '  Asha   Rao ');
     await tester.pump();
