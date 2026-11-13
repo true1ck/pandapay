@@ -28,7 +28,10 @@ class _FakeConnectivity implements Connectivity {
 /// normal status. Counts fetches.
 class _FlakyStatusRepository implements AppStatusRepository {
   bool fail = true;
-  AppStatus next = const AppStatus(minSupportedVersion: '1.0.0', maintenanceMode: false);
+  AppStatus next = const AppStatus(
+    minSupportedVersion: '1.0.0',
+    maintenanceMode: false,
+  );
   int fetches = 0;
 
   @override
@@ -106,28 +109,36 @@ void main() {
       // while the app was offline must now be seen.
       status
         ..fail = false
-        ..next = const AppStatus(minSupportedVersion: '1.0.0', maintenanceMode: true);
+        ..next = const AppStatus(
+          minSupportedVersion: '1.0.0',
+          maintenanceMode: true,
+        );
       connectivity.controller.add(_wifi);
       await _settle();
 
       expect(probes, 1);
       expect(status.fetches, 2);
-      expect((await container.read(appStatusProvider.future))?.maintenanceMode,
-          isTrue);
+      expect(
+        (await container.read(appStatusProvider.future))?.maintenanceMode,
+        isTrue,
+      );
     },
   );
 
-  test('no re-check when the server is not reachable after reconnect', () async {
-    container.read(connectivityBootstrapProvider);
-    // The router listens to appStatusProvider for the whole process.
-    container.listen(appStatusProvider, (_, _) {});
-    await container.read(appStatusProvider.future);
-    serverUp = false; // captive Wi-Fi: radio up, no server
-    connectivity.controller.add(_wifi);
-    await _settle();
-    expect(probes, 1);
-    expect(status.fetches, 1);
-  });
+  test(
+    'no re-check when the server is not reachable after reconnect',
+    () async {
+      container.read(connectivityBootstrapProvider);
+      // The router listens to appStatusProvider for the whole process.
+      container.listen(appStatusProvider, (_, _) {});
+      await container.read(appStatusProvider.future);
+      serverUp = false; // captive Wi-Fi: radio up, no server
+      connectivity.controller.add(_wifi);
+      await _settle();
+      expect(probes, 1);
+      expect(status.fetches, 1);
+    },
+  );
 
   test('a start that is already online never re-checks appStatus', () async {
     connectivity.seed = _wifi;
@@ -172,22 +183,28 @@ void main() {
     expect(probes, greaterThanOrEqualTo(2));
   });
 
-  testWidgets('resume with a failed-open appStatus re-checks it once reachable',
-      (tester) async {
-    connectivity.seed = _wifi;
-    await tester.runAsync(() async {
-      container.read(connectivityBootstrapProvider);
-      // The router listens to appStatusProvider for the whole process.
-      container.listen(appStatusProvider, (_, _) {});
-      expect(await container.read(appStatusProvider.future), isNull);
-      expect(status.fetches, 1);
-      status.fail = false;
+  testWidgets(
+    'resume with a failed-open appStatus re-checks it once reachable',
+    (tester) async {
+      connectivity.seed = _wifi;
+      await tester.runAsync(() async {
+        container.read(connectivityBootstrapProvider);
+        // The router listens to appStatusProvider for the whole process.
+        container.listen(appStatusProvider, (_, _) {});
+        expect(await container.read(appStatusProvider.future), isNull);
+        expect(status.fetches, 1);
+        status.fail = false;
 
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      await _settle();
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await _settle();
 
-      expect(status.fetches, 2);
-    });
-  });
+        expect(status.fetches, 2);
+      });
+    },
+  );
 }

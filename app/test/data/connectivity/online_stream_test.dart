@@ -8,7 +8,14 @@ import 'package:pandapay/data/connectivity/known_connectivity.dart';
 import 'package:pandapay/data/connectivity/online_stream.dart';
 
 class FakeConnectivity implements Connectivity {
-  FakeConnectivity({this.seed, this.seedError, this.seedNever = false});
+  FakeConnectivity({
+    this.seed,
+    this.seedError,
+    this.seedNever = false,
+    this.seedDelay,
+  });
+
+  Duration? seedDelay;
 
   List<ConnectivityResult>? seed;
   Object? seedError;
@@ -16,6 +23,8 @@ class FakeConnectivity implements Connectivity {
   final _controller = StreamController<List<ConnectivityResult>>.broadcast();
 
   void emit(List<ConnectivityResult> v) => _controller.add(v);
+
+  bool get hasListener => _controller.hasListener;
 
   @override
   Stream<List<ConnectivityResult>> get onConnectivityChanged =>
@@ -25,6 +34,8 @@ class FakeConnectivity implements Connectivity {
   Future<List<ConnectivityResult>> checkConnectivity() {
     if (seedNever) return Completer<List<ConnectivityResult>>().future;
     if (seedError != null) return Future.error(seedError!);
+    final delay = seedDelay;
+    if (delay != null) return Future.delayed(delay, () => seed!);
     return Future.value(seed);
   }
 
@@ -94,7 +105,7 @@ void main() {
       await sub.cancel();
     });
 
-    test('a failing or hanging seed falls back to the change stream', () async {
+    test('a failing or hanging seed is ignored', () async {
       final failing = FakeConnectivity(seedError: StateError('no plugin'));
       addTearDown(failing.close);
       final values = <bool>[];
@@ -115,11 +126,49 @@ void main() {
         hanging,
         toOnline: connectivityResultToIsOnline,
       ).listen(values2.add);
-      // The seed timeout is 2 s; do not wait in real time for it here, just
-      // prove that nothing was emitted and that the stream is still alive.
       await _settle();
       expect(values2, isEmpty);
+      // The change stream still works while the seed never answers.
+      hanging.emit(_wifi);
+      await _settle();
+      expect(values2, [true]);
       await sub2.cancel();
+    });
+
+    test(
+      'a change event that beats the seed wins over the stale seed',
+      () async {
+        final fake = FakeConnectivity(
+          seed: _none,
+          seedDelay: const Duration(milliseconds: 20),
+        );
+        addTearDown(fake.close);
+        final values = <bool>[];
+        final sub = connectivityOnlineStream(
+          fake,
+          toOnline: connectivityResultToIsOnline,
+        ).listen(values.add);
+        // The platform replays "online" synchronously on listen, before the
+        // asynchronous checkConnectivity() answers with an older "offline".
+        fake.emit(_wifi);
+        await _settle();
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+        expect(values, [true]);
+        await sub.cancel();
+      },
+    );
+
+    test('cancelling releases the platform subscription', () async {
+      final fake = FakeConnectivity(seed: _wifi);
+      addTearDown(fake.close);
+      final sub = connectivityOnlineStream(
+        fake,
+        toOnline: connectivityResultToIsOnline,
+      ).listen((_) {});
+      await _settle();
+      expect(fake.hasListener, isTrue);
+      await sub.cancel();
+      expect(fake.hasListener, isFalse);
     });
   });
 

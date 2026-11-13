@@ -38,21 +38,23 @@ void main() {
     expect(probes, 0);
   });
 
-  test('a successful probe is cached for ~20 s then expires to unknown',
-      () async {
-    final r = build();
-    expect(await r.check(), isTrue);
-    expect(r.serverReachable, isTrue);
-    expect(await r.check(), isTrue);
-    expect(probes, 1);
+  test(
+    'a successful probe is cached for ~20 s then expires to unknown',
+    () async {
+      final r = build();
+      expect(await r.check(), isTrue);
+      expect(r.serverReachable, isTrue);
+      expect(await r.check(), isTrue);
+      expect(probes, 1);
 
-    now = now.add(const Duration(seconds: 19));
-    expect(r.serverReachable, isTrue);
-    now = now.add(const Duration(seconds: 2));
-    expect(r.serverReachable, isNull);
-    expect(await r.check(), isTrue);
-    expect(probes, 2);
-  });
+      now = now.add(const Duration(seconds: 19));
+      expect(r.serverReachable, isTrue);
+      now = now.add(const Duration(seconds: 2));
+      expect(r.serverReachable, isNull);
+      expect(await r.check(), isTrue);
+      expect(probes, 2);
+    },
+  );
 
   test('force bypasses the cache; invalidate drops it', () async {
     final r = build();
@@ -65,28 +67,32 @@ void main() {
     expect(probes, 3);
   });
 
-  test('a failed probe is false, skips background reads, expires sooner',
-      () async {
-    probeBody = () async => false;
-    final r = build();
-    expect(await r.check(), isFalse);
-    expect(r.serverReachable, isFalse);
-    expect(r.shouldSkipBackgroundReads, isTrue);
+  test(
+    'a failed probe is false, skips background reads, expires sooner',
+    () async {
+      probeBody = () async => false;
+      final r = build();
+      expect(await r.check(), isFalse);
+      expect(r.serverReachable, isFalse);
+      expect(r.shouldSkipBackgroundReads, isTrue);
 
-    now = now.add(const Duration(seconds: 9));
-    expect(r.serverReachable, isNull);
-    expect(r.shouldSkipBackgroundReads, isFalse);
-  });
+      now = now.add(const Duration(seconds: 9));
+      expect(r.serverReachable, isNull);
+      expect(r.shouldSkipBackgroundReads, isFalse);
+    },
+  );
 
-  test('never throws: a throwing or hanging probe is just "unreachable"',
-      () async {
-    probeBody = () async => throw StateError('boom');
-    final r = build();
-    expect(await r.check(), isFalse);
+  test(
+    'never throws: a throwing or hanging probe is just "unreachable"',
+    () async {
+      probeBody = () async => throw StateError('boom');
+      final r = build();
+      expect(await r.check(), isFalse);
 
-    probeBody = () => Completer<bool>().future;
-    expect(await r.check(force: true), isFalse);
-  });
+      probeBody = () => Completer<bool>().future;
+      expect(await r.check(force: true), isFalse);
+    },
+  );
 
   test('does not probe while the radio is down', () async {
     radio = false;
@@ -140,39 +146,39 @@ void main() {
 
   group('httpServerProbe', () {
     test('200 with a JSON object is reachable', () async {
-      final client = MockClient(
-        (req) async {
-          expect(req.url.toString(), 'https://api.example.test/app-status');
-          expect(req.headers.containsKey('authorization'), isFalse);
-          return http.Response(jsonEncode({'maintenance': false}), 200);
-        },
-      );
+      final client = MockClient((req) async {
+        expect(req.url.toString(), 'https://api.example.test/app-status');
+        expect(req.headers.containsKey('authorization'), isFalse);
+        return http.Response(jsonEncode({'maintenance': false}), 200);
+      });
       expect(await httpServerProbe(client, 'https://api.example.test'), isTrue);
     });
 
-    test('captive-portal HTML, 5xx and transport errors are not reachable',
-        () async {
-      expect(
-        await httpServerProbe(
-          MockClient((_) async => http.Response('<html>login</html>', 200)),
-          'https://api.example.test',
-        ),
-        isFalse,
-      );
-      expect(
-        await httpServerProbe(
-          MockClient((_) async => http.Response('{}', 503)),
-          'https://api.example.test',
-        ),
-        isFalse,
-      );
-      expect(
-        await httpServerProbe(
-          MockClient((_) async => throw http.ClientException('no route')),
-          'https://api.example.test',
-        ),
-        isFalse,
-      );
-    });
+    test(
+      'captive-portal HTML, 5xx and transport errors are not reachable',
+      () async {
+        expect(
+          await httpServerProbe(
+            MockClient((_) async => http.Response('<html>login</html>', 200)),
+            'https://api.example.test',
+          ),
+          isFalse,
+        );
+        expect(
+          await httpServerProbe(
+            MockClient((_) async => http.Response('{}', 503)),
+            'https://api.example.test',
+          ),
+          isFalse,
+        );
+        expect(
+          await httpServerProbe(
+            MockClient((_) async => throw http.ClientException('no route')),
+            'https://api.example.test',
+          ),
+          isFalse,
+        );
+      },
+    );
   });
 }

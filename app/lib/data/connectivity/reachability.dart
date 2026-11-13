@@ -39,7 +39,7 @@ class ServerReachability {
     this.ttl = const Duration(seconds: 20),
     this.failureTtl = const Duration(seconds: 8),
     this.timeout = const Duration(milliseconds: 1800),
-  }) : _probe = probe,
+  }) : _probe = probe, // ignore: prefer_initializing_formals
        _radioUp = radioUp ?? (() => !KnownConnectivity.knownOffline),
        _now = now ?? DateTime.now;
 

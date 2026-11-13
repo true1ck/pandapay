@@ -54,10 +54,7 @@ void main() {
       expect(clock.observeDateHeader('not a date'), isFalse);
       expect(clock.hasOffset, isFalse);
 
-      expect(
-        clock.observeDateHeader('Fri, 13 Nov 2026 10:05:00 GMT'),
-        isTrue,
-      );
+      expect(clock.observeDateHeader('Fri, 13 Nov 2026 10:05:00 GMT'), isTrue);
       expect(clock.offset, const Duration(minutes: 5));
     });
 
@@ -73,15 +70,13 @@ void main() {
   group('ApiRequestHeadersClient captures the Date header', () {
     final api = Uri.parse('https://api.example.test:8443');
 
-    ApiRequestHeadersClient client(
-      http.Client inner,
-      ServerClock clock,
-    ) => ApiRequestHeadersClient(
-      inner: inner,
-      apiBaseUrl: api,
-      appVersion: () async => '1.0.0+1',
-      serverClock: clock,
-    );
+    ApiRequestHeadersClient client(http.Client inner, ServerClock clock) =>
+        ApiRequestHeadersClient(
+          inner: inner,
+          apiBaseUrl: api,
+          appVersion: () async => '1.0.0+1',
+          serverClock: clock,
+        );
 
     test('2xx API response updates the clock', () async {
       final clock = ServerClock();
@@ -90,9 +85,7 @@ void main() {
           (_) async => http.Response(
             '{}',
             200,
-            headers: {
-              'date': 'Fri, 13 Nov 2026 10:00:00 GMT',
-            },
+            headers: {'date': 'Fri, 13 Nov 2026 10:00:00 GMT'},
           ),
         ),
         clock,
@@ -103,7 +96,10 @@ void main() {
 
     test('missing Date header leaves the clock alone', () async {
       final clock = ServerClock();
-      final c = client(MockClient((_) async => http.Response('{}', 200)), clock);
+      final c = client(
+        MockClient((_) async => http.Response('{}', 200)),
+        clock,
+      );
       await c.get(Uri.parse('https://api.example.test:8443/transactions'));
       expect(clock.hasOffset, isFalse);
     });
@@ -133,10 +129,7 @@ void main() {
           (_) async => http.Response(
             '{}',
             200,
-            headers: {
-              'date': 'Fri, 13 Nov 2026 10:00:00 GMT',
-              'age': '3600',
-            },
+            headers: {'date': 'Fri, 13 Nov 2026 10:00:00 GMT', 'age': '3600'},
           ),
         ),
         clock,

@@ -36,8 +36,9 @@ void main() {
     final clock = ServerClock(deviceNow: () => device)
       ..observeServerTime(device.add(const Duration(minutes: 3)));
     final queue = SyncQueue(appDb, serverClock: clock);
-    final shifted =
-        device.add(const Duration(minutes: 3)).millisecondsSinceEpoch;
+    final shifted = device
+        .add(const Duration(minutes: 3))
+        .millisecondsSinceEpoch;
 
     queue.enqueueUpdate(
       entity: 'transactions',
@@ -91,6 +92,9 @@ void main() {
       fields: {'note': 'a'},
     );
     final clockMs = queue.pending().single.fieldClocks['note'] as int;
-    expect(clockMs, inInclusiveRange(before, DateTime.now().millisecondsSinceEpoch));
+    expect(
+      clockMs,
+      inInclusiveRange(before, DateTime.now().millisecondsSinceEpoch),
+    );
   });
 }
