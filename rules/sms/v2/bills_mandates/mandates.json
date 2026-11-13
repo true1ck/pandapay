@@ -3351,5 +3351,76 @@
     "status": "active",
     "createdBy": "baseline",
     "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-EXEC-UPI-TOWARDS-B",
+    "version": 1,
+    "family": "mandate_exec",
+    "senders": [
+      "*"
+    ],
+    "priority": 305,
+    "match": {
+      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:debited|deducted)\\s+from\\s+(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+towards\\s+(?<payee>[a-z][a-z0-9 .&'-]{1,60}?)\\s+umrn\\s*:?\\s*(?<ref_umrn>[a-z0-9@_-]+)",
+      "flags": "i",
+      "rejectAny": [
+        "will be",
+        "failed",
+        "declined",
+        "blocked",
+        "created",
+        "revoked",
+        "cancel",
+        "approved"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "unknown",
+          "rail": "upi",
+          "mandateRef": {
+            "from": "ref_umrn"
+          }
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payee",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "AD-HDFCBK-S",
+        "body": "PAYMENT ALERT! INR 150.00 deducted from HDFC Bank A/C No 1234 towards Example Finance UMRN: HDFC0000000000001",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AD-HDFCBK-S",
+        "body": "PAYMENT ALERT! INR 4000.00 will be deducted from HDFC Bank A/C No 1234 towards Example Finance India Private Lim UMRN: HDFC0000000000002",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-13T00:00:00Z"
   }
 ]

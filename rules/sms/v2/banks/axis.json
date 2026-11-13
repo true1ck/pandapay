@@ -3216,7 +3216,7 @@
   },
   {
     "id": "AXIS-AUTOPAY-ACTIVATION-MANDATE",
-    "version": 1,
+    "version": 2,
     "family": "mandate",
     "senders": [
       "AXISBK"
@@ -3231,7 +3231,12 @@
         "factType": "mandate",
         "attrs": {
           "phase": "created",
-          "merchantName": "OpenAILLC"
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
         },
         "amounts": [],
         "instrument": {
@@ -3245,19 +3250,153 @@
     "examples": [
       {
         "sender": "AX-AXISBK-S",
-        "body": "AutoPay activation successful. Txn amt: INR 0.00 Merchant: OpenAILLC Axis Bank Card no.: XX7105",
+        "body": "AutoPay activation successful. Txn amt: INR 0.00 Merchant: ExampleAI Axis Bank Card no.: XX1234",
         "expectFactTypes": [
           "mandate"
         ]
       },
       {
         "sender": "AX-AXISBK-S",
-        "body": "AutoPay cancelled for OpenAILLC Axis Bank Card no.: XX7105",
+        "body": "AutoPay cancelled for ExampleAI Axis Bank Card no.: XX1234",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "retired",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-13T00:00:00Z"
+  },
+  {
+    "id": "AXIS-AUTOPAY-ACTIVATION-MANDATE-B",
+    "version": 1,
+    "family": "mandate",
+    "senders": [
+      "AXISBK"
+    ],
+    "priority": 690,
+    "match": {
+      "pattern": "autopay\\s+activation\\s+successful[\\s\\S]{0,30}?txn\\s+amt:\\s*(?:inr|rs\\.?|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+merchant:\\s*(?<m>[a-z0-9&.' _*-]+?)\\s+axis\\s+bank\\s+card\\s+no\\.:\\s*(?:[x*•.]+\\s*)?(?<mask>\\d{2,6})",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        "amounts": [],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "axis",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "AutoPay activation successful. Txn amt: INR 0.00 Merchant: ExampleAI Axis Bank Card no.: XX1234",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "AutoPay cancelled for ExampleAI Axis Bank Card no.: XX1234",
         "expectFactTypes": []
       }
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-08T00:00:00Z"
+    "updatedAt": "2026-11-13T00:00:00Z"
+  },
+  {
+    "id": "AXIS-CARD-SPEND-ONELINE-B",
+    "version": 1,
+    "family": "card_spend",
+    "senders": [
+      "AXISBK",
+      "AXISBN",
+      "AXISCC",
+      "AXISMB"
+    ],
+    "priority": 777,
+    "match": {
+      "pattern": "^spent\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+axis\\s+bank\\s+(?:credit\\s+)?card\\s+no\\.?\\s*[x*•.]*(?<card>\\d{2,16})\\s+(?<date>\\d{1,2}-\\d{1,2}-\\d{2,4}\\s+\\d{2}:\\d{2}:\\d{2}\\s+(?:IST|UTC|GMT))\\s+(?!axis\\s+bill\\b)(?<m>[^\\n]+?)\\s+avl\\s+(?:cr(?:edit)?\\.?\\s*)?(?:limit|lmt)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "declined",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yy HH:mm:ss zzz",
+            "dd-MM-yyyy HH:mm:ss zzz",
+            "dd-MM-yy",
+            "dd-MM-yyyy"
+          ]
+        },
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "axis",
+          "maskFrom": "card"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-AXISBK-S",
+        "body": "Spent INR 500 Axis Bank Card no. XX1234 01-10-26 10:15:30 IST FLIPKART PA Avl Limit: INR 80000 Not you? SMS BLOCK 1234 to 919900000000",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AD-AXISBK-S",
+        "body": "Spent INR 1000 Axis Bank Card no. XX1234 02-10-26 14:20:45 IST MYNTRA DESI Avl Limit: INR 75000 Not you? SMS BLOCK 1234 to 919900000000",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-AXISBK-S",
+        "body": "Declined Spent INR 500 Axis Bank Card no. XX1234 01-10-26 10:15:30 IST FLIPKART PA Avl Limit: INR 80000",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-13T00:00:00Z"
   }
 ]

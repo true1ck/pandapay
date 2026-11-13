@@ -109,7 +109,9 @@ void main() {
   test('money in: the SMS Money-in screen and the transactions agree on income', () {
     send('VM-NEWBNK-S', 'Dear Customer, your A/c XX9988 has been credited with Rs 50,000.00 towards SALARY on 01-11-2026.', '2026-11-01');
     send('VM-NEWBNK-S', 'You have received Rs 2,000.00 from Priya S in your account ending 5566 via UPI on 07-11-2026.', '2026-11-07');
-    send('VM-NEWBNK-S', 'Dear Customer, amount of Rs 20,000 has been received by your wallet A/c. Check it https://x.example Sample Loans', '2026-11-08');
+    // A genuine wallet credit prints the updated balance. (A lender lure,
+    // "received by your wallet A/c. Check it https://...", is ignored.)
+    send('VM-NEWBNK-S', 'Dear Customer, amount of Rs 20,000 has been received by your wallet A/c. Updated wallet balance is Rs 25,000.', '2026-11-08');
     final list = moneyIn(facts(), events(), DateTime.utc(1900), DateTime.utc(2200));
     final screenTotal = list
         .where((i) => i.kind != 'refund')

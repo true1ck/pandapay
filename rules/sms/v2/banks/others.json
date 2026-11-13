@@ -37234,5 +37234,157 @@
     "status": "active",
     "createdBy": "baseline",
     "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "GEN-ACCT-SALARY-NARRATION-C1-B",
+    "version": 1,
+    "family": "salary",
+    "senders": [
+      "*"
+    ],
+    "priority": 296,
+    "match": {
+      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited)\\s+(?:to|in|into)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\s+for\\s+(?:[a-z0-9]{3,14}-)?(?<payer>[a-z][a-z0-9 .&']{2,60}?)-(?:salary|payroll|wages)\\b[\\s\\S]*?\\bbal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "salary",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VD-HDFCBK-S",
+        "body": "Update! INR 50,000.00 deposited in HDFC Bank A/c XX1234 on 30-OCT-26 for A2AINT01-EXAMPLE TECHNOLOGIES PVT LTD-Salary-Salary Oct 2026.Avl bal INR 1,50,000.00. Cheque deposits in A/C are subject to clearing",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VD-HDFCBK-S",
+        "body": "Update! INR 50,000.00 could not be deposited in HDFC Bank A/c XX1234 on 30-OCT-26 for A2AINT01-EXAMPLE TECHNOLOGIES PVT LTD-Salary-Salary Oct 2026.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-13T00:00:00Z"
   }
 ]

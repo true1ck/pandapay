@@ -1,0 +1,76 @@
+[
+  {
+    "rule": "IGN-LOAN-LURE-WALLET-CREDIT",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Customer, Amount of Rs. 15,000 has been received by your wallet A/c. Check it http://Kx7.in/EXAMPL/ae7l34 Example Loans"
+      },
+      {
+        "sender": "VK-EXAMPL-S",
+        "body": "Dear User, Good News! Your Wallet A/c has been credited successfully with Rs.11,000 on 10-10-24. Check now http://Kx7.in/EXAMPL/5vnMhq Example Finance"
+      },
+      {
+        "sender": "AX-EXAMPL-S",
+        "body": "Attention! Rs.15,000 has been credited to your wallet on 31-10-2024. Please log in to verify - http://Kx17.in/EXAMPL/GVOQui Example Loan"
+      },
+      {
+        "sender": "VK-EXAMPL-S",
+        "body": "Dear Customer, Rs.15,000 credited to your wallet. Tap here http://Kx10.in/EXAMPL/hX2LBy Example Finance"
+      },
+      {
+        "sender": "VK-EXAMPL-S",
+        "body": "Dear User, Rs 10,000 has been credited to your wallet. Open http://Kx10.in/EXAMPL/hX2LBy to withdraw"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "AD-EXAMPL",
+        "body": "You have received Rs. 400 in your Example wallet via Pocket UPI from SOME SHOP. Your updated wallet balance is Rs. 1000.00. Check it at https://example.com/wallet"
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Service Update Asha, We have received your repayment towards your Pay Later a/c on 5th June. You got a personal loan offer upto Rs 4,00,000. Check now https://example.com/loan"
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Rs.15000.00 credited to A/c XX1234 on 30-10-26 by UPI Ref 123456789012. Avl Bal Rs.20,000.00. Check https://example.com/app"
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Rs.50 cashback credited to your Example wallet. Check passbook https://example.com/p"
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Rs 500 credited to your Example wallet successfully. Check now https://exm.pe/x"
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your account has been successfully credited with Rs 5,000. Check now https://example.com/x"
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Refund of Rs 299 has been credited to your Example Pay wallet. Check details https://exm.in/d/B0ABCDE1"
+      }
+    ]
+  },
+  {
+    "rule": "IGN-LOAN-OFFER-CREDITED",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Customer, Limited period offer, Get Rs.5,00,000 credited to your account. Complete the application - http://1kx.in/EXAMPL/0HLABI Example Finance"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Rs.5,00,000 credited to A/c XX1234 on 30-10-26. Avl Bal Rs.5,10,000.00. Limited period offer on cards at https://example.com"
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Limited period offer! Get Rs 500 credited to your account as cashback. Apply at https://example.com/offer"
+      }
+    ]
+  }
+]

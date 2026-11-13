@@ -1,0 +1,79 @@
+[
+  {
+    "id": "FX-SPEND-CARD-LAYOUT-DATE-IST-MERCHANT-01",
+    "version": 1,
+    "family": "card_spend_foreign",
+    "senders": [
+      "AXISBK"
+    ],
+    "priority": 345,
+    "match": {
+      "pattern": "\\bspent\\s+(?<cur>(?:usd|eur|gbp|aed|sgd|aud|cad|jpy|chf|cny|hkd|nzd|sar|thb|myr)(?![a-z]))\\s*(?<fx>\\d[\\d,]*(?:\\.\\d+)?)\\s+(?:[a-z]+\\s+bank\\s+)?card\\s+no\\.?\\s*:?\\s*[x*•.]*(?<mask>\\d{2,6})\\s+(?<dt>\\d{1,2}-\\d{1,2}-\\d{2,4}\\s+\\d{2}:\\d{2}:\\d{2})(?:\\s+ist)?\\s+(?<merchant>[^\\n]+?)\\s+avl\\s+limit",
+      "flags": "i",
+      "rejectAny": [
+        "declined",
+        "failed",
+        "unsuccessful",
+        "reversal",
+        "reversed",
+        "refund"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "fx",
+            "unitFrom": "cur"
+          }
+        ],
+        "occurredAt": {
+          "from": "dt",
+          "formats": [
+            "dd-MM-yy HH:mm:ss",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd/MM/yy HH:mm:ss",
+            "dd/MM/yyyy HH:mm:ss"
+          ]
+        },
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "axis",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "Spent USD 9.68\nAxis Bank Card no. XX1234\n13-01-26 10:00:00 IST\nEXAMPLE SAAS, INC\nAvl Limit: INR 15000\nNot you? SMS BLOCK 1234 to 919900000000",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-AXISBK-S",
+        "body": "Txn reversal of USD 10 at EXAMPLE SAAS, INC was successful.\nCard no. XX1234\n11-12-25 10:00:00 IST\nAvl Limit: INR 16000\nAxis Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-13T00:00:00Z"
+  }
+]

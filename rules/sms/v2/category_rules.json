@@ -6648,5 +6648,159 @@
     "category": "online",
     "priority": 600,
     "source": "catalogue"
+  },
+  {
+    "merchantKey": "PETROLEU",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FLIPKA",
+    "match": "exact",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FLIPKARTINTERNE",
+    "match": "prefix",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "WELLNESS FOREVE",
+    "match": "prefix",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "WELLNESSFOREVER",
+    "match": "prefix",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TURTLEM",
+    "match": "exact",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TURTLEMINT",
+    "match": "prefix",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ALEGRA COMMUNICATION",
+    "match": "prefix",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "HUNGERBOX",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CAPITAL FLOAT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "emi",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CAPITALFLOAT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "emi",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PAYU FINANCE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "emi",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "GODIGIT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 600,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "LIBERTY GENERAL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 600,
+    "source": "catalogue"
   }
 ]

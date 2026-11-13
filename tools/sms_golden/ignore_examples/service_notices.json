@@ -1,0 +1,446 @@
+[
+  {
+    "rule": "IGN-AXIO-PAYLATER-LIMIT-UPDATE",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Approved credit for your Pay Later account has been modified. Open the app to see your new limit."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Approved credit for your Pay Later account is Rs 5000 this month."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-AXIO-SERVICE-UPDATE",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Service Update, by continuing to make timely EMI payments you keep a strong repayment record."
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your Pay Later a/c has got you a personal loan offer. Tap to view."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your Pay Later a/c bill of Rs 500 is due on 05-12-2026."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-AXIS-DECLINED-USAGE-LIMIT",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Txn on Axis Bank Credit Card XX1234 has been declined as amt exceeds usage limit set by you."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Txn of INR 500 on Axis Bank Credit Card XX1234 was successful."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-BANK-MAINTENANCE-SERVICE",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Services are restored. Thank you for your patience."
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Net banking will be unavailable due to scheduled maintenance tonight."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your account has been debited with Rs 10 on 05-12-2026."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-BURGERKING-CROWNS",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "100 Crowns credited to your BK account. Redeem them on your next order."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Rs 100 credited to your account on 05-12-2026."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-CANBNK-APY-MAINTAIN-BAL",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Atal Pension Yojana: please maintain sufficient balance in your account before the 5th."
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your Atal Pension Yojana contribution amount will be debited next month."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your pension of Rs 1000 has been credited on 05-12-2026."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-CANBNK-STRIKE-NOTICE",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "In view of bank strike on Monday, branch services may be affected."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your branch visit is scheduled for Monday at 11 AM."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-DELIVERY-RETURN-UPDATE",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Pickup arranged for your return of order 1234. Keep the item ready."
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your return request received for order 1234."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your order 1234 is out for delivery today."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-DOTGOI-SANCHAR-SAATHI",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Download the sancharsaathi app to report suspected fraud calls."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Download the Example Bank app to pay your bills."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-EKART-DELIVERY-UPDATE",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Ekart Update: your package will arrive today between 10 AM and 2 PM."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your order paid via Ekart Pay of Rs 500 was successful."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-EPFO-UAN-LINKED",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your UAN 1234X5678 has been linked by establishment Example Pvt Ltd."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your UAN 1234X5678 is active. Passbook available online."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-FITGYM-WELCOME",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Welcome to FitGym Club! Your membership starts today."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your gym membership renews on 05-12-2026."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-HPPAY-PROSPECTIVE-COINS",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "50 Happy coins shall be credited shortly for your order."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "50 Happy coins have been credited to your account."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-INDIALENDS-LOAN-REQ",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your loan request for Rs 50000 has been received. We will contact you shortly."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your loan of Rs 50000 has been disbursed to your account."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-INSURANCE-EXPIRING-RENEWAL",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your insurance policy for the scooter is expiring soon. Renew today."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your insurance premium of Rs 1200 was paid on 05-12-2026."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-LIC-PREMIUM-ADJUSTED",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Premium due from 01/01/2026 is adjusted on 05/02/2026 against your policy."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Premium due on 01/01/2026 is Rs 1000. Please pay on time."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-MCX-CLIENT-FUNDS",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Client Funds on 05/11/2026.MCX ledger balance statement is attached."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Client statement on 05/11/2026 for your NSE account is ready."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-MINTPAY-LOW-BALANCE",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your Mintpay balance is low. Add funds to continue."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your Mintpay payment of Rs 500 is due on 05-12-2026."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-MOBIKWIK-COLLECT-REQ",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Example Shop has requested money on MobiKwik app. Please approve."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Rs 500 has been debited from your MobiKwik wallet."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-MOBIKWIK-COLLECT-REQUEST",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Mobikwik: Collect request initiated by Example Shop for Rs 100. Authorise the request by entering UPI PIN in your app."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Mobikwik: Rs 100 has been added to your wallet."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-PANDAPAY-QA-PROBE",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Probe message from PandaPay QA 0042."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "A message from PandaPay support about your account."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-PROTEAN-APY-PRAN",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "APY(PRAN 1234567890) Contribution of Rs 210 credited to your PRAN on 05/11/2026."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "APY(PRAN 1234567890) statement for the year is ready to download."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-RELGEN-INSURANCE-RENEWAL",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Please renew your Two Wheeler Insurance before it lapses."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your car loan EMI of Rs 5000 is due on 05-12-2026."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-VICARE-DAILY-BALANCE",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your daily free sms balance is 100 for today."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your recharge of Rs 199 was successful."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-VICARE-POSTCALL-BALANCE",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Last-Call:00:01:07, Charge:Rs0.00, Main-Bal:Rs0.00, Pack-Exp:25-Jan-2027. For balance dial *121#"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Last-Call:00:01:07, Charge:Rs2.50, Main-Bal:Rs10.00, Pack-Exp:25-Jan-2027."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-WELLNESS-FOREVER-EBILL",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Bill amount Rs. 1,250.00 for Bill No AB/123/45 dated 05-12-2026. View your e-bill at https://example.invalid/b"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your bill amount of Rs 1,250.00 is due on 05-12-2026."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-PROMO-GENERIC",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Flat 20% off on shoes this weekend. Use code SAVE20 at checkout."
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Upto 50% off on all orders. Shop now and grab the sale."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Congratulations! Your 1-month ExampleTV subscription is now activated. Enjoy the offer: 20% off on your next recharge. T&C apply."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-TELECOM-JIO-SERVICE-PROMO",
+    "positive": [
+      {
+        "sender": "VM-JIONET-S",
+        "body": "Your JioTunes subscription is now activated. Set your caller tune and enjoy."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-JIONET-S",
+        "body": "Congratulations! Your 1-month ExampleTV Hotstar subscription is now activated on Jio number 9999999999."
+      },
+      {
+        "sender": "VM-JIONET-S",
+        "body": "Your Netflix subscription is now activated with your Jio plan."
+      }
+    ]
+  }
+]

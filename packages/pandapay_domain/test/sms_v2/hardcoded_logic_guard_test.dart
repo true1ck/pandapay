@@ -228,6 +228,10 @@ List<File> _dartFiles(Directory root) {
 void main() {
   // `dart test` runs from the package root.
   final repo = Directory.current.parent.parent;
+  // Compare paths with forward slashes: on Windows `File.path` uses backslashes,
+  // which would never equal the allow-list keys below.
+  final repoPath = repo.path.replaceAll(r'\', '/');
+  String slashed(String path) => path.replaceAll(r'\', '/');
 
   test('the guard recognises brand names and ignores look-alikes', () {
     expect(_brandsIn('VM-HDFCBK-S').toList(), ['hdfc']);
@@ -243,15 +247,16 @@ void main() {
   });
 
   test('no merchant, bank or brand name is hard-coded in SMS v2 Dart', () {
-    final allowByFile = {for (final a in _allow) '${repo.path}/${a.file}': a};
+    final allowByFile = {for (final a in _allow) '$repoPath/${a.file}': a};
     final hits = <_Hit>[];
     final tolerated = <String, Set<String>>{};
     var scanned = 0;
     for (final r in _roots) {
       for (final f in _dartFiles(Directory('${repo.path}/$r'))) {
         scanned++;
-        final rel = f.path.substring(repo.path.length + 1);
-        final allow = allowByFile[f.path];
+        final path = slashed(f.path);
+        final rel = path.substring(repoPath.length + 1);
+        final allow = allowByFile[path];
         if (allow != null && allow.tokens == null) continue;
         final lexed = _lex(f.readAsStringSync());
         void scan(List<(int, String)> parts, String where) {
