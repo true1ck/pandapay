@@ -1,3 +1,4 @@
+import '../../activity/transaction_badge.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -321,6 +322,8 @@ class SettledCard extends ConsumerWidget {
                       [date, ?category].join(' · '),
                       style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                     ),
+                    if (txnBadgeKind(e) case final badge?)
+                      TransactionBadgePill(kind: badge),
                   ],
                 ),
               ),

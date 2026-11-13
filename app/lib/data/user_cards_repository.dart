@@ -2757,6 +2757,12 @@ class TransactionTag {
 
 class TransactionEntry {
   final Map<String, dynamic>? selfTransferRule;
+
+  /// What kind of transfer this is, for a row whose kind is `transfer`:
+  /// `self` (between the person's own accounts), `family` (to or from a family
+  /// member the person marked), `card_bill`, `wallet`. Null
+  /// when the row is not a transfer, or was written before this was recorded.
+  final String? transferType;
   final String? sourceKey;
   final String id;
   final int pipelineVersion;
@@ -2804,6 +2810,18 @@ class TransactionEntry {
   /// for a cardless UPI transaction while the API rolls out.
   final bool instrumentKnown;
   final TxnEntryKind entryKind;
+
+  /// Money the person moved between their own accounts. Rows written before
+  /// [transferType] existed are recognised by the label the ledger gave them.
+  bool get isSelfTransfer =>
+      entryKind == TxnEntryKind.transfer &&
+      (transferType == 'self' ||
+          (transferType == null &&
+              merchantName == 'Transfer between your accounts'));
+
+  /// Money the person moved to or from a family member they marked.
+  bool get isFamilyTransfer =>
+      entryKind == TxnEntryKind.transfer && transferType == 'family';
   final String source;
 
   /// The latest time an SMS observation for this transaction was received by
@@ -2856,6 +2874,7 @@ class TransactionEntry {
 
   const TransactionEntry({
     this.selfTransferRule,
+    this.transferType,
     this.sourceKey,
     required this.id,
     this.pipelineVersion = 1,
@@ -2928,6 +2947,7 @@ class TransactionEntry {
       'instrument': instrumentKnown ? instrument.wireValue : null,
       'entry_kind': entryKind.wireValue,
       'self_transfer_rule': selfTransferRule,
+      if (transferType != null) 'transfer_type': transferType,
       'source': source,
       'sms_received_at': smsReceivedAt?.toIso8601String(),
       'observations': observations
@@ -2952,6 +2972,7 @@ class TransactionEntry {
   }) {
     return TransactionEntry(
       selfTransferRule: selfTransferRule,
+      transferType: transferType,
       sourceKey: sourceKey,
       id: id,
       pipelineVersion: pipelineVersion,
@@ -3031,6 +3052,7 @@ class TransactionEntry {
     return TransactionEntry(
       selfTransferRule: (json['self_transfer_rule'] as Map?)
           ?.cast<String, dynamic>(),
+      transferType: json['transfer_type'] as String?,
       sourceKey: json['source_key'] as String?,
       id: json['id'] as String,
       pipelineVersion: (json['pipeline_version'] as num?)?.toInt() ?? 1,

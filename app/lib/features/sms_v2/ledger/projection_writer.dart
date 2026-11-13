@@ -5,6 +5,7 @@ import 'package:pandapay_domain/sms_v2_category.dart';
 import 'package:pandapay_domain/sms_v2_ledger.dart';
 import '../../../data/local/financial_store.dart';
 import '../../../data/user_cards_repository.dart';
+import '../personal/owner_identity_store.dart';
 import '../personal/personal_merchant_aliases.dart';
 import '../storage/ledger_store.dart';
 import '../storage/subscription_store.dart';
@@ -20,6 +21,7 @@ TransactionEntry? transactionForEvent(
   Map<String, String> categoryIdBySlug = const {},
   Map<String, String> instrumentIdByFactId = const {},
   Map<String, PersonalMerchantAlias> merchantAliases = const {},
+  v2.OwnerIdentity? marks,
 }) {
   final kind = transactionKindForEvent(event);
   final fact = moneyFactForEvent(event, facts);
@@ -55,6 +57,16 @@ TransactionEntry? transactionForEvent(
       : printedName;
   // A card bill is a payment to the user's own card, however it was paid
   // (bank transfer, CHEQ, CRED, BBPS), so it is labelled as one.
+  final family =
+      event.type == v2.EventType.ownTransfer &&
+      !(marks?.isMarkedSelfOnce(fact.sourceKey) ?? false) &&
+      (marks?.isFamilyTransfer(
+            name: fact.counterparty?.name,
+            vpa: fact.counterparty?.vpa,
+            mask: fact.counterparty?.accountMask,
+            sourceKey: fact.sourceKey,
+          ) ??
+          false);
   final merchant = event.type == v2.EventType.cardBillPayment
       ? 'Credit card payment'
       // The bank's own cashback credit names no shop; "UNKNOWN" read as a
@@ -62,7 +74,7 @@ TransactionEntry? transactionForEvent(
       : event.type == v2.EventType.cashback && printed == null
       ? 'Cashback received'
       : event.type == v2.EventType.ownTransfer && printed == null
-      ? 'Transfer between your accounts'
+      ? (family ? 'Family transfer' : 'Transfer between your accounts')
       : fact.purpose == v2.MovementPurpose.walletTopup &&
             event.type == v2.EventType.purchase
       ? external?.counterpartyKey
@@ -90,6 +102,14 @@ TransactionEntry? transactionForEvent(
         : TaxonomyRegistry.v1.categoryFor(slug)?.displayName,
     instrument: method,
     entryKind: TxnEntryKind.fromJson(kind),
+    transferType: kind != 'transfer'
+        ? null
+        : switch (event.type) {
+            v2.EventType.ownTransfer => family ? 'family' : 'self',
+            v2.EventType.cardBillPayment => 'card_bill',
+            v2.EventType.walletTopup => 'wallet',
+            _ => null,
+          },
     userCardId:
         method == TxnInstrument.creditCard || method == TxnInstrument.debitCard
         ? instrument?.userCardId
@@ -145,6 +165,12 @@ class ProjectionWriter {
       ledger.db,
       namespace: ledger.namespace,
     ).load();
+    // The payees and single payments the person marked as family or as their
+    // own decide the badge a transfer carries (see [OwnerIdentity]).
+    final marks = OwnerIdentityStore(
+      ledger.db,
+      namespace: ledger.namespace,
+    ).marksOnly();
     final existing = <String, TransactionEntry>{};
     final legacyBySource = <String, List<TransactionEntry>>{};
     final db = ledger.db;
@@ -213,6 +239,7 @@ class ProjectionWriter {
             categoryIdBySlug: categoryIdBySlug,
             instrumentIdByFactId: instrumentIdByFactId,
             merchantAliases: merchantAliases,
+            marks: marks,
           );
           var old = existing[e.eventId];
           if (old == null && row != null) {

@@ -87,7 +87,7 @@ void main() {
         .map((r) => r['name'])
         .toSet();
     expect(tables, containsAll(['v2_subscriptions', 'v2_subscription_history']));
-    expect(SmsV2Schema.installedVersion(fresh), 4);
+    expect(SmsV2Schema.installedVersion(fresh), SmsV2Schema.version);
   });
 
   test('a database already at version 3 gains the tables and keeps its data', () {
@@ -101,7 +101,7 @@ void main() {
       "INSERT INTO v2_events (namespace, event_id, type, status, payload, dirty) VALUES ('a','e1','purchase','complete','{}',0)",
     );
     SmsV2Schema.ensure(old);
-    expect(SmsV2Schema.installedVersion(old), 4);
+    expect(SmsV2Schema.installedVersion(old), SmsV2Schema.version);
     expect(old.select('SELECT * FROM v2_events'), hasLength(1));
     expect(old.select('SELECT * FROM v2_subscriptions'), isEmpty);
   });
@@ -609,7 +609,7 @@ void main() {
     }
 
     void expectKept(Database old) {
-      expect(SmsV2Schema.installedVersion(old), 4);
+      expect(SmsV2Schema.installedVersion(old), SmsV2Schema.version);
       expect(old.select('SELECT fact_id FROM v2_facts').single['fact_id'], 'f1');
       expect(old.select('SELECT event_id FROM v2_events').single['event_id'], 'e1');
       expect(old.select('SELECT key FROM v2_sync_state').single['key'], 'k');
@@ -647,12 +647,12 @@ void main() {
       );
     });
 
-    test('a database that never had the module reaches 4', () {
+    test('a database that never had the module reaches the current version', () {
       final fresh = sqlite3.openInMemory();
       addTearDown(fresh.dispose);
       expect(SmsV2Schema.installedVersion(fresh), isNull);
       SmsV2Schema.ensure(fresh);
-      expect(SmsV2Schema.installedVersion(fresh), 4);
+      expect(SmsV2Schema.installedVersion(fresh), SmsV2Schema.version);
     });
 
     test('ensure twice changes nothing and keeps the rows', () {

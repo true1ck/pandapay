@@ -95,9 +95,11 @@ TransactionEntry _txn({
   String userCardId = 'uc1',
   TxnEntryKind entryKind = TxnEntryKind.spend,
   String source = 'manual',
+  String? transferType,
 }) {
   return TransactionEntry(
     id: id,
+    transferType: transferType,
     amount: amount,
     occurredAt: occurredAt,
     merchantName: merchantName,
@@ -305,6 +307,90 @@ void main() {
     expect(find.text('Unknown sender'), findsOneWidget);
     expect(find.text('Corner Shop'), findsOneWidget);
     expect(find.text('UNKNOWN'), findsNothing);
+  });
+
+  testWidgets('tags money moved between a person\'s own accounts as a Self transfer', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    final repo = _FakeUserCardsRepository([
+      _txn(
+        id: 'self',
+        amount: Money.fromRupees(1500),
+        occurredAt: now,
+        merchantName: 'ASHA RAO',
+        entryKind: TxnEntryKind.transfer,
+        transferType: 'self',
+      ),
+      // Written before the type was recorded: recognised by the ledger's label.
+      _txn(
+        id: 'old',
+        amount: Money.fromRupees(700),
+        occurredAt: now,
+        merchantName: 'Transfer between your accounts',
+        entryKind: TxnEntryKind.transfer,
+      ),
+      _txn(
+        id: 'bill',
+        amount: Money.fromRupees(900),
+        occurredAt: now,
+        merchantName: 'Credit card payment',
+        entryKind: TxnEntryKind.transfer,
+        transferType: 'card_bill',
+      ),
+      _txn(
+        id: 'shop',
+        amount: Money.fromRupees(100),
+        occurredAt: now,
+        merchantName: 'Corner Shop',
+      ),
+    ]);
+    await _pump(tester, repo: repo, cards: const []);
+
+    expect(find.text('Self transfer'), findsNWidgets(2));
+    expect(find.text('ASHA RAO'), findsOneWidget);
+    expect(find.text('Credit card payment'), findsOneWidget);
+    expect(find.text('Card bill'), findsOneWidget);
+    expect(find.text('Corner Shop'), findsOneWidget);
+  });
+
+  testWidgets('every kind of transfer carries its own badge, and a shop carries none', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    final repo = _FakeUserCardsRepository([
+      _txn(
+        id: 'family',
+        amount: Money.fromRupees(2000),
+        occurredAt: now,
+        merchantName: 'KABIR RAO',
+        entryKind: TxnEntryKind.transfer,
+        transferType: 'family',
+      ),
+      _txn(
+        id: 'wallet',
+        amount: Money.fromRupees(500),
+        occurredAt: now,
+        merchantName: 'Paytm Wallet',
+        entryKind: TxnEntryKind.transfer,
+        transferType: 'wallet',
+      ),
+      _txn(
+        id: 'shop',
+        amount: Money.fromRupees(100),
+        occurredAt: now,
+        merchantName: 'Corner Shop',
+      ),
+    ]);
+    await _pump(tester, repo: repo, cards: const []);
+
+    expect(find.text('Family transfer'), findsOneWidget);
+    expect(find.text('Wallet top-up'), findsOneWidget);
+    expect(find.text('Self transfer'), findsNothing);
+    expect(find.text('Corner Shop'), findsOneWidget);
+    // The badge says what the row is, so the plain "Transfer" label is not
+    // repeated in its subtitle.
+    expect(find.textContaining('· Transfer'), findsNothing);
   });
 
   testWidgets('groups transactions by day and shows a spend summary', (

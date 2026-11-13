@@ -11,7 +11,7 @@ abstract final class SmsV2Schema {
 
   /// Bump when a later package adds columns or tables; add the change to
   /// [_migrations] under the new number.
-  static const int version = 4;
+  static const int version = 5;
 
   /// Tables created by this module, in dependency order.
   static const List<String> tableNames = [
@@ -30,6 +30,8 @@ abstract final class SmsV2Schema {
     'v2_bulk_change_items',
     'v2_subscriptions',
     'v2_subscription_history',
+    'v2_owner_identity',
+    'v2_owner_signals',
   ];
 
   static const String _versionTable = 'sms_v2_schema_version';
@@ -225,6 +227,31 @@ CREATE TABLE IF NOT EXISTS v2_subscription_history (
   PRIMARY KEY (namespace, series_id, seq)
 )''',
       'CREATE INDEX IF NOT EXISTS idx_v2_subscription_history_at ON v2_subscription_history (namespace, series_id, at)',
+    ],
+    // Version 5 adds who the account owner is. It is its own step because a phone
+    // that already ran version 4 never runs version 4 again.
+    5: [
+      // Who the account owner is, for telling a transfer between their own
+      // accounts from a payment to someone else. `entry` is the string the
+      // linker reads (a name, `vpa:`, `payee:`, `mask:` or a `not:` rejection);
+      // `source` is user (typed), marked (a payment they flagged), inferred
+      // (learned from their messages) or dismissed (an inferred name they
+      // removed, so it is not learned again).
+      '''
+CREATE TABLE IF NOT EXISTS v2_owner_identity (
+  namespace TEXT NOT NULL,
+  entry TEXT NOT NULL,
+  source TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (namespace, entry)
+)''',
+      // How often each greeting name was seen and from how many senders.
+      '''
+CREATE TABLE IF NOT EXISTS v2_owner_signals (
+  namespace TEXT NOT NULL PRIMARY KEY,
+  payload TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)''',
     ],
   };
 

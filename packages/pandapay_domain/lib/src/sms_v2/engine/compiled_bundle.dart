@@ -1,5 +1,6 @@
 import '../contract/enums.dart';
 import '../contract/rule_bundle.dart';
+import '../linker/owner_vocabulary.dart';
 import '../solver/evidence_solver.dart';
 import '../solver/solver_pack.dart';
 import 'sender.dart';
@@ -317,6 +318,9 @@ class CompiledBundle {
     String? solverError;
     final pack = bundle.solverPack;
     if (pack != null) {
+      // Who-is-the-owner vocabulary rides in the same signed section. It does
+      // not depend on the solver being switched on.
+      OwnerVocabulary.installFromPackParams(pack['params']);
       try {
         final parsed = SolverPack.fromJson(pack);
         if (parsed.params.enabled) solver = EvidenceSolver(parsed);

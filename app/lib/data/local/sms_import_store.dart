@@ -3,6 +3,8 @@ import 'package:pandapay_domain/sms_v2.dart' as sms_v2;
 import '../../features/sms_import/sms_background_queue.dart';
 import '../../features/sms_import/sms_text_hint.dart';
 import '../../features/sms_v2/pipeline/intake_gate.dart';
+import '../../features/sms_v2/personal/owner_identity_store.dart';
+import '../../features/sms_v2/storage/sync_state_store.dart';
 import '../../features/sms_v2/pipeline/sms_v2_pipeline.dart';
 import 'financial_store.dart';
 import 'sms_intake_repository.dart';
@@ -25,6 +27,23 @@ class SmsImportStore {
   void capture(String namespace, QueuedSms message) =>
       _captureV2(namespace, [message]);
 
+  /// Learns the account owner's name from the greetings in [greetings]. When
+  /// the learned names change, the earlier transfers are checked again on the
+  /// next sync. Learning a name never stops a message from being captured.
+  void _learnOwnerName(
+    String namespace,
+    List<({String body, String sender})> greetings,
+  ) {
+    if (greetings.isEmpty) return;
+    try {
+      final db = store.database.db;
+      if (OwnerIdentityStore(db, namespace: namespace).noteGreetings(greetings)) {
+        final state = SyncStateStore(db, namespace: namespace);
+        if (state.get('owner:recheck') != 'revert') state.put('owner:recheck', '1');
+      }
+    } catch (_) {}
+  }
+
   void _captureV2(String namespace, List<QueuedSms> messages) {
     final pipeline = v2Pipeline;
     if (pipeline != null && pipeline.namespace != namespace) {
@@ -32,6 +51,11 @@ class SmsImportStore {
     }
     final intake = SmsIntakeRepository(store.database);
     final candidates = <sms_v2.SmsMessage>[];
+    // Greetings in messages this phone has not seen before. The services a
+    // person uses greet them by name; a name seen often, from several senders,
+    // is the account owner's. Every message is seen here, including the ones
+    // the gate drops (and whose text is never kept).
+    final greetings = <({String body, String sender})>[];
     store.batch(() {
       final db = store.database.db;
       db.execute('SAVEPOINT sms_v2_capture');
@@ -41,6 +65,13 @@ class SmsImportStore {
           final triage = classifySmsV2Intake(message.sender, message.body);
           if (triage.kind == SmsTriageKind.sensitive) continue;
           final sourceKey = smsSourceKey(namespace, message.sender, message.body);
+          if (intake.decision(namespace, sourceKey) == null &&
+              intake.capturedById(namespace, sourceKey) == null) {
+            greetings.add((
+              body: message.body,
+              sender: sms_v2.normalizeSenderBrand(message.sender).brand,
+            ));
+          }
           if (triage.kind == SmsTriageKind.unrelated || triage.kind == SmsTriageKind.promotion) {
             // The gate reads keywords and drops some real transactions, so a
             // header message it rejects gets one pass through the rules first.
@@ -102,6 +133,7 @@ class SmsImportStore {
             iosFilter: sms_v2.normalizeSenderBrand(message.sender).iosFilter,
           ));
         }
+        _learnOwnerName(namespace, greetings);
         if (pipeline != null) {
           for (var start = 0; start < candidates.length; start += 500) {
             final end = (start + 500).clamp(0, candidates.length);

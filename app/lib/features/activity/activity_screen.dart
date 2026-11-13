@@ -30,6 +30,7 @@ import 'foreign_payments_screen.dart';
 import 'deleted_transactions_screen.dart';
 import 'local_category_learning.dart';
 import '../../data/local/sms_intake_repository.dart';
+import 'transaction_badge.dart';
 import '../sms_v2/storage/outbox_store.dart';
 import '../sms_v2/sync/learning_signals.dart';
 import '../sms_v2/ui/review_controller.dart'
@@ -3573,47 +3574,6 @@ class _SummaryMetric extends StatelessWidget {
   }
 }
 
-/// The tinted pill beside a transaction title — Refund, Reversal or Transfer.
-class _MovementChip extends StatelessWidget {
-  const _MovementChip({
-    required this.label,
-    required this.tint,
-    required this.fillAlpha,
-    required this.borderAlpha,
-    this.textColor,
-  });
-
-  final String label;
-  final Color tint;
-  final double fillAlpha;
-  final double borderAlpha;
-  final Color? textColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(top: 2),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-      decoration: BoxDecoration(
-        color: tint.withValues(alpha: fillAlpha),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: tint.withValues(alpha: borderAlpha),
-          width: 0.8,
-        ),
-      ),
-      child: Text(
-        label,
-        style: BambooFonts.ui(
-          10.5,
-          weight: FontWeight.w700,
-          color: textColor ?? tint,
-        ),
-      ),
-    );
-  }
-}
-
 class _TransactionTile extends StatelessWidget {
   final TransactionEntry entry;
   final ForeignPayment? foreignPayment;
@@ -3702,13 +3662,19 @@ class _TransactionTile extends StatelessWidget {
         !isRefund &&
         !isReversal &&
         !showTransferChip;
+    // Money that moved between the person's own accounts, to family, to a card
+    // bill or into a wallet says so on the row, so it is never mistaken for
+    // spending or income.
+    final badge = txnBadgeKind(entry);
+    final showSelfChip = badge != null && badge.isTransfer;
     final nameDisplay = showTransferChip ? transferPayee : merchantDisplay;
     final subtitleParts = <String>[
       if (foreignPayment != null)
         '${foreignPayment!.originalLabel} · Foreign currency',
       isSmsImported ? '$timeLabel · SMS' : timeLabel,
       if ((entry.entryKind != TxnEntryKind.spend || isInvestmentCategory) &&
-          !showInvestmentChip)
+          !showInvestmentChip &&
+          !showSelfChip)
         entryLabel,
       if (entry.cardDisplayName != null) entry.cardDisplayName!,
       if (entry.cardDisplayName == null &&
@@ -3856,45 +3822,24 @@ class _TransactionTile extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (isRefund) ...[
+                        if (badge != null) ...[
                           const SizedBox(width: AppSpace.xs),
-                          const _MovementChip(
-                            label: 'Refund',
-                            tint: BambooInk.jade,
-                            fillAlpha: 0.12,
-                            borderAlpha: 0.3,
-                          ),
-                        ] else if (isReversal) ...[
-                          const SizedBox(width: AppSpace.xs),
-                          const _MovementChip(
-                            label: 'Reversal',
-                            tint: BambooInk.amber,
-                            fillAlpha: 0.15,
-                            borderAlpha: 0.35,
-                          ),
+                          TransactionBadgePill(kind: badge),
                         ] else if (showTransferChip) ...[
                           // Neutral: jade and amber stay reserved for the
                           // Refund/Reversal money moves.
                           const SizedBox(width: AppSpace.xs),
-                          _MovementChip(
-                            label: entry.entryKind == TxnEntryKind.transfer
+                          TransactionBadgePill.plain(
+                            entry.entryKind == TxnEntryKind.transfer
                                 ? 'Transfer'
                                 : 'Payment',
-                            tint: BambooInk.ink900,
-                            fillAlpha: 0.07,
-                            borderAlpha: 0.14,
-                            textColor: BambooInk.ink700,
                           ),
                         ] else if (showInvestmentChip) ...[
                           const SizedBox(width: AppSpace.xs),
-                          _MovementChip(
-                            label: isInvestmentReturn
+                          TransactionBadgePill.plain(
+                            isInvestmentReturn
                                 ? 'Investment return'
                                 : 'Investment',
-                            tint: BambooInk.ink900,
-                            fillAlpha: 0.07,
-                            borderAlpha: 0.14,
-                            textColor: BambooInk.ink700,
                           ),
                         ],
                       ],

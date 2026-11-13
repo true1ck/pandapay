@@ -1,4 +1,6 @@
 import '../sms_v2/ledger/providers.dart' show suspectedRefundsProvider;
+import 'transaction_badge.dart';
+import 'transfer_mark_panel.dart';
 import '../sms_v2/ui/review_controller.dart';
 import '../sms_v2/ui/transaction_actions.dart';
 import '../sms_v2/ui/why_sheet.dart';
@@ -1447,6 +1449,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                                   : entry.entryKind.label),
                           style: BambooFonts.ui(13.5, color: BambooInk.ink500),
                         ),
+                        // The same label the Activity row carries.
+                        if (txnBadgeKind(entry) != null) ...[
+                          const SizedBox(height: AppSpace.xs),
+                          TransactionBadge(entry: entry),
+                        ],
                       ],
                     ),
                   ),
@@ -1454,6 +1461,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                   ForeignTransactionInfo(transactionId: entry.id),
                   const SizedBox(height: AppSpace.md),
                   _suspectedRefundBanner(entry),
+                  TransferMarkPanel(
+                    entry: entry,
+                    onChanged: () =>
+                        ref.invalidate(transactionDetailProvider(widget.entry.id)),
+                  ),
                   _DetailRow(label: 'Card', value: _cardOrPaymentLabel(entry)),
                   if (transactionRewardLabel(entry) case final reward?)
                     _DetailRow(

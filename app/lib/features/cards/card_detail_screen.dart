@@ -1,3 +1,4 @@
+import '../activity/transaction_badge.dart';
 import '../sms_v2/ui/ledger_screens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1420,6 +1421,8 @@ class _RecentCardActivitySection extends ConsumerWidget {
                                 color: BambooInk.ink500,
                               ),
                             ),
+                            if (txnBadgeKind(txn) case final badge?)
+                              TransactionBadgePill(kind: badge),
                           ],
                         ),
                       ),

@@ -62,6 +62,14 @@ class AiWithdrawal {
         .any((event) => event.status == EventStatus.userConfirmed);
   }
 
+  /// True when the person has acted on [source] (edited it, or confirmed an
+  /// event it made). Such a source is never withdrawn.
+  bool touchedByPerson(String source) => _touchedByPerson(
+    source,
+    FactStore(_db, namespace: namespace),
+    EventStore(_db, namespace: namespace),
+  );
+
   /// Source keys whose reading still comes from this template's private rule.
   List<String> sourcesRead(String remoteHash) => [
     for (final row in _db.select(

@@ -150,6 +150,13 @@ Still on the UI isolate, in order of cost:
 5. Capture-worker contention: a UI write that lands while the worker commits waits up to 3 s
    (busy_timeout) and then throws SQLITE_BUSY. Watch logcat for `database is locked`; if it
    shows up, shorten worker transactions or queue UI writes behind the worker.
+6. `OwnerRecheck.sourcesToRecheck` (who the account owner is: a typed name, a payee marked as
+   self or family, a single payment marked, a removal) reads every fact and event once plus one
+   transfer-type query, then re-reads only the messages that changed (the re-reading goes to the
+   capture worker). It runs on the person's own action, never on startup, scroll or sync.
+   Measured on a real 3,075-fact, 1,693-event inbox: 338 ms cold (decoding the facts), 14 ms
+   when the decoded facts are already cached, which they are once the read model has run. Move
+   the scan into the worker if it is ever called more often than on a person's own tap.
 
 Split (shared expenses), 12 Nov: the change pull (`/shared-expenses/changes`) used to parse,
 canonicalise and write up to 200 records per refresh on the UI isolate. Large pages are now

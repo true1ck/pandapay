@@ -1,12 +1,29 @@
 {
   "schema": "pandapay.sms.solver/1",
-  "version": 4,
+  "version": 5,
   "params": {
     "accept": 0.8,
     "maxCueDistance": 8,
     "directionMargin": 2,
     "roleGap": 5,
-    "partyMaxWords": 5
+    "partyMaxWords": 5,
+    "ownerIdentity": {
+      "honorifics": [
+        "MR", "MRS", "MS", "MISS", "DR", "SHRI", "SHREE", "SRI", "SMT",
+        "KUM", "KUMARI", "MASTER", "PROF", "LATE"
+      ],
+      "greetingWords": ["dear", "hi", "hello", "hey", "namaste"],
+      "notNames": [
+        "CUSTOMER", "USER", "VALUED", "SIR", "MADAM", "INVESTOR", "CARDMEMBER",
+        "CARD", "HOLDER", "CONSUMER", "MEMBER", "CLIENT", "SUBSCRIBER", "TEAM",
+        "FRIEND", "ACCOUNT", "BANK", "ALL", "FROM", "TO", "THE", "AND", "FOR",
+        "WITH", "YOUR", "SAMPLE", "PATRON", "APP", "THERE", "EVERYONE",
+        "PARTNER", "SHOPPER", "GUEST"
+      ],
+      "minSightings": 3,
+      "minSenders": 3,
+      "maxLearned": 3
+    }
   },
   "lexicons": {
     "debit": [

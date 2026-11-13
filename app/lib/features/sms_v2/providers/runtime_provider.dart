@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
+import '../personal/owner_identity_store.dart';
 import '../../../app/providers.dart' as app;
 import '../../../data/api_request_headers_client.dart';
 import '../../../data/authenticated_http_client.dart';
@@ -71,9 +72,15 @@ smsV2RuntimeProvider = FutureProvider<SmsV2Runtime?>((ref) async {
     loadShippedBundle: () =>
         rootBundle.loadString('assets/sms_rules/baseline_bundle.json'),
     accountIsCurrent: current,
+    // Who the account owner is: the profile name when it is a real name (a
+    // username is ignored), the names they typed, the payees they marked and
+    // the names learned from their greetings.
     ownerNames: () {
-      final name = cache.financialStore.database.profileDisplayName(namespace);
-      return name == null ? const [] : [name];
+      final database = cache.financialStore.database;
+      return OwnerIdentityStore(
+        database.db,
+        namespace: namespace,
+      ).entries(profileName: database.profileDisplayName(namespace));
     },
     hasSharingConsent: () async {
       if (!current()) return false;
