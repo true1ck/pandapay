@@ -78,6 +78,15 @@ class SyncEngine {
   /// failed chunk (halving), so a server outage cannot turn into hundreds.
   static const maxIsolationRequests = 24;
 
+  /// Safety valve (H1-2): a 500 aborts the sync without blaming any row, so a
+  /// row that deterministically crashes the server would block the queue for
+  /// ever. After this many 500 aborts in a row that all start with the same
+  /// head row, that row alone is held back for [headRowBackoff].
+  static const headRowAbortLimit = 8;
+  static const headRowBackoff = Duration(hours: 1);
+  int? _abortHead;
+  int _abortCount = 0;
+
   bool _reregisteredDevice = false;
   int _isolationRequests = 0;
 
@@ -275,8 +284,20 @@ class SyncEngine {
         results = await _pushOnce(api, queue, chunk);
       } on ApiException catch (error) {
         if (_chunkIsToBlame(error)) return await _isolate(api, queue, chunk, error, attempted);
+        if (error.statusCode == 500) {
+          final head = chunk.first.clientSeq;
+          _abortCount = _abortHead == head ? _abortCount + 1 : 1;
+          _abortHead = head;
+          if (_abortCount >= headRowAbortLimit) {
+            queue.defer(head, headRowBackoff, 'server error');
+            _abortHead = null;
+            _abortCount = 0;
+          }
+        }
         rethrow;
       }
+      _abortHead = null;
+      _abortCount = 0;
       return await _applyResults(queue, chunk, results);
     } finally {
       queue.release(chunk);

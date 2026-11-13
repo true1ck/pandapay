@@ -321,6 +321,16 @@ class SyncQueue {
     onChanged?.call();
   }
 
+  /// Holds one change back for [delay] without counting an attempt (the
+  /// safety valve for a head row that keeps crashing the server, H1-2).
+  void defer(int clientSeq, Duration delay, String error) {
+    _appDb.db.execute(
+      'UPDATE sync_pending_changes SET next_attempt_at = ?, last_error = ? WHERE client_seq = ? AND namespace = ?',
+      [_clock.now().add(delay).millisecondsSinceEpoch, error, clientSeq, namespace],
+    );
+    onChanged?.call();
+  }
+
   /// Makes changes waiting out a backoff due again (connectivity came back).
   void resetBackoff() {
     _appDb.db.execute(

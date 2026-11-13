@@ -136,9 +136,11 @@ void main() {
     await _elapse(tester, ReachabilityMonitor.firstProbeDelay);
     expect(h.probes, 1);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     await _elapse(tester, const Duration(minutes: 5));
     expect(h.probes, 1);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await _elapse(tester, Duration.zero);

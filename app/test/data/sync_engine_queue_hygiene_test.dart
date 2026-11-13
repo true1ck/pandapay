@@ -371,6 +371,30 @@ void main() {
       expect(rows.map((r) => r['in_flight']), [0, 0, 0]);
     });
 
+    test('a head row that 500s 8 syncs in a row is held back, others go',
+        () async {
+      enqueue('poison', note: 'POISON');
+      enqueue('ok', note: 'fine');
+      final api = _ScriptedApi(
+        onPush: (device, changes) {
+          if (changes.any((c) => c.payload['note'] == 'POISON')) {
+            throw _http(500, '{"error":"internal_error"}');
+          }
+          return [for (final c in changes) _applied(c)];
+        },
+      );
+      final scope = scripted(api);
+      addTearDown(scope.dispose);
+      final engine = scope.read(syncEngineProvider);
+      for (var i = 0; i < SyncEngine.headRowAbortLimit; i++) {
+        expect((await engine.sync()).ranToCompletion, isFalse);
+      }
+      final rows = db.db.select('SELECT attempts FROM sync_pending_changes');
+      expect(rows.map((r) => r['attempts']), [0, 0], reason: 'never counted');
+      final result = await engine.sync();
+      expect(result.pushed, 1, reason: 'the newer row is no longer blocked');
+    });
+
     test('401, 429 and every 5xx abort without recording failures', () async {
       for (final status in [401, 429, 500, 502, 503, 504]) {
         db.db.execute('DELETE FROM sync_pending_changes');
