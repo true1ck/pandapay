@@ -36,6 +36,22 @@ final pendingSplitCountProvider = StreamProvider<int>((ref) {
   return counts.stream;
 });
 
+/// Private per-transaction splits the server refused (a conflict or a
+/// permanent error): they stay on the phone, unsent, until the person decides.
+final blockedSplitCountProvider = StreamProvider<int>((ref) {
+  final repository = ref.watch(splitRepositoryProvider).valueOrNull;
+  if (repository == null) return Stream.value(0);
+  final counts = StreamController<int>();
+  void changed() => counts.add(repository.blockedCount);
+  repository.addListener(changed);
+  changed();
+  ref.onDispose(() {
+    repository.removeListener(changed);
+    unawaited(counts.close());
+  });
+  return counts.stream;
+});
+
 class _SplitResumeObserver extends WidgetsBindingObserver {
   final SplitRepository repository;
   _SplitResumeObserver(this.repository);

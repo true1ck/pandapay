@@ -75,7 +75,7 @@ class _SharedSettlementsSheetState extends State<SharedSettlementsSheet> {
   Future<void> _respond(String id, String decision) async {
     if (_responding != null ||
         !_authorized ||
-        !widget.runtime.settlementsEnabled) {
+        !widget.runtime.canQueueSettlements) {
       return;
     }
     setState(() {
@@ -114,8 +114,7 @@ class _SharedSettlementsSheetState extends State<SharedSettlementsSheet> {
     final canRespond =
         status == 'pending' &&
         row['receiverMemberId'] == own &&
-        widget.runtime.settlementsEnabled &&
-        !widget.runtime.offline &&
+        widget.runtime.canQueueSettlements &&
         pending == null &&
         _responding == null;
     return SharedPanel(
