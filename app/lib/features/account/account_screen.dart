@@ -393,18 +393,6 @@ class _ProfileHero extends ConsumerWidget {
       ),
       child: Stack(
         children: [
-          Positioned(
-            top: -60,
-            right: -50,
-            child: Container(
-              width: 170,
-              height: 170,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: BambooInk.lime.withValues(alpha: 0.09),
-              ),
-            ),
-          ),
           Padding(
             padding: const EdgeInsets.all(AppSpace.xl),
             child: Column(
