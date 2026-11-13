@@ -30,6 +30,7 @@ class CorrectionsSync {
     required this.headers,
     required this.accountIsCurrent,
     this.requeue,
+    this.sharingGranted,
     DateTime Function()? clock,
   }) : clock = clock ?? DateTime.now;
 
@@ -44,6 +45,11 @@ class CorrectionsSync {
   /// on this phone after the first refusal.
   final void Function(String sourceKey, String? eventId)? requeue;
   final DateTime Function() clock;
+
+  /// Whether sharing with the community is agreed RIGHT NOW. Read just before
+  /// every send: a correction queued while it was agreed must not carry its
+  /// share-only parts after a withdrawal. Null = not asked (kept as queued).
+  final Future<bool> Function()? sharingGranted;
   Future<int>? _running;
 
   /// A refusal marker kept inside the queued payload; never sent. It counts
@@ -101,12 +107,13 @@ class CorrectionsSync {
       }
       try {
         final requestHeaders = await headers();
+        final shareOk = sharingGranted == null || await sharingGranted!();
         if (!accountIsCurrent()) return sent;
         final response = await client
             .post(
               baseUri.resolve('/sms/v2/corrections'),
               headers: {...requestHeaders, 'Content-Type': 'application/json'},
-              body: jsonEncode(_wire(payload)),
+              body: jsonEncode(_wire(payload, shareOk)),
             )
             .timeout(const Duration(seconds: 30));
         if (!accountIsCurrent()) return sent;
@@ -152,19 +159,26 @@ class CorrectionsSync {
   }
 
   /// What the server receives: the payload without the phone's own markers.
-  Map<String, Object?> _wire(Map<String, Object?> payload) => {
+  /// Without current consent the share-only parts (template, shared
+  /// category / shop) are dropped; the case itself is still sent.
+  Map<String, Object?> _wire(Map<String, Object?> payload, bool shareOk) => {
     for (final entry in payload.entries)
-      if (entry.key != _resentKey && entry.key != _noTemplateKey)
-        entry.key: entry.value,
+      if (entry.key != _resentKey &&
+          entry.key != _noTemplateKey &&
+          (shareOk || entry.key != 'redactedTemplate'))
+        entry.key: shareOk || entry.key != 'corrected'
+            ? entry.value
+            : <String, Object?>{},
   };
 
   /// True while the source or the event the correction names is still waiting
   /// in the upload queue: the server cannot match a correction to facts it has
-  /// not received. A record that has failed [_waitAttempts] times and is due
-  /// again no longer holds it, so a source the server keeps refusing cannot
-  /// hold a correction for ever. One that is in a back-off still does, however
-  /// many attempts it has: the back-off may only mean the phone was offline,
-  /// and the correction must not be sent (and refused) before the facts (Q-09).
+  /// not received. A record that has failed [_waitAttempts] times no longer
+  /// holds it, backoff or not (WP-C9: a network failure never counts an
+  /// attempt, so attempts > 0 means the server itself refused it; its backoff
+  /// keeps re-arming and must not hold the correction for ever). Below that,
+  /// a waiting record (even in a back-off: the phone may only have been
+  /// offline) still holds it, so it is not sent before its facts (Q-09).
   bool _waitsForUpload(Map<String, Object?> payload) {
     final ids = [
       if (payload['sourceKey'] is String) 'source:${payload['sourceKey']}',
@@ -175,12 +189,7 @@ class CorrectionsSync {
       'SELECT attempts, next_attempt_at FROM v2_outbox WHERE namespace=? AND id IN (${List.filled(ids.length, '?').join(',')})',
       [queue.namespace, ...ids],
     );
-    final nowMs = clock().millisecondsSinceEpoch;
-    return rows.any(
-      (row) =>
-          (row['attempts'] as int) < _waitAttempts ||
-          (row['next_attempt_at'] as int) > nowMs,
-    );
+    return rows.any((row) => (row['attempts'] as int) < _waitAttempts);
   }
 
   String? _reason(http.Response response) {
