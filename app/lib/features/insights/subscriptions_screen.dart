@@ -12,13 +12,15 @@ import '../../data/local_first/pending_overlays.dart';
 import '../../data/api_exception.dart';
 import '../../data/bills_projection_api.dart';
 import '../../data/commitments_repository.dart';
+import '../../data/local/subscription_overrides_store.dart';
 import '../../data/spend_reports_repository.dart';
+import '../sms_v2/ledger/providers.dart' show smsV2ReportingEnabledProvider;
 import 'central_bills_section.dart';
+import 'insights_local_first.dart';
 import 'subscription_detail_screen.dart';
 import 'subscription_view.dart';
 import '../cards/card_summary.dart';
 import '../../main.dart' show MoneyText;
-
 
 String _subscriptionStatus(RecurringSeries series) =>
     subscriptionListStatus(series);
@@ -114,7 +116,9 @@ class SubscriptionsScreen extends ConsumerWidget {
         ),
       ),
       body: AppBackground(
-        child: report.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
+        child: report.when(
+          skipLoadingOnReload: true,
+          skipLoadingOnRefresh: true,
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
             message: userFacingErrorMessage(err),
@@ -395,6 +399,25 @@ class SubscriptionsScreen extends ConsumerWidget {
       builder: (_) => const _AddSubscriptionDialog(),
     );
     if (draft == null || !context.mounted) return;
+
+    // WP-C7: in SMS-v2 mode the list is built on the phone, so a typed-in
+    // subscription is kept on the phone too (local-only; no server row).
+    if (kInsightsLocalFirst && ref.read(smsV2ReportingEnabledProvider)) {
+      (await _overridesStore(ref)).addManual(
+        displayName: draft.displayName,
+        amountInr: draft.amountInr,
+        cadenceDays: draft.cadenceDays,
+        nextExpectedOn: draft.nextExpectedOn,
+        autopayStatus: draft.autopayStatus,
+      );
+      ref.invalidate(recurringReportProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Subscription added.')));
+      }
+      return;
+    }
 
     final repository = ref.read(spendReportsRepositoryProvider);
     if (repository == null) {
@@ -1453,7 +1476,11 @@ class _SeriesCard extends ConsumerWidget {
     ];
     final lines = <(String, Color, bool)>[
       if (active)
-        (headline.join(' · '), issue || needsReview || noCharges ? warn : BambooInk.ink700, true),
+        (
+          headline.join(' · '),
+          issue || needsReview || noCharges ? warn : BambooInk.ink700,
+          true,
+        ),
       (_costLine, BambooInk.ink500, false),
       if (active && next != null && status == 'confirmed')
         (
@@ -1735,20 +1762,31 @@ class _SeriesCard extends ConsumerWidget {
       try {
         // Local first: the edit shows at once; the command outbox sends it.
         final n = next!;
-        await queueCommand(
-          ref,
-          kind: OverlayCommand.recurringUpdate,
-          target: series.id,
-          payload: {
-            'id': series.id,
-            'displayName': name.text.trim(),
-            'amountInr': double.parse(amount.text),
-            'cadenceDays': int.parse(cadence.text),
-            'nextExpectedOn':
-                '${n.year.toString().padLeft(4, '0')}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}',
-            'autopayStatus': autopayStatus,
-          },
-        );
+        if (kInsightsLocalFirst && isDeviceLocalSeriesId(series.id)) {
+          (await _overridesStore(ref)).edit(
+            series.id,
+            displayName: name.text.trim(),
+            amountInr: double.parse(amount.text),
+            cadenceDays: int.parse(cadence.text),
+            nextExpectedOn: n,
+            autopayStatus: autopayStatus,
+          );
+        } else {
+          await queueCommand(
+            ref,
+            kind: OverlayCommand.recurringUpdate,
+            target: series.id,
+            payload: {
+              'id': series.id,
+              'displayName': name.text.trim(),
+              'amountInr': double.parse(amount.text),
+              'cadenceDays': int.parse(cadence.text),
+              'nextExpectedOn':
+                  '${n.year.toString().padLeft(4, '0')}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}',
+              'autopayStatus': autopayStatus,
+            },
+          );
+        }
         if (!context.mounted) return true;
         ref.invalidate(recurringReportProvider);
         ScaffoldMessenger.of(
@@ -1799,13 +1837,17 @@ class _SeriesCard extends ConsumerWidget {
     try {
       // Hiding a subscription is saved on the phone first; a queued edit of
       // the same subscription is dropped because it is about to disappear.
-      await queueCommand(
-        ref,
-        kind: OverlayCommand.recurringDismiss,
-        target: series.id,
-        payload: {'id': series.id},
-        cancels: const [],
-      );
+      if (kInsightsLocalFirst && isDeviceLocalSeriesId(series.id)) {
+        (await _overridesStore(ref)).hide(series.id);
+      } else {
+        await queueCommand(
+          ref,
+          kind: OverlayCommand.recurringDismiss,
+          target: series.id,
+          payload: {'id': series.id},
+          cancels: const [],
+        );
+      }
       if (!context.mounted) return true;
       ref.invalidate(recurringReportProvider);
       ScaffoldMessenger.of(
@@ -1872,4 +1914,12 @@ class _SubscriptionAutopaySection extends StatelessWidget {
       ],
     );
   }
+}
+
+Future<SubscriptionOverridesStore> _overridesStore(WidgetRef ref) async {
+  final cache = await ref.read(responseCacheProvider.future);
+  return SubscriptionOverridesStore(
+    cache.financialStore.database,
+    ref.read(cacheNamespaceProvider),
+  );
 }

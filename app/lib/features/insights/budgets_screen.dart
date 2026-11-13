@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
@@ -11,6 +12,8 @@ import '../../data/catalogue_repository.dart' show SpendCategory;
 import '../../data/spend_reports_repository.dart';
 import '../../main.dart' show MoneyText;
 import '../cards/card_summary.dart';
+import 'insights_local_first.dart';
+import 'local_budgets.dart';
 import 'spending_visuals.dart';
 
 /// Budgets — a line the user draws for themselves, and being told when
@@ -202,6 +205,14 @@ class _BudgetCard extends ConsumerWidget {
               ),
             ],
           ),
+          if (budget.isEstimate)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpace.xs),
+              child: Text(
+                'Estimate from this phone until PandaPay confirms it',
+                style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+              ),
+            ),
           const SizedBox(height: AppSpace.sm),
           // Two bars, one on top of the other: spend against the budget,
           // and a thin marker for how much of the PERIOD has passed.
@@ -307,8 +318,12 @@ class _BudgetCard extends ConsumerWidget {
         ref,
         kind: OverlayCommand.budgetDelete,
         target: budget.id,
-        payload: {'id': budget.id},
+        payload: {
+          'id': budget.id,
+          'clientEditedAt': DateTime.now().toUtc().toIso8601String(),
+        },
       );
+      await forgetLocalBudget(ref, budget.id);
       ref.invalidate(budgetsProvider);
     } catch (e) {
       if (context.mounted) {
@@ -574,27 +589,55 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
                 b.period == _period,
           )
           .firstOrNull;
-      if (existing != null) {
+      // WP-C7: an existing budget is edited local first (as before). A new one
+      // is sent straight away while the server answers (unchanged for an online
+      // user); when it cannot be reached the budget is kept on the phone with
+      // an estimate of what is spent, and the command outbox delivers it with
+      // a client id so a retry cannot duplicate it.
+      Future<void> saveLocally() async {
+        final id = const Uuid().v4();
+        if (existing == null) {
+          await rememberLocalBudget(
+            ref,
+            id: id,
+            scope: _scope,
+            scopeRefId: _scopeRefId,
+            period: _period,
+            amountInr: amount,
+            label: _scope == BudgetScope.overall ? 'All spending' : null,
+          );
+        }
         await queueCommand(
           ref,
           kind: OverlayCommand.budgetSave,
           target: '${_scope.wireValue}|${_scopeRefId ?? ''}|${_period.wireValue}',
           payload: {
+            'id': id,
             'scope': _scope.wireValue,
             'scopeRefId': _scopeRefId,
             'period': _period.wireValue,
             'amountInr': amount,
             'rollover': false,
+            'clientEditedAt': DateTime.now().toUtc().toIso8601String(),
           },
         );
         ref.invalidate(budgetsProvider);
+      }
+
+      if (existing != null) {
+        await saveLocally();
       } else {
-        await repo.saveBudget(
-          scope: _scope,
-          scopeRefId: _scopeRefId,
-          period: _period,
-          amount: Money.fromRupees(amount),
-        );
+        try {
+          await repo.saveBudget(
+            scope: _scope,
+            scopeRefId: _scopeRefId,
+            period: _period,
+            amount: Money.fromRupees(amount),
+          );
+        } catch (e) {
+          if (!kInsightsLocalFirst || !isOfflineLike(e)) rethrow;
+          await saveLocally();
+        }
       }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
