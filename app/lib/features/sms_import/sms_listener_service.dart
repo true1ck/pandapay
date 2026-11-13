@@ -58,7 +58,9 @@ Future<void> smsBackgroundHandler(SmsMessage message) async {
     // Consent is per account: until this account has agreed to SMS reading
     // (the app mirrors that agreement into preferences), the message is not
     // written anywhere.
-    if (!await SmsReadingConsentMirror.isGranted(namespace)) return;
+    if (!await SmsReadingConsentMirror.isGrantedOrCarriedOver(namespace)) {
+      return;
+    }
     final queued = QueuedSms(
       sender: sender,
       body: body,

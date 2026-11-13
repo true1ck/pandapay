@@ -243,21 +243,19 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(h.result, isTrue);
-      expect(h.posted, [
-        {
-          'purpose': 'sms_reading',
-          'granted': true,
-          'policyVersion': '2026-11-15',
-          'sourceScreen': 'auto_sms_sync',
-        },
-      ]);
+      expect(h.posted, hasLength(1));
+      expect(h.posted.single, containsPair('purpose', 'sms_reading'));
+      expect(h.posted.single, containsPair('granted', true));
+      expect(h.posted.single, containsPair('policyVersion', '2026-11-15'));
+      expect(h.posted.single, containsPair('sourceScreen', 'auto_sms_sync'));
+      expect(h.posted.single['clientMutationId'], isNotEmpty);
     },
   );
 
-  testWidgets('a failed post keeps the sheet open and returns nothing', (
+  testWidgets('a refused post (400) keeps the sheet open and returns nothing', (
     tester,
   ) async {
-    final h = _Harness(postStatus: 500);
+    final h = _Harness(postStatus: 400);
     await _openSheet(tester, h);
     await tester.tap(find.byType(Checkbox));
     await tester.pumpAndSettle();

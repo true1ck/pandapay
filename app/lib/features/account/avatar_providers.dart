@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../app/providers.dart';
+import 'avatar_cache.dart';
 
 /// The avatar the person has chosen: the preset id and, when there is one, the
 /// photo bytes already downloaded.
@@ -19,10 +20,21 @@ class AvatarState {
 /// The signed-in person's avatar. Null while signed out or when it cannot be
 /// loaded: every screen then simply shows the initial letter, as it always did,
 /// instead of an error for something decorative.
+bool _sameAvatar(AvatarState a, AvatarState b) =>
+    a.preset == b.preset &&
+    a.sharePhoto == b.sharePhoto &&
+    (a.photo?.length ?? -1) == (b.photo?.length ?? -1);
+
+/// Clears the saved own-avatar copy (called after the person changes it, so the
+/// next read is the live one rather than the previous picture).
+Future<void> clearOwnAvatarCache(dynamic ref) async =>
+    (await AvatarCache.open(ref))?.clear('own');
+
 final avatarProvider = FutureProvider<AvatarState?>((ref) async {
   final api = ref.watch(avatarApiProvider);
   if (api == null) return null;
-  try {
+  final cache = await AvatarCache.open(ref);
+  Future<AvatarState?> fetch() async {
     final info = await api.info();
     Uint8List? photo;
     if (info.hasPhoto) {
@@ -33,19 +45,33 @@ final avatarProvider = FutureProvider<AvatarState?>((ref) async {
       }
     }
     return AvatarState(preset: info.preset, photo: photo, sharePhoto: info.sharePhoto);
-  } catch (_) {
-    return null;
   }
+
+  if (cache == null) {
+    try {
+      return await fetch();
+    } catch (_) {
+      return null;
+    }
+  }
+  return cacheFirst<AvatarState>(
+    cached: () => cache.read('own'),
+    fetch: fetch,
+    save: (s) => cache.write('own', s),
+    same: _sameAvatar,
+    onChanged: ref.invalidateSelf,
+  );
 });
 
-/// Another Split member's avatar, by profile id. Cached for the session (and
-/// reset on account switch, since the API provider is rebuilt). Null on any
-/// failure or when the server has nothing to show: it is decorative, so every
-/// screen then draws the initial letter and never an error.
+/// Another Split member's avatar, by profile id. Saved on the phone and shown
+/// cache-first (WP-C11). Null on any failure or when the server has nothing to
+/// show: it is decorative, so every screen then draws the initial letter and
+/// never an error.
 final memberAvatarProvider = FutureProvider.family<AvatarState?, String>((ref, profileId) async {
   final api = ref.watch(memberAvatarApiProvider);
   if (api == null) return null;
-  try {
+  final cache = await AvatarCache.open(ref);
+  Future<AvatarState?> fetch() async {
     final info = await api.info(profileId);
     if (info == null) return null;
     Uint8List? photo;
@@ -57,22 +83,38 @@ final memberAvatarProvider = FutureProvider.family<AvatarState?, String>((ref, p
       }
     }
     return AvatarState(preset: info.preset, photo: photo);
-  } catch (_) {
-    return null;
   }
+
+  if (cache == null) {
+    try {
+      return await fetch();
+    } catch (_) {
+      return null;
+    }
+  }
+  return cacheFirst<AvatarState>(
+    cached: () => cache.read('member:$profileId'),
+    fetch: fetch,
+    save: (s) => cache.write('member:$profileId', s),
+    same: _sameAvatar,
+    onChanged: () => ref.invalidateSelf(),
+  );
 });
 
 /// Another Split member's own PandaPay name, by profile id: what they call
-/// themselves, shown under the name the signed-in person saved for them. Cached
-/// for the session. Null on any failure or when there is none to show.
+/// themselves, shown under the name the signed-in person saved for them. Saved
+/// on the phone (WP-C11). Null on any failure or when there is none to show.
 final memberProfileNameProvider = FutureProvider.family<String?, String>((ref, profileId) async {
   final api = ref.watch(memberAvatarApiProvider);
   if (api == null) return null;
-  try {
-    return await api.profileName(profileId);
-  } catch (_) {
-    return null;
-  }
+  final cache = await AvatarCache.open(ref);
+  return cacheFirst<String>(
+    cached: () async => cache == null ? null : await cache.readText('name:$profileId'),
+    fetch: () => api.profileName(profileId),
+    save: (n) async => cache?.writeText('name:$profileId', n),
+    same: (a, b) => a == b,
+    onChanged: () => ref.invalidateSelf(),
+  );
 });
 
 enum AvatarPhotoSource { gallery, camera }

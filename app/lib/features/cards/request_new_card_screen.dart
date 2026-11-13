@@ -3,9 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
+import '../account/account_local_first.dart';
+import '../account/card_reports.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
-import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 
 /// C8 Request New Card (ui-spec Group C — "as A8, available any time").
@@ -46,14 +47,20 @@ class _RequestNewCardScreenState extends ConsumerState<RequestNewCardScreen> {
       _error = null;
     });
     try {
-      await ref
-          .read(cardFeedbackRepositoryProvider)
-          .requestNewCard(
-            issuerName: _issuerController.text.trim(),
-            productName: _productController.text.trim(),
-            networkGuess: _networkGuess?.name,
-          );
-      if (mounted) setState(() => _submitted = true);
+      final result = await requestNewCardLocalFirst(
+        ref,
+        issuerName: _issuerController.text.trim(),
+        productName: _productController.text.trim(),
+        networkGuess: _networkGuess?.name,
+      );
+      if (mounted) {
+        if (result == AccountWrite.queued) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text(savedOfflineMessage)));
+        }
+        setState(() => _submitted = true);
+      }
     } catch (e) {
       setState(() => _error = userFacingErrorMessage(e));
     } finally {

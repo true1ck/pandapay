@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -18,8 +20,40 @@ final changelogRepositoryProvider = Provider<ChangelogRepository>(
 );
 
 /// The changelog feed, newest first, max 20 entries — no auth required.
-final changelogProvider = FutureProvider<List<ChangelogEntry>>((ref) {
-  return ref.watch(changelogRepositoryProvider).fetch();
+///
+/// WP-C11: the last good copy is kept on the phone (public release notes, no
+/// account data). A slow or missing network shows it instead of a spinner.
+const changelogCacheKey = 'whats_new_changelog_cache_v1';
+
+Future<List<ChangelogEntry>?> readChangelogCache() async {
+  try {
+    final raw = (await SharedPreferences.getInstance()).getString(changelogCacheKey);
+    if (raw == null) return null;
+    return [
+      for (final m in jsonDecode(raw) as List)
+        ChangelogEntry.fromJson(Map<String, dynamic>.from(m as Map)),
+    ];
+  } catch (_) {
+    return null;
+  }
+}
+
+final changelogProvider = FutureProvider<List<ChangelogEntry>>((ref) async {
+  final repo = ref.watch(changelogRepositoryProvider);
+  try {
+    final entries = await repo.fetch();
+    try {
+      await (await SharedPreferences.getInstance()).setString(
+        changelogCacheKey,
+        jsonEncode([for (final e in entries) e.toJson()]),
+      );
+    } catch (_) {}
+    return entries;
+  } catch (_) {
+    final cached = await readChangelogCache();
+    if (cached != null) return cached;
+    rethrow;
+  }
 });
 
 /// "Last version the What's New sheet was shown/dismissed for". Follows the

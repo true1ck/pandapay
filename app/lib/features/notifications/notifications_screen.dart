@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'notification_read.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
@@ -116,8 +117,7 @@ class NotificationsScreen extends ConsumerWidget {
     if (repo == null) return;
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await repo.markNotificationsRead();
-      ref.invalidate(notificationsProvider);
+      await markNotificationsReadLocalFirst(ref);
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(content: Text(userFacingErrorMessage(e))),
@@ -303,8 +303,7 @@ class _NotificationTile extends ConsumerWidget {
     // and an invalidate afterwards would fire against a dead ref.
     if (notification.isUnread && repo != null) {
       try {
-        await repo.markNotificationsRead(id: notification.id);
-        ref.invalidate(notificationsProvider);
+        await markNotificationsReadLocalFirst(ref, id: notification.id);
       } catch (_) {
         // A failed read-receipt must not block opening what it points at.
       }

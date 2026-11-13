@@ -11,7 +11,8 @@ import '../../data/api_exception.dart';
 import '../../data/support_api.dart';
 import '../../data/merchant_issue_rules_repository.dart';
 import '../../data/user_cards_repository.dart';
-import '../settings/feedback_support_screen.dart' show supportApiBaseUrl;
+import '../account/account_local_first.dart';
+import '../account/support_submit.dart';
 import '../../main.dart' show MoneyText;
 
 /// Design 26 "Report an issue" — the transaction-scoped one, reached from
@@ -86,11 +87,9 @@ class _ReportTransactionScreenState extends ConsumerState<ReportTransactionScree
 
     setState(() => _submitting = true);
     try {
-      await SupportApi(
-        apiBaseUrl: supportApiBaseUrl,
+      final result = await submitTicketLocalFirst(
+        ref,
         accessToken: token,
-        client: ref.read(authenticatedHttpClientProvider),
-      ).submitTicket(
         kind: kind.ticketKind,
         // The chip label leads the message so a human triaging the queue
         // sees design 26's taxonomy even though it is stored under the
@@ -102,12 +101,19 @@ class _ReportTransactionScreenState extends ConsumerState<ReportTransactionScree
       // prompt is optional and independent: a user can report one payment,
       // select a subset of the same merchant's payments, and then separately
       // opt into applying this issue flag to future imports.
-      await _offerMerchantPropagation(kind);
+      // Offline there is no preview to wait for: skip the offer (WP-C11).
+      if (result == AccountWrite.sent) await _offerMerchantPropagation(kind);
       if (!mounted) return;
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Report sent. We usually respond within a day.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result == AccountWrite.queued
+                ? savedOfflineMessage
+                : 'Report sent. We usually respond within a day.',
+          ),
+        ),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -132,10 +138,10 @@ class _ReportTransactionScreenState extends ConsumerState<ReportTransactionScree
     final issueKind = _merchantIssueKind(kind);
     MerchantIssueRulePreview preview;
     try {
-      preview = await repository.preview(
-        sourceTransactionId: widget.entry.id,
-        issueKind: issueKind,
-      );
+      // Optional offer: never hold the screen for it (WP-C11).
+      preview = await repository
+          .preview(sourceTransactionId: widget.entry.id, issueKind: issueKind)
+          .timeout(const Duration(seconds: 4));
     } catch (_) {
       // Reporting remains successful when the optional propagation API is not
       // deployed yet, unavailable offline, or rejects an unsafe merchant.

@@ -109,6 +109,9 @@ import '../features/geofence/background_alerts_controller.dart';
 import '../features/geofence/nearby_merchants_repository.dart';
 import '../features/home_widget/home_widget_service.dart';
 import '../features/payments/payment_method_command.dart';
+import '../features/account/account_commands.dart';
+import '../features/account/account_local_first.dart' show kAccountLocalFirst;
+import '../features/notifications/notification_read.dart';
 import '../features/notifications/notification_commands.dart';
 import '../features/notifications/notification_gate.dart';
 import '../features/notifications/notification_local_state.dart';
@@ -3015,7 +3018,10 @@ Map<String, CommandHandler> commandHandlersFor(
   SpendReportsRepository? spend,
   NotificationPreferencesRepository? notificationPrefs,
   void Function()? onNotificationInboxSynced,
+  Map<String, CommandHandler> accountHandlers = const {},
 }) => {
+  // WP-C11: consents, name, opt-in, tickets, card reports, inbox read marks.
+  ...accountHandlers,
   // WP-C4: inbox rows and notification settings queued while offline.
   ...notificationCommandHandlers(
     userCards: repo,
@@ -3117,6 +3123,7 @@ final outboxFlushProvider = Provider<void>((ref) {
           spend: ref.read(spendReportsRepositoryProvider),
           notificationPrefs: ref.read(notificationPreferencesRepositoryProvider),
           onNotificationInboxSynced: () => ref.invalidate(notificationsProvider),
+          accountHandlers: accountCommandHandlers(ref),
         ),
       );
       if (commandsSent > 0) {
@@ -4422,6 +4429,28 @@ final notificationsProvider =
               .toList(),
           unreadCount: (body['unreadCount'] as num?)?.toInt() ?? 0,
         );
+      }
+
+      // WP-C11 (R-07): the saved inbox paints first and refreshes behind the
+      // screen; read marks still waiting to be sent are laid over it.
+      if (kAccountLocalFirst && cached != null) {
+        try {
+          final inbox = decode(cached);
+          _warmDisplay(
+            ref,
+            cache,
+            key,
+            cached.fetchedAt,
+            () => repo.fetchNotifications().timeout(const Duration(seconds: 8)),
+            (inbox) => {
+              'notifications': inbox.items.map((item) => item.toJson()).toList(),
+              'unreadCount': inbox.unreadCount,
+            },
+          );
+          return await applyPendingReadMarks(ref, inbox);
+        } catch (_) {
+          await cache?.clear(key);
+        }
       }
 
       if (_isKnownOffline() && cached != null) return decode(cached);

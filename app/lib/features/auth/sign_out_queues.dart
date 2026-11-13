@@ -3,6 +3,7 @@ import 'package:sqlite3/sqlite3.dart';
 
 import '../../app/providers.dart';
 import '../../data/local/queue_registry.dart';
+import '../account/account_commands.dart';
 import '../import/statement_import_continuation_provider.dart';
 import '../shared_expenses/runtime/shared_providers.dart';
 import '../sms_v2/providers/runtime_provider.dart';
@@ -174,6 +175,7 @@ Future<QueueFlushReport> flushSignOutQueues(
         repo,
         spend: ref.read(spendReportsRepositoryProvider),
         notificationPrefs: ref.read(notificationPreferencesRepositoryProvider),
+        accountHandlers: accountCommandHandlers(ref),
       );
       return drain(() => commands.flush(handlers));
     })

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../account/needs_internet.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
@@ -296,14 +297,23 @@ class _RecoveryEmailScreenState extends ConsumerState<RecoveryEmailScreen> {
     );
   }
 
-  Widget _primary(String label, VoidCallback? onPressed) => FilledButton(
-    style: FilledButton.styleFrom(
-      backgroundColor: BambooInk.slate,
-      foregroundColor: BambooInk.lime,
-      minimumSize: const Size.fromHeight(52),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-    ),
-    onPressed: onPressed,
-    child: Text(label),
-  );
+  Widget _primary(String label, VoidCallback? onPressed) {
+    // 'Done' only closes the screen; every other step talks to the server.
+    final offline = label != 'Done' && ref.watch(needsInternetProvider);
+    return withNeedsInternetHint(
+      offline,
+      FilledButton(
+        style: FilledButton.styleFrom(
+          backgroundColor: BambooInk.slate,
+          foregroundColor: BambooInk.lime,
+          minimumSize: const Size.fromHeight(52),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        onPressed: offline ? null : onPressed,
+        child: Text(label),
+      ),
+    );
+  }
 }

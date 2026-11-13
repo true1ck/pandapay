@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../account/account_local_first.dart';
+import '../account/card_reports.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
@@ -116,9 +118,8 @@ class _ReportWrongDataScreenState extends ConsumerState<ReportWrongDataScreen> {
       _error = null;
     });
     try {
-      await ref
-          .read(cardFeedbackRepositoryProvider)
-          .reportWrongData(
+      final result = await reportWrongDataLocalFirst(
+            ref,
             cardProductId: widget.cardProductId,
             fieldPath: fieldPath,
             shownValue: _shownController.text.trim().isEmpty
@@ -131,7 +132,14 @@ class _ReportWrongDataScreenState extends ConsumerState<ReportWrongDataScreen> {
                 ? null
                 : _sourceController.text.trim(),
           );
-      if (mounted) setState(() => _submitted = true);
+      if (mounted) {
+        if (result == AccountWrite.queued) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text(savedOfflineMessage)));
+        }
+        setState(() => _submitted = true);
+      }
     } catch (e) {
       setState(() => _error = userFacingErrorMessage(e));
     } finally {

@@ -13,6 +13,7 @@ import '../../app/providers.dart';
 import '../../data/account_api.dart';
 import '../../data/api_exception.dart';
 import '../../app/env.dart';
+import '../account/needs_internet.dart';
 
 /// H2 Account (real) — replaces AccountScreen's ~15%-built body (signed-in
 /// state + sign-out only) with the full spec surface: sign-out, a
@@ -460,30 +461,40 @@ class _TypedConfirmDeletionFormState extends State<_TypedConfirmDeletionForm> {
           style: BambooFonts.ui(13.5, color: BambooInk.ink500),
         ),
         const SizedBox(height: AppSpace.lg),
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: BambooInk.clay,
-              foregroundColor: Colors.white,
-              minimumSize: const Size.fromHeight(52),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
-            ),
-            onPressed: widget.submitting ? null : widget.onConfirm,
-            child: widget.submitting
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
+        Consumer(
+          builder: (context, ref, _) {
+            final offline = ref.watch(needsInternetProvider);
+            return withNeedsInternetHint(
+              offline,
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: BambooInk.clay,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(52),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                  )
-                : const Text('Delete my account'),
-          ),
+                    textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+                  ),
+                  onPressed: widget.submitting || offline
+                      ? null
+                      : widget.onConfirm,
+                  child: widget.submitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Delete my account'),
+                ),
+              ),
+            );
+          },
         ),
       ],
     );
