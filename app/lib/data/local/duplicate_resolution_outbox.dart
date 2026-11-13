@@ -1,6 +1,7 @@
 import '../api_exception.dart';
 import '../user_cards_repository.dart';
 import 'app_database.dart';
+import 'queue_retry_policy.dart';
 
 /// Returns true when retrying cannot change the outcome because the candidate
 /// is already resolved or no longer exists on the server.
@@ -51,13 +52,20 @@ class DuplicateResolutionOutboxEntry {
 /// Enqueueing is synchronous and happens before any network request. A
 /// successful server response, including an idempotent "already resolved"
 /// response, removes the intent. Other failures stay durable for the next
-/// connectivity/lifecycle flush, up to five attempts; then they wait for an
-/// explicit retry from Sync & backup.
+/// connectivity/lifecycle flush, up to five counted attempts; then they wait
+/// for an explicit retry from Sync & backup. A failure to reach the server
+/// (no connection, timeout, rejected session) is not counted and ends the
+/// pass, so a flaky connection cannot burn the five attempts; a permanent 4xx
+/// blocks at once. There is no time backoff here, so nothing to reset when the
+/// connection returns: the next flush simply retries.
 class DuplicateResolutionOutboxRepository {
   /// Automatic flushes are deliberately bounded. A later scheduler pass can
   /// continue from the oldest durable intent, keeping duplicate resolution
   /// work from starving input/raster frames during reconnect or resume.
   static const defaultFlushBatchSize = 20;
+
+  /// Counted failures after which an entry waits for an explicit retry.
+  static const maxAttempts = 5;
 
   DuplicateResolutionOutboxRepository(
     this._appDb, {
@@ -117,7 +125,7 @@ class DuplicateResolutionOutboxRepository {
     bool includeBlocked = true,
     int? limit,
   }) {
-    final blockedClause = includeBlocked ? '' : ' AND attempts < 5';
+    final blockedClause = includeBlocked ? '' : ' AND attempts < $maxAttempts';
     final boundedLimit = limit?.clamp(1, 200);
     final limitClause = boundedLimit == null ? '' : ' LIMIT $boundedLimit';
     final rows = _appDb.db.select(
@@ -171,14 +179,14 @@ class DuplicateResolutionOutboxRepository {
     final count =
         _appDb.db.select(
               'SELECT COUNT(*) AS count FROM duplicate_resolution_outbox '
-              'WHERE namespace=? AND attempts>=5',
+              'WHERE namespace=? AND attempts>=$maxAttempts',
               [namespace],
             ).single['count']
             as int;
     _appDb.db.execute(
       'UPDATE duplicate_resolution_outbox '
       'SET attempts=0, last_error=NULL '
-      'WHERE namespace=? AND attempts>=5',
+      'WHERE namespace=? AND attempts>=$maxAttempts',
       [namespace],
     );
     return count;
@@ -203,11 +211,31 @@ class DuplicateResolutionOutboxRepository {
           remove(entry.id);
           sent++;
         } else {
-          _appDb.db.execute(
-            'UPDATE duplicate_resolution_outbox '
-            'SET attempts=attempts+1, last_error=? WHERE namespace=? AND id=?',
-            [error.toString(), namespace, entry.id],
-          );
+          final failure = classifyQueueFailure(error);
+          switch (failure) {
+            case QueueFailure.network:
+              _appDb.db.execute(
+                'UPDATE duplicate_resolution_outbox SET last_error=? '
+                'WHERE namespace=? AND id=?',
+                [error.toString(), namespace, entry.id],
+              );
+            case QueueFailure.retryable:
+              _appDb.db.execute(
+                'UPDATE duplicate_resolution_outbox '
+                'SET attempts=attempts+1, last_error=? '
+                'WHERE namespace=? AND id=?',
+                [error.toString(), namespace, entry.id],
+              );
+            case QueueFailure.permanent:
+              _appDb.db.execute(
+                'UPDATE duplicate_resolution_outbox '
+                'SET attempts=MAX(attempts+1, $maxAttempts), last_error=? '
+                'WHERE namespace=? AND id=?',
+                [error.toString(), namespace, entry.id],
+              );
+          }
+          // Could not reach the server: the rest would fail the same way.
+          if (failure == QueueFailure.network) break;
         }
       }
       // Yield between entries so a reconnect/resume flush cannot monopolise

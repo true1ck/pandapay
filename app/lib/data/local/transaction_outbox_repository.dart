@@ -7,6 +7,7 @@ import 'package:crypto/crypto.dart';
 import '../user_cards_repository.dart';
 import 'app_database.dart';
 import 'financial_store.dart';
+import 'queue_retry_policy.dart';
 
 /// Plain value holder for one queued row — mirrors the
 /// transaction_outbox_entries columns 1:1 (see app_database.dart).
@@ -24,6 +25,17 @@ class TransactionOutboxEntry {
   final TxnEntryKind entryKind;
   final DateTime createdAt;
   final String? lastError;
+
+  /// Delivery attempts that counted (a pure network failure does not count).
+  final int attempts;
+
+  /// Earliest time the next automatic attempt may run; null when due now.
+  final DateTime? nextAttemptAt;
+
+  /// True once the server permanently rejected the entry. A parked entry is
+  /// kept (and its provisional row stays visible) but never retried
+  /// automatically; see [TransactionOutboxRepository.retryParked].
+  final bool parked;
 
   /// Optional contract wire value (payment_methods_v1.json); null for every
   /// row queued before the column existed and whenever the user chose none.
@@ -44,6 +56,9 @@ class TransactionOutboxEntry {
     required this.createdAt,
     this.lastError,
     this.paymentMethod,
+    this.attempts = 0,
+    this.nextAttemptAt,
+    this.parked = false,
   });
 }
 
@@ -61,11 +76,13 @@ class TransactionOutboxRepository {
   final AppDatabase _appDb;
   final String namespace;
   final FinancialStore? financialStore;
+  final DateTime Function() _now;
   TransactionOutboxRepository(
     this._appDb, {
     this.namespace = 'legacy',
     this.financialStore,
-  });
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now;
   String _sourceKey(String mutationId) {
     final account = namespace.startsWith('user:')
         ? namespace.substring(5)
@@ -80,7 +97,9 @@ class TransactionOutboxRepository {
   }
 
   Future<void> restoreLocalEntries() async {
-    for (final entry in await pending()) {
+    // Every queued entry, including parked ones and ones waiting out a
+    // backoff: the person still sees what they saved until it is delivered.
+    for (final entry in await all()) {
       financialStore?.saveProvisional(
         namespace,
         TransactionEntry(
@@ -190,15 +209,69 @@ class TransactionOutboxRepository {
     return rows.isEmpty ? null : rows.first['id'] as String;
   }
 
+  /// Entries due for delivery now: not parked and past their backoff, ordered
+  /// by `(parked, next_attempt_at, created_at)` so a row that keeps failing
+  /// never sits in front of a row that has not been tried yet.
   Future<List<TransactionOutboxEntry>> pending({int? limit}) async {
+    return _select(
+      'parked = 0 AND next_attempt_at <= ?',
+      [_now().millisecondsSinceEpoch],
+      limit: limit,
+    );
+  }
+
+  /// Every queued entry of this account in the same order, whatever its state
+  /// (due, waiting out a backoff or parked). Use this for counts and for
+  /// rebuilding the provisional rows; use [pending] to decide what to send.
+  Future<List<TransactionOutboxEntry>> all({int? limit}) async {
+    return _select('1 = 1', const [], limit: limit);
+  }
+
+  /// Entries the server permanently rejected. They stay queued (and visible)
+  /// until [retryParked] or [cancel].
+  Future<List<TransactionOutboxEntry>> parked() async {
+    return _select('parked = 1', const []);
+  }
+
+  /// Puts a parked entry back in the queue, due now, with a fresh attempt
+  /// count. Returns false when no parked entry has [id].
+  Future<bool> retryParked(int id) async {
+    _appDb.db.execute(
+      'UPDATE transaction_outbox_entries '
+      'SET parked = 0, attempts = 0, next_attempt_at = 0, last_error = NULL '
+      'WHERE namespace = ? AND id = ? AND parked = 1',
+      [namespace, id],
+    );
+    return _appDb.db.updatedRows > 0;
+  }
+
+  /// Makes every entry waiting out a backoff due again. Called when the
+  /// connection comes back: the delay was about a server problem that may
+  /// well have passed, and offline time should not be waited out twice.
+  /// Parked entries stay parked.
+  Future<void> resetBackoff() async {
+    _appDb.db.execute(
+      'UPDATE transaction_outbox_entries SET next_attempt_at = 0 '
+      'WHERE namespace = ? AND parked = 0 AND next_attempt_at > 0',
+      [namespace],
+    );
+  }
+
+  List<TransactionOutboxEntry> _select(
+    String where,
+    List<Object?> parameters, {
+    int? limit,
+  }) {
     final boundedLimit = limit?.clamp(1, 200);
     final limitClause = boundedLimit == null ? '' : ' LIMIT $boundedLimit';
     final rows = _appDb.db.select(
-      'SELECT * FROM transaction_outbox_entries WHERE namespace=? '
-      'ORDER BY created_at ASC$limitClause',
-      [namespace],
+      'SELECT * FROM transaction_outbox_entries WHERE namespace=? AND $where '
+      'ORDER BY parked ASC, next_attempt_at ASC, created_at ASC, id ASC'
+      '$limitClause',
+      [namespace, ...parameters],
     );
     return rows.map((row) {
+      final nextAttemptAt = row['next_attempt_at'] as int? ?? 0;
       return TransactionOutboxEntry(
         id: row['id'] as int,
         clientMutationId: row['client_mutation_id'] as String,
@@ -218,13 +291,21 @@ class TransactionOutboxRepository {
         ),
         lastError: row['last_error'] as String?,
         paymentMethod: row['payment_method'] as String?,
+        attempts: row['attempts'] as int? ?? 0,
+        nextAttemptAt: nextAttemptAt == 0
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(nextAttemptAt),
+        parked: (row['parked'] as int? ?? 0) != 0,
       );
     }).toList();
   }
 
-  /// Attempts every queued entry once. A success removes the row; a
-  /// failure records [TransactionOutboxEntry.lastError] and leaves it
-  /// queued for the next flush — never silently drops a queued transaction.
+  /// Attempts every entry that is due, once. A success removes the row; a
+  /// failure records [TransactionOutboxEntry.lastError] and leaves it queued,
+  /// never silently dropping a queued transaction. What happens next depends
+  /// on [classifyQueueFailure]: a network failure changes nothing and ends the
+  /// pass; a retryable server failure counts an attempt and backs off; a
+  /// permanent rejection parks the row so it cannot starve newer ones.
   Future<int> flush(
     UserCardsRepository repo, {
     int maxEntries = defaultFlushBatchSize,
@@ -284,15 +365,44 @@ class TransactionOutboxRepository {
         );
         sent++;
       } catch (e) {
-        _appDb.db.execute(
-          'UPDATE transaction_outbox_entries SET last_error = ? WHERE id = ?',
-          [e.toString(), entry.id],
-        );
+        final failure = classifyQueueFailure(e);
+        _recordFailure(entry, e, failure);
+        // The connection itself is down: the rest would only each wait out
+        // their own timeout. Leave them for the next trigger.
+        if (failure == QueueFailure.network) break;
       }
       // Let Flutter service pending input and paint work between network/DB
       // items when this is called from a lifecycle or connectivity callback.
       await Future<void>.delayed(Duration.zero); // perf-ok: bounded 20-row outbox batch
     }
     return sent;
+  }
+
+  void _recordFailure(
+    TransactionOutboxEntry entry,
+    Object error,
+    QueueFailure failure,
+  ) {
+    switch (failure) {
+      case QueueFailure.network:
+        _appDb.db.execute(
+          'UPDATE transaction_outbox_entries SET last_error = ? WHERE id = ?',
+          [error.toString(), entry.id],
+        );
+      case QueueFailure.retryable:
+        final attempts = entry.attempts + 1;
+        final next = _now().add(queueBackoff(attempts));
+        _appDb.db.execute(
+          'UPDATE transaction_outbox_entries '
+          'SET last_error = ?, attempts = ?, next_attempt_at = ? WHERE id = ?',
+          [error.toString(), attempts, next.millisecondsSinceEpoch, entry.id],
+        );
+      case QueueFailure.permanent:
+        _appDb.db.execute(
+          'UPDATE transaction_outbox_entries '
+          'SET last_error = ?, attempts = ?, parked = 1 WHERE id = ?',
+          [error.toString(), entry.attempts + 1, entry.id],
+        );
+    }
   }
 }

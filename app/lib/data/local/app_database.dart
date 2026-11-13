@@ -6,6 +6,7 @@ import '../../features/shared_expenses/storage/shared_schema.dart';
 import '../device_identity.dart';
 import '../secure_storage/install_guard.dart';
 import 'database_key.dart';
+import 'local_first_schema.dart';
 import 'storage_paths.dart';
 
 /// UA-0.3 offline cache (GAP_ANALYSIS.md §2) — plain sqlite3, not drift.
@@ -322,7 +323,7 @@ CREATE INDEX IF NOT EXISTS idx_user_merchant_rules_namespace
 ''';
 
 class AppDatabase {
-  static const _schemaVersion = 2;
+  static const _schemaVersion = 3;
   static final Set<AppDatabase> _connections = {};
   static final Set<String> _recoveryPaths = {};
   final Database db;
@@ -354,11 +355,17 @@ class AppDatabase {
       // v2: transaction_outbox_entries.payment_method (nullable, additive).
       // Existing queued rows keep NULL, which flushes exactly as before.
       _ensureOutboxPaymentMethodColumn();
+      // v3: transaction_outbox_entries retry bookkeeping (attempts, backoff,
+      // park). Defaults make every existing row behave exactly as before.
+      _ensureOutboxRetryColumns();
       db.execute('PRAGMA user_version = $_schemaVersion');
     }
     // Prepare the additive module before account capture/restore can enumerate
     // its tables. Its independent version never changes legacy user_version.
     SharedExpensesSchema.ensure(db, allowNewerVersion: true);
+    // Later offline-first tables/columns live in their own append-only module
+    // (own version row), never in `_schema`, which only runs for version < 1.
+    LocalFirstSchema.ensure(db);
     _connections.add(this);
   }
 
@@ -404,6 +411,28 @@ class AppDatabase {
           .select('PRAGMA table_info(transaction_outbox_entries)')
           .any((row) => row['name'] == 'payment_method');
       if (!added) rethrow;
+    }
+  }
+
+  /// Additive v3 step (queue hygiene). Every column is defaulted, so rows that
+  /// existed before keep flushing exactly as before: never attempted, due
+  /// immediately, not parked. `last_error` already exists since v1.
+  void _ensureOutboxRetryColumns() {
+    const definitions = {
+      'attempts': 'INTEGER NOT NULL DEFAULT 0',
+      'next_attempt_at': 'INTEGER NOT NULL DEFAULT 0',
+      'parked': 'INTEGER NOT NULL DEFAULT 0',
+    };
+    if (db.select('PRAGMA table_info(transaction_outbox_entries)').isEmpty) {
+      return;
+    }
+    for (final entry in definitions.entries) {
+      LocalFirstSchema.addColumnIfMissing(
+        db,
+        'transaction_outbox_entries',
+        entry.key,
+        entry.value,
+      );
     }
   }
 

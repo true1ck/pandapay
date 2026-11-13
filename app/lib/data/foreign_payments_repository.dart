@@ -8,6 +8,8 @@ import 'api_exception.dart';
 import 'foreign_payment.dart';
 import 'foreign_money.dart';
 import 'local/app_database.dart';
+import 'local/local_first_schema.dart';
+import 'local/queue_retry_policy.dart';
 
 final _initializedForeignStores = <Object>{};
 void ensureForeignPaymentsSchema(AppDatabase database) {
@@ -20,7 +22,8 @@ void ensureForeignPaymentsSchema(AppDatabase database) {
     CREATE TABLE IF NOT EXISTS foreign_payments_outbox (
       seq INTEGER PRIMARY KEY AUTOINCREMENT, namespace TEXT NOT NULL,
       source_key TEXT NOT NULL, kind TEXT NOT NULL, payload TEXT NOT NULL,
-      last_error TEXT
+      last_error TEXT, attempts INTEGER NOT NULL DEFAULT 0,
+      next_attempt_at INTEGER NOT NULL DEFAULT 0, parked INTEGER NOT NULL DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS foreign_payments_pending_account
       ON foreign_payments_outbox(namespace, seq);
@@ -33,6 +36,21 @@ void ensureForeignPaymentsSchema(AppDatabase database) {
       PRIMARY KEY(namespace, source_key)
     );
   ''');
+  // A table created by an earlier version has none of the retry columns.
+  for (final column in ['attempts', 'next_attempt_at', 'parked']) {
+    LocalFirstSchema.addColumnIfMissing(
+      database.db,
+      'foreign_payments_outbox',
+      column,
+      'INTEGER NOT NULL DEFAULT 0',
+    );
+  }
+  LocalFirstSchema.addColumnIfMissing(
+    database.db,
+    'foreign_payments_outbox',
+    'last_error',
+    'TEXT',
+  );
 }
 
 /// Synchronous ingestion is used in the same SQLite savepoint as SMS capture,
@@ -216,6 +234,7 @@ class ForeignPaymentsRepository {
   final bool Function() accountIsCurrent;
   final void Function()? onChanged;
   final void Function()? onLedgerChanged;
+  final DateTime Function() _now;
   Future<void>? _syncFuture;
   DateTime? _lastRateRefresh;
 
@@ -228,7 +247,52 @@ class ForeignPaymentsRepository {
     bool Function()? accountIsCurrent,
     this.onChanged,
     this.onLedgerChanged,
-  }) : accountIsCurrent = accountIsCurrent ?? (() => true);
+    DateTime Function()? now,
+  }) : accountIsCurrent = accountIsCurrent ?? (() => true),
+       _now = now ?? DateTime.now;
+
+  /// Changes the service refused for good. They stay saved (the payment keeps
+  /// showing its local edit) but are not retried until [retryParked].
+  Future<int> parkedCount() async {
+    final db = await _db();
+    return db.db.select(
+          'SELECT COUNT(*) AS n FROM foreign_payments_outbox WHERE namespace=? AND parked=1',
+          [namespace],
+        ).single['n']
+        as int;
+  }
+
+  /// True when at least one queued change is ready to send now. Lets a caller
+  /// that only wants to drain the outbox (the sync engine) skip [sync], which
+  /// also refreshes exchange rates over the network.
+  Future<bool> hasDueChanges() async {
+    final db = await _db();
+    return db.db.select(
+      'SELECT 1 FROM foreign_payments_outbox WHERE namespace=? AND parked=0 AND next_attempt_at<=? LIMIT 1',
+      [namespace, _now().millisecondsSinceEpoch],
+    ).isNotEmpty;
+  }
+
+  /// Makes every change waiting out a backoff due again (the connection came
+  /// back). Parked changes stay parked.
+  Future<void> resetBackoff() async {
+    final db = await _db();
+    db.db.execute(
+      'UPDATE foreign_payments_outbox SET next_attempt_at=0 '
+      'WHERE namespace=? AND parked=0 AND next_attempt_at>0',
+      [namespace],
+    );
+  }
+
+  /// Puts every parked change back in the queue (an explicit retry).
+  Future<void> retryParked() async {
+    final db = await _db();
+    db.db.execute(
+      'UPDATE foreign_payments_outbox SET parked=0, attempts=0, next_attempt_at=0, last_error=NULL '
+      'WHERE namespace=? AND parked=1',
+      [namespace],
+    );
+  }
 
   Future<AppDatabase> _db() async {
     final db = await database;
@@ -582,9 +646,18 @@ class ForeignPaymentsRepository {
     final db = await _db();
     if (accessToken() == null || !accountIsCurrent()) return;
     final stopwatch = Stopwatch()..start();
+    // Only changes that are due. A change also waits while an earlier change
+    // of the same payment is parked or in backoff: edits are patches, so
+    // sending a later one first would let the older one overwrite it.
+    final nowMs = _now().millisecondsSinceEpoch;
     final pending = db.db.select(
-      'SELECT * FROM foreign_payments_outbox WHERE namespace=? ORDER BY seq LIMIT 100',
-      [namespace],
+      'SELECT * FROM foreign_payments_outbox AS o '
+      'WHERE o.namespace=? AND o.parked=0 AND o.next_attempt_at<=? '
+      'AND NOT EXISTS (SELECT 1 FROM foreign_payments_outbox AS e '
+      'WHERE e.namespace=o.namespace AND e.source_key=o.source_key AND e.seq<o.seq '
+      'AND (e.parked=1 OR e.next_attempt_at>?)) '
+      'ORDER BY o.seq LIMIT 100',
+      [namespace, nowMs, nowMs],
     );
     final blockedSources = <String>{};
     Object? firstError;
@@ -662,17 +735,42 @@ class ForeignPaymentsRepository {
         if (isAuthenticationFailure(error)) rethrow;
         firstError ??= error;
         blockedSources.add(sourceKey);
+        // A 409 here means "needs review", which the person clears by
+        // retrying, so it backs off instead of parking.
+        final failure = classifyQueueFailure(
+          error,
+          retryableStatuses: const {409},
+        );
         if (accountIsCurrent()) {
-          db.db.execute(
-            'UPDATE foreign_payments_outbox SET last_error=? WHERE namespace=? AND seq=?',
-            [
-              error is ApiException
-                  ? 'http_${error.statusCode ?? 0}'
-                  : 'unavailable',
-              namespace,
-              row['seq'],
-            ],
-          );
+          final lastError = error is ApiException
+              ? 'http_${error.statusCode ?? 0}'
+              : 'unavailable';
+          final attempts = (row['attempts'] as int? ?? 0) + 1;
+          switch (failure) {
+            case QueueFailure.network:
+              db.db.execute(
+                'UPDATE foreign_payments_outbox SET last_error=? WHERE namespace=? AND seq=?',
+                [lastError, namespace, row['seq']],
+              );
+            case QueueFailure.retryable:
+              db.db.execute(
+                'UPDATE foreign_payments_outbox SET last_error=?, attempts=?, next_attempt_at=? '
+                'WHERE namespace=? AND seq=?',
+                [
+                  lastError,
+                  attempts,
+                  _now().add(queueBackoff(attempts)).millisecondsSinceEpoch,
+                  namespace,
+                  row['seq'],
+                ],
+              );
+            case QueueFailure.permanent:
+              db.db.execute(
+                'UPDATE foreign_payments_outbox SET last_error=?, attempts=?, parked=1 '
+                'WHERE namespace=? AND seq=?',
+                [lastError, attempts, namespace, row['seq']],
+              );
+          }
         }
         if (accountIsCurrent()) {
           _save(
@@ -685,6 +783,9 @@ class ForeignPaymentsRepository {
             }),
           );
         }
+        // Could not reach the service: the remaining changes would each wait
+        // out their own timeout. Leave them for the next trigger.
+        if (failure == QueueFailure.network) break;
       }
     }
     if (accountIsCurrent()) {

@@ -44,11 +44,20 @@ class SyncQueue {
     _appDb.db.execute('''CREATE TABLE IF NOT EXISTS account_sync_state (
       namespace TEXT PRIMARY KEY, device_id TEXT, last_server_seq INTEGER NOT NULL DEFAULT 0,
       last_synced_at INTEGER)''');
+    // A change claimed by a push that never finished (the process died) goes
+    // back in line. One the server already applied (in_flight = 2) must not:
+    // it is only waiting for its fresh server copy to be stored.
     _appDb.db.execute(
-      'UPDATE sync_pending_changes SET in_flight=0 WHERE namespace=?',
+      'UPDATE sync_pending_changes SET in_flight=0 WHERE namespace=? AND in_flight=1',
       [namespace],
     );
   }
+
+  /// `in_flight` value of a change the server has applied but whose server
+  /// copy has not been stored locally yet. It is never pushed again, yet keeps
+  /// overlaying the stored row (so the edit does not flicker back to the old
+  /// value) until [purgeApplied] runs after the server copy is saved.
+  static const _applied = 2;
 
   /// Records a local edit.
   ///
@@ -190,12 +199,44 @@ class SyncQueue {
     }).toList();
   }
 
+  /// Changes still waiting for the server (applied ones are not waiting).
   int get pendingCount =>
       _appDb.db.select(
-            'SELECT COUNT(*) AS c FROM sync_pending_changes WHERE namespace = ?',
+            'SELECT COUNT(*) AS c FROM sync_pending_changes WHERE namespace = ? AND in_flight != $_applied',
             [namespace],
           ).first['c']
           as int;
+
+  /// The server applied this change. It leaves the push queue for good (never
+  /// re-sent, not counted as pending) but stays as an overlay until
+  /// [purgeApplied], so a failed refetch cannot make the edit look undone.
+  void markApplied(int clientSeq) {
+    _appDb.db.execute(
+      'UPDATE sync_pending_changes SET in_flight=$_applied WHERE namespace=? AND client_seq=?',
+      [namespace, clientSeq],
+    );
+    onChanged?.call();
+  }
+
+  /// Entities that have applied changes awaiting [purgeApplied].
+  Set<String> appliedEntities() => {
+    for (final row in _appDb.db.select(
+      'SELECT DISTINCT entity FROM sync_pending_changes WHERE namespace=? AND in_flight=$_applied',
+      [namespace],
+    ))
+      row['entity'] as String,
+  };
+
+  /// Drops applied changes of [entities] once their server copy is stored.
+  void purgeApplied(Iterable<String> entities) {
+    for (final entity in entities) {
+      _appDb.db.execute(
+        'DELETE FROM sync_pending_changes WHERE namespace=? AND entity=? AND in_flight=$_applied',
+        [namespace, entity],
+      );
+    }
+    onChanged?.call();
+  }
 
   void remove(int clientSeq) {
     _appDb.db.execute(
@@ -216,8 +257,9 @@ class SyncQueue {
 
   void release(List<SyncChange> changes) {
     for (final change in changes) {
+      // Only what is still claimed: a change the server applied stays applied.
       _appDb.db.execute(
-        'UPDATE sync_pending_changes SET in_flight=0 WHERE namespace=? AND client_seq=?',
+        'UPDATE sync_pending_changes SET in_flight=0 WHERE namespace=? AND client_seq=? AND in_flight=1',
         [namespace, change.clientSeq],
       );
     }

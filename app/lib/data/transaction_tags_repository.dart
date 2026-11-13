@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 import 'api_exception.dart';
 import 'local/app_database.dart';
+import 'local/queue_retry_policy.dart';
 import 'user_cards_repository.dart';
 
 export 'user_cards_repository.dart' show TransactionTag;
@@ -20,6 +21,7 @@ class TransactionTagsRepository extends ChangeNotifier {
   final String accessToken;
   final http.Client client;
   final VoidCallback? onChanged;
+  final DateTime Function() _now;
   bool isSyncing = false;
   Future<void>? _syncFuture;
   bool _syncAgain = false;
@@ -44,7 +46,8 @@ class TransactionTagsRepository extends ChangeNotifier {
     required this.accessToken,
     required this.client,
     this.onChanged,
-  });
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now;
 
   List<TransactionTag> get allTags => database.db
       .select(
@@ -60,6 +63,33 @@ class TransactionTagsRepository extends ChangeNotifier {
             [namespace],
           ).single['n']
           as int;
+
+  /// Changes the server refused for good. They stay queued (and the local
+  /// state keeps showing them) but are not retried until [retryParked].
+  int get parkedCount =>
+      database.db.select(
+            'SELECT count(*) n FROM transaction_tag_outbox WHERE namespace=? AND parked=1',
+            [namespace],
+          ).single['n']
+          as int;
+
+  /// Makes every change waiting out a backoff due again (the connection came
+  /// back). Parked changes stay parked.
+  void resetBackoff() => database.db.execute(
+    'UPDATE transaction_tag_outbox SET next_attempt_at=0 '
+    'WHERE namespace=? AND parked=0 AND next_attempt_at>0',
+    [namespace],
+  );
+
+  /// Puts every parked change back in the queue (an explicit retry).
+  void retryParked() {
+    database.db.execute(
+      'UPDATE transaction_tag_outbox SET parked=0, attempts=0, next_attempt_at=0, last_error=NULL '
+      'WHERE namespace=? AND parked=1',
+      [namespace],
+    );
+    _changed();
+  }
   bool get hasSnapshot => _snapshotCache ??= database.db.select(
     'SELECT 1 FROM transaction_tag_sync_state WHERE namespace=?',
     [namespace],
@@ -416,10 +446,12 @@ class TransactionTagsRepository extends ChangeNotifier {
         'Content-Type': 'application/json',
       };
       // Definitions first; independent links retain their own mutation clock.
+      // Only changes that are due: not parked, past their backoff.
       final pending =
           database.db.select(
-            'SELECT * FROM transaction_tag_outbox WHERE namespace=? ORDER BY seq',
-            [namespace],
+            'SELECT * FROM transaction_tag_outbox '
+            'WHERE namespace=? AND parked=0 AND next_attempt_at<=? ORDER BY seq',
+            [namespace, _now().millisecondsSinceEpoch],
           ).toList()..sort((a, b) {
             final x = jsonDecode(a['payload_json'] as String) as Map;
             final y = jsonDecode(b['payload_json'] as String) as Map;
@@ -451,11 +483,16 @@ class TransactionTagsRepository extends ChangeNotifier {
         } catch (error) {
           if (_disposed) return;
           lastError = error.toString();
-          database.db.execute(
-            'UPDATE transaction_tag_outbox SET attempts=attempts+1,last_error=? WHERE namespace=? AND mutation_id=?',
-            [lastError, namespace, row['mutation_id']],
+          // A 409 here only means "try again", so it backs off, not parks.
+          final failure = classifyQueueFailure(
+            error,
+            retryableStatuses: const {409},
           );
-          // A pending offline transaction must not block independent tag edits.
+          _recordFailure(row, failure);
+          // Could not reach the server: the remaining rows (and the snapshot
+          // download) would each wait out their own timeout. Stop here.
+          if (failure == QueueFailure.network) rethrow;
+          // Otherwise a bad row must not block independent tag edits.
         }
       }
       if (_disposed) return;
@@ -548,6 +585,35 @@ class TransactionTagsRepository extends ChangeNotifier {
     } finally {
       isSyncing = false;
       if (!_disposed) notifyListeners();
+    }
+  }
+
+  void _recordFailure(Map<String, Object?> row, QueueFailure failure) {
+    final attempts = (row['attempts'] as int? ?? 0) + 1;
+    switch (failure) {
+      case QueueFailure.network:
+        database.db.execute(
+          'UPDATE transaction_tag_outbox SET last_error=? WHERE namespace=? AND mutation_id=?',
+          [lastError, namespace, row['mutation_id']],
+        );
+      case QueueFailure.retryable:
+        database.db.execute(
+          'UPDATE transaction_tag_outbox SET attempts=?,last_error=?,next_attempt_at=? '
+          'WHERE namespace=? AND mutation_id=?',
+          [
+            attempts,
+            lastError,
+            _now().add(queueBackoff(attempts)).millisecondsSinceEpoch,
+            namespace,
+            row['mutation_id'],
+          ],
+        );
+      case QueueFailure.permanent:
+        database.db.execute(
+          'UPDATE transaction_tag_outbox SET attempts=?,last_error=?,parked=1 '
+          'WHERE namespace=? AND mutation_id=?',
+          [attempts, lastError, namespace, row['mutation_id']],
+        );
     }
   }
 

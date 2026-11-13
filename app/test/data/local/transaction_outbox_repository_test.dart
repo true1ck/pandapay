@@ -125,7 +125,8 @@ void main() {
     final sentCount = await outbox.flush(repo);
 
     expect(sentCount, 0);
-    final remaining = await outbox.pending();
+    // A counted failure backs off, so it is no longer due; all() still lists it.
+    final remaining = await outbox.all();
     expect(remaining, hasLength(1));
     expect(remaining.single.lastError, isNotNull);
   });
