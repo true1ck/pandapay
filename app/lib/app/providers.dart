@@ -31,6 +31,8 @@ import '../data/analytics.dart';
 import '../data/app_status_repository.dart';
 import '../data/api_exception.dart';
 import '../data/auth_api.dart';
+import '../data/connectivity/known_connectivity.dart';
+import '../data/connectivity/online_stream.dart';
 import '../data/product_access_api.dart';
 import '../data/api_request_headers_client.dart';
 import '../data/authenticated_http_client.dart';
@@ -2763,12 +2765,19 @@ bool connectivityResultToIsOnline(List<ConnectivityResult> results) {
   return results.any((r) => r != ConnectivityResult.none);
 }
 
+///
+/// WP-C1: the stream is seeded with the current state (see
+/// [connectivityOnlineStream]) so readers never see "unknown" on a late
+/// subscription, and [KnownConnectivity] (behind `_isKnownOffline`) is updated
+/// on every emission. It is subscribed at the app root
+/// (`connectivityBootstrapProvider`) so the value is known before the
+/// signed-in shell's lifecycle listeners start.
 final isOnlineProvider = StreamProvider<bool>((ref) {
-  return Connectivity().onConnectivityChanged.map((results) {
-    final online = connectivityResultToIsOnline(results);
-    _lastKnownOffline = !online;
-    return online;
-  });
+  return connectivityOnlineStream(
+    ref.watch(connectivityProvider),
+    toOnline: connectivityResultToIsOnline,
+    onValue: (online) => KnownConnectivity.online = online,
+  );
 });
 
 final outboxRepositoryProvider = FutureProvider<TransactionOutboxRepository>((
@@ -4828,9 +4837,11 @@ bool _isAuthenticationFailure(Object error) {
   return isAuthenticationFailure(error);
 }
 
-bool _lastKnownOffline = false;
-
-bool _isKnownOffline() => _lastKnownOffline;
+/// True once `isOnlineProvider` has reported the radio down (and until it
+/// reports it up). Unknown counts as online. The value lives in
+/// [KnownConnectivity] so code outside this file (`isOfflineLike`, the
+/// reachability probe) reads the same state.
+bool _isKnownOffline() => KnownConnectivity.knownOffline;
 
 /// The cache is always best-effort — every offline-cache-aware provider
 /// below calls this instead of watching responseCacheProvider directly, so
