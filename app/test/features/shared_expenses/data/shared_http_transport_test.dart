@@ -440,4 +440,29 @@ void main() {
       }
     },
   );
+
+  test(
+    '429 carries a bounded whole-second Retry-After; junk is ignored',
+    () async {
+      Future<SharedTransportException> failWith(String? retryAfter) async {
+        handler = (_) async => http.Response(
+          jsonEncode({'error': 'rate_limited'}),
+          429,
+          headers: {...headers, 'retry-after': ?retryAfter},
+        );
+        try {
+          await remote.execute(fixtures.command());
+        } on SharedTransportException catch (error) {
+          return error;
+        }
+        throw StateError('expected a refusal');
+      }
+
+      expect((await failWith('30')).retryAfter, const Duration(seconds: 30));
+      expect((await failWith('999999')).retryAfter, const Duration(hours: 1));
+      expect((await failWith('soon')).retryAfter, isNull);
+      expect((await failWith(null)).retryAfter, isNull);
+      expect((await failWith('30')).statusCode, 429);
+    },
+  );
 }

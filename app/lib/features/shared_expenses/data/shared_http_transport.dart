@@ -84,6 +84,14 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
     return token;
   }
 
+  /// `Retry-After` in whole seconds (the HTTP-date form is ignored). Bounded so
+  /// a bad header cannot park a command for longer than an hour.
+  static Duration? _retryAfter(String? header) {
+    final seconds = int.tryParse(header?.trim() ?? '');
+    if (seconds == null || seconds < 1) return null;
+    return Duration(seconds: seconds > 3600 ? 3600 : seconds);
+  }
+
   Future<Map<String, Object?>?> _request(
     String method,
     String path, {
@@ -126,6 +134,7 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
         throw SharedTransportException(
           statusCode: response.statusCode >= 300 ? response.statusCode : null,
           code: 'invalid_response',
+          retryAfter: _retryAfter(response.headers['retry-after']),
         );
       }
       final decoded = jsonDecode(utf8.decode(bytes, allowMalformed: false));
@@ -152,6 +161,7 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
           existingContextId: sharedUuid(result['existingContextId'])
               ? result['existingContextId'] as String
               : null,
+          retryAfter: _retryAfter(response.headers['retry-after']),
         );
       }
       return result;

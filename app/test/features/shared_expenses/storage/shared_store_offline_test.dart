@@ -196,43 +196,52 @@ void main() {
       expect(store.operation(_idLow)!.state, SharedCommandState.rejected);
     });
 
-    test('a different 403 code is permanent even with a pending create', () async {
-      final c = await inviteAheadOfCreate();
-      await store.fail(c, statusCode: 403, serverCode: 'not_owner', now: 1);
-      expect(store.operation(_idLow)!.state, SharedCommandState.rejected);
-    });
+    test(
+      'a different 403 code is permanent even with a pending create',
+      () async {
+        final c = await inviteAheadOfCreate();
+        await store.fail(c, statusCode: 403, serverCode: 'not_owner', now: 1);
+        expect(store.operation(_idLow)!.state, SharedCommandState.rejected);
+      },
+    );
 
-    test('409 retryable and 429 retry; plain 409 conflicts; 400 rejects', () async {
-      await store.enqueue(_rename(_idLow, _ctxA));
-      await store.fail(
-        await claim(1),
-        statusCode: 409,
-        retryable: true,
-        now: 1,
-      );
-      expect(store.operation(_idLow)!.state, SharedCommandState.retry);
-      await store.fail(await claim(999999), statusCode: 429, now: 999999);
-      expect(store.operation(_idLow)!.state, SharedCommandState.retry);
-      await store.fail(await claim(9999999), statusCode: 409, now: 9999999);
-      expect(store.operation(_idLow)!.state, SharedCommandState.conflict);
-      await store.requeue(_idLow);
-      await store.fail(await claim(0), statusCode: 400, now: 0);
-      expect(store.operation(_idLow)!.state, SharedCommandState.rejected);
-    });
+    test(
+      '409 retryable and 429 retry; plain 409 conflicts; 400 rejects',
+      () async {
+        await store.enqueue(_rename(_idLow, _ctxA));
+        await store.fail(
+          await claim(1),
+          statusCode: 409,
+          retryable: true,
+          now: 1,
+        );
+        expect(store.operation(_idLow)!.state, SharedCommandState.retry);
+        await store.fail(await claim(999999), statusCode: 429, now: 999999);
+        expect(store.operation(_idLow)!.state, SharedCommandState.retry);
+        await store.fail(await claim(9999999), statusCode: 409, now: 9999999);
+        expect(store.operation(_idLow)!.state, SharedCommandState.conflict);
+        await store.requeue(_idLow);
+        await store.fail(await claim(0), statusCode: 400, now: 0);
+        expect(store.operation(_idLow)!.state, SharedCommandState.rejected);
+      },
+    );
 
-    test('429 respects Retry-After when it is longer than the backoff', () async {
-      await store.enqueue(_rename(_idLow, _ctxA));
-      await store.fail(
-        await claim(1000),
-        statusCode: 429,
-        retryAfter: const Duration(minutes: 20),
-        now: 1000,
-      );
-      final next = db.db
-          .select('SELECT next_attempt FROM shared_commands')
-          .single['next_attempt'];
-      expect(next, 1000 + const Duration(minutes: 20).inMilliseconds);
-    });
+    test(
+      '429 respects Retry-After when it is longer than the backoff',
+      () async {
+        await store.enqueue(_rename(_idLow, _ctxA));
+        await store.fail(
+          await claim(1000),
+          statusCode: 429,
+          retryAfter: const Duration(minutes: 20),
+          now: 1000,
+        );
+        final next = db.db
+            .select('SELECT next_attempt FROM shared_commands')
+            .single['next_attempt'];
+        expect(next, 1000 + const Duration(minutes: 20).inMilliseconds);
+      },
+    );
 
     test('without Retry-After the 5s doubling backoff is unchanged', () async {
       await store.enqueue(_rename(_idLow, _ctxA));
@@ -245,19 +254,25 @@ void main() {
       );
     });
 
-    test('server errors stop at the attempt cap with a surfaced error', () async {
-      await store.enqueue(_rename(_idLow, _ctxA));
-      var now = 0;
-      for (var i = 0; i < sharedMaxAttempts; i++) {
-        expect(store.operation(_idLow)!.state, isNot(SharedCommandState.rejected));
-        now += 1000000;
-        await store.fail(await claim(now), statusCode: 503, now: now);
-      }
-      final op = store.operation(_idLow)!;
-      expect(op.state, SharedCommandState.rejected);
-      expect(op.errorCode, startsWith('retry_limit'));
-      expect(store.attentionCount, 1);
-    });
+    test(
+      'server errors stop at the attempt cap with a surfaced error',
+      () async {
+        await store.enqueue(_rename(_idLow, _ctxA));
+        var now = 0;
+        for (var i = 0; i < sharedMaxAttempts; i++) {
+          expect(
+            store.operation(_idLow)!.state,
+            isNot(SharedCommandState.rejected),
+          );
+          now += 1000000;
+          await store.fail(await claim(now), statusCode: 503, now: now);
+        }
+        final op = store.operation(_idLow)!;
+        expect(op.state, SharedCommandState.rejected);
+        expect(op.errorCode, startsWith('retry_limit'));
+        expect(store.attentionCount, 1);
+      },
+    );
 
     test('being offline never burns the cap', () async {
       await store.enqueue(_rename(_idLow, _ctxA));
@@ -365,14 +380,17 @@ void main() {
       expect(await store.claim(now: 2, leaseId: 'worker'), isNull);
     });
 
-    test('Discard of a refused create removes the waiting invite too', () async {
-      await store.enqueue(_create(_idHigh, _ctxA));
-      await store.enqueue(_invite(_idLow, _ctxA));
-      await store.fail(await claim(1), statusCode: 422, now: 1);
-      expect(await store.discard(_idHigh), isTrue);
-      expect(store.operation(_idHigh), isNull);
-      expect(store.operation(_idLow), isNull);
-    });
+    test(
+      'Discard of a refused create removes the waiting invite too',
+      () async {
+        await store.enqueue(_create(_idHigh, _ctxA));
+        await store.enqueue(_invite(_idLow, _ctxA));
+        await store.fail(await claim(1), statusCode: 422, now: 1);
+        expect(await store.discard(_idHigh), isTrue);
+        expect(store.operation(_idHigh), isNull);
+        expect(store.operation(_idLow), isNull);
+      },
+    );
 
     test('another account never sees these rows', () async {
       await store.enqueue(_rename(_idLow, _ctxA));

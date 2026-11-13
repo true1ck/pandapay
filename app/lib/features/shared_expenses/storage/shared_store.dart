@@ -183,6 +183,7 @@ class SharedExpensesStore {
     );
     return rows.isEmpty ? null : rows.single['operation_id'] as String;
   }
+
   Future<T> _write<T>(T Function() action) => recoveryGate.run(() async {
     if (!isCurrent()) throw const SharedLocalException('account_changed');
     final name = 'shared_write_${_sequence++}';
