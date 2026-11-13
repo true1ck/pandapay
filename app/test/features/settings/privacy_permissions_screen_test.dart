@@ -21,7 +21,11 @@ class _Server {
   late final http.Client client = MockClient((request) async {
     if (request.method == 'POST' && request.url.path == '/consents') {
       final body = jsonDecode(request.body) as Map<String, dynamic>;
-      posted.add(body);
+      // WP-C11: replay ids are checked in consent_offline_test.dart.
+      expect(body['clientMutationId'], isNotEmpty);
+      posted.add(Map.of(body)
+        ..remove('clientMutationId')
+        ..remove('clientRecordedAt'));
       latest.removeWhere((c) => c['purpose'] == body['purpose']);
       latest.add({
         'purpose': body['purpose'],

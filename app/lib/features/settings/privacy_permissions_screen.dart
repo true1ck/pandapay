@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../account/contributions_opt_in.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/device_permissions.dart';
@@ -551,11 +552,8 @@ class _ContributionToggle extends ConsumerWidget {
           ),
           value: optedIn,
           onChanged: (v) async {
-            final repo = ref.read(userCardsRepositoryProvider);
-            if (repo == null) return;
             try {
-              await repo.setContributionsOptIn(v);
-              ref.invalidate(profileProvider);
+              await setContributionsOptInLocalFirst(ref, v);
             } catch (e) {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(

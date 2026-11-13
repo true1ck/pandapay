@@ -24,6 +24,16 @@ class ChangelogEntry {
     required this.publishedAt,
   });
 
+  /// Same shape the server sends, so a saved copy decodes with fromJson.
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'app_version': appVersion,
+    'title': title,
+    'body_markdown': bodyMarkdown,
+    'highlights_data_change': highlightsDataChange,
+    'published_at': publishedAt.toIso8601String(),
+  };
+
   factory ChangelogEntry.fromJson(Map<String, dynamic> json) {
     return ChangelogEntry(
       id: json['id'] as String,
@@ -45,7 +55,7 @@ class ChangelogRepository {
   ChangelogRepository({required this.apiBaseUrl, http.Client? client}) : _client = client ?? http.Client();
 
   Future<List<ChangelogEntry>> fetch() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/changelog'));
+    final response = await _client.get(Uri.parse('$apiBaseUrl/changelog')).timeout(const Duration(seconds: 8));
     if (response.statusCode != 200) {
       throw ApiException('GET /changelog failed: ${response.statusCode} ${response.body}');
     }

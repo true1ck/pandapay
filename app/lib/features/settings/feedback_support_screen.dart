@@ -8,7 +8,8 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
-import '../../data/support_api.dart';
+import '../account/account_local_first.dart';
+import '../account/support_submit.dart';
 import '../onboarding/request_unsupported_card_screen.dart';
 import '../../app/env.dart';
 
@@ -130,12 +131,9 @@ class _FeedbackFormState extends ConsumerState<_FeedbackForm> {
       _error = null;
     });
     try {
-      final api = SupportApi(
-        apiBaseUrl: supportApiBaseUrl,
+      final result = await submitTicketLocalFirst(
+        ref,
         accessToken: widget.accessToken,
-        client: ref.read(authenticatedHttpClientProvider),
-      );
-      await api.submitTicket(
         kind: _kind,
         message: message,
         diagnostics: _diagnostics,
@@ -146,7 +144,11 @@ class _FeedbackFormState extends ConsumerState<_FeedbackForm> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Thanks for letting us know'),
-          content: const Text('We typically respond within 2 business days.'),
+          content: Text(
+            result == AccountWrite.queued
+                ? savedOfflineMessage
+                : 'We typically respond within 2 business days.',
+          ),
           actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('OK'))],
         ),
       );

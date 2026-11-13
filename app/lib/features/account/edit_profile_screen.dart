@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../account/account_local_first.dart';
 import '../../data/account_name_api.dart';
 import '../../data/api_exception.dart';
 import '../settings/feedback_support_screen.dart';
@@ -71,14 +72,40 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       _error = null;
     });
     try {
-      final profile = await api.save(_nameController.text);
-      await ref.read(profileSnapshotWriterProvider)(profile);
+      final name = AccountNameApi.clean(_nameController.text);
+      Map<String, dynamic>? profile;
+      final result = await sendOrQueue(
+        ref,
+        kind: AccountCommand.profileName,
+        target: 'profile_name',
+        payload: {'name': name},
+        live: () async => profile = await api.save(name),
+      );
+      if (result == AccountWrite.sent) {
+        await ref.read(profileSnapshotWriterProvider)(profile!);
+      } else {
+        // Saved offline: show the new name everywhere at once (profile cache
+        // and the display-name column); the server write is queued.
+        final current = ref.read(profileProvider).valueOrNull ?? const {};
+        await ref.read(profileSnapshotWriterProvider)({
+          ...current,
+          'display_name': name,
+        });
+      }
       if (!mounted) return;
       setState(() {
-        _savedName = (profile['display_name'] as String?) ?? '';
+        _savedName = name;
         _nameController.text = _savedName;
       });
-      messenger.showSnackBar(const SnackBar(content: Text('Name updated')));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            result == AccountWrite.queued
+                ? savedOfflineMessage
+                : 'Name updated',
+          ),
+        ),
+      );
     } catch (error) {
       if (mounted) setState(() => _error = userFacingErrorMessage(error));
     } finally {
@@ -116,6 +143,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           final jpeg = await prepareAvatarPhoto(picked);
           await api.uploadPhoto(jpeg);
       }
+      await clearOwnAvatarCache(ref);
       ref.invalidate(avatarProvider);
       await ref.read(avatarProvider.future);
       if (mounted) messenger.showSnackBar(const SnackBar(content: Text('Avatar updated')));
@@ -139,6 +167,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     });
     try {
       await api.setPhotoSharing(share);
+      await clearOwnAvatarCache(ref);
       ref.invalidate(avatarProvider);
       await ref.read(avatarProvider.future);
     } catch (error) {

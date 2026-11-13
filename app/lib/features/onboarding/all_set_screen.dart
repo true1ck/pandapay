@@ -10,6 +10,7 @@ import '../../data/api_exception.dart';
 import '../../data/card_snapshots.dart';
 import '../../main.dart' show MoneyText;
 import '../cards/recommendation_confidence.dart';
+import '../account/needs_internet.dart';
 import 'entry_brand.dart';
 import 'onboarding_back.dart';
 
@@ -135,7 +136,7 @@ class _AllSetScreenState extends ConsumerState<AllSetScreen> {
                     ),
                     textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
                   ),
-                  onPressed: _finishing
+                  onPressed: _finishing || ref.watch(needsInternetProvider)
                       ? null
                       : () async {
                           if (_finishing) return;

@@ -8,11 +8,11 @@ import '../../app/providers.dart'
         consentsApiProvider,
         profileSnapshotWriterProvider,
         userCardsRepositoryProvider;
-import '../../data/api_exception.dart';
 import '../../data/local_first/command_outbox.dart';
 import '../../data/support_api.dart';
 import '../consent/consent_commands.dart';
 import '../settings/feedback_support_screen.dart' show supportApiBaseUrl;
+import '../settings/merchant_rules_offline.dart';
 import 'account_local_first.dart';
 
 /// WP-C11 handlers for [AccountCommand] kinds. Built from a provider `Ref` at
@@ -24,6 +24,7 @@ import 'account_local_first.dart';
 Map<String, CommandHandler> accountCommandHandlers(dynamic ref) {
   dynamic need(dynamic v) => v ?? (throw StateError('Sign in to send this'));
   return {
+    ...merchantRuleHandlers(ref),
     AccountCommand.consentSubmit: (p) =>
         replayConsent(need(ref.read(consentsApiProvider)), p),
     AccountCommand.profileName: (p) async {
