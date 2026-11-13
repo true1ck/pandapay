@@ -2813,9 +2813,11 @@ final transactionAttachmentsProvider =
     });
 
 final pendingOutboxCountProvider = FutureProvider<int>((ref) async {
+  // `all()`, not `pending()`: rows waiting out a backoff or parked are still
+  // unsent work the person has to be told about.
   final items = await (await ref.watch(
     outboxRepositoryProvider.future,
-  )).pending();
+  )).all();
   final duplicateOutbox = await ref.watch(
     duplicateResolutionOutboxRepositoryProvider.future,
   );

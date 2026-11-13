@@ -141,7 +141,7 @@ final accountSignOutProvider = Provider<AccountSignOut>((ref) {
     await attempt(() async {
       queued += (await (await ref.read(
         outboxRepositoryProvider.future,
-      )).pending()).length;
+      )).all()).length;
     });
     await attempt(() async {
       queued += (await ref.read(
