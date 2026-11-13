@@ -11,6 +11,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../data/api_exception.dart';
+import '../cards/add_card_local_first.dart';
 import '../cards/find_cards_screen.dart';
 import '../consent/sms_access_disclosure.dart';
 import '../cards/card_visual.dart';
@@ -102,7 +103,12 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
         for (final id in _selected) {
           final userCardId =
               _addedIdsByProduct[id] ??
-              await repo.addCard(id, last4: _scannedLast4ByProductId[id]);
+              // WP-C6: offline (already signed in) the card is queued.
+              (await addCardLocalFirst(
+                ref,
+                cardProductId: id,
+                last4: _scannedLast4ByProductId[id],
+              )).id;
           _addedIdsByProduct[id] = userCardId;
           addedIds.add(userCardId);
         }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../app/design/bamboo_components.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
@@ -428,13 +429,40 @@ class SubscriptionsScreen extends ConsumerWidget {
     }
 
     try {
-      await repository.createRecurring(
-        displayName: draft.displayName,
-        amountInr: draft.amountInr,
-        cadenceDays: draft.cadenceDays,
-        nextExpectedOn: draft.nextExpectedOn,
-        autopayStatus: draft.autopayStatus,
-      );
+      // H3: a client uuid + clock make a retry safe. Online it is sent now,
+      // exactly as before; when the server cannot be reached the add is queued
+      // and shows on the list at once.
+      final id = Uuid().v4();
+      final editedAt = DateTime.now().toUtc();
+      try {
+        await repository.createRecurring(
+          displayName: draft.displayName,
+          amountInr: draft.amountInr,
+          cadenceDays: draft.cadenceDays,
+          nextExpectedOn: draft.nextExpectedOn,
+          autopayStatus: draft.autopayStatus,
+          id: id,
+          clientEditedAt: editedAt,
+        );
+      } catch (e) {
+        if (!kInsightsLocalFirst || !isOfflineLike(e)) rethrow;
+        final n = draft.nextExpectedOn;
+        await queueCommand(
+          ref,
+          kind: OverlayCommand.recurringCreate,
+          target: id,
+          payload: {
+            'id': id,
+            'displayName': draft.displayName,
+            'amountInr': draft.amountInr,
+            'cadenceDays': draft.cadenceDays,
+            'nextExpectedOn':
+                '${n.year.toString().padLeft(4, '0')}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}',
+            'autopayStatus': draft.autopayStatus,
+            'clientEditedAt': editedAt.toIso8601String(),
+          },
+        );
+      }
       ref.invalidate(recurringReportProvider);
       if (context.mounted) {
         ScaffoldMessenger.of(
@@ -1784,6 +1812,7 @@ class _SeriesCard extends ConsumerWidget {
               'nextExpectedOn':
                   '${n.year.toString().padLeft(4, '0')}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}',
               'autopayStatus': autopayStatus,
+              'clientEditedAt': DateTime.now().toUtc().toIso8601String(),
             },
           );
         }
@@ -1844,7 +1873,10 @@ class _SeriesCard extends ConsumerWidget {
           ref,
           kind: OverlayCommand.recurringDismiss,
           target: series.id,
-          payload: {'id': series.id},
+          payload: {
+            'id': series.id,
+            'clientEditedAt': DateTime.now().toUtc().toIso8601String(),
+          },
           cancels: const [],
         );
       }

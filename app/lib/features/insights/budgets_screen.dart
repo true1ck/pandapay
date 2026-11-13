@@ -589,13 +589,21 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
                 b.period == _period,
           )
           .firstOrNull;
+      // H3-7: the cached list can be stale; the phone's own rows and queued
+      // saves say too.
+      final localId = await localBudgetIdFor(
+        ref,
+        scope: _scope,
+        scopeRefId: _scopeRefId,
+        period: _period,
+      );
       // WP-C7: an existing budget is edited local first (as before). A new one
       // is sent straight away while the server answers (unchanged for an online
       // user); when it cannot be reached the budget is kept on the phone with
       // an estimate of what is spent, and the command outbox delivers it with
       // a client id so a retry cannot duplicate it.
       Future<void> saveLocally() async {
-        final id = const Uuid().v4();
+        final id = localId ?? const Uuid().v4();
         if (existing == null) {
           await rememberLocalBudget(
             ref,
@@ -624,7 +632,7 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
         ref.invalidate(budgetsProvider);
       }
 
-      if (existing != null) {
+      if (existing != null || localId != null) {
         await saveLocally();
       } else {
         try {
