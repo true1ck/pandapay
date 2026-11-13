@@ -7,6 +7,7 @@ const express = require('express');
 const { createCorsPolicy } = require('./cors_policy');
 const { jsonBodyParser, jsonBodyErrorHandler } = require('./request_limits');
 const { rejectInvalidUuid } = require('./http_db_errors');
+const { syncPushBodyParser } = require('./sync_push_body');
 const { validateSyncRegistration, validateSyncPushRequest, validateSyncPushChange, validateSyncPullQuery, validateSyncAck, validateSyncConflictId, syncRejectionDetail, createSyncPushContext, processSyncPushItem, syncDeviceExists, respondUnknownSyncDevice, respondDbError } = require('./sync_request_validation');
 const { createLoungeUsagePostHandler } = require('./lounge_usage_route');
 const { createCatalogueHandler } = require('./catalogue_route');
@@ -155,6 +156,8 @@ app.use(...createCorsPolicy());
 require('./sms_v2').registerSmsV2(app, { requireAuth, requireAdmin, withUserClient, loadUserCardForState, applyTransactionState, reverseTransactionState });
 // LANE-D-1: clients that do not send `X-Sms-Pipeline: v2` (every shipped app) get `transfer` instead of `refund` in JSON answers.
 app.use(require('./legacy_entry_kind').legacyEntryKindFilter);
+// /sync/push carries up to 200 changes (16 KiB commitment documents): larger, explicit limit, mounted first so the 100 KiB global parser skips the parsed body.
+app.use('/sync/push', syncPushBodyParser);
 app.use(jsonBodyParser);
 app.use(jsonBodyErrorHandler);
 
