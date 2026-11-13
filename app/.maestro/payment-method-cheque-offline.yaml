@@ -9,11 +9,13 @@ appId: app.pandapay.pandapay.dev2
 - launchApp
 - setAirplaneMode: enabled
 - tapOn: "Add transaction"
-- tapOn: "0.00"
-- inputText: "3300"
+# Merchant first: once the account has cards, typing an amount shows a recommendation panel
+# that pushes the merchant field under the keyboard.
 - tapOn: "Search or enter a merchant"
 - inputText: "Maestro Offline Cheque"
-- tapOn: "Merchant or payee"
+- tapOn: "0.00"
+- inputText: "3300"
+- tapOn: "Add transaction"
 - scrollUntilVisible:
     element: "UPI / bank"
 - tapOn: "UPI / bank"

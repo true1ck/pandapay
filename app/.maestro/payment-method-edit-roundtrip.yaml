@@ -7,10 +7,10 @@ appId: app.pandapay.pandapay.dev2
 - stopApp
 - launchApp
 - tapOn: "TOTAL SPENT.*"
-- tapOn: "100, Other.*"
+- tapOn: "Merchants"
 - scrollUntilVisible:
-    element: "Maestro NEFT.*"
-- tapOn: "Maestro NEFT.*"
+    element: ".*Maestro NEFT.*"
+- tapOn: ".*Maestro NEFT.*"
 - scrollUntilVisible:
     element: "13/11/2026.*UPI from bank.*"
 - tapOn: "13/11/2026.*UPI from bank.*"
