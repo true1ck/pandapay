@@ -135,10 +135,13 @@ class _TransferMarkPanelState extends ConsumerState<TransferMarkPanel> {
         (entry.merchantVpa ?? '').isNotEmpty;
     if (!isSelf && !isFamily && !hasPayee) return const SizedBox.shrink();
 
+    final method = transferCheckMethod(entry);
     final title = isSelf
         ? 'Self transfer'
         : isFamily
         ? 'Family transfer'
+        : method != null
+        ? 'Paid by $method. Is this a transfer?'
         : 'Is this a transfer?';
     final body = isSelf
         ? 'Counted as a move between your own accounts, not as spending or '
