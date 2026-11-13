@@ -104,7 +104,20 @@ class FakeServer {
   final Map<String, Object?> profile = {'displayName': 'Test Person'};
   final Set<String> pushedSeqs = {};
   final Set<String> pointsMutations = {};
+  final Map<String, Map<String, dynamic>> commitments = {};
+  final Map<String, Map<String, dynamic>> recurringSeries = {};
+  final List<String> recurringEdits = [];
   int pointsAdjustments = 0;
+  int pushReplays = 0;
+
+  void loseNext(int n, List<String> prefixes) {
+    loseNextResponses = n;
+    losePrefixes = prefixes;
+  }
+
+  /// Limits [loseNextResponses] to requests whose path starts with one of
+  /// these (empty = any mutating request).
+  List<String> losePrefixes = [];
 
   /// An older server: ignores the client's card id and assigns its own.
   bool assignOwnCardIds = false;
@@ -261,7 +274,9 @@ class FakeServer {
     }
     final mutating = request.method != 'GET';
     final response = await _route(rec, request);
-    if (mutating && loseNextResponses > 0) {
+    if (mutating &&
+        loseNextResponses > 0 &&
+        (losePrefixes.isEmpty || losePrefixes.any(rec.path.startsWith))) {
       loseNextResponses--;
       throw http.ClientException('Connection closed before response');
     }
@@ -334,6 +349,15 @@ class FakeServer {
     if (p == '/notifications' && r.method == 'POST') return _notification(r);
     if (p == '/notifications' && r.method == 'GET') {
       return _json(200, {'notifications': notifications});
+    }
+    if (p == '/users/me/name') return _json(200, {'ok': true});
+    if (segs.isNotEmpty && segs[0] == 'recurring') return _recurring(r, segs);
+    if (p == '/consents' && r.method == 'GET') {
+      final latest = <String, Map<String, dynamic>>{};
+      for (final c in consents) {
+        latest['${c['purpose']}'] = c;
+      }
+      return _json(200, {'consents': latest.values.toList()});
     }
     if (p == '/profile' && (r.method == 'PATCH' || r.method == 'PUT')) {
       profile.addAll(r.body ?? const {});
@@ -652,7 +676,9 @@ class FakeServer {
         for (final c in changes.cast<Map<String, dynamic>>()) {
           final seq = c['clientSeq'];
           final dupKey = '${c['entity']}|${c['entityId']}|$seq';
-          if (!pushedSeqs.add(dupKey)) duplicates.add('push $dupKey');
+          // A replayed push (lost answer) is legitimate: edits are field-level
+          // last-writer-wins, so it is idempotent. Counted, not a duplicate.
+          if (!pushedSeqs.add(dupKey)) pushReplays++;
           final entity = c['entity'] as String;
           final id = c['entityId'] as String;
           final payload =
@@ -670,6 +696,14 @@ class FakeServer {
           } else if (entity == 'user_cards') {
             row = cards[id];
             fields = _cardFields(payload);
+          } else if (entity == 'user_commitments') {
+            if (c['op'] == 'delete') {
+              commitments.remove(id);
+            } else {
+              commitments[id] = {...?commitments[id], ...payload};
+            }
+            results.add({'clientSeq': seq, 'applied': true, 'conflicts': 0});
+            continue;
           } else {
             results.add({
               'clientSeq': seq,
@@ -898,5 +932,33 @@ class FakeServer {
     final row = {...b, 'id': newId()};
     notifications.add(row);
     return _json(201, {'notification': row});
+  }
+
+  // ---- recurring (subscriptions, legacy server path) ----
+  Future<http.Response> _recurring(RecordedRequest r, List<String> segs) async {
+    if (segs.length == 1 && r.method == 'GET') {
+      return _json(200, {'series': <Object>[], 'totalAnnualInr': 0});
+    }
+    if (segs.length == 1 && r.method == 'POST') {
+      final id = newId();
+      recurringSeries[id] = {...?r.body, 'id': id};
+      return _json(201, {'id': id});
+    }
+    if (segs.length >= 2) {
+      final row = recurringSeries[segs[1]];
+      if (row == null) return _json(404, {'error': 'not_found'});
+      if (r.method == 'PATCH') {
+        row.addAll(r.body ?? {});
+        recurringEdits.add('patch ${segs[1]}');
+        return _json(200, {'ok': true});
+      }
+      if (r.method == 'POST' && segs.length == 3 && segs[2] == 'dismiss') {
+        row['dismissed'] = true;
+        recurringEdits.add('dismiss ${segs[1]}');
+        return _json(200, {'ok': true});
+      }
+    }
+    unhandled.add('${r.method} ${r.path}');
+    return _json(404, {'error': 'not_found'});
   }
 }

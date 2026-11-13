@@ -2,9 +2,6 @@
 // response, and transaction edits that must survive a refresh.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
-import 'package:pandapay/data/local/financial_store.dart';
-import 'package:pandapay/data/local/sync_queue.dart';
-import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/sync_status/sync_status_providers.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
@@ -96,7 +93,7 @@ void main() {
     expect(app.server.log, isEmpty);
 
     // Reconnect; the first answer is lost after the server applied it.
-    app.server.loseNextResponses = 1;
+    app.server.loseNext(1, ['/transactions']);
     await app.goOnline();
     await app.flushAll();
 

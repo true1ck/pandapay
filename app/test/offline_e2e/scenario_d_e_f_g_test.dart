@@ -159,7 +159,7 @@ void main() {
     expect((await outbox.all()), hasLength(3));
     expect(app.server.log, isEmpty);
 
-    app.server.loseNextResponses = 2;
+    app.server.loseNext(2, ['/transactions']);
     await app.goOnline();
     await app.flushAll();
     final names = app.server.activeTransactions
@@ -168,6 +168,8 @@ void main() {
         .toList()
       ..sort();
     expect(names, ['Synthetic Cafe', 'Voice 0', 'Voice 1']);
+    expect(app.server.count('POST', '/transactions'), 5,
+        reason: '3 entries + 2 replays after lost answers');
     expect(app.server.duplicates, isEmpty);
     expect(app.pending, 0);
   });
@@ -218,14 +220,15 @@ void main() {
 
     await app.restart(online: false);
     expect(app.pending, 3);
+    app.server.loseNext(1, ['/user-cards']); // the add-card answer is lost once
     await app.goOnline();
-    app.server.loseNextResponses = 1; // the add-card answer is lost once
     await app.flushAll();
 
     final serverCards = app.server.cards.values
         .where((c) => c['last4'] == '4444')
         .toList();
     expect(serverCards, hasLength(1), reason: 'card created exactly once');
+    expect(app.server.count('POST', '/user-cards'), 2, reason: 'replayed once');
     final serverId = serverCards.single['id'] as String;
     final txn = app.server.activeTransactions
         .singleWhere((t) => t['merchant_name'] == 'Travel Desk');
@@ -246,6 +249,42 @@ void main() {
     }
   });
   }
+
+  test('f2. a card add that fails (500) does not park the transactions on it',
+      () async {
+    app.server.seedCard(last4: '1111');
+    await app.start();
+    await app.firstSyncOnline();
+    await app.goOffline();
+    final ref = app.ref;
+    final added = await addCardLocalFirst(ref,
+        cardProductId: 'product-2', last4: '5555');
+    final outbox = await app.c.read(outboxRepositoryProvider.future);
+    await outbox.enqueue(
+      userCardId: added.id,
+      amount: Money.fromRupees(310),
+      merchantName: 'Held Shop',
+      occurredAt: DateTime.now(),
+      clientMutationId: '99999999-9999-4999-8999-999999999999',
+    );
+    // The server is back but the card route is failing.
+    app.server.failPrefix['/user-cards'] = 500;
+    await app.goOnline();
+    await app.flushAll(expectDrain: false);
+    expect(app.attention, 0, reason: 'nothing was refused for good');
+    expect(app.server.requests('POST', '/transactions'), isEmpty,
+        reason: 'the transaction waits for its card, it is not sent early');
+    expect(await outbox.parked(), isEmpty);
+
+    app.server.failPrefix.clear();
+    app.advance(const Duration(hours: 1));
+    await app.flushAll();
+    final txn = app.server.activeTransactions
+        .singleWhere((t) => t['merchant_name'] == 'Held Shop');
+    final card = app.server.cards.values.singleWhere((c) => c['last4'] == '5555');
+    expect(txn['user_card_id'], card['id']);
+    expect(app.pending, 0);
+  });
 
   test('g. edit card nickname/last4/fee/points, archive and default offline',
       () async {

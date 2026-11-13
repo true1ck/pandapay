@@ -14,7 +14,6 @@ import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/app_status_repository.dart';
 import 'package:pandapay/data/authenticated_http_client.dart';
@@ -31,7 +30,6 @@ import 'package:pandapay/features/sync/sync_engine.dart';
 import 'package:pandapay/features/sync_status/queue_totals.dart';
 import 'package:pandapay/features/sync_status/sync_status_providers.dart';
 import 'package:pandapay/features/sync_status/reachability_monitor.dart';
-import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'fake_server.dart';
