@@ -71,8 +71,8 @@ void main() {
     expect(find.text('Change phone number'), findsOneWidget);
     expect(find.text('Verified'), findsNothing);
     expect(find.text('Not verified'), findsNothing);
-    // Email has no text field: only the name is editable inline.
-    expect(find.byType(TextField), findsOneWidget);
+    // Email has no text field: only first and last name are editable inline.
+    expect(find.byType(TextField), findsNWidgets(2));
   });
 
   testWidgets('no phone yet: offers Add phone number', (tester) async {
@@ -83,7 +83,7 @@ void main() {
     expect(find.text('Add phone number'), findsOneWidget);
   });
 
-  testWidgets('Save is disabled until the name changes, then saves the cleaned name', (tester) async {
+  testWidgets('Save stays enabled, nothing is sent for an unchanged name, then saves the cleaned name', (tester) async {
     final requests = await mount(
       tester,
       profile: {'id': 'p1', 'display_name': 'Asha', 'email': 'asha@example.com'},
@@ -92,7 +92,7 @@ void main() {
     FilledButton save() => tester.widget<FilledButton>(
       find.descendant(of: find.byKey(const Key('edit-name-save')), matching: find.byType(FilledButton)),
     );
-    expect(save().onPressed, isNull);
+    expect(save().onPressed, isNotNull);
 
     await tester.enterText(find.byKey(const Key('edit-name-field')), '  Asha   Rao ');
     await tester.pump();
@@ -106,6 +106,21 @@ void main() {
     expect(requests.last.method, 'PUT');
     expect(requests.last.url.path, '/users/me/name');
     expect(find.text('Name updated'), findsOneWidget);
+  });
+
+  testWidgets('a saved full name splits into first and last, and saves joined', (tester) async {
+    final requests = await mount(
+      tester,
+      profile: {'id': 'p1', 'display_name': 'Asha Devi Rao', 'email': 'asha@example.com'},
+      phone: typed('+91 •••• 3210'),
+    );
+    expect(find.widgetWithText(TextField, 'Asha'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Devi Rao'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('edit-last-name-field')), 'Rao');
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('edit-name-save')));
+    await tester.pumpAndSettle();
+    expect(jsonDecode(requests.first.body), {'display_name': 'Asha Rao'});
   });
 
   testWidgets('an empty name is refused without a request', (tester) async {

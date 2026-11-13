@@ -31,7 +31,9 @@ class EditProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
-  final _nameController = TextEditingController();
+  final _nameController = TextEditingController(); // first name
+  final _lastController = TextEditingController();
+  String get _typedName => '${_nameController.text} ${_lastController.text}';
   bool _seeded = false;
   bool _saving = false;
   bool _avatarBusy = false;
@@ -43,6 +45,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _lastController.dispose();
     super.dispose();
   }
 
@@ -50,14 +53,22 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     if (_seeded) return;
     _seeded = true;
     _savedName = name;
-    _nameController.text = name;
+    _setFields(name);
+  }
+
+  // The account stores one name; the screen shows it as first + last (first word, then the rest).
+  void _setFields(String name) {
+    final clean = AccountNameApi.clean(name);
+    final space = clean.indexOf(' ');
+    _nameController.text = space < 0 ? clean : clean.substring(0, space);
+    _lastController.text = space < 0 ? '' : clean.substring(space + 1);
   }
 
   bool get _dirty =>
-      AccountNameApi.clean(_nameController.text) != AccountNameApi.clean(_savedName);
+      AccountNameApi.clean(_typedName) != AccountNameApi.clean(_savedName);
 
   Future<void> _saveName() async {
-    final problem = AccountNameApi.problemWith(_nameController.text);
+    final problem = AccountNameApi.problemWith(_typedName);
     if (problem != null) {
       setState(() => _error = problem);
       return;
@@ -71,12 +82,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       _error = null;
     });
     try {
-      final profile = await api.save(_nameController.text);
+      final profile = await api.save(_typedName);
       await ref.read(profileSnapshotWriterProvider)(profile);
       if (!mounted) return;
       setState(() {
         _savedName = (profile['display_name'] as String?) ?? '';
-        _nameController.text = _savedName;
+        _setFields(_savedName);
       });
       messenger.showSnackBar(const SnackBar(content: Text('Name updated')));
     } catch (error) {
@@ -195,7 +206,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             final email = (data?['email'] as String?)?.trim() ?? '';
             _seed(((data?['display_name'] as String?) ?? '').trim());
             final hasPhone = phone?.hasPhone == true;
-            final shownName = AccountNameApi.clean(_nameController.text);
+            final shownName = AccountNameApi.clean(_typedName);
             final initial = shownName.isNotEmpty
                 ? shownName.characters.first.toUpperCase()
                 : (email.isNotEmpty ? email.characters.first.toUpperCase() : '?');
@@ -304,17 +315,33 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       controller: _nameController,
                       enabled: !_saving,
                       textCapitalization: TextCapitalization.words,
-                      textInputAction: TextInputAction.done,
-                      autofillHints: const [AutofillHints.name],
-                      inputFormatters: [LengthLimitingTextInputFormatter(60)],
-                      onChanged: (_) => setState(() => _error = null),
-                      onSubmitted: (_) => _saving || !_dirty ? null : _saveName(),
+                      textInputAction: TextInputAction.next,
+                      autofillHints: const [AutofillHints.givenName],
+                      inputFormatters: [LengthLimitingTextInputFormatter(30)],
+                      onChanged: (_) => setState(() => _error = null), // also clears Required
                       style: BambooFonts.ui(16, color: BambooInk.ink900),
                       decoration: InputDecoration(
-                        labelText: 'Your name',
-                        errorText: _error,
+                        label: requiredLabel('First name'),
+                        errorText: requiredError(_submitted, _nameController.text) ?? _error,
                         errorMaxLines: 3,
                         border: const OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpace.md),
+                    TextField(
+                      key: const Key('edit-last-name-field'),
+                      controller: _lastController,
+                      enabled: !_saving,
+                      textCapitalization: TextCapitalization.words,
+                      textInputAction: TextInputAction.done,
+                      autofillHints: const [AutofillHints.familyName],
+                      inputFormatters: [LengthLimitingTextInputFormatter(30)],
+                      onChanged: (_) => setState(() => _error = null),
+                      onSubmitted: (_) => _saving ? null : _saveName(),
+                      style: BambooFonts.ui(16, color: BambooInk.ink900),
+                      decoration: const InputDecoration(
+                        labelText: 'Last name (optional)',
+                        border: OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: AppSpace.sm),
