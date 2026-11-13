@@ -389,12 +389,12 @@ class _ProfileHero extends ConsumerWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: BambooInk.slate,
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(24),
       ),
       child: Stack(
         children: [
           Padding(
-            padding: const EdgeInsets.all(AppSpace.xl),
+            padding: const EdgeInsets.all(AppSpace.lg),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -408,7 +408,7 @@ class _ProfileHero extends ConsumerWidget {
                       size: 56,
                       radiusFactor: 18 / 56,
                     ),
-                    const SizedBox(width: 14),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -416,16 +416,16 @@ class _ProfileHero extends ConsumerWidget {
                           Text(
                             name,
                             style: BambooFonts.heading(
-                              20,
+                              18,
                               color: BambooInk.onSlate,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 3),
+                          const SizedBox(height: 2),
                           Text(
                             subtitleParts.join(' · '),
                             style: BambooFonts.ui(
-                              12.5,
+                              12,
                               color: BambooInk.onSlateMuted,
                             ),
                           ),
@@ -439,7 +439,7 @@ class _ProfileHero extends ConsumerWidget {
                       semanticLabel: 'Edit profile',
                       child: Container(
                         key: const Key('profile-edit-button'),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                         decoration: BoxDecoration(
                           color: BambooInk.slateRaised,
                           borderRadius: BorderRadius.circular(AppRadius.pill),
@@ -463,11 +463,13 @@ class _ProfileHero extends ConsumerWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
                       child: _StatTile(
+                        icon: Icons.account_balance_wallet_outlined,
+                        iconColor: BambooInk.onSlateMuted,
                         label: 'Lifetime earned',
                         // Hidden rather than shown as ₹0 when there's
                         // nothing logged yet — same rule the rest of the app
@@ -478,7 +480,7 @@ class _ProfileHero extends ConsumerWidget {
                                 summary.rewardsAllTime,
                                 confidence: Confidence.estimated,
                                 style: BambooFonts.heading(
-                                  18,
+                                  16,
                                   color: BambooInk.lime,
                                 ),
                                 hidePaise: true,
@@ -486,16 +488,18 @@ class _ProfileHero extends ConsumerWidget {
                               ),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: _StatTile(
+                        icon: Icons.workspace_premium_outlined,
+                        iconColor: BambooInk.lime,
                         label: 'Panda rank',
                         value: summary == null
                             ? null
                             : Text(
                                 pandaRankFor(summary.streakDays),
                                 style: BambooFonts.heading(
-                                  18,
+                                  16,
                                   color: BambooInk.onSlate,
                                 ),
                               ),
@@ -518,29 +522,45 @@ class _ProfileHero extends ConsumerWidget {
 class _StatTile extends StatelessWidget {
   final String label;
   final Widget? value;
-  const _StatTile({required this.label, required this.value});
+  final IconData icon;
+  final Color iconColor;
+  const _StatTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.iconColor,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
         color: BambooInk.slateRaised,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(
-            label,
-            style: BambooFonts.ui(11.5, color: BambooInk.onSlateMuted),
+          Icon(icon, size: 20, color: iconColor),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: BambooFonts.ui(11.5, color: BambooInk.onSlateMuted),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 1),
+                value ??
+                    Text(
+                      'Not yet',
+                      style: BambooFonts.heading(16, color: BambooInk.onSlateMuted),
+                    ),
+              ],
+            ),
           ),
-          const SizedBox(height: 3),
-          value ??
-              Text(
-                'Not yet',
-                style: BambooFonts.heading(18, color: BambooInk.onSlateMuted),
-              ),
         ],
       ),
     );
