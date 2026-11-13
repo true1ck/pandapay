@@ -2603,17 +2603,24 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
   final userRepo = ref.watch(userCardsRepositoryProvider);
   final cache = await _cacheOrNull(ref);
   if (cache == null) return;
+  // WP-C16: no refresh burst while the radio is down or the API is known
+  // unreachable; saved data stays on screen and nothing is invalidated.
+  if (_skipBackgroundRead(ref)) return;
+  var anyOk = false;
+  final startedAt = DateTime.now();
+  _lastHomeRefresh = (ref.read(cacheNamespaceProvider), startedAt);
 
   Future<void> refreshUserCards() async {
     if (userRepo == null) return;
     try {
       final cards = await userRepo.fetchUserCards().timeout(
-        _homeRequestTimeout,
+        _backgroundReadTimeout,
       );
       await cache.put(
         _scopedCacheKey(ref, _userCardsCacheKey),
         jsonEncode({'userCards': cards.map((c) => c.toJson()).toList()}),
       );
+      anyOk = true;
     } catch (_) {}
   }
 
@@ -2624,9 +2631,10 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
           .read(catalogueRepositoryProvider)
           .loader(
             cache: ResponseCacheCatalogueStore(cache),
-            timeout: _homeRequestTimeout,
+            timeout: _backgroundReadTimeout,
           )
           .refreshCache();
+      anyOk = true;
     } catch (_) {}
   }
 
@@ -2635,11 +2643,12 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
       final categories = await ref
           .read(categoryRepositoryProvider)
           .fetchCategories()
-          .timeout(_homeRequestTimeout);
+          .timeout(_backgroundReadTimeout);
       await cache.put(
         _categoriesCacheKey,
         jsonEncode({'categories': categories.map((c) => c.toJson()).toList()}),
       );
+      anyOk = true;
     } catch (_) {}
   }
 
@@ -2649,12 +2658,13 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
     if (overridesRepo == null) return;
     try {
       final overrides = await overridesRepo.fetchOverrides().timeout(
-        _homeRequestTimeout,
+        _backgroundReadTimeout,
       );
       await cache.put(
         _scopedCacheKey(ref, _cardOverridesCacheKey),
         jsonEncode({'overrides': overrides.map((o) => o.toJson()).toList()}),
       );
+      anyOk = true;
     } catch (_) {}
   }
 
@@ -2666,7 +2676,8 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
             anchor: DateTime.now().toUtc(),
             timeZone: ref.read(deviceTimeZoneProvider),
           )
-          .timeout(_homeRequestTimeout);
+          .timeout(_backgroundReadTimeout);
+      anyOk = true;
       if (summary != null) {
         await cache.put(
           _scopedCacheKey(ref, 'home_summary'),
@@ -2689,7 +2700,8 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
       // freshly fetched rows to every consumer rather than leaving an older
       // in-memory Activity result alive beside a newer SQLite snapshot.
       ref.invalidate(transactionsProvider);
-      await ref.read(transactionsProvider.future).timeout(_homeRequestTimeout);
+      await ref.read(transactionsProvider.future).timeout(_backgroundReadTimeout);
+      anyOk = true;
     } catch (_) {}
   }
 
@@ -2719,6 +2731,12 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
     refreshHomeSummary(),
     refreshTransactions(),
   ]);
+  if (!anyOk) {
+    // Every request failed: keep the snapshots on screen, and let a later
+    // reconnect refresh straight away instead of treating this as done.
+    _lastHomeRefresh = null;
+    return;
+  }
   ref.invalidate(userCardsProvider);
   ref.invalidate(catalogueProvider);
   ref.invalidate(categoriesProvider);
@@ -2743,6 +2761,12 @@ final displayDataSyncLifecycleProvider = Provider<void>((ref) {
     if (ref.read(isOnlineProvider).valueOrNull == false) return;
     final namespace = ref.read(cacheNamespaceProvider);
     final now = DateTime.now();
+    final homeRefresh = _lastHomeRefresh;
+    if (homeRefresh != null &&
+        homeRefresh.$1 == namespace &&
+        now.difference(homeRefresh.$2) < const Duration(seconds: 15)) {
+      return;
+    }
     if (!force &&
         lastNamespace == namespace &&
         lastStarted != null &&
@@ -5107,6 +5131,12 @@ const _cardOverridesCacheKey = 'card_overrides';
 // completes must become a cache/fallback/error state instead of leaving the
 // recommendation section in AsyncLoading forever.
 const _homeRequestTimeout = Duration(seconds: 15);
+// WP-C16: cold-start background reads give up sooner than user-initiated ones
+// (a hung socket must not hold the refresh burst for 15 s).
+const _backgroundReadTimeout = Duration(seconds: 8);
+// Namespace + start of Home's own refresh, so the lifecycle provider does not
+// fire a second forced burst right behind it.
+(String, DateTime)? _lastHomeRefresh;
 const _spendReportCacheKey = 'spend_report';
 const _transactionsCacheKey = 'transactions';
 

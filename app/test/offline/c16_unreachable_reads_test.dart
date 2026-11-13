@@ -23,6 +23,7 @@ class _HangingRepository implements UserCardsRepository {
 }
 
 void main() {
+  homeRefreshTests();
   test('unreachable server: cached lounge usage is served without waiting',
       () async {
     final database = openInMemoryForTesting();
@@ -77,5 +78,43 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 200));
 
     expect(repo.calls, 1);
+  });
+}
+
+class _CountingRepository implements UserCardsRepository {
+  var calls = 0;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    calls++;
+    return Future<dynamic>.error(StateError('should not be called'));
+  }
+}
+
+void homeRefreshTests() {
+  test('Home refresh burst is skipped when the API is unreachable', () async {
+    final database = openInMemoryForTesting();
+    addTearDown(database.close);
+    final reachability = ServerReachability(
+      probe: () async => false,
+      radioUp: () => true,
+    );
+    await reachability.check();
+    final repo = _CountingRepository();
+    final container = ProviderContainer(
+      overrides: [
+        accessTokenProvider.overrideWith((ref) => 'test-token'),
+        responseCacheProvider.overrideWith(
+          (ref) async => ResponseCache(database),
+        ),
+        userCardsRepositoryProvider.overrideWithValue(repo),
+        serverReachabilityProvider.overrideWithValue(reachability),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(homeDataRefreshProvider.future);
+
+    expect(repo.calls, 0);
   });
 }
