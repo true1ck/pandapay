@@ -382,7 +382,7 @@ void main() {
         expect(strip.top, 0);
         expect(strip.width, 400);
         // 40 dp status bar plus a slim 22-26 dp line.
-        expect(strip.height - 40, inInclusiveRange(22, 26));
+        expect(strip.height - 40, inInclusiveRange(16, 20));
         // The app bar starts where the strip ends and is NOT 40 dp taller.
         expect(appBar.top, strip.bottom);
         expect(appBar.height, kToolbarHeight);
@@ -402,7 +402,7 @@ void main() {
       addTearDown(tester.view.reset);
       await _show(tester, _offline);
       final strip = tester.getRect(find.byKey(_stripKey));
-      expect(strip.height, inInclusiveRange(22, 26));
+      expect(strip.height, inInclusiveRange(16, 20));
     });
 
     testWidgets('toggling does not recreate the screen below', (tester) async {

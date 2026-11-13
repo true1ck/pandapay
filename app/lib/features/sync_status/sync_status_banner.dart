@@ -72,7 +72,7 @@ class SyncStatusStrip extends ConsumerWidget {
   final GlobalKey<NavigatorState>? navigatorKey;
 
   /// Height of the line, below the status bar inset.
-  static const double lineHeight = 24;
+  static const double lineHeight = 18;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -111,14 +111,14 @@ class SyncStatusStrip extends ConsumerWidget {
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 16,
-                        vertical: 3,
+                        vertical: 1,
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
                             _icon(summary.mode),
-                            size: 14,
+                            size: 12,
                             color: palette.text,
                           ),
                           const SizedBox(width: 6),
@@ -128,7 +128,7 @@ class SyncStatusStrip extends ConsumerWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: BambooFonts.ui(
-                                12,
+                                11,
                                 weight: FontWeight.w500,
                                 color: palette.text,
                                 height: 1.2,
