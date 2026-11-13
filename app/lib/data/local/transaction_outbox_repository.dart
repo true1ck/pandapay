@@ -41,6 +41,11 @@ class TransactionOutboxEntry {
   /// row queued before the column existed and whenever the user chose none.
   final String? paymentMethod;
 
+  /// Set only by a payment-sent "log it" (reward matching needs them).
+  final String? merchantVpa;
+  final String? mcc;
+  final String? rail;
+
   const TransactionOutboxEntry({
     required this.id,
     required this.clientMutationId,
@@ -56,6 +61,9 @@ class TransactionOutboxEntry {
     required this.createdAt,
     this.lastError,
     this.paymentMethod,
+    this.merchantVpa,
+    this.mcc,
+    this.rail,
     this.attempts = 0,
     this.nextAttemptAt,
     this.parked = false,
@@ -175,6 +183,9 @@ class TransactionOutboxRepository {
     TxnEntryKind entryKind = TxnEntryKind.spend,
     String? clientMutationId,
     String? paymentMethod,
+    String? merchantVpa,
+    String? mcc,
+    String? rail,
   }) async {
     final mutationId = clientMutationId ?? const Uuid().v4();
     final effectiveUserCategoryId = userCategoryId ??
@@ -187,8 +198,9 @@ class TransactionOutboxRepository {
       '''
       INSERT OR IGNORE INTO transaction_outbox_entries
         (namespace, user_card_id, client_mutation_id, amount_paise, category_id, user_category_id, merchant_name,
-         occurred_at, note, instrument, entry_kind, created_at, payment_method)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         occurred_at, note, instrument, entry_kind, created_at, payment_method,
+         merchant_vpa, mcc, rail)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ''',
       [
         namespace,
@@ -204,6 +216,9 @@ class TransactionOutboxRepository {
         entryKind.wireValue,
         DateTime.now().millisecondsSinceEpoch,
         paymentMethod,
+        merchantVpa,
+        mcc,
+        rail,
       ],
     );
     financialStore?.saveProvisional(
@@ -332,6 +347,9 @@ class TransactionOutboxRepository {
         ),
         lastError: row['last_error'] as String?,
         paymentMethod: row['payment_method'] as String?,
+        merchantVpa: row['merchant_vpa'] as String?,
+        mcc: row['mcc'] as String?,
+        rail: row['rail'] as String?,
         attempts: row['attempts'] as int? ?? 0,
         nextAttemptAt: nextAttemptAt == 0
             ? null
@@ -382,6 +400,9 @@ class TransactionOutboxRepository {
           entryKind: entry.entryKind,
           clientMutationId: entry.clientMutationId,
           paymentMethod: entry.paymentMethod,
+          merchantVpa: entry.merchantVpa,
+          mcc: entry.mcc,
+          rail: entry.rail,
         );
         financialStore?.saveTransactions(namespace, [
           TransactionEntry(
