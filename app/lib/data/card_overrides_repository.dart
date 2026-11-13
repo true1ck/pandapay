@@ -118,8 +118,13 @@ class CardOverridesRepository {
     String? merchantName,
     String? categoryId,
     String? reasonNote,
+    // WP-C6: the phone's own id, so a replayed create answers 200
+    // `{override, replayed: true}` instead of adding a second rule. An old
+    // server ignores it and returns its own id (the caller remaps).
+    String? id,
   }) async {
     final requestBody = {
+      'id': ?id,
       'userCardId': userCardId,
       'scope': _scopeToJson(scope),
       'vpa': ?vpa,
@@ -132,7 +137,7 @@ class CardOverridesRepository {
       headers: _headers,
       body: jsonEncode(requestBody),
     );
-    if (response.statusCode != 201) {
+    if (response.statusCode != 201 && !(id != null && response.statusCode == 200)) {
       throw ApiException('POST /card-overrides failed: ${response.statusCode} ${response.body}');
     }
     return CardOverride.fromJson(

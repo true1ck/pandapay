@@ -108,6 +108,8 @@ import '../features/geofence/background_alerts_controller.dart';
 import '../features/geofence/nearby_merchants_repository.dart';
 import '../features/home_widget/home_widget_service.dart';
 import '../features/notifications/notification_commands.dart';
+import '../features/cards/add_card_local_first.dart';
+import '../data/local_first/card_overrides_overlay.dart';
 import '../features/notifications/notification_gate.dart';
 import '../features/notifications/notification_local_state.dart';
 import '../features/notifications/notification_triggers.dart';
@@ -2570,6 +2572,50 @@ final cardOverridesProvider = FutureProvider<List<CardOverride>>((ref) async {
     }
   }
 
+  // WP-C6 (W-08): queued creates, deletes and edits are shown on top of
+  // whatever list this returns, so a change made offline is visible at once.
+  ref.watch(commandOutboxRevisionProvider);
+  Future<List<CardOverride>> withQueued(List<CardOverride> base) async {
+    try {
+      final commands = await ref.read(commandOutboxProvider.future);
+      final db = cache?.financialStore.database.db;
+      if (db == null) return base;
+      final labels = {
+        for (final c in ref.read(userCardsProvider).valueOrNull ?? const <UserCard>[])
+          c.id: (name: c.cardName, nickname: c.nickname),
+      };
+      return overlayCardOverrides(
+        base,
+        commands.pendingOf({CardCommand.createOverride, CardCommand.deleteOverride}),
+        pendingOverrideEdits(db, ref.read(cacheNamespaceProvider)),
+        cardLabels: labels,
+      );
+    } catch (_) {
+      return base;
+    }
+  }
+
+  // Cache first: a saved list is returned at once and refreshed in the
+  // background (never a 15 s wait on dead Wi-Fi); with nothing saved and the
+  // server known to be unreachable the list is just the queued rules.
+  if (kCardsLocalFirst) {
+    final saved = decodeCached();
+    if (saved != null || serverKnownUnreachable(ref)) {
+      if (saved != null && !serverKnownUnreachable(ref)) {
+        final at = await cache?.fetchedAt(cacheKey);
+        if (at == null ||
+            DateTime.now().difference(at) > const Duration(seconds: 30)) {
+          _backgroundDisplayRefresh(ref, cache, cacheKey, repo.fetchOverrides, (
+            List<CardOverride> overrides,
+          ) {
+            return {'overrides': overrides.map((o) => o.toJson()).toList()};
+          });
+        }
+      }
+      return withQueued(saved ?? const []);
+    }
+  }
+
   // After a live edit/delete/toggle invalidates this provider, fetch first so
   // the screen cannot immediately rehydrate the pre-mutation snapshot.
   // Cached data remains the fallback for an offline or unavailable API.
@@ -2584,16 +2630,44 @@ final cardOverridesProvider = FutureProvider<List<CardOverride>>((ref) async {
       // A local-database write must never turn a successful override fetch
       // into an error. The next successful fetch will repair the snapshot.
     }
-    return overrides;
+    return withQueued(overrides);
   } catch (error) {
     if (!_canUseReadCache(error)) rethrow;
     // Overrides are an enhancement to ranking, not a prerequisite for
     // showing the wallet. If this is the first signed-in request and there is
     // no cache yet, fail open with the base catalogue instead of replacing
     // Home with an error state while the API is unavailable.
-    return decodeCached() ?? const [];
+    return withQueued(decodeCached() ?? const []);
   }
 });
+
+/// One quiet background refresh per cache key (WP-C6): saves the fetched value
+/// and rebuilds the provider only when it differs from what is saved.
+void _backgroundDisplayRefresh<T>(
+  Ref ref,
+  ResponseCache? cache,
+  String key,
+  Future<T> Function() fetch,
+  Object? Function(T) encode,
+) {
+  if (cache == null || _backgroundDisplayRefreshes.containsKey(key)) return;
+  final namespace = ref.read(cacheNamespaceProvider);
+  var disposed = false;
+  ref.onDispose(() => disposed = true);
+  final work = fetch()
+      .timeout(_homeRequestTimeout)
+      .then((value) async {
+        if (disposed || ref.read(cacheNamespaceProvider) != namespace) return;
+        final next = jsonEncode(encode(value));
+        final before = await cache.get(key);
+        await cache.put(key, next);
+        if (!disposed && before != next) ref.invalidateSelf();
+      })
+      .catchError((Object _) {})
+      .whenComplete(() => _backgroundDisplayRefreshes.remove(key));
+  _backgroundDisplayRefreshes[key] = work;
+  unawaited(work);
+}
 
 /// Refreshes Home's small set of inputs without blocking its first frame.
 /// Read providers above are cache-first; this provider writes a fresh snapshot
@@ -2942,7 +3016,10 @@ Map<String, CommandHandler> commandHandlersFor(
   SpendReportsRepository? spend,
   NotificationPreferencesRepository? notificationPrefs,
   void Function()? onNotificationInboxSynced,
+  CardCommandContext? cards,
 }) => {
+  // WP-C6: card adds, card field patches and card overrides queued offline.
+  if (cards != null) ...cardCommandHandlers(cards),
   // WP-C4: inbox rows and notification settings queued while offline.
   ...notificationCommandHandlers(
     userCards: repo,
@@ -3039,16 +3116,22 @@ final outboxFlushProvider = Provider<void>((ref) {
     try {
       final outbox = await ref.read(outboxRepositoryProvider.future);
       if (disposed || outbox.namespace != namespace) return;
-      final sent = await outbox.flush(repo);
       final commands = await ref.read(commandOutboxProvider.future);
-      final commandsSent = await commands.flush(
-        commandHandlersFor(
-          repo,
-          spend: ref.read(spendReportsRepositoryProvider),
-          notificationPrefs: ref.read(notificationPreferencesRepositoryProvider),
-          onNotificationInboxSynced: () => ref.invalidate(notificationsProvider),
-        ),
+      final handlers = commandHandlersFor(
+        repo,
+        spend: ref.read(spendReportsRepositoryProvider),
+        notificationPrefs: ref.read(notificationPreferencesRepositoryProvider),
+        onNotificationInboxSynced: () => ref.invalidate(notificationsProvider),
+        cards: await cardCommandContext(ref),
       );
+      // WP-C6: a card added offline must exist on the server (and its id be
+      // remapped) before queued transactions that name it are sent.
+      final addedCards = await commands.flush(
+        handlers,
+        onlyKinds: CardCommand.addFirst,
+      );
+      final sent = await outbox.flush(repo);
+      final commandsSent = addedCards + await commands.flush(handlers);
       if (commandsSent > 0) {
         // Drop the cached server lists so the next read shows what the server
         // now holds, not the snapshot taken before these changes.
