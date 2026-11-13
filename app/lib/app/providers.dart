@@ -60,6 +60,7 @@ import '../data/local/sms_import_store.dart';
 import '../data/local/sync_queue.dart';
 import '../data/local_first/local_first_cards.dart';
 import '../data/local_first/command_outbox.dart';
+import '../data/local_first/command_outcomes.dart';
 import '../data/local_first/pending_overlays.dart';
 import '../data/local/duplicate_resolution_outbox.dart';
 import '../data/local/transaction_outbox_repository.dart';
@@ -2875,12 +2876,18 @@ Map<String, CommandHandler> commandHandlersFor(
   UserCardsRepository repo, {
   SpendReportsRepository? spend,
 }) => {
-  OutboxCommand.ignoreTransaction: (p) => repo.ignoreTransaction(
-    p['id'] as String,
+  // A repeat answers 409/404 although the state the person wanted is already
+  // in place; that is success, not a refusal (SRV-17).
+  OutboxCommand.ignoreTransaction: (p) => ignoreAlreadyDoneIsDone(
+    () => repo.ignoreTransaction(
+      p['id'] as String,
+      reason: p['reason'] as String,
+    ),
     reason: p['reason'] as String,
   ),
-  OutboxCommand.restoreTransaction: (p) =>
-      repo.restoreTransaction(p['id'] as String),
+  OutboxCommand.restoreTransaction: (p) => restoreAlreadyDoneIsDone(
+    () => repo.restoreTransaction(p['id'] as String),
+  ),
   OutboxCommand.setSpendExclusion: (p) => repo.setSpendExclusion(
     p['id'] as String,
     excluded: p['excluded'] as bool,
@@ -2932,6 +2939,10 @@ Future<void> _goneIsDone(Future<void> Function() call) async {
     if (error.statusCode != 404) rethrow;
   }
 }
+
+/// How often [outboxFlushProvider] re-checks for queued work whose backoff
+/// has expired while the app stays open.
+const outboxDueRecheckInterval = Duration(minutes: 5);
 
 /// Bump to ask [outboxFlushProvider] to send queued quick-adds now. A save
 /// writes the outbox and bumps this; it never waits for the delivery.
@@ -2990,8 +3001,21 @@ final outboxFlushProvider = Provider<void>((ref) {
     }
   }
 
+  // Coming back online: a backoff was about a server problem that may have
+  // passed, and time spent offline must not be waited out a second time.
+  Future<void> resetBackoffs() async {
+    try {
+      (await ref.read(outboxRepositoryProvider.future)).resetBackoff();
+      (await ref.read(commandOutboxProvider.future)).resetBackoff();
+    } catch (_) {
+      /* Entries keep their backoff; the next trigger still flushes. */
+    }
+  }
+
   ref.listen(isOnlineProvider, (_, next) {
-    if (next.valueOrNull == true) unawaited(flush());
+    if (next.valueOrNull == true) {
+      unawaited(resetBackoffs().then((_) => flush()));
+    }
   });
   ref.listen(outboxFlushRequestProvider, (_, _) => unawaited(flush()));
   ref.listen(cacheNamespaceProvider, (_, next) {
@@ -3009,8 +3033,16 @@ final outboxFlushProvider = Provider<void>((ref) {
     });
   });
   final lifecycle = AppLifecycleListener(onResume: () => unawaited(flush()));
+  // While the app is open, look again for commands whose backoff has run out:
+  // nothing else triggers a flush between a failure and the next resume or
+  // reconnect. A flush that finds nothing due does no network work.
+  final dueTimer = Timer.periodic(
+    outboxDueRecheckInterval,
+    (_) => unawaited(flush()),
+  );
   ref.onDispose(() {
     disposed = true;
+    dueTimer.cancel();
     startup.cancel('outbox-flush');
     lifecycle.dispose();
   });

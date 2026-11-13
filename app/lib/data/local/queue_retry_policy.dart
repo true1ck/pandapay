@@ -12,8 +12,8 @@ import '../api_exception.dart';
 /// server will never accept is parked instead of blocking newer work.
 enum QueueFailure {
   /// No usable response: the device could not reach the server (socket error,
-  /// timeout, TLS failure, an `ApiException` without an HTTP status) or the
-  /// session was rejected (401). Says nothing about the row itself, so it does
+  /// timeout, TLS failure, a client-side HTTP exception) or the session was
+  /// rejected (401). Says nothing about the row itself, so it does
   /// not count as an attempt, sets no backoff, and the rest of the batch is
   /// skipped because it would fail the same way (one 15 s timeout per row
   /// otherwise).
@@ -39,7 +39,9 @@ QueueFailure classifyQueueFailure(Object error) {
   }
   if (error is ApiException) {
     final status = error.statusCode;
-    if (status == null) return QueueFailure.network;
+    // No status and no transport exception: unknown, so it counts.
+    if (status == null) return QueueFailure.retryable;
+    // The session was rejected; the row says nothing about it.
     if (status == 401) return QueueFailure.network;
     if (status == 408 || status == 429) return QueueFailure.retryable;
     if (status >= 400 && status < 500) return QueueFailure.permanent;

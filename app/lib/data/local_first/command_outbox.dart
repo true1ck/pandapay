@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../api_exception.dart';
 import '../local/app_database.dart';
+import '../local/queue_retry_policy.dart';
 
 /// One queued command, as seen by a screen that overlays it.
 class PendingCommand {
@@ -37,10 +38,16 @@ typedef CommandHandler = Future<void> Function(Map<String, Object?> payload);
 ///   fails for a retryable reason, later commands for that target wait.
 /// * Opposite commands cancel each other while still queued: ignore then
 ///   restore of one transaction sends nothing.
-/// * A retryable failure (network, timeout, 5xx, 401, 429) backs off
-///   30 s, 1 min, 2 min ... up to 30 min and tries again.
+/// * A retryable server failure (5xx, 408, 429) backs off 30 s, 1 min, 2 min
+///   ... up to 30 min and tries again.
+/// * A failure to reach the server at all (no connection, timeout, a rejected
+///   session) is not the command's fault: it does not count as an attempt and
+///   sets no backoff, and it ends the pass. [resetBackoff] makes everything
+///   due again when the connection returns.
 /// * A permanent refusal (other 4xx) is parked, kept with its error, and no
-///   longer retried automatically.
+///   longer retried automatically. So is a 500 for a target that is not a
+///   server id (`v2:...`, `projection:...`): the server cannot succeed for it,
+///   and retrying every 30 minutes would keep the pending badge up for ever.
 class CommandOutbox {
   CommandOutbox(this._appDb, {required this.namespace, DateTime Function()? now})
     : _now = now ?? DateTime.now {
@@ -147,6 +154,15 @@ class CommandOutbox {
       ),
   ];
 
+  /// Makes every unparked command due again. Called when the connection
+  /// returns: a backoff was about a server problem that may have passed, and
+  /// time spent offline should not be waited out a second time.
+  void resetBackoff() => _appDb.db.execute(
+    'UPDATE command_outbox SET next_attempt_at=0 '
+    'WHERE namespace=? AND parked=0 AND next_attempt_at>0',
+    [namespace],
+  );
+
   /// Puts a parked command back in the queue (explicit retry).
   void retryParked(int id) {
     _appDb.db.execute(
@@ -189,28 +205,44 @@ class CommandOutbox {
         _appDb.db.execute('DELETE FROM command_outbox WHERE id=?', [id]);
         delivered++;
       } catch (error) {
-        if (_isPermanent(error)) {
-          _park(id, '$error');
-        } else {
-          _backoff(id, row['attempts'] as int, '$error');
-          blocked.add(target);
+        switch (classifyQueueFailure(error)) {
+          case QueueFailure.network:
+            // Could not reach the server: not the command's fault. Keep it
+            // due and stop; the other commands would fail the same way.
+            _appDb.db.execute(
+              'UPDATE command_outbox SET last_error=? WHERE id=?',
+              ['$error', id],
+            );
+            return delivered;
+          case QueueFailure.permanent:
+            _park(id, '$error');
+          case QueueFailure.retryable:
+            if (_isInternalError(error) && !isServerId(target)) {
+              _park(id, '$error');
+            } else {
+              _backoff(id, row['attempts'] as int, '$error');
+              blocked.add(target);
+            }
         }
       }
     }
     return delivered;
   }
 
-  /// A 4xx other than "log in again", "too early" and "slow down" means the
-  /// server looked at the command and said no; repeating it will not help.
-  bool _isPermanent(Object error) {
-    if (error is ApiException) {
-      final status = error.statusCode;
-      if (status == null) return false;
-      if (status == 401 || status == 408 || status == 429) return false;
-      return status >= 400 && status < 500;
-    }
-    return false;
-  }
+  /// Only a plain 500: that is how the server reports a malformed id (a
+  /// database cast error). 502/503/504 are outages and stay retryable.
+  bool _isInternalError(Object error) =>
+      error is ApiException && error.statusCode == 500;
+
+  /// False for ids the phone made up for its own derived rows (SMS-derived
+  /// subscriptions `v2:<key>`, server projections `projection:<key>`, queued
+  /// transactions `local-outbox:<id>`). The server has no such row, so a 500
+  /// for one of them is a permanent condition, not an outage.
+  static bool isServerId(String target) =>
+      !(target.startsWith('v2:') ||
+          target.startsWith('projection:') ||
+          target.startsWith('local-outbox:') ||
+          target.startsWith('local:'));
 
   void _park(int id, String error) => _appDb.db.execute(
     'UPDATE command_outbox SET parked=1, last_error=? WHERE id=?',

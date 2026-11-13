@@ -229,7 +229,6 @@ void main() {
       const SocketException('no route'),
       TimeoutException('slow'),
       http.ClientException('closed'),
-      ApiException('GET failed without a status'),
       _http(401),
     ]) {
       test('${error.runtimeType} keeps attempts at 0 and sets no backoff', () async {
@@ -244,6 +243,14 @@ void main() {
         expect(await outbox.pending(), hasLength(1));
       });
     }
+
+    test('an ApiException without a status is unknown and counts', () async {
+      await enqueue('a');
+      server.failAll = ApiException('something odd');
+      await outbox.flush(server);
+      expect(_row(appDb, 'a')['attempts'], 1);
+      expect(_row(appDb, 'a')['next_attempt_at'], isNot(0));
+    });
 
     test('a network failure ends the pass instead of timing out per row', () async {
       for (var i = 0; i < 5; i++) {
@@ -321,6 +328,7 @@ void main() {
       expect(classifyQueueFailure(_http(409)), QueueFailure.permanent);
       expect(classifyQueueFailure(_http(401)), QueueFailure.network);
       expect(classifyQueueFailure(StateError('x')), QueueFailure.retryable);
+      expect(classifyQueueFailure(ApiException('no status')), QueueFailure.retryable);
     });
 
     test('backoff doubles from 30 s and caps at 30 min', () {
