@@ -96,32 +96,71 @@ class TransactionOutboxRepository {
         .toString();
   }
 
+  TransactionEntry _provisional(TransactionOutboxEntry entry) =>
+      TransactionEntry(
+        id: 'local-outbox:${entry.clientMutationId}',
+        sourceKey: _sourceKey(entry.clientMutationId),
+        amount: Money.fromPaise(entry.amountPaise),
+        occurredAt: entry.occurredAt ?? entry.createdAt,
+        userCardId: entry.userCardId,
+        categoryId: entry.categoryId ??
+            (entry.userCategoryId == null
+                ? null
+                : 'custom:${entry.userCategoryId}'),
+        merchantName: entry.merchantName,
+        note: entry.note,
+        instrument: entry.instrument,
+        paymentMethod: entry.paymentMethod,
+        entryKind: entry.entryKind,
+        source: 'manual',
+        status: 'active',
+      );
+
   Future<void> restoreLocalEntries() async {
     // Every queued entry, including parked ones and ones waiting out a
     // backoff: the person still sees what they saved until it is delivered.
     for (final entry in await all()) {
-      financialStore?.saveProvisional(
-        namespace,
-        TransactionEntry(
-          id: 'local-outbox:${entry.clientMutationId}',
-          sourceKey: _sourceKey(entry.clientMutationId),
-          amount: Money.fromPaise(entry.amountPaise),
-          occurredAt: entry.occurredAt ?? entry.createdAt,
-          userCardId: entry.userCardId,
-          categoryId: entry.categoryId ??
-              (entry.userCategoryId == null
-                  ? null
-                  : 'custom:${entry.userCategoryId}'),
-          merchantName: entry.merchantName,
-          note: entry.note,
-          instrument: entry.instrument,
-          paymentMethod: entry.paymentMethod,
-          entryKind: entry.entryKind,
-          source: 'manual',
-          status: 'active',
-        ),
-      );
+      financialStore?.saveProvisional(namespace, _provisional(entry));
     }
+  }
+
+  /// Changes the category and/or card of an entry that has not been sent yet
+  /// (a bulk edit that includes a row saved offline). [categoryId] may be a
+  /// `custom:<id>` value. Returns false when the entry is no longer queued, i.e.
+  /// it has been delivered and the caller should edit the server row instead.
+  Future<bool> editQueued(
+    String clientMutationId, {
+    String? categoryId,
+    String? userCardId,
+  }) async {
+    final custom = categoryId != null && categoryId.startsWith('custom:');
+    if (categoryId != null) {
+      _appDb.db.execute(
+        'UPDATE transaction_outbox_entries SET category_id=?, user_category_id=? '
+        'WHERE namespace=? AND client_mutation_id=?',
+        [
+          custom ? null : categoryId,
+          custom ? categoryId.substring('custom:'.length) : null,
+          namespace,
+          clientMutationId,
+        ],
+      );
+      if (_appDb.db.updatedRows == 0) return false;
+    }
+    if (userCardId != null) {
+      _appDb.db.execute(
+        'UPDATE transaction_outbox_entries SET user_card_id=? '
+        'WHERE namespace=? AND client_mutation_id=?',
+        [userCardId, namespace, clientMutationId],
+      );
+      if (_appDb.db.updatedRows == 0) return false;
+    }
+    for (final entry in await all()) {
+      if (entry.clientMutationId == clientMutationId) {
+        financialStore?.saveProvisional(namespace, _provisional(entry));
+      }
+    }
+    return true;
   }
 
   Future<void> enqueue({
