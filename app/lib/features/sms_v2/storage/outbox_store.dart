@@ -35,12 +35,18 @@ class OutboxStore {
     Map<String, Object?> payload, {
     bool backfill = false,
     bool categoryOnly = false,
+    bool restart = false,
   }) {
+    // A changed payload always starts over. [restart] also starts over a
+    // payload that is byte-for-byte the one already queued: used when the
+    // record must be sent now whatever its back-off was (a resend the server
+    // asked for).
     db.execute(
       '''
 INSERT INTO v2_outbox(namespace, id, kind, payload) VALUES (?, ?, ?, ?)
 ON CONFLICT(namespace, id) DO UPDATE SET payload=excluded.payload,
-  attempts=0, next_attempt_at=0 WHERE v2_outbox.payload != excluded.payload
+  attempts=0, next_attempt_at=0
+  WHERE ? OR v2_outbox.payload != excluded.payload
 ''',
       [
         namespace,
@@ -51,7 +57,29 @@ ON CONFLICT(namespace, id) DO UPDATE SET payload=excluded.payload,
           if (backfill) '_backfill': true,
           if (categoryOnly) '_categoryOnly': true,
         }),
+        restart ? 1 : 0,
       ],
+    );
+  }
+
+  /// Makes every waiting record of this account due now, keeping its attempt
+  /// count. For the moment the phone gets a connection back: a wait that was
+  /// set while it had none says nothing about the server. Returns how many
+  /// records were waiting.
+  int resetBackoff() {
+    db.execute(
+      'UPDATE v2_outbox SET next_attempt_at=0 '
+      'WHERE namespace=? AND next_attempt_at>0',
+      [namespace],
+    );
+    return db.updatedRows;
+  }
+
+  /// Holds [id] back until [until], without counting an attempt.
+  void deferUntil(String id, DateTime until) {
+    db.execute(
+      'UPDATE v2_outbox SET next_attempt_at=? WHERE namespace=? AND id=?',
+      [until.millisecondsSinceEpoch, namespace, id],
     );
   }
 

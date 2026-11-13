@@ -411,4 +411,77 @@ void main() {
     }
     expect(stateValue(FactsUpload.refusedKey), isNull);
   });
+
+  group("a network failure is not the record's fault (Q-08)", () {
+    final failures = <String, Object Function()>{
+      'SocketException': () => const SocketException('no route'),
+      'TimeoutException': () => TimeoutException('slow'),
+      'ClientException': () => http.ClientException('connection closed'),
+    };
+    for (final entry in failures.entries) {
+      test('${entry.key} burns no attempt and sets no back-off', () async {
+        final upload = uploader(
+          MockClient((request) async => throw entry.value()),
+        );
+        for (var i = 0; i < 8; i++) {
+          expect(await upload.drain(), 0);
+        }
+        final rows = queue.due(now);
+        expect(rows, hasLength(4), reason: 'every record is due right away');
+        expect(rows.every((r) => r.attempts == 0), isTrue);
+      });
+    }
+
+    test('after an offline spell the very next drain uploads', () async {
+      var online = false;
+      final upload = uploader(
+        MockClient((request) async {
+          if (!online) throw const SocketException('offline');
+          return http.Response(
+            jsonEncode({'results': accepted(decode(request))}),
+            200,
+          );
+        }),
+      );
+      // Eight 15-minute ticks offline: with the old counting this left every
+      // record 30 minutes in back-off.
+      for (var i = 0; i < 8; i++) {
+        await upload.drain();
+        now = now.add(const Duration(minutes: 15));
+      }
+      online = true;
+      expect(await upload.drain(), 4);
+      expect(queue.due(now), isEmpty);
+    });
+
+    test('a failure that is not the network still backs off', () async {
+      final upload = uploader(
+        MockClient((request) async => throw StateError('bad response')),
+      );
+      await upload.drain();
+      expect(queue.due(now), isEmpty);
+      expect(queue.due(now.add(const Duration(seconds: 30))).first.attempts, 1);
+    });
+
+    test(
+      'a connection lost while a failing batch is split burns nothing',
+      () async {
+        for (final key in ['a', 'b']) {
+          addSource(key);
+        }
+        var calls = 0;
+        final upload = uploader(
+          MockClient((request) async {
+            calls++;
+            if (calls == 1) return http.Response('{"error":"x"}', 400);
+            throw const SocketException('dropped');
+          }),
+        );
+        await upload.drain();
+        final rows = queue.due(now);
+        expect(rows, isNotEmpty);
+        expect(rows.every((r) => r.attempts == 0), isTrue);
+      },
+    );
+  });
 }

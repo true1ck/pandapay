@@ -273,6 +273,7 @@ class FactsUpload {
     final work = <List<OutboxRecord>>[failed.records];
     final suspects = <OutboxRecord>[];
     var stopped = false;
+    var networkDown = false;
     while (work.isNotEmpty && accountIsCurrent()) {
       final part = work.removeAt(0);
       if (part.length == 1 && failed.records.length == 1) {
@@ -307,12 +308,17 @@ class FactsUpload {
           // The network or the account changed: keep every record for later.
           work.insert(0, part);
           stopped = true;
+          networkDown = sent.offline;
       }
       if (stopped) break;
     }
-    for (final part in work) {
-      for (final record in part) {
-        queue.retry(record, clock());
+    // A dropped connection says nothing about the records (Q-08): they wait
+    // for the next pass without a count or a back-off.
+    if (!networkDown) {
+      for (final part in work) {
+        for (final record in part) {
+          queue.retry(record, clock());
+        }
       }
     }
     final healthy = suspects.isEmpty
@@ -457,18 +463,41 @@ class FactsUpload {
         progressed ? _Outcome.progressed : _Outcome.noProgress,
         acknowledged: acknowledged,
       );
-    } catch (_) {
+    } catch (error) {
+      // No connection, a timeout or a dropped socket: the phone was offline,
+      // not refused. Counting it would double the wait on every 15-minute
+      // tick and hold the upload back for up to half an hour after the
+      // connection returned (Q-08).
+      if (isNetworkFailure(error)) {
+        return const _Sent(_Outcome.stopped, offline: true);
+      }
       retryAll();
       return const _Sent(_Outcome.stopped);
     }
   }
+
+  /// Whether [error] only says the request never got an answer.
+  static bool isNetworkFailure(Object error) =>
+      error is SocketException ||
+      error is TimeoutException ||
+      error is http.ClientException ||
+      error is HandshakeException ||
+      error is HttpException;
 }
 
 enum _Outcome { progressed, noProgress, refusedWhole, stopped }
 
 class _Sent {
-  const _Sent(this.outcome, {this.acknowledged = 0, this.status});
+  const _Sent(
+    this.outcome, {
+    this.acknowledged = 0,
+    this.status,
+    this.offline = false,
+  });
   final _Outcome outcome;
   final int acknowledged;
   final int? status;
+
+  /// The request failed for want of a network, not because of an answer.
+  final bool offline;
 }
