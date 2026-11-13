@@ -282,4 +282,119 @@ void main() {
       );
     },
   );
+
+  group('rewards balance tile', () {
+    CardProduct productWith({
+      required RewardUnit unit,
+      double pointValue = 1,
+    }) => CardProduct(
+      id: 'p1',
+      name: 'Test Card',
+      network: CardNetwork.rupay,
+      pointValueInr: pointValue,
+      verifiedAt: DateTime(2026, 3, 1),
+      baseRewardUnit: unit,
+      baseRewardRate: 1,
+      rewardRules: const [
+        RewardRule(id: 'r1', unit: RewardUnit.cashbackPercent, rate: 1),
+      ],
+    );
+
+    // The server always sends points_balance (the typed-in starting figure, 0 by
+    // default), so a realistic card has pointsBalance: 0 next to what it earned.
+    UserCard owned({double earned = 0, double credited = 0}) => UserCard(
+      id: 'uc1',
+      cardProductId: 'p1',
+      nickname: 'My Test Card',
+      cardName: 'Test Card',
+      isDefault: false,
+      totalPointsEarned: earned,
+      creditedPoints: credited,
+      pointsBalance: 0,
+    );
+
+    testWidgets('a cashback card shows its balance in rupees, never as pts', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        catalogue: [productWith(unit: RewardUnit.cashbackPercent)],
+        owned: [owned(earned: 120)],
+      );
+      expect(find.textContaining('₹120 cashback'), findsOneWidget);
+      expect(find.textContaining('120 pts'), findsNothing);
+    });
+
+    testWidgets('a points card shows points with their rupee value', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        catalogue: [
+          productWith(unit: RewardUnit.pointsPer200, pointValue: 0.2),
+        ],
+        owned: [owned(earned: 1000)],
+      );
+      expect(find.textContaining('1000 pts'), findsOneWidget);
+      expect(find.textContaining('≈ ₹200'), findsOneWidget);
+    });
+
+    testWidgets('a starting balance of 0 does not hide what the card earned', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        catalogue: [productWith(unit: RewardUnit.cashbackPercent)],
+        owned: [owned(earned: 100)],
+      );
+      expect(find.textContaining('₹100 cashback'), findsOneWidget);
+      expect(find.textContaining('₹0 cashback'), findsNothing);
+      // A cashback card has no "1 pt = ₹x" line.
+      expect(find.textContaining('1 pt ='), findsNothing);
+      expect(find.textContaining('Estimated from your spends'), findsOneWidget);
+    });
+
+    testWidgets(
+      'points show the earned total, not the typed-in starting balance',
+      (tester) async {
+        await _pump(
+          tester,
+          catalogue: [
+            productWith(unit: RewardUnit.pointsPer200, pointValue: 0.2),
+          ],
+          owned: [owned(earned: 350)],
+        );
+        expect(find.textContaining('350 pts'), findsOneWidget);
+        expect(find.text('0 pts'), findsNothing);
+      },
+    );
+
+    testWidgets('points the bank credited get their own line', (tester) async {
+      await _pump(
+        tester,
+        catalogue: [
+          productWith(unit: RewardUnit.pointsPer200, pointValue: 0.2),
+        ],
+        owned: [owned(earned: 856, credited: 2500)],
+      );
+      expect(
+        find.byKey(const ValueKey('points-credited-line')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Bank credited 2500 pts'), findsOneWidget);
+    });
+
+    testWidgets('no credited line when the bank credited nothing', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        catalogue: [
+          productWith(unit: RewardUnit.pointsPer200, pointValue: 0.2),
+        ],
+        owned: [owned(earned: 856)],
+      );
+      expect(find.byKey(const ValueKey('points-credited-line')), findsNothing);
+    });
+  });
 }

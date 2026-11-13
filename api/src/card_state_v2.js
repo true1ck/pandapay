@@ -36,6 +36,7 @@
 const rewardV2 = require('./reward_math_v2');
 const { loadDirectory } = require('./merchant_directory');
 const { safeErrorCode } = require('./safeErrorCode');
+const { matchRefunds, netOfRefunds, MAX_AGE_DAYS: REFUND_WINDOW_DAYS } = require('./refund_matching');
 const {
   periodBounds, cardAnchorDate, cardIssueAnchorDate, windowBoundsV2, calendarDay, istDay, addDays,
 } = require('./cycles');
@@ -190,6 +191,22 @@ function ledgerRows(outcome) {
 }
 
 /** C3.1 context from a stored transaction row (or the same fields from a write path). */
+// A card statement line routed through a payment gateway is an online payment.
+// Banks print the gateway in the merchant text ("PYU*Flipkar", "RAZ*Alegra",
+// "Runnr Razorpay"); nothing else in an SMS says online or in-store, so this is
+// the only evidence there is, and it is used only to move an UNKNOWN rail to
+// online (a rail the SMS did state is never overridden).
+const GATEWAY_PREFIX = /^\s*(?:PYU|PAYU|RAZ|RZP|PHP|CCAV|CCA|BD|BILLDESK|CFR|CASHFREE|IPAY|PPSL)\s*\*/i;
+const GATEWAY_WORD = /\b(?:razorpay|payu|billdesk|ccavenue|cashfree|instamojo)\b/i;
+
+function inferRail(rail, merchantName) {
+  const known = rail && rail !== 'unknown' ? rail : null;
+  if (known) return known;
+  const name = merchantName ? String(merchantName) : '';
+  if (name && (GATEWAY_PREFIX.test(name) || GATEWAY_WORD.test(name))) return 'online';
+  return 'unknown';
+}
+
 function transactionContext(row) {
   return {
     amount: Number(row.amount_inr),
@@ -198,7 +215,7 @@ function transactionContext(row) {
     merchant_name: row.merchant_name || null,
     merchant_vpa: row.merchant_vpa || null,
     mcc: row.mcc || null,
-    rail: row.rail || 'unknown',
+    rail: inferRail(row.rail, row.merchant_name),
     platform: null,
   };
 }
@@ -846,6 +863,22 @@ function sameNumber(a, b) {
 }
 
 /**
+ * Spends net of the refunds that reverse them (see refund_matching.js): a
+ * fully refunded purchase earns nothing and uses no cap or milestone, a
+ * partly refunded one is priced on what is left. Rows are cloned, not mutated.
+ */
+function netOfMatchedRefunds(transactions, excluded = new Set()) {
+  const rows = arr(transactions);
+  const counts = (t) => t.status === 'active' && t.instrument === 'credit_card' && !excluded.has(String(t.id));
+  const spends = rows.filter((t) => counts(t) && t.entry_kind === 'spend');
+  const refunds = rows.filter((t) => counts(t) && t.entry_kind === 'refund');
+  if (refunds.length === 0) return rows;
+  const refunded = matchRefunds(spends, refunds);
+  if (refunded.size === 0) return rows;
+  return rows.map((t) => (refunded.has(String(t.id)) ? netOfRefunds(t, refunded.get(String(t.id))) : t));
+}
+
+/**
  * The pure replay. `transactions` are the card's rows from
  * `range.loadFrom`..`range.loadTo` (active spends, plus any row still
  * carrying a record), with id, amount_inr, occurred_at, category_id,
@@ -860,9 +893,13 @@ function planReplay({
   existingCapRows = [], existingMilestoneRows = [],
 }) {
   const excluded = new Set(arr(excludeTxnIds).map(String));
+  // History rows (is_backfill) earn rewards like any other spend: caps and
+  // milestones are bucketed by their own period, so an old month can never
+  // disturb the current one. (They used to be skipped, which left every
+  // spend older than a day at no reward at all.)
   const isEligible = (t) => t.status === 'active' && t.instrument === 'credit_card' && t.entry_kind === 'spend'
-    && t.is_backfill !== true && !excluded.has(String(t.id));
-  const ordered = [...arr(transactions)].sort((a, b) => {
+    && !excluded.has(String(t.id));
+  const ordered = netOfMatchedRefunds(transactions, excluded).slice().sort((a, b) => {
     const time = new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime();
     return time || (String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0);
   });
@@ -902,10 +939,12 @@ function planReplay({
 
   const newCapEntries = new Map(); // txn id -> entries (replayed spends)
   const expectedUpdates = [];
+  const replayedIds = []; // spends the rebuild priced: they now carry card state
   if (caps) {
     for (const t of ordered) {
       if (!isEligible(t)) continue;
       const day = dayOf(t.occurred_at);
+      if (!(day < caps.start || day > caps.end)) replayedIds.push(t.id);
       if (day < caps.start || day > caps.end) {
         // A seed: its period is rebuilt but the spend is outside the window,
         // so it counts through what its record says it added.
@@ -1078,6 +1117,7 @@ function planReplay({
     milestonesToDelete,
     txnRecordUpdates: recordUpdates,
     txnExpectedUpdates: expectedUpdates,
+    replayedIds,
     diff,
   };
 }
@@ -1091,8 +1131,7 @@ const TXN_SELECT = `SELECT id, amount_inr, occurred_at, category_id, merchant_na
    AND occurred_at >= ($2::date::timestamp AT TIME ZONE 'Asia/Kolkata')
    AND occurred_at < (($3::date + 1)::timestamp AT TIME ZONE 'Asia/Kolkata')
    AND (card_state_v2 IS NOT NULL
-        OR (status = 'active' AND instrument = 'credit_card' AND entry_kind = 'spend'
-            AND COALESCE(is_backfill, false) = false))
+        OR (status = 'active' AND instrument = 'credit_card' AND entry_kind IN ('spend', 'refund')))
  ORDER BY occurred_at ASC, id ASC`;
 
 /**
@@ -1188,32 +1227,58 @@ async function applyCardRebuild(client, userId, v2, plan) {
       [v2.userCardId, r.milestone_rule_id, r.period_start, userId],
     );
   }
-  for (const u of plan.txnRecordUpdates) {
+  // Bulk writes: a card with years of history is priced in a handful of
+  // statements, not one round trip per spend.
+  if (plan.txnRecordUpdates.length > 0) {
     await client.query(
-      `UPDATE transactions SET card_state_v2 = $3::jsonb, updated_at = now() WHERE id = $1 AND profile_id = $2`,
-      [u.id, userId, u.record ? JSON.stringify(u.record) : null],
+      `UPDATE transactions t SET card_state_v2 = NULLIF(r.rec, 'null'::jsonb), updated_at = now()
+         FROM jsonb_to_recordset($2::jsonb) AS r(id uuid, rec jsonb)
+        WHERE t.id = r.id AND t.profile_id = $1`,
+      [userId, JSON.stringify(plan.txnRecordUpdates.map((u) => ({ id: u.id, rec: u.record || null })))],
     );
   }
-  for (const u of plan.txnExpectedUpdates) {
+  if (plan.txnExpectedUpdates.length > 0) {
     await client.query(
-      `UPDATE transactions
-          SET expected_points = $3, expected_value_inr = $4, expected_cashback_inr = $5, updated_at = now()
-        WHERE id = $1 AND profile_id = $2`,
-      [u.id, userId, u.native, u.value, u.cashback],
+      `UPDATE transactions t
+          SET expected_points = r.native_amt, expected_value_inr = r.value_inr, expected_cashback_inr = r.cashback_inr, updated_at = now()
+         FROM jsonb_to_recordset($2::jsonb) AS r(id uuid, native_amt numeric, value_inr numeric, cashback_inr numeric)
+        WHERE t.id = r.id AND t.profile_id = $1`,
+      [userId, JSON.stringify(plan.txnExpectedUpdates.map((u) => ({ id: u.id, native_amt: u.native, value_inr: u.value, cashback_inr: u.cashback })))],
     );
-    // The estimated earn row follows the transaction; confirmed rows are left alone.
+    // The estimated earn rows follow the transactions; confirmed rows are left alone.
     await client.query(
       `DELETE FROM points_ledger
-        WHERE transaction_id = $1 AND profile_id = $2 AND reason = $3 AND state = 'estimated'`,
-      [u.id, userId, LEDGER_REASON],
+        WHERE profile_id = $1 AND transaction_id = ANY($2::uuid[]) AND reason = $3 AND state = 'estimated'`,
+      [userId, plan.txnExpectedUpdates.map((u) => u.id), LEDGER_REASON],
     );
-    for (const row of ledgerRows(u)) {
+    const ledger = [];
+    for (const u of plan.txnExpectedUpdates) {
+      for (const row of ledgerRows(u)) {
+        ledger.push({ transaction_id: u.id, delta: row.delta, reason: row.reason, occurred_at: u.occurred_at });
+      }
+    }
+    if (ledger.length > 0) {
       await client.query(
         `INSERT INTO points_ledger (profile_id, user_card_id, transaction_id, delta_points, reason, state, occurred_at)
-         VALUES ($1, $2, $3, $4, $5, 'estimated', $6)`,
-        [userId, v2.userCardId, u.id, row.delta, row.reason, u.occurred_at],
+         SELECT $1, $2, r.transaction_id, r.delta, r.reason, 'estimated', r.occurred_at
+           FROM jsonb_to_recordset($3::jsonb) AS r(transaction_id uuid, delta numeric, reason text, occurred_at timestamptz)`,
+        [userId, v2.userCardId, JSON.stringify(ledger)],
       );
     }
+  }
+  // A spend the rebuild priced carries card state now, so a later edit or
+  // ignore reverses it (and a history row is never applied a second time).
+  const marked = [...new Set([
+    ...arr(plan.replayedIds),
+    ...plan.txnRecordUpdates.map((u) => u.id),
+    ...plan.txnExpectedUpdates.map((u) => u.id),
+  ])];
+  if (marked.length > 0) {
+    await client.query(
+      `UPDATE transactions SET state_applied = true
+        WHERE profile_id = $1 AND id = ANY($2::uuid[]) AND state_applied IS DISTINCT FROM true`,
+      [userId, marked],
+    );
   }
   return {
     capRows: plan.diff.caps.length,
@@ -1251,7 +1316,7 @@ function feeWaiverWindows(rules, asOf, statementDay) {
 }
 
 function isEligibleSpend(t) {
-  return t.status === 'active' && t.instrument === 'credit_card' && t.entry_kind === 'spend' && t.is_backfill !== true;
+  return t.status === 'active' && t.instrument === 'credit_card' && t.entry_kind === 'spend';
 }
 
 /**
@@ -1266,7 +1331,7 @@ function planFeeWaivers({
 }) {
   const totals = new Map(windows.map((w) => [key(w.rule.id, w.start), 0]));
   const recordUpdates = [];
-  const ordered = [...arr(transactions)].sort((a, b) => new Date(a.occurred_at) - new Date(b.occurred_at)
+  const ordered = netOfMatchedRefunds(transactions).slice().sort((a, b) => new Date(a.occurred_at) - new Date(b.occurred_at)
     || (String(a.id) < String(b.id) ? -1 : 1));
   for (const t of ordered) {
     const entries = [];
@@ -1342,8 +1407,7 @@ async function planFeeWaiverRebuild(client, card, { asOf = new Date(), v2 = null
         AND occurred_at >= (($3::date - $5::int)::timestamp AT TIME ZONE 'UTC')
         AND occurred_at < (($4::date + $5::int + 1)::timestamp AT TIME ZONE 'UTC')
         AND (card_state_v2 IS NOT NULL
-             OR (status = 'active' AND instrument = 'credit_card' AND entry_kind = 'spend'
-                 AND COALESCE(is_backfill, false) = false))
+             OR (status = 'active' AND instrument = 'credit_card' AND entry_kind IN ('spend', 'refund')))
       ORDER BY occurred_at ASC, id ASC`,
     [card.userCardId, card.profileId, from, to, FEE_WINDOW_MARGIN_DAYS],
   );
@@ -1396,8 +1460,112 @@ async function applyFeeWaiverRebuild(client, userId, card, plan) {
 async function reconcileIfV2(client, userId, userCardId) {
   const v2 = await loadV2Card(client, userCardId, { profileId: userId });
   if (!v2) return null;
+  // Spends recorded as history (or before the card was linked) may never have
+  // been priced, and a recent refund changes what its purchase earned. Price
+  // them once: replay from the oldest day that needs it, so old months stop
+  // showing no reward and every period's caps and the milestone progress come
+  // out right. This extra work runs in its own savepoint: if it ever fails the
+  // wallet read falls back to the plain current-period rebuild it always did.
+  await client.query(`SAVEPOINT ${HOOK_SAVEPOINT}_catchup`);
+  try {
+    let since = await oldestUnpricedDay(client, v2);
+    const refundSince = await refundWindowStart(client, v2);
+    if (refundSince && (!since || refundSince < since)) since = refundSince;
+    if (since) {
+      const { plan } = await rebuildCardState(client, userId, v2, {
+        asOf: new Date(), caps: true, milestones: true, expected: true, since,
+      });
+      await refreshFeeWaivers(client, userId, v2);
+      await client.query(`RELEASE SAVEPOINT ${HOOK_SAVEPOINT}_catchup`);
+      return { rebuiltCaps: plan.capRows.length, pricedHistory: plan.txnExpectedUpdates.length };
+    }
+    await client.query(`RELEASE SAVEPOINT ${HOOK_SAVEPOINT}_catchup`);
+  } catch (err) {
+    await client.query(`ROLLBACK TO SAVEPOINT ${HOOK_SAVEPOINT}_catchup`);
+    await client.query(`RELEASE SAVEPOINT ${HOOK_SAVEPOINT}_catchup`);
+    console.warn('card_state_v2 history catch-up deferred', safeErrorCode(err));
+  }
   const { plan } = await rebuildCardState(client, userId, v2, { asOf: new Date(), caps: true });
-  return { rebuiltCaps: plan.capRows.length };
+  return { rebuiltCaps: plan.capRows.length, pricedHistory: 0 };
+}
+
+/**
+ * The current fee-waiver period's progress, replayed over the card's spends
+ * (history included) with the same maths the live path uses. A v2 card object
+ * carries the fields the planner reads (userCardId, profileId, cardProductId,
+ * statementDay). Nothing to do for a card whose product has no fee-waiver rules.
+ */
+async function refreshFeeWaivers(client, userId, v2) {
+  const feePlan = await planFeeWaiverRebuild(client, v2, { asOf: new Date(), v2 });
+  if (feePlan && (feePlan.toWrite.length > 0 || feePlan.recordUpdates.length > 0)) {
+    await applyFeeWaiverRebuild(client, userId, v2, feePlan);
+  }
+}
+
+/**
+ * Start of the window that can hold the purchases of this card's recent refunds,
+ * or null. Refunds of EVERY status count: ignoring, restoring or deleting a
+ * refund changes what its purchase earned just as adding one does, and the
+ * rebuild is idempotent, so re-checking costs nothing when nothing changed.
+ */
+async function refundWindowStart(client, v2) {
+  const r = await client.query(
+    `SELECT to_char(min(occurred_at) AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD') AS day
+       FROM transactions
+      WHERE user_card_id = $1 AND profile_id = $2
+        AND instrument = 'credit_card' AND entry_kind = 'refund'
+        AND occurred_at >= now() - ($3::int * interval '1 day')`,
+    [v2.userCardId, v2.profileId, REFUND_WINDOW_DAYS],
+  );
+  const day = r.rows[0] && r.rows[0].day;
+  return day ? addDays(day, -REFUND_WINDOW_DAYS) : null;
+}
+
+/**
+ * India day of the oldest active card spend that has no reward figure yet, or
+ * null. Only the missing figure counts: a rebuild that fails half-way (or the
+ * plain current-period rebuild) can stamp a record on a spend without pricing
+ * it, and such a spend must still be found.
+ */
+async function oldestUnpricedDay(client, v2) {
+  const r = await client.query(
+    `SELECT to_char(min(occurred_at) AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD') AS day
+       FROM transactions
+      WHERE user_card_id = $1 AND profile_id = $2 AND status = 'active'
+        AND instrument = 'credit_card' AND entry_kind = 'spend'
+        AND expected_value_inr IS NULL
+        AND occurred_at < now() + interval '1 day'`, // a future-dated spend is priced once its day comes, never re-tried every read
+    [v2.userCardId, v2.profileId],
+  );
+  return (r.rows[0] && r.rows[0].day) || null;
+}
+
+/**
+ * Prices a batch of history spends for one v2 card, exactly (date order,
+ * every period's own caps). Returns null for a v1-shaped card so the caller
+ * applies those row by row. Never throws past its savepoint: pricing history
+ * must not fail the upload that carried it.
+ */
+async function priceHistoryIfV2(client, userId, userCardId, sinceDay) {
+  await client.query(`SAVEPOINT ${HOOK_SAVEPOINT}_history`);
+  try {
+    const v2 = await loadV2Card(client, userCardId, { profileId: userId });
+    if (!v2) {
+      await client.query(`RELEASE SAVEPOINT ${HOOK_SAVEPOINT}_history`);
+      return null;
+    }
+    const { plan } = await rebuildCardState(client, userId, v2, {
+      asOf: new Date(), caps: true, milestones: true, expected: true, since: sinceDay,
+    });
+    await refreshFeeWaivers(client, userId, v2);
+    await client.query(`RELEASE SAVEPOINT ${HOOK_SAVEPOINT}_history`);
+    return { priced: plan.txnExpectedUpdates.length };
+  } catch (err) {
+    await client.query(`ROLLBACK TO SAVEPOINT ${HOOK_SAVEPOINT}_history`);
+    await client.query(`RELEASE SAVEPOINT ${HOOK_SAVEPOINT}_history`);
+    console.warn('card_state_v2 history pricing deferred', safeErrorCode(err));
+    return { priced: 0, deferred: true };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1466,6 +1634,9 @@ module.exports = {
   // index.js hooks
   applyIfV2,
   reconcileIfV2,
+  priceHistoryIfV2,
+  netOfMatchedRefunds,
+  oldestUnpricedDay,
   currentCapStates,
   currentMilestoneStates,
   // recording and rebuild
@@ -1480,6 +1651,7 @@ module.exports = {
   // pure parts (tests, the recompute script)
   buildV2Card,
   transactionContext,
+  inferRail,
   computeTransactionV2,
   milestoneEntries,
   rebuildRange,

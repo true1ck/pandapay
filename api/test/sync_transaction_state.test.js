@@ -257,14 +257,14 @@ test('instrument and entry-kind transition reverses the old card spend without a
   assert.equal(f.calls.at(-1).sql.includes('state_applied = true'), true);
 });
 
-test('backfilled edit validates card but leaves derived reward state untouched', async () => {
+test('a history (backfill) spend is priced on edit like any other card spend', async () => {
   const f = fixture({
     before: row({ is_backfill: true, state_applied: false }),
     after: row({ amount_inr: '120.00', is_backfill: true, state_applied: false }),
   });
   await f.applier(f.client, input());
-  assert.equal(f.events.some(([kind]) => kind === 'reverse' || kind === 'apply'), false);
-  assert.equal(f.calls.some((call) => call.sql.includes('state_applied = true')), false);
+  assert.equal(f.events.some(([kind]) => kind === 'apply'), true, 'history rows earn rewards now');
+  assert.equal(f.calls.some((call) => call.sql.includes('state_applied = true')), true);
 });
 
 test('missing transaction is delegated to SQL and preserves not_found', async () => {

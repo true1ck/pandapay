@@ -15,6 +15,7 @@ import '../storage/ledger_store.dart';
 import '../storage/row_decode_cache.dart';
 import 'json_fingerprint.dart';
 import 'reports.dart';
+import 'suspected_refunds.dart';
 
 /// Reads the account's whole ledger state into one [LedgerReadModel].
 ///
@@ -241,4 +242,14 @@ final smsV2LedgerReadModelProvider = FutureProvider<LedgerReadModel>((
 /// This gate affects reports only; capture routing still uses the build flag.
 final smsV2ReportingEnabledProvider = Provider<bool>((ref) {
   return ref.watch(smsV2LedgerReadModelProvider).valueOrNull?.v2Ready == true;
+});
+
+/// Card spends the card's available limit says were probably refunded without
+/// a message, keyed by the spend's event id. Empty until the ledger has loaded.
+final suspectedRefundsProvider = Provider<Map<String, SuspectedRefundInfo>>((
+  ref,
+) {
+  final model = ref.watch(smsV2LedgerReadModelProvider).valueOrNull;
+  if (model == null) return const {};
+  return suspectedRefundsFromModel(model);
 });

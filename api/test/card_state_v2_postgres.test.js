@@ -28,6 +28,7 @@ const { periodBounds, addDays } = require('../src/cycles');
 const { replayCurrentCapConsumption } = require('../src/card_state_reconciliation');
 const { loadDirectory } = require('../src/merchant_directory');
 const cardStateV2 = require('../src/card_state_v2');
+const { creditRewardFacts } = require('../src/reward_credits');
 const { recompute } = require('../scripts/recompute_card_state');
 const F = require('./card_state_v2_fixture');
 
@@ -1157,5 +1158,160 @@ test('real card (PhonePe SBI Select Black): points caps stored in points, not ru
       for (const m of milestones) assert.deepEqual([m.period_start, m.approximate_window], [prevMonthStart, false]);
     });
     if (!ran) t.skip('phonepe-sbi-select-black is not in this database');
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// Rewards fix (13 Nov 2026): history pricing, refund netting, bank credits.
+// These run the new bulk SQL against a real Postgres.
+// ---------------------------------------------------------------------------
+
+/** A history row the way SMS upload leaves it: active, flagged is_backfill, never priced. */
+async function insertHistorySpend(client, ids, spend) {
+  const occurred = new Date(`${spend.day}T06:30:00Z`);
+  const row = await client.query(
+    `INSERT INTO transactions (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, category_id,
+                               rail, source, instrument, entry_kind, is_backfill, state_applied, status)
+     VALUES ($1, $2, $3, $4, $5, $6, 'unknown', 'sms', 'credit_card', $7, true, false, $8) RETURNING id`,
+    [ids.profileId, ids.userCardId, spend.amount, occurred, spend.merchant || null,
+      spend.category ? ids.cats[spend.category] : null, spend.kind || 'spend', spend.status || 'active'],
+  );
+  return row.rows[0].id;
+}
+
+test('history spends are priced by the wallet read, once, with each month keeping its own caps', { skip }, async () => {
+  cardStateV2.clearDirectoryCache();
+  await withRollback(async (client) => {
+    const fns = extractIndexFunctions();
+    const { monthStart, prevMonthStart } = await dates(client);
+    const ids = await seedSyntheticCard(client, { openedOn: addDays(prevMonthStart, -40) });
+    await asUser(client, ids.profileId);
+    const lastMonth = await insertHistorySpend(client, ids, { amount: 2000, day: addDays(prevMonthStart, 3), category: 'dining' });
+    const thisMonth = await insertHistorySpend(client, ids, { amount: 2000, day: addDays(monthStart, 1), category: 'dining' });
+    const wallet = await insertHistorySpend(client, ids, { amount: 500, day: addDays(monthStart, 2), category: 'wallet' });
+
+    await fns.reconcileCurrentCapStates(client, ids.profileId);
+    const [a, b, c] = await expectedOf(client, [lastMonth, thisMonth, wallet]);
+    assert.deepEqual([a.value, b.value, c.value], [25, 25, 0], 'every history spend now has a reward figure (the excluded wallet load earns 0)');
+    assert.ok(a.card_state_v2 && b.card_state_v2, 'priced spends carry the record a later edit reverses');
+    const flags = await client.query(`SELECT state_applied FROM transactions WHERE id = ANY($1::uuid[])`, [[lastMonth, thisMonth, wallet]]);
+    assert.ok(flags.rows.every((r) => r.state_applied === true), 'and are marked applied');
+    const ledger = await client.query(`SELECT delta_points::float8 AS points, state FROM points_ledger WHERE user_card_id = $1 ORDER BY occurred_at`, [ids.userCardId]);
+    assert.deepEqual(ledger.rows.map((r) => [r.points, r.state]), [[100, 'estimated'], [100, 'estimated']]);
+
+    // Each month has its own monthly cap row: last month never leaks into this one.
+    const rows = await capRows(client, ids.userCardId);
+    const monthly = rows.filter((r) => r.cap_rule_id === F.CAP.parent);
+    assert.deepEqual(monthly.map((r) => [r.period_start, r.consumed]).sort(), [[monthStart, 100], [prevMonthStart, 100]].sort());
+
+    // A second wallet read changes nothing.
+    const before = await client.query(`SELECT max(updated_at) AS t FROM transactions WHERE user_card_id = $1`, [ids.userCardId]);
+    await fns.reconcileCurrentCapStates(client, ids.profileId);
+    assert.deepEqual(await capRows(client, ids.userCardId), rows);
+    const after = await client.query(`SELECT max(updated_at) AS t FROM transactions WHERE user_card_id = $1`, [ids.userCardId]);
+    assert.equal(String(after.rows[0].t), String(before.rows[0].t), 'no rewrite of unchanged rows');
+    assert.equal((await client.query(`SELECT count(*)::int AS n FROM points_ledger WHERE user_card_id = $1`, [ids.userCardId])).rows[0].n, 2);
+
+    // Ignoring a priced history spend reverses exactly its record.
+    await ignoreSpend(client, fns, ids, thisMonth);
+    const after2 = (await capRows(client, ids.userCardId)).filter((r) => r.cap_rule_id === F.CAP.parent);
+    assert.deepEqual(after2.map((r) => [r.period_start, r.consumed]).sort(), [[prevMonthStart, 100]].sort().concat(after2.filter((r) => r.consumed === 0).map((r) => [r.period_start, 0])).sort());
+  });
+});
+
+test('a refund takes its purchase out of the reward; ignoring the refund puts it back', { skip }, async () => {
+  cardStateV2.clearDirectoryCache();
+  await withRollback(async (client) => {
+    const fns = extractIndexFunctions();
+    const { monthStart, prevMonthStart } = await dates(client);
+    const ids = await seedSyntheticCard(client, { openedOn: addDays(prevMonthStart, -40) });
+    await asUser(client, ids.profileId);
+    const purchase = await insertHistorySpend(client, ids, { amount: 2000, day: addDays(monthStart, 1), category: 'dining', merchant: 'ACME STORE' });
+    const other = await insertHistorySpend(client, ids, { amount: 2000, day: addDays(monthStart, 1), category: 'dining', merchant: 'OTHER SHOP' });
+    const refund = await insertHistorySpend(client, ids, { amount: 2000, day: addDays(monthStart, 3), merchant: 'ACME STORE', kind: 'refund' });
+
+    await fns.reconcileCurrentCapStates(client, ids.profileId);
+    let [p, o] = await expectedOf(client, [purchase, other]);
+    assert.deepEqual([p.value, o.value], [0, 25], 'the refunded purchase earns nothing, the other keeps its reward');
+    assert.equal(consumedById(await capRows(client, ids.userCardId))[F.CAP.parent], 100, 'and only the other one used the cap');
+    assert.equal((await client.query(`SELECT count(*)::int AS n FROM points_ledger WHERE transaction_id = $1`, [purchase])).rows[0].n, 0);
+
+    // The refund is ignored: the next wallet read puts the reward back.
+    await asOwner(client);
+    await client.query(`UPDATE transactions SET status = 'ignored' WHERE id = $1`, [refund]);
+    await asUser(client, ids.profileId);
+    await fns.reconcileCurrentCapStates(client, ids.profileId);
+    [p, o] = await expectedOf(client, [purchase, other]);
+    assert.deepEqual([p.value, o.value], [25, 25]);
+    assert.equal(consumedById(await capRows(client, ids.userCardId))[F.CAP.parent], 200);
+    assert.equal((await client.query(`SELECT count(*)::int AS n FROM points_ledger WHERE transaction_id = $1`, [purchase])).rows[0].n, 1);
+  });
+});
+
+test('a failure in the history catch-up falls back to the plain rebuild instead of failing the wallet read', { skip }, async () => {
+  cardStateV2.clearDirectoryCache();
+  await withRollback(async (client) => {
+    const fns = extractIndexFunctions();
+    const { monthStart, prevMonthStart } = await dates(client);
+    const ids = await seedSyntheticCard(client, { openedOn: addDays(prevMonthStart, -40) });
+    await asUser(client, ids.profileId);
+    await recordSpend(client, fns, ids, { amount: 2000, day: monthStart, category: 'dining' });
+    await insertHistorySpend(client, ids, { amount: 2000, day: addDays(prevMonthStart, 3), category: 'dining' });
+    // Break the bulk price write only (not the cap rebuild the fallback needs).
+    await asOwner(client);
+    await client.query(`CREATE FUNCTION wp_fail_price() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+      IF NEW.expected_value_inr IS NOT NULL AND OLD.is_backfill THEN RAISE EXCEPTION 'injected price failure'; END IF; RETURN NEW; END $$`);
+    await client.query(`CREATE TRIGGER wp_fail_price BEFORE UPDATE ON transactions FOR EACH ROW EXECUTE FUNCTION wp_fail_price()`);
+    await asUser(client, ids.profileId);
+    await fns.reconcileCurrentCapStates(client, ids.profileId); // must not throw
+    const consumed = consumedById(await capRows(client, ids.userCardId));
+    assert.equal(consumed[F.CAP.parent], 100, 'the current month is still rebuilt (the fallback)');
+    await asOwner(client);
+    await client.query(`DROP TRIGGER wp_fail_price ON transactions`);
+    await asUser(client, ids.profileId);
+    await fns.reconcileCurrentCapStates(client, ids.profileId);
+    const pending = await client.query(`SELECT count(*)::int AS n FROM transactions WHERE user_card_id = $1 AND status = 'active' AND entry_kind = 'spend' AND expected_value_inr IS NULL`, [ids.userCardId]);
+    assert.equal(pending.rows[0].n, 0, 'once the fault is gone the next read prices the history');
+  });
+});
+
+test('bank-credited points reach the points history once, confirmed, and survive a re-read under a new fact id', { skip }, async () => {
+  await withRollback(async (client) => {
+    const { prevMonthStart } = await dates(client);
+    const ids = await seedSyntheticCard(client, { openedOn: prevMonthStart });
+    await asOwner(client);
+    const instrument = (await client.query(
+      `INSERT INTO sms_v2_instruments (instrument_id, profile_id, kind, issuer_slug, mask_digits, display_name, status, user_card_id, first_seen_at, last_seen_at)
+       VALUES (gen_random_uuid(), $1, 'credit_card', 'hdfc', '5678', 'HDFC 5678', 'confirmed', $2, now(), now()) RETURNING instrument_id`,
+      [ids.profileId, ids.userCardId])).rows[0].instrument_id;
+    const fact = (n, minor = 2500, role = 'points_earned') => client.query(
+      `INSERT INTO sms_v2_facts (fact_id, profile_id, source_key, fact_type, contract_version, observed_at, instrument_id, payload, provenance)
+       VALUES ($1, $2, 'sms:reward-credit-1', 'reward', '2.0', now(), $3, $4::jsonb, '{}'::jsonb)`,
+      [String(n).padStart(64, '0'), ids.profileId, instrument,
+        JSON.stringify({ amounts: [{ role, minor, unit: 'POINTS' }] })]);
+    await fact(1);
+    await fact(2, 3000, 'cash_value'); // a cash-value fact is not points
+    await asUser(client, ids.profileId);
+
+    assert.equal(await creditRewardFacts(client, ids.profileId), 1);
+    assert.equal(await creditRewardFacts(client, ids.profileId), 0, 'a second sweep adds nothing');
+    let rows = (await client.query(`SELECT delta_points::float8 AS points, state, reason FROM points_ledger WHERE user_card_id = $1`, [ids.userCardId])).rows;
+    assert.deepEqual(rows, [{ points: 2500, state: 'confirmed', reason: 'issuer credit' }]);
+
+    // The same message re-read under another rule (a new fact id) is not credited again.
+    await asOwner(client);
+    await fact(3);
+    await asUser(client, ids.profileId);
+    assert.equal(await creditRewardFacts(client, ids.profileId, { factIds: [String(3).padStart(64, '0')] }), 0);
+    rows = (await client.query(`SELECT count(*)::int AS n FROM points_ledger WHERE user_card_id = $1`, [ids.userCardId])).rows;
+    assert.equal(rows[0].n, 1);
+
+    // A credit for an instrument not linked to a card is skipped.
+    await asOwner(client);
+    await client.query(`UPDATE sms_v2_instruments SET user_card_id = NULL WHERE instrument_id = $1`, [instrument]);
+    await client.query(`DELETE FROM points_ledger WHERE user_card_id = $1`, [ids.userCardId]);
+    await asUser(client, ids.profileId);
+    assert.equal(await creditRewardFacts(client, ids.profileId), 0);
   });
 });

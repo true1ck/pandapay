@@ -58,6 +58,17 @@ function step(container, token) {
   return { ok: true, holder: container, slot: idx, value: container[idx] };
 }
 
+// When a path cannot be followed because a selector such as `[id=some_rule]`
+// matches nothing in an array that DOES exist, the record simply lacks that
+// rule. That is different from a wrong path (a misspelt key, a missing parent),
+// and it is how an override written for a newer record shows up against an
+// older one. Reported as `missing_selector: "id=some_rule"`.
+function missingSelector(token, container) {
+  return 'selectKey' in token && Array.isArray(container)
+    ? { missing_selector: `${token.selectKey}=${token.selectValue}` }
+    : {};
+}
+
 /**
  * Applies one change in place. op: "set" (default), "remove" (delete a key or
  * an array element), "append" (push onto an array).
@@ -67,12 +78,14 @@ function applyChange(target, change) {
   let cur = target;
   for (let i = 0; i < tokens.length - 1; i++) {
     const r = step(cur, tokens[i]);
-    if (!r.ok || r.value === undefined) return { ok: false, error: `path not found at segment ${i + 1}` };
+    if (!r.ok || r.value === undefined) {
+      return { ok: false, error: `path not found at segment ${i + 1}`, ...missingSelector(tokens[i], cur) };
+    }
     cur = r.value;
   }
   const lastTok = tokens[tokens.length - 1];
   const r = step(cur, lastTok);
-  if (!r.ok) return { ok: false, error: 'final segment not found' };
+  if (!r.ok) return { ok: false, error: 'final segment not found', ...missingSelector(lastTok, cur) };
   const op = change.op || 'set';
   if (op === 'set') {
     r.holder[r.slot] = deepClone(change.value);
@@ -138,7 +151,12 @@ function applyOverrides(record, overrideFile) {
           citation: typeof change.citation === 'string' && change.citation.trim() ? change.citation.trim() : null,
         });
       } else {
-        errors.push({ index: i, path: change.path, error: r.error });
+        errors.push({
+          index: i,
+          path: change.path,
+          error: r.error,
+          ...(r.missing_selector ? { missing_selector: r.missing_selector } : {}),
+        });
       }
     } catch (err) {
       errors.push({ index: i, path: change?.path ?? null, error: err.message });

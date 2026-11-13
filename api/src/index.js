@@ -73,6 +73,7 @@ const paymentMethods = require('./payment_methods');
 // card-rewards v2 (WP8): v2-shaped cards record in native units; see the hooks
 // in applyTransactionState, reconcileCurrentCapStates and GET /user-cards.
 const cardStateV2 = require('./card_state_v2');
+const { creditRewardFacts, ISSUER_CREDIT_REASON } = require('./reward_credits');
 const { registerSplitRoutes } = require('./transaction_splits');
 const transactionTags = require('./transaction_tags');
 const { registerUserMerchantCategoryRuleRoutes } = require('./user_merchant_category_rules');
@@ -2000,6 +2001,7 @@ app.get('/user-cards', requireAuth, async (req, res) => {
         card.cap_states = [];
         card.milestone_states = [];
         card.total_points_earned = Number(card.points_balance || 0);
+        card.credited_points = 0;
         card.fee_waiver_states = [];
       }
 
@@ -2008,6 +2010,9 @@ app.get('/user-cards', requireAuth, async (req, res) => {
         // Rebuild derived current-period cap state from the canonical ledger.
         // The SMS attribution repair remains an explicit reconciliation task.
         await reconcileCurrentCapStates(client, req.userId);
+        // Points the bank credited by SMS may have arrived before the card was linked:
+        // one sweep for the whole wallet (idempotent), not one scan per card.
+        await creditRewardFacts(client, req.userId);
 
         for (const card of cards.rows) {
           // card-rewards v2 (WP8, C8 D22c): `consumed` keeps its v1 meaning
@@ -2019,11 +2024,17 @@ app.get('/user-cards', requireAuth, async (req, res) => {
           card.cap_states = await cardStateV2.currentCapStates(client, card.id);
           card.milestone_states = await cardStateV2.currentMilestoneStates(client, card.id);
 
+          // Bank-credited rows are kept out of the estimated total: a statement credit
+          // usually pays out points the spends already estimated, so adding both would
+          // count them twice. They are returned separately.
           const pointsTotal = await client.query(
-            `SELECT COALESCE(SUM(delta_points), 0) AS total_points FROM points_ledger WHERE user_card_id = $1`,
-            [card.id]
+            `SELECT COALESCE(SUM(delta_points) FILTER (WHERE reason IS DISTINCT FROM $2), 0) AS total_points,
+                    COALESCE(SUM(delta_points) FILTER (WHERE reason = $2), 0) AS credited_points
+               FROM points_ledger WHERE user_card_id = $1`,
+            [card.id, ISSUER_CREDIT_REASON]
           );
           card.total_points_earned = Number(pointsTotal.rows[0].total_points) + Number(card.points_balance || 0);
+          card.credited_points = Number(pointsTotal.rows[0].credited_points);
 
           const feeWaiverStates = await client.query(
             `SELECT fw.fee_waiver_rule_id, fw.qualified_spend, fw.waived_at, fw.period_end,
@@ -3225,7 +3236,7 @@ async function insertTransactionAndUpdateState(client, userId, {
       RETURNING id, amount_inr, occurred_at, instrument, entry_kind, source, status, reward_state, source_account_last4, state_applied, is_backfill`,
       [old.id, userId, resolvedInstrument, userCardId || null, resolvedAccountLast4, refreshedEntryKind, Boolean(shouldReclassify), merchantName || null, merchantLocked]
     );
-    if (shouldReclassify && refreshedMovesCardState && !old.is_backfill) {
+    if (shouldReclassify && refreshedMovesCardState) {
       const card = oldCard || (userCardId ? await loadUserCardForState(client, userId, userCardId) : null);
       if (!card) throw new Error('cannot apply reclassified card transaction without its card state');
       await applyTransactionState(client, userId, card, {
@@ -3802,8 +3813,7 @@ async function repairSmsHistory(client, userId, { reviewCrossSource = false, rev
     );
     const newMovesCardState = row.instrument === 'credit_card'
       && desiredKind === 'spend'
-      && Boolean(row.user_card_id)
-      && !row.is_backfill;
+      && Boolean(row.user_card_id);
     if (newMovesCardState) {
       const card = oldCard || await loadUserCardForState(client, userId, row.user_card_id);
       if (card) {
@@ -3973,12 +3983,12 @@ async function repairSmsHistory(client, userId, { reviewCrossSource = false, rev
     if (linked.rowCount === 0) continue;
     linkedCards += 1;
 
-    // Historical backfills must never change the current card cycle. A live
-    // credit-card spend, however, was intentionally held out of card state
-    // while unmatched, so apply it exactly once after linking it now.
+    // A credit-card spend (live or history) is held out of card state while
+    // unmatched, so apply it exactly once after linking it now. State is keyed
+    // by the spend's own period, so a history spend never touches the current
+    // cycle.
     if (row.instrument === 'credit_card'
         && row.entry_kind === 'spend'
-        && !row.is_backfill
         && row.state_applied !== true) {
       const card = await loadUserCardForState(client, userId, resolved.userCardId);
       if (card) {
@@ -4166,8 +4176,8 @@ async function repairSmsHistory(client, userId, { reviewCrossSource = false, rev
       reservedRows.add(selected.candidate.id);
 
       // Keep totals and card state count-once while this pair awaits a decision.
-      if (smsRow.instrument === 'credit_card' && !smsRow.is_backfill
-          && smsRow.state_applied !== false) {
+      if (smsRow.instrument === 'credit_card'
+          && (smsRow.state_applied === true || (smsRow.state_applied == null && !smsRow.is_backfill))) {
         const card = await loadUserCardForState(client, userId, smsRow.user_card_id);
         if (!card) throw new Error('cannot suppress historical duplicate without its active card');
         await reverseTransactionState(client, userId, card, smsRow);
@@ -4236,6 +4246,9 @@ async function reconcileCurrentCapStates(client, userId) {
       rebuiltCaps += v2Rebuilt.rebuiltCaps;
       continue;
     }
+    // A v1-shaped card prices its unpriced history spends one by one, oldest
+    // first (each lands in its own period, so the current cycle is untouched).
+    await priceUnpricedHistoryV1(client, userId, card.id);
 
     const rewardRules = await client.query(
       `SELECT id, category_id, merchant_pattern, rail, unit, rate,
@@ -4269,7 +4282,6 @@ async function reconcileCurrentCapStates(client, userId) {
           AND status = 'active'
           AND instrument = 'credit_card'
           AND entry_kind = 'spend'
-          AND COALESCE(is_backfill, false) = false
           AND occurred_at >= $3::date
           AND occurred_at < ($4::date + interval '1 day')
         ORDER BY occurred_at ASC, id ASC`,
@@ -4304,6 +4316,36 @@ async function reconcileCurrentCapStates(client, userId) {
   }
 
   return { rebuiltCaps };
+}
+
+/**
+ * v1-shaped cards: history spends (and spends held out of state while their
+ * card was unmatched) that never got a reward figure are applied once, oldest
+ * first. Bounded per call so one wallet read stays quick; the rest follow on
+ * the next read. v2 cards use cardStateV2.reconcileIfV2 instead.
+ */
+async function priceUnpricedHistoryV1(client, userId, userCardId, limit = 300) {
+  const rows = await client.query(
+    `SELECT id, amount_inr, occurred_at, category_id, merchant_name, rail
+       FROM transactions
+      WHERE profile_id = $1 AND user_card_id = $2 AND status = 'active'
+        AND instrument = 'credit_card' AND entry_kind = 'spend'
+        AND expected_value_inr IS NULL AND state_applied IS DISTINCT FROM true
+      ORDER BY occurred_at ASC, id ASC
+      LIMIT $3`,
+    [userId, userCardId, limit],
+  );
+  if (rows.rows.length === 0) return 0;
+  const card = await loadUserCardForState(client, userId, userCardId);
+  if (!card) return 0;
+  for (const row of rows.rows) {
+    await applyTransactionState(client, userId, card, {
+      txnId: row.id, userCardId, amount: Number(row.amount_inr), occurred: row.occurred_at,
+      categoryId: row.category_id, merchantName: row.merchant_name, rail: row.rail, sign: 1,
+    });
+    await client.query(`UPDATE transactions SET state_applied = true WHERE id = $1 AND profile_id = $2`, [row.id, userId]);
+  }
+  return rows.rows.length;
 }
 
 /**
@@ -5583,7 +5625,7 @@ app.post('/duplicate-candidates/:id/resolve', requireAuth, async (req, res) => {
         const txn = byId.get(transactionId);
         if (!txn || txn.status !== 'ignored' || txn.suppressed_elsewhere) return;
         const movesCardState = txn.instrument === 'credit_card' && txn.entry_kind === 'spend' && Boolean(txn.user_card_id);
-        if (!txn.is_backfill && movesCardState && txn.state_applied !== true) {
+        if (movesCardState && txn.state_applied !== true) {
           const card = await loadUserCardForState(client, req.userId, txn.user_card_id);
           if (!card) throw new Error('cannot activate duplicate: user card is missing or archived');
           await applyTransactionState(client, req.userId, card, {
@@ -5942,7 +5984,7 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
         );
       }
 
-      const stateUpdates = old.is_backfill || !newMovesCardState
+      const stateUpdates = !newMovesCardState
         ? {}
         : await applyTransactionState(client, req.userId, newCard, {
             txnId: old.id, userCardId: newValues.userCardId, amount: newValues.amount,
@@ -5952,7 +5994,7 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
             // merchant has to re-apply against the rule that merchant earns at.
             merchantName: newValues.merchantName, rail: newValues.rail,
           });
-      if (!old.is_backfill) {
+      if (newMovesCardState) {
         await client.query(`UPDATE transactions SET state_applied = true WHERE id = $1`, [old.id]);
       }
 
@@ -6395,14 +6437,14 @@ app.post('/transactions/category-bulk-apply', requireAuth, async (req, res) => {
           [target.categoryId || null, target.userCategoryId || null, old.id, req.userId],
         );
         const newCard = oldMovesCardState ? stateCards.get(id) : null;
-        if (!old.is_backfill && oldMovesCardState) {
+        if (oldMovesCardState) {
           await applyTransactionState(client, req.userId, newCard, {
             txnId: old.id, userCardId: old.user_card_id, amount: Number(old.amount_inr),
             occurred: old.occurred_at, categoryId: target.categoryId || null, sign: 1,
             merchantName: old.merchant_name, rail: old.rail,
           });
         }
-        if (!old.is_backfill) await client.query('UPDATE transactions SET state_applied = true WHERE id = $1', [old.id]);
+        if (oldMovesCardState) await client.query('UPDATE transactions SET state_applied = true WHERE id = $1', [old.id]);
         await client.query(
           `INSERT INTO transaction_category_bulk_operation_items
              (profile_id, operation_id, transaction_id, old_category_id, old_user_category_id,

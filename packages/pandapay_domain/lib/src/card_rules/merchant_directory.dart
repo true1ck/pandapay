@@ -278,7 +278,9 @@ class MerchantDirectory {
     if (merchantName != null) {
       final text = ' ${normalizeMerchantText(merchantName)} ';
       if (text.trim().isNotEmpty) {
-        final best = _best(_aliases.where((c) => text.contains(' ${c.key} ')));
+        final best =
+            _best(_aliases.where((c) => text.contains(' ${c.key} '))) ??
+            _cutShort(text.trim());
         if (best != null) {
           return MerchantMatch(
             slug: best.slug,
@@ -290,6 +292,36 @@ class MerchantDirectory {
       }
     }
     return null;
+  }
+
+  /// A bank prints merchant text in a fixed number of characters, so the last
+  /// word is often cut short ("PYU*Flipkar", "Flipka"). When no alias matched
+  /// as whole words, accept an alias whose LAST word is the text's last word
+  /// with one to three letters missing. The text's last word must be at least
+  /// [minCutWord] letters (a short stub names nothing), and any earlier words
+  /// of a multi-word alias must match whole. The server's JS twin applies the
+  /// same rule (api/src/merchant_directory.js).
+  static const int minCutWord = 6;
+  static const int maxCutLetters = 3;
+
+  _Candidate? _cutShort(String text) {
+    final words = text.split(' ');
+    final last = words.last;
+    if (last.length < minCutWord) return null;
+    final before = ' ${words.sublist(0, words.length - 1).join(' ')} ';
+    _Candidate? best;
+    for (final c in _aliases) {
+      final parts = c.key.split(' ');
+      final tail = parts.last;
+      final missing = tail.length - last.length;
+      if (missing < 1 || missing > maxCutLetters || !tail.startsWith(last)) {
+        continue;
+      }
+      final head = parts.sublist(0, parts.length - 1).join(' ');
+      if (head.isNotEmpty && !before.endsWith(' $head ')) continue;
+      best = _best(best == null ? [c] : [best, c]);
+    }
+    return best;
   }
 
   /// The platform whose alias appears in [text] (same word-boundary,

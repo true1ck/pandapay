@@ -266,7 +266,15 @@ test('every fixture transforms; the report aggregates and renders', () => {
 // Every override file checked into api/scripts/catalogue_overrides must apply
 // cleanly to its record. Records come from the fixtures, or from a local
 // CardPipeline checkout when one exists next to this repo.
-test('every committed override file applies to its CardPipeline record without error', () => {
+//
+// A local CardPipeline checkout can be OLDER than the overrides: the overrides
+// and the committed snapshots (db/fixtures/catalogue_v2_cards) were written
+// against newer records than a checkout last refreshed in August. An override
+// that talks about a rule the old record does not have (error carries
+// `missing_selector`) says nothing about the override, so it is reported as a
+// diagnostic and skipped. Every other error, and every error against a fixture
+// record (which is pinned in this repo), still fails the test.
+test('every committed override file applies to its CardPipeline record without error', (t) => {
   const files = fs.existsSync(DEFAULT_OVERRIDES_DIR)
     ? fs.readdirSync(DEFAULT_OVERRIDES_DIR).filter((f) => f.endsWith('.json') && f !== 'verified_cards.json')
     : [];
@@ -278,12 +286,17 @@ test('every committed override file applies to its CardPipeline record without e
   for (const file of files) {
     const slug = file.replace(/\.json$/, '');
     const overrides = JSON.parse(fs.readFileSync(path.join(DEFAULT_OVERRIDES_DIR, file), 'utf8'));
-    const record = fs.existsSync(path.join(FIXTURES, file))
-      ? unwrapItem(fixture(slug)).record
-      : pipeline?.get(slug);
+    const fromFixture = fs.existsSync(path.join(FIXTURES, file));
+    const record = fromFixture ? unwrapItem(fixture(slug)).record : pipeline?.get(slug);
     if (!record) continue; // no source record available in this checkout
     const { errors } = applyOverrides(record, overrides);
-    assert.deepEqual(errors, [], file);
+    const stale = fromFixture ? [] : errors.filter((e) => e.missing_selector);
+    assert.deepEqual(errors.filter((e) => !stale.includes(e)), [], file);
+    if (stale.length) {
+      t.diagnostic(
+        `${file}: the local CardPipeline record is older than this override; skipped ${stale.length} change(s) for rules it does not have (${[...new Set(stale.map((e) => e.missing_selector))].join(', ')})`,
+      );
+    }
     transformCardRecordV2(record, { directory, overrides, sourceSlug: slug });
   }
 });

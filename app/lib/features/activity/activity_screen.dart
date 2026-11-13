@@ -24,6 +24,7 @@ import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
 import '../auth/login_screen.dart';
 import 'activity_projection.dart';
+import 'transaction_reward_label.dart';
 import 'foreign_payments_screen.dart';
 import 'deleted_transactions_screen.dart';
 import 'local_category_learning.dart';
@@ -3658,10 +3659,9 @@ class _TransactionTile extends StatelessWidget {
               entry.merchantName == 'Amazon Pay Later'))
         'Amazon Pay Later',
       if (isIgnored) 'Excluded from spend',
-      if (entry.status == 'active' &&
-          entry.rewardState == 'estimated' &&
-          (entry.source == 'sms' || entry.source == 'sms_bulk'))
-        'Pending confirmation',
+      // The reward this card spend earned (priced by the server). Nothing for a
+      // payment that cannot earn one, and nothing until it has been priced.
+      if (activityRewardChip(entry) case final chip?) chip,
       // The Transfer chip is what replaces this segment, so the category goes
       // only when the chip is actually on the row. `other` is one of the
       // canonical fifteen and a user can pick it deliberately — nothing here
@@ -3848,8 +3848,7 @@ class _TransactionTile extends StatelessWidget {
                     entry.amount,
                     prefix: amountPrefix,
                     confidence: Confidence.estimated,
-                    // The subtitle already carries "Pending confirmation", so the
-                    // hourglass only pushed the figure off the row's right edge.
+                    // The hourglass only pushed the figure off the row's right edge.
                     showConfidenceIcon: false,
                     style:
                         BambooFonts.money(

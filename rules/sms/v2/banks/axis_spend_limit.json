@@ -1,0 +1,98 @@
+[
+  {
+    "id": "AXIS-CARD-SPEND-INR-B-LIM",
+    "version": 1,
+    "family": "card_spend",
+    "senders": [
+      "AXISBK",
+      "AXISBN",
+      "AXISCC",
+      "AXISMB"
+    ],
+    "priority": 779,
+    "match": {
+      "pattern": "Spent\\s+(?:INR|Rs\\.?|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+using\\s+Axis\\s+Bank\\s+Credit\\s+Card\\s+no\\.\\s*[x*•.]*(?<card>\\d{2,16})\\s+on\\s+(?<date>\\d{1,2}-\\d{1,2}-\\d{2,4}\\s+\\d{2}:\\d{2}:\\d{2}\\s+[A-Z]{3})\\s+at\\s+(?<m>[^\\n]+?)\\.(?:\\s*Avl\\s+limit:\\s*(?:INR|Rs\\.?|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?))",
+      "flags": "i",
+      "rejectAny": [
+        "declined",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yy HH:mm:ss zzz",
+            "dd-MM-yyyy HH:mm:ss zzz",
+            "dd-MM-yy",
+            "dd-MM-yyyy"
+          ]
+        },
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "axis",
+          "maskFrom": "card"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        },
+        "amounts": [
+          {
+            "role": "available_credit",
+            "from": "lim",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "AD-AXISBK-S",
+        "body": "Spent INR 1250 using Axis Bank Credit Card no. XX4321 on 12-10-26 10:15:10 IST at FLIPKART IN. Avl limit: INR 500. Not you? SMS BLOCK 4321 to +919951860002.",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "AD-AXISBK-S",
+        "body": "Declined Spent INR 1250 using Axis Bank Credit Card no. XX4321 on 12-10-26 10:15:10 IST at FLIPKART IN. Avl limit: INR 500.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-13T00:00:00Z"
+  }
+]
