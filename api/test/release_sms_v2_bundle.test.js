@@ -49,7 +49,7 @@ test('dry run is the default: build, gate and checks run, nothing is imported', 
   const golden = h.calls.find((c) => c.which === 'golden').args;
   assert.ok(golden.includes('--require-stages'));
   assert.equal(golden[golden.indexOf('--profile') + 1], 'release');
-  assert.ok(golden[golden.indexOf('--baseline') + 1].endsWith('tools/sms_golden/reports/latest.json'));
+  assert.ok(golden[golden.indexOf('--baseline') + 1].replaceAll('\\', '/').endsWith('tools/sms_golden/reports/latest.json'));
 });
 
 test('a failing golden gate stops everything, in dry run and with --apply', () => {

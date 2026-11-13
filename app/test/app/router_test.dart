@@ -19,6 +19,7 @@ import 'package:pandapay/features/insights/payments_due_screen.dart'
 import 'package:pandapay/features/insights/insights_overview.dart'
     show InsightsOverview, insightsOverviewProvider;
 import 'package:pandapay/features/insights/insights_hub_screen.dart';
+import 'package:pandapay/features/account/avatar_providers.dart';
 import 'package:pandapay/features/cards/my_cards_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -73,6 +74,7 @@ Future<void> _pumpApp(
         duplicateCandidatesProvider.overrideWith((ref) async => const []),
         needsReviewCountProvider.overrideWith((ref) async => 0),
         profileProvider.overrideWith((ref) async => null),
+        avatarProvider.overrideWith((ref) async => null),
         budgetsProvider.overrideWith((ref) async => const []),
         recurringReportProvider.overrideWith((ref) async => null),
         rankedRecommendationsProvider.overrideWith(

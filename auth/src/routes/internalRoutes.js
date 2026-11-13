@@ -4,6 +4,7 @@ const { safeErrorCode } = require('../utils/safeErrorCode');
 const express = require('express');
 const { createHash, timingSafeEqual } = require('node:crypto');
 const config = require('../config');
+const avatars = require('../services/userAvatar');
 const { verifyCurrentSession } = require('../services/currentSessionVerification');
 
 const router = express.Router();
@@ -57,6 +58,51 @@ router.post('/session/verify', async (req, res) => {
       phone_on_file: { present: false, value: null },
       phone_gate: { required: false, satisfied: false },
     });
+  }
+});
+
+// Avatars of OTHER people, for the API service. Who may look (a shared Split group)
+// is the API's decision; here only the owner's consent is enforced. Every miss
+// (unknown, deleted, inactive, private photo, no photo) is the same 404.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Loaded on first use so this module stays importable without the database config.
+const avatarQuery = (...args) => require('../db').query(...args);
+
+function avatarGate(req, res, next) {
+  if (!serviceAuthenticated(req)) {
+    const configured = serviceSecretConfigured();
+    return res.status(configured ? 401 : 503)
+      .json({ error: configured ? 'Unauthorized service' : 'Internal session verification is not configured' });
+  }
+  if (!UUID.test(req.params.userId)) return res.status(400).json({ error: 'invalid_user_id' });
+  res.setHeader('Cache-Control', 'no-store');
+  return next();
+}
+
+const notFound = res => res.status(404).json({ error: 'not_found' });
+
+router.get('/avatar/:userId', avatarGate, async (req, res) => {
+  try {
+    const avatar = await avatars.getPublicAvatar({ query: avatarQuery, userId: req.params.userId });
+    return avatar ? res.json(avatar) : notFound(res);
+  } catch (error) {
+    console.error('Internal avatar unavailable:', safeErrorCode(error, 'avatar_error'));
+    return res.status(503).json({ error: 'Avatar is temporarily unavailable' });
+  }
+});
+
+router.get('/avatar/:userId/photo', avatarGate, async (req, res) => {
+  try {
+    const photo = await avatars.getPublicPhoto({ query: avatarQuery, userId: req.params.userId });
+    if (!photo) return notFound(res);
+    res.setHeader('Content-Type', photo.type);
+    res.setHeader('Content-Length', String(photo.bytes.length));
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    return res.end(photo.bytes);
+  } catch (error) {
+    console.error('Internal avatar unavailable:', safeErrorCode(error, 'avatar_error'));
+    return res.status(503).json({ error: 'Avatar is temporarily unavailable' });
   }
 });
 

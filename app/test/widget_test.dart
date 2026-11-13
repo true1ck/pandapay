@@ -14,6 +14,7 @@ import 'package:pandapay/data/auth_api.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/features/auth/login_screen.dart';
 import 'package:pandapay/features/account/account_screen.dart';
+import 'package:pandapay/features/account/avatar_providers.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/response_cache.dart';
@@ -469,6 +470,7 @@ void main() {
         [_rupayCard()],
         extraOverrides: [
           profileProvider.overrideWith((ref) async => {'id': 'profile-123'}),
+          avatarProvider.overrideWith((ref) async => null),
         ],
       ),
     );
@@ -497,6 +499,7 @@ void main() {
             bankAccountSummariesProvider.overrideWith((ref) async => const []),
             cardOverridesProvider.overrideWith((ref) async => const []),
             homeDataRefreshProvider.overrideWith((ref) async {}),
+            avatarProvider.overrideWith((ref) async => null),
             profileApiProvider.overrideWithValue(
               ProfileApi(
                 apiBaseUrl: 'http://test',

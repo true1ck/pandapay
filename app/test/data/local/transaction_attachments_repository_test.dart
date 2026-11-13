@@ -9,6 +9,9 @@ import 'package:pandapay/data/secure_storage/encrypted_receipt_file.dart';
 import 'package:pandapay/data/secure_storage/local_database_key_custody.dart';
 import 'package:pandapay/data/secure_storage/local_key_provisioning_lease.dart';
 
+/// Paths use the platform separator; compare them with `/` so the tests agree on Windows.
+String _slash(String p) => p.replaceAll(r'\', '/');
+
 void main() {
   late Directory root;
   late AppDatabase database;
@@ -103,7 +106,7 @@ void main() {
         reason: 'the stored file starts with the PPRC header',
       );
       expect(String.fromCharCodes(stored), isNot(contains('ABCDEFGHIJKLMNOP')));
-      expect(attachment.localPath, startsWith('${root.path}/receipts/'));
+      expect(_slash(attachment.localPath), startsWith(_slash('${root.path}/receipts/')));
 
       final viewed = await repository.decryptForViewing(attachment);
       expect(viewed.file.readAsBytesSync(), plain);
@@ -155,7 +158,7 @@ void main() {
     for (final workspace in workspaces) {
       expect(workspace.directory.existsSync(), isFalse);
     }
-    final all = filesUnder(root).where((f) => !f.path.contains('/receipts/'));
+    final all = filesUnder(root).where((f) => !_slash(f.path).contains('/receipts/'));
     expect(all, isEmpty);
   });
 

@@ -18,6 +18,7 @@ import 'shared_context_guard.dart';
 import 'shared_rename_member_dialog.dart';
 import '../../../app/design/bamboo_components.dart';
 import 'shared_settle_sheet.dart';
+import '../../account/member_avatar.dart';
 
 /// Existing context's membership. A name records a shadow member; it neither
 /// sends an invitation nor verifies identity or accepts debt.
@@ -207,6 +208,14 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
             key: ValueKey('member-hint-${member.id}'),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
+            style: style,
+          ),
+        // The name this person gave themselves, when it differs from the name
+        // saved for them (the saved name stays the main one).
+        if (member.profileId != null && member.id != roster.ownMemberId)
+          MemberProfileNameLine(
+            profileId: member.profileId,
+            savedName: _displayName(member),
             style: style,
           ),
         if (_canRename(roster, member))
@@ -991,6 +1000,18 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
                                 for (final member in roster.members)
                                   ListTile(
                                     key: ValueKey('member-${member.id}'),
+                                    // Only joined people have an avatar to show;
+                                    // invited rows keep their old layout.
+                                    leading: member.profileId == null
+                                        ? null
+                                        : MemberAvatar(
+                                            profileId: member.profileId,
+                                            name: member.id == roster.ownMemberId
+                                                ? 'You'
+                                                : _displayName(member),
+                                            self:
+                                                member.id == roster.ownMemberId,
+                                          ),
                                     title: Text(
                                       member.id == roster.ownMemberId
                                           ? 'You'

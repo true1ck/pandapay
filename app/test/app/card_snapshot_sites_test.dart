@@ -253,7 +253,7 @@ void main() {
     final offenders = <String>[];
     for (final entity in Directory('lib').listSync(recursive: true)) {
       if (entity is! File || !entity.path.endsWith('.dart')) continue;
-      if (entity.path.endsWith('data/card_snapshots.dart')) continue;
+      if (entity.path.replaceAll(r'\', '/').endsWith('data/card_snapshots.dart')) continue;
       if (RegExp(r'\bCardSnapshot\(').hasMatch(entity.readAsStringSync())) {
         offenders.add(entity.path);
       }
@@ -272,7 +272,7 @@ void main() {
     ).listSync(recursive: true)) {
       if (entity is! File || !entity.path.endsWith('.dart')) continue;
       if (RegExp(r'\bCardSnapshot\(').hasMatch(entity.readAsStringSync())) {
-        offenders.add(entity.path.split('/').last);
+        offenders.add(entity.path.replaceAll(r'\', '/').split('/').last);
       }
     }
     offenders.sort();

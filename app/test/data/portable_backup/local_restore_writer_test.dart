@@ -132,6 +132,9 @@ Future<Map<String, File>> runCapture(AppDatabase db, Directory staging) =>
       appDb: db,
       namespace: namespace,
     ).capturePortableSections(stagingDirectory: staging);
+/// Paths use the platform separator; compare them with `/` so the tests agree on Windows.
+String _slash(String p) => p.replaceAll(r'\', '/');
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -305,10 +308,10 @@ void main() {
           .single;
       expect(row['transaction_id'], 'txn-1');
       expect(row['file_name'], 'receipt.png');
-      expect(row['local_path'], '${attachmentsDir.path}/att-9.pprc');
+      expect(_slash(row['local_path'] as String), _slash('${attachmentsDir.path}/att-9.pprc'));
       expect(
-        attachmentsDir.listSync().map((e) => e.path),
-        ['${attachmentsDir.path}/att-9.pprc'],
+        attachmentsDir.listSync().map((e) => _slash(e.path)),
+        [_slash('${attachmentsDir.path}/att-9.pprc')],
         reason: 'no plaintext copy next to the encrypted receipt',
       );
     },

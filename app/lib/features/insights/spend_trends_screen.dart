@@ -3702,6 +3702,27 @@ class _MonthlyChartAxisPainter extends CustomPainter {
       oldDelegate.viewportWidth != viewportWidth;
 }
 
+/// Shortest bar the monthly chart draws, so a tiny month stays visible.
+const double _monthlyChartMinBarHeight = 3;
+
+/// Rect of one monthly bar. The bottom edge is always the chart's x-axis
+/// baseline; a bar shorter than [_monthlyChartMinBarHeight] is stretched
+/// UPWARD from the baseline. (Clamping only the height while keeping the top
+/// where the true value put it pushes the bar below the axis.)
+@visibleForTesting
+Rect monthlyBarRect({
+  required double x,
+  required double width,
+  required int spendPaise,
+  required int maxPaise,
+  required double chartHeight,
+}) {
+  final baseline = _monthlyChartTopPad + chartHeight;
+  final normalized = maxPaise <= 0 ? 0.0 : spendPaise / maxPaise;
+  final height = math.max(_monthlyChartMinBarHeight, chartHeight * normalized);
+  return Rect.fromLTWH(x, baseline - height, width, height);
+}
+
 /// Bars, their values and month labels. Laid out in content coordinates
 /// (no axis gutter) because the parent scroll view owns the horizontal offset.
 class _MonthlyBarsPainter extends CustomPainter {
@@ -3730,17 +3751,22 @@ class _MonthlyBarsPainter extends CustomPainter {
     final barWidth = _monthlyChartBarWidth(slot);
     for (var index = 0; index < series.length; index += 1) {
       final point = series[index];
-      final normalized = point.spend.paise / maxPaise;
-      final barHeight = chartHeight * normalized;
       final x = slot * index + (slot - barWidth) / 2;
-      final y = _monthlyChartTopPad + chartHeight - barHeight;
+      final rect = monthlyBarRect(
+        x: x,
+        width: barWidth,
+        spendPaise: point.spend.paise,
+        maxPaise: maxPaise,
+        chartHeight: chartHeight,
+      );
+      final y = rect.top;
       final barPaint = Paint()
         ..color = index == selectedIndex
             ? BambooInk.lime
             : BambooInk.ink500.withValues(alpha: 0.25);
       canvas.drawRRect(
         RRect.fromRectAndCorners(
-          Rect.fromLTWH(x, y, barWidth, math.max(3.0, barHeight)),
+          rect,
           topLeft: const Radius.circular(10),
           topRight: const Radius.circular(10),
         ),
