@@ -30,7 +30,7 @@ All of this is additive. Unless noted, a client that does not send `strict:true`
 | Update with nothing syncable | `applied:true, reason:null`, a no-op change_log row | `applied:false, reason:'no_syncable_fields'`, nothing written (no change_log row) |
 | Field clock more than 5 minutes ahead of the server | stored as given | clamped to the server clock; `clampedClocks: [field,...]` returned |
 | Unknown / unregistered `deviceId` on push | 200, every item `rejected` (unchanged) | 409 `{error:'device_not_registered'}` before anything is applied |
-| DB timeout / serialization failure / deadlock inside one item | `reason:'rejected'` (permanent) | `reason:'transient'` (retryable) |
+| DB timeout / serialization failure / deadlock inside one item | `reason:'transient'` (retryable; was `rejected`, not gated by strict) | same |
 | Unknown `deviceId` on pull / ack | was 500, now 409 `{error:'device_not_registered'}` | same |
 | Request-level transient DB error | was 500, now 503 `retryable:true` | same |
 
