@@ -148,6 +148,7 @@ class HistoryCategoryRecheck {
       namespace: namespace,
       aliases: bundle.merchantAliases,
     );
+    final decisions = _ledger.categoryDecisions(); // perf-ok: once per run, not per chunk
     final revision = canonicalJson({
       'version': 1,
       'categories': bundle.categoryRules.map((rule) => rule.toJson()).toList(),
@@ -156,7 +157,7 @@ class HistoryCategoryRecheck {
       'personalRules': personal.userRules.map((rule) => rule.toJson()).toList(),
       'confirmedHistory': personal.confirmedHistory,
       'userDecisions': {
-        for (final entry in _ledger.categoryDecisions().entries) // perf-ok: once per run, not per chunk
+        for (final entry in decisions.entries)
           if (entry.value.source == CategorySource.user)
             entry.key: entry.value.slug,
       },
@@ -332,10 +333,7 @@ class HistoryCategoryRecheck {
     final why = ((progress['failedWhy'] as Map?) ?? const {})
         .cast<String, Object?>();
     final reason = failureReason(error);
-    progress['failedWhy'] = {
-      ...why,
-      reason: ((why[reason] as int?) ?? 0) + 1,
-    };
+    progress['failedWhy'] = {...why, reason: ((why[reason] as int?) ?? 0) + 1};
   }
 
   /// A short word for why a spend could not be looked at: a fixed set of
@@ -432,7 +430,8 @@ class HistoryCategoryRecheck {
         'AND fact_id IN (${List.filled(group.length, '?').join(',')})',
         [namespace, ...group],
       )) {
-        instrumentIds[row['fact_id'] as String] = row['instrument_id'] as String;
+        instrumentIds[row['fact_id'] as String] =
+            row['instrument_id'] as String;
       }
     }
     final before = _ledger.categoryDecisions(eventIds: affected.keys.toSet());
