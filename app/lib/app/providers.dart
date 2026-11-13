@@ -6230,6 +6230,13 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
     if (isAuthenticationFailure(error)) {
       throw const AuthenticationUnavailableException();
     }
+    // WP-C16: a store that has synced before knows this filter matches nothing
+    // locally; offline that is an honest empty list, not an error. Only a
+    // never-synced store (local == null) still surfaces the failure.
+    if (local != null && isOfflineLike(error)) {
+      ready = true;
+      return local.rows;
+    }
     rethrow;
   }
 }
