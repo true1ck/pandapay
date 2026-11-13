@@ -286,9 +286,17 @@ List<SubscriptionState> subscriptionStatesFromLedger(
           ]
           ..removeWhere((d) => d <= 0)
           ..sort();
-    final cadence =
-        _cadence(latest?.frequency) ??
-        (intervals.isEmpty ? 0 : intervals[intervals.length ~/ 2]);
+    final observed = intervals.isEmpty ? 0 : intervals[intervals.length ~/ 2];
+    final stated = _cadence(latest?.frequency);
+    // The stated frequency is trusted until the charges disagree with it: three
+    // or more charges (two intervals) whose median is more than half off the
+    // stated cycle show what the service really does (a "monthly" mandate that
+    // bills every 90 days, or a yearly one billed monthly).
+    final cadence = stated == null
+        ? observed
+        : (intervals.length >= 2 && (observed - stated).abs() > stated * 0.5)
+        ? observed
+        : stated;
     final last = paid.lastOrNull;
     final failures = [...?failuresByKey[group.key]]
       ..sort((a, b) => a.effectiveAt.compareTo(b.effectiveAt));

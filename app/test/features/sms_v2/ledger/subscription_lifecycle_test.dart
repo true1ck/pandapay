@@ -250,6 +250,17 @@ void main() {
     expect(entries.last.amountMinor, 64900, reason: 'the limit set at setup');
   });
 
+  test('a stated cycle is trusted until three or more charges contradict it', () {
+    send('AX-AXISBK-S', mandate, '2026-01-01');
+    send('AX-AXISBK-S', debit('03-01-26'), '2026-01-03');
+    send('AX-AXISBK-S', debit('03-04-26'), '2026-04-03');
+    // Two charges, one interval: the monthly mandate is still believed.
+    expect(subs(now: DateTime.utc(2026, 4, 10)).single.cadenceDays, inInclusiveRange(28, 31));
+    send('AX-AXISBK-S', debit('03-07-26'), '2026-07-03');
+    // Three charges 90 days apart: the observed rhythm wins over "monthly".
+    expect(subs(now: DateTime.utc(2026, 7, 10)).single.cadenceDays, inInclusiveRange(88, 92));
+  });
+
   test('one service named two ways is one subscription, named plainly', () {
     send(
       'VM-HDFCBK-S',
