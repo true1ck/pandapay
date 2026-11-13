@@ -175,9 +175,11 @@ class TokenStore {
     await IosSmsIntakeService().revoke('signed-out');
     _cachedAccessToken = null;
     _cachedRefreshToken = null;
+    // The pending copy goes first: an interrupted clear must never leave it
+    // next to a surviving refresh token, where `load` would trust it.
+    await _secureStorage.delete(key: _pendingAccessKey);
     await _secureStorage.delete(key: _accessKey);
     await _secureStorage.delete(key: _refreshKey);
     await _secureStorage.delete(key: _requestKey);
-    await _secureStorage.delete(key: _pendingAccessKey);
   }
 }
