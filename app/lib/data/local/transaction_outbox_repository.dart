@@ -368,10 +368,11 @@ class TransactionOutboxRepository {
   Future<int> flush(
     UserCardsRepository repo, {
     int maxEntries = defaultFlushBatchSize,
+    Set<String> holdCardIds = const {},
   }) async {
     try {
       return await AccountRecoveryOperationGate.process.run(
-        () => _flush(repo, maxEntries: maxEntries),
+        () => _flush(repo, maxEntries: maxEntries, holdCardIds: holdCardIds),
       );
     } on AccountRecoveryBusy {
       return 0;
@@ -381,9 +382,20 @@ class TransactionOutboxRepository {
   Future<int> _flush(
     UserCardsRepository repo, {
     required int maxEntries,
+    required Set<String> holdCardIds,
   }) async {
     var sent = 0;
-    for (final entry in await pending(limit: maxEntries)) {
+    // An entry naming a card whose queued add has not reached the server yet
+    // is held back: sent now it would be answered 404 and parked for good
+    // (WP-Q1). It goes once the add succeeded (its card id is remapped then).
+    final due = holdCardIds.isEmpty
+        ? await pending(limit: maxEntries)
+        : [
+            for (final e in await pending())
+              if (e.userCardId == null || !holdCardIds.contains(e.userCardId))
+                e,
+          ].take(maxEntries).toList();
+    for (final entry in due) {
       try {
         final id = await repo.logTransaction(
           userCardId: entry.userCardId,

@@ -3257,7 +3257,10 @@ final outboxFlushProvider = Provider<void>((ref) {
         handlers,
         onlyKinds: CardCommand.addFirst,
       );
-      final sent = await outbox.flush(repo);
+      final sent = await outbox.flush(
+        repo,
+        holdCardIds: unsentCardAddTargets(commands),
+      );
       final commandsSent = addedCards + await commands.flush(handlers);
       if (commandsSent > 0) {
         // Drop the cached server lists so the next read shows what the server

@@ -156,7 +156,20 @@ Future<QueueFlushReport> flushSignOutQueues(
       final repo = ref.read(userCardsRepositoryProvider);
       if (repo == null) return 0;
       final outbox = await ref.read(outboxRepositoryProvider.future);
-      return drain(() => outbox.flush(repo));
+      final commands = await ref.read(commandOutboxProvider.future);
+      // A card added offline must exist on the server before transactions
+      // that name it are sent (this queue is flushed before command_outbox).
+      final handlers = commandHandlersFor(
+        repo,
+        cards: await cardCommandContext(ref),
+      );
+      await commands.flush(handlers, onlyKinds: CardCommand.addFirst);
+      return drain(
+        () => outbox.flush(
+          repo,
+          holdCardIds: unsentCardAddTargets(commands),
+        ),
+      );
     })
     ..attachFlush('duplicate_resolution_outbox', () async {
       final repo = ref.read(userCardsRepositoryProvider);
