@@ -1,0 +1,78 @@
+[
+  {
+    "id": "REW-CREDITED-LABEL-CARD",
+    "version": 1,
+    "family": "rewards",
+    "senders": [
+      "*"
+    ],
+    "priority": 292,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?\\bon\\s+(?<date>\\d{1,2}[-/ ](?:\\d{1,2}|[a-z]{3,9})[-/ ]\\d{2,4}))|)[\\s\\S]*?\\b(?:reward\\s+|bonus\\s+|loyalty\\s+)?(?:cash\\s?points?|points?|neu\\s?coins?|coins?)\\s+(?:credited|added|awarded|received)\\s*[:\\-]?\\s*(?<pts>\\d[\\d,]*)\\b[\\s\\S]*?\\bcard\\b(?:\\s*(?:no\\.?|number|ending(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*]*(?<mask>\\d{4,5})\\b)?",
+      "flags": "i",
+      "requireAll": [
+        "credit card"
+      ],
+      "rejectAny": [
+        "debited",
+        "spent",
+        "withdrawn",
+        "will be credited",
+        "get up to",
+        "eligible",
+        "if you",
+        "offer",
+        "apply now",
+        "t&c apply",
+        "debit card",
+        "on spending",
+        "when you spend",
+        "upon spending",
+        "t&c"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "reward",
+        "attrs": {},
+        "amounts": [
+          {
+            "role": "points_earned",
+            "from": "pts",
+            "unit": "POINTS"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        },
+        "occurredAt": {
+          "from": "date"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Reward Points Credited: 2500 To HDFC Bank Credit Card 5678 On 05/NOV/2026 Towards 10X Cashpoints on Select MerchantsCheck Here: https://1.hdfc.bank.in/HDFCBK/s/AbCd1234",
+        "expectFactTypes": [
+          "reward"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Get 2500 reward points credited to your HDFC Bank Credit Card 5678 if you spend Rs 50,000. T&C apply.",
+        "expectFactTypes": []
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Reward Points Credited: 50 To HDFC Bank Debit Card 1234 On 05/NOV/2026 Towards SmartBuy",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-13T00:00:00Z"
+  }
+]

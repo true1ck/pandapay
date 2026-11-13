@@ -3132,7 +3132,7 @@
     "examples": [
       {
         "sender": "AD-AXISBK-S",
-        "body": "Spent INR 78217 using Axis Bank Credit Card no. XX7105 on 16-10-26 22:15:10 IST at FLIPKART IN. Avl limit: INR 543. Not you? SMS BLOCK 7105 to +919951860002. To convert the transaction to FLEXI EMI, visit https://ccm.axis.bank.in/AXISBK/MvBI4klm",
+        "body": "Spent INR 1250 using Axis Bank Credit Card no. XX4321 on 12-10-26 10:15:10 IST at FLIPKART IN. Not you? SMS BLOCK 4321 to +919951860002. To convert the transaction to FLEXI EMI, visit https://ccm.axis.bank.in/AXISBK/Xx12Yy34",
         "expectFactTypes": [
           "movement"
         ]

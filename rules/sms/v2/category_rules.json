@@ -6648,5 +6648,49 @@
     "category": "online",
     "priority": 600,
     "source": "catalogue"
+  },
+  {
+    "merchantKey": "PETROLEU",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PETROLE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FLIPKAR",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FLIPKA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
   }
 ]

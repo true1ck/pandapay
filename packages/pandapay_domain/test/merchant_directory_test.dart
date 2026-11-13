@@ -232,4 +232,41 @@ void main() {
       );
     });
   });
+
+  group('cut-short last word (twin of the JS tests)', () {
+    final cut = MerchantDirectory.fromJson({
+      'merchants': [
+        {'slug': 'flipkart', 'name': 'Flipkart', 'aliases': ['flipkart'], 'vpa_prefixes': []},
+        {'slug': 'swiggy', 'name': 'Swiggy', 'aliases': ['swiggy', 'bundl technologies'], 'vpa_prefixes': []},
+        {'slug': 'instamart', 'name': 'Swiggy Instamart', 'parent_slug': 'swiggy', 'aliases': ['swiggy instamart'], 'vpa_prefixes': []},
+        {'slug': 'freshmenu', 'name': 'FreshMenu', 'aliases': ['freshmenu'], 'vpa_prefixes': []},
+      ],
+      'platforms': [],
+    });
+    String? slug(String name) => cut.resolve(merchantName: name)?.slug;
+
+    test('a last word the bank cut short still resolves', () {
+      for (final name in ['PYU*Flipkar', 'Flipka', 'FLIPKAR', 'razorpay flipkar']) {
+        expect(slug(name), 'flipkart', reason: name);
+        expect(cut.resolve(merchantName: name)!.source, MerchantMatchSource.alias);
+      }
+    });
+
+    test('a cut multi-word alias needs its earlier words whole', () {
+      expect(slug('BUNDL TECHNOLOG'), 'swiggy');
+      expect(slug('ZZZ TECHNOLOG'), isNull);
+    });
+
+    test('short stubs and long cuts never resolve', () {
+      expect(slug('FLIPK'), isNull);
+      expect(slug('FRESH'), isNull);
+      expect(slug('FLIP'), isNull);
+      expect(slug('FLIPKARTT'), isNull);
+      expect(slug('FRESHMENUS'), isNull);
+    });
+
+    test('a whole-word match always beats a cut-short one', () {
+      expect(slug('swiggy flipkar'), 'swiggy');
+    });
+  });
 }

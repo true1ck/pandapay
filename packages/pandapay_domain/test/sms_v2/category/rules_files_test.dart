@@ -30,7 +30,7 @@ void main() {
       ));
 
   test('the files have the expected size and only catalogue rules', () {
-    expect(rules.length, 604);
+    expect(rules.length, 608); // 604 + PETROLEU, PETROLE, FLIPKAR, FLIPKA (names the bank cuts short)
     expect(aliases.length, 166);
     expect(rules.every((r) => r.source == CategorySource.catalogue), isTrue);
     expect(rules.every((r) => r.senders.length == 1 && r.senders.single == '*'), isTrue);
