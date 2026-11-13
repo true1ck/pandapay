@@ -3218,6 +3218,10 @@ Future<void> _goneIsDone(Future<void> Function() call) => goneIsDone(call);
 /// has expired while the app stays open.
 const outboxDueRecheckInterval = Duration(minutes: 5);
 
+/// Pause between two passes of one reconnect flush while the previous pass still
+/// delivered something.
+const outboxContinueInterval = Duration(milliseconds: 250);
+
 /// Bump to ask [outboxFlushProvider] to send queued quick-adds now. A save
 /// writes the outbox and bumps this; it never waits for the delivery.
 final outboxFlushRequestProvider = StateProvider<int>((ref) => 0);
@@ -3239,6 +3243,10 @@ final outboxFlushProvider = Provider<void>((ref) {
     if (repo == null || ref.read(isOnlineProvider).valueOrNull == false) return;
     running = true;
     var workRemains = false;
+    // True when this pass delivered something: a long queue (a reconnect after
+    // hours offline) is sent in passes of 20 and must not wait minutes between
+    // them (WP-Q1).
+    var progressed = false;
     try {
       final outbox = await ref.read(outboxRepositoryProvider.future);
       if (disposed || outbox.namespace != namespace) return;
@@ -3279,6 +3287,7 @@ final outboxFlushProvider = Provider<void>((ref) {
         duplicateResolutionOutboxRepositoryProvider.future,
       );
       final duplicateSent = await duplicateOutbox.flush(repo);
+      progressed = sent > 0 || duplicateSent > 0 || commandsSent > 0;
       workRemains =
           commands.pendingCount > 0 ||
           duplicateOutbox.pendingCount > 0 ||
@@ -3305,7 +3314,10 @@ final outboxFlushProvider = Provider<void>((ref) {
       dueTimer?.cancel();
       dueTimer = null;
       if (workRemains && !disposed) {
-        dueTimer = Timer(outboxDueRecheckInterval, () => unawaited(flushRef()));
+        dueTimer = Timer(
+          progressed ? outboxContinueInterval : outboxDueRecheckInterval,
+          () => unawaited(flushRef()),
+        );
       }
     }
   }

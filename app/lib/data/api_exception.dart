@@ -10,6 +10,12 @@ import 'connectivity/known_connectivity.dart';
 /// Carries a technical [debugMessage] (method, path, status, raw body — for
 /// logs) separate from [userMessage] (safe to render directly in the UI).
 /// Screens should show `userMessage`, never `toString()`/`debugMessage`.
+/// Debug text of the error thrown for a request whose account is no longer the
+/// signed-in one (session ended, or another account signed in). It says nothing
+/// about the data in the request, so queues treat it as "no connection", not as
+/// an attempt (WP-Q1).
+const accountChangedDebugMessage = 'Account changed before request';
+
 class ApiException implements Exception {
   final String userMessage;
   final String debugMessage;

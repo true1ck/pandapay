@@ -48,6 +48,10 @@ QueueFailure classifyQueueFailure(
   if (error is AuthenticationUnavailableException) return QueueFailure.network;
   if (error is ApiException) {
     final status = error.statusCode;
+    // The session ended under a request that was already being sent.
+    if (error.debugMessage == accountChangedDebugMessage) {
+      return QueueFailure.network;
+    }
     // No status and no transport exception: unknown, so it counts.
     if (status == null) return QueueFailure.retryable;
     // The session was rejected; the row says nothing about it.
