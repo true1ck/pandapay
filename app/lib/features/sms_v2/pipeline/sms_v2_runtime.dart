@@ -26,6 +26,7 @@ import '../../sms_import/sms_text_hint.dart';
 import '../storage/bundle_store.dart';
 import '../storage/outbox_store.dart';
 import '../storage/schema.dart';
+import '../storage/subscription_store.dart';
 import '../storage/sync_state_store.dart';
 import '../storage/provisional_store.dart';
 import '../storage/stats_store.dart';
@@ -243,6 +244,12 @@ class SmsV2Runtime {
               financial.notifyExternalChanges(namespace, entities),
         ),
       );
+    }
+    // A history import marked the saved subscription rows dirty instead of
+    // re-deriving them per chunk. Tell the readers once, now that it is over.
+    if (SubscriptionStore(financial.database.db, namespace: namespace)
+        .isDirty) {
+      financial.notifyExternalChanges(namespace, const ['subscriptions']);
     }
   }
 

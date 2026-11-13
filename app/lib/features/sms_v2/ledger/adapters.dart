@@ -6,6 +6,7 @@ import '../../../data/commitments_repository.dart';
 import '../../../data/card_bill_ledger.dart';
 import '../../../data/pending_bills.dart';
 import '../../../data/spend_reports_repository.dart';
+import 'subscription_state.dart';
 
 String _instrumentKey(v2.Fact f) => [
   f.instrument?.issuerSlug,
@@ -19,6 +20,7 @@ String _name(v2.Fact f) => f is v2.MandateFact
 /// One subscription per service. A cancellation or failure notice often omits
 /// the card or account, so the instrument must not split a service's history.
 String _seriesKey(v2.Fact f) => normalizeMerchantText(_name(f));
+
 /// "issuer|digits" of a fact's instrument, or '' when it names none.
 String _instKey(v2.Fact f) {
   final i = f.instrument;
@@ -61,6 +63,12 @@ Map<String, String> _canonicalSeries(
 Map<String, v2.Fact> _facts(Iterable<v2.Fact> facts) => {
   for (final f in facts) f.factId: f,
 };
+/// The posted amount in whatever currency it was charged: (currency, minor).
+(String, int)? _postedAny(v2.Fact f) {
+  final a = f.amounts.where((a) => a.role == v2.AmountRole.posted).firstOrNull;
+  return a == null ? null : (a.unit, a.minor);
+}
+
 int? _amount(v2.Fact f, v2.AmountRole role) => f.amounts
     .where((a) => a.role == role && a.unit == 'INR')
     .firstOrNull
@@ -78,35 +86,95 @@ int? _cadence(String? frequency) =>
       'yearly' || 'annual' || 'annually' => 365,
       _ => null,
     };
-DateTime _next(DateTime date, int days) {
-  final months = days >= 350 ? 12 : (days >= 26 && days <= 32 ? 1 : 0);
-  if (months == 0) return date.add(Duration(days: days));
 
-  // SMS date-only values are parsed at midnight in India and stored in UTC.
-  const offset = Duration(hours: 5, minutes: 30);
-  final wall = date.toUtc().add(offset);
-  final month = wall.month + months;
-  final max = DateTime.utc(wall.year, month + 1, 0).day;
-  return DateTime.utc(
-    wall.year,
-    month,
-    wall.day > max ? max : wall.day,
-    wall.hour,
-    wall.minute,
-    wall.second,
-    wall.millisecond,
-    wall.microsecond,
-  ).subtract(offset);
+/// One charge seen twice under two names is one service. A payment aggregator's
+/// receipt names the service ("Example Labs") while the bank prints its own
+/// payee ("EXAMPLE TEC"); the linker already joins the receipt to the bank debit
+/// as one charge event, so every name on that event is the same subscription.
+/// The service's own name (the receipt's) is the one shown. Returns, for each
+/// such key, the key it is merged into.
+Map<String, String> _chargeAliases(
+  Map<String, v2.Fact> byId,
+  Iterable<v2.Event> events,
+) {
+  final parent = <String, String>{};
+  final preferred = <String>{};
+  String find(String k) {
+    var root = k;
+    while (parent[root] != null && parent[root] != root) {
+      root = parent[root]!;
+    }
+    parent[k] = root;
+    return root;
+  }
+
+  void union(String a, String b) {
+    final ra = find(a), rb = find(b);
+    if (ra != rb) parent[rb] = ra;
+  }
+
+  for (final e in events) {
+    if (e.type != v2.EventType.subscriptionCharge || !_usable(e)) continue;
+    final charge = moneyFactForEvent(e, byId);
+    if (charge == null) continue;
+    final original = e.legs
+        .where((l) => l.role == v2.LegRole.original)
+        .map((l) => byId[l.factId])
+        .whereType<v2.MandateFact>()
+        .firstOrNull;
+    final base = _seriesKey(original ?? charge);
+    find(base);
+    for (final l in e.legs.where((l) => l.role == v2.LegRole.duplicateNotice)) {
+      final receipt = byId[l.factId];
+      if (receipt is! v2.MovementFact || receipt.counterparty?.name == null) {
+        continue;
+      }
+      final key = _seriesKey(receipt);
+      if (key.isEmpty || key == 'UNKNOWN SERVICE') continue;
+      preferred.add(key);
+      union(base, key);
+    }
+  }
+  final members = <String, List<String>>{};
+  for (final k in parent.keys) {
+    members.putIfAbsent(find(k), () => []).add(k);
+  }
+  final alias = <String, String>{};
+  for (final group in members.values) {
+    if (group.length < 2) continue;
+    final target =
+        (group.where(preferred.contains).toList()..sort()).firstOrNull ??
+        (group.toList()..sort()).first;
+    for (final k in group) {
+      if (k != target) alias[k] = target;
+    }
+  }
+  return alias;
 }
 
-/// Mandate history plus actual charge events. Attempts never add a charge or
-/// an amount; a failed payment is a lifecycle state on the same subscription.
-List<RecurringSeries> subscriptionsFromLedger(
+/// Mandate facts and charge events of the ledger, grouped one group per
+/// service (two spellings of one service merged). Shared by the subscription
+/// list and its history so both read the same grouping.
+class _SubscriptionGroups {
+  _SubscriptionGroups(
+    this.byId,
+    this.mergedGroups,
+    this.mergedCharges,
+    this.keyOf,
+  );
+  final Map<String, v2.Fact> byId;
+  final Map<String, List<v2.Fact>> mergedGroups;
+  final Map<String, List<(v2.Event, v2.MovementFact)>> mergedCharges;
+  final String Function(v2.Fact) keyOf;
+}
+
+_SubscriptionGroups _groupSubscriptions(
   Iterable<v2.Fact> facts,
-  Iterable<v2.Event> events, {
-  required DateTime now,
-}) {
+  Iterable<v2.Event> events,
+) {
   final byId = _facts(facts);
+  final alias = _chargeAliases(byId, events);
+  String K(String key) => alias[key] ?? key;
   final groups = <String, List<v2.Fact>>{};
   final excluded = <String>{};
   for (final f in byId.values.whereType<v2.MandateFact>()) {
@@ -115,11 +183,13 @@ List<RecurringSeries> subscriptionsFromLedger(
           v2.MandatePurpose.ipo,
           v2.MandatePurpose.sip,
           v2.MandatePurpose.loan,
+          // A utility, card or insurance AutoPay is a bill, owned by Bills.
+          v2.MandatePurpose.bill,
         }.contains(f.mandatePurpose)) {
       excluded.add(f.factId);
       continue;
     }
-    groups.putIfAbsent(_seriesKey(f), () => []).add(f);
+    groups.putIfAbsent(K(_seriesKey(f)), () => []).add(f);
   }
   final charges = <String, List<(v2.Event, v2.MovementFact)>>{};
   for (final e in events.where(
@@ -133,9 +203,14 @@ List<RecurringSeries> subscriptionsFromLedger(
         .whereType<v2.MandateFact>()
         .firstOrNull;
     if (original != null && excluded.contains(original.factId)) continue;
-    final key = _seriesKey(original ?? f);
+    final key = K(_seriesKey(original ?? f));
     groups.putIfAbsent(key, () => []);
     charges.putIfAbsent(key, () => []).add((e, f));
+    // A receipt that names the service differently is part of this service.
+    for (final l in e.legs.where((l) => l.role == v2.LegRole.duplicateNotice)) {
+      final receipt = byId[l.factId];
+      if (receipt is v2.MovementFact) groups[key]!.add(receipt);
+    }
   }
   // The same service under two names is one subscription.
   final groupInstrument = <String, String>{
@@ -147,7 +222,7 @@ List<RecurringSeries> subscriptionsFromLedger(
   };
   final canon = _canonicalSeries(groups.keys, groupInstrument);
   String keyOf(v2.Fact f) {
-    final own = _seriesKey(f);
+    final own = K(_seriesKey(f));
     final known = canon[own];
     if (known != null) return known;
     final inst = _instKey(f);
@@ -165,17 +240,36 @@ List<RecurringSeries> subscriptionsFromLedger(
   }
   final mergedCharges = <String, List<(v2.Event, v2.MovementFact)>>{};
   for (final c in charges.entries) {
-    mergedCharges
-        .putIfAbsent(canon[c.key] ?? c.key, () => [])
-        .addAll(c.value);
+    mergedCharges.putIfAbsent(canon[c.key] ?? c.key, () => []).addAll(c.value);
   }
-  // A mandate whose service name was never read, with no charge to show for it, is
-  // not a subscription: it would be listed as "Unknown service".
+  return _SubscriptionGroups(byId, mergedGroups, mergedCharges, keyOf);
+}
+
+/// Everything the ledger says about each subscription, with no clock in it:
+/// the rows `SubscriptionStore` keeps. Whether one is past, paused or late is
+/// decided later, when a screen reads it ([seriesFromSubscriptionStates]).
+List<SubscriptionState> subscriptionStatesFromLedger(
+  Iterable<v2.Fact> facts,
+  Iterable<v2.Event> events,
+) {
+  final grouped = _groupSubscriptions(facts, events);
+  final byId = grouped.byId;
+  final mergedGroups = grouped.mergedGroups;
+  final mergedCharges = grouped.mergedCharges;
+  final keyOf = grouped.keyOf;
+  // One pass over the attempts, bucketed by service. (Filtering every fact once
+  // per service made this O(services x facts).)
+  final failuresByKey = <String, List<v2.AttemptFact>>{};
+  final scheduledByKey = <String, List<v2.AttemptFact>>{};
+  for (final f in byId.values.whereType<v2.AttemptFact>()) {
+    if (f.status == v2.AttemptStatus.failed) {
+      failuresByKey.putIfAbsent(keyOf(f), () => []).add(f);
+    } else if (f.status == v2.AttemptStatus.scheduled && f.dueAt != null) {
+      scheduledByKey.putIfAbsent(keyOf(f), () => []).add(f);
+    }
+  }
+  final result = <SubscriptionState>[];
   final nameless = normalizeMerchantText('Unknown service');
-  mergedGroups.removeWhere(
-    (key, _) => key == nameless && (mergedCharges[key] ?? const []).isEmpty,
-  );
-  final result = <RecurringSeries>[];
   for (final group in mergedGroups.entries) {
     final mandates = group.value.whereType<v2.MandateFact>().toList()
       ..sort((a, b) => a.effectiveAt.compareTo(b.effectiveAt));
@@ -196,106 +290,311 @@ List<RecurringSeries> subscriptionsFromLedger(
         _cadence(latest?.frequency) ??
         (intervals.isEmpty ? 0 : intervals[intervals.length ~/ 2]);
     final last = paid.lastOrNull;
-    final next = last == null || cadence == 0
-        ? null
-        : _next(last.$1.occurredAt, cadence);
-    final failures =
-        byId.values
-            .whereType<v2.AttemptFact>()
-            .where(
-              (f) =>
-                  f.status == v2.AttemptStatus.failed &&
-                  keyOf(f) == group.key,
-            )
+    final failures = [...?failuresByKey[group.key]]
+      ..sort((a, b) => a.effectiveAt.compareTo(b.effectiveAt));
+    // Announced debit dates after the last charge: the screen picks the first
+    // one that is still ahead of it.
+    final dueAts =
+        ([
+              for (final f in scheduledByKey[group.key] ?? const <v2.AttemptFact>[])
+                if (last == null || f.dueAt!.isAfter(last.$1.occurredAt))
+                  f.dueAt!,
+            ]..sort())
+            .reversed
+            .take(SubscriptionState.maxDueAts)
             .toList()
-          ..sort((a, b) => a.effectiveAt.compareTo(b.effectiveAt));
-    // A renewal the service announced ("will renew on 12 Nov") is a better guess
-    // for the next charge than last charge plus cadence. It adds no charge and
-    // no amount: an announcement is not money moved.
-    final announced =
-        (byId.values
-                .whereType<v2.AttemptFact>()
-                .where(
-                  (f) =>
-                      f.status == v2.AttemptStatus.scheduled &&
-                      f.dueAt != null &&
-                      f.dueAt!.isAfter(now) &&
-                      (last == null || f.dueAt!.isAfter(last.$1.occurredAt)) &&
-                      keyOf(f) == group.key,
-                )
-                .toList()
-              ..sort((a, b) => a.dueAt!.compareTo(b.dueAt!)))
-            .firstOrNull
-            ?.dueAt;
-    final cancelled =
-        latest?.phase == v2.MandatePhase.revoked ||
-        latest?.phase == v2.MandatePhase.expired;
-    final failed =
-        failures.isNotEmpty &&
-        (last == null ||
-            failures.last.effectiveAt.isAfter(last.$1.occurredAt)) &&
-        (latest == null ||
-            !latest.effectiveAt.isAfter(failures.last.effectiveAt));
-    final lifecycle = cancelled
-        ? 'cancelled'
-        : latest?.phase == v2.MandatePhase.paused
-        ? 'paused'
-        : failed
-        ? 'failed_payment'
-        : next != null && now.isAfter(next.add(Duration(days: cadence)))
-        ? 'lapsed'
-        : 'active';
-    final amount = last == null ? null : _amount(last.$2, v2.AmountRole.posted);
-    final yearly = cadence == 0
-        ? 0
-        : cadence >= 26 && cadence <= 32
-        ? 12
-        : cadence >= 350
-        ? 1
-        : 365 / cadence;
+            .reversed
+            .toList();
     result.add(
-      RecurringSeries(
-        id: 'v2:${group.key}',
+      SubscriptionState(
+        kind: SubscriptionStateKind.mandate,
+        key: group.key,
         // The plain service name, not a longer variant a later notice used.
-        displayName: _name(
+        name: _name(
           [
             ...group.value,
             ...paid.map((c) => c.$2),
           ].firstWhere((f) => _seriesKey(f) == group.key, orElse: () => anchor),
         ),
-        typicalAmount: Money.fromPaise(amount ?? 0),
-        amountKnown: amount != null,
-        cadenceDays: cadence,
-        occurrenceCount: paid.length,
-        annualCost: Money.fromPaise(
-          amount == null ? 0 : (amount * yearly).round(),
-        ),
-        autopayLimit:
-            latest == null || _amount(latest, v2.AmountRole.ceiling) == null
+        cadence: cadence,
+        chargeCount: paid.length,
+        firstChargeAt: paid.firstOrNull?.$1.occurredAt,
+        lastChargeAt: last?.$1.occurredAt,
+        lastAmountMinor: last == null
             ? null
-            : Money.fromPaise(_amount(latest, v2.AmountRole.ceiling)!),
-        lastSeenOn: last?.$1.occurredAt,
-        nextExpectedOn: cancelled ? null : (announced ?? next),
-        startDate:
-            mandates.firstOrNull?.effectiveAt ??
-            paid.firstOrNull?.$1.occurredAt,
-        endDate: cancelled ? latest?.effectiveAt : null,
-        lifecycleStatus: lifecycle,
-        autopayStatus: cancelled
-            ? 'cancelled'
-            : latest?.phase.wire ?? 'unknown',
-        isMandate: latest != null,
+            : _amount(last.$2, v2.AmountRole.posted),
+        ceilingMinor: latest == null
+            ? null
+            : _amount(latest, v2.AmountRole.ceiling),
+        latestPhase: latest?.phase.wire,
+        latestPhaseAt: latest?.effectiveAt,
+        firstMandateAt: mandates.firstOrNull?.effectiveAt,
         mandateReference: latest?.references['umrn'],
+        lastFailureAt: failures.lastOrNull?.effectiveAt,
+        dueAts: dueAts,
         sourceKey: anchor.sourceKey,
-        detectionSource: 'sms_v2',
-        cadenceConfirmed: cadence > 0,
-        setupConfirmed: latest != null,
+        unnamed: group.key == nameless && paid.isEmpty,
       ),
     );
   }
-  result.addAll(_patternSubscriptions(byId, events, mergedGroups.keys, now));
-  result.sort((a, b) => a.displayName.compareTo(b.displayName));
+  result.addAll(_patternStates(byId, events, mergedGroups.keys));
+  result.addAll(_noticeStates(byId, mergedGroups.keys));
   return result;
+}
+
+/// Mandate history plus actual charge events, as the series a screen shows as
+/// of [now]. Attempts never add a charge or an amount; a failed payment is a
+/// lifecycle state on the same subscription. Prefer reading the saved rows
+/// (`subscriptionStatesProvider`): this walks the whole ledger.
+List<RecurringSeries> subscriptionsFromLedger(
+  Iterable<v2.Fact> facts,
+  Iterable<v2.Event> events, {
+  required DateTime now,
+}) => seriesFromSubscriptionStates(
+  subscriptionStatesFromLedger(facts, events),
+  now,
+);
+
+/// One dated thing that happened to a subscription, in the order a person
+/// would tell it: set up, charged, price changed, paused, cancelled...
+enum SubscriptionHistoryKind {
+  setup,
+  setupAgain,
+  limitChanged,
+  charge,
+  priceChange,
+  failedPayment,
+  paused,
+  resumed,
+  cancelled,
+  expired,
+  stopped,
+  upcoming,
+}
+
+class SubscriptionHistoryEntry {
+  const SubscriptionHistoryEntry({
+    required this.kind,
+    required this.at,
+    this.amountMinor,
+    this.previousAmountMinor,
+    this.sourceKey,
+  });
+
+  final SubscriptionHistoryKind kind;
+  final DateTime at;
+
+  /// A charge, a failed charge, a price or the limit set at setup.
+  final int? amountMinor;
+
+  /// The price before a [SubscriptionHistoryKind.priceChange].
+  final int? previousAmountMinor;
+
+  /// The message this came from, when one message says it.
+  final String? sourceKey;
+}
+
+/// The whole story of each subscription, newest first, keyed by the series id
+/// [subscriptionsFromLedger] gives it (`v2:<service>`). It is read from the same
+/// facts and charges as the list, so the two cannot disagree: the last entry
+/// of a cancelled row is its cancellation.
+Map<String, List<SubscriptionHistoryEntry>> subscriptionHistoryFromLedger(
+  Iterable<v2.Fact> facts,
+  Iterable<v2.Event> events, {
+  required DateTime now,
+}) {
+  final grouped = _groupSubscriptions(facts, events);
+  final byId = grouped.byId;
+  final attempts = byId.values.whereType<v2.AttemptFact>().toList();
+  final history = <String, List<SubscriptionHistoryEntry>>{};
+  for (final group in grouped.mergedGroups.entries) {
+    final entries = <SubscriptionHistoryEntry>[];
+    final mandates = group.value.whereType<v2.MandateFact>().toList()
+      ..sort((a, b) => a.effectiveAt.compareTo(b.effectiveAt));
+    // A card standing instruction re-sends "created" with every charge, and two
+    // alerts can announce one activation; neither is a fresh setup.
+    final chargeSources = {
+      for (final c in grouped.mergedCharges[group.key] ?? const []) c.$2.sourceKey,
+    };
+    DateTime? lastSetupAt;
+    for (final m in mandates) {
+      switch (m.phase) {
+        case v2.MandatePhase.created:
+          final first = !entries.any(
+            (e) =>
+                e.kind == SubscriptionHistoryKind.setup ||
+                e.kind == SubscriptionHistoryKind.setupAgain,
+          );
+          final withCharge = chargeSources.contains(m.sourceKey);
+          final sameActivation =
+              lastSetupAt != null &&
+              m.effectiveAt.difference(lastSetupAt).inHours.abs() < 48;
+          if (first || (!withCharge && !sameActivation)) {
+            entries.add(
+              SubscriptionHistoryEntry(
+                kind: first
+                    ? SubscriptionHistoryKind.setup
+                    : SubscriptionHistoryKind.setupAgain,
+                at: m.effectiveAt,
+                amountMinor: _amount(m, v2.AmountRole.ceiling),
+                sourceKey: m.sourceKey,
+              ),
+            );
+            lastSetupAt = m.effectiveAt;
+          }
+        case v2.MandatePhase.modified:
+          entries.add(
+            SubscriptionHistoryEntry(
+              kind: SubscriptionHistoryKind.limitChanged,
+              at: m.effectiveAt,
+              amountMinor: _amount(m, v2.AmountRole.ceiling),
+              sourceKey: m.sourceKey,
+            ),
+          );
+        case v2.MandatePhase.paused:
+          entries.add(
+            SubscriptionHistoryEntry(
+              kind: SubscriptionHistoryKind.paused,
+              at: m.effectiveAt,
+              sourceKey: m.sourceKey,
+            ),
+          );
+        case v2.MandatePhase.resumed:
+          entries.add(
+            SubscriptionHistoryEntry(
+              kind: SubscriptionHistoryKind.resumed,
+              at: m.effectiveAt,
+              sourceKey: m.sourceKey,
+            ),
+          );
+        case v2.MandatePhase.revoked:
+        case v2.MandatePhase.expired:
+          entries.add(
+            SubscriptionHistoryEntry(
+              kind: m.phase == v2.MandatePhase.revoked
+                  ? SubscriptionHistoryKind.cancelled
+                  : SubscriptionHistoryKind.expired,
+              at: m.effectiveAt,
+              sourceKey: m.sourceKey,
+            ),
+          );
+      }
+    }
+    final paid = [...?grouped.mergedCharges[group.key]]
+      ..sort((a, b) => a.$1.occurredAt.compareTo(b.$1.occurredAt));
+    int? previous;
+    for (final c in paid) {
+      final amount = _amount(c.$2, v2.AmountRole.posted);
+      final changed = previous != null && amount != null && amount != previous;
+      entries.add(
+        SubscriptionHistoryEntry(
+          kind: changed
+              ? SubscriptionHistoryKind.priceChange
+              : SubscriptionHistoryKind.charge,
+          at: c.$1.occurredAt,
+          amountMinor: amount,
+          previousAmountMinor: changed ? previous : null,
+          sourceKey: c.$2.sourceKey,
+        ),
+      );
+      if (amount != null) previous = amount;
+    }
+    for (final f in attempts.where((a) => grouped.keyOf(a) == group.key)) {
+      if (f.status == v2.AttemptStatus.failed) {
+        entries.add(
+          SubscriptionHistoryEntry(
+            kind: SubscriptionHistoryKind.failedPayment,
+            at: f.effectiveAt,
+            amountMinor:
+                _amount(f, v2.AmountRole.scheduled) ??
+                _amount(f, v2.AmountRole.posted),
+            sourceKey: f.sourceKey,
+          ),
+        );
+      } else if (f.status == v2.AttemptStatus.scheduled &&
+          f.dueAt != null &&
+          f.dueAt!.isAfter(now)) {
+        entries.add(
+          SubscriptionHistoryEntry(
+            kind: SubscriptionHistoryKind.upcoming,
+            at: f.dueAt!,
+            amountMinor:
+                _amount(f, v2.AmountRole.scheduled) ??
+                _amount(f, v2.AmountRole.posted),
+            sourceKey: f.sourceKey,
+          ),
+        );
+      }
+    }
+    entries.sort((a, b) => b.at.compareTo(a.at));
+    history['v2:${group.key}'] = entries;
+  }
+  return history;
+}
+
+/// A bank or app that announces an upcoming AutoPay debit to a service ("your
+/// account will be debited with Rs 81 towards Amazon Pay for the recurring bill
+/// payments") is telling us a mandate exists, even when the setup message and
+/// the debits themselves were never seen. Two or more such notices, on
+/// different months, for a service with no mandate row are listed for review:
+/// never as a confirmed subscription, because no money was seen moving.
+Iterable<SubscriptionState> _noticeStates(
+  Map<String, v2.Fact> byId,
+  Iterable<String> knownKeys,
+) sync* {
+  final byService = <String, List<v2.AttemptFact>>{};
+  for (final f in byId.values.whereType<v2.AttemptFact>()) {
+    if (f.status != v2.AttemptStatus.scheduled || f.dueAt == null) continue;
+    final name = f.counterparty?.name?.trim();
+    if (name == null || name.length < 3) continue;
+    final key = normalizeMerchantText(name);
+    if (key.isEmpty) continue;
+    byService.putIfAbsent(key, () => []).add(f);
+  }
+  final known = knownKeys.toList();
+  for (final entry in byService.entries) {
+    if (known.any(
+      (k) =>
+          k == entry.key ||
+          entry.key.startsWith('$k ') ||
+          k.startsWith('${entry.key} '),
+    )) {
+      continue;
+    }
+    final notices = entry.value..sort((a, b) => a.dueAt!.compareTo(b.dueAt!));
+    // One notice, or several for one billing date, proves nothing recurs.
+    final months = {
+      for (final n in notices) '${n.dueAt!.year}-${n.dueAt!.month}',
+    };
+    if (months.length < 2) continue;
+    final last = notices.last;
+    final gaps = [
+      for (var i = 1; i < notices.length; i++)
+        notices[i].dueAt!.difference(notices[i - 1].dueAt!).inDays,
+    ]..removeWhere((d) => d < 20);
+    gaps.sort();
+    yield SubscriptionState(
+      kind: SubscriptionStateKind.notice,
+      key: entry.key,
+      name: _name(last),
+      cadence: gaps.isEmpty ? 0 : gaps[gaps.length ~/ 2],
+      lastAmountMinor: _amount(last, v2.AmountRole.scheduled),
+      firstMandateAt: notices.first.dueAt,
+      dueAts: [
+        for (final n in notices.skip(
+          notices.length > SubscriptionState.maxDueAts
+              ? notices.length - SubscriptionState.maxDueAts
+              : 0,
+        ))
+          n.dueAt!,
+      ],
+      sourceKey: last.sourceKey,
+      reviewReason:
+          'Your bank announced ${notices.length} upcoming AutoPay debits '
+          '(${months.length} different months), but no setup message or '
+          'debit was seen, so this cannot be confirmed.',
+    );
+  }
 }
 
 /// Subscriptions that never sent a mandate message: the same merchant charged the
@@ -303,11 +602,10 @@ List<RecurringSeries> subscriptionsFromLedger(
 /// flagged as detected by pattern, not confirmed by a mandate, so the screen can
 /// say so. A person, an own account, an EMI or a bill (whose amount moves) is
 /// never read this way, and a service that already has a mandate is not repeated.
-Iterable<RecurringSeries> _patternSubscriptions(
+Iterable<SubscriptionState> _patternStates(
   Map<String, v2.Fact> byId,
   Iterable<v2.Event> events,
   Iterable<String> mandateKeys,
-  DateTime now,
 ) sync* {
   final byMerchant = <String, List<(v2.Event, v2.MovementFact)>>{};
   for (final e in events.where(
@@ -330,19 +628,25 @@ Iterable<RecurringSeries> _patternSubscriptions(
   for (final entry in byMerchant.entries) {
     final merchant = entry.key.split('|').first;
     if (known.any(
-      (k) => k == merchant || merchant.startsWith('$k ') || k.startsWith('$merchant '),
+      (k) =>
+          k == merchant ||
+          merchant.startsWith('$k ') ||
+          k.startsWith('$merchant '),
     )) {
       continue;
     }
-    // The commonest amount, charged at least three times.
-    final byAmount = <int, List<(v2.Event, v2.MovementFact)>>{};
+    // The commonest amount in one currency, charged at least three times. A
+    // foreign charge is read in its own currency: the rupee figure on the
+    // statement moves with the exchange rate, the dollar price does not.
+    final byAmount = <String, List<(v2.Event, v2.MovementFact)>>{};
     for (final c in entry.value) {
-      final a = _amount(c.$2, v2.AmountRole.posted);
-      if (a != null && a > 0) byAmount.putIfAbsent(a, () => []).add(c);
+      final a = _postedAny(c.$2);
+      if (a != null && a.$2 > 0) {
+        byAmount.putIfAbsent('${a.$1}|${a.$2}', () => []).add(c);
+      }
     }
     final run =
-        (byAmount.values.toList()
-              ..sort((a, b) => b.length.compareTo(a.length)))
+        (byAmount.values.toList()..sort((a, b) => b.length.compareTo(a.length)))
             .firstOrNull;
     if (run == null || run.length < 3) continue;
     run.sort((a, b) => a.$1.occurredAt.compareTo(b.$1.occurredAt));
@@ -355,33 +659,26 @@ Iterable<RecurringSeries> _patternSubscriptions(
     if (!monthly && !weekly) continue;
     final cadence = (List.of(gaps)..sort())[gaps.length ~/ 2];
     final last = run.last;
-    final next = _next(last.$1.occurredAt, cadence);
-    final amount = _amount(last.$2, v2.AmountRole.posted)!;
-    final lapsed = now.isAfter(next.add(Duration(days: cadence)));
-    yield RecurringSeries(
-      id: 'v2:pattern:${entry.key}',
-      displayName: _name(last.$2),
-      typicalAmount: Money.fromPaise(amount),
-      amountKnown: true,
-      cadenceDays: cadence,
-      occurrenceCount: run.length,
-      annualCost: Money.fromPaise((amount * (monthly ? 12 : 52)).round()),
-      autopayLimit: null,
-      lastSeenOn: last.$1.occurredAt,
-      nextExpectedOn: lapsed ? null : next,
-      startDate: run.first.$1.occurredAt,
-      endDate: null,
-      lifecycleStatus: lapsed ? 'lapsed' : 'active',
-      autopayStatus: 'unknown',
-      isMandate: false,
-      mandateReference: null,
+    final posted = _postedAny(last.$2)!;
+    final foreign = posted.$1 != 'INR';
+    yield SubscriptionState(
+      kind: SubscriptionStateKind.pattern,
+      key: entry.key,
+      name: _name(last.$2),
+      cadence: cadence,
+      chargeCount: run.length,
+      firstChargeAt: run.first.$1.occurredAt,
+      lastChargeAt: last.$1.occurredAt,
+      lastAmountMinor: posted.$2,
+      currency: posted.$1,
+      annualFactor: monthly ? 12 : 52,
       sourceKey: last.$2.sourceKey,
-      detectionSource: 'sms_v2_pattern',
-      cadenceConfirmed: true,
-      setupConfirmed: false,
-      // Found by rhythm alone: listed under "Possible subscriptions" for the
-      // person to confirm, never counted in totals or reminded about.
-      reviewCandidate: true,
+      reviewReason: foreign
+          ? 'Charged ${(posted.$2 / 100).toStringAsFixed(2)} ${posted.$1} '
+                '${run.length} times, about every $cadence days, with no '
+                'subscription message.'
+          : 'Charged the same amount ${run.length} times, about every '
+                '$cadence days, with no subscription message.',
     );
   }
 }
@@ -802,11 +1099,34 @@ class InvestmentSummary {
     required this.takenOutMinor,
     required this.dividendMinor,
     this.balanceMinor,
+    this.entries = const [],
   });
   final String platform;
   final int putInMinor, takenOutMinor, dividendMinor;
+
+  /// The movements behind the totals, newest first; each opens as a transaction.
+  final List<InvestmentEntry> entries;
   final int? balanceMinor;
   int get netInvestedMinor => putInMinor - takenOutMinor;
+}
+
+/// One movement of an investment platform: money put in, taken out or a
+/// dividend. [eventId] opens the full transaction.
+class InvestmentEntry {
+  const InvestmentEntry({
+    required this.eventId,
+    required this.kind,
+    required this.label,
+    required this.amountMinor,
+    required this.occurredAt,
+  });
+  final String eventId;
+
+  /// `put_in`, `taken_out` or `dividend`.
+  final String kind;
+  final String label;
+  final int amountMinor;
+  final DateTime occurredAt;
 }
 
 const ipoPlatformLabel = 'IPO allotments';
@@ -839,6 +1159,7 @@ List<InvestmentSummary> investmentsSummary(
   }
 
   final groups = <String, List<int>>{};
+  final entriesByGroup = <String, List<InvestmentEntry>>{};
   for (final e in events.where(
     (e) =>
         _usable(e) &&
@@ -870,6 +1191,21 @@ List<InvestmentSummary> investmentsSummary(
             ? 2
             : 0] +=
         e.amountMinor;
+    entriesByGroup.putIfAbsent(key, () => []).add(
+      InvestmentEntry(
+        eventId: e.eventId,
+        kind: e.type == v2.EventType.investmentWithdrawal
+            ? 'taken_out'
+            : e.type == v2.EventType.dividend
+            ? 'dividend'
+            : 'put_in',
+        label: e.type == v2.EventType.ipoApplication
+            ? (f.counterparty?.name ?? 'IPO application')
+            : named ?? 'Investment',
+        amountMinor: e.amountMinor,
+        occurredAt: e.occurredAt,
+      ),
+    );
   }
   final balances = <String, int>{};
   for (final entry in brokers.entries) {
@@ -886,6 +1222,8 @@ List<InvestmentSummary> investmentsSummary(
         takenOutMinor: g.value[1],
         dividendMinor: g.value[2],
         balanceMinor: balances[g.key],
+        entries: [...?entriesByGroup[g.key]]
+          ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt)),
       ),
   ];
 }
@@ -975,12 +1313,13 @@ List<IpoApplication> ipoApplications(
   // A "no allotment" notice names no company the contract can carry, so it joins an
   // application only when exactly ONE application is still waiting (blocked, not
   // older than 60 days at the notice). Otherwise it stays an activity-only notice.
-  final notices = byId.values
-      .whereType<v2.InfoFact>()
-      .where((f) => kIpoNoAllotmentRules.contains(f.provenance.ruleId))
-      .map((f) => f.effectiveAt)
-      .toList()
-    ..sort();
+  final notices =
+      byId.values
+          .whereType<v2.InfoFact>()
+          .where((f) => kIpoNoAllotmentRules.contains(f.provenance.ruleId))
+          .map((f) => f.effectiveAt)
+          .toList()
+        ..sort();
   for (final notice in notices) {
     final waiting = [
       for (var i = 0; i < result.length; i++)
@@ -1021,22 +1360,28 @@ RecurringReport recurringReportFromLedger(
   Iterable<v2.Fact> facts,
   Iterable<v2.Event> events, {
   required DateTime now,
-}) {
-  final series = subscriptionsFromLedger(facts, events, now: now);
-  return RecurringReport(
-    series: series,
-    totalAnnual: Money.fromPaise(
-      series
-          .where(
-            (s) =>
-                !s.reviewCandidate &&
-                (s.lifecycleStatus == 'active' ||
-                    s.lifecycleStatus == 'failed_payment'),
-          )
-          .fold(0, (sum, s) => sum + s.annualCost.paise),
-    ),
-  );
-}
+}) => _recurringReport(subscriptionsFromLedger(facts, events, now: now));
+
+/// The report a screen shows, from the saved subscription rows as of [now].
+RecurringReport recurringReportFromSubscriptionStates(
+  Iterable<SubscriptionState> states, {
+  required DateTime now,
+}) => _recurringReport(seriesFromSubscriptionStates(states, now));
+
+RecurringReport _recurringReport(List<RecurringSeries> series) =>
+    RecurringReport(
+      series: series,
+      totalAnnual: Money.fromPaise(
+        series
+            .where(
+              (s) =>
+                  !s.reviewCandidate &&
+                  (s.lifecycleStatus == 'active' ||
+                      s.lifecycleStatus == 'failed_payment'),
+            )
+            .fold(0, (sum, s) => sum + s.annualCost.paise),
+      ),
+    );
 
 List<SmsBillRow> smsBillRowsFromFacts(
   Iterable<v2.Fact> facts,

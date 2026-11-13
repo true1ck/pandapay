@@ -72,7 +72,7 @@ void main() {
     expect(find.byTooltip('Add subscription'), findsOneWidget);
     expect(find.text('Subscriptions are still loading'), findsOneWidget);
   });
-  testWidgets('cadence selection survives leaving the Subscriptions tab', (
+  testWidgets('the Subscriptions tab keeps its list after leaving and returning', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -113,23 +113,15 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Monthly (1)'));
-    await tester.pumpAndSettle();
+    // One list: every subscription is there.
     expect(find.text('Spotify'), findsOneWidget);
-    expect(find.text('Netflix'), findsNothing);
+    expect(find.text('Netflix'), findsOneWidget);
     await tester.tap(find.text('Due dates'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Subscriptions'));
     await tester.pumpAndSettle();
     expect(find.text('Spotify'), findsOneWidget);
-    expect(find.text('Netflix'), findsNothing);
-    final chip = tester.widget<ChoiceChip>(
-      find.ancestor(
-        of: find.text('Monthly (1)'),
-        matching: find.byType(ChoiceChip),
-      ),
-    );
-    expect(chip.selected, isTrue);
+    expect(find.text('Netflix'), findsOneWidget);
     expect(find.byType(AppBar), findsOneWidget);
   });
 }

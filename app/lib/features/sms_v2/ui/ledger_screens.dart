@@ -5,14 +5,17 @@ import 'package:pandapay_domain/sms_v2_ledger.dart';
 import '../../../app/design/app_theme.dart';
 import '../../../app/design/bamboo_components.dart';
 import '../../../app/design/widgets.dart';
+import '../../activity/transaction_detail_screen.dart';
 import '../../insights/subscription_view.dart';
+import '../../../app/providers.dart' show clockProvider, subscriptionStatesProvider;
 import '../ledger/adapters.dart';
+import '../ledger/subscription_state.dart';
 import '../ledger/providers.dart';
 import '../ledger/reports.dart';
 import '../instruments/issuer_slugs.dart';
 import 'screen_parts.dart';
 
-enum SmsLedgerScreen { investments, ipos, moneyIn, subscriptions }
+enum SmsLedgerScreen { investments, ipos, moneyIn }
 
 const _moneyInSections = [
   ('salary', 'Salary'),
@@ -42,7 +45,6 @@ class SmsLedgerScreenView extends ConsumerWidget {
         SmsLedgerScreen.investments => 'Investments',
         SmsLedgerScreen.ipos => 'Your IPO applications',
         SmsLedgerScreen.moneyIn => 'Money in',
-        SmsLedgerScreen.subscriptions => 'Subscriptions',
       }),
     ),
     body: AppBackground(
@@ -138,6 +140,12 @@ class LedgerReportList extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpace.md),
               child: BambooPanel(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => InvestmentPlatformScreen(summary: item),
+                  ),
+                ),
+                semanticLabel: item.platform,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -190,6 +198,15 @@ class LedgerReportList extends StatelessWidget {
                 child: ListTile(
                   contentPadding: _rowPadding,
                   isThreeLine: true,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => IpoApplicationScreen(application: item),
+                    ),
+                  ),
+                  trailing: const Icon(
+                    Icons.chevron_right_rounded,
+                    color: BambooInk.ink500,
+                  ),
                   leading: const BambooIconTile(Icons.lock_clock_outlined),
                   title: Text(item.company),
                   subtitle: Column(
@@ -251,6 +268,14 @@ class LedgerReportList extends StatelessWidget {
               for (final item in rows)
                 ListTile(
                   contentPadding: _rowPadding,
+                  // The full transaction page: details, category, notes, edit.
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => TransactionDetailScreen(
+                        transactionId: 'v2:${item.eventId}',
+                      ),
+                    ),
+                  ),
                   leading: const BambooIconTile(
                     Icons.south_west_rounded,
                     size: 36,
@@ -258,84 +283,6 @@ class LedgerReportList extends StatelessWidget {
                   title: Text(item.payer),
                   subtitle: Text(smsDate(item.occurredAt)),
                   trailing: _amount(smsMoney(item.amountMinor)),
-                ),
-            ]),
-          );
-        }
-      case SmsLedgerScreen.subscriptions:
-        // The same filtering and merging as the main Subscriptions screen
-        // ([buildSubscriptionView]), so both list the same services.
-        final view = buildSubscriptionView(
-          subscriptionsFromLedger(model.facts, events, now: DateTime.now()),
-        );
-        final subscriptions = view.subscriptions;
-        for (final active in [true, false]) {
-          final items = subscriptions
-              .where((s) => (s.lifecycleStatus == 'active') == active)
-              .toList();
-          if (items.isEmpty) continue;
-          children.add(
-            BambooSectionLabel(
-              active ? 'Active' : 'Past and interrupted',
-              asTitle: true,
-              padding: EdgeInsets.fromLTRB(
-                4,
-                children.isEmpty ? AppSpace.sm : AppSpace.xl,
-                4,
-                10,
-              ),
-            ),
-          );
-          children.add(
-            _RowGroup([
-              for (final item in items)
-                ListTile(
-                  contentPadding: _rowPadding,
-                  leading: BambooIconTile(
-                    active ? Icons.autorenew_rounded : Icons.pause_rounded,
-                    size: 36,
-                  ),
-                  title: Text(item.displayName),
-                  subtitle: Text(
-                    '${item.lifecycleStatus.replaceAll('_', ' ')} • ${item.cadenceDays == 0 ? 'Schedule unknown' : 'Every ${item.cadenceDays} days'}',
-                  ),
-                  trailing: item.amountKnown
-                      ? _amount(smsMoney(item.typicalAmount.paise))
-                      : Text(
-                          'Amount unknown',
-                          style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-                        ),
-                ),
-            ]),
-          );
-        }
-        if (view.candidates.isNotEmpty) {
-          children.add(
-            BambooSectionLabel(
-              'Possible subscriptions',
-              asTitle: true,
-              padding: EdgeInsets.fromLTRB(
-                4,
-                children.isEmpty ? AppSpace.sm : AppSpace.xl,
-                4,
-                10,
-              ),
-            ),
-          );
-          children.add(
-            _RowGroup([
-              for (final item in view.candidates)
-                ListTile(
-                  contentPadding: _rowPadding,
-                  leading: const BambooIconTile(
-                    Icons.help_outline_rounded,
-                    size: 36,
-                  ),
-                  title: Text(item.displayName),
-                  subtitle: Text(
-                    'Found from repeated charges, not confirmed • every ${item.cadenceDays} days',
-                  ),
-                  trailing: _amount(smsMoney(item.typicalAmount.paise)),
                 ),
             ]),
           );
@@ -348,7 +295,6 @@ class LedgerReportList extends StatelessWidget {
           SmsLedgerScreen.investments => Icons.show_chart_rounded,
           SmsLedgerScreen.ipos => Icons.lock_clock_outlined,
           SmsLedgerScreen.moneyIn => Icons.south_west_rounded,
-          SmsLedgerScreen.subscriptions => Icons.autorenew_rounded,
         },
       );
     }
@@ -580,6 +526,200 @@ class LinkedInstrumentUsage extends ConsumerWidget {
         if (matches.length != 1) return const SizedBox.shrink();
         return InstrumentUsageSection(instrument: matches.single, model: model);
       },
+    );
+  }
+}
+
+/// An investment platform opened in full: its totals, then every movement behind
+/// them. Each movement opens as a transaction, where it can be reviewed and
+/// edited like any other.
+class InvestmentPlatformScreen extends StatelessWidget {
+  const InvestmentPlatformScreen({super.key, required this.summary});
+  final InvestmentSummary summary;
+
+  static String _kindLabel(String kind) => switch (kind) {
+    'taken_out' => 'Taken out',
+    'dividend' => 'Dividend',
+    _ => 'Put in',
+  };
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: Text(summary.platform)),
+    body: AppBackground(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpace.lg,
+          AppSpace.sm,
+          AppSpace.lg,
+          AppSpace.xxl,
+        ),
+        children: [
+          BambooPanel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _InlineFigures([
+                  ('Net invested', smsMoney(summary.netInvestedMinor)),
+                ], size: 18),
+                const SizedBox(height: AppSpace.sm),
+                _InlineFigures([
+                  ('Put in', smsMoney(summary.putInMinor)),
+                  ('Taken out', smsMoney(summary.takenOutMinor)),
+                ]),
+                _InlineFigures([
+                  if (summary.balanceMinor != null)
+                    ('Fund balance', smsMoney(summary.balanceMinor!)),
+                  ('Dividends', smsMoney(summary.dividendMinor)),
+                ]),
+              ],
+            ),
+          ),
+          BambooSectionLabel(
+            'Movements',
+            asTitle: true,
+            trailing: '${summary.entries.length}',
+          ),
+          if (summary.entries.isEmpty)
+            const SmsEmpty(
+              'No movements yet. Your imported messages will fill this in.',
+              icon: Icons.show_chart_rounded,
+            )
+          else
+            _RowGroup([
+              for (final e in summary.entries)
+                ListTile(
+                  contentPadding: _rowPadding,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => TransactionDetailScreen(
+                        transactionId: 'v2:${e.eventId}',
+                      ),
+                    ),
+                  ),
+                  leading: BambooIconTile(
+                    e.kind == 'taken_out'
+                        ? Icons.south_west_rounded
+                        : e.kind == 'dividend'
+                        ? Icons.savings_outlined
+                        : Icons.north_east_rounded,
+                    size: 36,
+                  ),
+                  title: Text(e.label),
+                  subtitle: Text(
+                    '${_kindLabel(e.kind)} • ${smsDate(e.occurredAt)}',
+                  ),
+                  trailing: Text(
+                    smsMoney(e.amountMinor),
+                    style: BambooFonts.money(14.5, weight: FontWeight.w700),
+                  ),
+                ),
+            ]),
+        ],
+      ),
+    ),
+  );
+}
+
+/// One IPO application in full: what was blocked, invested and released, where
+/// and when, and a way into the transaction behind it.
+class IpoApplicationScreen extends StatelessWidget {
+  const IpoApplicationScreen({super.key, required this.application});
+  final IpoApplication application;
+
+  @override
+  Widget build(BuildContext context) {
+    final a = application;
+    Widget row(String label, String value) => Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpace.lg,
+        vertical: 10,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: BambooFonts.ui(13.5, color: BambooInk.ink500),
+            ),
+          ),
+          const SizedBox(width: AppSpace.md),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: BambooFonts.ui(
+                13.5,
+                weight: FontWeight.w600,
+                color: BambooInk.ink900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    return Scaffold(
+      appBar: AppBar(title: const Text('IPO application')),
+      body: AppBackground(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpace.lg,
+            AppSpace.sm,
+            AppSpace.lg,
+            AppSpace.xxl,
+          ),
+          children: [
+            BambooPanel(
+              child: Row(
+                children: [
+                  const BambooIconTile(Icons.lock_clock_outlined),
+                  const SizedBox(width: AppSpace.md),
+                  Expanded(
+                    child: Text(
+                      a.company,
+                      style: BambooFonts.heading(17, color: BambooInk.ink900),
+                    ),
+                  ),
+                  _IpoStatusPill(a.status),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpace.md),
+            _RowGroup([
+              row('Blocked', smsMoney(a.blockedMinor)),
+              row('Invested', smsMoney(a.investedMinor)),
+              row('Released', smsMoney(a.releasedMinor)),
+              if (a.remainingHoldMinor > 0)
+                row('Still held by the bank', smsMoney(a.remainingHoldMinor)),
+              row('Platform', a.platform ?? 'Not stated'),
+              row('Account', '••${a.accountMask ?? 'unknown'}'),
+              if (a.appliedAt != null) row('Applied', smsDate(a.appliedAt!)),
+              if (a.updatedAt != null)
+                row('Last update', smsDate(a.updatedAt!)),
+              if (a.noAllotmentNoticeAt != null)
+                row(
+                  'No allotment notice',
+                  '${smsDate(a.noAllotmentNoticeAt!)} • your bank should release the money',
+                ),
+            ]),
+            if (a.investedMinor > 0) ...[
+              const SizedBox(height: AppSpace.lg),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => TransactionDetailScreen(
+                      transactionId: 'v2:${a.eventId}',
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                label: const Text('Open transaction'),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

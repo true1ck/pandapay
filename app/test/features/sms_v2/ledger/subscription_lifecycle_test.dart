@@ -128,6 +128,128 @@ void main() {
     expect(s.nextExpectedOn, isNull);
   });
 
+  group('past subscriptions are marked past, not left active', () {
+    test('a mandate that never charged is awaiting its first debit only while recent', () {
+      send('AX-AXISBK-S', mandate, '2026-10-20');
+      expect(subs(now: DateTime.utc(2026, 11, 9)).single.lifecycleStatus, 'active');
+      // Months on, with nothing ever taken under it, it is not a live subscription.
+      expect(subs(now: DateTime.utc(2027, 3, 1)).single.lifecycleStatus, 'lapsed');
+    });
+
+    test('a monthly plan a week late is active, one that missed a cycle and a half is past', () {
+      send('AX-AXISBK-S', mandate, '2026-08-01');
+      send('AX-AXISBK-S', debit('03-09-26'), '2026-09-03');
+      send('AX-AXISBK-S', debit('03-10-26'), '2026-10-03');
+      expect(subs(now: DateTime.utc(2026, 11, 10)).single.lifecycleStatus, 'active');
+      final late = subs(now: DateTime.utc(2026, 12, 1)).single;
+      expect(late.lifecycleStatus, 'lapsed');
+      expect(late.nextExpectedOn, isNull, reason: 'a past plan has no renewal');
+    });
+
+    test('a paused subscription has no renewal date to remind about', () {
+      send('AX-AXISBK-S', mandate, '2026-08-01');
+      send('AX-AXISBK-S', debit('03-10-26'), '2026-10-03');
+      send(
+        'AX-AXISBK-S',
+        'Your NETFLIX UPI AutoPay mandate has been paused. -Axis Bank',
+        '2026-10-20',
+      );
+      final s = subs(now: DateTime.utc(2026, 11, 1)).single;
+      expect(s.lifecycleStatus, 'paused');
+      expect(s.nextExpectedOn, isNull);
+    });
+
+    test('a charge long after a revoke notice means it carried on', () {
+      send('AX-AXISBK-S', mandate, '2026-08-01');
+      send('AX-AXISBK-S', debit('03-08-26'), '2026-08-03');
+      send(
+        'AX-AXISBK-S',
+        'AutoPay mandate for NETFLIX has been revoked successfully. -Axis Bank',
+        '2026-08-20',
+      );
+      expect(subs(now: DateTime.utc(2026, 9, 1)).single.lifecycleStatus, 'cancelled');
+      send('AX-AXISBK-S', debit('03-10-26'), '2026-10-03');
+      expect(subs(now: DateTime.utc(2026, 10, 10)).single.lifecycleStatus, 'active');
+    });
+
+    test('a debit settling just after the revoke notice does not undo it', () {
+      send('AX-AXISBK-S', mandate, '2026-08-01');
+      send('AX-AXISBK-S', debit('03-08-26'), '2026-08-03');
+      send(
+        'AX-AXISBK-S',
+        'AutoPay mandate for NETFLIX has been revoked successfully. -Axis Bank',
+        '2026-09-02',
+      );
+      send('AX-AXISBK-S', debit('03-09-26'), '2026-09-03');
+      expect(subs(now: DateTime.utc(2026, 9, 10)).single.lifecycleStatus, 'cancelled');
+    });
+
+    test('a failed payment from long ago is not still a payment problem', () {
+      send(
+        'VM-HDFCBK-S',
+        'Dear Customer, Standing Instruction (SI) of Rs 119.00 towards SPOTIFY on HDFC Bank Card ending 1234 has been registered.',
+        '2026-01-01',
+      );
+      send(
+        'VM-HDFCBK-S',
+        'Dear Customer, your standing instruction of Rs 119.00 for SPOTIFY on card XX1234 could not be processed due to insufficient limit.',
+        '2026-02-02',
+      );
+      expect(subs(now: DateTime.utc(2026, 2, 20)).single.lifecycleStatus, 'failed_payment');
+      expect(subs(now: DateTime.utc(2026, 11, 9)).single.lifecycleStatus, 'lapsed');
+    });
+  });
+
+  test('the history tells the whole story newest first', () {
+    send('AX-AXISBK-S', mandate, '2026-08-01');
+    send('AX-AXISBK-S', debit('03-08-26'), '2026-08-03');
+    send(
+      'AX-AXISBK-S',
+      debit('03-09-26').replaceAll('649.00', '799.00'),
+      '2026-09-03',
+    );
+    send(
+      'AX-AXISBK-S',
+      'Your NETFLIX UPI AutoPay mandate has been paused. -Axis Bank',
+      '2026-10-01',
+    );
+    send(
+      'AX-AXISBK-S',
+      'Your NETFLIX UPI AutoPay mandate has been resumed. -Axis Bank',
+      '2026-10-20',
+    );
+    send(
+      'AX-AXISBK-S',
+      'AutoPay mandate for NETFLIX has been revoked successfully. -Axis Bank',
+      '2026-11-02',
+    );
+    final facts = FactStore(db.db, namespace: _ns).all();
+    final events = EventStore(db.db, namespace: _ns).listSince(DateTime.utc(1900));
+    final history = subscriptionHistoryFromLedger(
+      facts,
+      events,
+      now: DateTime.utc(2026, 11, 9),
+    );
+    final entries = history[subs().single.id]!;
+    expect(
+      [for (final e in entries) e.kind],
+      [
+        SubscriptionHistoryKind.cancelled,
+        SubscriptionHistoryKind.resumed,
+        SubscriptionHistoryKind.paused,
+        SubscriptionHistoryKind.priceChange,
+        SubscriptionHistoryKind.charge,
+        SubscriptionHistoryKind.setup,
+      ],
+    );
+    final change = entries.firstWhere(
+      (e) => e.kind == SubscriptionHistoryKind.priceChange,
+    );
+    expect(change.amountMinor, 79900);
+    expect(change.previousAmountMinor, 64900);
+    expect(entries.last.amountMinor, 64900, reason: 'the limit set at setup');
+  });
+
   test('one service named two ways is one subscription, named plainly', () {
     send(
       'VM-HDFCBK-S',

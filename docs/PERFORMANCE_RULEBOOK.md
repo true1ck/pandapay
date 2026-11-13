@@ -164,6 +164,19 @@ split's screen are one request each (`/shared-expenses/hub`, `/contexts/:id/scre
 them or stop writing them). Same contention caveat as item 5: a UI write that lands while the
 Split worker commits waits up to the 3 s busy_timeout.
 
+Subscriptions, 13 Nov: a subscription is derived from every mandate, charge, failure and
+announcement in the ledger (O(history)), and three screens plus the Insights tile and the
+reminders each used to derive it again on the UI isolate. It is now derived once, where the ledger
+is written, and saved in `v2_subscriptions` / `v2_subscription_history` (`SubscriptionStore`,
+schema v4). Capture re-derives it once per chunk, only when the chunk held a mandate message, an
+announced or failed debit, a mandate-referenced debit, or a spend at a shop with enough earlier spends
+to form a pattern (`SubscriptionProjection.touchesSubscriptions`, one indexed count). A correction,
+a server pull or an AI withdrawal only mark the rows dirty; the next reader re-derives them once in a
+short-lived worker isolate (`rebuildSubscriptionsOffThread`). Anything that depends on today's date is
+decided when a row is read, so a plan that quietly stopped turns past without a new message. Every
+reader goes through `subscriptionStatesProvider`; `performance_guards_test.dart` fails when a screen,
+provider or reminder calls the ledger derivation again.
+
 Not yet verified on a phone: killing the app mid-import and relaunching (messages must be
 retried without duplicates); covered on the host by `capture_worker_test.dart`.
 

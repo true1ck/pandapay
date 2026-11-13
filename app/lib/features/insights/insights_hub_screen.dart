@@ -14,6 +14,7 @@ import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
 import '../../main.dart' show MoneyText;
 import 'insights_overview.dart';
+import 'subscription_view.dart' show buildSubscriptionView;
 import '../shared_expenses/runtime/shared_providers.dart';
 import '../cards/card_visual.dart';
 
@@ -102,7 +103,10 @@ class InsightsHubScreen extends ConsumerWidget {
     // Shown on the tile because the annual figure is the whole point: a
     // ₹649 monthly charge doesn't feel like much, and ₹7,788 a year does.
     final recurring = ref.watch(recurringReportProvider).valueOrNull;
-    final subscriptionHeadline = recurring == null || recurring.series.isEmpty
+    // Only services still billing earn a figure; a report holding nothing but
+    // cancelled or lapsed ones has no yearly cost to show.
+    final subscriptionHeadline =
+        recurring == null || buildSubscriptionView(recurring.series).active.isEmpty
         ? null
         : '${recurring.totalAnnual.format(compact: true)}/yr';
 

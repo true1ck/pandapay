@@ -162,4 +162,43 @@ void main() {
       expect(runtime, contains('previousBatch'));
     });
   });
+
+  group('subscriptions are read from saved rows, never derived on the UI thread', () {
+    // Deriving a subscription walks every fact and event (O(history)). It runs
+    // where the ledger is written (SubscriptionProjection) and a screen reads the
+    // few saved rows (subscriptionStatesProvider). A screen, tile or reminder
+    // that calls the ledger derivation brings back the lag rule 1 and rule 4
+    // were written for.
+    test('no screen, provider or reminder calls the ledger derivation', () {
+      final allowed = {
+        'lib/features/sms_v2/ledger/adapters.dart',
+        'lib/features/sms_v2/ledger/subscription_projection.dart',
+      };
+      final offenders = _offending(
+        [..._dartFiles('lib')].where((f) => !allowed.contains(_norm(f.path))),
+        (line) =>
+            line.contains('subscriptionsFromLedger(') ||
+            line.contains('subscriptionStatesFromLedger(') ||
+            line.contains('subscriptionHistoryFromLedger(') ||
+            line.contains('recurringReportFromLedger('),
+      );
+      expect(offenders, isEmpty, reason: offenders.join('\n'));
+    });
+
+    test('the subscription history lookup is an index search, not a scan', () {
+      final db = sqlite3.openInMemory();
+      addTearDown(db.dispose);
+      SmsV2Schema.ensure(db);
+      final plan = db
+          .select(
+            'EXPLAIN QUERY PLAN SELECT kind, at FROM v2_subscription_history '
+            'INDEXED BY idx_v2_subscription_history_at '
+            'WHERE namespace=? AND series_id=? ORDER BY at DESC, seq DESC',
+            ['n', 's'],
+          )
+          .map((r) => r['detail'] as String)
+          .join(' | ');
+      expect(plan, contains('SEARCH'), reason: plan);
+    });
+  });
 }

@@ -8,6 +8,11 @@ import '../../app/providers.dart';
 import '../../data/local/sms_intake_repository.dart';
 import '../../data/spend_reports_repository.dart';
 import '../../main.dart' show MoneyText;
+import '../sms_v2/ledger/adapters.dart'
+    show SubscriptionHistoryEntry, SubscriptionHistoryKind;
+import 'subscriptions_screen.dart' show editSubscription, ignoreSubscription;
+import 'subscription_view.dart'
+    show SubscriptionPhase, subscriptionHasPaymentIssue, subscriptionPhase;
 
 class SubscriptionDetailScreen extends ConsumerStatefulWidget {
   final RecurringSeries series;
@@ -157,7 +162,34 @@ class _SubscriptionDetailScreenState
   }
 
   Widget _headerStatusBadge(RecurringSeries series) {
-    final (label, icon, color, bg) = switch (series.setupConfirmed) {
+    final phase = subscriptionPhase(series);
+    final lifecycle = series.lifecycleStatus.trim().toLowerCase();
+    final (label, icon, color, bg) = phase == SubscriptionPhase.paused
+        ? (
+            'Paused',
+            Icons.pause_circle_outline_rounded,
+            BambooInk.amber,
+            BambooInk.amber.withValues(alpha: 0.15),
+          )
+        : phase == SubscriptionPhase.past
+        ? (
+            lifecycle == 'cancelled'
+                ? 'Cancelled'
+                : lifecycle == 'expired'
+                ? 'Expired'
+                : 'Not renewing',
+            Icons.stop_circle_outlined,
+            BambooInk.onSlateMuted,
+            Colors.white.withValues(alpha: 0.1),
+          )
+        : subscriptionHasPaymentIssue(series)
+        ? (
+            'Payment failed',
+            Icons.error_outline_rounded,
+            const Color(0xFFFF8B66),
+            const Color(0x33FF8B66),
+          )
+        : switch (series.setupConfirmed) {
       true => (
         'Setup confirmed',
         Icons.verified_outlined,
@@ -265,6 +297,26 @@ class _SubscriptionDetailScreenState
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
+        actions: [
+          if (subscriptionPhase(series) != SubscriptionPhase.past)
+            IconButton(
+              tooltip: 'Edit subscription',
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: () async {
+                final saved = await editSubscription(context, ref, series);
+                // The list behind re-reads; this copy would be stale.
+                if (saved && context.mounted) Navigator.of(context).pop();
+              },
+            ),
+          IconButton(
+            tooltip: 'Ignore subscription',
+            icon: const Icon(Icons.visibility_off_outlined),
+            onPressed: () async {
+              final hidden = await ignoreSubscription(context, ref, series);
+              if (hidden && context.mounted) Navigator.of(context).pop();
+            },
+          ),
+        ],
       ),
       body: AppBackground(
         child: ListView(
@@ -488,6 +540,11 @@ class _SubscriptionDetailScreenState
               ),
             ),
             const SizedBox(height: AppSpace.lg),
+            if (series.reviewReason != null) ...[
+              _ReviewReasonCard(reason: series.reviewReason!),
+              const SizedBox(height: AppSpace.lg),
+            ],
+            _SubscriptionHistory(seriesId: series.id),
             Row(
               children: [
                 const Icon(Icons.sms_outlined, color: BambooInk.jade, size: 21),
@@ -695,4 +752,200 @@ class _SubscriptionDetailScreenState
       ],
     ),
   );
+}
+
+class _ReviewReasonCard extends StatelessWidget {
+  final String reason;
+  const _ReviewReasonCard({required this.reason});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(AppSpace.md),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFFF3D6),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: const Color(0x33C98A00)),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.help_outline_rounded, color: Color(0xFF9B6500)),
+        const SizedBox(width: AppSpace.sm),
+        Expanded(
+          child: Text(
+            'Needs your review. $reason',
+            style: BambooFonts.ui(13, color: BambooInk.ink900, height: 1.35),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Every dated event of one subscription (set up, charged, price changed,
+/// paused, cancelled...), newest first, read from the same messages as the list.
+class _SubscriptionHistory extends ConsumerWidget {
+  final String seriesId;
+  const _SubscriptionHistory({required this.seriesId});
+
+  static const _months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  static String _date(DateTime d) {
+    final l = d.toLocal();
+    return '${l.day} ${_months[l.month - 1]} ${l.year}';
+  }
+
+  static String _money(int? minor) =>
+      minor == null ? '' : Money.fromPaise(minor).format(hidePaise: true);
+
+  static (IconData, String, Color) _look(SubscriptionHistoryEntry e) {
+    final amount = _money(e.amountMinor);
+    final before = _money(e.previousAmountMinor);
+    return switch (e.kind) {
+      SubscriptionHistoryKind.setup => (
+        Icons.play_circle_outline_rounded,
+        amount.isEmpty ? 'Set up' : 'Set up · limit $amount',
+        BambooInk.jade,
+      ),
+      SubscriptionHistoryKind.setupAgain => (
+        Icons.replay_rounded,
+        amount.isEmpty ? 'Set up again' : 'Set up again · limit $amount',
+        BambooInk.jade,
+      ),
+      SubscriptionHistoryKind.limitChanged => (
+        Icons.tune_rounded,
+        amount.isEmpty ? 'Limit changed' : 'Limit changed to $amount',
+        BambooInk.ink700,
+      ),
+      SubscriptionHistoryKind.charge => (
+        Icons.receipt_long_outlined,
+        amount.isEmpty ? 'Charged' : 'Charged $amount',
+        BambooInk.ink900,
+      ),
+      SubscriptionHistoryKind.priceChange => (
+        Icons.trending_up_rounded,
+        before.isEmpty
+            ? 'Price changed to $amount'
+            : 'Price changed from $before to $amount',
+        const Color(0xFF9B6500),
+      ),
+      SubscriptionHistoryKind.failedPayment => (
+        Icons.error_outline_rounded,
+        amount.isEmpty ? 'Payment failed' : 'Payment failed · $amount',
+        const Color(0xFF9B3D00),
+      ),
+      SubscriptionHistoryKind.paused => (
+        Icons.pause_circle_outline_rounded,
+        'Paused',
+        const Color(0xFF9B6500),
+      ),
+      SubscriptionHistoryKind.resumed => (
+        Icons.play_arrow_rounded,
+        'Resumed',
+        BambooInk.jade,
+      ),
+      SubscriptionHistoryKind.cancelled => (
+        Icons.cancel_outlined,
+        'Cancelled',
+        BambooInk.ink500,
+      ),
+      SubscriptionHistoryKind.expired => (
+        Icons.event_busy_outlined,
+        'Expired',
+        BambooInk.ink500,
+      ),
+      SubscriptionHistoryKind.stopped => (
+        Icons.history_toggle_off_rounded,
+        'No charge since',
+        BambooInk.ink500,
+      ),
+      SubscriptionHistoryKind.upcoming => (
+        Icons.event_available_outlined,
+        amount.isEmpty ? 'Debit announced' : 'Debit announced · $amount',
+        BambooInk.jade,
+      ),
+    };
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final entries = ref
+        .watch(subscriptionHistoryProvider)
+        .valueOrNull?[seriesId];
+    if (entries == null || entries.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.history_rounded, color: BambooInk.jade, size: 21),
+            const SizedBox(width: AppSpace.xs),
+            Text(
+              'History',
+              style: BambooFonts.heading(18, color: BambooInk.ink900),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpace.sm),
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpace.md,
+            vertical: AppSpace.xs,
+          ),
+          decoration: BoxDecoration(
+            color: BambooInk.glassFillOnPaper,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: BambooInk.hairlineOnPaper),
+          ),
+          child: Column(
+            children: [
+              for (final e in entries)
+                Builder(
+                  builder: (context) {
+                    final (icon, label, color) = _look(e);
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 9),
+                      child: Row(
+                        children: [
+                          Icon(icon, size: 18, color: color),
+                          const SizedBox(width: AppSpace.sm),
+                          Expanded(
+                            child: Text(
+                              label,
+                              style: BambooFonts.ui(
+                                13.5,
+                                weight: FontWeight.w600,
+                                color: BambooInk.ink900,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            _date(e.at),
+                            style: BambooFonts.ui(12, color: BambooInk.ink500),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpace.lg),
+      ],
+    );
+  }
 }

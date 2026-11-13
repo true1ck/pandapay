@@ -8,6 +8,7 @@ import '../category/category_snapshot.dart';
 import '../ledger/projection_writer.dart';
 import '../storage/event_store.dart';
 import '../storage/fact_store.dart';
+import '../storage/subscription_store.dart';
 import '../storage/instrument_store.dart';
 import '../storage/ledger_store.dart';
 
@@ -174,6 +175,9 @@ class AiWithdrawal {
             [namespace, 'event:$eventId', 'ledger:$eventId'],
           );
         }
+        // Withdrawn facts and events can have been part of a subscription.
+        SubscriptionStore(_db, namespace: namespace).markDirty();
+        financial.notifyExternalChanges(namespace, const ['subscriptions']);
         _db.execute('RELEASE sms_ai_withdraw');
       } catch (_) {
         _db.execute('ROLLBACK TO sms_ai_withdraw');

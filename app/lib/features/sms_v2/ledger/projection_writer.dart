@@ -7,6 +7,7 @@ import '../../../data/local/financial_store.dart';
 import '../../../data/user_cards_repository.dart';
 import '../personal/personal_merchant_aliases.dart';
 import '../storage/ledger_store.dart';
+import '../storage/subscription_store.dart';
 
 /// Maps the ledger to the existing transaction model. All attribution comes
 /// from a money leg; the anchor's source key is kept even if it was a hold.
@@ -128,6 +129,11 @@ class ProjectionWriter {
     required Map<String, v2.Instrument> instrumentsById,
     Map<String, String> categoryIdBySlug = const {},
     Map<String, String> instrumentIdByFactId = const {},
+    // A correction, a server pull or a withdrawal changes the ledger without
+    // going through capture; the saved subscription rows are then out of date
+    // until the next reader re-derives them. Capture passes false because it
+    // re-derives them itself.
+    bool markSubscriptionsDirty = true,
   }) {
     final merchantAliases = PersonalMerchantAliases(
       ledger.db,
@@ -240,6 +246,15 @@ class ProjectionWriter {
           for (final row in display)
             if (!_unchanged(existing[row.eventId], row)) row,
         ]);
+        if (markSubscriptionsDirty &&
+            snapshot.events.any(
+              (e) =>
+                  e.type == v2.EventType.subscriptionCharge ||
+                  e.type == v2.EventType.purchase,
+            )) {
+          SubscriptionStore(db, namespace: ledger.namespace).markDirty();
+          financial.notifyExternalChanges(ledger.namespace, const ['subscriptions']);
+        }
         db.execute('RELEASE v2_projection');
       } catch (_) {
         db.execute('ROLLBACK TO v2_projection');

@@ -10,6 +10,8 @@ import '../../../data/local/financial_store.dart';
 import '../../../data/local/sms_intake_repository.dart';
 import '../ledger/foreign_payment_bridge.dart';
 import '../ledger/projection_writer.dart';
+import '../ledger/subscription_projection.dart';
+import '../storage/subscription_store.dart';
 import '../storage/event_store.dart';
 import '../storage/fact_store.dart';
 import '../storage/instrument_store.dart';
@@ -321,8 +323,30 @@ class SmsV2Pipeline {
             ],
           );
         }
+        // Saved subscription rows follow the ledger: derived here, in the same
+        // transaction (and, for live capture, the same worker) that wrote it,
+        // and only when this chunk can change one.
+        final subscriptionsChanged =
+            SubscriptionProjection.touchesSubscriptions(
+              _db,
+              namespace,
+              incoming,
+            );
+        // Deriving is O(history). A live message re-derives right away; a history
+        // import (many chunks) only marks the rows dirty, and they are derived
+        // once, off the UI isolate, after the import (see SmsV2Runtime.capture).
+        if (subscriptionsChanged) {
+          if (backfill) {
+            SubscriptionStore(_db, namespace: namespace).markDirty();
+          } else {
+            SubscriptionProjection.rebuild(_db, namespace);
+          }
+        }
         _db.execute('RELEASE SAVEPOINT sms_v2_process');
-        financial.notifyExternalChanges(namespace, const ['observations']);
+        financial.notifyExternalChanges(namespace, [
+          'observations',
+          if (subscriptionsChanged && !backfill) 'subscriptions',
+        ]);
       } catch (_) {
         _db.execute('ROLLBACK TO SAVEPOINT sms_v2_process');
         _db.execute('RELEASE SAVEPOINT sms_v2_process');
@@ -724,6 +748,8 @@ class SmsV2Pipeline {
       instrumentsById: instrumentsById,
       categoryIdBySlug: categoryIdBySlug,
       instrumentIdByFactId: instrumentIds,
+      // Capture derives the subscription rows itself, once per chunk.
+      markSubscriptionsDirty: false,
     );
     for (final entry in changed.entries) {
       _outbox.enqueue(

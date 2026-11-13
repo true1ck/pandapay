@@ -15,6 +15,8 @@ import '../../data/user_cards_repository.dart' show UserCard;
 import '../cards/cap_progress.dart';
 import '../cards/next_best_card.dart';
 import '../insights/payments_due_screen.dart' show paymentsDueProvider;
+import '../insights/subscription_view.dart'
+    show SubscriptionPhase, subscriptionPhase;
 import '../sms_v2/providers/runtime_provider.dart' show smsV2RuntimeProvider;
 import '../sms_v2/storage/schema.dart' show SmsV2Schema;
 import '../sms_v2/storage/sync_state_store.dart' show SyncStateStore;
@@ -337,6 +339,8 @@ class NotificationTriggerRunner {
       if (renewal == null || series.typicalAmount.paise <= 0) continue;
       // A merchant only suspected of recurring is not something to remind about.
       if (series.reviewCandidate) continue;
+      // A paused, cancelled or lapsed subscription is not about to renew.
+      if (subscriptionPhase(series) != SubscriptionPhase.active) continue;
       final stage = subscriptionReminderStage(renewal, now);
       if (stage == null) continue;
       final date = DateFormat('yyyy-MM-dd').format(renewal);

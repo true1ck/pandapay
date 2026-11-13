@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/user_cards_repository.dart' show TxnEntryKind;
 import 'package:pandapay/features/sms_import/sms_background_queue.dart';
+import 'package:pandapay/features/activity/transaction_detail_screen.dart';
 import 'package:pandapay/features/sms_v2/ledger/adapters.dart';
+import 'package:pandapay/app/providers.dart' show recurringReportProvider;
+import 'package:pandapay/features/insights/subscriptions_screen.dart';
 import 'package:pandapay/features/sms_v2/ledger/providers.dart';
 import 'package:pandapay/features/sms_v2/ledger/reports.dart';
 import 'package:pandapay/features/sms_v2/ui/ledger_screens.dart';
@@ -53,7 +56,69 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// The one Subscriptions page, fed from the same ledger the capture pipeline
+  /// reads (as the saved rows would be).
+  Future<void> showSubscriptions(WidgetTester tester, LedgerReadModel model) async {
+    await tester.binding.setSurfaceSize(const Size(420, 2000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          recurringReportProvider.overrideWith(
+            (_) async => recurringReportFromLedger(
+              model.facts,
+              model.snapshot().events,
+              now: DateTime.now(),
+            ),
+          ),
+        ],
+        child: const MaterialApp(home: SubscriptionsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
   Finder text(String s) => find.textContaining(s, findRichText: true);
+
+  group('every row opens a full page', () {
+    testWidgets('an IPO application opens its details and the transaction behind it', (
+      tester,
+    ) async {
+      final model = await replay(tester, ['ipo_block_then_allotment']);
+      await show(tester, SmsLedgerScreen.ipos, model);
+      await tester.tap(find.text('TATA TECHNOLOGIES LTD'));
+      await tester.pumpAndSettle();
+      expect(find.text('IPO application'), findsOneWidget);
+      expect(find.text('Blocked'), findsOneWidget);
+      expect(find.text('Invested'), findsOneWidget);
+      expect(find.text('Open transaction'), findsOneWidget);
+      await tester.tap(find.text('Open transaction'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TransactionDetailScreen), findsOneWidget);
+    });
+
+    testWidgets('an investment platform opens its movements, each a transaction', (
+      tester,
+    ) async {
+      final model = await replay(tester, ['ipo_block_then_allotment']);
+      await show(tester, SmsLedgerScreen.investments, model);
+      await tester.tap(find.text('IPO allotments'));
+      await tester.pumpAndSettle();
+      expect(find.text('Movements'), findsOneWidget);
+      expect(find.textContaining('Put in'), findsWidgets);
+      await tester.tap(find.textContaining('Put in •'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TransactionDetailScreen), findsOneWidget);
+    });
+
+    testWidgets('a money-in row opens the full transaction page', (tester) async {
+      final model = await replay(tester, ['lanej_salary_two_months_same_payer']);
+      await show(tester, SmsLedgerScreen.moneyIn, model);
+      await tester.tap(find.byType(ListTile).first);
+      await tester.pumpAndSettle();
+      expect(find.byType(TransactionDetailScreen), findsOneWidget);
+    });
+  });
 
   group('Your IPO applications', () {
     testWidgets('allotted: blocked then debited is one row, counted as investment', (
@@ -243,11 +308,10 @@ void main() {
           ),
         ],
       );
-      await show(tester, SmsLedgerScreen.subscriptions, model);
+      await showSubscriptions(tester, model);
       expect(find.text('Active'), findsOneWidget);
       expect(find.text('Netflix'), findsOneWidget);
       expect(find.text('₹649.00'), findsOneWidget);
-      expect(find.byType(ListTile), findsOneWidget);
       expect(text('TATA'), findsNothing);
       expect(text('SAMPLE WORKS'), findsNothing);
       // The scheduled-debit notice is not an extra spend.
@@ -269,12 +333,12 @@ void main() {
           ),
         ],
       );
-      await show(tester, SmsLedgerScreen.subscriptions, model);
+      await showSubscriptions(tester, model);
       expect(find.text('Netflix'), findsOneWidget);
       expect(find.text('Active'), findsNothing);
-      expect(find.text('Past and interrupted'), findsOneWidget);
-      expect(text('cancelled'), findsOneWidget);
-      expect(find.text('₹649.00'), findsOneWidget);
+      expect(find.text('Past'), findsOneWidget);
+      expect(text('Cancelled'), findsOneWidget);
+      expect(text('649'), findsWidgets, reason: 'keeps its last charge');
     });
 
     testWidgets('a failed payment is a state on the service, never a spend', (
@@ -291,9 +355,9 @@ void main() {
           ),
         ],
       );
-      await show(tester, SmsLedgerScreen.subscriptions, model);
+      await showSubscriptions(tester, model);
       expect(find.text('Netflix'), findsOneWidget);
-      expect(text('failed payment'), findsOneWidget);
+      expect(text('Payment failed'), findsOneWidget);
       final totals = model.snapshot().totals(
         DateTime.utc(2026, 10, 31, 18, 30),
         DateTime.utc(2026, 12, 31, 18, 30),
