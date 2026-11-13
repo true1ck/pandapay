@@ -1,5 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
+    <!-- Declared explicitly: release builds only received INTERNET transitively
+         (google_sign_in_android), which is fragile. Only debug/profile manifests
+         carried it directly. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <!-- UA-4 (Chunk 30, extended): camera/QR card scanning (mobile_scanner,
          camera + google_mlkit_text_recognition). -->
     <uses-permission android:name="android.permission.CAMERA"/>
@@ -237,6 +241,13 @@
         <intent>
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="upi"/>
+        </intent>
+        <!-- url_launcher canLaunchUrl/launchUrl for https links (card pages,
+             issuer sites). Without this Android 11+ package visibility makes
+             canLaunchUrl return false even when a browser is installed. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
         </intent>
         <package android:name="com.phonepe.app"/>
         <package android:name="com.phonepe.app.preprod"/>

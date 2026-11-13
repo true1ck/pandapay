@@ -265,6 +265,7 @@ flutter:
     - assets/avatars/
     - assets/data/bundled_catalogue.json
     - assets/sms_rules/
+    - assets/google_fonts/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
