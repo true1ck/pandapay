@@ -387,6 +387,7 @@ class SubscriptionHistoryEntry {
     this.amountMinor,
     this.previousAmountMinor,
     this.sourceKey,
+    this.eventId,
   });
 
   final SubscriptionHistoryKind kind;
@@ -400,6 +401,9 @@ class SubscriptionHistoryEntry {
 
   /// The message this came from, when one message says it.
   final String? sourceKey;
+
+  /// The ledger event behind a charge; opens its transaction page.
+  final String? eventId;
 }
 
 /// The whole story of each subscription, newest first, keyed by the series id
@@ -508,6 +512,7 @@ Map<String, List<SubscriptionHistoryEntry>> subscriptionHistoryFromLedger(
           amountMinor: amount,
           previousAmountMinor: changed ? previous : null,
           sourceKey: c.$2.sourceKey,
+          eventId: c.$1.eventId,
         ),
       );
       if (amount != null) previous = amount;

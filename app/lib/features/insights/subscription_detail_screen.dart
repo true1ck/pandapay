@@ -1,3 +1,4 @@
+import '../activity/transaction_detail_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -916,7 +917,8 @@ class _SubscriptionHistory extends ConsumerWidget {
                 Builder(
                   builder: (context) {
                     final (icon, label, color) = _look(e);
-                    return Padding(
+                    final eventId = e.eventId;
+                    final row = Padding(
                       padding: const EdgeInsets.symmetric(vertical: 9),
                       child: Row(
                         children: [
@@ -936,8 +938,25 @@ class _SubscriptionHistory extends ConsumerWidget {
                             _date(e.at),
                             style: BambooFonts.ui(12, color: BambooInk.ink500),
                           ),
+                          if (eventId != null)
+                            const Icon(
+                              Icons.chevron_right_rounded,
+                              size: 18,
+                              color: BambooInk.ink500,
+                            ),
                         ],
                       ),
+                    );
+                    if (eventId == null) return row;
+                    return InkWell(
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => TransactionDetailScreen(
+                            transactionId: 'v2:$eventId',
+                          ),
+                        ),
+                      ),
+                      child: row,
                     );
                   },
                 ),

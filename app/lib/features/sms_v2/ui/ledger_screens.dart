@@ -110,7 +110,7 @@ class _RowGroup extends StatelessWidget {
 
 const _rowPadding = EdgeInsets.symmetric(horizontal: AppSpace.lg);
 
-class LedgerReportList extends StatelessWidget {
+class LedgerReportList extends StatefulWidget {
   const LedgerReportList({
     super.key,
     required this.screen,
@@ -118,6 +118,17 @@ class LedgerReportList extends StatelessWidget {
   });
   final SmsLedgerScreen screen;
   final LedgerReadModel model;
+
+  @override
+  State<LedgerReportList> createState() => _LedgerReportListState();
+}
+
+class _LedgerReportListState extends State<LedgerReportList> {
+  SmsLedgerScreen get screen => widget.screen;
+  LedgerReadModel get model => widget.model;
+
+  /// Money-in sections the person has folded away. Expanded by default.
+  final Set<String> _collapsed = <String>{};
 
   Widget _amount(String text) =>
       Text(text, style: BambooFonts.money(14.5, weight: FontWeight.w700));
@@ -253,36 +264,61 @@ class LedgerReportList extends StatelessWidget {
         for (final (kind, title) in _moneyInSections) {
           final rows = items.where((i) => i.kind == kind).toList();
           if (rows.isEmpty) continue;
+          final open = !_collapsed.contains(kind);
           children.add(
-            BambooSectionLabel(
-              title,
-              asTitle: true,
-              trailing: smsMoney(sum(rows)),
-            ),
-          );
-          children.add(
-            _RowGroup([
-              for (final item in rows)
-                ListTile(
-                  contentPadding: _rowPadding,
-                  // The full transaction page: details, category, notes, edit.
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => TransactionDetailScreen(
-                        transactionId: 'v2:${item.eventId}',
+            Semantics(
+              button: true,
+              expanded: open,
+              label: '$title, ${open ? 'collapse' : 'expand'} list',
+              child: InkWell(
+                onTap: () => setState(() {
+                  open ? _collapsed.add(kind) : _collapsed.remove(kind);
+                }),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: BambooSectionLabel(
+                        title,
+                        asTitle: true,
+                        trailing: smsMoney(sum(rows)),
                       ),
                     ),
-                  ),
-                  leading: const BambooIconTile(
-                    Icons.south_west_rounded,
-                    size: 36,
-                  ),
-                  title: Text(item.payer),
-                  subtitle: Text(smsDate(item.occurredAt)),
-                  trailing: _amount(smsMoney(item.amountMinor)),
+                    Icon(
+                      open
+                          ? Icons.expand_less_rounded
+                          : Icons.expand_more_rounded,
+                      color: BambooInk.ink500,
+                    ),
+                  ],
                 ),
-            ]),
+              ),
+            ),
           );
+          if (open) {
+            children.add(
+              _RowGroup([
+                for (final item in rows)
+                  ListTile(
+                    contentPadding: _rowPadding,
+                    // The full transaction page: details, category, notes, edit.
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => TransactionDetailScreen(
+                          transactionId: 'v2:${item.eventId}',
+                        ),
+                      ),
+                    ),
+                    leading: const BambooIconTile(
+                      Icons.south_west_rounded,
+                      size: 36,
+                    ),
+                    title: Text(item.payer),
+                    subtitle: Text(smsDate(item.occurredAt)),
+                    trailing: _amount(smsMoney(item.amountMinor)),
+                  ),
+              ]),
+            );
+          }
         }
     }
     if (children.isEmpty) {
@@ -700,7 +736,7 @@ class IpoApplicationScreen extends StatelessWidget {
                   '${smsDate(a.noAllotmentNoticeAt!)} • your bank should release the money',
                 ),
             ]),
-            if (a.investedMinor > 0) ...[
+            ...[
               const SizedBox(height: AppSpace.lg),
               OutlinedButton.icon(
                 onPressed: () => Navigator.of(context).push(
