@@ -6456,6 +6456,13 @@ final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
       }
     } catch (_) {}
   }
+  // WP-C16: first-ever launch with no network and nothing cached: serve the
+  // bundled built-in categories instead of waiting out a request that cannot
+  // succeed. Not cached, so the first online refresh replaces it.
+  if (cached == null && _skipBackgroundRead(ref)) {
+    final bundled = await loadBundledCategories();
+    if (bundled.isNotEmpty) return [...bundled, ...customCategories];
+  }
   try {
     final categories = await ref
         .watch(categoryRepositoryProvider)
@@ -6488,7 +6495,7 @@ final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
     // Category ids improve the ranking but are not required to produce a
     // truthful base-rate recommendation. The engine safely falls back to
     // catch-all card rules until the next refresh can load the ids.
-    return customCategories;
+    return [...await loadBundledCategories(), ...customCategories];
   }
 });
 

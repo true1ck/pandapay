@@ -1,0 +1,80 @@
+{
+  "note": "Built-in spend categories from db/supabase/migrations/0014_seed_reference.sql (+ emi). Last-resort offline fallback only; ids are placeholders (the server assigns UUIDs), so they are prefixed 'bundled:' and never sent to the API.",
+  "categories": [
+    {
+      "id": "bundled:groceries",
+      "slug": "groceries",
+      "name": "Groceries"
+    },
+    {
+      "id": "bundled:fuel",
+      "slug": "fuel",
+      "name": "Fuel"
+    },
+    {
+      "id": "bundled:dining",
+      "slug": "dining",
+      "name": "Dining"
+    },
+    {
+      "id": "bundled:online",
+      "slug": "online",
+      "name": "Online Shopping"
+    },
+    {
+      "id": "bundled:travel",
+      "slug": "travel",
+      "name": "Travel"
+    },
+    {
+      "id": "bundled:bills",
+      "slug": "bills",
+      "name": "Bills & Utilities"
+    },
+    {
+      "id": "bundled:rent",
+      "slug": "rent",
+      "name": "Rent"
+    },
+    {
+      "id": "bundled:insurance",
+      "slug": "insurance",
+      "name": "Insurance"
+    },
+    {
+      "id": "bundled:education",
+      "slug": "education",
+      "name": "Education"
+    },
+    {
+      "id": "bundled:government",
+      "slug": "government",
+      "name": "Government"
+    },
+    {
+      "id": "bundled:wallet",
+      "slug": "wallet",
+      "name": "Wallet Load"
+    },
+    {
+      "id": "bundled:entertainment",
+      "slug": "entertainment",
+      "name": "Entertainment"
+    },
+    {
+      "id": "bundled:health",
+      "slug": "health",
+      "name": "Health & Pharmacy"
+    },
+    {
+      "id": "bundled:emi",
+      "slug": "emi",
+      "name": "EMI"
+    },
+    {
+      "id": "bundled:other",
+      "slug": "other",
+      "name": "Other"
+    }
+  ]
+}
