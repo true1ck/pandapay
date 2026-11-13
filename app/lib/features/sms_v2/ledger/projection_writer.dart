@@ -124,7 +124,17 @@ TransactionEntry? transactionForEvent(
       v2.Rail.upi => TxnRail.upiQr,
       _ => TxnRail.unknown,
     },
-    paymentMethod: fact.rail == v2.Rail.upi ? 'upi' : null,
+    // How it was paid, only when the message says so. Nothing about spending
+    // changes with it; the person can still pick another method.
+    paymentMethod: switch (fact.rail) {
+      v2.Rail.upi => 'upi',
+      v2.Rail.neft => 'neft',
+      v2.Rail.imps => 'imps',
+      v2.Rail.rtgs => 'rtgs',
+      v2.Rail.cheque => 'cheque',
+      v2.Rail.nach => 'auto_debit',
+      _ => null,
+    },
     source: 'sms',
     smsReceivedAt: fact.observedAt,
     status: 'active',
