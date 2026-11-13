@@ -34,6 +34,7 @@ void main() {
 
   // What the fake server does.
   var offline = false, commandStatus = 200, nameClash = false;
+  String? clashKind;
   var capabilitiesOn = true, capabilityCalls = 0;
   final posted = <String>[];
 
@@ -44,6 +45,7 @@ void main() {
     offline = false;
     commandStatus = 200;
     nameClash = false;
+    clashKind = null;
     capabilitiesOn = true;
     capabilityCalls = 0;
     posted.clear();
@@ -60,7 +62,7 @@ void main() {
         if (request.method == 'POST' && last == 'commands') {
           final command = SharedCommand.fromJson(jsonDecode(request.body));
           posted.add(command.operationId);
-          if (nameClash) {
+          if (nameClash || command.kind == clashKind) {
             return ok({'error': 'friend_name_taken'}, 409);
           }
           if (commandStatus != 200) {
@@ -241,6 +243,18 @@ void main() {
         expect(runtime.store.pendingCount, 0);
       },
     );
+  });
+
+  group('refusal on the member step (WP-H2)', () {
+    test('a name refused on the member op is acknowledged: no leftover "not synced"', () async {
+      await runtime.refresh();
+      clashKind = 'member.invite';
+      await expectLater(
+        runtime.addFriend(name: 'Sam'),
+        throwsA(isA<SharedNameException>()),
+      );
+      expect(runtime.store.attentionCount, 0);
+    });
   });
 
   group('needs attention (X-01)', () {

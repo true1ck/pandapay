@@ -70,8 +70,11 @@ Future<void> _show(
   SyncStatusSummary summary, {
   List<Override> overrides = const [],
   ThemeMode themeMode = ThemeMode.light,
+  Widget page = const _Page(),
 }) async {
-  await tester.pumpWidget(_app(overrides: overrides, themeMode: themeMode));
+  await tester.pumpWidget(
+    _app(overrides: overrides, themeMode: themeMode, page: page),
+  );
   ProviderScope.containerOf(
     tester.element(find.byType(MaterialApp)),
   ).read(_mode.notifier).state = summary;
@@ -450,6 +453,31 @@ void main() {
       await tester.tap(find.byKey(_stripKey));
       await tester.pumpAndSettle();
       expect(find.text('Sync status'), findsOneWidget);
+    });
+
+    testWidgets('does nothing while a dialog is on top (WP-H2)', (tester) async {
+      await _show(
+        tester,
+        _offline,
+        page: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => showDialog<void>(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => const AlertDialog(title: Text('Signing out')),
+              ),
+              child: const Text('open dialog'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open dialog'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(_stripKey), warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(find.text('Sync status'), findsNothing);
+      expect(find.text('Signing out'), findsOneWidget);
     });
 
     testWidgets('the sheet opens above the app, not inside the strip', (

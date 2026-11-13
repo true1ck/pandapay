@@ -151,6 +151,15 @@ class SyncStatusStrip extends ConsumerWidget {
   void _open(BuildContext context) {
     final navigatorContext = navigatorKey?.currentContext;
     if (navigatorContext == null) return;
+    // The strip sits above the Navigator, so it stays hit-testable while a
+    // dialog or sheet (the sign-out wipe progress dialog included) is up. A
+    // popup route on top means the app is modal: do nothing (WP-H2).
+    Route<dynamic>? top;
+    navigatorKey!.currentState?.popUntil((route) {
+      top = route;
+      return true; // looks only; nothing is popped
+    });
+    if (top is PopupRoute) return;
     showSyncStatusSheet(navigatorContext);
   }
 

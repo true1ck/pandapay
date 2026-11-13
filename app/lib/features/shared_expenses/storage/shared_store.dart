@@ -140,6 +140,7 @@ class SharedExpensesStore {
   final void Function()? onChanged;
   var _sequence = 0;
   var _lastStamp = 0;
+  var _stampSeeded = false;
   SharedExpensesStore(
     this.database, {
     required this.namespace,
@@ -165,6 +166,18 @@ class SharedExpensesStore {
   /// two commands saved in the same millisecond still send in the order they
   /// were saved. A caller-supplied positive time is kept exactly.
   int _stamp(int requested) {
+    // After a restart the wall clock may have gone back: never stamp below
+    // what is already stored (WP-H2).
+    if (!_stampSeeded) {
+      _stampSeeded = true;
+      final top = database.db
+          .select(
+            'SELECT MAX(created_at) AS m FROM shared_commands WHERE namespace=?',
+            [namespace],
+          )
+          .single['m'];
+      if (top is int && top > _lastStamp) _lastStamp = top;
+    }
     if (requested > 0) {
       if (requested > _lastStamp) _lastStamp = requested;
       return requested;
@@ -561,7 +574,21 @@ ORDER BY c.created_at,c.operation_id LIMIT 1''',
     required int now,
   }) => _write(() {
     if (!_owns(claim)) return;
-    final attempts = operation(claim.command.operationId)!.attempts + 1;
+    // next_attempt==1 marks "made due early by resetBackoff": this try was not
+    // sent after a real wait, so it must not use up the attempt budget
+    // (~10 app opens during an outage would otherwise reject queued work).
+    final earlyRetry =
+        database.db
+            .select(
+              'SELECT next_attempt FROM shared_commands WHERE namespace=? AND operation_id=?',
+              [namespace, claim.command.operationId],
+            )
+            .single['next_attempt'] ==
+        _resetMarker;
+    final previous = operation(claim.command.operationId)!.attempts;
+    final attempts = statusCode != null && earlyRetry && previous > 0
+        ? previous
+        : previous + 1;
     // The server answers 403 for a context it has not seen yet exactly as for
     // one the person does not own. While this context's own create is still
     // on its way, that 403 is "not yet", not "never".
@@ -640,9 +667,10 @@ ORDER BY c.created_at,c.operation_id LIMIT 1''',
 
   /// A reconnect should not wait out a backoff earned while offline: queued
   /// rows become due now. Attempt counts are kept, so the cap still applies.
+  static const _resetMarker = 1;
   Future<void> resetBackoff() => _write(
     () => database.db.execute(
-      "UPDATE shared_commands SET next_attempt=0 WHERE namespace=? AND state IN ('retry','pending') AND next_attempt>0",
+      "UPDATE shared_commands SET next_attempt=$_resetMarker WHERE namespace=? AND state IN ('retry','pending') AND next_attempt>$_resetMarker",
       [namespace],
     ),
   );

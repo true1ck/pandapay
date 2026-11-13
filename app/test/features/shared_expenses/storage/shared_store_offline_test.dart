@@ -71,6 +71,18 @@ void main() {
       },
     );
 
+    test('after a restart with the clock set back, new commands still sort after old ones (WP-H2)', () async {
+      final future = DateTime.now().millisecondsSinceEpoch + 86400000;
+      await store.enqueue(_rename(_idHigh, _ctxA), createdAt: future);
+      final restarted = SharedExpensesStore(db, namespace: fixtures.accountA);
+      await restarted.enqueue(_rename(_idLow, _ctxA));
+      final rows = db.db.select(
+        'SELECT operation_id FROM shared_commands WHERE namespace=? ORDER BY created_at,operation_id',
+        [fixtures.accountA],
+      );
+      expect([for (final r in rows) r['operation_id']], [_idHigh, _idLow]);
+    });
+
     test('equal-millisecond enqueues still get strictly rising stamps', () async {
       for (final id in [_idHigh, _idMid, _idLow]) {
         await store.enqueue(_rename(id, _ctxA));
@@ -274,6 +286,19 @@ void main() {
       },
     );
 
+    test('re-runs made due early by resetBackoff do not burn the cap (WP-H2)', () async {
+      await store.enqueue(_rename(_idLow, _ctxA));
+      var now = 1000;
+      await store.fail(await claim(now), statusCode: 503, now: now);
+      for (var i = 0; i < sharedMaxAttempts * 3; i++) {
+        await store.resetBackoff(); // an app open / reconnect inside the wait
+        now += 10;
+        await store.fail(await claim(now), statusCode: 503, now: now);
+      }
+      expect(store.operation(_idLow)!.state, SharedCommandState.retry);
+      expect(store.operation(_idLow)!.attempts, 1);
+    });
+
     test('being offline never burns the cap', () async {
       await store.enqueue(_rename(_idLow, _ctxA));
       var now = 0;
@@ -294,7 +319,7 @@ void main() {
       final rows = db.db.select(
         "SELECT next_attempt FROM shared_commands WHERE state IN ('retry','pending')",
       );
-      expect(rows.every((r) => r['next_attempt'] == 0), isTrue);
+      expect(rows.every((r) => (r['next_attempt'] as int) <= 1), isTrue);
     });
 
     test('resetBackoff leaves refused and committed rows alone', () async {
