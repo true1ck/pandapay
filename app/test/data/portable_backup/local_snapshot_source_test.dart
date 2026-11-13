@@ -371,7 +371,7 @@ void main() {
 
       // schema drift (old table without the namespace column) must fail loudly
       appDb.db.execute(
-        'CREATE TABLE sms_facts_outbox (entity TEXT, id TEXT, created_at INTEGER)',
+        'CREATE TABLE v2_outbox (entity TEXT, id TEXT, created_at INTEGER)',
       );
       await expectLater(
         source.drainAndVerifyOutboxes(),

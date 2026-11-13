@@ -8,6 +8,7 @@ import 'canonical_ndjson.dart';
 import 'portable_attachments.dart';
 import 'portable_snapshot.dart';
 import '../local/app_database.dart';
+import '../local/queue_registry.dart';
 
 /// One locally persisted outbox queue that must be empty before the export.
 class LocalPortableQueue {
@@ -48,6 +49,19 @@ class LocalPortableSnapshotSource implements PortableLocalSnapshotSource {
     'split_documents staging (server splits are canonical)',
     'SMS intake raw ingest log (parsed observations travel)',
     'attachment binary paths (files travel by content hash)',
+    // WP-C3 (L-05): local-only data that exists in this database but is not in
+    // the archive, each with the reason, so the gap is declared, not silent.
+    // The archive format and version are unchanged.
+    'bill_card_assignments (financial_entities rows of that type: the card a '
+        'person picked for a bill; phone-only choices, picked again after a restore)',
+    'manual_bank_balances (financial_entities rows of that type: balances the '
+        'person typed in; phone-only, re-entered after a restore)',
+    'local_past_bill_receipts (phone-only record that a past bill was settled; '
+        'not part of the archive contract)',
+    'user_merchant_category_rules (locally learned merchant categories; never '
+        'synced, not part of the archive contract)',
+    'command_outbox (queued server commands are not exported: they must drain '
+        'before a backup, see the outbox check)',
   ];
 
   const LocalPortableSnapshotSource({
@@ -72,22 +86,40 @@ class LocalPortableSnapshotSource implements PortableLocalSnapshotSource {
     return PortableOutboxStatus(counts);
   }
 
+  /// Every send queue that must be empty before an export. The list comes from
+  /// [QueueRegistry.defaultQueues] (WP-C3, L-05, Q-11), so a queue added there
+  /// is verified here without a second hand-kept list (the old list still named
+  /// `sms_facts_outbox` and friends, tables that no longer exist, and missed
+  /// `v2_outbox` and `command_outbox`).
+  ///
+  /// Skipped on purpose: local history that is not a send queue
+  /// ([QueueKind.localData]); `sms_intake` (raw ingest log) and
+  /// `split_documents` (server splits are canonical), both listed in
+  /// [declaredExclusions]; `statement_import` uses its own count below.
+  /// A row in any counted queue, parked or not, blocks the export: it is not in
+  /// the archive and would be lost on the new phone.
+  static const Set<String> _notCountedQueues = {
+    'sms_intake',
+    'split_documents',
+    'statement_import',
+  };
+
   Map<String, List<Object?>> get _queues {
     final args = _namespaces;
-    List<Object?> namespaced(String table, {String column = 'namespace'}) => <Object?>[
-          'SELECT COUNT(*) FROM $table WHERE $column = ?',
-          args,
-        ];
+    final queues = <String, List<Object?>>{};
+    for (final spec in QueueRegistry.defaultQueues) {
+      if (spec.kind != QueueKind.outbox ||
+          _notCountedQueues.contains(spec.name)) {
+        continue;
+      }
+      queues[spec.name] = <Object?>[
+        'SELECT COUNT(*) FROM ${spec.table} '
+            'WHERE ${spec.namespaceColumn} = ? AND (${spec.pendingWhere})',
+        args,
+      ];
+    }
     return <String, List<Object?>>{
-      'sync_pending_changes': namespaced('sync_pending_changes'),
-      'transaction_outbox_entries': namespaced('transaction_outbox_entries'),
-      'duplicate_resolution_outbox': namespaced('duplicate_resolution_outbox'),
-      'transaction_tag_outbox': namespaced('transaction_tag_outbox'),
-      'foreign_payments_outbox': namespaced('foreign_payments_outbox'),
-      'shared_commands': [
-        "SELECT COUNT(*) FROM shared_commands WHERE namespace=? AND state!='committed'",
-        <Object?>[namespace],
-      ],
+      ...queues,
       'shared_editor_drafts': [
         'SELECT COUNT(*) FROM shared_editor_drafts WHERE namespace=?',
         <Object?>[namespace],
@@ -100,10 +132,6 @@ class LocalPortableSnapshotSource implements PortableLocalSnapshotSource {
         "SELECT COUNT(*) FROM shared_source_dependencies d JOIN shared_commands c ON c.namespace=d.namespace AND c.operation_id=d.operation_id WHERE d.namespace=? AND d.resolved=0 AND c.state!='committed'",
         <Object?>[namespace],
       ],
-      'sms_facts_outbox': namespaced('sms_facts_outbox'),
-      'sms_fact_override_outbox': namespaced('sms_fact_override_outbox'),
-      'sms_rule_exposure_outbox': namespaced('sms_rule_exposure_outbox'),
-      'sms_dismissal_outbox': namespaced('sms_dismissal_outbox'),
       'statement_import_batches': [
         'SELECT COUNT(*) FROM statement_import_batches WHERE namespace=? AND ciphertext IS NOT NULL',
         <Object?>[namespace],

@@ -5,6 +5,7 @@ import 'package:sqlite3/sqlite3.dart' show Database, SqliteException;
 
 import 'portable_backup.dart';
 import '../local/app_database.dart';
+import '../local/queue_registry.dart';
 import '../local/statement_import_pending.dart';
 
 /// Fresh-target gate for the raw-sqlite3 database: the namespace must hold
@@ -75,6 +76,18 @@ class LocalPortableRestoreWriter implements PortableLocalRestoreWriter {
   Database get _db => appDb.db;
   List<String> get _wipeNamespaces => <String>[namespace, 'legacy'];
 
+  /// Queues a restore clears in the target namespace, by registry name. Only
+  /// the ones that held rows this code always cleared; every other queue
+  /// (`command_outbox`, `v2_outbox`, `shared_commands`, `foreign_payments_outbox`
+  /// ...) keeps its unsent work, because deleting a person's unsent changes is
+  /// never a side effect a restore should have.
+  static const restoreWipedQueues = <String>[
+    'sync_pending_changes',
+    'transaction_tag_outbox',
+    'duplicate_resolution_outbox',
+    'transaction_outbox_entries',
+  ];
+
   static const _namespacedTables = <String>[
     'user_categories',
     'transaction_tags',
@@ -92,21 +105,15 @@ class LocalPortableRestoreWriter implements PortableLocalRestoreWriter {
       for (final statement in <String>[
       'DELETE FROM financial_entities WHERE namespace IN (?, ?)',
       'DELETE FROM financial_transaction_pages WHERE namespace IN (?, ?)',
-      'DELETE FROM sync_pending_changes WHERE namespace IN (?, ?)',
       'DELETE FROM transaction_tags WHERE namespace IN (?, ?)',
       'DELETE FROM user_categories WHERE namespace IN (?, ?)',
-      for (final table in <String>['transaction_tag_links', 'transaction_tag_outbox'])
-        'DELETE FROM $table WHERE namespace IN (?, ?)',
-      for (final table in <String>[
-        'local_commitments',
-        'local_needs_review',
-        'duplicate_resolution_outbox',
-        'transaction_outbox_entries',
-        'sms_facts_outbox',
-        'sms_fact_override_outbox',
-        'sms_rule_exposure_outbox',
-        'sms_dismissal_outbox',
-      ])
+      'DELETE FROM transaction_tag_links WHERE namespace IN (?, ?)',
+      // Send queues of the fresh namespace, named through QueueRegistry so a
+      // renamed table cannot silently leave this list stale (it used to name
+      // four `sms_*_outbox` tables that no longer exist).
+      for (final queue in restoreWipedQueues)
+        'DELETE FROM ${QueueRegistry.defaultQueues.firstWhere((q) => q.name == queue).table} WHERE namespace IN (?, ?)',
+      for (final table in <String>['local_commitments', 'local_needs_review'])
         'DELETE FROM $table WHERE namespace IN (?, ?)',
       'DELETE FROM local_user_cards',
       'DELETE FROM transaction_attachments',

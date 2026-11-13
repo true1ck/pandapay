@@ -95,6 +95,7 @@ import '../data/spend_reports_repository.dart';
 import '../data/spending_selection.dart';
 import '../data/subscription_credits_repository.dart';
 import '../data/sync_api.dart';
+import '../data/local/queue_registry.dart';
 import '../data/session_end_reason.dart';
 import '../data/token_store.dart';
 import '../data/upi_payment_service.dart';
@@ -691,6 +692,16 @@ final pendingSyncCountProvider = FutureProvider<int>((ref) async {
   return (await ref.watch(syncQueueProvider.future)).pendingCount;
 });
 
+/// Counts of queued work that needs a look, read through [QueueRegistry]
+/// (WP-C3, Q-11) so every queue is covered, and a change the server already
+/// applied (waiting only for its stored copy) is not counted.
+///
+/// Keys: `sms` (messages waiting to be read), `blocked` (refused for good in
+/// the three queues the recovery screen can retry: edits, duplicate decisions,
+/// queued commands), `parked` (refused for good in every other queue),
+/// `awaiting` (held until something else happens, e.g. a sign-in), `legacy`
+/// (rows from before accounts were namespaced). The first, second and last
+/// keep their old meaning.
 final pendingRecoveryStatusProvider = FutureProvider<Map<String, int>>((
   ref,
 ) async {
@@ -698,23 +709,37 @@ final pendingRecoveryStatusProvider = FutureProvider<Map<String, int>>((
   final namespace = ref.watch(cacheNamespaceProvider);
   final cache = await ref.watch(responseCacheProvider.future);
   final db = cache.financialStore.database;
+  final registry = QueueRegistry(db);
   int count(String table, String where, List<Object?> args) =>
       db.db
               .select('SELECT COUNT(*) AS n FROM $table WHERE $where', args)
               .single['n']
           as int;
+  const retryable = {
+    'sync_pending_changes',
+    'duplicate_resolution_outbox',
+    // Commands the server refused (for example ignoring a transaction it
+    // no longer has) stay visible here instead of failing silently.
+    'command_outbox',
+  };
+  var blocked = 0;
+  var parked = 0;
+  var awaiting = 0;
+  for (final spec in registry.queues) {
+    if (spec.kind != QueueKind.outbox) continue;
+    final counts = registry.countsFor(spec.name, namespace);
+    if (retryable.contains(spec.name)) {
+      blocked += counts.parked;
+    } else {
+      parked += counts.parked;
+    }
+    awaiting += counts.blocked;
+  }
   return {
-    'sms': count('sms_intake', 'namespace=?', [namespace]),
-    'blocked':
-        count('sync_pending_changes', 'namespace=? AND attempts>=5', [
-          namespace,
-        ]) +
-        count('duplicate_resolution_outbox', 'namespace=? AND attempts>=5', [
-          namespace,
-        ]) +
-        // Commands the server refused (for example ignoring a transaction it
-        // no longer has) stay visible here instead of failing silently.
-        count('command_outbox', 'namespace=? AND parked=1', [namespace]),
+    'sms': registry.countsFor('sms_intake', namespace).total,
+    'blocked': blocked,
+    'parked': parked,
+    'awaiting': awaiting,
     'legacy':
         count('sync_pending_changes', "namespace='legacy'", []) +
         count('transaction_outbox_entries', "namespace='legacy'", []) +
