@@ -113,22 +113,13 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         final smsResult = subset.isEmpty
             ? null
             : await _discoverLocally(subset);
-        try {
-          final emailResult = await repo
-              .discoverCards()
-              .timeout(const Duration(seconds: 20));
-          final result = smsResult == null
-              ? emailResult
-              : _mergeDiscovery(smsResult, emailResult);
-          // The server can identify an SMS-only card only as a generic
-          // issuer/suffix placeholder. Reconcile against the current wallet
-          // before rendering so a card already owned under a named product
-          // cannot be selected and later fail as a duplicate.
-          CardDiscoveryResult filteredResult = result;
+        // The wallet reconcile (placeholder suggestions for cards already owned
+        // under a named product) is local, so it never waits on the network.
+        Future<CardDiscoveryResult> reconcile(CardDiscoveryResult result) async {
           try {
             final owned = await ref.read(userCardsProvider.future);
             final catalogue = await ref.read(catalogueProvider.future);
-            filteredResult = CardDiscoveryResult(
+            return CardDiscoveryResult(
               suggestions: filterOwnedCardSuggestions(
                 suggestions: result.suggestions,
                 ownedCards: owned,
@@ -139,19 +130,36 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
             );
           } catch (_) {
             // Discovery remains useful if a cached wallet/catalogue read is
-            // unavailable; the local fallback still reconciles physical-card
-            // identity before rendering.
+            // unavailable.
+            return result;
           }
+        }
+
+        // WP-C10: show the on-phone SMS result immediately; the forwarded-email
+        // answer is merged in when (and if) the server responds.
+        if (smsResult != null) {
+          final shown = await reconcile(smsResult);
+          if (!mounted || generation != _scanGeneration) return;
+          setState(() {
+            _result = shown;
+            _scanning = false;
+          });
+        }
+        try {
+          final emailResult = await repo
+              .discoverCards()
+              .timeout(const Duration(seconds: 20));
+          final result = smsResult == null
+              ? emailResult
+              : _mergeDiscovery(smsResult, emailResult);
+          final filteredResult = await reconcile(result);
           if (mounted && generation == _scanGeneration) {
             setState(() => _result = filteredResult);
           }
         } catch (_) {
-          // The SMS scan is local-first. A slow/cold API must not turn a
-          // device-side card discovery into a blank or crashing screen.
+          // The SMS result (if any) is already on screen. A slow/cold/offline
+          // API must not blank or break a device-side discovery.
           if (smsResult == null) rethrow;
-          if (mounted && generation == _scanGeneration) {
-            setState(() => _result = smsResult);
-          }
         }
       } else {
         // Guest mode / on-device matching against local catalogue

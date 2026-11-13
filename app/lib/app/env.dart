@@ -33,11 +33,12 @@ enum AppEnvironment { dev, staging, prod }
 class Env {
   const Env._();
 
-  /// Requires accepted server receipts and device storage/restart tests.
-  /// This flag never enables account recovery or background uploads.
+  /// WP-C10 (D7): ON by default; pass =false to turn it off. Reviewed batches are
+  /// saved encrypted on the phone before the first upload and resume
+  /// automatically (idempotent by importKey). Never enables account recovery.
   static const bool statementImportContinuationEnabled = bool.fromEnvironment(
     'PANDAPAY_STATEMENT_IMPORT_CONTINUATION_ENABLED',
-    defaultValue: false,
+    defaultValue: true,
   );
 
   /// Enable only after auth v2 migrations, providers and supported clients pass

@@ -34,10 +34,11 @@ final _cacheSizeProvider = FutureProvider.autoDispose<int>((ref) async {
 /// mirrors that shape for transactions via a single `fetchTransactions()`
 /// call rather than counting on every rebuild.
 final _transactionCountProvider = FutureProvider.autoDispose<int>((ref) async {
-  final repo = ref.watch(userCardsRepositoryProvider);
-  if (repo == null) return 0;
-  final transactions = await repo.fetchTransactions();
-  return transactions.length;
+  // Local COUNT: no network, no rows materialised (works offline, WP-C10).
+  final cache = await ref.watch(responseCacheProvider.future);
+  return cache.financialStore.transactionCount(
+    ref.watch(cacheNamespaceProvider),
+  );
 });
 
 class DataStorageScreen extends ConsumerWidget {
