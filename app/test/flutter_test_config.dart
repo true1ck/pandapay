@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:alchemist/alchemist.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show AssetManifest, AssetMetadata;
 import 'package:flutter_secure_storage_platform_interface/flutter_secure_storage_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
 // ignore: implementation_imports
@@ -22,6 +23,24 @@ class _NeverRespondingClient extends http.BaseClient {
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) =>
       Completer<http.StreamedResponse>().future;
+}
+
+/// The app now bundles Outfit / IBM Plex Sans under `assets/google_fonts/`, and
+/// `google_fonts` prefers a bundled asset over everything else. Under the widget
+/// test binding that makes the font really load (real async asset + engine
+/// work) in the middle of a test, which changes text metrics between layout and
+/// paint (`debugSize == size` assertion in `TextPainter.paint`, then a cascade)
+/// and can hang `pumpAndSettle`. Widget tests never need the real fonts, so
+/// present `google_fonts` with an asset manifest that lists nothing: the font
+/// then takes the same inert path it did before the fonts were bundled (the
+/// never-answering client below). `test/app/offline_fonts_test.dart` resets this
+/// to the real manifest to prove the bundled assets resolve.
+class _NoAssetsManifest implements AssetManifest {
+  @override
+  List<String> listAssets() => const <String>[];
+
+  @override
+  List<AssetMetadata>? getAssetVariants(String key) => null;
 }
 
 /// `flutter test` runs on the headless `flutter_tester` harness, which never
@@ -91,6 +110,7 @@ class _TolerantGoldenComparator extends LocalFileComparator {
 
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   google_fonts_base.httpClient = _NeverRespondingClient();
+  google_fonts_base.assetManifest = _NoAssetsManifest();
   final fakeSecureStorage = _FakeSecureStoragePlatform();
   FlutterSecureStoragePlatform.instance = fakeSecureStorage;
   // A single fake instance backs the whole test run (one process, every
