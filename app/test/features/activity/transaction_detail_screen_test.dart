@@ -285,14 +285,14 @@ void main() {
         transactionId: entry.id,
         shared: true,
       );
-      final action = find.text('Split options');
+      final action = find.text('Split this expense');
       await tester.ensureVisible(action);
       await tester.pumpAndSettle();
       await tester.tap(action);
       await tester.pumpAndSettle();
-      expect(find.text('Private allocations'), findsOneWidget);
-      expect(find.text('Share with people'), findsOneWidget);
-      await tester.tap(find.text('Private allocations'));
+      expect(find.text('With friends'), findsOneWidget);
+      expect(find.text('Just for me'), findsOneWidget);
+      await tester.tap(find.text('Just for me'));
       await tester.pumpAndSettle();
       expect(find.text('Save split'), findsOneWidget);
     },
@@ -505,7 +505,7 @@ void main() {
     await tester.tap(splitButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('Split this expense'), findsOneWidget);
+    expect(find.text('Split expense'), findsOneWidget);
     final amounts = find.byType(TextField);
     await tester.enterText(amounts.at(0), '400');
     await tester.tap(find.text('Add a share'));
@@ -653,6 +653,40 @@ void main() {
 
       expect(find.textContaining('Could not load split details'), findsNothing);
       expect(find.text('Retry'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'a phone-only SMS payment can be split privately and the labels stay on the phone',
+    (tester) async {
+      final id = 'v2:${'b' * 64}';
+      final repo = _FakeUserCardsRepository(
+        TransactionEntry(
+          id: id,
+          amount: Money.fromRupees(500),
+          occurredAt: DateTime(2026, 11, 4),
+          merchantName: 'ZOMATO',
+          source: 'sms',
+          status: 'active',
+        ),
+        failSplits: true,
+      );
+      await _pump(tester, repo: repo, transactionId: id);
+
+      final action = find.text('Split this expense');
+      await tester.ensureVisible(action);
+      await tester.tap(action);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('once this payment has synced'), findsNothing);
+      await tester.enterText(find.byKey(const ValueKey('private-amount-0')), '200');
+      await tester.enterText(find.byKey(const ValueKey('private-label-0')), 'Priya');
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('split-submit')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Split across 1 share'), findsOneWidget);
+      expect(find.text('Priya'), findsOneWidget);
+      expect(repo.splits, isEmpty, reason: 'never sent to the server');
     },
   );
 

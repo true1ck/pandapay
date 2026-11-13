@@ -218,6 +218,36 @@ class SplitRepository extends ChangeNotifier {
     _schedule(const Duration(milliseconds: 750));
   }
 
+  /// Phone-only payments (`v2:…` / `local…` ids) have no server row yet, so the
+  /// split endpoint cannot accept them. The labels are kept on this phone only
+  /// (never pending, so [sync] never tries to PUT them) instead of blocking the
+  /// user from splitting a payment that has not synced.
+  void saveDeviceOnly(String id, List<TransactionSplit> splits, Money total) {
+    if (_disposed) {
+      throw StateError(
+        'Account changed. Reopen the transaction before editing.',
+      );
+    }
+    if (splits.length > 20 ||
+        splits.any(
+          (s) => s.amount.paise <= 0 || (s.note?.length ?? 0) > 2000,
+        ) ||
+        splits.fold<int>(0, (sum, s) => sum + s.amount.paise) > total.paise) {
+      throw StateError('Check the share amounts and notes before saving.');
+    }
+    final doc = TransactionSplitDocument(splits, fingerprint: fingerprint(splits));
+    database.db.execute(
+      'INSERT INTO split_documents '
+      '(namespace,transaction_id,document_json,fetched_at,version,pending) '
+      'VALUES (?,?,?,?,1,0) '
+      'ON CONFLICT(namespace,transaction_id) DO UPDATE SET '
+      'document_json=excluded.document_json, fetched_at=excluded.fetched_at, '
+      'version=version+1, pending=0, error=NULL, blocked=0',
+      [namespace, id, jsonEncode(doc.toJson()), now().millisecondsSinceEpoch],
+    );
+    _changed();
+  }
+
   void _schedule(Duration delay) {
     if (!autoSync || _disposed) return;
     _timer?.cancel();

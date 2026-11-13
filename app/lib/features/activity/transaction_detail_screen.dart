@@ -39,10 +39,9 @@ import 'transaction_reward_label.dart';
 import 'foreign_payments_screen.dart';
 import '../sync/split_sync.dart';
 import '../insights/spend_trends_screen.dart';
-import '../quickadd/quick_add_screen.dart';
 import '../payments/payment_method_catalogue.dart';
 import '../shared_expenses/runtime/shared_providers.dart';
-import '../shared_expenses/composer/shared_source_seed.dart';
+import 'split_expense_screen.dart';
 
 /// D2 Transaction Detail (ui-spec Group D). Deep-linkable at /activity/:id.
 /// Full record incl. source and reconciliation status. Actions: edit (D3),
@@ -304,12 +303,34 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
 
   Future<void> _loadSplits() async {
     if (!_hasServerId) {
-      if (mounted) {
-        setState(() {
-          _loadingSplits = false;
-          _splitLoadError = null;
-          _splits = const [];
-        });
+      // Nothing to fetch, but labels saved on this phone for the payment are.
+      try {
+        final store = await ref.read(splitRepositoryProvider.future);
+        if (!mounted || store.namespace != ref.read(cacheNamespaceProvider)) {
+          return;
+        }
+        if (_splitStore != store) {
+          _splitStore?.removeListener(_splitChanged);
+          _splitStore = store;
+          store.addListener(_splitChanged);
+        }
+        final saved = store.local(widget.entry.id);
+        if (mounted) {
+          setState(() {
+            _localSplit = saved;
+            _loadingSplits = false;
+            _splitLoadError = null;
+            _splits = saved?.document.splits ?? const [];
+          });
+        }
+      } catch (_) {
+        if (mounted) {
+          setState(() {
+            _loadingSplits = false;
+            _splitLoadError = null;
+            _splits = const [];
+          });
+        }
       }
       return;
     }
@@ -544,111 +565,16 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     }
   }
 
-  Future<void> _showSplitOptions() async {
+  /// Opens the dedicated Split screen. Both ways of splitting live there:
+  /// with friends (shared expense) and just for me (private labelled shares).
+  Future<void> _openSplitScreen() async {
     if (_savingSplits) return;
+    // Finish the one-time read first so an existing split is never shown as
+    // new and then overwritten.
     if (_loadingSplits) await _loadSplits();
     if (!mounted || ref.read(cacheNamespaceProvider) != _openedNamespace) {
       return;
     }
-    if (_splitLoadError != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Retry loading the current split before sharing it.'),
-        ),
-      );
-      return;
-    }
-    final entry = _entry;
-    final namespace = ref.read(cacheNamespaceProvider);
-    var knownIdentity = false;
-    if (namespace.startsWith('user:')) {
-      try {
-        SharedSourceSeed.fromTransaction(namespace.substring(5), entry);
-        knownIdentity = true;
-      } catch (_) {
-        /* The source must finish reconciliation first. */
-      }
-    }
-    final canShare =
-        knownIdentity &&
-        namespace.startsWith('user:') &&
-        entry.status == 'active' &&
-        entry.entryKind == TxnEntryKind.spend &&
-        entry.amount.paise > 0 &&
-        _localSplit?.pending != true;
-    final selection = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: BambooInk.paper,
-      builder: (sheet) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text('Split this expense', style: BambooFonts.heading(18)),
-            ),
-            ListTile(
-              leading: const Icon(Icons.person_outline_rounded),
-              title: Text('Private allocations', style: BambooFonts.ui(15)),
-              subtitle: Text(
-                'Keep your existing labels and amounts',
-                style: BambooFonts.ui(12),
-              ),
-              onTap: () => Navigator.pop(sheet, 'private'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.people_outline_rounded),
-              title: Text('Share with people', style: BambooFonts.ui(15)),
-              subtitle: Text(
-                _localSplit?.pending == true
-                    ? 'Sync your private allocations first'
-                    : !knownIdentity
-                    ? 'Finish payment reconciliation before sharing'
-                    : 'Use this payment in the shared expense editor',
-                style: BambooFonts.ui(12),
-              ),
-              enabled: canShare,
-              onTap: canShare ? () => Navigator.pop(sheet, 'shared') : null,
-            ),
-          ],
-        ),
-      ),
-    );
-    if (!mounted || ref.read(cacheNamespaceProvider) != namespace) return;
-    if (selection == 'private') {
-      await _showSplitSheet();
-    } else if (selection == 'shared') {
-      await Navigator.push<void>(
-        context,
-        MaterialPageRoute(
-          builder: (_) => QuickAddScreen(
-            sharedExpense: true,
-            sharedSourceEntry: entry,
-            sharedSourceAccountId: namespace.substring(5),
-            sharedSourceNote: _note,
-          ),
-        ),
-      );
-    }
-  }
-
-  Future<void> _showSplitSheet() async {
-    if (_savingSplits) return;
-    if (!_hasServerId) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Private allocations open once this payment has synced. You can still share it with people.',
-          ),
-        ),
-      );
-      return;
-    }
-    // A detail row can be opened before the one-time split read has settled.
-    // Finish that read before opening the editor so an existing split is not
-    // accidentally presented as a new split and then overwritten.
-    if (_loadingSplits) await _loadSplits();
-    if (!mounted) return;
     if (_splitLoadError != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -657,38 +583,45 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       );
       return;
     }
-    final result = await showModalBottomSheet<List<TransactionSplit>>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: BambooInk.paper,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    final namespace = ref.read(cacheNamespaceProvider);
+    await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SplitExpenseScreen(
+          entry: _entry,
+          note: _note,
+          initialPrivate: _splits,
+          initialMode:
+              _splits.isNotEmpty || !ref.read(sharedExpensesEnabledProvider)
+              ? SplitScreenMode.justMe
+              : SplitScreenMode.friends,
+          onSavePrivate: (shares) => _savePrivateShares(shares, namespace),
+        ),
       ),
-      builder: (context) =>
-          _SplitSheet(total: widget.entry.amount, initial: _splits),
     );
-    if (result == null) return;
+  }
 
+  Future<void> _savePrivateShares(
+    List<TransactionSplit> shares,
+    String namespace,
+  ) async {
     if (!mounted) return;
     setState(() => _savingSplits = true);
     try {
-      final store = _splitStore;
-      if (store == null) {
-        throw StateError('Local storage is unavailable. Try again.');
-      }
-      if (store.namespace != ref.read(cacheNamespaceProvider)) {
+      final SplitRepository store = await ref.read(splitRepositoryProvider.future);
+      if (store.namespace != ref.read(cacheNamespaceProvider) ||
+          namespace != ref.read(cacheNamespaceProvider)) {
         throw StateError(
           'Account changed. Reopen the transaction before editing.',
         );
       }
-      store.save(widget.entry.id, result, widget.entry.amount);
-      _splitChanged();
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
+      if (_hasServerId) {
+        store.save(widget.entry.id, shares, widget.entry.amount);
+      } else {
+        // Not synced yet: keep the labels on this phone.
+        store.saveDeviceOnly(widget.entry.id, shares, widget.entry.amount);
       }
+      _splitChanged();
     } finally {
       if (mounted) setState(() => _savingSplits = false);
     }
@@ -1736,14 +1669,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                     icon: Icons.call_split_rounded,
                     label: _savingSplits
                         ? 'Saving split…'
-                        : ref.watch(sharedExpensesEnabledProvider)
-                        ? 'Split options'
                         : _splits.isEmpty
                         ? 'Split this expense'
                         : 'Split across ${_splits.length} ${_splits.length == 1 ? 'share' : 'shares'}',
-                    onTap: ref.watch(sharedExpensesEnabledProvider)
-                        ? _showSplitOptions
-                        : _showSplitSheet,
+                    onTap: _openSplitScreen,
                   ),
                   if (_localSplit?.pending == true) ...[
                     const SizedBox(height: AppSpace.xs),
@@ -2351,235 +2280,6 @@ class _SplitSummary extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _SplitSheet extends StatefulWidget {
-  final Money total;
-  final List<TransactionSplit> initial;
-  const _SplitSheet({required this.total, required this.initial});
-
-  @override
-  State<_SplitSheet> createState() => _SplitSheetState();
-}
-
-class _SplitSheetState extends State<_SplitSheet> {
-  late final List<TextEditingController> _amounts;
-  late final List<TextEditingController> _notes;
-  final _originalShares = <TextEditingController, TransactionSplit>{};
-
-  @override
-  void initState() {
-    super.initState();
-    final seed = widget.initial.isEmpty
-        ? [const TransactionSplit(amount: Money.zero())]
-        : widget.initial;
-    _amounts = [
-      for (final s in seed)
-        TextEditingController(
-          text: s.amount.isZero ? '' : s.amount.rupees.toStringAsFixed(2),
-        ),
-    ];
-    _notes = [for (final s in seed) TextEditingController(text: s.note ?? '')];
-    for (var i = 0; i < seed.length; i++) {
-      _originalShares[_amounts[i]] = seed[i];
-    }
-  }
-
-  @override
-  void dispose() {
-    for (final c in _amounts) {
-      c.dispose();
-    }
-    for (final c in _notes) {
-      c.dispose();
-    }
-    super.dispose();
-  }
-
-  Money _amount(TextEditingController controller) {
-    final parsed = double.tryParse(controller.text.trim());
-    return parsed == null || !parsed.isFinite || parsed <= 0
-        ? const Money.zero()
-        : Money.fromRupees(parsed);
-  }
-
-  int get _enteredPaise =>
-      _amounts.fold(0, (sum, controller) => sum + _amount(controller).paise);
-
-  bool get _overAllocated => _enteredPaise > widget.total.paise;
-
-  bool get _hasShares =>
-      _amounts.any((controller) => !_amount(controller).isZero);
-
-  // An existing split can be cleared intentionally by removing every row.
-  // A brand-new split still needs at least one positive share.
-  bool get _canSave =>
-      !_overAllocated &&
-      !_hasInvalidAmounts &&
-      (_hasShares || widget.initial.isNotEmpty);
-
-  bool get _hasInvalidAmounts => _amounts.any((controller) {
-    final text = controller.text.trim();
-    return text.isNotEmpty &&
-        (!RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(text) ||
-            _amount(controller).isZero);
-  });
-
-  void _addShare() {
-    setState(() {
-      _amounts.add(TextEditingController());
-      _notes.add(TextEditingController());
-    });
-  }
-
-  void _removeShare(int index) {
-    setState(() {
-      _originalShares.remove(_amounts[index]);
-      _amounts.removeAt(index).dispose();
-      _notes.removeAt(index).dispose();
-    });
-  }
-
-  void _save() {
-    if (!_canSave) return;
-    final splits = <TransactionSplit>[];
-    for (var i = 0; i < _amounts.length; i++) {
-      final amount = _amount(_amounts[i]);
-      if (amount.isZero) continue; // a blank row is not an error, just skipped
-      final note = _notes[i].text.trim();
-      splits.add(
-        TransactionSplit(
-          amount: amount,
-          note: note.isEmpty ? null : note,
-          userCardId: _originalShares[_amounts[i]]?.userCardId,
-          categoryId: _originalShares[_amounts[i]]?.categoryId,
-        ),
-      );
-    }
-    if (splits.isEmpty && widget.initial.isEmpty) return;
-    Navigator.of(context).pop(splits);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final remaining = Money.fromPaise(widget.total.paise - _enteredPaise);
-    return Padding(
-      padding: EdgeInsets.only(
-        left: AppSpace.lg,
-        right: AppSpace.lg,
-        top: AppSpace.lg,
-        bottom: MediaQuery.viewInsetsOf(context).bottom + AppSpace.lg,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Split details',
-              style: BambooFonts.heading(18, color: BambooInk.ink900),
-            ),
-            const SizedBox(height: AppSpace.xs),
-            Text(
-              'Who owed what out of ${widget.total.format()}. This does not change which '
-              'card was charged, or what it earned.',
-              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-            ),
-            const SizedBox(height: AppSpace.lg),
-            for (var i = 0; i < _amounts.length; i++)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpace.sm),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 110,
-                      child: TextField(
-                        controller: _amounts[i],
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        onChanged: (_) => setState(() {}),
-                        style: BambooFonts.money(15, color: BambooInk.ink900),
-                        decoration: const InputDecoration(
-                          prefixText: '₹ ',
-                          hintText: '0',
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpace.sm),
-                    Expanded(
-                      child: TextField(
-                        controller: _notes[i],
-                        maxLength: 2000,
-                        style: BambooFonts.ui(14, color: BambooInk.ink900),
-                        decoration: const InputDecoration(
-                          hintText: 'Who / what for',
-                          counterText: '',
-                        ),
-                      ),
-                    ),
-                    if (_amounts.length > 1)
-                      IconButton(
-                        tooltip: 'Remove this share',
-                        icon: const Icon(
-                          Icons.close_rounded,
-                          size: 18,
-                          color: BambooInk.ink500,
-                        ),
-                        onPressed: () => _removeShare(i),
-                      ),
-                  ],
-                ),
-              ),
-            TextButton.icon(
-              onPressed: _amounts.length >= 20 ? null : _addShare,
-              style: TextButton.styleFrom(
-                foregroundColor: BambooInk.ink900,
-                minimumSize: const Size(44, 44),
-              ),
-              icon: const Icon(Icons.add_rounded, size: 18),
-              label: const Text('Add a share'),
-            ),
-            const SizedBox(height: AppSpace.sm),
-            Text(
-              _hasInvalidAmounts
-                  ? 'Enter a positive amount with at most two decimal places for each share.'
-                  : _overAllocated
-                  ? 'That is ${(-remaining).format()} more than the payment.'
-                  : 'Unallocated: ${remaining.format()} — still yours.',
-              style: BambooFonts.ui(
-                12.5,
-                weight: FontWeight.w600,
-                color: _overAllocated ? BambooInk.clayInk : BambooInk.ink500,
-              ),
-            ),
-            const SizedBox(height: AppSpace.md),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: BambooInk.slate,
-                foregroundColor: BambooInk.onSlate,
-                minimumSize: const Size.fromHeight(48),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              onPressed: _canSave ? _save : null,
-              child: Text('Save split'),
-            ),
-            if (widget.initial.isNotEmpty) ...[
-              const SizedBox(height: AppSpace.xs),
-              TextButton(
-                onPressed: () =>
-                    Navigator.of(context).pop(const <TransactionSplit>[]),
-                child: const Text('Clear split'),
-              ),
-            ],
-          ],
-        ),
       ),
     );
   }
