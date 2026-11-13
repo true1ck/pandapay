@@ -1,4 +1,5 @@
 import '../sms_v2/ledger/providers.dart' show suspectedRefundsProvider;
+import 'spend_exclusion_matches.dart';
 import 'transaction_badge.dart';
 import 'transfer_mark_panel.dart';
 import '../sms_v2/ui/review_controller.dart';
@@ -951,6 +952,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     try {
       await setSpendExclusion(ref, [previous], excluded: excluded);
       ref.invalidate(transactionDetailProvider(widget.entry.id));
+      if (excluded) await _offerSimilarExclusions(previous);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -968,6 +970,23 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+    }
+  }
+
+  /// After leaving one transaction out, offers the other open ones with the same
+  /// merchant or tag. Applied only after the person ticks and confirms.
+  Future<void> _offerSimilarExclusions(TransactionEntry source) async {
+    final loaded = ref.read(transactionsProvider).valueOrNull;
+    if (loaded == null || !mounted) return;
+    final groups = exclusionMatches(source, loaded);
+    if (groups.isEmpty) return;
+    final chosen = await showExclusionMatchesSheet(context, groups);
+    if (chosen == null || chosen.isEmpty || !mounted) return;
+    final n = await setSpendExclusion(ref, chosen, excluded: true);
+    if (mounted && n > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("$n more won't count in your spending.")),
+      );
     }
   }
 
