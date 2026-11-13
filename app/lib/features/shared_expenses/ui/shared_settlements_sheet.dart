@@ -62,6 +62,8 @@ class _SharedSettlementsSheetState extends State<SharedSettlementsSheet> {
     _data = _load();
   }
 
+  bool _refreshing = false;
+
   Future<({SharedRoster roster, Map<String, Object?> page})> _load() async {
     final roster = await widget.runtime.contextRoster(widget.contextId);
     final page = await widget.runtime.settlements(
@@ -197,10 +199,18 @@ class _SharedSettlementsSheetState extends State<SharedSettlementsSheet> {
                     ),
                     IconButton(
                       tooltip: 'Refresh',
-                      onPressed: _responding != null
+                      onPressed: _responding != null || _refreshing
                           ? null
                           : () async {
-                              await widget.runtime.flushEditor();
+                              _refreshing = true;
+                              try {
+                                await widget.runtime.flushEditor();
+                              } catch (_) {
+                                // Offline or account changed: reload what is
+                                // saved rather than throwing out of the tap.
+                              } finally {
+                                _refreshing = false;
+                              }
                               if (mounted && _authorized) {
                                 setState(() {
                                   _data = _load();
@@ -227,11 +237,26 @@ class _SharedSettlementsSheetState extends State<SharedSettlementsSheet> {
                       builder: (context, snapshot) {
                         if (snapshot.hasError) {
                           return Center(
-                            child: TextButton(
-                              onPressed: () => setState(() {
-                                _data = _load();
-                              }),
-                              child: const Text('Try again'),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                TextButton(
+                                  onPressed: () => setState(() {
+                                    _data = _load();
+                                  }),
+                                  child: const Text('Try again'),
+                                ),
+                                // A page that fails to load must not strand
+                                // the person on it.
+                                if (_history.length > 1)
+                                  TextButton(
+                                    onPressed: () => setState(() {
+                                      _history.removeLast();
+                                      _data = _load();
+                                    }),
+                                    child: const Text('Previous page'),
+                                  ),
+                              ],
                             ),
                           );
                         }

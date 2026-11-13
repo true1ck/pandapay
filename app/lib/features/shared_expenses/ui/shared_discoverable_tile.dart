@@ -15,13 +15,16 @@ class SharedDiscoverableTile extends ConsumerStatefulWidget {
 
 class _TileState extends ConsumerState<SharedDiscoverableTile> {
   bool? _value;
-  bool _busy = false, _load = false;
+  bool _busy = false;
+
+  /// The runtime the shown value belongs to. A new one (another account, a
+  /// re-login) must not inherit the old account's switch.
+  SharedExpensesRuntime? _for;
 
   Future<void> _fetch(SharedExpensesRuntime runtime) async {
-    _load = true;
     try {
       final status = await runtime.discoverability();
-      if (mounted && status.phoneVerified) {
+      if (mounted && identical(_for, runtime) && status.phoneVerified) {
         setState(() => _value = status.discoverable);
       }
     } catch (_) {
@@ -57,7 +60,12 @@ class _TileState extends ConsumerState<SharedDiscoverableTile> {
     if (runtime == null || !runtime.proposalsEnabled) {
       return const SizedBox.shrink();
     }
-    if (!_load) _fetch(runtime);
+    if (!identical(_for, runtime)) {
+      _for = runtime;
+      _value = null;
+      _busy = false;
+      _fetch(runtime);
+    }
     final value = _value;
     if (value == null) return const SizedBox.shrink();
     return Container(

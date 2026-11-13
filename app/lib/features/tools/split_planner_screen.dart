@@ -71,7 +71,9 @@ class _SplitPlannerScreenState extends ConsumerState<SplitPlannerScreen> {
         ),
       ),
       body: AppBackground(
-        child: owned.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
+        child: owned.when(
+          skipLoadingOnReload: true,
+          skipLoadingOnRefresh: true,
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
             message: userFacingErrorMessage(err),
@@ -101,7 +103,10 @@ class _SplitPlannerScreenState extends ConsumerState<SplitPlannerScreen> {
                   inputFormatters: [
                     TextInputFormatter.withFunction(
                       (oldValue, newValue) =>
-                          RegExp(r'^\d*(\.\d{0,2})?$').hasMatch(newValue.text)
+                          // Up to ₹9,99,99,999: more only overflows the maths.
+                          RegExp(
+                            r'^\d{0,8}(\.\d{0,2})?$',
+                          ).hasMatch(newValue.text)
                           ? newValue
                           : oldValue,
                     ),
@@ -283,8 +288,8 @@ class _SplitResult extends StatelessWidget {
         if (placed < total) ...[
           const SizedBox(height: AppSpace.sm),
           Text(
-            '${(total - placed).format()} of this amount has no eligible card left to place — shown '
-            'as unallocated below, not silently dropped.',
+            '${(total - placed).format()} of this amount has no eligible card left to '
+            'place, so it is not in the plan below.',
             style: BambooFonts.ui(12.5, color: BambooInk.clay),
           ),
         ],
@@ -352,9 +357,11 @@ class _AllocationBar extends StatelessWidget {
           const SizedBox(height: AppSpace.sm),
           Row(
             children: [
-              Text(
-                '${(fraction * 100).toStringAsFixed(0)}% of total · expected reward ',
-                style: BambooFonts.ui(12, color: BambooInk.ink500),
+              Flexible(
+                child: Text(
+                  '${(fraction * 100).toStringAsFixed(0)}% of total · expected reward ',
+                  style: BambooFonts.ui(12, color: BambooInk.ink500),
+                ),
               ),
               MoneyText(
                 allocation.expectedValue,

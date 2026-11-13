@@ -255,8 +255,7 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
       );
       if (code != null && code.startsWith('split:')) {
         // Split-group invite carried through the Play install referrer.
-        await PendingSplitInviteStore().capture(code.substring(6));
-        _resumePendingSplitJoin();
+        await PendingSplitInviteStore().captureFromReferrer(code.substring(6));
       } else if (code != null && mounted) {
         final pendingStore = await ref.read(
           pendingInvitationStoreProvider.future,
@@ -269,6 +268,9 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
     } on MissingPluginException {
       // iOS and platform-less test harnesses have no Install Referrer API.
     }
+    // An invite saved earlier (install referrer, or the app was closed during
+    // sign-up) resumes now rather than only when a new link event arrives.
+    if (mounted) unawaited(_resumePendingSplitJoin());
   }
 
   String? _lastPushLink;
@@ -318,7 +320,10 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
             !onboarding.isLoading &&
             onboarding.valueOrNull != false) {
           if (!mounted) return;
-          ref.read(goRouterProvider).go('/split/join/$token');
+          // A newer link may have been saved while this waited.
+          final latest = await PendingSplitInviteStore().read() ?? token;
+          if (!mounted) return;
+          ref.read(goRouterProvider).go('/split/join/$latest');
           return;
         }
         await Future<void>.delayed(const Duration(milliseconds: 400));

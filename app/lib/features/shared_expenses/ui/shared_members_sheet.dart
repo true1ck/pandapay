@@ -62,7 +62,6 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
   String? _pendingPhone, _pendingMemberId, _formError;
   // Add-person is an inline step of this sheet, not a dialog on top of it.
   bool _adding = false;
-  SharedPhoneLookup _lookup = SharedPhoneLookup.none;
   Map<String, SharedOwnerInvitation> _inv = const {};
   SharedGroupLinkStatus? _groupLink;
   SharedInviteLink? _groupLinkNow;
@@ -118,25 +117,36 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
     };
   }
 
-  Future<bool> _confirm(String title, String body, String action) async =>
-      await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(title),
-          content: Text(body),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
+  /// True while a dialog or picker opened from this sheet is on screen. A
+  /// second tap must not stack a second one (two rename dialogs, two confirms).
+  bool _modal = false, _picking = false;
+
+  Future<bool> _confirm(String title, String body, String action) async {
+    if (_modal) return false;
+    _modal = true;
+    try {
+      return await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: Text(title),
+              content: Text(body),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: Text(action),
+                ),
+              ],
             ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(action),
-            ),
-          ],
-        ),
-      ) ??
-      false;
+          ) ??
+          false;
+    } finally {
+      _modal = false;
+    }
+  }
 
   Future<void> _remove(SharedEditorMember member) async {
     if (_busy || !_authorized) return;
@@ -252,20 +262,42 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
   }
 
   Future<void> _rename(SharedRoster roster, SharedEditorMember member) async {
-    if (_busy || !_authorized) return;
+    if (_busy || _modal || !_authorized) return;
     final self = member.id == roster.ownMemberId;
     String? opId;
-    final name = await showSharedRenameMemberDialog(
+    _modal = true;
+    final String? name;
+    try {
+      name = await _showRename(roster, member, self, (id) => opId = id);
+    } finally {
+      _modal = false;
+    }
+    if (name == null || opId == null || !mounted || !_authorized) return;
+    setState(() {
+      _notice = widget.runtime.operationStatus(opId!);
+      _roster = widget.runtime.contextRoster(widget.contextId);
+    });
+  }
+
+  Future<String?> _showRename(
+    SharedRoster roster,
+    SharedEditorMember member,
+    bool self,
+    void Function(String) saved,
+  ) {
+    return showSharedRenameMemberDialog(
       context,
       title: self ? 'Edit your name' : 'Edit name',
       initialName: member.rawName ?? (self ? '' : _displayName(member)),
       onSave: (typed) async {
         try {
-          opId = await widget.runtime.renameMember(
-            contextId: widget.contextId,
-            memberId: member.id,
-            name: typed,
-            directCounterpart: roster.direct && !self,
+          saved(
+            await widget.runtime.renameMember(
+              contextId: widget.contextId,
+              memberId: member.id,
+              name: typed,
+              directCounterpart: roster.direct && !self,
+            ),
           );
           return null;
         } on SharedNameException catch (error) {
@@ -281,11 +313,6 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
         }
       },
     );
-    if (name == null || opId == null || !mounted || !_authorized) return;
-    setState(() {
-      _notice = widget.runtime.operationStatus(opId!);
-      _roster = widget.runtime.contextRoster(widget.contextId);
-    });
   }
 
   /// Rare on purpose: a split stays after everyone settles and can be used for
@@ -323,6 +350,7 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
   }
 
   void _showCannotLeaveSheet() {
+    var handled = false; // a double tap must not pop twice or open two forms
     showBambooSheet(
       context: context,
       builder: (ctx) => BambooSheet(
@@ -334,6 +362,8 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
             icon: const Icon(Icons.payments_outlined, size: 18),
             label: const Text('Settle up'),
             onPressed: () {
+              if (handled) return;
+              handled = true;
               Navigator.pop(ctx);
               SharedSettleSheet.show(
                 context,
@@ -343,7 +373,11 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
             },
           ),
           OutlinedButton(
-            onPressed: () => Navigator.pop(ctx),
+            onPressed: () {
+              if (handled) return;
+              handled = true;
+              Navigator.pop(ctx);
+            },
             child: const Text('Stay in split'),
           ),
         ],
@@ -410,22 +444,38 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
   /// One link per group. Creating a new one replaces the old, so a link is only
   /// re-shared in the session that made it.
   Future<void> _shareGroupLink({bool reuse = false}) async {
-    if (_busy || !_authorized || !widget.runtime.proposalsEnabled) return;
+    if (_busy || _modal || !_authorized || !widget.runtime.proposalsEnabled) {
+      return;
+    }
+    final resharing = reuse && _groupLinkNow != null;
+    // Making a link asks who may join with it; sharing the one just made
+    // does not ask again.
+    var auto = _groupLink?.autoJoin ?? true;
+    if (!resharing) {
+      final choice = await _askJoinMode();
+      if (choice == null || !mounted) return;
+      auto = choice;
+    }
     setState(() => _busy = true);
     try {
-      final link = reuse && _groupLinkNow != null
+      final link = resharing
           ? _groupLinkNow!
-          : await widget.runtime.createGroupLink(widget.contextId);
+          : await widget.runtime.createGroupLink(
+              widget.contextId,
+              autoJoin: auto,
+            );
       if (!mounted || !_authorized) return;
       setState(() => _groupLinkNow = link);
       await _loadGroupLink();
       await SharePlus.instance.share(
         ShareParams(
           subject: 'Join ${widget.groupName} on PandaPay',
-          text:
-              'Join "${widget.groupName}" on PandaPay to keep shared expenses '
-              'in one place. Open the link and ask to join; the group owner '
-              'approves each person: ${link.url}',
+          text: auto
+              ? 'Join "${widget.groupName}" on PandaPay to keep shared '
+                    'expenses in one place. Open the link to join: ${link.url}'
+              : 'Join "${widget.groupName}" on PandaPay to keep shared '
+                    'expenses in one place. Open the link and ask to join; '
+                    'the group owner approves each person: ${link.url}',
         ),
       );
     } catch (error) {
@@ -434,6 +484,45 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
       }
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// "Who can join with this link?" True: anyone with the link joins at once
+  /// (the default, and what most groups want). False: the owner approves each
+  /// person. Null: cancelled.
+  Future<bool?> _askJoinMode() async {
+    if (_modal) return null;
+    _modal = true;
+    try {
+      return await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Who can join with this link?'),
+          content: const Text(
+            'Anyone with the link joins right away. If you would rather '
+            'approve each person, choose that instead. Joining never adds any '
+            'expense or debt.',
+          ),
+          actions: [
+            TextButton(
+              key: const Key('link-mode-approve'),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('I approve each person'),
+            ),
+            FilledButton(
+              key: const Key('link-mode-open'),
+              style: sharedPrimaryButtonStyle(),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(
+                'Anyone with the link joins',
+                style: BambooFonts.ui(14, color: BambooInk.lime),
+              ),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      _modal = false;
     }
   }
 
@@ -481,10 +570,12 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
           const SizedBox(height: 4),
           Text(
             active
-                ? 'Anyone with the link can ask to join$dateText. You approve each person.'
+                ? (link!.autoJoin
+                      ? 'Anyone with the link joins right away$dateText. Turn it off any time.'
+                      : 'Anyone with the link can ask to join$dateText. You approve each person.')
                 : link?.expired == true
                 ? 'The last link expired. Create a new one to invite people.'
-                : 'Share one link with the whole group. You approve each person who asks to join.',
+                : 'Share one link with the whole group. You choose whether people join right away or need your approval.',
             style: BambooFonts.ui(12, color: BambooInk.ink700),
           ),
           Wrap(
@@ -619,11 +710,13 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
           );
           return;
         }
-        var lookup = _lookup;
+        // Never trust the answer for a number that has since been edited.
+        var lookup = SharedPhoneLookup.none;
         if (phone.isNotEmpty && cleaned != null) {
           try {
             lookup = await widget.runtime.lookupPhone(cleaned);
           } catch (_) {}
+          if (!mounted) return;
           if (lookup.self) {
             setState(() => _formError = 'That is your own number.');
             return;
@@ -632,6 +725,7 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
         final name = text;
         _pendingPhone = cleaned;
         final current = await widget.runtime.contextRoster(widget.contextId);
+        if (!mounted) return;
         if (!current.canInvite) throw const SharedRuntimeUnavailable();
         final norm = _normalizeName(name);
         final duplicateName = current.members.any(
@@ -673,10 +767,21 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
       if (refused != null) {
         // Roll back: nothing was added, so let them change the name.
         if (mounted) {
+          final message = sharedInviteIssueMessage(
+            SharedTransportException(code: refused.code),
+          );
+          // The number saved for this person belongs to nobody now.
+          final gone = _pendingMemberId;
+          if (gone != null) {
+            _phones.remove(gone);
+            unawaited(widget.runtime.pendingPhones.forget(gone));
+          }
           setState(() {
-            _formError = sharedInviteIssueMessage(
-              SharedTransportException(code: refused.code),
-            );
+            _formError = message;
+            // Found through "Check status" the form is closed: say it where
+            // the person is looking, and bring the form back to fix the name.
+            _notice = message;
+            _adding = true;
             _pending = null;
             _pendingMemberId = null;
             _pendingPhone = null;
@@ -710,10 +815,21 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
         });
         _loadInvitations();
       }
+    } on SharedRuntimeUnavailable {
+      if (mounted) {
+        setState(() {
+          _formError = 'Adding people is not available right now.';
+        });
+      }
     } catch (_) {
       if (mounted) {
-        _notice =
-            'Could not save the person yet. It is kept on this phone. Try again.';
+        // Shown in the form too: the error used to land in a notice that is
+        // only drawn on the list, so the person saw nothing happen.
+        setState(() {
+          _notice =
+              'Could not save the person yet. It is kept on this phone. Try again.';
+          if (_adding) _formError = _notice;
+        });
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -723,7 +839,14 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
   /// Opens the system contact picker. Asks for contacts access only now; a
   /// refusal leaves manual name/number entry fully usable. Nothing is uploaded.
   Future<void> _fillFromContacts() async {
-    final contact = await _pickContact();
+    if (_picking || _busy) return;
+    _picking = true;
+    final (String, String)? contact;
+    try {
+      contact = await _pickContact();
+    } finally {
+      _picking = false;
+    }
     if (contact == null || !mounted) return;
     final pickedName = contact.$1;
     final pickedPhone = sharedCleanPhone(contact.$2);
@@ -749,6 +872,7 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
       }
     } catch (_) {}
 
+    if (!mounted) return;
     setState(() {
       _nameField.text = pickedName;
       _phoneField.text = pickedPhone ?? "";
@@ -855,6 +979,9 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
         buildCounter:
             (_, {required currentLength, required isFocused, maxLength}) =>
                 null,
+        // Once a person is saved on this phone, the name is fixed until the
+        // server answers; a different name would add a second person.
+        readOnly: _busy || _pending != null,
         textCapitalization: TextCapitalization.words,
         textInputAction: TextInputAction.next,
         style: BambooFonts.ui(15),
@@ -868,7 +995,9 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
         buildCounter:
             (_, {required currentLength, required isFocused, maxLength}) =>
                 null,
+        readOnly: _busy || _pending != null,
         textInputAction: TextInputAction.done,
+        onSubmitted: (_) => _add(),
         style: BambooFonts.ui(15),
         decoration: const InputDecoration(
           labelText: 'Mobile number (optional)',
@@ -877,9 +1006,8 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
       SharedPhoneLookupStatus(
         runtime: widget.runtime,
         controller: _phoneField,
-        onResult: (r) {
-          if (mounted) setState(() => _lookup = r);
-        },
+        // The status line shows the answer itself; submit re-checks the number.
+        onResult: (_) {},
       ),
       const SizedBox(height: 8),
       Text(
@@ -975,9 +1103,10 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
                                 ),
                               );
                             }
-                            if (!snapshot.hasData ||
-                                snapshot.connectionState ==
-                                    ConnectionState.waiting) {
+                            // While a newer roster loads, keep showing the last
+                            // one: a spinner here threw away the scroll position
+                            // and the notice after every action.
+                            if (!snapshot.hasData) {
                               return const Center(
                                 child: CircularProgressIndicator(
                                   color: BambooInk.slate,

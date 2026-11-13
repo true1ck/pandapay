@@ -63,6 +63,11 @@ class SharedEditor extends ChangeNotifier {
   Future<SharedCommand>? _seal;
   SharedCommand? _sealed;
   bool get sealed => _sealed != null;
+
+  /// True from the moment Submit is tapped until the expense is saved or the
+  /// save fails. Edits are ignored during this window, so the fields must not
+  /// accept typing that the model would silently drop.
+  bool get isSealing => _sealing;
   bool get someoneElsePaid =>
       ownMemberId != null &&
       (multiplePayers
@@ -221,6 +226,18 @@ class SharedEditor extends ChangeNotifier {
     if (_editable) {
       partial = value;
       if (value && sharedText.isEmpty) sharedText = billText;
+      if (!value) {
+        // Fully shared again: every payer's shared part is what they paid. The
+        // per-payer shared fields are hidden now, so a stale value left in them
+        // could never be corrected by the person.
+        for (final id in payerInputs.keys.toList()) {
+          final input = payerInputs[id]!;
+          payerInputs[id] = SharedPayerInput(
+            fullText: input.fullText,
+            sharedText: input.fullText,
+          );
+        }
+      }
       _changed();
     }
   }

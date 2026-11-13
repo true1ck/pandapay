@@ -35,6 +35,10 @@ class _LookupState extends State<SharedPhoneLookupStatus> {
   SharedPhoneLookup? _result;
   String? _error;
 
+  /// Only the newest lookup may change what is shown; an older answer arriving
+  /// late must neither overwrite it nor leave "Checking…" on screen.
+  int _seq = 0;
+
   @override
   void initState() {
     super.initState();
@@ -51,8 +55,17 @@ class _LookupState extends State<SharedPhoneLookupStatus> {
   void _changed() {
     _debounce?.cancel();
     final phone = sharedCleanPhone(widget.controller.text);
-    if (phone == _checked && phone != null) return;
+    if (phone == _checked && phone != null) {
+      // Back to the number already checked while another was in flight: the
+      // old answer stands and the in-flight one is no longer wanted.
+      if (_checking) {
+        _seq++;
+        setState(() => _checking = false);
+      }
+      return;
+    }
     if (phone == null) {
+      _seq++;
       _checked = null;
       if (_result != null || _error != null || _checking) {
         setState(() {
@@ -69,15 +82,14 @@ class _LookupState extends State<SharedPhoneLookupStatus> {
 
   Future<void> _check(String phone) async {
     if (!mounted) return;
+    final seq = ++_seq;
     setState(() {
       _checking = true;
       _error = null;
     });
     try {
       final result = await widget.runtime.lookupPhone(phone);
-      if (!mounted || sharedCleanPhone(widget.controller.text) != phone) {
-        return;
-      }
+      if (!mounted || seq != _seq) return;
       _checked = phone;
       setState(() {
         _result = result;
@@ -85,7 +97,7 @@ class _LookupState extends State<SharedPhoneLookupStatus> {
       });
       widget.onResult(result);
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || seq != _seq) return;
       setState(() {
         _checking = false;
         _result = null;
@@ -250,6 +262,10 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
   SharedPhoneLookup _lookup = SharedPhoneLookup.none;
   late String? _error = widget.initialError;
 
+  /// Set while a contact is being picked or the form is being checked, so a
+  /// second tap cannot open a second picker or close the screen underneath.
+  bool _picking = false, _submitting = false;
+
   @override
   void initState() {
     super.initState();
@@ -279,7 +295,14 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
   }
 
   Future<void> _pick() async {
-    final contact = await sharedPickContact(context);
+    if (_picking || _submitting) return;
+    _picking = true;
+    final (String, String)? contact;
+    try {
+      contact = await sharedPickContact(context);
+    } finally {
+      _picking = false;
+    }
     if (contact == null || !mounted) return;
     final pickedName = contact.$1;
     final pickedPhone = sharedCleanPhone(contact.$2);
@@ -296,6 +319,7 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
   }
 
   Future<void> _submit() async {
+    if (_submitting || _picking) return;
     final name = _name.text.trim(), raw = _phone.text.trim();
     if (name.isEmpty || RegExp(r'[\x00-\x1f\x7f]').hasMatch(name)) {
       setState(() => _error = 'Enter a name.');
@@ -320,17 +344,27 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
       );
       return;
     }
-    var lookup = _lookup;
+    // Never reuse the answer for a number the person has since edited: it could
+    // open somebody else's chat. A failed check just means "unknown".
+    var lookup = SharedPhoneLookup.none;
     if (raw.isNotEmpty && phone != null) {
+      setState(() => _submitting = true);
       try {
         lookup = await widget.runtime.lookupPhone(phone);
-      } catch (_) {}
+      } catch (_) {
+        lookup = SharedPhoneLookup.none;
+      }
+      if (!mounted) return;
       if (lookup.self) {
-        if (mounted) setState(() => _error = 'That is your own number.');
+        setState(() {
+          _submitting = false;
+          _error = 'That is your own number.';
+        });
         return;
       }
     }
     if (!mounted) return;
+    _submitting = true;
     Navigator.pop(context, SharedAddFriendInput(name, phone, lookup));
   }
 
@@ -362,7 +396,7 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
             foregroundColor: BambooInk.slate,
             side: const BorderSide(color: BambooInk.ink300),
           ),
-          onPressed: _pick,
+          onPressed: _picking || _submitting ? null : _pick,
           icon: const Icon(Icons.contacts_outlined, size: 20),
           label: Text('Pick from contacts', style: BambooFonts.ui(14)),
         ),
@@ -416,7 +450,7 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
         const SizedBox(height: 16),
         FilledButton(
           style: sharedPrimaryButtonStyle(),
-          onPressed: _submit,
+          onPressed: _submitting ? null : _submit,
           child: Text(
             _lookup.existingContextId != null
                 ? 'Open existing split'
@@ -435,7 +469,24 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
 
 /// The whole add-friend journey for Quick Add and the Splits hub. Returns the
 /// context to open, or null if cancelled or nothing was created.
+bool _addFriendInFlight = false;
+
 Future<String?> runAddFriendFlow(
+  BuildContext context,
+  SharedExpensesRuntime runtime,
+) async {
+  // Whoever started it (hub, Quick Add), a second tap must not stack a second
+  // sheet and then collide with the friend the first one is saving.
+  if (_addFriendInFlight) return null;
+  _addFriendInFlight = true;
+  try {
+    return await _addFriendFlow(context, runtime);
+  } finally {
+    _addFriendInFlight = false;
+  }
+}
+
+Future<String?> _addFriendFlow(
   BuildContext context,
   SharedExpensesRuntime runtime,
 ) async {
@@ -460,7 +511,8 @@ Future<String?> runAddFriendFlow(
     final existing = input.lookup.existingContextId;
     if (existing != null) return existing;
     final same = await runtime.sameNameFriend(input.name);
-    if (same != null && context.mounted) {
+    if (!context.mounted) return null;
+    if (same != null) {
       final open = await showSharedFriendNameTakenDialog(context, input.name);
       if (open == true) return same;
       if (open == null) return null;
@@ -492,6 +544,8 @@ Future<String?> runAddFriendFlow(
       return null;
     }
   }
+  // The friend is saved from here on. Nothing below may report a failure to
+  // save (a retry would only hit "already have a friend called …").
   try {
     if (added.link != null && !input.lookup.found) {
       await SharePlus.instance.share(
@@ -552,15 +606,16 @@ Future<String?> runAddFriendFlow(
         ),
       );
     }
-    return added.contextId;
-  } catch (error) {
+  } catch (_) {
     messenger.showSnackBar(
       const SnackBar(
-        content: Text('Could not save the friend yet. Try again in a moment.'),
+        content: Text(
+          'Friend saved, but the invite could not be shared. Open them to share it again.',
+        ),
       ),
     );
-    return null;
   }
+  return added.contextId;
 }
 
 /// Same-name friend: open the chat they already have, or change the name.

@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../../../app/design/app_theme.dart';
 import '../ui/shared_components.dart';
@@ -36,6 +38,25 @@ class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
   /// The claimant's choice; null until they pick (neither is preselected).
   bool? _sharePhone;
   bool _wantsChoice = false;
+
+  static const _choiceKey = 'pandapay_app.split_phone_share_choice_v1';
+
+  @override
+  void initState() {
+    super.initState();
+    // The last answer is offered again, still changeable on this screen: one
+    // less thing to decide on every link. Never applied over a choice just made.
+    unawaited(() async {
+      try {
+        final saved = (await SharedPreferences.getInstance()).getBool(
+          _choiceKey,
+        );
+        if (saved != null && mounted && _sharePhone == null) {
+          setState(() => _sharePhone = saved);
+        }
+      } catch (_) {}
+    }());
+  }
 
   Future<SharedInvitePreview> _load(SharedExpensesRuntime runtime) async {
     await runtime.refresh(maxPullPages: 1);
@@ -84,7 +105,18 @@ class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
           sharePhone: _wantsChoice ? _sharePhone : null,
         );
       }
-      await PendingSplitInviteStore().clear();
+      // The claim is done; a storage hiccup clearing the reminder is not a
+      // failed join (a retry would only replay the same claim).
+      try {
+        await PendingSplitInviteStore().clear();
+        final choice = _sharePhone;
+        if (_wantsChoice && choice != null) {
+          await (await SharedPreferences.getInstance()).setBool(
+            _choiceKey,
+            choice,
+          );
+        }
+      } catch (_) {}
       if (mounted) setState(() => _result = status);
     } catch (error) {
       if (mounted) {
@@ -146,12 +178,15 @@ class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   final error = snapshot.error;
+                  // Only a definite answer from the server ("no such invite")
+                  // kills the link. Anything else (no connection, the shared
+                  // module not loaded yet on a fresh install, a server error)
+                  // is transient: keep the saved invite and let them retry.
                   final offline =
-                      error is SharedTransportException &&
-                      (error.code == 'network_unavailable' ||
-                          error.code == 'account_changed' ||
-                          (error.statusCode != null &&
-                              error.statusCode! >= 500));
+                      error is! SharedTransportException ||
+                      error.code == 'network_unavailable' ||
+                      error.code == 'account_changed' ||
+                      (error.statusCode != null && error.statusCode! >= 500);
                   if (offline) {
                     // Keep the saved invite: nothing is wrong with the link.
                     return _message(
@@ -175,9 +210,12 @@ class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
                   );
                 }
                 final preview = snapshot.data!;
+                // An open link needs no owner decision, so there is nothing to
+                // share a number for: no choice, no extra step.
                 _wantsChoice =
                     preview.phoneSharing &&
                     !preview.phoneBound &&
+                    !preview.autoJoin &&
                     preview.ownPhoneMask != null;
                 if (_result != null) {
                   return _message(
@@ -203,8 +241,11 @@ class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
                               ),
                               const SizedBox(height: 12),
                               Text(
-                                'The split owner will confirm your request. '
-                                'You approve your own share of each expense.',
+                                preview.autoJoin
+                                    ? 'You will join right away. Joining never '
+                                          'adds any expense or debt to you.'
+                                    : 'The split owner will confirm your request. '
+                                          'You approve your own share of each expense.',
                                 style: BambooFonts.ui(
                                   14,
                                   color: BambooInk.ink700,
@@ -222,7 +263,9 @@ class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
                                   ),
                                 ),
                               ],
-                              if (preview.phoneSharing && !preview.phoneBound)
+                              if (preview.phoneSharing &&
+                                  !preview.phoneBound &&
+                                  !preview.autoJoin)
                                 SharedPhoneConsent(
                                   ownerName: preview.ownerName,
                                   ownMask: preview.ownPhoneMask,
@@ -279,7 +322,16 @@ class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
                         ),
                       ),
                       TextButton(
-                        onPressed: _busy ? null : widget.onDone,
+                        onPressed: _busy
+                            ? null
+                            : () async {
+                                // Declined for now: do not bring it back at
+                                // every launch for a week.
+                                try {
+                                  await PendingSplitInviteStore().clear();
+                                } catch (_) {}
+                                widget.onDone();
+                              },
                         child: const Text('Not now'),
                       ),
                     ],

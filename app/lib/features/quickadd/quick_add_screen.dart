@@ -484,9 +484,22 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     ];
   }
 
+  /// A group picker or members sheet is on screen. A second tap on the same
+  /// button must not stack another one.
+  bool _sharedSheetOpen = false;
+
   Future<void> _chooseSharedContext() async {
     final runtime = _sharedRuntime;
-    if (runtime == null || _sharingLoading) return;
+    if (runtime == null || _sharingLoading || _sharedSheetOpen) return;
+    _sharedSheetOpen = true;
+    try {
+      await _chooseSharedContextSheet(runtime);
+    } finally {
+      _sharedSheetOpen = false;
+    }
+  }
+
+  Future<void> _chooseSharedContextSheet(SharedExpensesRuntime runtime) async {
     final history = <String?>[null];
     var request = runtime.contexts();
     final selected = await showModalBottomSheet<String>(
@@ -648,13 +661,23 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
 
   Future<void> _addSharedMember() async {
     final editor = _sharedEditor, runtime = _sharedRuntime;
-    if (_sharingLoading || editor?.contextId == null || runtime == null) return;
-    await SharedMembersSheet.show(
-      context,
-      runtime: runtime,
-      contextId: editor!.contextId!,
-      groupName: editor.contextName,
-    );
+    if (_sharingLoading ||
+        _sharedSheetOpen ||
+        editor?.contextId == null ||
+        runtime == null) {
+      return;
+    }
+    _sharedSheetOpen = true;
+    try {
+      await SharedMembersSheet.show(
+        context,
+        runtime: runtime,
+        contextId: editor!.contextId!,
+        groupName: editor.contextName,
+      );
+    } finally {
+      _sharedSheetOpen = false;
+    }
     if (mounted && runtime.isCurrent() && _sharedEditor == editor) {
       await _loadSharedContext(editor.contextId!);
     }

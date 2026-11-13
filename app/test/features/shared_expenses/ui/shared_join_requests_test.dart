@@ -513,7 +513,7 @@ void main() {
       expect(find.text('Approve selected (25)'), findsOneWidget);
     });
 
-    testWidgets('switching split asks before clearing the selection', (
+    testWidgets('switching split starts a fresh selection without a prompt', (
       tester,
     ) async {
       runtime.list = [
@@ -525,7 +525,42 @@ void main() {
       await tester.pumpAndSettle();
       await tester.longPress(find.byKey(Key('row-${idOf(2)}')));
       await tester.pumpAndSettle();
-      expect(find.text('Switch split?'), findsOneWidget);
+      expect(find.text('Switch split?'), findsNothing);
+      expect(find.text('Approve selected (1)'), findsOneWidget);
+      expect(find.byKey(Key('check-${idOf(1)}')), findsNothing);
+    });
+
+    testWidgets('a batch with nothing to check is approved without a dialog', (
+      tester,
+    ) async {
+      runtime.list = [req(1), req(2)];
+      await page(tester);
+      await tester.longPress(find.byKey(Key('row-${idOf(1)}')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('select-all')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('approve-selected')));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(runtime.calls.map((c) => c.id), [idOf(1), idOf(2)]);
+    });
+
+    testWidgets('a second tap on Approve selected opens one dialog only', (
+      tester,
+    ) async {
+      runtime.list = mixed();
+      await page(tester);
+      await tester.longPress(find.byKey(Key('row-${idOf(1)}')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(Key('check-${idOf(2)}')));
+      // Person 5 did not share a number, so this batch has something to check.
+      await tester.tap(find.byKey(Key('check-${idOf(5)}')));
+      await tester.pumpAndSettle();
+      final approve = find.byKey(const Key('approve-selected'));
+      await tester.tap(approve);
+      await tester.tap(approve, warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
     });
 
     testWidgets('confirmation lists counts, names, masks and concerns', (
@@ -567,7 +602,8 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.byKey(const Key('approve-selected')));
         await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const Key('confirm-action')));
+        // All of these shared a matching number: no confirmation is asked.
+        expect(find.byKey(const Key('confirm-action')), findsNothing);
         await tester.pumpAndSettle();
         expect(runtime.calls.map((c) => c.id), [idOf(1), idOf(2), idOf(3)]);
         expect(
@@ -615,7 +651,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('approve-selected')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('confirm-action')));
+      // All of these shared a matching number: no confirmation is asked.
+      expect(find.byKey(const Key('confirm-action')), findsNothing);
       await tester.pumpAndSettle();
       expect(runtime.calls.map((c) => c.id), [idOf(1), idOf(2)]);
       expect(

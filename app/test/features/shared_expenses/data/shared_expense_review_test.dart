@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -149,6 +150,33 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  testWidgets('removing an accepted expense asks once, then queues one void', (
+    tester,
+  ) async {
+    runtime.canRespond = false;
+    await launch(tester);
+    final remove = find.text('Remove this expense');
+    await tester.ensureVisible(remove);
+    await tester.pumpAndSettle();
+    await tester.tap(remove);
+    await tester.pumpAndSettle();
+    expect(find.text('Remove this expense?'), findsOneWidget);
+    expect(runtime.store.pendingCount, 0, reason: 'nothing before confirming');
+    await tester.tap(find.byKey(const Key('confirm-remove-expense')));
+    await tester.pumpAndSettle();
+    expect(runtime.store.pendingCount, 1);
+    final row = db.db
+        .select('SELECT kind, request_json FROM shared_commands')
+        .single;
+    expect(row['kind'], 'expense.propose');
+    final sent = jsonDecode(row['request_json'] as String) as Map;
+    final payload = (sent['payload'] ?? sent) as Map;
+    expect(payload['void'], true);
+    expect(payload['snapshot'], isNull);
+    expect(payload['expenseId'], expense);
+    expect(payload['expectedHeadRevisionId'], revision);
+    expect(payload.containsKey('bill'), isFalse);
+  });
   testWidgets(
     'accepted revisions never offer another approval; revoked data disappears',
     (tester) async {
@@ -156,6 +184,8 @@ void main() {
       await launch(tester);
       expect(find.text('Accepted expense'), findsOneWidget);
       expect(find.text('Approve this revision'), findsNothing);
+      // An accepted expense can be taken back out, not approved again.
+      expect(find.text('Remove this expense'), findsOneWidget);
       await runtime.revokeContext(group);
       await tester.pumpAndSettle();
       expect(find.text('Dinner'), findsNothing);

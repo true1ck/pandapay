@@ -146,6 +146,39 @@ test('a failed directory write backs off instead of retrying on every request', 
   assert.equal(calls, 2, 'tries again after the short backoff');
 });
 
+test('creating a group link carries the chosen join mode in the same transaction', async () => {
+  const { registerInvitationRoutes } = require('../src/shared_expenses/invitations');
+  const routes = {};
+  const app = { get() {}, post: (path, ...h) => { routes['POST ' + path] = h[h.length - 1]; } };
+  const queries = [];
+  const withUserClient = async (_u, fn) => fn({ query: async (sql, args) => {
+    queries.push([sql, args]);
+    if (/set_group_link_mode/.test(sql)) return { rows: [{ result: { autoJoin: args[1] } }] };
+    return { rows: [{ result: { contextId: args[0], active: true } }] };
+  } });
+  registerInvitationRoutes(app, { protect: (fn) => [fn], withUserClient, sendError() {}, secret, androidPackageId: 'x' });
+  const ctx = '33333333-3333-4333-8333-333333333333', link = '44444444-4444-4444-8444-444444444444';
+  const call = async (body) => {
+    const out = {}; const res = { status(c) { out.code = c; return res; }, json(b) { out.body = b; return res; } };
+    await routes['POST /shared-expenses/groups/link']({ userId: actor, body }, res); return out;
+  };
+  const open = await call({ contextId: ctx, linkId: link, autoJoin: true });
+  assert.equal(open.body.autoJoin, true);
+  const creds = require('../src/shared_expenses/invitations').groupLinkCredentials(secret, actor, ctx, link);
+  const set = queries.find(([sql]) => /set_group_link_mode/.test(sql));
+  assert.deepEqual(set[1], [ctx, true, creds.tokenHash], 'only the hash of THIS link is given, never the token');
+  // Left out means approval (the safe, old behaviour).
+  queries.length = 0;
+  const approval = await call({ contextId: ctx, linkId: link });
+  assert.equal(approval.body.autoJoin, false);
+  assert.equal(queries.find(([sql]) => /set_group_link_mode/.test(sql))[1][1], false);
+  // Anything that is not a boolean is refused before the database is touched.
+  queries.length = 0;
+  const bad = await call({ contextId: ctx, linkId: link, autoJoin: 'yes' }).catch((e) => e);
+  assert.ok(bad instanceof Error || bad.code, 'non-boolean autoJoin is refused');
+  assert.equal(queries.length, 0);
+});
+
 test('a signed-in person is registered by any authenticated request, without opening Splits', async () => {
   const auth = require('../src/auth');
   const { registerInvitationRoutes } = require('../src/shared_expenses/invitations');

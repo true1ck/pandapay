@@ -28,6 +28,7 @@ class _SharedExpenseReviewSheetState extends State<SharedExpenseReviewSheet> {
   final _history = <String?>[null];
   String? _notice;
   bool _saving = false;
+  late int _seenVersion = widget.runtime.dataVersion;
   @override
   void initState() {
     super.initState();
@@ -47,10 +48,17 @@ class _SharedExpenseReviewSheetState extends State<SharedExpenseReviewSheet> {
     after: _history.last,
   );
   void _changed() {
-    if (mounted && !widget.runtime.busy) {
+    if (!mounted || widget.runtime.busy) return;
+    // Reload only when the data really changed. Every sync tick notifies, and
+    // reloading on each one flashed a spinner over the Approve button while the
+    // person was reaching for it.
+    if (widget.runtime.dataVersion != _seenVersion) {
+      _seenVersion = widget.runtime.dataVersion;
       setState(() {
         _page = _load();
       });
+    } else {
+      setState(() {}); // flags (offline, busy bar) may have changed
     }
   }
 
@@ -88,6 +96,66 @@ class _SharedExpenseReviewSheetState extends State<SharedExpenseReviewSheet> {
         setState(
           () => _notice =
               'Could not confirm your response. Your saved response is kept; refresh to check its status.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  /// Anyone in the expense can take an accepted expense back out (the
+  /// Splitwise way), after one confirmation. The earlier revision stays in the
+  /// history, so nothing is lost.
+  Future<void> _remove(Map row) async {
+    if (_saving) return;
+    final ok =
+        await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Remove this expense?'),
+            content: const Text(
+              'It stops counting in balances for everyone. The history is kept.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Keep it'),
+              ),
+              TextButton(
+                key: const Key('confirm-remove-expense'),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Remove'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!ok || !mounted) return;
+    setState(() {
+      _saving = true;
+      _notice = null;
+    });
+    try {
+      final op = await widget.runtime.removeExpense(
+        contextId: widget.contextId,
+        expenseId: widget.expenseId,
+        headRevisionId: row['revisionId'] as String,
+        title: row['title'] as String,
+        occurredOn: row['occurredOn'] as String? ?? '',
+      );
+      if (!mounted) return;
+      final result = widget.runtime.store.receipt(op)?.result;
+      setState(() {
+        _notice = result is Map && result['status'] == 'accepted'
+            ? 'Expense removed. The history is kept.'
+            : 'Removal saved. It takes effect once everyone has approved it.';
+        _page = _load();
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _notice =
+              'Could not remove the expense yet. Check your connection and try again.',
         );
       }
     } finally {
@@ -218,6 +286,16 @@ class _SharedExpenseReviewSheetState extends State<SharedExpenseReviewSheet> {
               const SharedNotice(
                 'A response is already saved on this device. Sync to check its status.',
               ),
+            if (status == 'accepted' &&
+                row['void'] != true &&
+                runtime.proposalsEnabled &&
+                !runtime.offline &&
+                !_saving)
+              SharedTextAction(
+                label: 'Remove this expense',
+                icon: Icons.delete_outline_rounded,
+                onTap: () => unawaited(_remove(row)),
+              ),
             if (canRespond) ...[
               const SharedNotice(
                 'Review the whole bill, payer contributions, and your share before approving.',
@@ -301,8 +379,7 @@ class _SharedExpenseReviewSheetState extends State<SharedExpenseReviewSheet> {
                       ),
                     );
                   }
-                  if (!snapshot.hasData ||
-                      snapshot.connectionState == ConnectionState.waiting) {
+                  if (!snapshot.hasData) {
                     return const Center(child: CircularProgressIndicator());
                   }
                   final page = snapshot.data!;

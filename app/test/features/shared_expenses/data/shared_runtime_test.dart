@@ -7,6 +7,8 @@ import 'package:pandapay/app/design/app_theme.dart';
 import 'package:pandapay/features/shared_expenses/runtime/shared_providers.dart';
 import 'package:pandapay/features/shared_expenses/runtime/shared_routes.dart';
 import 'package:pandapay/features/shared_expenses/ui/shared_presentation.dart';
+import 'package:pandapay/features/shared_expenses/ui/shared_settle_sheet.dart';
+import 'package:pandapay/features/shared_expenses/composer/shared_editor.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
@@ -76,6 +78,18 @@ class _VisibleRuntime extends SharedExpensesRuntime {
     expenses: SharedPage(),
     balances: SharedPage(),
   );
+}
+
+/// Answers the roster only when the test lets it, like a slow network.
+class _SlowRosterRuntime extends _VisibleRuntime {
+  final answer = Completer<SharedRoster>();
+  var rosterCalls = 0;
+  _SlowRosterRuntime(super.original);
+  @override
+  Future<SharedRoster> contextRoster(String id) {
+    rosterCalls++;
+    return answer.future;
+  }
 }
 
 class _PausingCache extends ResponseCache {
@@ -263,6 +277,146 @@ void main() {
     await tester.tap(find.byTooltip('Add expense'));
     expect(added, isTrue);
     expect(runtime.store.pendingCount, 0);
+  });
+  testWidgets('repeated taps open one split and one editor, not a stack', (
+    tester,
+  ) async {
+    final old = runtime;
+    runtime = _VisibleRuntime(runtime);
+    old.dispose();
+    // Like go_router's push: the future ends only when the page is closed.
+    final opened = <String>[];
+    var pageOpen = Completer<void>();
+    var adds = 0;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedExpensesRuntimeProvider.overrideWith((ref) async => runtime),
+        ],
+        child: MaterialApp(
+          home: SharedExpensesRoute(
+            onOpenContext: (id) {
+              opened.add(id);
+              return pageOpen.future;
+            },
+            onAddExpense: () {
+              adds++;
+              return pageOpen.future;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Groups'));
+    await tester.pumpAndSettle();
+    for (var i = 0; i < 3; i++) {
+      await tester.tap(find.text('Flatmates'));
+      await tester.pump();
+    }
+    expect(opened, [fixtures.contextId], reason: 'second tap must be ignored');
+    // While one page is open, the add button cannot open a second one either.
+    await tester.tap(find.byTooltip('Add expense'));
+    await tester.pump();
+    expect(adds, 0);
+    // Coming back re-arms the buttons.
+    pageOpen.complete();
+    await tester.pumpAndSettle();
+    pageOpen = Completer<void>();
+    await tester.tap(find.byTooltip('Add expense'));
+    await tester.tap(find.byTooltip('Add expense'));
+    await tester.pump();
+    expect(adds, 1);
+    pageOpen.complete();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Flatmates'));
+    await tester.pump();
+    expect(opened.length, 2);
+  });
+  testWidgets('Settle up opens one form however often it is tapped while slow', (
+    tester,
+  ) async {
+    final old = runtime;
+    final slow = _SlowRosterRuntime(old)
+      ..capabilities = {
+        'available': true,
+        'reads': true,
+        'proposals': true,
+        'acceptedWrites': true,
+        'settlements': true,
+      };
+    runtime = slow;
+    old.dispose();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedExpensesRuntimeProvider.overrideWith((ref) async => runtime),
+        ],
+        child: MaterialApp(
+          home: SharedContextRoute(
+            contextId: fixtures.contextId,
+            onAddExpense: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Balances'));
+    await tester.pumpAndSettle();
+    final settle = find.text('Settle up');
+    expect(settle, findsOneWidget);
+    // The roster is slow: nothing opens yet, and the person keeps tapping.
+    for (var i = 0; i < 5; i++) {
+      await tester.tap(settle);
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(slow.rosterCalls, 1, reason: 'taps while loading must be ignored');
+    slow.answer.complete(
+      SharedRoster(
+        name: 'Flatmates',
+        ownMemberId: 'me',
+        direct: false,
+        canInvite: false,
+        members: const [
+          SharedEditorMember('me', 'You', profileId: 'p1', role: 'owner'),
+          SharedEditorMember('bob', 'Bob', profileId: 'p2'),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(SharedSettleSheet), findsOneWidget);
+  });
+  testWidgets('group screen add-expense button is single-flight too', (
+    tester,
+  ) async {
+    final old = runtime;
+    runtime = _VisibleRuntime(runtime);
+    old.dispose();
+    final page = Completer<void>();
+    var adds = 0;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedExpensesRuntimeProvider.overrideWith((ref) async => runtime),
+        ],
+        child: MaterialApp(
+          home: SharedContextRoute(
+            contextId: fixtures.contextId,
+            onAddExpense: () {
+              adds++;
+              return page.future;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Add expense'));
+    await tester.tap(find.byTooltip('Add expense'));
+    await tester.pump();
+    expect(adds, 1);
+    page.complete();
+    await tester.pumpAndSettle();
   });
   testWidgets(
     'hub pages preserve search and selected tab with independent previous cursors',

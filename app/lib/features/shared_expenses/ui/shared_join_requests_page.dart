@@ -68,25 +68,30 @@ class _PageState extends State<SharedJoinRequestsPage> {
     _refresh();
   }
 
+  /// Only the newest refresh may write the list. An older answer arriving late
+  /// would bring back a request that was just approved.
+  int _refreshSeq = 0;
+
   Future<void> _refresh() async {
     if (!mounted) return;
+    final seq = ++_refreshSeq;
     setState(() {
       _failedLoad = false;
       _loading = _requests == null;
     });
     try {
       final items = await widget.runtime.joinRequests();
-      if (!mounted) return;
+      if (!mounted || seq != _refreshSeq) return;
       setState(() {
         _requests = items;
         _offline = false;
         _loading = false;
         final ids = {for (final r in items) r.invitationId};
+        // Select mode may be on with nothing ticked yet; keep it. Cancel exits.
         _selected.removeWhere((id) => !ids.contains(id));
-        if (_selected.isEmpty && _selectContext != null) _selectContext = null;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || seq != _refreshSeq) return;
       setState(() {
         _loading = false;
         _offline =
@@ -156,8 +161,11 @@ class _PageState extends State<SharedJoinRequestsPage> {
         for (final r in _requests ?? const <SharedJoinRequest>[])
           if (!gone.contains(r.invitationId)) r,
       ];
+      // Leave select mode only when the run consumed the selection, not when
+      // one row elsewhere was approved on its own.
+      final consumed = items.every((r) => _selected.contains(r.invitationId));
       _selected.removeAll(gone);
-      if (_selected.isEmpty) _selectContext = null;
+      if (consumed && _selected.isEmpty) _selectContext = null;
       _reasons.addAll(outcome.failed);
       for (final id in outcome.expired) {
         _reasons.remove(id);
@@ -168,6 +176,9 @@ class _PageState extends State<SharedJoinRequestsPage> {
               outcome.notRun.contains(r.invitationId))
             r,
       ];
+      // The batch stopped because the connection dropped: show it, and stop
+      // offering row buttons that would each fail the same way.
+      if (outcome.stoppedOffline) _offline = true;
       _retry = retry;
       _retryApprove = approve;
       _progress = null;
@@ -203,30 +214,41 @@ class _PageState extends State<SharedJoinRequestsPage> {
     }
   }
 
+  bool _dialogOpen = false;
+
+  /// One confirmation at a time. Two taps used to stack two dialogs, and
+  /// confirming both ran the same batch twice.
   Future<bool> _confirm({
     required String title,
     required Widget body,
     required String action,
-  }) async =>
-      await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(title),
-          content: SingleChildScrollView(child: body),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
+  }) async {
+    if (_dialogOpen) return false;
+    _dialogOpen = true;
+    try {
+      return await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: Text(title),
+              content: SingleChildScrollView(child: body),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  key: const Key('confirm-action'),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: Text(action),
+                ),
+              ],
             ),
-            TextButton(
-              key: const Key('confirm-action'),
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(action),
-            ),
-          ],
-        ),
-      ) ??
-      false;
+          ) ??
+          false;
+    } finally {
+      _dialogOpen = false;
+    }
+  }
 
   Future<void> _approveSelected(
     String contextId,
@@ -281,12 +303,18 @@ class _PageState extends State<SharedJoinRequestsPage> {
         if (n > 5) Text('and ${n - 5} more'),
       ],
     );
-    final ok = await _confirm(
-      title: 'Approve $n ${n == 1 ? 'person' : 'people'} to $name?',
-      body: body,
-      action: 'Approve $n',
-    );
-    if (!ok || !mounted) return;
+    // Everyone shared a matching number: nothing to warn about, and the person
+    // already chose these rows and tapped Approve, so do not ask a third time.
+    // Anyone who stands out (different number, did not share) still gets the
+    // full list to check before anything is approved.
+    if (concerns.isNotEmpty) {
+      final ok = await _confirm(
+        title: 'Approve $n ${n == 1 ? 'person' : 'people'} to $name?',
+        body: body,
+        action: 'Approve $n',
+      );
+      if (!ok || !mounted) return;
+    }
     await _run(chosen, approve: true);
   }
 
@@ -310,16 +338,8 @@ class _PageState extends State<SharedJoinRequestsPage> {
     String contextId, {
     SharedJoinRequest? first,
   }) async {
-    if (_selectContext != null &&
-        _selectContext != contextId &&
-        _selected.isNotEmpty) {
-      final ok = await _confirm(
-        title: 'Switch split?',
-        body: const Text('Your current selection will be cleared.'),
-        action: 'Clear and switch',
-      );
-      if (!ok || !mounted) return;
-    }
+    // Switching split just starts a fresh selection. It used to ask "Switch
+    // split?" first, an extra approval for something that is one tap to redo.
     setState(() {
       if (_selectContext != contextId) _selected.clear();
       _selectContext = contextId;
@@ -347,16 +367,25 @@ class _PageState extends State<SharedJoinRequestsPage> {
   }
 
   void _selectAll(List<SharedJoinRequest> inGroup) {
+    final eligible = [
+      for (final r in inGroup)
+        if (sharedJoinSelectAllEligible(r) && !_expired(r)) r.invitationId,
+    ];
     setState(() {
       _selected
         ..clear()
-        ..addAll(
-          inGroup
-              .where((r) => sharedJoinSelectAllEligible(r) && !_expired(r))
-              .take(sharedJoinBatchMax)
-              .map((r) => r.invitationId),
-        );
+        ..addAll(eligible.take(sharedJoinBatchMax));
     });
+    if (eligible.length > sharedJoinBatchMax) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Selected the first $sharedJoinBatchMax of ${eligible.length}. '
+            'Approve these, then select the rest.',
+          ),
+        ),
+      );
+    }
   }
 
   void _cancelSelect() => setState(() {
@@ -510,34 +539,41 @@ class _PageState extends State<SharedJoinRequestsPage> {
 
     final selecting = _selectContext != null;
     final inSelected = selecting ? groups[_selectContext] : null;
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Join requests', style: BambooFonts.heading(17)),
-        actions: [
-          if (selecting)
-            TextButton(
-              key: const Key('cancel-select'),
-              onPressed: _cancelSelect,
-              child: const Text('Cancel'),
-            ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        child: CustomScrollView(
-          key: const Key('join-requests-page'),
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-              sliver: SliverList(delegate: SliverChildListDelegate(slivers)),
-            ),
+    // Back leaves select mode first; it used to close the whole page.
+    return PopScope(
+      canPop: !selecting,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && selecting && !_working) _cancelSelect();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text('Join requests', style: BambooFonts.heading(17)),
+          actions: [
+            if (selecting)
+              TextButton(
+                key: const Key('cancel-select'),
+                onPressed: _cancelSelect,
+                child: const Text('Cancel'),
+              ),
           ],
         ),
+        body: RefreshIndicator(
+          onRefresh: _refresh,
+          child: CustomScrollView(
+            key: const Key('join-requests-page'),
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                sliver: SliverList(delegate: SliverChildListDelegate(slivers)),
+              ),
+            ],
+          ),
+        ),
+        bottomNavigationBar: selecting && inSelected != null
+            ? _selectionBar(inSelected, scheme)
+            : null,
       ),
-      bottomNavigationBar: selecting && inSelected != null
-          ? _selectionBar(inSelected, scheme)
-          : null,
     );
   }
 

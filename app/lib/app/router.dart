@@ -956,7 +956,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoute.splitJoin,
+        // Keyed by token: a second invite link must start a fresh screen, not
+        // inherit the first link's preview, consent choice and result.
         builder: (context, state) => SharedJoinRoute(
+          key: ValueKey(state.pathParameters['token']!),
           token: state.pathParameters['token']!,
           onDone: () => context.go(AppRoute.splits),
         ),
