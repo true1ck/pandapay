@@ -8,6 +8,8 @@ const { createCorsPolicy } = require('./cors_policy');
 const { jsonBodyParser, jsonBodyErrorHandler } = require('./request_limits');
 const { rejectInvalidUuid } = require('./http_db_errors');
 const { createBudgetPostHandler, createBudgetDeleteHandler } = require('./budgets_write');
+const { registerConsentRoute } = require('./consents_route');
+const { createSmsImportBatchPostHandler } = require('./sms_import_batches_route');
 const { createRecurringPostHandler, createRecurringPatchHandler } = require('./recurring_write');
 const { syncPushBodyParser } = require('./sync_push_body');
 const { validateSyncRegistration, validateSyncPushRequest, validateSyncPushChange, validateSyncPullQuery, validateSyncAck, validateSyncConflictId, syncRejectionDetail, createSyncPushContext, processSyncPushItem, syncDeviceExists, respondUnknownSyncDevice, respondDbError } = require('./sync_request_validation');
@@ -8036,43 +8038,7 @@ app.get('/consents/history', requireAuth, async (req, res) => {
  * revocation is its own new row with granted=false, not an edit to the
  * grant row.
  */
-app.post('/consents', requireAuth, async (req, res) => {
-  const { purpose, granted, policyVersion, sourceScreen } = req.body || {};
-  if (!CONSENT_PURPOSES.includes(purpose)) {
-    return res.status(400).json({ error: `purpose must be one of ${CONSENT_PURPOSES.join(', ')}` });
-  }
-  if (typeof granted !== 'boolean') {
-    return res.status(400).json({ error: 'granted must be a boolean' });
-  }
-  if (!policyVersion || typeof policyVersion !== 'string') {
-    return res.status(400).json({ error: 'policyVersion is required' });
-  }
-  try {
-    const result = await withUserClient(req.userId, async (client) => {
-      if (purpose === 'sms_shared_learning') {
-        // Match the feedback route's lock so revocation/purge cannot race an
-        // in-flight contribution write under the previous grant.
-        await client.query(
-          'SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))',
-          [`sms-shared-learning-consent:${req.userId}`],
-        );
-      }
-      const inserted = await client.query(
-        `INSERT INTO user_consents (profile_id, purpose, policy_version, granted, source_screen)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING purpose, granted, granted_at, policy_version, source_screen`,
-        [req.userId, purpose, policyVersion, granted, sourceScreen || null]
-      );
-      // Revoking sms_shared_learning purges the v2 template data in the database
-      // (trigger sms_v2_revoke_template_consent), inside this transaction.
-      return inserted;
-    });
-    res.status(201).json({ consent: result.rows[0] });
-  } catch (err) {
-    console.error('POST /consents error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+registerConsentRoute(app, { requireAuth, withUserClient, CONSENT_PURPOSES });
 
 // PATCH /user-cards/:id was independently started here as "Task H-0b" to
 // unblock A9/H — since consolidated into the single Task C-4 implementation
@@ -9076,29 +9042,14 @@ app.get('/statement-imports', requireAuth, async (req, res) => {
  * built, per the plan's explicit instruction), so this table's counts are a
  * true summary, not a guess.
  */
-app.post('/sms-import-batches', requireAuth, async (req, res) => {
-  const { messageCount, parsedCount, failedCount } = req.body || {};
-  try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
-        `INSERT INTO sms_import_batches (profile_id, message_count, parsed_count, failed_count)
-         VALUES ($1, $2, $3, $4) RETURNING *`,
-        [req.userId, messageCount ?? 0, parsedCount ?? 0, failedCount ?? 0]
-      )
-    );
-    res.status(201).json({ smsImportBatch: result.rows[0] });
-  } catch (err) {
-    console.error('POST /sms-import-batches error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+app.post('/sms-import-batches', requireAuth, createSmsImportBatchPostHandler({ withUserClient }));
 
 /** GET /sms-import-batches — F1/F4 history read. */
 app.get('/sms-import-batches', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, (client) =>
       client.query(
-        `SELECT * FROM sms_import_batches WHERE profile_id = $1 ORDER BY imported_at DESC LIMIT 20`,
+        `SELECT id, profile_id, message_count, parsed_count, failed_count, imported_at FROM sms_import_batches WHERE profile_id = $1 ORDER BY imported_at DESC LIMIT 20`,
         [req.userId]
       )
     );

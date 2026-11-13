@@ -34,11 +34,8 @@ async function profile() {
 }
 function consent(profile,granted,options={}) {
  // Exercise the actual route, including its common lock and old/v2 purge work.
- const source=fs.readFileSync(require.resolve('../../src/index.js'),'utf8');
- const start=source.indexOf("app.post('/consents',"); const end=source.indexOf('\n});',start)+5;
  let handler;
- new Function('app','requireAuth','withUserClient','CONSENT_PURPOSES','safeErrorCode',source.slice(start,end))(
-  {post:(_path,_auth,fn)=>{handler=fn;}},()=>{},(p,fn)=>own(p,fn,options),['sms_shared_learning'],e=>e?.code||'unknown');
+ require('../../src/consents_route').registerConsentRoute({post:(_path,_auth,fn)=>{handler=fn;}},{requireAuth:()=>{},withUserClient:(p,fn)=>own(p,fn,options),CONSENT_PURPOSES:['sms_shared_learning']});
  const res={code:null,body:null,status(n){this.code=n;return this;},json(body){this.body=body;return this;}};
  return handler({userId:profile,body:{purpose:'sms_shared_learning',granted,policyVersion:'sms-shared-learning-v3',sourceScreen:'synthetic-test'}},res).then(()=>res);
 }
