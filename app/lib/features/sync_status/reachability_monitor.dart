@@ -35,6 +35,7 @@ class ReachabilityMonitor extends Notifier<bool?> {
   static const healthyInterval = Duration(seconds: 60);
 
   Timer? _timer;
+  bool _paused = false;
   int _generation = 0;
   int _failures = 0;
   late ServerReachability _reachability;
@@ -51,8 +52,19 @@ class ReachabilityMonitor extends Notifier<bool?> {
       _generation++;
     });
     if (online != true) return null;
+    _paused = false;
+    // H1-9: no polling while the app is paused, inactive or detached.
     final lifecycle = AppLifecycleListener(
-      onResume: () => _schedule(generation, Duration.zero),
+      onStateChange: (lifecycleState) {
+        if (lifecycleState == AppLifecycleState.resumed) {
+          _paused = false;
+          _schedule(generation, Duration.zero);
+        } else {
+          _paused = true;
+          _timer?.cancel();
+          _timer = null;
+        }
+      },
     );
     ref.onDispose(lifecycle.dispose);
     _schedule(generation, firstProbeDelay);
@@ -60,14 +72,14 @@ class ReachabilityMonitor extends Notifier<bool?> {
   }
 
   void _schedule(int generation, Duration after) {
-    if (generation != _generation) return;
+    if (generation != _generation || _paused) return;
     _timer?.cancel();
     _timer = Timer(after, () => unawaited(_probe(generation)));
   }
 
   Future<void> _probe(int generation) async {
     final reachable = await _reachability.check(force: true);
-    if (generation != _generation) return;
+    if (generation != _generation || _paused) return;
     if (reachable) {
       _failures = 0;
       state = true;

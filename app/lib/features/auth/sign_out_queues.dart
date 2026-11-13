@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sqlite3/sqlite3.dart';
 
 import '../../app/providers.dart';
 import '../../data/local/queue_registry.dart';
@@ -72,6 +73,33 @@ SignOutQueueScan scanSignOutQueues(QueueRegistry registry, String namespace) {
     pending: pending,
     kinds: merged.values.toList(),
   );
+}
+
+/// Unsent changes of every account other than [current] in the same database
+/// (H1-6). A rejected session keeps account A's queue; signing out of account
+/// B later deletes the whole file, so A's work is lost and must be named.
+int unsentInOtherAccounts(QueueRegistry registry, Database db, String current) {
+  final others = <String>{};
+  for (final spec in registry.queues) {
+    if (spec.kind != QueueKind.outbox) continue;
+    try {
+      final columns = db.select('PRAGMA table_info(${spec.table})');
+      if (!columns.any((c) => c['name'] == spec.namespaceColumn)) continue;
+      for (final row in db.select(
+        'SELECT DISTINCT ${spec.namespaceColumn} AS ns FROM ${spec.table}',
+      )) {
+        final ns = row['ns'];
+        if (ns is String && ns != current && ns != 'signed-out') others.add(ns);
+      }
+    } catch (_) {
+      // A table that is not there (yet) holds nothing.
+    }
+  }
+  var total = 0;
+  for (final ns in others) {
+    total += scanSignOutQueues(registry, ns).unsent;
+  }
+  return total;
 }
 
 /// Queues that are always flushed on sign-out, as before WP-C3 (the sync

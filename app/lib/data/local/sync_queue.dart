@@ -4,6 +4,7 @@ import 'dart:convert';
 import '../server_clock.dart';
 import '../sync_api.dart';
 import 'app_database.dart';
+import 'queue_retry_policy.dart';
 
 /// Plan Phase 4 — the local half of the change queue.
 ///
@@ -41,9 +42,22 @@ class SyncQueue {
         "ALTER TABLE sync_pending_changes ADD COLUMN namespace TEXT NOT NULL DEFAULT 'legacy'",
       );
     }
+    // H1: retry backoff for counted failures (additive, guarded).
+    if (!columns.any((c) => c['name'] == 'next_attempt_at')) {
+      _appDb.db.execute(
+        'ALTER TABLE sync_pending_changes ADD COLUMN next_attempt_at INTEGER',
+      );
+    }
     _appDb.db.execute('''CREATE TABLE IF NOT EXISTS account_sync_state (
       namespace TEXT PRIMARY KEY, device_id TEXT, last_server_seq INTEGER NOT NULL DEFAULT 0,
       last_synced_at INTEGER)''');
+    // H1: the last field clock issued, so a restart never stamps older.
+    final stateColumns = _appDb.db.select('PRAGMA table_info(account_sync_state)');
+    if (!stateColumns.any((c) => c['name'] == 'last_clock_ms')) {
+      _appDb.db.execute(
+        'ALTER TABLE account_sync_state ADD COLUMN last_clock_ms INTEGER',
+      );
+    }
     // A change claimed by a push that never finished (the process died) goes
     // back in line. One the server already applied (in_flight = 2) must not:
     // it is only waiting for its fresh server copy to be stored.
@@ -59,6 +73,26 @@ class SyncQueue {
   /// value) until [purgeApplied] runs after the server copy is saved.
   static const _applied = 2;
 
+  /// The field clock for a new edit: the (server-adjusted) clock, but never
+  /// older than the last one issued for this account, even across a restart
+  /// (H1-4). An explicit [at] is used as given.
+  int _stampMs(DateTime? at) {
+    if (at != null) return at.millisecondsSinceEpoch;
+    var ms = _clock.now().millisecondsSinceEpoch;
+    final rows = _appDb.db.select(
+      'SELECT last_clock_ms FROM account_sync_state WHERE namespace = ?',
+      [namespace],
+    );
+    final last = rows.isEmpty ? null : rows.first['last_clock_ms'] as int?;
+    if (last != null && ms < last) ms = last;
+    _appDb.db.execute(
+      'INSERT INTO account_sync_state(namespace,last_clock_ms) VALUES (?,?) '
+      'ON CONFLICT(namespace) DO UPDATE SET last_clock_ms=excluded.last_clock_ms',
+      [namespace, ms],
+    );
+    return ms;
+  }
+
   /// Records a local edit.
   ///
   /// [fields] is field name -> new value, already in the shape the server
@@ -73,7 +107,7 @@ class SyncQueue {
     DateTime? at,
   }) {
     if (fields.isEmpty) return 0;
-    final clockMs = (at ?? _clock.now()).millisecondsSinceEpoch;
+    final clockMs = _stampMs(at);
 
     final existing = _appDb.db.select(
       "SELECT client_seq, payload_json, field_clocks_json FROM sync_pending_changes "
@@ -113,7 +147,7 @@ class SyncQueue {
     )..addAll({for (final k in fields.keys) k: clockMs});
 
     _appDb.db.execute(
-      'UPDATE sync_pending_changes SET payload_json = ?, field_clocks_json = ?, attempts = 0, last_error = NULL WHERE client_seq = ?',
+      'UPDATE sync_pending_changes SET payload_json = ?, field_clocks_json = ?, attempts = 0, next_attempt_at = NULL, last_error = NULL WHERE client_seq = ?',
       [jsonEncode(payload), jsonEncode(clocks), row['client_seq']],
     );
     onChanged?.call();
@@ -130,7 +164,7 @@ class SyncQueue {
     DateTime? at,
   }) {
     if (fields.isEmpty) return;
-    final clockMs = (at ?? _clock.now()).millisecondsSinceEpoch;
+    final clockMs = _stampMs(at);
     _appDb.db.execute(
       'INSERT INTO sync_pending_changes '
       '(namespace, entity, entity_id, op, payload_json, field_clocks_json, created_at) '
@@ -170,7 +204,7 @@ class SyncQueue {
         namespace,
         entity,
         entityId,
-        (at ?? _clock.now()).millisecondsSinceEpoch,
+        _stampMs(at),
       ],
     );
     onChanged?.call();
@@ -178,8 +212,9 @@ class SyncQueue {
 
   List<SyncChange> pending({int limit = 200}) {
     final rows = _appDb.db.select(
-      'SELECT * FROM sync_pending_changes WHERE namespace = ? AND attempts < 5 AND in_flight=0 ORDER BY client_seq LIMIT ?',
-      [namespace, limit],
+      'SELECT * FROM sync_pending_changes WHERE namespace = ? AND attempts < 5 AND in_flight=0 '
+      'AND (next_attempt_at IS NULL OR next_attempt_at <= ?) ORDER BY client_seq LIMIT ?',
+      [namespace, _clock.now().millisecondsSinceEpoch, limit],
     );
     return rows.map((r) {
       return SyncChange(
@@ -273,11 +308,25 @@ class SyncQueue {
   static const maxAttempts = 5;
 
   void recordFailure(int clientSeq, String error) {
+    final rows = _appDb.db.select(
+      'SELECT attempts FROM sync_pending_changes WHERE client_seq = ? AND namespace = ?',
+      [clientSeq, namespace],
+    );
+    final attempts = (rows.isEmpty ? 0 : rows.first['attempts'] as int) + 1;
+    final due = _clock.now().add(queueBackoff(attempts)).millisecondsSinceEpoch;
     _appDb.db.execute(
-      'UPDATE sync_pending_changes SET attempts = attempts + 1, last_error = ? WHERE client_seq = ? AND namespace = ?',
-      [error, clientSeq, namespace],
+      'UPDATE sync_pending_changes SET attempts = ?, next_attempt_at = ?, last_error = ? WHERE client_seq = ? AND namespace = ?',
+      [attempts, due, error, clientSeq, namespace],
     );
     onChanged?.call();
+  }
+
+  /// Makes changes waiting out a backoff due again (connectivity came back).
+  void resetBackoff() {
+    _appDb.db.execute(
+      'UPDATE sync_pending_changes SET next_attempt_at = NULL WHERE namespace = ? AND next_attempt_at IS NOT NULL',
+      [namespace],
+    );
   }
 
   void reject(int clientSeq, String error) {

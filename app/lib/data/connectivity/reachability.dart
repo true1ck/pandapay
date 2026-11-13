@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 
 import '../../app/env.dart';
 import 'known_connectivity.dart';
@@ -129,24 +131,54 @@ class ServerReachability {
   }
 }
 
-/// One `GET /app-status`. Reachable only when the answer is a 200 carrying a
-/// JSON object: captive portals answer 200 with HTML (or redirect to one), and
-/// a 5xx means the API is not serving.
-Future<bool> httpServerProbe(http.Client client, String baseUrl) async {
+/// One `GET /app-status`, aborted (socket closed) after [timeout] so a dead
+/// network cannot leave hung requests behind (H1-9).
+///
+/// Reachable means the server answered: a 200 with a JSON object (captive
+/// portals answer 200 with HTML), a 429, or a 5xx other than 502/503/504 that
+/// carries a JSON object body. Network errors, timeouts and gateway failures
+/// (502/503/504) are unreachable.
+Future<bool> httpServerProbe(
+  http.Client client,
+  String baseUrl, {
+  Duration timeout = const Duration(milliseconds: 1800),
+}) async {
+  final abort = Completer<void>();
+  final timer = Timer(timeout, () {
+    if (!abort.isCompleted) abort.complete();
+  });
   try {
-    final response = await client.get(Uri.parse('$baseUrl/app-status'));
-    if (response.statusCode != 200) return false;
-    return jsonDecode(response.body) is Map;
+    final request = http.AbortableRequest(
+      'GET',
+      Uri.parse('$baseUrl/app-status'),
+      abortTrigger: abort.future,
+    );
+    final response = await http.Response.fromStream(await client.send(request));
+    final code = response.statusCode;
+    if (code == 200) return jsonDecode(response.body) is Map;
+    if (code == 502 || code == 503 || code == 504) return false;
+    if (code == 429) return true;
+    if (code >= 500) return jsonDecode(response.body) is Map;
+    return false;
   } catch (_) {
     return false;
+  } finally {
+    timer.cancel();
   }
 }
 
 /// The app-wide probe. Override in tests with a fake [ServerReachability].
 final serverReachabilityProvider = Provider<ServerReachability>((ref) {
-  final client = http.Client();
+  // Connection timeout as a second guard; at most one probe in flight.
+  final client = IOClient(
+    HttpClient()..connectionTimeout = const Duration(milliseconds: 1800),
+  );
+  Future<bool>? running;
   final reachability = ServerReachability(
-    probe: () => httpServerProbe(client, Env.apiBaseUrl),
+    probe: () => running ??= httpServerProbe(
+      client,
+      Env.apiBaseUrl,
+    ).whenComplete(() => running = null),
   );
   ref.onDispose(() {
     reachability.dispose();

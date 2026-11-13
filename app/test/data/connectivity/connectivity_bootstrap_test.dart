@@ -207,4 +207,51 @@ void main() {
       });
     },
   );
+
+  group('stale offline flag (H1-8)', () {
+    testWidgets('resume re-polls and corrects a missed online event',
+        (tester) async {
+      await tester.runAsync(() async {
+        container.read(connectivityBootstrapProvider);
+        await _settle();
+        expect(KnownConnectivity.knownOffline, isTrue);
+
+        // The platform went online but the event was never delivered.
+        connectivity.seed = _wifi;
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await _settle();
+        expect(container.read(isOnlineProvider).valueOrNull, isTrue);
+        expect(KnownConnectivity.knownOffline, isFalse);
+      });
+    });
+
+    testWidgets('a foreground offline app re-polls every 60 s, then stops',
+        (tester) async {
+      final fresh = ProviderContainer(
+        overrides: [
+          connectivityProvider.overrideWithValue(connectivity),
+          appStatusRepositoryProvider.overrideWithValue(status),
+          serverReachabilityProvider.overrideWithValue(reachability),
+        ],
+      );
+      addTearDown(fresh.dispose);
+      fresh.read(connectivityBootstrapProvider);
+      fresh.listen(isOnlineProvider, (_, _) {});
+      await tester.pump();
+      await tester.pump();
+      expect(KnownConnectivity.knownOffline, isTrue);
+
+      connectivity.seed = _wifi;
+      await tester.pump(connectivityRepollInterval + const Duration(seconds: 1));
+      await tester.pump();
+      await tester.pump();
+      expect(KnownConnectivity.knownOffline, isFalse);
+      // Online again: nothing left to poll (no pending timer at test end).
+    });
+  });
 }

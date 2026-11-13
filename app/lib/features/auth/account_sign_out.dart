@@ -43,7 +43,12 @@ class SignOutReport {
     this.phoneOnlyMessages = 0,
     this.pendingKinds = const [],
     this.connection = SignOutConnection.ok,
+    this.otherAccountsUnsent = 0,
   });
+
+  /// Unsent changes of OTHER accounts that share this phone's database. The
+  /// whole file is deleted on sign-out, so they are lost too (H1-6).
+  final int otherAccountsUnsent;
 
   /// Changes queued for the server (edits, quick adds, SMS facts, corrections),
   /// counting every queue. Changes the server already applied and that only
@@ -67,9 +72,10 @@ class SignOutReport {
   /// Whether the unsent changes could have been sent just now.
   final SignOutConnection connection;
 
-  bool get losesSomething =>
-      unsynced + phoneOnlyReceipts + phoneOnlyReviewItems + phoneOnlyMessages >
-      0;
+  bool get losesSomething => _ownLoss + otherAccountsUnsent > 0;
+
+  int get _ownLoss =>
+      unsynced + phoneOnlyReceipts + phoneOnlyReviewItems + phoneOnlyMessages;
 
   /// Changes are waiting and could not be sent: the person is about to lose
   /// work that a connection would have saved. Needs a stronger warning.
@@ -81,6 +87,15 @@ class SignOutReport {
 /// zero count are left out. Empty when nothing would be lost.
 String signOutWarningMessage(SignOutReport report) {
   if (!report.losesSomething) return '';
+  final other = report.otherAccountsUnsent;
+  final otherText = other == 0
+      ? ''
+      : 'Another account on this phone has $other unsent ${other == 1 ? 'change' : 'changes'} that will also be deleted.';
+  final own = report._ownLoss == 0 ? '' : _ownWarningMessage(report);
+  return [own, otherText].where((t) => t.isNotEmpty).join(' ');
+}
+
+String _ownWarningMessage(SignOutReport report) {
   String plural(int n, String one, String many) => n == 1 ? one : many;
 
   final phoneOnly = <String>[

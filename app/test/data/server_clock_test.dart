@@ -26,18 +26,21 @@ void main() {
       expect(clock.offset, const Duration(minutes: 3));
       expect(clock.now(), device.add(const Duration(minutes: 3)));
 
-      // Device is 2 hours ahead of the server.
-      clock.observeServerTime(device.subtract(const Duration(hours: 2)));
-      expect(clock.offset, const Duration(hours: -2));
-      expect(clock.now(), device.subtract(const Duration(hours: 2)));
+      // Device is 2 hours ahead of the server (a fresh clock: one that already
+      // issued a later time never goes backwards, see the hardening tests).
+      final ahead = ServerClock(deviceNow: () => device);
+      ahead.observeServerTime(device.subtract(const Duration(hours: 2)));
+      expect(ahead.offset, const Duration(hours: -2));
+      expect(ahead.now(), device.subtract(const Duration(hours: 2)));
     });
 
-    test('an offset beyond 7 days is clamped, not trusted', () {
+    test('an offset beyond one day is clamped, not trusted', () {
       final clock = ServerClock(deviceNow: () => device);
       clock.observeServerTime(device.add(const Duration(days: 400)));
-      expect(clock.offset, const Duration(days: 7));
-      clock.observeServerTime(device.subtract(const Duration(days: 400)));
-      expect(clock.offset, const Duration(days: -7));
+      expect(clock.offset, const Duration(days: 1));
+      final other = ServerClock(deviceNow: () => device);
+      other.observeServerTime(device.subtract(const Duration(days: 400)));
+      expect(other.offset, const Duration(days: -1));
     });
 
     test('sub-two-second skew is treated as no skew', () {

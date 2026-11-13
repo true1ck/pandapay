@@ -181,6 +181,45 @@ void main() {
     db.close();
   });
 
+  group('other accounts on the same database (H1-6)', () {
+    test('their unsent work is counted and named in the warning', () {
+      seedEveryQueue(_b);
+      final registry = QueueRegistry(db);
+      expect(unsentInOtherAccounts(registry, db.db, _a), 11);
+      expect(unsentInOtherAccounts(registry, db.db, _b), 0);
+
+      final report = SignOutReport(
+        unsynced: 0,
+        phoneOnlyReceipts: 0,
+        phoneOnlyReviewItems: 0,
+        otherAccountsUnsent: 11,
+      );
+      expect(report.losesSomething, isTrue);
+      expect(
+        signOutWarningMessage(report),
+        'Another account on this phone has 11 unsent changes that will also be deleted.',
+      );
+    });
+
+    test('own and other losses are both in one message', () {
+      final text = signOutWarningMessage(
+        const SignOutReport(
+          unsynced: 2,
+          phoneOnlyReceipts: 0,
+          phoneOnlyReviewItems: 0,
+          otherAccountsUnsent: 1,
+        ),
+      );
+      expect(text, contains('2 changes haven'));
+      expect(
+        text,
+        endsWith(
+          'Another account on this phone has 1 unsent change that will also be deleted.',
+        ),
+      );
+    });
+  });
+
   group('scanSignOutQueues', () {
     test('counts every registered send queue, in words', () {
       seedEveryQueue(_a);

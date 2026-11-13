@@ -176,6 +176,10 @@ void main() {
       fields: {'note': 'a'},
     );
     queue.recordFailure(queue.pending().first.clientSeq, 'offline');
+    // It waits out a backoff (H1-2) but is never discarded.
+    expect(queue.pendingCount, 1);
+    expect(queue.pending(), isEmpty);
+    queue.resetBackoff();
     expect(
       queue.pending(),
       hasLength(1),

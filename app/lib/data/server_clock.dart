@@ -21,7 +21,14 @@ class ServerClock {
 
   /// A skew larger than this is not believed in full. The server also clamps
   /// future client clocks; this only bounds how far the client moves its own.
-  static const Duration maxOffset = Duration(days: 7);
+  static const Duration maxOffset = Duration(days: 1);
+
+  /// The offset is the median of this many recent samples, so one odd `Date`
+  /// header (a proxy, a cache without `Age`) cannot move the clock alone.
+  static const int sampleCount = 5;
+
+  /// Samples older than this are dropped when a new one arrives.
+  static const Duration sampleMaxAge = Duration(minutes: 2);
 
   /// Date headers have one-second resolution and include network latency, so
   /// anything smaller than this is noise, not skew.
@@ -29,24 +36,42 @@ class ServerClock {
 
   final DateTime Function() _deviceNow;
   Duration _offset = Duration.zero;
+  final List<(DateTime, Duration)> _samples = [];
+  DateTime? _lastIssued;
 
   Duration get offset => _offset;
   bool get hasOffset => _offset != Duration.zero;
 
   /// Server-adjusted "now". Equal to the device clock when no offset is known.
+  ///
+  /// Never goes backwards within the process: a later edit must not be stamped
+  /// older than an earlier one when the offset is corrected downwards.
   DateTime now() {
     final device = _deviceNow();
-    return _offset == Duration.zero ? device : device.add(_offset);
+    final value = _offset == Duration.zero ? device : device.add(_offset);
+    final last = _lastIssued;
+    if (last != null && value.isBefore(last)) return last;
+    _lastIssued = value;
+    return value;
   }
 
   /// Records a measurement. [serverTime] is the server's clock at (about) the
   /// moment the device clock read [receivedAt] (default: now). Returns whether
   /// the stored offset changed.
   bool observeServerTime(DateTime serverTime, {DateTime? receivedAt}) {
-    var next = serverTime.difference(receivedAt ?? _deviceNow());
+    final at = _deviceNow();
+    var sample = serverTime.difference(receivedAt ?? at);
+    if (sample > maxOffset) sample = maxOffset;
+    if (sample < -maxOffset) sample = -maxOffset;
+    _samples
+      ..removeWhere((s) => at.difference(s.$1) > sampleMaxAge)
+      ..add((at, sample));
+    while (_samples.length > sampleCount) {
+      _samples.removeAt(0);
+    }
+    final sorted = _samples.map((s) => s.$2).toList()..sort();
+    var next = sorted[(sorted.length - 1) ~/ 2];
     if (next.abs() < noiseFloor) next = Duration.zero;
-    if (next > maxOffset) next = maxOffset;
-    if (next < -maxOffset) next = -maxOffset;
     final changed = next != _offset;
     _offset = next;
     return changed;
@@ -66,5 +91,8 @@ class ServerClock {
     return true;
   }
 
-  void reset() => _offset = Duration.zero;
+  void reset() {
+    _offset = Duration.zero;
+    _samples.clear();
+  }
 }
