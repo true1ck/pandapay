@@ -14,7 +14,7 @@ Future<void> goneIsDone(Future<void> Function() call) async {
   try {
     await call();
   } on ApiException catch (error) {
-    if (error.statusCode != 404) rethrow;
+    if (!_serverSaid404(error)) rethrow;
   }
 }
 
@@ -31,7 +31,7 @@ Future<void> ignoreAlreadyDoneIsDone(
     await call();
   } on ApiException catch (error) {
     final status = error.statusCode;
-    if (status == 404) return;
+    if (_serverSaid404(error)) return;
     if (status == 409 && _alreadyHas(error, reason == 'transfer' ? 'deleted' : 'ignored')) {
       return;
     }
@@ -45,8 +45,13 @@ Future<void> ignoreAlreadyDoneIsDone(
 Future<void> restoreAlreadyDoneIsDone(Future<void> Function() call) =>
     goneIsDone(call);
 
+/// A 404 only counts when it carries the server's own JSON error; a proxy or
+/// captive-portal page also answers 404 and must not delete the command.
+bool _serverSaid404(ApiException error) =>
+    error.statusCode == 404 && error.errorCode != null;
+
 bool _alreadyHas(ApiException error, String state) {
-  final text = '${error.errorCode ?? ''} ${error.debugMessage}'.toLowerCase();
+  final text = (error.errorCode ?? '').toLowerCase();
   return text.contains("already '$state'") ||
       text.contains('already "$state"') ||
       text.contains('already $state');

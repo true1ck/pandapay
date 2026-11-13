@@ -3005,13 +3005,7 @@ Map<String, CommandHandler> commandHandlersFor(
   },
 };
 
-Future<void> _goneIsDone(Future<void> Function() call) async {
-  try {
-    await call();
-  } on ApiException catch (error) {
-    if (error.statusCode != 404) rethrow;
-  }
-}
+Future<void> _goneIsDone(Future<void> Function() call) => goneIsDone(call);
 
 /// How often [outboxFlushProvider] re-checks for queued work whose backoff
 /// has expired while the app stays open.
