@@ -103,19 +103,40 @@ List<SuspectedRefund> detectSilentRefunds({
     final list = [...entry.value]..sort((a, b) => a.at.compareTo(b.at));
     final cardSpends = spends.where((s) => s.instrumentId == id).toList()
       ..sort((a, b) => a.at.compareTo(b.at));
-    final cardCredits = credits.where((c) => c.instrumentId == id).toList();
+    // Credits in time order with running totals, so what the messages explain
+    // between two readings is two binary searches, not a scan of every credit
+    // per reading (this runs on the UI isolate over the whole history).
+    final cardCredits = credits.where((c) => c.instrumentId == id).toList()
+      ..sort((a, b) => a.at.compareTo(b.at));
+    final creditTotals = List<int>.filled(cardCredits.length + 1, 0);
+    for (var k = 0; k < cardCredits.length; k++) {
+      creditTotals[k + 1] = creditTotals[k] + cardCredits[k].amountMinor;
+    }
+    // How many credits are dated at or before [t].
+    int creditsUpTo(DateTime t) {
+      var lo = 0;
+      var hi = cardCredits.length;
+      while (lo < hi) {
+        final mid = (lo + hi) >> 1;
+        if (cardCredits[mid].at.isAfter(t)) {
+          hi = mid;
+        } else {
+          lo = mid + 1;
+        }
+      }
+      return lo;
+    }
+
     for (var i = 1; i < list.length; i++) {
       final before = list[i - 1];
       final after = list[i];
       final rise = after.availableMinor - before.availableMinor;
       if (rise <= 0) continue;
-      // What the messages account for between the two readings.
-      var explained = 0;
-      for (final c in cardCredits) {
-        if (c.at.isAfter(before.at) && !c.at.isAfter(after.at)) {
-          explained += c.amountMinor;
-        }
-      }
+      // What the messages account for between the two readings
+      // (after `before`, up to and including `after`).
+      final explained =
+          creditTotals[creditsUpTo(after.at)] -
+          creditTotals[creditsUpTo(before.at)];
       final unexplained = rise - explained;
       if (unexplained < silentRefundMinimumMinor) continue;
 

@@ -1021,9 +1021,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                 ),
                 const Divider(height: 1),
               ],
-              // Leaves the transaction out of spending totals and budgets only.
-              // It stays in history, in Money out and on the card, and keeps
-              // its rewards, unlike Refund / Reversal / Delete below.
+              // Leaves the transaction out of spending totals and trends on
+              // this phone (and out of server budgets for synced entries; not
+              // yet for entries read from SMS). It stays in history, in Money
+              // out and on the card, and keeps its rewards, unlike Refund /
+              // Reversal / Delete below.
               if (canExcludeFromSpend(_entry))
                 ListTile(
                   key: const Key('toggle-spend-exclusion'),
@@ -1040,9 +1042,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                   ),
                   subtitle: Text(
                     _entry.excludeFromSpend
-                        ? 'Add it back to your spending totals and budgets.'
+                        ? 'Add it back to your spending totals.'
                         : 'Stays in your history and Money out, and keeps its '
-                              'rewards. Left out of spending totals and budgets.',
+                              'rewards. Left out of spending totals and trends '
+                              'on this phone. ${spendExclusionBudgetNote(_entry)}',
                     style: BambooFonts.ui(12, color: BambooInk.ink500),
                   ),
                   onTap: () =>

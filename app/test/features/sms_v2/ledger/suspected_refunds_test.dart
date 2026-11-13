@@ -143,6 +143,58 @@ void main() {
       );
     });
 
+    test('a refund only counts for the same card, the same amount and a date near the spend', () {
+      final readings = [
+        _reading('after-spend', '2026-10-12T10:30:00Z', 500),
+        _reading('weeks-later', '2026-11-03T12:00:00Z', 78500),
+      ];
+      final spend = _row('big', '2026-10-12T10:30:00Z', 78000);
+      // another amount, another card, and a refund dated before the spend: not known.
+      // (All dated outside the two readings, so they explain none of the rise.)
+      for (final refund in [
+        _row('r1', '2026-11-10T10:00:00Z', 77000, kind: TxnEntryKind.refund),
+        _row('r2', '2026-11-10T10:00:00Z', 78000, kind: TxnEntryKind.refund, last4: '5678'),
+        _row('r3', '2026-10-01T10:00:00Z', 78000, kind: TxnEntryKind.refund),
+      ]) {
+        expect(
+          suspectedRefundsFromModel(_model(readings, [spend, refund])).keys,
+          ['event-big'],
+          reason: refund.id,
+        );
+      }
+      // the later of two refunds is the one that counts
+      expect(
+        suspectedRefundsFromModel(
+          _model(readings, [
+            spend,
+            _row('early', '2026-10-01T10:00:00Z', 78000, kind: TxnEntryKind.refund),
+            _row('late', '2026-11-10T10:00:00Z', 78000, kind: TxnEntryKind.refund),
+          ]),
+        ),
+        isEmpty,
+      );
+    });
+
+    test('the card is told apart by the last four digits, however a row masks it', () {
+      final readings = [
+        _reading('a', '2026-10-12T10:30:00Z', 500),
+        _reading('b', '2026-11-03T12:00:00Z', 78500),
+      ];
+      for (final last4 in ['4321', 'XX4321', '**** 4321', 'xxxx-4321']) {
+        final found = suspectedRefundsFromModel(
+          _model(readings, [_row('big', '2026-10-12T10:30:00Z', 78000, last4: last4)]),
+        );
+        expect(found.keys, ['event-big'], reason: last4);
+      }
+      // fewer than four digits is no card at all
+      expect(
+        suspectedRefundsFromModel(
+          _model(readings, [_row('big', '2026-10-12T10:30:00Z', 78000, last4: '321')]),
+        ),
+        isEmpty,
+      );
+    });
+
     test('an empty ledger is safe', () {
       expect(suspectedRefundsFromModel(_model(const [], const [])), isEmpty);
     });

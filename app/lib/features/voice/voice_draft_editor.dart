@@ -5,6 +5,12 @@ import 'follow_up/follow_up.dart';
 import 'follow_up/refund_candidates.dart';
 import 'voice_action_parser.dart';
 
+/// Points a card can spend by voice: the card's own `totalPointsEarned`, the
+/// same number the card screen shows. Bank-credited rows are not part of it, and
+/// the server's points correction is measured against the same total, so a
+/// redemption saved from here lands on what the user saw.
+double voicePointsAvailable(UserCard card) => card.totalPointsEarned;
+
 /// The editable state behind one entry in the review sheet. The parser's
 /// draft is the first guess; everything here can be changed by the user or
 /// by answering a follow-up question, and saving reads this, not the draft.

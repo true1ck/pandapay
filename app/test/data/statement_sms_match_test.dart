@@ -77,6 +77,18 @@ void main() {
     expect(out.keys, [0]);
   });
 
+  test('an investment return is money in, so it matches a credit row only', () {
+    final returned = sms('a', 6, 5000, kind: TxnEntryKind.investmentReturn);
+    expect(
+      rowsExplainedBySms([row('SBI ••8648', 6, 5000, credit: true)], [returned]).keys,
+      [0],
+    );
+    expect(
+      rowsExplainedBySms([row('SBI ••8648', 6, 5000)], [returned]),
+      isEmpty,
+    );
+  });
+
   test('the import review leaves such a row out unless the person keeps both', () {
     final session = TransactionImportSession(
       fileDigest: 'file',

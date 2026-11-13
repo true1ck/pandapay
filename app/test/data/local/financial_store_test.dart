@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/financial_store.dart';
 import 'package:pandapay/data/local/sync_queue.dart';
+import 'package:pandapay/data/local_first/command_outbox.dart';
 import 'package:pandapay/data/local/sms_intake_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -553,6 +554,109 @@ void main() {
     });
     store.syncCardDatesFromObservations('a');
     expect(store.entities('a', 'cards').single['statement_day'], 16);
+  });
+
+  group('"Don\'t count in spending" survives a server refresh', () {
+    TransactionEntry smsRow({bool excluded = false}) => TransactionEntry(
+      id: 'v2:evt-1',
+      eventId: 'evt-1',
+      amount: Money.fromPaise(50000),
+      occurredAt: DateTime(2026, 10, 15),
+      merchantName: 'Sample Shop',
+      source: 'sms',
+      status: 'active',
+      pipelineVersion: 2,
+      excludeFromSpend: excluded,
+    );
+    // The server's twin of the same SMS event: another id, never the flag.
+    TransactionEntry serverTwin() => TransactionEntry(
+      id: 'srv-1',
+      eventId: 'evt-1',
+      amount: Money.fromPaise(50000),
+      occurredAt: DateTime(2026, 10, 15),
+      merchantName: 'Sample Shop',
+      source: 'sms',
+      status: 'active',
+      pipelineVersion: 2,
+    );
+    bool storedFlag(String id) => TransactionEntry.fromJson(
+      rawTransaction(db, 'a', id)['payload'] as Map<String, dynamic>,
+    ).excludeFromSpend;
+
+    test('a server twin does not clear a locally excluded SMS row', () {
+      store.saveTransactions('a', [smsRow()]);
+      store.setExcludeFromSpend('a', 'v2:evt-1', true);
+      expect(storedFlag('v2:evt-1'), isTrue);
+
+      store.saveTransactions('a', [serverTwin()]);
+
+      expect(storedFlag('v2:evt-1'), isTrue);
+      final rows = store.transactions('a', all)!.rows;
+      expect(rows, hasLength(1));
+      expect(rows.single.id, 'v2:evt-1');
+      expect(rows.single.excludeFromSpend, isTrue);
+      expect(rows.single.countsAsSpend, isFalse);
+    });
+
+    test('counting it in again also survives a server twin', () {
+      store.saveTransactions('a', [smsRow(excluded: true)]);
+      store.setExcludeFromSpend('a', 'v2:evt-1', false);
+
+      store.saveTransactions('a', [serverTwin()]);
+
+      expect(storedFlag('v2:evt-1'), isFalse);
+    });
+
+    test('a row that was never excluded stays counted after a server twin', () {
+      store.saveTransactions('a', [smsRow()]);
+      store.saveTransactions('a', [serverTwin()]);
+      expect(storedFlag('v2:evt-1'), isFalse);
+    });
+
+    test('a queued set_spend_exclusion wins over a refreshed server row', () {
+      final server = TransactionEntry(
+        id: 'srv-2',
+        amount: Money.fromPaise(9900),
+        occurredAt: DateTime(2026, 10, 16),
+        merchantName: 'Manual Shop',
+        source: 'manual',
+        status: 'active',
+      );
+      store.saveTransactions('a', [server]);
+      store.setExcludeFromSpend('a', 'srv-2', true);
+      CommandOutbox(db, namespace: 'a').enqueue(
+        kind: 'set_spend_exclusion',
+        target: 'srv-2',
+        payload: {'id': 'srv-2', 'excluded': true},
+      );
+
+      // A refresh before the flush: the server still says "counted".
+      store.saveTransactions('a', [server]);
+      expect(storedFlag('srv-2'), isTrue);
+
+      // Once the command has been flushed the server's answer is trusted.
+      db.db.execute('DELETE FROM command_outbox');
+      store.saveTransactions('a', [server]);
+      expect(storedFlag('srv-2'), isFalse);
+    });
+
+    test('a queued command of another account does not touch this one', () {
+      final server = TransactionEntry(
+        id: 'srv-3',
+        amount: Money.fromPaise(9900),
+        occurredAt: DateTime(2026, 10, 16),
+        merchantName: 'Manual Shop',
+        source: 'manual',
+        status: 'active',
+      );
+      CommandOutbox(db, namespace: 'b').enqueue(
+        kind: 'set_spend_exclusion',
+        target: 'srv-3',
+        payload: {'id': 'srv-3', 'excluded': true},
+      );
+      store.saveTransactions('a', [server]);
+      expect(storedFlag('srv-3'), isFalse);
+    });
   });
 
 }

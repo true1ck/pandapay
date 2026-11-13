@@ -54,6 +54,31 @@ void main() {
       expect(TransactionEntry.fromJson(json).excludeFromSpend, isFalse);
     });
 
+    test('a row stored before the flag existed parses as counted', () {
+      // Exactly what an older app version or server wrote: no such key.
+      final old = TransactionEntry.fromJson({
+        'id': 'old-1',
+        'amount_inr': 120.5,
+        'occurred_at': '2026-10-01T10:00:00.000Z',
+        'merchant_name': 'Sample Shop',
+        'entry_kind': 'spend',
+        'status': 'active',
+      });
+      expect(old.excludeFromSpend, isFalse);
+      expect(old.countsAsSpend, isTrue);
+      expect(old.toJson().containsKey('exclude_from_spend'), isFalse);
+      // An explicit false from a newer server reads the same way.
+      expect(
+        TransactionEntry.fromJson({
+          'id': 'old-2',
+          'amount_inr': 1,
+          'occurred_at': '2026-10-01T10:00:00.000Z',
+          'exclude_from_spend': false,
+        }).excludeFromSpend,
+        isFalse,
+      );
+    });
+
     test('copyWith changes only the choice', () {
       final changed = row('a', 100).copyWith(excludeFromSpend: true);
       expect(changed.excludeFromSpend, isTrue);
@@ -70,6 +95,20 @@ void main() {
       );
       expect(canExcludeFromSpend(row('local-outbox:1', 100)), isFalse);
     });
+  });
+
+  test('the budget note is honest: SMS rows are not sent to the server yet', () {
+    final sms = TransactionEntry(
+      id: 'v2:e1',
+      amount: Money.fromPaise(100),
+      occurredAt: DateTime(2026, 11, 10),
+      source: 'sms',
+      status: 'active',
+      pipelineVersion: 2,
+    );
+    expect(spendExclusionBudgetNote(sms), contains('do not see this choice'));
+    expect(spendExclusionBudgetNote(sms), contains('SMS'));
+    expect(spendExclusionBudgetNote(row('srv', 100)), 'Budgets leave it out too.');
   });
 
   group('ledger read model', () {

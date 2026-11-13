@@ -12,12 +12,25 @@ bool canExcludeFromSpend(TransactionEntry entry) =>
     entry.status == 'active' &&
     !entry.id.startsWith('local-outbox:');
 
+/// The sentence the detail screen adds about budgets. Budgets are computed on
+/// the server from synced entries, and the choice is not sent for entries read
+/// from SMS yet, so say so instead of promising it.
+String spendExclusionBudgetNote(TransactionEntry entry) =>
+    entry.pipelineVersion == 2
+    ? 'Budgets use your synced entries and do not see this choice for '
+          'entries read from SMS yet.'
+    : 'Budgets leave it out too.';
+
 /// Counts each of [entries] in, or leaves it out of, the person's spending
 /// ("Don't count in spending"). Returns how many were changed.
 ///
-/// Only spending totals, breakdowns and budgets read this choice. The row stays
-/// in Activity and in Money out, and its rewards, caps and card state are not
-/// touched, so nothing is reversed on the server (unlike Refund or Delete).
+/// Spending totals, breakdowns and trends on the phone read this choice.
+/// Budgets (and the assistant and spend report) are computed on the server from
+/// synced entries, so they only see it for non-SMS rows; for SMS rows it is not
+/// sent yet (see docs/money-in-out-spending-definitions.md, Known limitations).
+/// The row stays in Activity and in Money out, and its rewards, caps and card
+/// state are not touched, so nothing is reversed on the server (unlike Refund
+/// or Delete).
 ///
 /// An SMS transaction lives only on the phone, so the choice is stored there,
 /// like its notes and tags. Any other transaction is written to the phone first

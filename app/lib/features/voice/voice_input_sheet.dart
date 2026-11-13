@@ -732,10 +732,9 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
               .where((item) => item.id == editor.selectedCardId)
               .firstOrNull!;
           final points = editor.points!;
-          final ledger = await repo.fetchPointsLedger(card.id);
-          final current =
-              (card.pointsBalance ?? 0) +
-              ledger.fold<double>(0, (sum, row) => sum + row.deltaPoints);
+          // The figure the card screen shows (bank credits left out): the
+          // server measures the correction against the same total.
+          final current = voicePointsAvailable(card);
           if (points > current) {
             throw StateError(
               'This card has ${current.toStringAsFixed(0)} points available, so the entry was not saved.',

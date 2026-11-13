@@ -54,6 +54,10 @@ TransactionRewardLabel? transactionRewardLabel(
         note: 'This payment method does not earn a card reward.',
       );
   }
+  final methodNote = _noRewardPaymentMethodNote[entry.paymentMethod];
+  if (methodNote != null) {
+    return TransactionRewardLabel('None', note: methodNote);
+  }
   if (entry.userCardId == null) {
     return const TransactionRewardLabel(
       'Not counted',
@@ -90,11 +94,28 @@ TransactionRewardLabel? transactionRewardLabel(
   }
   return TransactionRewardLabel(
     '≈ ${reward.format()}',
+    // reward_state 'confirmed' only says the spend itself came from a card
+    // statement. The figure is still what the card's rules work out, not a
+    // credit the bank paid (those are 'issuer credit' rows on the card's
+    // points history), so it is never called confirmed here.
     note: entry.rewardState == 'confirmed'
-        ? 'Confirmed by your card statement.'
+        ? 'The spend is on your card statement. The reward is an estimate '
+              'from your card\'s rules.'
         : 'Estimated from your card\'s rules.',
   );
 }
+
+/// Payment methods a credit-card spend can be marked with that do not earn the
+/// card's reward (the amount was met with a gift card or reward points, or it is
+/// an EMI or a pay-later purchase). The server's reward engine does not read the
+/// payment method yet, so a figure may still be stored for these rows: the app
+/// does not show it. Keys are the stored payment_method values.
+const Map<String, String> _noRewardPaymentMethodNote = {
+  'gift_card': 'Paid with a gift card, so no card reward applies.',
+  'reward_points': 'Paid with reward points, so no card reward applies.',
+  'emi': 'Paid as an EMI, so this spend is not counted for card rewards.',
+  'pay_later': 'Paid with pay later, so no card reward applies.',
+};
 
 /// The short chip on an activity row: "Reward ≈ ₹12" for a credit-card spend the
 /// server has priced above zero, otherwise null (an unpriced, excluded or
@@ -103,7 +124,8 @@ String? activityRewardChip(TransactionEntry entry) {
   if (entry.entryKind != TxnEntryKind.spend ||
       entry.status != 'active' ||
       entry.instrument != TxnInstrument.creditCard ||
-      entry.userCardId == null) {
+      entry.userCardId == null ||
+      _noRewardPaymentMethodNote.containsKey(entry.paymentMethod)) {
     return null;
   }
   final reward = entry.rewardValue;

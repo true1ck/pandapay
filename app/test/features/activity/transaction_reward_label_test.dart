@@ -10,6 +10,7 @@ TransactionEntry _entry({
   String? userCardId = 'card-1',
   Money? reward,
   String rewardState = 'estimated',
+  String? paymentMethod,
 }) => TransactionEntry(
   id: 't1',
   amount: Money.fromRupees(1000),
@@ -21,6 +22,7 @@ TransactionEntry _entry({
   status: status,
   rewardValue: reward,
   rewardState: rewardState,
+  paymentMethod: paymentMethod,
 );
 
 void main() {
@@ -32,11 +34,36 @@ void main() {
       expect(label.note, contains('Estimated'));
     });
 
-    test('a confirmed reward says it was confirmed by the statement', () {
+    test('a statement-imported spend is confirmed, the reward is still an estimate', () {
+      // reward_state is 'confirmed' on every statement row: that confirms the
+      // spend, not the reward figure.
       final label = transactionRewardLabel(
         _entry(reward: Money.fromRupees(50), rewardState: 'confirmed'),
       )!;
-      expect(label.note, contains('Confirmed'));
+      expect(label.value, startsWith('≈ '));
+      expect(label.note, contains('estimate'));
+      expect(label.note, isNot(contains('Confirmed')));
+      expect(label.note, isNot(contains('confirmed')));
+    });
+
+    test('a payment method that cannot earn the card reward shows none, never a figure', () {
+      for (final method in ['gift_card', 'reward_points', 'emi', 'pay_later']) {
+        final label = transactionRewardLabel(
+          _entry(reward: Money.fromRupees(50), paymentMethod: method),
+        )!;
+        expect(label.value, 'None', reason: method);
+        expect(label.note, isNotNull, reason: method);
+        expect(label.value, isNot(contains('50')), reason: method);
+      }
+    });
+
+    test('methods that do not change the reward keep the estimate', () {
+      for (final method in ['upi', 'net_banking', 'auto_debit', null]) {
+        final label = transactionRewardLabel(
+          _entry(reward: Money.fromRupees(50), paymentMethod: method),
+        )!;
+        expect(label.value, startsWith('≈ '), reason: '$method');
+      }
     });
 
     test('an unpriced credit-card spend is being calculated, never ₹0', () {
@@ -112,6 +139,20 @@ void main() {
         isNull,
       );
       expect(activityRewardChip(_entry(kind: TxnEntryKind.refund, reward: Money.fromRupees(12))), isNull);
+    });
+
+    test('no chip for a spend paid with a gift card, reward points, EMI or pay later', () {
+      for (final method in ['gift_card', 'reward_points', 'emi', 'pay_later']) {
+        expect(
+          activityRewardChip(_entry(reward: Money.fromRupees(12), paymentMethod: method)),
+          isNull,
+          reason: method,
+        );
+      }
+      expect(
+        activityRewardChip(_entry(reward: Money.fromRupees(12), paymentMethod: 'upi')),
+        'Reward ≈ ₹12',
+      );
     });
 
     test('paise are kept when the reward is not a whole rupee', () {

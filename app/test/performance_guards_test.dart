@@ -66,6 +66,32 @@ void main() {
     });
   });
 
+  group('rule 3: per-fact and per-row ledger reads build no regular expression', () {
+    // suspectedRefundsFromModel walks every fact and every transaction row each
+    // time the ledger model changes, on the UI isolate. It once called
+    // RegExp(r'\D') per fact and per row (20,000+ compilations per run). A
+    // top-level final is fine; a construction inside a function is not.
+    test('suspected_refunds.dart constructs no RegExp inside a function', () {
+      final file = File('lib/features/sms_v2/ledger/suspected_refunds.dart');
+      expect(file.existsSync(), isTrue, reason: 'guard points at a moved file');
+      final offenders = _offending(
+        [file],
+        (line) =>
+            RegExp(r'(?<![\w.])RegExp\(').hasMatch(line) &&
+            !line.startsWith('final '),
+      );
+      expect(offenders, isEmpty, reason: offenders.join('\n'));
+    });
+
+    test('the guard itself catches the original mistake', () {
+      bool flags(String line) =>
+          RegExp(r'(?<![\w.])RegExp\(').hasMatch(line) &&
+          !line.startsWith('final ');
+      expect(flags("  final digits = mask.replaceAll(RegExp(r'\\D'), '');"), isTrue);
+      expect(flags("final _digits = RegExp(r'\\D');"), isFalse);
+    });
+  });
+
   group('rule 2: a zero-duration yield is not a background thread', () {
     test('every Future.delayed(Duration.zero) in data/SMS code is justified', () {
       final files = [

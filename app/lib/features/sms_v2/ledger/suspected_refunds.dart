@@ -68,7 +68,10 @@ Map<String, SuspectedRefundInfo> suspectedRefundsFromModel(
 
   final spends = <SpendOnCard>[];
   final refundedEventIds = <String>{};
-  final cardRefunds = <TransactionEntry>[];
+  // The latest refund per card and amount: a spend is "already refunded" when
+  // one of that amount is dated no earlier than a day before it. One map lookup
+  // per spend instead of a scan of every refund per spend (R4).
+  final latestRefund = <String, DateTime>{};
   for (final row in model.transactions) {
     if (row.status != 'active' || row.instrument != TxnInstrument.creditCard) {
       continue;
@@ -89,7 +92,11 @@ Map<String, SuspectedRefundInfo> suspectedRefundsFromModel(
           );
         }
       case TxnEntryKind.refund:
-        cardRefunds.add(row);
+        final key = '$last4:${row.amount.paise}';
+        final seen = latestRefund[key];
+        if (seen == null || row.occurredAt.isAfter(seen)) {
+          latestRefund[key] = row.occurredAt;
+        }
         credits.add(
           ExplainedCredit(
             instrumentId: last4,
@@ -115,14 +122,10 @@ Map<String, SuspectedRefundInfo> suspectedRefundsFromModel(
   // A spend that already has a refund of the same amount on the same card
   // (read from a message, or one the person recorded) is not a mystery.
   for (final spend in spends) {
-    for (final refund in cardRefunds) {
-      if (_last4(refund.cardLast4) == spend.instrumentId &&
-          refund.amount.paise == spend.amountMinor &&
-          !refund.occurredAt.isBefore(
-            spend.at.subtract(const Duration(days: 1)),
-          )) {
-        refundedEventIds.add(spend.eventId);
-      }
+    final refundedAt = latestRefund['${spend.instrumentId}:${spend.amountMinor}'];
+    if (refundedAt != null &&
+        !refundedAt.isBefore(spend.at.subtract(const Duration(days: 1)))) {
+      refundedEventIds.add(spend.eventId);
     }
   }
 
@@ -144,9 +147,16 @@ Map<String, SuspectedRefundInfo> suspectedRefundsFromModel(
   };
 }
 
+/// The last four digits in [mask], skipping any non-digit ("XX4321", "**** 4321").
+/// Runs once per fact and per transaction row, so it scans characters instead of
+/// compiling and running a regular expression each time (R3).
 String? _last4(String? mask) {
   if (mask == null) return null;
-  final digits = mask.replaceAll(RegExp(r'\D'), '');
-  if (digits.length < 4) return null;
-  return digits.substring(digits.length - 4);
+  final found = <int>[];
+  for (var i = mask.length - 1; i >= 0 && found.length < 4; i--) {
+    final c = mask.codeUnitAt(i);
+    if (c >= 0x30 && c <= 0x39) found.add(c);
+  }
+  if (found.length < 4) return null;
+  return String.fromCharCodes(found.reversed);
 }

@@ -118,6 +118,24 @@ void main() {
       expect(old, isEmpty);
     });
 
+    test('credits given out of order still explain only the window between two readings', () {
+      // 78,000 and 500 land between the readings (given latest first); a 4,000
+      // credit before the first reading and one after the second do not count.
+      final found = detectSilentRefunds(
+        readings: [reading('2026-10-12T10:30:00Z', 500), reading('2026-11-03T12:00:00Z', 78500)],
+        spends: [spend('s78k', '2026-10-12T10:30:00Z', 78000)],
+        credits: [
+          credit('2026-11-10T00:00:00Z', 4000),
+          credit('2026-11-03T12:00:00Z', 500), // on the later reading: counts
+          credit('2026-10-20T00:00:00Z', 100),
+          credit('2026-10-12T10:30:00Z', 4000), // on the earlier reading: does not count
+        ],
+      );
+      // rise 78,000; explained 600; unexplained 77,400 is within 0.9..1.05 of 78,000
+      expect(found, hasLength(1));
+      expect(found.single.limitRoseByMinor, 7740000);
+    });
+
     test('empty and one-reading inputs are safe', () {
       expect(detectSilentRefunds(readings: const [], spends: const [], credits: const []), isEmpty);
       expect(

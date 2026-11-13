@@ -73,7 +73,7 @@ const paymentMethods = require('./payment_methods');
 // card-rewards v2 (WP8): v2-shaped cards record in native units; see the hooks
 // in applyTransactionState, reconcileCurrentCapStates and GET /user-cards.
 const cardStateV2 = require('./card_state_v2');
-const { creditRewardFacts, ISSUER_CREDIT_REASON } = require('./reward_credits');
+const { creditRewardFacts, ISSUER_CREDIT_REASON, estimatedPointsTotal } = require('./reward_credits');
 const { registerSplitRoutes } = require('./transaction_splits');
 const transactionTags = require('./transaction_tags');
 const { registerUserMerchantCategoryRuleRoutes } = require('./user_merchant_category_rules');
@@ -2881,11 +2881,8 @@ app.post('/user-cards/:id/points-adjustment', requireAuth, async (req, res) => {
         if (prior.rows.length > 0) return prior.rows[0];
       }
 
-      const currentLedgerSum = await client.query(
-        `SELECT COALESCE(SUM(delta_points), 0) AS total FROM points_ledger WHERE user_card_id = $1`,
-        [req.params.id]
-      );
-      const currentTotal = Number(currentLedgerSum.rows[0].total) + Number(owns.rows[0].points_balance || 0);
+      // Same total GET /user-cards shows: bank-credited rows are left out.
+      const currentTotal = await estimatedPointsTotal(client, req.params.id, owns.rows[0].points_balance);
       const delta = target - currentTotal;
 
       const adjustmentReason = typeof reason === 'string' && reason.trim()
@@ -6547,6 +6544,10 @@ app.put('/transactions/:id/spend-exclusion', requireAuth, async (req, res) => {
   const { excluded } = req.body || {};
   if (typeof excluded !== 'boolean') {
     return res.status(400).json({ error: 'excluded must be true or false' });
+  }
+  // A malformed id would otherwise reach the uuid cast and surface as a 500.
+  if (!UUID_RE.test(String(req.params.id || ''))) {
+    return res.status(400).json({ error: 'id must be a valid UUID' });
   }
   try {
     const result = await withUserClient(req.userId, async (client) => {

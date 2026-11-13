@@ -64,4 +64,22 @@ async function creditRewardFacts(client, profileId, { factIds = null, userCardId
   }
 }
 
-module.exports = { creditRewardFacts, ISSUER_CREDIT_REASON, CREDIT_SQL };
+/**
+ * The points total the card screen shows: every ledger row except the bank's
+ * own credits, plus the card's opening balance. GET /user-cards and the manual
+ * points correction must agree on it, or a correction aimed at what the user
+ * sees lands on a different number (1,000 shown, 3,500 seen by the server,
+ * a -2,500 row written, -1,500 shown afterwards).
+ */
+const ESTIMATED_POINTS_SUM_SQL = `
+  SELECT COALESCE(SUM(delta_points) FILTER (WHERE reason IS DISTINCT FROM $2), 0) AS total
+    FROM points_ledger WHERE user_card_id = $1`;
+
+async function estimatedPointsTotal(client, userCardId, pointsBalance) {
+  const sum = await client.query(ESTIMATED_POINTS_SUM_SQL, [userCardId, ISSUER_CREDIT_REASON]);
+  return Number(sum.rows[0].total) + Number(pointsBalance || 0);
+}
+
+module.exports = {
+  creditRewardFacts, ISSUER_CREDIT_REASON, CREDIT_SQL, ESTIMATED_POINTS_SUM_SQL, estimatedPointsTotal,
+};

@@ -31,7 +31,10 @@ String? _accountDigits(String? label) {
 
 sms.Direction? _direction(TxnEntryKind kind) => switch (kind) {
   TxnEntryKind.spend || TxnEntryKind.investment => sms.Direction.debit,
-  TxnEntryKind.income || TxnEntryKind.refund => sms.Direction.credit,
+  // A redemption or broker payout is money coming back in.
+  TxnEntryKind.income ||
+  TxnEntryKind.refund ||
+  TxnEntryKind.investmentReturn => sms.Direction.credit,
   _ => null,
 };
 

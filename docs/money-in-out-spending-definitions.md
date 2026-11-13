@@ -7,7 +7,7 @@ fallback). If a screen disagrees with this page, the screen is wrong.
 
 | Figure | What it adds up |
 |---|---|
-| **Spending** | Settled spend rows the person has not left out of spending, net of refunds. Feeds budgets, breakdowns, Trends, Insights and voice answers. |
+| **Spending** | Settled spend rows the person has not left out of spending, net of refunds. Feeds the phone's breakdowns, Trends, Insights and voice answers, and the server's budgets for rows the server knows the choice for (see Known limitations). |
 | **Money out** | Spending + spend the person left out of spending + money put into investments. |
 | **Money in** | Income + investment returns. Refunds are netted inside spending instead. |
 
@@ -31,8 +31,10 @@ that are ignored, deleted or reported as wrong.
 
 A per-transaction choice, separate from `status` and from `entry_kind`.
 
-- Leaves the row out of spending totals, breakdowns, budgets and the Activity
-  "Spending" filter.
+- Leaves the row out of the spending totals, breakdowns, trends and the Activity
+  "Spending" filter **on this phone**. Budgets are computed on the server from
+  synced entries, so they leave it out only for rows whose choice reached the
+  server (not for entries read from SMS; see Known limitations).
 - Does **not** change: the row's status, its place in Activity, Money out, card
   utilisation and dues, rewards, caps, milestones, fee waivers, recurring and
   subscription detection.
@@ -43,10 +45,14 @@ A per-transaction choice, separate from `status` and from `entry_kind`.
 - Why not `status = 'ignored'`: that reverses card caps, milestones, points and
   fee-waiver progress and hides the row. Why not `entry_kind = 'transfer'`: that
   loses what the row was and removes it from Money out.
-- SMS transactions keep the choice on the phone (like notes and tags). Server
-  rows carry it in `transactions.exclude_from_spend`, written through
+- SMS transactions keep the choice on the phone only (like notes and tags). The
+  server's copy of an SMS event (the same event under another row id) never
+  carries it, so when the app refreshes from the server it keeps the phone's
+  value (`FinancialStore.saveTransactions`). Server rows carry it in
+  `transactions.exclude_from_spend`, written through
   `PUT /transactions/:id/spend-exclusion` (a value, not a toggle) by the command
-  outbox.
+  outbox; while that command is still queued the phone's value also wins over a
+  refreshed server row, so the flag does not flicker off before it is sent.
 
 Code: `TransactionEntry.countsAsSpend` (use it for any spending total; use
 `entryKind` alone for card-side figures), `Totals.excludedSpendMinor`,
@@ -72,6 +78,26 @@ filter `NOT exclude_from_spend` in `api/src/spend_reports.js`.
 - Card-side figures keep counting spend the person left out of spending:
   `/monthly-reports` and the rewards or savings report use all spend as the base
   that rewards were earned on, and `/home-summary` rewards read every spend row.
+
+## Known limitations
+
+- **Phone-only flag for SMS rows.** The choice on an entry read from SMS is not
+  sent to the server. Budgets (`/budgets`, `budgetSpend`), the assistant
+  (`assistant_spending.js`) and `/spend-report` are computed on the server, so
+  they still count that spend. The detail screen says so. Server sync for these
+  rows is not built yet.
+- **Existing investment withdrawals stay `transfer` on the server.** Rows the
+  server stored as `transfer` before `investment_return` existed keep that kind
+  until they are re-projected; no backfill is run (owner decision). New
+  withdrawals project to `investment_return`.
+- **Exports omit the flag.** CSV and other data exports do not include
+  `exclude_from_spend`, so a re-import does not restore the choice.
+- **The PandaPay-format importer rejects `investment_return`.** The row is
+  reported as "Transaction type is not supported". Its parsed-row model has no
+  investment-return kind, so accepting it needs a model, review-screen and
+  duplicate-check change, not a one-line allow.
+- **Deploy order matters** (below): migrations `000200` and `000300`, then the
+  API, then the app.
 
 ## Server mapping
 
