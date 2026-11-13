@@ -485,6 +485,20 @@ void main() {
       expect(p!.categoryCaps, isFalse);
     });
 
+    test('a refresh already in flight cannot overwrite a toggle made while it ran (WP-H2)', () async {
+      await seedCache('notification_preferences', _prefs().toJson());
+      await backdate('notification_preferences');
+      prefsRepo.gate = Completer<void>();
+      await container.read(notificationPreferencesProvider.future); // starts the refresh
+      prefsRepo.reachable = false;
+      await updateNotificationPreferences(ref, {'category_caps': false});
+      prefsRepo.reachable = true; // the held answer is the old server copy
+      prefsRepo.gate!.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      final p = await container.read(notificationPreferencesProvider.future);
+      expect(p!.categoryCaps, isFalse);
+    });
+
     test('online, a toggle goes straight to the server and nothing is queued', () async {
       await updateNotificationPreferences(ref, {'category_bills': false});
       expect(prefsRepo.updates, [
