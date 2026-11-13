@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
 import 'known_connectivity.dart';
+import 'online_stream.dart';
 import 'reachability.dart';
 
 /// App-root connectivity wiring (WP-C1). Watched once from `PandaPayApp.build`
@@ -28,9 +29,54 @@ import 'reachability.dart';
 ///    provider is invalidated; on resume, a `null` (failed-open) status is
 ///    re-checked the same way. A re-check that fails is still fail-open
 ///    (`null`) and never blocks the app.
+/// How often a known-offline app in the foreground asks the platform again
+/// whether it is still offline (H1-8).
+const connectivityRepollInterval = Duration(seconds: 60);
+
 final connectivityBootstrapProvider = Provider<void>((ref) {
   var disposed = false;
-  ref.onDispose(() => disposed = true);
+  Timer? repollTimer;
+  var foreground = true;
+  ref.onDispose(() {
+    disposed = true;
+    repollTimer?.cancel();
+    repollTimer = null;
+  });
+
+  /// H1-8: the plugin can miss an "online" event, leaving every gated path
+  /// skipped until the next one. Ask it directly; if it says online while we
+  /// believe offline, rebuild the stream (its seed emits online, so listeners
+  /// see the usual offline -> online transition exactly once).
+  Future<void> repoll() async {
+    if (!KnownConnectivity.knownOffline) return;
+    try {
+      final results = await ref.read(connectivityProvider).checkConnectivity();
+      if (disposed) return;
+      if (connectivityResultToIsOnline(results) &&
+          KnownConnectivity.knownOffline) {
+        ref.invalidate(isOnlineProvider);
+      }
+    } catch (_) {
+      // No answer: keep the current belief.
+    }
+  }
+
+  // One lightweight timer, only while the app is in the foreground AND known
+  // offline, so an online or backgrounded app (and widget tests that never go
+  // offline) have no pending timer.
+  void syncRepollTimer() {
+    final want = !disposed && foreground && KnownConnectivity.knownOffline;
+    if (want && repollTimer == null) {
+      repollTimer = Timer.periodic(
+        connectivityRepollInterval,
+        (_) => unawaited(repoll()),
+      );
+    } else if (!want) {
+      repollTimer?.cancel();
+      repollTimer = null;
+    }
+  }
+
   final reachability = ref.watch(serverReachabilityProvider);
 
   Future<void> recheckAppStatus({required bool force}) async {
@@ -41,17 +87,24 @@ final connectivityBootstrapProvider = Provider<void>((ref) {
 
   ref.listen<AsyncValue<bool>>(isOnlineProvider, (previous, next) {
     reachability.invalidate();
+    syncRepollTimer();
     final cameOnline =
         previous?.valueOrNull == false && next.valueOrNull == true;
     if (cameOnline) unawaited(recheckAppStatus(force: true));
   });
 
   final lifecycle = AppLifecycleListener(
+    onStateChange: (state) {
+      foreground = state == AppLifecycleState.resumed;
+      syncRepollTimer();
+    },
     onResume: () {
       reachability.invalidate();
-      if (KnownConnectivity.knownOffline || !ref.exists(appStatusProvider)) {
+      if (KnownConnectivity.knownOffline) {
+        unawaited(repoll());
         return;
       }
+      if (!ref.exists(appStatusProvider)) return;
       final status = ref.read(appStatusProvider);
       if (!status.isLoading && status.valueOrNull == null) {
         unawaited(recheckAppStatus(force: false));

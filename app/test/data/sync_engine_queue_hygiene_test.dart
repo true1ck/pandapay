@@ -334,25 +334,22 @@ void main() {
       expect(queue.pending(), isEmpty);
     });
 
-    test('a 500 caused by one poison change is isolated and counted once',
-        () async {
+    test('a 500 for a chunk aborts: no isolation, no attempts (H1-2)', () async {
       for (var i = 0; i < 4; i++) {
         enqueue('t$i', note: i == 1 ? 'POISON' : 'fine');
       }
       final api = _ScriptedApi(
         onPush: (device, changes) {
-          if (changes.any((c) => c.payload['note'] == 'POISON')) {
-            throw _http(500, '{"error":"internal_error"}');
-          }
-          return [for (final c in changes) _applied(c)];
+          throw _http(500, '{"error":"internal_error"}');
         },
       );
       final scope = scripted(api);
       addTearDown(scope.dispose);
       final result = await scope.read(syncEngineProvider).sync();
-      expect(result.pushed, 3);
-      final left = db.db.select('SELECT attempts FROM sync_pending_changes');
-      expect(left.single['attempts'], 1);
+      expect(result.ranToCompletion, isFalse);
+      expect(api.pushes, hasLength(1), reason: 'no halving against an outage');
+      final rows = db.db.select('SELECT attempts FROM sync_pending_changes');
+      expect(rows.map((r) => r['attempts']), [0, 0, 0, 0]);
     });
 
     test('a network error aborts the sync and counts nothing', () async {
@@ -374,8 +371,32 @@ void main() {
       expect(rows.map((r) => r['in_flight']), [0, 0, 0]);
     });
 
-    test('401, 429 and 503 abort without recording failures', () async {
-      for (final status in [401, 429, 503]) {
+    test('a head row that 500s 8 syncs in a row is held back, others go',
+        () async {
+      enqueue('poison', note: 'POISON');
+      enqueue('ok', note: 'fine');
+      final api = _ScriptedApi(
+        onPush: (device, changes) {
+          if (changes.any((c) => c.payload['note'] == 'POISON')) {
+            throw _http(500, '{"error":"internal_error"}');
+          }
+          return [for (final c in changes) _applied(c)];
+        },
+      );
+      final scope = scripted(api);
+      addTearDown(scope.dispose);
+      final engine = scope.read(syncEngineProvider);
+      for (var i = 0; i < SyncEngine.headRowAbortLimit; i++) {
+        expect((await engine.sync()).ranToCompletion, isFalse);
+      }
+      final rows = db.db.select('SELECT attempts FROM sync_pending_changes');
+      expect(rows.map((r) => r['attempts']), [0, 0], reason: 'never counted');
+      final result = await engine.sync();
+      expect(result.pushed, 1, reason: 'the newer row is no longer blocked');
+    });
+
+    test('401, 429 and every 5xx abort without recording failures', () async {
+      for (final status in [401, 429, 500, 502, 503, 504]) {
         db.db.execute('DELETE FROM sync_pending_changes');
         enqueue('t$status');
         final api = _ScriptedApi(onPush: (device, changes) => throw _http(status));
@@ -588,9 +609,26 @@ void main() {
       expect(queue.pendingCount, 0, reason: 'nothing was rejected');
     });
 
+    test('a single refused item is a real rejection, not a device problem',
+        () async {
+      enqueue('t1');
+      final api = _ScriptedApi(
+        onPush: (device, changes) => [
+          for (final c in changes) _failed(c, 'not_found'),
+        ],
+      );
+      final scope = scripted(api);
+      addTearDown(scope.dispose);
+      await scope.read(syncEngineProvider).sync();
+      expect(api.registrations, isEmpty);
+      expect(api.pushes, hasLength(1), reason: 'no wasted re-push (H1-5)');
+      expect(queue.pending(), isEmpty);
+    });
+
     test('genuinely rejected items are rejected after one re-registration',
         () async {
       enqueue('t1');
+      enqueue('t2');
       final api = _ScriptedApi(
         onPush: (device, changes) => [
           for (final c in changes) _failed(c, 'rejected'),
@@ -601,7 +639,7 @@ void main() {
       await scope.read(syncEngineProvider).sync();
       expect(api.registrations, hasLength(1));
       expect(api.pushes, hasLength(2));
-      expect(queue.pendingCount, 1);
+      expect(queue.pendingCount, 2);
       expect(queue.pending(), isEmpty, reason: 'rejected leaves auto-retry');
     });
 
@@ -656,6 +694,79 @@ void main() {
       expect(api.registrations, hasLength(1));
       expect(api.pushes, hasLength(2));
       expect(queue.pending(), hasLength(1), reason: 'nothing was rejected');
+    });
+  });
+
+  group('strict push results (H1-4)', () {
+    Map<String, Object?> row() =>
+        Map.of(db.db.select('SELECT * FROM sync_pending_changes').single);
+
+    test('ignoredFields park the change with a plain reason', () async {
+      enqueue('t1');
+      final api = _ScriptedApi(
+        onPush: (device, changes) => [
+          SyncPushResult(
+            clientSeq: changes.single.clientSeq,
+            applied: true,
+            conflicts: 0,
+            ignoredFields: const ['colour'],
+          ),
+        ],
+      );
+      final scope = scripted(api);
+      addTearDown(scope.dispose);
+      final result = await scope.read(syncEngineProvider).sync();
+      expect(result.pushed, 0);
+      expect(queue.pending(), isEmpty);
+      expect(queue.pendingCount, 1, reason: 'kept for review, not dropped');
+      expect(row()['last_error'], contains('colour'));
+    });
+
+    test('no_syncable_fields is permanent', () async {
+      enqueue('t1');
+      final api = _ScriptedApi(
+        onPush: (device, changes) => [_failed(changes.single, 'no_syncable_fields')],
+      );
+      final scope = scripted(api);
+      addTearDown(scope.dispose);
+      await scope.read(syncEngineProvider).sync();
+      expect(row()['attempts'], SyncQueue.maxAttempts);
+      expect(api.registrations, isEmpty);
+    });
+
+    test('transient is retried without counting an attempt', () async {
+      enqueue('t1');
+      final api = _ScriptedApi(
+        onPush: (device, changes) => [_failed(changes.single, 'transient')],
+      );
+      final scope = scripted(api);
+      addTearDown(scope.dispose);
+      await scope.read(syncEngineProvider).sync();
+      expect(row()['attempts'], 0);
+      expect(queue.pending(), hasLength(1));
+    });
+
+    test('an unknown retryable reason counts once and backs off', () async {
+      enqueue('t1');
+      final api = _ScriptedApi(
+        onPush: (device, changes) => [_failed(changes.single, 'weird')],
+      );
+      final scope = scripted(api);
+      addTearDown(scope.dispose);
+      await scope.read(syncEngineProvider).sync();
+      expect(row()['attempts'], 1);
+      expect(queue.pending(), isEmpty, reason: 'waiting out its backoff');
+      queue.resetBackoff();
+      expect(queue.pending(), hasLength(1));
+    });
+
+    test('an applied result with no strict fields behaves as before', () async {
+      enqueue('t1');
+      final scope = scripted(_ScriptedApi());
+      addTearDown(scope.dispose);
+      final result = await scope.read(syncEngineProvider).sync();
+      expect(result.pushed, 1);
+      expect(queue.pendingCount, 0);
     });
   });
 

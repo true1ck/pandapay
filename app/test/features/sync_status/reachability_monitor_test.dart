@@ -127,4 +127,23 @@ void main() {
     await tester.pump(const Duration(minutes: 2));
     expect(h.probes, 0);
   });
+
+  testWidgets('polling pauses in the background and probes on resume', (
+    tester,
+  ) async {
+    final h = _Harness(results: [true]);
+    await h.pump(tester);
+    await _elapse(tester, ReachabilityMonitor.firstProbeDelay);
+    expect(h.probes, 1);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await _elapse(tester, const Duration(minutes: 5));
+    expect(h.probes, 1);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await _elapse(tester, Duration.zero);
+    expect(h.probes, 2);
+  });
 }

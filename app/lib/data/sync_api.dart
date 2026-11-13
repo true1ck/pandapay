@@ -58,11 +58,16 @@ class SyncPushResult {
   final int conflicts;
   final String? reason;
 
+  /// Payload keys the server does not sync (strict push only). Empty from an
+  /// older server or when the entity does not report it.
+  final List<String> ignoredFields;
+
   const SyncPushResult({
     required this.clientSeq,
     required this.applied,
     required this.conflicts,
     this.reason,
+    this.ignoredFields = const [],
   });
 
   factory SyncPushResult.fromJson(Map<String, dynamic> json) => SyncPushResult(
@@ -70,13 +75,25 @@ class SyncPushResult {
     applied: json['applied'] == true,
     conflicts: (json['conflicts'] as num?)?.toInt() ?? 0,
     reason: json['reason'] as String?,
+    ignoredFields: (json['ignoredFields'] is List)
+        ? (json['ignoredFields'] as List).whereType<String>().toList()
+        : const [],
   );
 
   /// Whether the server will ever accept this change. A `not_found` or
   /// `malformed` result is permanent — retrying it forever is what turns a
   /// single bad row into a queue that never drains.
   bool get isPermanentFailure =>
-      !applied && (reason == 'not_found' || reason == 'malformed' || reason == 'unknown_entity' || reason == 'rejected');
+      !applied &&
+      (reason == 'not_found' ||
+          reason == 'malformed' ||
+          reason == 'unknown_entity' ||
+          reason == 'rejected' ||
+          reason == 'no_syncable_fields');
+
+  /// A database timeout or deadlock on the server: retry later, and it says
+  /// nothing about the change, so it is not counted as an attempt.
+  bool get isTransient => !applied && reason == 'transient';
 }
 
 class SyncPullBatch {
@@ -194,6 +211,9 @@ class SyncApi {
       body: jsonEncode({
         'deviceId': deviceId,
         'changes': changes.map((c) => c.toJson()).toList(),
+        // Ask the server to report what it ignores instead of silently
+        // dropping it. An older server ignores the flag.
+        'strict': true,
       }),
     );
     if (response.statusCode != 200) {

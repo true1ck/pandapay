@@ -52,6 +52,16 @@ QueueFailure classifyQueueFailure(
     if (status == null) return QueueFailure.retryable;
     // The session was rejected; the row says nothing about it.
     if (status == 401) return QueueFailure.network;
+    // The account is not set up / paid up yet (phone or membership gate): says
+    // nothing about the row, which must wait rather than be parked.
+    if (status == 403 &&
+        (error.errorCode == 'phone_required' ||
+            error.errorCode == 'membership_required')) {
+      return QueueFailure.network;
+    }
+    // A 404 without the server's own JSON error is a gateway, captive portal
+    // or maintenance page, not an answer about this row.
+    if (status == 404 && error.errorCode == null) return QueueFailure.network;
     if (status == 408 || status == 429) return QueueFailure.retryable;
     if (retryableStatuses.contains(status)) return QueueFailure.retryable;
     if (status >= 400 && status < 500) return QueueFailure.permanent;

@@ -159,6 +159,7 @@ final accountSignOutProvider = Provider<AccountSignOut>((ref) {
       );
     }
     var scan = const SignOutQueueScan(unsent: 0, pending: 0, kinds: []);
+    var otherUnsent = 0;
     var counts = const PhoneOnlyCounts(
       smsOutbox: 0,
       receipts: 0,
@@ -168,6 +169,11 @@ final accountSignOutProvider = Provider<AccountSignOut>((ref) {
       final database = await ref.read(appDatabaseProvider.future);
       scan = scanSignOutQueues(QueueRegistry(database), namespace);
       counts = readPhoneOnlyCounts(database.db, namespace);
+      otherUnsent = unsentInOtherAccounts(
+        QueueRegistry(database),
+        database.db,
+        namespace,
+      );
     });
     // Waiting rows are what a connection would have delivered. Parked ones
     // were refused for good and are lost either way, so they say nothing
@@ -186,6 +192,7 @@ final accountSignOutProvider = Provider<AccountSignOut>((ref) {
       phoneOnlyMessages: counts.messages,
       pendingKinds: scan.kinds,
       connection: connection,
+      otherAccountsUnsent: otherUnsent,
     );
   }
 

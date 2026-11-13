@@ -78,6 +78,15 @@ class SyncEngine {
   /// failed chunk (halving), so a server outage cannot turn into hundreds.
   static const maxIsolationRequests = 24;
 
+  /// Safety valve (H1-2): a 500 aborts the sync without blaming any row, so a
+  /// row that deterministically crashes the server would block the queue for
+  /// ever. After this many 500 aborts in a row that all start with the same
+  /// head row, that row alone is held back for [headRowBackoff].
+  static const headRowAbortLimit = 8;
+  static const headRowBackoff = Duration(hours: 1);
+  int? _abortHead;
+  int _abortCount = 0;
+
   bool _reregisteredDevice = false;
   int _isolationRequests = 0;
 
@@ -275,8 +284,20 @@ class SyncEngine {
         results = await _pushOnce(api, queue, chunk);
       } on ApiException catch (error) {
         if (_chunkIsToBlame(error)) return await _isolate(api, queue, chunk, error, attempted);
+        if (error.statusCode == 500) {
+          final head = chunk.first.clientSeq;
+          _abortCount = _abortHead == head ? _abortCount + 1 : 1;
+          _abortHead = head;
+          if (_abortCount >= headRowAbortLimit) {
+            queue.defer(head, headRowBackoff, 'server error');
+            _abortHead = null;
+            _abortCount = 0;
+          }
+        }
         rethrow;
       }
+      _abortHead = null;
+      _abortCount = 0;
       return await _applyResults(queue, chunk, results);
     } finally {
       queue.release(chunk);
@@ -304,9 +325,10 @@ class SyncEngine {
     }
     // An older server cannot say "unknown device"; it answers not_found or
     // rejected for every item. One item failing that way is a real rejection,
-    // all of them failing that way is far more likely the device.
+    // all of them failing that way is far more likely the device. A single
+    // item proves nothing (H1-5), so it is not re-registered for.
     final everyItemRefused =
-        results.isNotEmpty &&
+        results.length >= 2 &&
         results.every(
           (r) =>
               !r.applied && (r.reason == 'not_found' || r.reason == 'rejected'),
@@ -332,12 +354,14 @@ class SyncEngine {
 
   /// True when the server's answer is about the content of this request
   /// rather than about the server, the session or the network: a request that
-  /// is too large (413), invalid (400, 422) or that crashed the handler (500).
-  /// Everything else (401, 403, 408, 429, other 5xx, no status) aborts the
-  /// sync and records nothing, exactly as before.
+  /// is too large (413) or invalid (400, 422). Everything else (401, 403, 408,
+  /// 429, every 5xx, no status) aborts the sync and records nothing. A 500 is
+  /// deliberately not here (H1-2): the server answers a bare internal_error for
+  /// any unmapped database failure, an outage included, so halving the chunk
+  /// would burn attempts on rows that did nothing wrong.
   bool _chunkIsToBlame(ApiException error) {
     final status = error.statusCode;
-    return status == 413 || status == 400 || status == 422 || status == 500;
+    return status == 413 || status == 400 || status == 422;
   }
 
   /// A request failed because of what it contained. Halve it until the bad
@@ -354,14 +378,7 @@ class SyncEngine {
       final message = error.statusCode == 413
           ? 'Change is too large to sync'
           : (error.userMessage);
-      if (error.statusCode == 500) {
-        // Not conclusive (a crash may be the server's, not the change's):
-        // count it, and let the attempt limit take it out of the automatic
-        // retry set if it keeps failing.
-        queue.recordFailure(change.clientSeq, 'server error');
-      } else {
-        queue.reject(change.clientSeq, message);
-      }
+      queue.reject(change.clientSeq, message);
       return 0;
     }
     if (_isolationRequests >= maxIsolationRequests) throw error;
@@ -408,14 +425,27 @@ class SyncEngine {
           final cache = await _ref.read(responseCacheProvider.future);
           cache.financialStore.markInactive(queue.namespace, change.entityId);
         }
+        if (result.ignoredFields.isNotEmpty) {
+          // The server kept the rest but dropped these fields. Never silent:
+          // keep the change for review with a plain reason.
+          queue.reject(
+            result.clientSeq!,
+            "Some details weren't saved: ${result.ignoredFields.join(', ')}",
+          );
+          continue;
+        }
         queue.markApplied(result.clientSeq!);
         applied++;
       } else if (result.isPermanentFailure) {
         // Retain rejected work for review while allowing later edits through.
         queue.reject(
           result.clientSeq!,
-          result.reason ?? 'Change needs attention',
+          result.reason == 'no_syncable_fields'
+              ? 'PandaPay no longer accepts this kind of edit'
+              : (result.reason ?? 'Change needs attention'),
         );
+      } else if (result.isTransient) {
+        // A database hiccup on the server: nothing to count, try next sync.
       } else {
         queue.recordFailure(result.clientSeq!, result.reason ?? 'unknown');
       }
@@ -692,8 +722,17 @@ final syncLifecycleProvider = Provider<void>((ref) {
         // An explicit sign-out wipes the file, so this reset only matters there.
         ref.read(sessionEndReasonProvider).mayWipeAccountData) {
       // Sign-out: the queue and cursor belong to the account that just left.
-      final db = await ref.read(appDatabaseProvider.future);
-      SyncQueue(db, namespace: previous!).resetCursor();
+      // H1-7: sign-out closes the database and then invalidates the provider;
+      // awaiting `.future` here could reopen (and recreate) the file that is
+      // being deleted. Use only a database that is still alive.
+      if (!ref.exists(appDatabaseProvider)) return;
+      final db = ref.read(appDatabaseProvider).valueOrNull;
+      if (db == null) return;
+      try {
+        SyncQueue(db, namespace: previous!).resetCursor();
+      } catch (_) {
+        // Already closed: the file is deleted by the sign-out anyway.
+      }
     }
   });
 
@@ -704,6 +743,11 @@ final syncLifecycleProvider = Provider<void>((ref) {
       // Backoffs were about problems that may have passed; do not wait them
       // out a second time after being offline.
       ref.read(transactionTagsProvider)?.resetBackoff();
+      try {
+        (await ref.read(syncQueueProvider.future)).resetBackoff();
+      } catch (_) {
+        // The sync below still runs; the backoff just expires on its own.
+      }
       try {
         await ref.read(foreignPaymentsRepositoryProvider).resetBackoff();
       } catch (_) {
