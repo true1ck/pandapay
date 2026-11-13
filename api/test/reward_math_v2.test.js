@@ -55,6 +55,46 @@ test('resolveMerchant: an alias matches on word boundaries only', () => {
   assert.strictEqual(resolveMerchant(dir, 'POS*SWIGGY*ORDER', null)?.slug, 'swiggy');
 });
 
+const CUT_DIR = {
+  version: 1,
+  merchants: [
+    { slug: 'flipkart', name: 'Flipkart', parent_slug: null, aliases: ['flipkart'], vpa_prefixes: [] },
+    { slug: 'swiggy', name: 'Swiggy', parent_slug: null, aliases: ['swiggy', 'bundl technologies'], vpa_prefixes: [] },
+    { slug: 'instamart', name: 'Swiggy Instamart', parent_slug: 'swiggy', aliases: ['swiggy instamart'], vpa_prefixes: [] },
+    { slug: 'freshmenu', name: 'FreshMenu', parent_slug: null, aliases: ['freshmenu'], vpa_prefixes: [] },
+  ],
+  platforms: [],
+};
+
+test('resolveMerchant: a last word the bank cut short still resolves (PYU*Flipkar, Flipka)', () => {
+  const dir = loadDirectory(CUT_DIR);
+  for (const name of ['PYU*Flipkar', 'Flipka', 'FLIPKAR', 'razorpay flipkar']) {
+    const r = resolveMerchant(dir, name, null);
+    assert.equal(r && r.slug, 'flipkart', name);
+    assert.equal(r.via, 'alias');
+  }
+});
+
+test('resolveMerchant: a cut multi-word alias needs its earlier words whole', () => {
+  const dir = loadDirectory(CUT_DIR);
+  assert.equal(resolveMerchant(dir, 'BUNDL TECHNOLOG', null).slug, 'swiggy');
+  assert.equal(resolveMerchant(dir, 'ZZZ TECHNOLOG', null), null, 'the head word "bundl" is missing');
+});
+
+test('resolveMerchant: short stubs and long cuts never resolve', () => {
+  const dir = loadDirectory(CUT_DIR);
+  assert.equal(resolveMerchant(dir, 'FLIPK', null), null, 'five letters is too short a stub');
+  assert.equal(resolveMerchant(dir, 'FRESH', null), null, 'a common word is not a cut brand');
+  assert.equal(resolveMerchant(dir, 'FLIP', null), null);
+  assert.equal(resolveMerchant(dir, 'FLIPKARTT', null), null, 'longer than the alias is not a cut');
+  assert.equal(resolveMerchant(dir, 'FRESHMENUS', null), null);
+});
+
+test('resolveMerchant: a whole-word match always beats a cut-short one', () => {
+  const dir = loadDirectory(CUT_DIR);
+  assert.equal(resolveMerchant(dir, 'swiggy flipkar', null).slug, 'swiggy');
+});
+
 test('resolveMerchant: the longest matching alias wins', () => {
   const dir = loadDirectory(DIR_JSON);
   const r = resolveMerchant(dir, 'SWIGGY INSTAMART BANGALORE', null);

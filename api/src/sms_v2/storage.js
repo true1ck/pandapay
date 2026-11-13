@@ -9,6 +9,8 @@
 
 const { isDeepStrictEqual } = require('node:util');
 const { projectEvent, movesCardState } = require('./projection');
+const cardStateV2 = require('../card_state_v2');
+const { creditRewardFacts } = require('../reward_credits');
 
 // ---------- SQL fragments: contract-shaped JSON built in the database ----------
 
@@ -696,17 +698,17 @@ async function projectTransactions(client, profileId, eventIds, { backfill, cate
       `INSERT INTO transactions (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, category_id, rail, payment_method, source,
          status, reward_state, source_key, instrument, entry_kind, state_applied, is_backfill, event_id, pipeline_version)
        SELECT $1, r.user_card_id, r.amount_minor::numeric / 100, r.occurred_at, r.merchant_name, r.category_id, r.rail::txn_rail, r.payment_method,
-              'sms', 'active', 'estimated', r.source_key, r.instrument::txn_instrument, r.entry_kind::txn_entry_kind, false, r.is_backfill,
+              'sms', 'active', COALESCE(r.reward_state, 'estimated')::txn_confidence, r.source_key, r.instrument::txn_instrument, r.entry_kind::txn_entry_kind, false, r.is_backfill,
               r.event_id, 2
          FROM jsonb_to_recordset($2::jsonb) AS r(event_id text, amount_minor bigint, occurred_at timestamptz, merchant_name text,
-           category_id uuid, user_card_id uuid, rail text, payment_method text, instrument text, entry_kind text, source_key text, is_backfill boolean)
+           category_id uuid, user_card_id uuid, rail text, payment_method text, instrument text, entry_kind text, source_key text, is_backfill boolean, reward_state text)
        ON CONFLICT (profile_id, event_id) WHERE event_id IS NOT NULL DO NOTHING
        RETURNING id, event_id, amount_inr, occurred_at, merchant_name, category_id, user_card_id, rail::text AS rail,
                  entry_kind::text AS entry_kind, instrument::text AS instrument, is_backfill`,
       [profileId, J(toInsert.map((s) => ({
         event_id: s.eventId, amount_minor: s.amountMinor, occurred_at: s.occurredAt, merchant_name: s.merchantName,
         category_id: s.categoryId, user_card_id: s.userCardId, rail: s.rail, payment_method: s.paymentMethod || null, instrument: s.instrument, entry_kind: s.entryKind,
-        source_key: s.sourceKey, is_backfill: backfill === true || historyEvents.has(s.eventId),
+        source_key: s.sourceKey, is_backfill: backfill === true || historyEvents.has(s.eventId), reward_state: s.rewardState || 'estimated',
       })))],
     );
     newRows.push(...r.rows);
@@ -753,25 +755,47 @@ async function projectTransactions(client, profileId, eventIds, { backfill, cate
 
   // ---- apply card state exactly once ----
   // New rows, rows just rewritten, and rows that gained a card since they were
-  // first stored. Never for backfill rows, never twice for the same row.
+  // first stored. History rows are included: they earn rewards like any other
+  // spend (caps are bucketed by each spend's own period, so an old month never
+  // disturbs the current one). Never twice for the same row.
   const candidates = [];
-  if (backfill !== true) {
-    for (const r of newRows) if (!r.is_backfill && rowMovesCard(r)) candidates.push({ id: r.id, row: r });
-  }
+  for (const r of newRows) if (rowMovesCard(r)) candidates.push({ id: r.id, row: r });
   const changedIds = new Set(changed.map((c) => c.row.id));
   for (const { row, spec } of changed) {
-    if (!row.is_backfill && movesCardState(spec)) candidates.push({ id: row.id, spec });
+    if (movesCardState(spec)) candidates.push({ id: row.id, spec });
   }
   for (const [id, row] of rowOf) {
-    if (specs.has(id) && row.status === 'active' && !row.is_backfill && !changedIds.has(row.id) && !row.state_applied && rowMovesCard(row)) {
+    if (specs.has(id) && row.status === 'active' && !changedIds.has(row.id) && !row.state_applied && rowMovesCard(row)) {
       candidates.push({ id: row.id, row });
     }
   }
+  const srcOf = (c) => (c.row
+    ? { cardId: c.row.user_card_id, amount: Number(c.row.amount_inr), occurred: c.row.occurred_at, categoryId: c.row.category_id, merchantName: c.row.merchant_name, rail: c.row.rail, history: Boolean(c.row.is_backfill) || backfill === true }
+    : { cardId: c.spec.userCardId, amount: c.spec.amountMinor / 100, occurred: new Date(c.spec.occurredAt), categoryId: c.spec.categoryId, merchantName: c.spec.merchantName, rail: c.spec.rail, history: backfill === true || Boolean(rowOf.get(c.id) && rowOf.get(c.id).is_backfill) });
+  // Oldest first, so cap blending sees spends in the order they happened.
+  const ordered = candidates.map((c) => ({ c, src: srcOf(c) }))
+    .sort((a, b) => new Date(a.src.occurred) - new Date(b.src.occurred));
+
+  // History spends of a v2 card are priced by one exact rebuild per card
+  // (date order, every period's own caps) instead of one apply per row.
+  const historyByCard = new Map();
+  for (const { c, src } of ordered) {
+    if (!src.history) continue;
+    const day = new Date(src.occurred).toISOString().slice(0, 10);
+    const cur = historyByCard.get(src.cardId);
+    if (!cur) historyByCard.set(src.cardId, { day, ids: [c.id] });
+    else { if (day < cur.day) cur.day = day; cur.ids.push(c.id); }
+  }
   const applied = [];
-  for (const c of candidates) {
-    const src = c.row
-      ? { cardId: c.row.user_card_id, amount: Number(c.row.amount_inr), occurred: c.row.occurred_at, categoryId: c.row.category_id, merchantName: c.row.merchant_name, rail: c.row.rail }
-      : { cardId: c.spec.userCardId, amount: c.spec.amountMinor / 100, occurred: new Date(c.spec.occurredAt), categoryId: c.spec.categoryId, merchantName: c.spec.merchantName, rail: c.spec.rail };
+  const priced = new Set();
+  for (const [cardId, h] of historyByCard) {
+    const card = await cardFor(cardId);
+    if (!card) continue;
+    const out = await cardStateV2.priceHistoryIfV2(client, profileId, cardId, h.day);
+    if (out) h.ids.forEach((id) => priced.add(id)); // priced (or deferred to the next rebuild); never applied twice
+  }
+  for (const { c, src } of ordered) {
+    if (priced.has(c.id)) { applied.push(c.id); continue; }
     const card = await cardFor(src.cardId);
     if (!card) continue; // archived or missing card: the row is kept without card state
     await deps.applyTransactionState(client, profileId, card, {
@@ -796,6 +820,9 @@ async function ingestBatch(client, profileId, body, { backfill = false, category
   const results = [];
   await upsertInstruments(client, profileId, body.instruments, results);
   await insertFacts(client, profileId, body.items, results);
+  // Points the bank credited ("Reward Points Credited: 2500 ...") go to the card's points history.
+  const creditedFactIds = [...new Set(results.filter((r) => r.kind === 'fact' && r.status !== 'rejected').map((r) => r.id))];
+  if (creditedFactIds.length) await creditRewardFacts(client, profileId, { factIds: creditedFactIds });
   if (hooks?.afterFactsStored) {
     const factIds = [...new Set(results.filter(r => r.kind === 'fact' && r.status !== 'rejected').map(r => r.id))];
     if (factIds.length) await hooks.afterFactsStored(client, profileId, factIds);

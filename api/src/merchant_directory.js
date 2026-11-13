@@ -102,7 +102,38 @@ function resolveMerchant(dir, name, vpa) {
   for (const entry of directory.aliasIndex) {
     if (padded.includes(` ${entry.match} `) && better(entry, best)) best = entry;
   }
-  return best ? { slug: best.slug, via: 'alias', match: best.match } : null;
+  if (best) return { slug: best.slug, via: 'alias', match: best.match };
+  const cut = cutShortMatch(directory, text);
+  return cut ? { slug: cut.slug, via: 'alias', match: cut.match } : null;
+}
+
+/**
+ * A bank prints merchant text in a fixed number of characters, so the last
+ * word is often cut short ("PYU*Flipkar", "Flipka", "Swigg"). When no alias
+ * matched as whole words, accept an alias whose LAST word is the text's last
+ * word with one to three letters missing. The text's last word must be at
+ * least six letters (a short stub names nothing), and any earlier words of a
+ * multi-word alias must match whole. The Dart twin applies the same rule.
+ */
+const MIN_CUT_WORD = 6;
+const MAX_CUT_LETTERS = 3;
+
+function cutShortMatch(directory, text) {
+  const words = text.split(' ');
+  const last = words[words.length - 1];
+  if (last.length < MIN_CUT_WORD) return null;
+  const before = ` ${words.slice(0, -1).join(' ')} `;
+  let best = null;
+  for (const entry of directory.aliasIndex) {
+    const parts = entry.match.split(' ');
+    const tail = parts[parts.length - 1];
+    const missing = tail.length - last.length;
+    if (missing < 1 || missing > MAX_CUT_LETTERS || !tail.startsWith(last)) continue;
+    const head = parts.slice(0, -1).join(' ');
+    if (head !== '' && !before.endsWith(` ${head} `)) continue;
+    if (better(entry, best)) best = entry;
+  }
+  return best;
 }
 
 /** Parent chain of `slug` (excluding itself), nearest first, ≤ 5 deep. */

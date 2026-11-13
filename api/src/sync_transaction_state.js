@@ -194,7 +194,7 @@ function createSyncTransactionApplier({
 
     if (oldCard) await reverseTransactionState(client, userId, oldCard, beforeForState);
 
-    if (!after.is_backfill && movesCardState(after)) {
+    if (movesCardState(after)) {
       if (!newCard) throw taggedError('SYNC_TRANSACTION_CARD_REQUIRED');
       await applyTransactionState(client, userId, newCard, {
         txnId: after.id,
@@ -208,13 +208,11 @@ function createSyncTransactionApplier({
       });
     }
 
-    if (!after.is_backfill) {
-      await client.query(
-        `UPDATE transactions SET state_applied = true
-          WHERE id = $1 AND profile_id = $2`,
-        [entityId, userId],
-      );
-    }
+    await client.query(
+      `UPDATE transactions SET state_applied = true
+        WHERE id = $1 AND profile_id = $2`,
+      [entityId, userId],
+    );
 
     return result;
   };
