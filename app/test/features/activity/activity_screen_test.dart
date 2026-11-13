@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemChannels;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1183,30 +1184,61 @@ void main() {
         expect(find.byKey(const Key('activity-suggest-Zomato')), findsNothing);
         expect(find.byKey(const Key('activity-suggest-notes')), findsOneWidget);
 
-        // Add two merchants, one after the other.
+        // Add two merchants, one after the other, from the same typed words:
+        // the box keeps "sw" and the list stays, so the second is one tap away.
         await tester.tap(find.byKey(const Key('activity-suggest-Swiggy')));
         await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const Key('activity-suggest-Zomato')));
+        expect(
+          tester
+              .widget<TextField>(find.byKey(const Key('activity-search-field')))
+              .controller!
+              .text,
+          'sw',
+        );
+        expect(
+          find.byKey(const Key('activity-search-suggestions')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('activity-suggest-Swish Mart')),
+          findsOneWidget,
+        );
+        await tester.tap(find.byKey(const Key('activity-suggest-Swish Mart')));
         await tester.pumpAndSettle();
+        expect(find.byIcon(Icons.check_circle_rounded), findsNWidgets(2));
         expect(find.text('Done'), findsOneWidget);
         await tester.tap(find.byKey(const Key('activity-search-done')));
         await tester.pumpAndSettle();
 
-        // The list shows only those two merchants, each with a chip to remove it.
+        // The words were only a way to find them: the box is empty again, and
+        // the list shows only those two merchants, each with a chip to remove it.
+        expect(
+          tester
+              .widget<TextField>(find.byKey(const Key('activity-search-field')))
+              .controller!
+              .text,
+          isEmpty,
+        );
         expect(
           find.byKey(const Key('activity-search-suggestions')),
           findsNothing,
         );
         expect(find.text('Blinkit'), findsNothing);
-        expect(find.text('Swish Mart'), findsNothing);
+        expect(find.text('Zomato'), findsNothing);
         expect(find.bySemanticsLabel(RegExp('Remove Swiggy')), findsOneWidget);
-        expect(find.bySemanticsLabel(RegExp('Remove Zomato')), findsOneWidget);
+        expect(
+          find.bySemanticsLabel(RegExp('Remove Swish Mart')),
+          findsOneWidget,
+        );
         expect(find.byKey(const Key('activity-filters-count')), findsOneWidget);
 
-        await tester.tap(find.bySemanticsLabel(RegExp('Remove Zomato')));
+        await tester.tap(find.bySemanticsLabel(RegExp('Remove Swish Mart')));
         await tester.pumpAndSettle();
-        expect(find.bySemanticsLabel(RegExp('Remove Zomato')), findsNothing);
-        expect(find.text('Zomato'), findsNothing);
+        expect(
+          find.bySemanticsLabel(RegExp('Remove Swish Mart')),
+          findsNothing,
+        );
+        expect(find.text('Swish Mart'), findsNothing);
         expect(find.text('Swiggy'), findsWidgets);
 
         await tester.tap(find.text('Clear all'));
@@ -1348,6 +1380,375 @@ void main() {
       expect(saved, isNotNull);
       expect(saved, contains('"sort":"merchantAz"'));
       expect(saved, isNot(contains('zom')));
+    });
+  });
+
+  group('search: several matches from one search, and the keyboard', () {
+    // The screen saves its view between visits; a test must not inherit the
+    // merchants an earlier one picked.
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    List<TransactionEntry> anthropic() {
+      final now = _currentMonthTime(10, 0);
+      return [
+        _txn(
+          id: 'a1',
+          amount: Money.fromRupees(100),
+          occurredAt: now,
+          merchantName: 'ANTHROPIC CLAUDE SUB U',
+        ),
+        _txn(
+          id: 'a2',
+          amount: Money.fromRupees(200),
+          occurredAt: now,
+          merchantName: 'ANTHROPIC SAN FRANCISCO U',
+        ),
+        _txn(
+          id: 'a3',
+          amount: Money.fromRupees(300),
+          occurredAt: now,
+          merchantName: 'ANTHROPIC US',
+        ),
+        _txn(
+          id: 'z1',
+          amount: Money.fromRupees(250),
+          occurredAt: now,
+          merchantName: 'Zomato',
+        ),
+      ];
+    }
+
+    String boxText(WidgetTester tester) => tester
+        .widget<TextField>(find.byKey(const Key('activity-search-field')))
+        .controller!
+        .text;
+
+    /// The Activity page reached from another page, as it is in the app, so
+    /// that "back" has somewhere to go.
+    Future<GoRouter> pumpFromHome(WidgetTester tester) async {
+      final router = GoRouter(
+        initialLocation: '/',
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (context, state) => Scaffold(
+              body: Center(
+                child: TextButton(
+                  onPressed: () => context.push('/activity'),
+                  child: const Text('open activity'),
+                ),
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/activity',
+            builder: (context, state) => Scaffold(
+              appBar: AppBar(title: const Text('Activity')),
+              body: const ActivityScreen(),
+            ),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            foreignPaymentsProvider.overrideWith((ref) async => const []),
+            accessTokenProvider.overrideWith((ref) => 'test-token'),
+            sessionInitProvider.overrideWith((ref) async {}),
+            userCardsRepositoryProvider.overrideWithValue(
+              _FakeUserCardsRepository(anthropic()),
+            ),
+            userCardsProvider.overrideWith((ref) async => const []),
+            categoriesProvider.overrideWith((ref) async => const []),
+            transactionsProvider.overrideWith((ref) async => anthropic()),
+          ],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+      FocusManager.instance.listenToApplicationLifecycleChangesIfSupported();
+      await tester.tap(find.text('open activity'));
+      await tester.pumpAndSettle();
+      return router;
+    }
+
+    Future<void> openSearch(WidgetTester tester) async {
+      await tester.tap(find.byKey(const Key('activity-search-field')));
+      await tester.pumpAndSettle();
+      expect(tester.testTextInput.isVisible, isTrue);
+    }
+
+    bool searchIsOpen() => find
+        .byKey(const Key('activity-search-suggestions'))
+        .evaluate()
+        .isNotEmpty;
+
+    bool onActivityPage() =>
+        find.byKey(const Key('activity-search-field')).evaluate().isNotEmpty;
+
+    Future<void> edgeSwipe(WidgetTester tester) async {
+      final gesture = await tester.startGesture(const Offset(2, 300));
+      await gesture.moveBy(const Offset(40, 0));
+      await tester.pump();
+      // Far enough that the page's own back swipe (which needs about half the
+      // screen) completes when it is the one listening.
+      await gesture.moveBy(const Offset(560, 0));
+      await gesture.up();
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('typing "ant" lets all three Anthropic lines be picked, one '
+        'after the other, without typing again', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await _pump(
+        tester,
+        repo: _FakeUserCardsRepository(anthropic()),
+        cards: const [],
+        overrides: [
+          transactionsProvider.overrideWith((ref) async => anthropic()),
+        ],
+      );
+
+      await tester.tap(find.byKey(const Key('activity-search-field')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('activity-search-field')),
+        'ant',
+      );
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.add_circle_outline_rounded), findsNWidgets(3));
+
+      for (final (index, name) in [
+        'ANTHROPIC CLAUDE SUB U',
+        'ANTHROPIC SAN FRANCISCO U',
+        'ANTHROPIC US',
+      ].indexed) {
+        await tester.tap(find.byKey(Key('activity-suggest-$name')));
+        await tester.pumpAndSettle();
+        // Every pick leaves the words and the list where they were.
+        expect(boxText(tester), 'ant');
+        expect(find.byKey(const Key('activity-search-suggestions')), findsOne);
+        expect(
+          find.byIcon(Icons.check_circle_rounded),
+          findsNWidgets(index + 1),
+        );
+        expect(tester.testTextInput.isVisible, isTrue);
+      }
+
+      // Tapping a ticked line takes it off again, still without retyping.
+      await tester.tap(
+        find.byKey(const Key('activity-suggest-ANTHROPIC SAN FRANCISCO U')),
+      );
+      await tester.pumpAndSettle();
+      expect(boxText(tester), 'ant');
+      expect(find.byIcon(Icons.check_circle_rounded), findsNWidgets(2));
+      await tester.tap(
+        find.byKey(const Key('activity-suggest-ANTHROPIC SAN FRANCISCO U')),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('activity-search-done')));
+      await tester.pumpAndSettle();
+      expect(searchIsOpen(), isFalse);
+      expect(tester.testTextInput.isVisible, isFalse);
+      expect(boxText(tester), isEmpty);
+      expect(find.text('Zomato'), findsNothing);
+      for (final name in [
+        'ANTHROPIC CLAUDE SUB U',
+        'ANTHROPIC SAN FRANCISCO U',
+        'ANTHROPIC US',
+      ]) {
+        expect(find.bySemanticsLabel(RegExp('Remove $name')), findsOneWidget);
+      }
+      semantics.dispose();
+    });
+
+    testWidgets(
+      'typing again after a pick makes the words a text search again',
+      (tester) async {
+        await _pump(
+          tester,
+          repo: _FakeUserCardsRepository(anthropic()),
+          cards: const [],
+          overrides: [
+            transactionsProvider.overrideWith((ref) async => anthropic()),
+          ],
+        );
+        await tester.tap(find.byKey(const Key('activity-search-field')));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('activity-search-field')),
+          'ant',
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(const Key('activity-suggest-ANTHROPIC US')),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.enterText(
+          find.byKey(const Key('activity-search-field')),
+          'ant u',
+        );
+        await tester.pump(const Duration(milliseconds: 400));
+        await tester.tap(find.byKey(const Key('activity-search-done')));
+        await tester.pumpAndSettle();
+        // Typed after the pick, so it is kept as a search, not wiped.
+        expect(boxText(tester), 'ant u');
+      },
+    );
+
+    testWidgets('a quick pick is not undone by the search typed just before', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      final repo = _FakeUserCardsRepository(anthropic());
+      await _pump(
+        tester,
+        repo: repo,
+        cards: const [],
+        overrides: [
+          transactionsProvider.overrideWith((ref) async => anthropic()),
+        ],
+      );
+      await tester.tap(find.byKey(const Key('activity-search-field')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('activity-search-field')),
+        'ant',
+      );
+      // Picked before the short wait that would send the words as a search.
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(find.byKey(const Key('activity-suggest-ANTHROPIC US')));
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.tap(find.byKey(const Key('activity-search-done')));
+      await tester.pumpAndSettle();
+
+      // The merchant is picked, and the words never went out as a search too.
+      expect(
+        find.bySemanticsLabel(RegExp('Remove ANTHROPIC US')),
+        findsOneWidget,
+      );
+      expect(repo.lastFetchArgs?.single['query'], isNull);
+      expect(boxText(tester), isEmpty);
+      semantics.dispose();
+    });
+
+    testWidgets('back closes the search and the keyboard first, and stays on '
+        'the page; back again leaves', (tester) async {
+      await pumpFromHome(tester);
+      await openSearch(tester);
+      expect(searchIsOpen(), isTrue);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(searchIsOpen(), isFalse);
+      expect(tester.testTextInput.isVisible, isFalse);
+      expect(onActivityPage(), isTrue);
+
+      // Searching again brings the keyboard back, and back puts it away again.
+      await openSearch(tester);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(tester.testTextInput.isVisible, isFalse);
+      expect(onActivityPage(), isTrue);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(onActivityPage(), isFalse);
+      expect(find.text('open activity'), findsOneWidget);
+      expect(tester.testTextInput.isVisible, isFalse);
+    });
+
+    testWidgets('picked merchants stay and the typed words go when back closes '
+        'the search', (tester) async {
+      await pumpFromHome(tester);
+      await openSearch(tester);
+      await tester.enterText(
+        find.byKey(const Key('activity-search-field')),
+        'ant',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('activity-suggest-ANTHROPIC US')));
+      await tester.pumpAndSettle();
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(searchIsOpen(), isFalse);
+      expect(onActivityPage(), isTrue);
+      expect(boxText(tester), isEmpty);
+      // The merchant picked is a chip and the one row left; nothing else is.
+      expect(find.text('ANTHROPIC US'), findsNWidgets(2));
+      expect(find.text('ANTHROPIC CLAUDE SUB U'), findsNothing);
+      expect(find.text('Zomato'), findsNothing);
+    });
+
+    testWidgets('on an iPhone the edge swipe closes the search and keyboard '
+        'first; a second swipe leaves', (tester) async {
+      await pumpFromHome(tester);
+      await openSearch(tester);
+
+      await edgeSwipe(tester);
+      expect(searchIsOpen(), isFalse);
+      expect(tester.testTextInput.isVisible, isFalse);
+      expect(onActivityPage(), isTrue);
+
+      await openSearch(tester);
+      await edgeSwipe(tester);
+      expect(tester.testTextInput.isVisible, isFalse);
+      expect(onActivityPage(), isTrue);
+
+      await edgeSwipe(tester);
+      expect(onActivityPage(), isFalse);
+      expect(find.text('open activity'), findsOneWidget);
+      expect(tester.testTextInput.isVisible, isFalse);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+    testWidgets(
+      'after the app goes to the background and comes back mid-search '
+      '(a screenshot sent elsewhere), going back leaves no keyboard',
+      (tester) async {
+        await pumpFromHome(tester);
+        await openSearch(tester);
+
+        for (final state in [
+          AppLifecycleState.inactive,
+          AppLifecycleState.hidden,
+          AppLifecycleState.paused,
+          AppLifecycleState.hidden,
+          AppLifecycleState.inactive,
+          AppLifecycleState.resumed,
+        ]) {
+          tester.binding.handleAppLifecycleStateChanged(state);
+          await tester.pump();
+        }
+        await tester.pumpAndSettle();
+
+        await edgeSwipe(tester);
+        expect(searchIsOpen(), isFalse);
+        expect(tester.testTextInput.isVisible, isFalse);
+        await edgeSwipe(tester);
+        expect(onActivityPage(), isFalse);
+        expect(tester.testTextInput.isVisible, isFalse);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+    );
+
+    testWidgets('leaving the page puts away a keyboard that Flutter no longer '
+        'tracks (the phone brought it back on its own)', (tester) async {
+      final router = await pumpFromHome(tester);
+      await openSearch(tester);
+
+      // Flutter lets go of the field, then the phone shows the keyboard again.
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      await SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+      expect(tester.testTextInput.isVisible, isTrue);
+
+      router.go('/');
+      await tester.pumpAndSettle();
+      expect(find.text('open activity'), findsOneWidget);
+      expect(tester.testTextInput.isVisible, isFalse);
     });
   });
 }

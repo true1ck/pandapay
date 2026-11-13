@@ -3,7 +3,9 @@ import '../sms_v2/ledger/providers.dart';
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemChannels;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -285,8 +287,23 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   void deactivate() {
     // Leaving the page (a transaction, another tab, back) must not leave the
     // keyboard open over whatever comes next.
-    FocusManager.instance.primaryFocus?.unfocus();
+    _dismissKeyboard();
     super.deactivate();
+  }
+
+  final _searchKey = GlobalKey<_SearchFieldState>();
+
+  /// Back while the search is open (the arrow, the iPhone edge swipe, the
+  /// Android back): close the search and its keyboard and stay on this page.
+  /// Back again leaves.
+  void _closeSearch() {
+    final field = _searchKey.currentState;
+    if (field != null) {
+      field.finish();
+    } else {
+      ref.read(_activitySearchActiveProvider.notifier).state = false;
+      _dismissKeyboard();
+    }
   }
 
   @override
@@ -887,7 +904,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         ? pendingForeign
         : const <ForeignPayment>[];
 
-    return AppBackground(
+    final page = AppBackground(
       child: Column(
         children: [
           Padding(
@@ -901,7 +918,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
               children: [
                 Row(
                   children: [
-                    const Expanded(child: _SearchField()),
+                    Expanded(child: _SearchField(key: _searchKey)),
                     if (!searching) ...[
                       const SizedBox(width: AppSpace.xs),
                       PopupMenuButton<String>(
@@ -1299,6 +1316,24 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         ],
       ),
     );
+
+    // While the search is open, going back closes it instead of leaving the
+    // page. (canPop false also switches off the iPhone's own back swipe, so
+    // that swipe is picked up here instead.)
+    return PopScope(
+      canPop: !searching,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _closeSearch();
+      },
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          page,
+          if (searching && defaultTargetPlatform == TargetPlatform.iOS)
+            _EdgeBackSwipe(onBack: _closeSearch),
+        ],
+      ),
+    );
   }
 
   Future<void> _openSortSheet(
@@ -1595,6 +1630,23 @@ final _activitySearchActiveProvider = StateProvider<bool>((ref) => false);
 /// it to the server. Suggestions follow this.
 final _activitySearchDraftProvider = StateProvider<String>((ref) => '');
 
+/// True once a merchant has been picked from the suggestions for the words
+/// typed. The words stay in the box so the next match can be picked too; they
+/// are only a way of finding merchants, not a text search, and go when the
+/// search ends. Typing again makes them a search again.
+final _activitySearchPickedProvider = StateProvider<bool>((ref) => false);
+
+/// Puts the keyboard away. Dropping Flutter's focus is not always enough: the
+/// phone can bring the keyboard back for a field that Flutter no longer tracks
+/// (the app was in the background, a screenshot was taken), so the platform is
+/// told to hide it as well. Hiding is harmless when it is already hidden.
+void _dismissKeyboard() {
+  FocusManager.instance.primaryFocus?.unfocus();
+  SystemChannels.textInput
+      .invokeMethod<void>('TextInput.hide')
+      .catchError((Object _) {});
+}
+
 const _activityViewKey = 'activity_view_v1';
 const _activityRecentKey = 'activity_recent_searches_v1';
 
@@ -1889,7 +1941,7 @@ IconData _typeIcon(_ActivityTypeFilter type) => switch (type) {
 final Object _searchTapGroup = Object();
 
 class _SearchField extends ConsumerStatefulWidget {
-  const _SearchField();
+  const _SearchField({super.key});
 
   @override
   ConsumerState<_SearchField> createState() => _SearchFieldState();
@@ -1909,6 +1961,8 @@ class _SearchFieldState extends ConsumerState<_SearchField> {
       if (!mounted) return;
       ref.read(_activitySearchDraftProvider.notifier).state = _controller.text;
       ref.read(_activitySearchActiveProvider.notifier).state = _focus.hasFocus;
+      // A visit that ended mid-search must not leave its state behind.
+      ref.read(_activitySearchPickedProvider.notifier).state = false;
     });
   }
 
@@ -1923,8 +1977,25 @@ class _SearchFieldState extends ConsumerState<_SearchField> {
 
   void _onFocus() {
     if (!mounted) return;
-    ref.read(_activitySearchActiveProvider.notifier).state = _focus.hasFocus;
-    if (!_focus.hasFocus) unawaited(_rememberSearch(_controller.text));
+    final hasFocus = _focus.hasFocus;
+    ref.read(_activitySearchActiveProvider.notifier).state = hasFocus;
+    if (hasFocus) return;
+    if (ref.read(_activitySearchPickedProvider)) {
+      // Focus left while the box only held the words used to find merchants.
+      _dropFinderText();
+    } else {
+      unawaited(_rememberSearch(_controller.text));
+    }
+  }
+
+  /// Empties the box after merchants were picked with the words in it. The
+  /// merchants are the search now; the words have done their job.
+  void _dropFinderText() {
+    _debounce?.cancel();
+    _controller.clear();
+    ref.read(_activitySearchDraftProvider.notifier).state = '';
+    ref.read(_activitySearchPickedProvider.notifier).state = false;
+    if (mounted) setState(() {});
   }
 
   void _setQuery(String value) {
@@ -1938,6 +2009,8 @@ class _SearchFieldState extends ConsumerState<_SearchField> {
 
   void _onChanged(String value) {
     ref.read(_activitySearchDraftProvider.notifier).state = value;
+    // Typing again: these are a search of their own once more.
+    ref.read(_activitySearchPickedProvider.notifier).state = false;
     _debounce?.cancel();
     _debounce = Timer(
       const Duration(milliseconds: 350),
@@ -1952,14 +2025,23 @@ class _SearchFieldState extends ConsumerState<_SearchField> {
     _debounce?.cancel();
     _controller.clear();
     ref.read(_activitySearchDraftProvider.notifier).state = '';
+    ref.read(_activitySearchPickedProvider.notifier).state = false;
     _setQuery('');
     setState(() {});
   }
 
-  void _finish() {
+  /// Ends the search and puts the keyboard away: Done, Cancel, the Search key,
+  /// and back. The words typed become a text search, unless they only served to
+  /// pick merchants. Safe to call when the box has already lost focus.
+  void finish() {
     _debounce?.cancel();
-    _setQuery(_controller.text);
-    _focus.unfocus();
+    if (ref.read(_activitySearchPickedProvider)) {
+      _dropFinderText();
+    } else {
+      _setQuery(_controller.text);
+    }
+    ref.read(_activitySearchActiveProvider.notifier).state = false;
+    _dismissKeyboard();
   }
 
   @override
@@ -1970,6 +2052,8 @@ class _SearchFieldState extends ConsumerState<_SearchField> {
       _,
       next,
     ) {
+      // Picking a merchant clears the text search on purpose; the words stay.
+      if (ref.read(_activitySearchPickedProvider)) return;
       final incoming = next ?? '';
       if (_controller.text.trim() != incoming) {
         _controller.text = incoming;
@@ -1985,6 +2069,11 @@ class _SearchFieldState extends ConsumerState<_SearchField> {
         _controller.text = next;
         setState(() {});
       }
+    });
+    // A merchant was picked: a search typed a moment ago must not land
+    // afterwards and filter the picked merchants by the same words.
+    ref.listen<bool>(_activitySearchPickedProvider, (_, picked) {
+      if (picked) _debounce?.cancel();
     });
     final active = ref.watch(_activitySearchActiveProvider);
     final hasMerchants = ref.watch(
@@ -2004,7 +2093,7 @@ class _SearchFieldState extends ConsumerState<_SearchField> {
             // Tapping anywhere outside the field and its suggestions (or
             // pressing Search) closes the keyboard.
             onTapOutside: (_) => _focus.unfocus(),
-            onSubmitted: (_) => _finish(),
+            onSubmitted: (_) => finish(),
             style: BambooFonts.ui(14.5, color: BambooInk.ink900),
             decoration: InputDecoration(
               hintText: 'Search merchants or notes',
@@ -2031,7 +2120,7 @@ class _SearchFieldState extends ConsumerState<_SearchField> {
         if (active)
           TextButton(
             key: const Key('activity-search-done'),
-            onPressed: _finish,
+            onPressed: finish,
             style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
             child: Text(
               _controller.text.trim().isEmpty && !hasMerchants
@@ -2040,6 +2129,43 @@ class _SearchFieldState extends ConsumerState<_SearchField> {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// The iPhone's swipe from the left edge, while the search is open. The page's
+/// own back swipe is off then (it would leave the page with the keyboard up),
+/// so a swipe from the edge closes the search instead, like the back arrow.
+class _EdgeBackSwipe extends StatefulWidget {
+  final VoidCallback onBack;
+  const _EdgeBackSwipe({required this.onBack});
+
+  @override
+  State<_EdgeBackSwipe> createState() => _EdgeBackSwipeState();
+}
+
+class _EdgeBackSwipeState extends State<_EdgeBackSwipe> {
+  double _travelled = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      key: const Key('activity-search-edge-swipe'),
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: 28 + MediaQuery.paddingOf(context).left,
+      child: GestureDetector(
+        // Only drags are claimed; a tap on a suggestion beneath still lands.
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragStart: (_) => _travelled = 0,
+        onHorizontalDragUpdate: (d) => _travelled += d.delta.dx,
+        onHorizontalDragEnd: (d) {
+          if (_travelled > 48 || (d.primaryVelocity ?? 0) > 500) {
+            widget.onBack();
+          }
+        },
+      ),
     );
   }
 }
@@ -2105,6 +2231,9 @@ class _SearchSuggestions extends ConsumerWidget {
 
     void toggle(String name) {
       final key = _merchantKey(name);
+      // Mark the typed words as finder words first, so the box keeps them and
+      // the next match is one tap away (all three "Anthropic" lines, say).
+      ref.read(_activitySearchPickedProvider.notifier).state = true;
       ref.read(_activityFilterProvider.notifier).update((f) {
         final next = {...f.merchants};
         final had = next.any((m) => _merchantKey(m) == key);
@@ -2114,7 +2243,6 @@ class _SearchSuggestions extends ConsumerWidget {
         // merchants chosen, not the typed text as well.
         return f.copyWith(merchants: next, query: () => null);
       });
-      ref.read(_activitySearchDraftProvider.notifier).state = '';
     }
 
     Widget header(String text) => Padding(
@@ -2195,11 +2323,13 @@ class _SearchSuggestions extends ConsumerWidget {
                   style: BambooFonts.ui(14, color: BambooInk.ink900),
                 ),
                 onTap: () {
+                  ref.read(_activitySearchPickedProvider.notifier).state =
+                      false;
                   ref
                       .read(_activityFilterProvider.notifier)
                       .update((f) => f.copyWith(query: () => draft));
                   unawaited(_rememberSearch(draft));
-                  FocusManager.instance.primaryFocus?.unfocus();
+                  _dismissKeyboard();
                 },
               ),
             if (needle.isEmpty && recent.isNotEmpty) ...[
@@ -2217,11 +2347,13 @@ class _SearchSuggestions extends ConsumerWidget {
                     style: BambooFonts.ui(14, color: BambooInk.ink900),
                   ),
                   onTap: () {
+                    ref.read(_activitySearchPickedProvider.notifier).state =
+                        false;
                     ref.read(_activitySearchDraftProvider.notifier).state = r;
                     ref
                         .read(_activityFilterProvider.notifier)
                         .update((f) => f.copyWith(query: () => r));
-                    FocusManager.instance.primaryFocus?.unfocus();
+                    _dismissKeyboard();
                   },
                 ),
             ],
