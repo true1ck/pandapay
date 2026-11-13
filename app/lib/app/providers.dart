@@ -2437,7 +2437,7 @@ final cardSpendSummaryProvider = Provider<Map<String, CardSpendSummary>>((ref) {
         // Card side: what the bank bills includes spend the person chose not
         // to count in their own spending.
         cycleTotal: Money.fromPaise(
-          model.totalsForTransactions(rows).spendMinor,
+          model.totalsForTransactions(rows).allSpendMinor,
         ),
         latestSpend: spends.firstOrNull,
       );
@@ -2863,6 +2863,10 @@ Future<bool> queueCommand(
 abstract final class OutboxCommand {
   static const ignoreTransaction = 'ignore_transaction';
   static const restoreTransaction = 'restore_transaction';
+
+  /// Sets whether a transaction counts in the person's spending. A later
+  /// command for the same transaction replaces an earlier unsent one.
+  static const setSpendExclusion = 'set_spend_exclusion';
 }
 
 Map<String, CommandHandler> commandHandlersFor(
@@ -2875,6 +2879,10 @@ Map<String, CommandHandler> commandHandlersFor(
   ),
   OutboxCommand.restoreTransaction: (p) =>
       repo.restoreTransaction(p['id'] as String),
+  OutboxCommand.setSpendExclusion: (p) => repo.setSpendExclusion(
+    p['id'] as String,
+    excluded: p['excluded'] as bool,
+  ),
   // Both carry a client mutation id the server uses to ignore a repeat, so a
   // lost reply cannot count a visit or a correction twice.
   OverlayCommand.loungeVisit: (p) => repo.logLoungeVisit(
@@ -5264,11 +5272,16 @@ EntryKindTotals _localEntryTotals(
   Iterable<TransactionEntry> rows,
   TxnEntryKind kind,
 ) {
-  final matching = rows.where((row) => row.entryKind == kind).toList();
+  final ofKind = rows.where((row) => row.entryKind == kind).toList();
+  // Spending leaves out what the person chose not to count, but the rewards
+  // were earned on it all the same.
+  final matching = kind == TxnEntryKind.spend
+      ? ofKind.where((row) => row.countsAsSpend).toList()
+      : ofKind;
   return EntryKindTotals(
     total: _sumLocalAmounts(matching),
     txnCount: matching.length,
-    rewards: _sumLocalRewards(matching),
+    rewards: _sumLocalRewards(ofKind),
   );
 }
 
@@ -5452,14 +5465,12 @@ List<SpendSeriesPoint> _localSpendSeries(
         return SpendSeriesPoint(
           periodStart: bucketFrom,
           spend: _sumLocalAmounts(
-            bucketRows.where((row) => row.entryKind == TxnEntryKind.spend),
+            bucketRows.where((row) => row.countsAsSpend),
           ),
           rewards: _sumLocalRewards(
             bucketRows.where((row) => row.entryKind == TxnEntryKind.spend),
           ),
-          txnCount: bucketRows
-              .where((row) => row.entryKind == TxnEntryKind.spend)
-              .length,
+          txnCount: bucketRows.where((row) => row.countsAsSpend).length,
         );
       }(),
   ];
@@ -5477,9 +5488,7 @@ SpendReport _makeLocalSpendReport(
     bounds.previousFrom,
     bounds.previousTo,
   );
-  final spendRows = current
-      .where((row) => row.entryKind == TxnEntryKind.spend)
-      .toList();
+  final spendRows = current.where((row) => row.countsAsSpend).toList();
   final elapsed = now.isBefore(bounds.from)
       ? 0.0
       : now.isAfter(bounds.to)

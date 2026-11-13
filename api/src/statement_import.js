@@ -1,7 +1,7 @@
 const crypto = require('node:crypto');
 const SOURCES = new Set(['statement', 'screenshot', 'csv', 'xlsx', 'json']);
 const RAILS = new Set(['upi_qr', 'swipe', 'online', 'contactless', 'atm', 'emi', 'unknown']);
-const ENTRY_KINDS = new Set(['spend', 'income', 'investment', 'transfer']);
+const ENTRY_KINDS = new Set(['spend', 'income', 'investment', 'investment_return', 'transfer']);
 const INSTRUMENTS = new Set(['credit_card', 'debit_card', 'cash', 'upi_bank', 'wallet', 'other']);
 const STATUSES = new Set(['active', 'ignored', 'deleted']);
 function maskAccount(value) { return value?.replace(/\d{6,}/g, (digits) => `****${digits.slice(-4)}`) || null; }
@@ -40,7 +40,7 @@ function inferStatementEntryKind(transaction) {
   if (ENTRY_KINDS.has(transaction?.entryKind)) return transaction.entryKind;
   const text = String(transaction?.merchantName || transaction?.description || '').toLowerCase();
   if (/\b(?:investment|mutual\s+fund|sip|stocks?|shares?|equity|redemption|sold\s+units?)\b/.test(text)) {
-    return /\b(?:redemption|sold\s+units?|proceeds?)\b/.test(text) ? 'transfer' : 'investment';
+    return /\b(?:redemption|sold\s+units?|proceeds?)\b/.test(text) ? 'investment_return' : 'investment';
   }
   if (/\b(?:interest\s+(?:charge|fee|on\s+(?:loan|emi))|(?:loan|emi)\s+interest|(?:processing|service|late|annual|maintenance|brokerage)\s+fee|bank\s+charge|finance\s+charge)\b/.test(text)) {
     return 'spend';

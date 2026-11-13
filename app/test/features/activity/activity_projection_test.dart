@@ -62,6 +62,41 @@ void main() {
     expect(() => projection.rows.clear(), throwsUnsupportedError);
   });
 
+  test('investment returns count as money in, transfers and refunds do not', () {
+    final day = DateTime(2026, 10, 31);
+    final projection = ActivityProjection.build([
+      entry('salary', 500, day, kind: TxnEntryKind.income),
+      entry('redeemed', 700, day, kind: TxnEntryKind.investmentReturn),
+      entry('sip', 200, day, kind: TxnEntryKind.investment),
+      entry('shop', 100, day),
+      entry('own', 900, day, kind: TxnEntryKind.transfer),
+      entry('refunded', 50, day, kind: TxnEntryKind.refund),
+    ]);
+
+    // Money in = income + investment returns. Money out = spending + money put
+    // into investments. A transfer is in neither.
+    expect(projection.totalIncoming.paise, 1200);
+    expect(projection.totalOutgoing.paise, 300);
+  });
+
+  test('TxnEntryKind money in and out agree with the Activity chips', () {
+    expect(TxnEntryKind.investmentReturn.isMoneyIn, isTrue);
+    expect(TxnEntryKind.income.isMoneyIn, isTrue);
+    expect(TxnEntryKind.investment.isMoneyOut, isTrue);
+    expect(TxnEntryKind.spend.isMoneyOut, isTrue);
+    for (final kind in [
+      TxnEntryKind.transfer,
+      TxnEntryKind.refund,
+      TxnEntryKind.unknown,
+    ]) {
+      expect(kind.isMoneyIn || kind.isMoneyOut, isFalse, reason: kind.name);
+    }
+    expect(
+      TxnEntryKind.fromJson('investment_return'),
+      TxnEntryKind.investmentReturn,
+    );
+  });
+
   test('received UPI credit flows into the Activity Money in total', () {
     final transaction = entry(
       'credit',

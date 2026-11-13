@@ -23,7 +23,8 @@ const ENTRY_KIND_BY_TYPE = Object.freeze({
   own_transfer: 'transfer',
   card_bill_payment: 'transfer',
   wallet_topup: 'transfer',
-  investment_withdrawal: 'transfer',
+  // Money back from an investment: its own kind, matching the phone's projector.
+  investment_withdrawal: 'investment_return',
 });
 
 // Money arrives at one of the user's instruments for these types, so the row's

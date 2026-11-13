@@ -1220,7 +1220,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
           .where(
             (entry) =>
                 entry.status == 'active' &&
-                (entry.entryKind == TxnEntryKind.spend ||
+                (entry.countsAsSpend ||
                     (ref.read(smsV2ReportingEnabledProvider) &&
                         entry.entryKind == TxnEntryKind.refund)),
           )

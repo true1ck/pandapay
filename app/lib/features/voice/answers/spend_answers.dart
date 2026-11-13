@@ -144,7 +144,7 @@ class SpendAnswerer {
     var sum = 0.0;
     var n = 0;
     for (final t in s.transactions) {
-      if (t.entryKind != TxnEntryKind.spend || t.status != 'active') continue;
+      if (!t.countsAsSpend || t.status != 'active') continue;
       final at = t.occurredAt.toLocal();
       if (at.isBefore(from) || !at.isBefore(end)) continue;
       if (!_matches(t, q, ids)) continue;

@@ -36,7 +36,7 @@ const anchor = { sourceKey: 'sms:synthetic:1', rail: 'card' };
 const EXPECT = {
   purchase: 'spend', subscription_charge: 'spend', fee: 'spend', emi: 'spend', bill_payment: 'spend', atm_withdrawal: 'spend', p2p_out: 'spend',
   refund: 'refund', cashback: 'income', income: 'income', p2p_in: 'income', dividend: 'income', investment: 'investment',
-  own_transfer: 'transfer', card_bill_payment: 'transfer', wallet_topup: 'transfer', investment_withdrawal: 'transfer',
+  own_transfer: 'transfer', card_bill_payment: 'transfer', wallet_topup: 'transfer', investment_withdrawal: 'investment_return',
 };
 
 test('every event type maps to the row kind in the Contracts table', () => {

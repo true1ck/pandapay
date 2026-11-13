@@ -436,6 +436,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         TxnEntryKind.spend => v2.EventType.purchase,
         TxnEntryKind.income => v2.EventType.income,
         TxnEntryKind.investment => v2.EventType.investment,
+        TxnEntryKind.investmentReturn => v2.EventType.investmentWithdrawal,
         TxnEntryKind.refund => v2.EventType.refund,
         TxnEntryKind.transfer =>
           _cardBill ? v2.EventType.cardBillPayment : v2.EventType.ownTransfer,
@@ -595,6 +596,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         SimilarField.type => switch (_entryKind) {
           TxnEntryKind.income => 'income',
           TxnEntryKind.investment => 'an investment',
+          TxnEntryKind.investmentReturn => 'an investment return',
           TxnEntryKind.refund => 'a refund',
           TxnEntryKind.transfer => _cardBill
               ? 'a credit card bill payment'

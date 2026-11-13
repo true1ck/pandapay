@@ -32,7 +32,11 @@ function downgradeRefund(value) {
   let out = null;
   for (const key of Object.keys(value)) {
     const current = value[key];
-    const next = KEYS.has(key) && current === 'refund' ? 'transfer' : downgradeRefund(current);
+    // 'investment_return' is as unknown to a v1 client as 'refund': it would
+    // otherwise read as spending, so it too shows as a neutral transfer.
+    const next = KEYS.has(key) && (current === 'refund' || current === 'investment_return')
+      ? 'transfer'
+      : downgradeRefund(current);
     if (next !== current) { if (!out) out = { ...value }; out[key] = next; }
   }
   return out || value;

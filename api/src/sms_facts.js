@@ -28,7 +28,7 @@ const FACT_TYPES = [
 
 const FACT_STATUSES = ['active', 'superseded', 'discarded'];
 
-const ENTRY_KINDS = ['spend', 'income', 'transfer', 'investment'];
+const ENTRY_KINDS = ['spend', 'income', 'transfer', 'investment', 'investment_return'];
 
 const INSTRUMENTS = [
   'upi_bank',

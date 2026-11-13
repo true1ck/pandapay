@@ -467,7 +467,7 @@ test('a broker settlement payout is an investment-proceeds money-in, not wallet 
     body: 'Dear Sujay We have transferred Rs 93.82 to your bank account ending with XXXXXXX2626 as a part of running account settlement vide Ref No PO26101713812965. To continue trading and investing, add funds back to your Dhan account.',
   });
   assert.equal(result.ok, true);
-  assert.equal(result.fields.entryKind, 'transfer');
+  assert.equal(result.fields.entryKind, 'investment_return');
   assert.equal(result.fields.transferKind, 'investment_proceeds');
   assert.equal(result.fields.merchant, 'Investment proceeds');
   assert.equal(result.fields.accountLast4, '2626');
@@ -785,7 +785,13 @@ test('loan disbursement, investment proceeds, gifts and reimbursements are not e
   for (const [body, transferKind] of cases) {
     const result = parseSmsAgainstPatterns([], { sender: 'BANK', body });
     assert.equal(result.ok, true, body);
-    assert.equal(result.fields.entryKind, 'transfer', body);
+    // Money back from an investment is its own kind: not a transfer, and
+    // (like the others here) never earned income.
+    assert.equal(
+      result.fields.entryKind,
+      transferKind === 'investment_proceeds' ? 'investment_return' : 'transfer',
+      body,
+    );
     assert.equal(result.fields.transferKind, transferKind, body);
   }
 });

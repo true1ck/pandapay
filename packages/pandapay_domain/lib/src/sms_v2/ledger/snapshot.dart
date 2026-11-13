@@ -18,9 +18,11 @@ class LedgerSnapshot {
     required Iterable<LedgerEntry> entries,
     required Iterable<Event> events,
     Map<String, CategoryDecision> categoryByEvent = const {},
+    Set<String> excludedEventIds = const {},
   }) : entries = List.unmodifiable(entries),
        events = List.unmodifiable(events),
-       categoryByEvent = Map.unmodifiable(categoryByEvent);
+       categoryByEvent = Map.unmodifiable(categoryByEvent),
+       excludedEventIds = Set.unmodifiable(excludedEventIds);
 
   factory LedgerSnapshot.project({
     required Iterable<Event> events,
@@ -211,8 +213,12 @@ class LedgerSnapshot {
   final List<Event> events;
   final Map<String, CategoryDecision> categoryByEvent;
 
+  /// Events (and refunds of them) the person left out of their spending.
+  final Set<String> excludedEventIds;
+
   Totals totals(DateTime from, DateTime to) => DefaultLedgerProjector(
     categoryByEvent: categoryByEvent,
+    excludedEventIds: excludedEventIds,
   ).totals(entries, events, from, to);
 }
 

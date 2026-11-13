@@ -671,7 +671,11 @@ function parseBuiltInAccountCredit(sms) {
       ...(!earnedIncomeCredit || ownTransfer || incomingBankTransferCandidate || walletLoad || brokerSettlement
         ? { transferKind }
         : {}),
-      entryKind: (earnedIncomeCredit && !ownTransfer)
+      // Money back from a broker or an investment is neither a transfer nor
+      // earned income: it is mostly the user's own principal coming home.
+      entryKind: transferKind === 'investment_proceeds' && !ownTransfer
+        ? 'investment_return'
+        : (earnedIncomeCredit && !ownTransfer)
         || externalVpaCredit
         || plainExternalBankCredit
         ? 'income'
@@ -1146,7 +1150,7 @@ function parseBuiltInInvestmentMovement(sms) {
       ...(referenceMatch ? { reference: referenceMatch[1] } : {}),
       instrument: bankInstrument ? 'upi_bank' : 'other',
       ...(investmentProceeds ? { transferKind: 'investment_proceeds' } : {}),
-      entryKind: investmentProceeds ? 'transfer' : 'investment',
+      entryKind: investmentProceeds ? 'investment_return' : 'investment',
     }, body),
   };
 }

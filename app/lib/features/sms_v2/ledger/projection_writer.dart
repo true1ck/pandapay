@@ -225,6 +225,9 @@ class ProjectionWriter {
                   'id': old.id,
                   'expected_value_inr': old.rewardValue?.rupees,
                   'note': old.note,
+                  // The person's own choice survives a re-projection, like a
+                  // note or a tag does.
+                  if (old.excludeFromSpend) 'exclude_from_spend': true,
                   'tags': old.tags.map((t) => t.toJson()).toList(),
                   if (old.userCategoryId != null) ...{
                     'category_id': null,

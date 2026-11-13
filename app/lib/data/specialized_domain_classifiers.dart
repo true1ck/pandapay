@@ -174,7 +174,9 @@ class SpecializedDomainClassifiers {
         RegExp(r'\b(?:credited|received|payout|transferred\s+to\s+your\s+bank)\b').hasMatch(lower)) {
       return BrokerClassificationResult(
         eventType: BrokerEventType.brokerSettlement,
-        suggestedKind: TxnEntryKind.income,
+        // The user's own money coming home: an investment return, never
+        // earned income.
+        suggestedKind: TxnEntryKind.investmentReturn,
         entityName: brokerName,
         reason: 'Broker settlement payout returned to bank account',
       );

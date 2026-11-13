@@ -28,12 +28,13 @@ function extractFactsFromObservation(obs) {
   const occurredAt = obs.occurredAt || obs.occurred_at || new Date().toISOString();
   const facts = [];
 
-  // 1. Posted movement (spend, income, transfer)
+  // 1. Posted movement (spend, income, investment, investment return, transfer)
   if (
     parsed.amountInr != null &&
     parsed.amountInr > 0 &&
     (parsed.entryKind === 'spend' || parsed.entryKind === 'income' ||
-      parsed.entryKind === 'investment' || parsed.entryKind === 'transfer')
+      parsed.entryKind === 'investment' || parsed.entryKind === 'investment_return' ||
+      parsed.entryKind === 'transfer')
   ) {
     const payload = {
       amountRole: 'posted',

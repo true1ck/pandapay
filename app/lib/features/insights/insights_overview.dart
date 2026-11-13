@@ -291,7 +291,9 @@ insightsOverviewProvider = FutureProvider.family<InsightsOverview, InsightsPerio
   final missedRows = <MissedEarning>[];
 
   for (final txn in active) {
-    if (ledgerReport == null) spend += txn.amount;
+    // Spend the person chose not to count stays out of the spend total, but its
+    // rewards below were earned all the same.
+    if (ledgerReport == null && txn.countsAsSpend) spend += txn.amount;
 
     // Null reward means "not known", not "earned nothing" — such a row is
     // left out of the earned total and its category bar entirely rather

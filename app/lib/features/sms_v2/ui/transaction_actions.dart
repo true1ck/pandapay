@@ -147,6 +147,7 @@ class SmsTransactionActions {
     TxnEntryKind.spend => EventType.purchase,
     TxnEntryKind.income => EventType.income,
     TxnEntryKind.investment => EventType.investment,
+    TxnEntryKind.investmentReturn => EventType.investmentWithdrawal,
     TxnEntryKind.refund => EventType.refund,
     TxnEntryKind.transfer => EventType.ownTransfer,
     _ => EventType.unknown,

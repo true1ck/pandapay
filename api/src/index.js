@@ -3773,9 +3773,11 @@ async function repairSmsHistory(client, userId, { reviewCrossSource = false, rev
   for (const row of classificationEvidence.rows) {
     const desiredKind = row.transfer_kind === 'fee' || row.transfer_kind === 'payment_to_person'
       ? 'spend'
+      : row.transfer_kind === 'investment_proceeds'
+      ? 'investment_return'
       : transferKinds.has(row.transfer_kind)
       ? 'transfer'
-      : ['spend', 'income', 'investment', 'transfer'].includes(row.parser_entry_kind)
+      : ['spend', 'income', 'investment', 'investment_return', 'transfer'].includes(row.parser_entry_kind)
       ? row.parser_entry_kind
       : null;
     if (!desiredKind || desiredKind === row.entry_kind) continue;
@@ -4707,7 +4709,7 @@ async function reverseTransactionState(client, userId, userCard, txnRow) {
 
 /** Mirrors the txn_instrument / txn_entry_kind enums in migration 0040. */
 const TXN_INSTRUMENTS = ['credit_card', 'debit_card', 'cash', 'upi_bank', 'wallet', 'other'];
-const TXN_ENTRY_KINDS = ['spend', 'income', 'investment', 'transfer'];
+const TXN_ENTRY_KINDS = ['spend', 'income', 'investment', 'investment_return', 'transfer'];
 
 app.post('/transactions', requireAuth, async (req, res) => {
   const {
@@ -5305,7 +5307,7 @@ app.get('/transactions', requireAuth, async (req, res) => {
                 CASE WHEN ucat.parent_category_id IS NOT NULL OR ucat.parent_user_category_id IS NOT NULL THEN ucat.name END AS subcategory_name,
                 t.rail, t.payment_method, t.status, t.source, t.note,
                 t.instrument, t.entry_kind, t.reward_state,
-                t.expected_value_inr,
+                t.expected_value_inr, t.exclude_from_spend,
                 (SELECT o.metadata->'selfTransferRule' FROM transaction_observations o
                   WHERE o.transaction_id=t.id AND o.profile_id=t.profile_id
                     AND o.metadata->'selfTransferRule' IS NOT NULL LIMIT 1) AS self_transfer_rule,
@@ -5400,7 +5402,7 @@ app.get('/transactions/:id', requireAuth, async (req, res) => {
                 CASE WHEN ucat.parent_category_id IS NOT NULL OR ucat.parent_user_category_id IS NOT NULL THEN ucat.name END AS subcategory_name,
                 t.rail, t.payment_method, t.status, t.source, t.note,
                 t.instrument, t.entry_kind, t.reward_state,
-                t.expected_value_inr,
+                t.expected_value_inr, t.exclude_from_spend,
                 COALESCE(t.source_account_last4,
                   (SELECT o.metadata->>'accountLast4'
                      FROM transaction_observations o
@@ -6486,6 +6488,51 @@ app.patch('/transactions/:id/note', requireAuth, async (req, res) => {
 });
 
 /**
+ * PUT /transactions/:id/spend-exclusion — "Don't count in spending".
+ *
+ * Sets, never toggles, so a lost reply that is sent again cannot flip it back.
+ * Deliberately NOT part of POST /transactions/:id/ignore: ignoring reverses
+ * the card's caps, milestones, points and fee-waiver progress and hides the
+ * row, but a purchase the person simply does not want in their spending
+ * (a gift, a reimbursed expense) still happened on the card and still earned
+ * what it earned. This only flips `exclude_from_spend`; spending totals,
+ * breakdowns and budgets read it, and nothing else does.
+ *
+ * Only a spend row can be excluded: for any other kind the flag would mean
+ * nothing, and accepting it would hide a mistake.
+ */
+app.put('/transactions/:id/spend-exclusion', requireAuth, async (req, res) => {
+  const { excluded } = req.body || {};
+  if (typeof excluded !== 'boolean') {
+    return res.status(400).json({ error: 'excluded must be true or false' });
+  }
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const existing = await client.query(
+        `SELECT entry_kind FROM transactions WHERE id = $1 AND profile_id = $2`,
+        [req.params.id, req.userId]
+      );
+      if (existing.rows.length === 0) return { status: 404, error: 'transaction not found' };
+      if (existing.rows[0].entry_kind !== 'spend') {
+        return { status: 409, error: 'only a spend transaction can be left out of spending' };
+      }
+      const updated = await client.query(
+        `UPDATE transactions SET exclude_from_spend = $1
+          WHERE id = $2 AND profile_id = $3
+          RETURNING id, exclude_from_spend`,
+        [excluded, req.params.id, req.userId]
+      );
+      return { status: 200, transaction: updated.rows[0] };
+    });
+    if (result.status !== 200) return res.status(result.status).json({ error: result.error });
+    res.json({ transaction: result.transaction });
+  } catch (err) {
+    console.error('PUT /transactions/:id/spend-exclusion error', safeErrorCode(err));
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
  * GET /transactions/:id/splits — design 18 "Split this expense".
  *
  * The `transaction_splits` table has existed since migration 0004 with an
@@ -6852,6 +6899,7 @@ app.get('/spend-by-category', requireAuth, async (req, res) => {
            LEFT JOIN user_categories parent_uc ON parent_uc.id = ucat.parent_user_category_id AND parent_uc.profile_id = t.profile_id
           WHERE t.profile_id = $1 AND t.status = 'active'
             AND t.entry_kind = 'spend'
+            AND NOT t.exclude_from_spend
             AND t.occurred_at >= now() - ($2 || ' months')::interval
           GROUP BY COALESCE(t.category_id, ucat.parent_user_category_id, t.user_category_id),
                    COALESCE(sc.slug, parent_uc.slug, ucat.slug),

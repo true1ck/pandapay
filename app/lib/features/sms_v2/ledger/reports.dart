@@ -116,6 +116,7 @@ class LedgerReadModel {
         TxnEntryKind.spend => v2.EventType.purchase,
         TxnEntryKind.income => v2.EventType.income,
         TxnEntryKind.investment => v2.EventType.investment,
+        TxnEntryKind.investmentReturn => v2.EventType.investmentWithdrawal,
         TxnEntryKind.refund => v2.EventType.refund,
         TxnEntryKind.transfer => v2.EventType.ownTransfer,
         TxnEntryKind.unknown => v2.EventType.unknown,
@@ -160,7 +161,9 @@ class LedgerReadModel {
         normalizeMerchantText(row.merchantName ?? 'UNKNOWN'),
       );
       final incoming =
-          kind == v2.EventType.income || kind == v2.EventType.refund;
+          kind == v2.EventType.income ||
+          kind == v2.EventType.refund ||
+          kind == v2.EventType.investmentWithdrawal;
       final entry = v2.LedgerEntry(
         entryId: sha256.convert(utf8.encode('$id|0')).toString(),
         eventId: id,
@@ -176,7 +179,9 @@ class LedgerReadModel {
         countsAsTransaction: kind != v2.EventType.ownTransfer,
         isSpend: kind == v2.EventType.purchase,
         isIncome: kind == v2.EventType.income,
-        isInvestment: kind == v2.EventType.investment,
+        isInvestment:
+            kind == v2.EventType.investment ||
+            kind == v2.EventType.investmentWithdrawal,
       );
       entries[entry.entryId] = entry;
     }
@@ -184,7 +189,50 @@ class LedgerReadModel {
       entries: entries.values,
       events: events.values,
       categoryByEvent: categories,
+      excludedEventIds: _excludedFromSpend,
     );
+  }
+
+  // Worked out over every stored row, not only the ones a screen selected, so a
+  // refund still follows its purchase when only one of the two is on screen.
+  late final Set<String> _excludedFromSpend = _leftOutOfSpending(
+    transactions.where((r) => r.status == 'active'),
+    ledger.events,
+  );
+
+  /// Events the person chose not to count in their spending, plus any refund
+  /// of one of them (a refund of something not counted must not come off the
+  /// spending that never included it). Only spend rows can be left out.
+  static Set<String> _leftOutOfSpending(
+    Iterable<TransactionEntry> rows,
+    Iterable<v2.Event> events,
+  ) {
+    final direct = <String>{
+      for (final row in rows)
+        if (row.excludeFromSpend && row.entryKind == TxnEntryKind.spend)
+          row.eventId ??
+              sha256.convert(utf8.encode('legacy|${row.id}')).toString(),
+    };
+    if (direct.isEmpty) return const {};
+    final eventByFact = <String, String>{};
+    for (final e in events) {
+      if (!direct.contains(e.eventId)) continue;
+      for (final leg in e.legs) {
+        if (moneyLegRoles.contains(leg.role)) eventByFact[leg.factId] = e.eventId;
+      }
+    }
+    final out = {...direct};
+    for (final e in events) {
+      if (e.type != v2.EventType.refund) continue;
+      if (e.legs.any(
+        (l) =>
+            l.role == v2.LegRole.original &&
+            direct.contains(eventByFact[l.factId]),
+      )) {
+        out.add(e.eventId);
+      }
+    }
+    return out;
   }
 
   late final _merchantByEvent = {
@@ -231,15 +279,20 @@ class LedgerReadModel {
     final current = state.entries
         .where((e) => !e.occurredAt.isBefore(from) && e.occurredAt.isBefore(to))
         .toList();
+    // Spending leaves out what the person chose not to count; Money out adds
+    // it back through Totals.excludedSpendMinor.
     final spend = current
         .where(
-          (e) => e.isSpend || events[e.eventId]?.type == v2.EventType.refund,
+          (e) =>
+              (e.isSpend || events[e.eventId]?.type == v2.EventType.refund) &&
+              !state.excludedEventIds.contains(e.eventId),
         )
         .toList();
     v2.Totals groupTotals(Iterable<v2.LedgerEntry> entries) => LedgerSnapshot(
       entries: entries,
       events: state.events,
       categoryByEvent: state.categoryByEvent,
+      excludedEventIds: state.excludedEventIds,
     ).totals(from, to);
     Map<String, List<v2.LedgerEntry>> groups(
       String Function(v2.LedgerEntry) key,
@@ -336,9 +389,12 @@ class LedgerReadModel {
                   to.difference(from).inMicroseconds)
               .clamp(0, 1)
               .toDouble(),
-      spend: kindTotal(
-        totals.spendMinor,
-        (e) => e.isSpend || events[e.eventId]?.type == v2.EventType.refund,
+      spend: EntryKindTotals(
+        total: Money.fromPaise(totals.spendMinor),
+        txnCount: spend.map((e) => e.eventId).toSet().length,
+        // Rewards were earned on everything, including spend the person chose
+        // not to count in their spending.
+        rewards: rewards(current.where((e) => e.isSpend)),
       ),
       income: kindTotal(totals.incomeMinor, (e) => e.isIncome),
       investment: kindTotal(totals.investmentMinor, (e) => e.isInvestment),
@@ -349,6 +405,7 @@ class LedgerReadModel {
               (e) =>
                   (e.isSpend ||
                       events[e.eventId]?.type == v2.EventType.refund) &&
+                  !state.excludedEventIds.contains(e.eventId) &&
                   !e.occurredAt.isBefore(previousFrom) &&
                   e.occurredAt.isBefore(previousTo),
             )

@@ -3043,6 +3043,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                                 TxnEntryKind.income => 'Save income',
                                 TxnEntryKind.transfer => 'Save transfer',
                                 TxnEntryKind.investment => 'Save investment',
+                                TxnEntryKind.investmentReturn =>
+                                  'Save investment return',
                                 TxnEntryKind.refund => 'Save refund',
                                 TxnEntryKind.unknown => 'Save entry',
                               },

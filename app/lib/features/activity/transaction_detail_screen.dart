@@ -28,6 +28,7 @@ import '../../main.dart' show MoneyText;
 import '../account/account_screen.dart' show AccountTile;
 import '../cards/card_summary.dart';
 import 'mark_transaction_kind.dart';
+import 'spend_exclusion.dart';
 import 'report_transaction_screen.dart';
 import 'foreign_payments_screen.dart';
 import '../sync/split_sync.dart';
@@ -111,7 +112,7 @@ class TransactionDetailScreen extends ConsumerWidget {
                           Text(
                             MerchantIdentity.displayName(
                                   entry.merchantName,
-                                  incoming: entry.entryKind == TxnEntryKind.income,
+                                  incoming: entry.entryKind.isMoneyIn,
                                 ) ??
                                 'Saved transaction',
                             style: BambooFonts.heading(20),
@@ -920,6 +921,33 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     return 'Restore transaction';
   }
 
+  /// Counts this transaction in, or leaves it out of, the person's spending.
+  Future<void> _setSpendExclusion(bool excluded) async {
+    final previous = _entry;
+    setState(() => _entry = _entry.copyWith(excludeFromSpend: excluded));
+    try {
+      await setSpendExclusion(ref, [previous], excluded: excluded);
+      ref.invalidate(transactionDetailProvider(widget.entry.id));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              excluded
+                  ? "Won't count in your spending. It stays in your history and Money out."
+                  : 'Counted in your spending again.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _entry = previous);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+    }
+  }
+
   Future<void> _showIgnoreSheet() async {
     final reason = await showModalBottomSheet<String>(
       context: context,
@@ -972,6 +1000,33 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                 ),
                 const Divider(height: 1),
               ],
+              // Leaves the transaction out of spending totals and budgets only.
+              // It stays in history, in Money out and on the card, and keeps
+              // its rewards, unlike Refund / Reversal / Delete below.
+              if (canExcludeFromSpend(_entry))
+                ListTile(
+                  key: const Key('toggle-spend-exclusion'),
+                  leading: Icon(
+                    _entry.excludeFromSpend
+                        ? Icons.add_circle_outline_rounded
+                        : Icons.visibility_off_outlined,
+                  ),
+                  title: Text(
+                    _entry.excludeFromSpend
+                        ? 'Count in spending again'
+                        : "Don't count in spending",
+                    style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                  ),
+                  subtitle: Text(
+                    _entry.excludeFromSpend
+                        ? 'Add it back to your spending totals and budgets.'
+                        : 'Stays in your history and Money out, and keeps its '
+                              'rewards. Left out of spending totals and budgets.',
+                    style: BambooFonts.ui(12, color: BambooInk.ink500),
+                  ),
+                  onTap: () =>
+                      Navigator.of(context).pop('toggle_spend_exclusion'),
+                ),
               for (final r in const [
                 'refund',
                 'reversal',
@@ -1013,6 +1068,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         ),
       ),
     );
+    if (reason == 'toggle_spend_exclusion') {
+      await _setSpendExclusion(!_entry.excludeFromSpend);
+      return;
+    }
     if (reason == 'mark_own_transfer' || reason == 'mark_card_bill') {
       await _markKind(
         reason == 'mark_card_bill'
@@ -1357,7 +1416,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                         Text(
                           MerchantIdentity.displayName(
                                 entry.merchantName,
-                                incoming: entry.entryKind == TxnEntryKind.income,
+                                incoming: entry.entryKind.isMoneyIn,
                               ) ??
                               (entry.entryKind == TxnEntryKind.income
                                   ? 'Income'
@@ -1543,6 +1602,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                               : entry.status[0].toUpperCase() +
                                     entry.status.substring(1)),
                   ),
+                  if (entry.excludeFromSpend)
+                    const _DetailRow(
+                      label: 'Spending',
+                      value: 'Not counted in your spending',
+                    ),
                   if (_note != null && _note!.isNotEmpty)
                     _DetailRow(label: 'Note', value: _note!),
                   if (entry.source == 'sms' ||
@@ -2048,7 +2112,7 @@ class _SmsEvidenceSection extends ConsumerWidget {
               value:
                   MerchantIdentity.displayName(
                     entry.merchantName,
-                    incoming: entry.entryKind == TxnEntryKind.income,
+                    incoming: entry.entryKind.isMoneyIn,
                   ) ??
                   'Not provided by SMS',
             ),

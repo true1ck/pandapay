@@ -1056,6 +1056,33 @@ class FinancialStore {
     _notify(ns);
   }
 
+  /// Sets the "don't count in spending" choice on the stored row. Nothing else
+  /// about the row changes: it stays active, visible and in Money out.
+  void setExcludeFromSpend(String ns, String id, bool excluded) {
+    final rows = database.db.select(
+      "SELECT payload FROM financial_entities WHERE namespace=? AND entity='transactions' AND id=?",
+      [ns, id],
+    );
+    if (rows.isEmpty) return;
+    final body =
+        jsonDecode(rows.single['payload'] as String) as Map<String, dynamic>;
+    final next = {...body};
+    if (excluded) {
+      next['exclude_from_spend'] = true;
+    } else {
+      next.remove('exclude_from_spend');
+    }
+    _upsert(
+      ns,
+      'transactions',
+      id,
+      next,
+      DateTime.now().millisecondsSinceEpoch,
+      sourceKey: body['source_key'] as String?,
+    );
+    _notify(ns);
+  }
+
   void replaceCards(
     String ns,
     List<UserCard> cards, {

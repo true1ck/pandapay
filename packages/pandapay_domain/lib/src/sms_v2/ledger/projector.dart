@@ -53,10 +53,12 @@ String? transactionKindForEvent(Event event) {
       event.type == EventType.ipoApplication) {
     return 'investment';
   }
-  if (ownTransferEventTypes.contains(event.type) ||
-      event.type == EventType.investmentWithdrawal) {
-    return 'transfer';
-  }
+  // Money coming back from an investment is its own kind. It is neither a
+  // transfer (it leaves no pair to match) nor income (it is mostly the
+  // user's own principal), so it shows as "Investment return" and lands in
+  // Money in without touching earned income.
+  if (event.type == EventType.investmentWithdrawal) return 'investment_return';
+  if (ownTransferEventTypes.contains(event.type)) return 'transfer';
   return null;
 }
 
@@ -107,10 +109,16 @@ class DefaultLedgerProjector implements LedgerProjector {
     Map<String, CategoryDecision> categoryByEvent = const {},
     Map<String, String> instrumentIdByFactId = const {},
     MerchantKeyer? keyer,
+    Set<String> excludedEventIds = const {},
   }) : categoryByEvent = Map.unmodifiable(categoryByEvent),
        instrumentIdByFactId = Map.unmodifiable(instrumentIdByFactId),
+       excludedEventIds = Set.unmodifiable(excludedEventIds),
        keyer = keyer ?? MerchantKeyer();
 
+  /// Events the person chose not to count in their spending, together with any
+  /// refund of one of them. Their spend moves to `excludedSpendMinor`: out of
+  /// spending and budgets, still in Money out.
+  final Set<String> excludedEventIds;
   final Map<String, CategoryDecision> categoryByEvent;
   final Map<String, String> instrumentIdByFactId;
   final MerchantKeyer keyer;
@@ -340,6 +348,7 @@ class DefaultLedgerProjector implements LedgerProjector {
         if (e.category != null) e.eventId: e.category!,
     };
     var spend = 0, refunds = 0, income = 0, investment = 0;
+    var investmentOut = 0, investmentReturn = 0, excludedSpend = 0;
     final counts = <String>{};
     final byCategory = <String, int>{};
     for (final row in byId.values) {
@@ -353,7 +362,10 @@ class DefaultLedgerProjector implements LedgerProjector {
         continue;
       }
       if (row.countsAsTransaction) counts.add(row.eventId);
-      if (row.isSpend) {
+      final leftOut = excludedEventIds.contains(row.eventId);
+      if (row.isSpend && leftOut) {
+        excludedSpend += row.amountMinor;
+      } else if (row.isSpend) {
         spend += row.amountMinor;
         byCategory.update(
           row.category ?? 'other',
@@ -361,7 +373,12 @@ class DefaultLedgerProjector implements LedgerProjector {
           ifAbsent: () => row.amountMinor,
         );
       }
-      if (event.type == EventType.refund) {
+      if (event.type == EventType.refund && leftOut) {
+        // A refund of something left out of spending comes off that same
+        // amount, so neither spending nor a category goes negative for it.
+        refunds += row.amountMinor;
+        excludedSpend -= row.amountMinor;
+      } else if (event.type == EventType.refund) {
         refunds += row.amountMinor;
         spend -= row.amountMinor;
         String? category;
@@ -384,9 +401,13 @@ class DefaultLedgerProjector implements LedgerProjector {
       }
       if (row.isIncome) income += row.amountMinor;
       if (row.isInvestment) {
-        investment += event.type == EventType.investmentWithdrawal
-            ? -row.amountMinor
-            : row.amountMinor;
+        if (event.type == EventType.investmentWithdrawal) {
+          investment -= row.amountMinor;
+          investmentReturn += row.amountMinor;
+        } else {
+          investment += row.amountMinor;
+          investmentOut += row.amountMinor;
+        }
       }
     }
     return Totals(
@@ -394,6 +415,9 @@ class DefaultLedgerProjector implements LedgerProjector {
       refundMinor: refunds,
       incomeMinor: income,
       investmentMinor: investment,
+      investmentOutMinor: investmentOut,
+      investmentReturnMinor: investmentReturn,
+      excludedSpendMinor: excludedSpend,
       transactionCount: counts.length,
       byCategory: Map.unmodifiable(byCategory),
     );

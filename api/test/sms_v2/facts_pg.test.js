@@ -343,7 +343,7 @@ test('transactions are projected for every event type, per the Contracts table',
   const expectKind = {
     purchase: 'spend', subscription_charge: 'spend', fee: 'spend', emi: 'spend', bill_payment: 'spend', atm_withdrawal: 'spend', p2p_out: 'spend',
     refund: 'refund', cashback: 'income', income: 'income', p2p_in: 'income', dividend: 'income', investment: 'investment',
-    own_transfer: 'transfer', card_bill_payment: 'transfer', wallet_topup: 'transfer', investment_withdrawal: 'transfer',
+    own_transfer: 'transfer', card_bill_payment: 'transfer', wallet_topup: 'transfer', investment_withdrawal: 'investment_return',
   };
   const inflow = new Set(['refund', 'cashback', 'income', 'p2p_in', 'dividend', 'investment_withdrawal']);
   const items = []; const events = []; const ledger = []; const made = new Map();

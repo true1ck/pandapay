@@ -225,7 +225,7 @@ test('statement narration classification excludes settlements and preserves expl
   assert.equal(inferStatementEntryKind({ merchantName: 'CREDIT CARD BILL PAYMENT' }), 'transfer');
   assert.equal(inferStatementEntryKind({ merchantName: 'SELF TRANSFER TO HDFC ACCOUNT' }), 'transfer');
   assert.equal(inferStatementEntryKind({ merchantName: 'MUTUAL FUND SIP' }), 'investment');
-  assert.equal(inferStatementEntryKind({ merchantName: 'MUTUAL FUND REDEMPTION PROCEEDS' }), 'transfer');
+  assert.equal(inferStatementEntryKind({ merchantName: 'MUTUAL FUND REDEMPTION PROCEEDS' }), 'investment_return');
   assert.equal(inferStatementEntryKind({ merchantName: 'SALARY CREDIT' }), 'income');
   assert.equal(inferStatementEntryKind({ merchantName: 'AMAZON PURCHASE' }), 'spend');
   assert.equal(inferStatementEntryKind({ entryKind: 'income', merchantName: 'REFUND' }), 'income');

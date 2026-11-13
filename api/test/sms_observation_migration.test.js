@@ -49,6 +49,27 @@ test('extractFactsFromObservation preserves investment posted movements', () => 
   assert.equal(smsFacts.validateFactSet(facts).valid, true);
 });
 
+test('extractFactsFromObservation keeps investment proceeds as a posted movement, never drops them', () => {
+  // The parser emits 'investment_return' for broker payouts and redemptions.
+  // Before it was accepted here such a message produced no fact at all.
+  const facts = migration.extractFactsFromObservation({
+    sourceKey: 'proceeds'.repeat(8),
+    occurredAt: '2026-10-15T10:00:00.000Z',
+    parsed: {
+      amountInr: 93.82,
+      merchant: 'Investment proceeds',
+      entryKind: 'investment_return',
+      accountLast4: '2626',
+    },
+  });
+
+  assert.equal(facts.length, 1);
+  assert.equal(facts[0].factType, 'posted_movement');
+  assert.equal(facts[0].payload.entryKind, 'investment_return');
+  assert.equal(facts[0].payload.amountInr, 93.82);
+  assert.equal(smsFacts.validateFactSet(facts).valid, true);
+});
+
 test('extractFactsFromObservation extracts both posted movement and balance snapshot from debit with balance', () => {
   const obs = {
     sourceKey: 'b'.repeat(64),

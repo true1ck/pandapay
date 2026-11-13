@@ -430,6 +430,10 @@ enum TxnEntryKind {
   spend('spend', 'Spending'),
   income('income', 'Money in'),
   investment('investment', 'Investment'),
+
+  /// Money coming back from an investment (redemption, sale, broker payout).
+  /// Counts in Money in but is never earned income and never spending.
+  investmentReturn('investment_return', 'Investment return'),
   transfer('transfer', 'Transfer'),
   refund('refund', 'Refund'),
   unknown('unknown', 'Unknown');
@@ -437,6 +441,12 @@ enum TxnEntryKind {
   final String wireValue;
   final String label;
   const TxnEntryKind(this.wireValue, this.label);
+
+  /// Counts toward Money in: income and money back from investments.
+  bool get isMoneyIn => this == income || this == investmentReturn;
+
+  /// Counts toward Money out: spending and money put into investments.
+  bool get isMoneyOut => this == spend || this == investment;
 
   // Historical receipt imports used `payment` for a spend. Keep that known
   // alias explicit; an unrecognised future kind must never become spending.
@@ -2282,6 +2292,24 @@ class UserCardsRepository {
     }
   }
 
+  /// Counts the transaction in, or leaves it out of, the person's spending.
+  /// Safe to repeat: it sets a value, it does not toggle. It does not touch
+  /// rewards, caps or card state, so the row stays exactly as the bank has it.
+  Future<void> setSpendExclusion(String id, {required bool excluded}) async {
+    final response = await _client
+        .put(
+          Uri.parse('$apiBaseUrl/transactions/$id/spend-exclusion'),
+          headers: _headers,
+          body: jsonEncode({'excluded': excluded}),
+        )
+        .timeout(_transactionRequestTimeout);
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'PUT /transactions/:id/spend-exclusion failed: ${response.statusCode} ${response.body}',
+      );
+    }
+  }
+
   /// Task D-5 (ui-spec D5 Duplicate Review). Pending pairs only.
   Future<List<DuplicateCandidate>> fetchDuplicateCandidates() async {
     final response = await _client
@@ -2804,6 +2832,19 @@ class TransactionEntry {
   /// "unknown", never as zero earned.
   final Money? rewardValue;
 
+  /// The person chose not to count this in their spending (a gift they paid
+  /// for, a reimbursed expense, something that is not really theirs). The row
+  /// stays in Activity, in Money out, on the card and in rewards; only the
+  /// spending totals, breakdowns and budgets leave it out. Never affects
+  /// subscriptions, recurring detection, card dues or reward state.
+  final bool excludeFromSpend;
+
+  /// Whether this row is part of the person's spending: a spend row that they
+  /// have not excluded. Use this wherever a spending total is built; use
+  /// [entryKind] alone for card-side figures (dues, utilisation, rewards).
+  bool get countsAsSpend =>
+      entryKind == TxnEntryKind.spend && !excludeFromSpend;
+
   const TransactionEntry({
     this.selfTransferRule,
     this.sourceKey,
@@ -2836,6 +2877,7 @@ class TransactionEntry {
     this.rewardState = 'estimated',
     this.note,
     this.rewardValue,
+    this.excludeFromSpend = false,
     this.tags = const [],
   });
 
@@ -2886,6 +2928,7 @@ class TransactionEntry {
       'reward_state': rewardState,
       'note': note,
       'expected_value_inr': rewardValue?.rupees,
+      if (excludeFromSpend) 'exclude_from_spend': true,
       'tags': tags.map((tag) => tag.toJson()).toList(),
     };
   }
@@ -2895,6 +2938,7 @@ class TransactionEntry {
     String? note,
     String? merchantName,
     TxnEntryKind? entryKind,
+    bool? excludeFromSpend,
     bool clearNote = false,
   }) {
     return TransactionEntry(
@@ -2930,6 +2974,7 @@ class TransactionEntry {
       note: clearNote ? null : (note ?? this.note),
       tags: tags,
       rewardValue: rewardValue,
+      excludeFromSpend: excludeFromSpend ?? this.excludeFromSpend,
     );
   }
 
@@ -3022,6 +3067,8 @@ class TransactionEntry {
       rewardValue: json['expected_value_inr'] == null
           ? null
           : Money.fromRupees(_num(json['expected_value_inr'])),
+      // Absent on older servers and older stored rows: not excluded.
+      excludeFromSpend: json['exclude_from_spend'] == true,
       tags: (json['tags'] as List? ?? const [])
           .map((item) => TransactionTag.fromJson(item as Map<String, dynamic>))
           .toList(),
