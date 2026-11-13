@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/commitments_repository.dart';
 import 'package:pandapay/data/notification_preferences_repository.dart';
+import 'package:pandapay/data/user_cards_repository.dart' show UserCard;
 import 'package:pandapay/features/insights/payments_due_screen.dart'
     show DuePayment, paymentsDueProvider;
 import 'package:pandapay/features/notifications/scheduled_reminders.dart';
@@ -256,12 +257,13 @@ void main() {
       final c = ProviderContainer(
         overrides: [
           reminderSchedulerProvider.overrideWithValue(s),
-          reminderDebounceProvider.overrideWithValue(Duration.zero),
+          reminderDelayProvider.overrideWithValue(Duration.zero),
           cacheNamespaceProvider.overrideWithValue(ns),
           clockProvider.overrideWithValue(_FixedClock(now)),
           notificationPreferencesProvider.overrideWith((_) async => prefs()),
           recurringReportProvider.overrideWith((_) async => null),
           paymentsDueProvider.overrideWith((_) async => const <DuePayment>[]),
+          userCardsProvider.overrideWith((_) async => const <UserCard>[]),
           commitmentsProvider.overrideWith((_) async => list),
         ],
       );
@@ -295,12 +297,13 @@ void main() {
       expect(s.live, isNotEmpty);
       c.updateOverrides([
         reminderSchedulerProvider.overrideWithValue(s),
-        reminderDebounceProvider.overrideWithValue(Duration.zero),
+        reminderDelayProvider.overrideWithValue(Duration.zero),
         cacheNamespaceProvider.overrideWithValue('user:t'),
         clockProvider.overrideWithValue(_FixedClock(now)),
         notificationPreferencesProvider.overrideWith((_) async => prefs()),
         recurringReportProvider.overrideWith((_) async => null),
         paymentsDueProvider.overrideWith((_) async => const <DuePayment>[]),
+        userCardsProvider.overrideWith((_) async => const <UserCard>[]),
         commitmentsProvider.overrideWith(
           (_) async => [
             Commitment(

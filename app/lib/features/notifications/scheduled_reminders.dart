@@ -10,6 +10,7 @@ import '../../app/providers.dart';
 import '../../data/commitments_repository.dart';
 import '../../data/notification_preferences_repository.dart';
 import '../../data/spend_reports_repository.dart' show RecurringSeries;
+import '../../data/user_cards_repository.dart' show UserCard;
 import '../insights/payments_due_screen.dart' show paymentsDueProvider;
 import '../insights/subscription_view.dart' show buildSubscriptionView;
 import 'notification_branding.dart';
@@ -329,8 +330,8 @@ class PluginReminderScheduler implements ReminderScheduler {
   }
 }
 
-/// Quiet period before rescheduling after a change; tests shorten it.
-final reminderDebounceProvider = Provider<Duration>((_) => const Duration(seconds: 2));
+/// Wait before rescheduling after a change; tests shorten it.
+final reminderDelayProvider = Provider<Duration>((_) => const Duration(seconds: 3));
 
 final reminderSchedulerProvider = Provider<ReminderScheduler>(
   (ref) => PluginReminderScheduler(
@@ -366,12 +367,15 @@ Future<List<PlannedReminder>> currentReminderPlan(Ref ref, DateTime now) async {
   );
 }
 
-/// Reschedules on resume and on data changes (debounced), does nothing while
-/// signed out, and cancels everything when the account goes away. The one
-/// debounce timer is cancelled on dispose, so nothing is left pending.
+/// Reschedules on resume and on data changes (coalesced and delayed through
+/// the shared startup scheduler, so no timer outlives the provider), does
+/// nothing while signed out, and cancels everything when the account goes
+/// away. Like the notification sweep it starts once the cards have loaded,
+/// and it deliberately does not eagerly start the heavier providers itself.
 final reminderLifecycleProvider = Provider<void>((ref) {
+  const key = 'reminder-sync';
   final scheduler = ref.read(reminderSchedulerProvider);
-  Timer? debounce;
+  final startup = ref.read(startupWorkSchedulerProvider);
   var disposed = false;
 
   Future<void> run() async {
@@ -387,29 +391,29 @@ final reminderLifecycleProvider = Provider<void>((ref) {
   }
 
   void request() {
-    debounce?.cancel();
-    debounce = Timer(ref.read(reminderDebounceProvider), () => unawaited(run()));
+    if (disposed) return;
+    startup.enqueue(key, run, delay: ref.read(reminderDelayProvider));
   }
 
   ref.onDispose(() {
     disposed = true;
-    debounce?.cancel();
+    startup.cancel(key);
   });
   final listener = AppLifecycleListener(onResume: request);
   ref.onDispose(listener.dispose);
 
   ref.listen<String>(cacheNamespaceProvider, (previous, next) {
     if (next == 'signed-out') {
-      debounce?.cancel();
+      startup.cancel(key);
       unawaited(scheduler.cancelAll().catchError((_) {}));
     } else {
       request();
     }
   });
+  ref.listen<AsyncValue<List<UserCard>>>(userCardsProvider, (_, next) {
+    if (next.hasValue) request();
+  });
   ref.listen<Object?>(commitmentsProvider, (_, _) => request());
   ref.listen<Object?>(recurringReportProvider, (_, _) => request());
-  ref.listen<Object?>(paymentsDueProvider, (_, _) => request());
   ref.listen<Object?>(dueDateRemindersProvider, (_, _) => request());
-  ref.listen<Object?>(notificationPreferencesProvider, (_, _) => request());
-  request();
 });
