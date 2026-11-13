@@ -10,7 +10,6 @@ import 'package:pandapay/data/local_first/card_overrides_overlay.dart';
 import 'package:pandapay/data/local_first/command_outbox.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/cards/add_card_local_first.dart';
-import 'package:pandapay_domain/pandapay_domain.dart';
 
 class _Repo implements UserCardsRepository {
   _Repo(this.answer);
@@ -25,6 +24,7 @@ class _Repo implements UserCardsRepository {
     String cardProductId, {
     String? nickname,
     String? last4,
+    bool mergeExisting = true,
   }) {
     calls.add(clientId);
     return answer(clientId);
@@ -169,7 +169,7 @@ void main() {
       expect(
         db.db
             .select('SELECT user_card_id FROM transaction_outbox_entries')
-            .single[0],
+            .single['user_card_id'],
         'srv',
       );
       expect(
@@ -177,7 +177,7 @@ void main() {
             .select(
               "SELECT raw_json FROM cached_responses WHERE key='a:card_overrides'",
             )
-            .single[0],
+            .single['raw_json'],
         contains('"user_card_id":"srv"'),
       );
     },

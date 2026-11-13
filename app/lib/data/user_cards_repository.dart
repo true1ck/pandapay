@@ -1590,6 +1590,9 @@ class UserCardsRepository {
     String cardProductId, {
     String? nickname,
     String? last4,
+    // A queued replay merges into the card the person already has (409
+    // card_already_added); a direct tap keeps showing that as an error.
+    bool mergeExisting = true,
   }) async {
     final response = await _client
         .post(
@@ -1614,7 +1617,8 @@ class UserCardsRepository {
         returned != null) {
       return (id: returned, existing: decoded?['linkedExisting'] == true);
     }
-    if (response.statusCode == 409 &&
+    if (mergeExisting &&
+        response.statusCode == 409 &&
         decoded?['error'] == 'card_already_added' &&
         returned != null) {
       return (id: returned, existing: true);
@@ -3255,6 +3259,17 @@ class DuplicateTransactionSummary {
       cardDisplayName: (nickname?.isNotEmpty == true) ? nickname : cardName,
     );
   }
+
+  /// Cache round-trip (WP-C6): [fromJson] reads it back unchanged.
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'amount_inr': amount.rupees,
+    'occurred_at': occurredAt.toIso8601String(),
+    'merchant_name': merchantName,
+    'source': source,
+    'status': status,
+    'card_name': cardDisplayName,
+  };
 }
 
 class DuplicateCandidate {
@@ -3285,4 +3300,12 @@ class DuplicateCandidate {
       matchReason: json['match_reason'] as String,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'txn_a': txnA.toJson(),
+    'txn_b': txnB.toJson(),
+    'match_score': matchScore,
+    'match_reason': matchReason,
+  };
 }

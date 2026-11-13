@@ -2555,6 +2555,7 @@ final cardOverridesRepositoryProvider = Provider<CardOverridesRepository?>((
 final cardOverridesProvider = FutureProvider<List<CardOverride>>((ref) async {
   final repo = ref.watch(cardOverridesRepositoryProvider);
   if (repo == null) return const [];
+  ref.watch(commandOutboxRevisionProvider);
   final cache = await _cacheOrNull(ref);
   final cacheKey = _scopedCacheKey(ref, _cardOverridesCacheKey);
   final cached = await cache?.get(cacheKey);
@@ -2574,7 +2575,6 @@ final cardOverridesProvider = FutureProvider<List<CardOverride>>((ref) async {
 
   // WP-C6 (W-08): queued creates, deletes and edits are shown on top of
   // whatever list this returns, so a change made offline is visible at once.
-  ref.watch(commandOutboxRevisionProvider);
   Future<List<CardOverride>> withQueued(List<CardOverride> base) async {
     try {
       final commands = await ref.read(commandOutboxProvider.future);
@@ -3234,10 +3234,60 @@ final duplicateCandidatesProvider = FutureProvider<List<DuplicateCandidate>>((
 ) async {
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return const [];
+  // WP-C6 (W-15): the list is kept in the response cache (so it opens without
+  // the network) and pairs the person already decided, waiting in the
+  // duplicate-resolution outbox, are hidden (they are done, only unsent).
+  final cache = await _cacheOrNull(ref);
+  final cacheKey = _scopedCacheKey(ref, 'duplicate_candidates');
+  final cachedRaw = await cache?.get(cacheKey);
+  List<DuplicateCandidate>? decodeCached() {
+    if (cachedRaw == null) return null;
+    try {
+      return [
+        for (final c in jsonDecode(cachedRaw) as List)
+          DuplicateCandidate.fromJson(Map<String, dynamic>.from(c as Map)),
+      ];
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<List<DuplicateCandidate>> withoutDecided(
+    List<DuplicateCandidate> all,
+  ) async {
+    try {
+      final outbox = await ref.read(
+        duplicateResolutionOutboxRepositoryProvider.future,
+      );
+      final decided = {for (final e in outbox.pending()) e.candidateId};
+      if (decided.isEmpty) return all;
+      return [
+        for (final c in all)
+          if (!decided.contains(c.id)) c,
+      ];
+    } catch (_) {
+      return all;
+    }
+  }
+
+  final saved = decodeCached();
+  if (kCardsLocalFirst && saved != null && serverKnownUnreachable(ref)) {
+    return withoutDecided(saved);
+  }
   try {
-    return await repo.fetchDuplicateCandidates();
+    final fresh = await repo.fetchDuplicateCandidates();
+    try {
+      await cache?.put(
+        cacheKey,
+        jsonEncode([for (final c in fresh) c.toJson()]),
+      );
+    } catch (_) {}
+    return withoutDecided(fresh);
   } catch (error) {
     if (isAuthenticationFailure(error)) return const [];
+    if (kCardsLocalFirst && saved != null && _canUseReadCache(error)) {
+      return withoutDecided(saved);
+    }
     rethrow;
   }
 });
@@ -3305,6 +3355,47 @@ final archivedCardsProvider = FutureProvider<List<UserCard>>((ref) async {
   try {
     final repo = ref.watch(userCardsRepositoryProvider);
     if (repo == null) return const [];
+    // WP-C6: a saved include-archived snapshot is shown at once (refreshed in
+    // the background), and a server known to be unreachable is not waited on.
+    // A card change clears the snapshot, so a removal is never replayed stale;
+    // without a snapshot and with no server, the phone's own copy answers.
+    if (kCardsLocalFirst) {
+      final cache = await _cacheOrNull(ref);
+      final key = _scopedCacheKey(ref, _userCardsWithArchivedCacheKey);
+      final raw = await cache?.get(key);
+      if (raw != null) {
+        try {
+          final cards = [
+            for (final c in (jsonDecode(raw) as Map)['userCards'] as List)
+              UserCard.fromJson(Map<String, dynamic>.from(c as Map)),
+          ].where((card) => card.isArchived).toList();
+          if (!serverKnownUnreachable(ref)) {
+            final at = await cache?.fetchedAt(key);
+            if (at == null ||
+                DateTime.now().difference(at) > const Duration(seconds: 30)) {
+              _backgroundDisplayRefresh(
+                ref,
+                cache,
+                key,
+                () => repo.fetchUserCards(includeArchived: true),
+                (List<UserCard> all) => {
+                  'userCards': all.map((c) => c.toJson()).toList(),
+                },
+              );
+            }
+          }
+          return cards;
+        } catch (_) {
+          // A corrupt snapshot falls through to the normal read below.
+        }
+      } else if (cache != null && serverKnownUnreachable(ref)) {
+        return cache.financialStore
+            .entities(ref.read(cacheNamespaceProvider), 'cards')
+            .map(UserCard.fromJson)
+            .where((card) => card.isArchived)
+            .toList();
+      }
+    }
     return await _loadUserCardsWithOfflineCache(
       ref,
       repo,

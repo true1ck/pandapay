@@ -238,12 +238,20 @@ final cardSaveStatesProvider = FutureProvider<CardSaveStates>((ref) async {
 bool serverKnownUnreachable(dynamic ref) {
   if (KnownConnectivity.knownOffline) return true;
   try {
+    if ((ref.read(isOnlineProvider) as AsyncValue<bool>).valueOrNull == false) {
+      return true;
+    }
     return (ref.read(serverReachabilityProvider) as ServerReachability)
         .shouldSkipBackgroundReads;
   } catch (_) {
     return false;
   }
 }
+
+/// "The server is not there" for [error]: [isOfflineLike], or the app already
+/// knows the device is offline.
+bool offlineLike(dynamic ref, Object error) =>
+    isOfflineLike(error) || serverKnownUnreachable(ref);
 
 // --- add card --------------------------------------------------------------
 
@@ -291,19 +299,25 @@ Future<AddCardOutcome> addCardLocalFirst(
   if (!serverKnownUnreachable(ref)) {
     try {
       final result = await repo
-          .addCardWithClientId(id, cardProductId, nickname: nickname, last4: last4)
+          .addCardWithClientId(
+            id,
+            cardProductId,
+            nickname: nickname,
+            last4: last4,
+            mergeExisting: false,
+          )
           .timeout(attempt);
       if (creditLimitInr != null) {
         try {
           await repo.updateCard(result.id, creditLimitInr: creditLimitInr);
         } catch (error) {
-          if (!isOfflineLike(error)) rethrow;
+          if (!offlineLike(ref, error)) rethrow;
           await _queueFields(ref, result.id, {'creditLimitInr': creditLimitInr});
         }
       }
       return AddCardOutcome(id: result.id, queued: false);
     } catch (error) {
-      if (!isOfflineLike(error)) rethrow;
+      if (!offlineLike(ref, error)) rethrow;
     }
   }
   final cache = await ref.read(responseCacheProvider.future);
@@ -530,6 +544,9 @@ Future<void> _patchFields(UserCardsRepository repo, Map<String, Object?> p) {
         creditLimitInr: (p['creditLimitInr'] as num?)?.toDouble(),
         statementDay: (p['statementDay'] as num?)?.toInt(),
         dueDay: (p['dueDay'] as num?)?.toInt(),
+        autopayMode: p['autopayMode'] == null
+            ? null
+            : AutopayMode.fromJson(p['autopayMode'] as String?),
         last4: p['last4'] as String?,
       );
     }

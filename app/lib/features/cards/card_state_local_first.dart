@@ -90,7 +90,7 @@ Future<CardChange> setCardArchived(
       await applyUserCardArchiveToCache(ref, userCardId: cardId, archived: archived);
       return CardChange.saved;
     } catch (error) {
-      if (!kCardsLocalFirst || !isOfflineLike(error)) rethrow;
+      if (!kCardsLocalFirst || !offlineLike(ref, error)) rethrow;
     }
   }
   final queue = await ref.read(syncQueueProvider.future);
@@ -131,7 +131,7 @@ Future<CardChange> setCardDefault(WidgetRef ref, String cardId) async {
       await repo.setDefaultCard(cardId);
       return CardChange.saved;
     } catch (error) {
-      if (!kCardsLocalFirst || !isOfflineLike(error)) rethrow;
+      if (!kCardsLocalFirst || !offlineLike(ref, error)) rethrow;
     }
   }
   // Signed in: save on the phone, the sync queue carries it. LocalFirstCards

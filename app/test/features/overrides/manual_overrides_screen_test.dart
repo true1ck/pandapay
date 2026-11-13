@@ -319,6 +319,9 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         cardOverridesRepositoryProvider.overrideWithValue(offlineRepo),
+        // Offline with nothing saved, the real provider no longer waits on the
+        // network (WP-C6); give the screen its row directly.
+        cardOverridesProvider.overrideWith((ref) async => [override]),
         isOnlineProvider.overrideWith((ref) => Stream.value(false)),
         syncQueueProvider.overrideWith((ref) async => queue),
       ],
@@ -374,6 +377,9 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         cardOverridesRepositoryProvider.overrideWithValue(offlineRepo),
+        // Offline with nothing saved, the real provider no longer waits on the
+        // network (WP-C6); give the screen its row directly.
+        cardOverridesProvider.overrideWith((ref) async => [override]),
         userCardsProvider.overrideWith((ref) async => userCards),
         isOnlineProvider.overrideWith((ref) => Stream.value(false)),
         syncQueueProvider.overrideWith((ref) async => queue),

@@ -17,6 +17,7 @@ import '../../data/user_cards_repository.dart';
 import '../scan/scan_card_screen.dart';
 import 'card_picker_screen.dart';
 import 'find_cards_screen.dart';
+import 'add_card_local_first.dart';
 import 'card_add_guard.dart';
 import 'card_summary.dart';
 import 'cap_progress.dart';
@@ -389,6 +390,14 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
     final duePayments = ref.watch(paymentsDueProvider).valueOrNull ?? const <DuePayment>[];
     final duePayment = duePayments.where((d) => d.card.id == card.id).firstOrNull;
 
+    final saveStates =
+        ref.watch(cardSaveStatesProvider).valueOrNull ?? CardSaveStates.none;
+    final saveNote = saveStates.notSaved.contains(card.id)
+        ? 'Not saved — the server refused this card. It is only on this phone.'
+        : saveStates.saving.contains(card.id)
+        ? 'Saving… it will be added when you are back online.'
+        : null;
+
     return Opacity(
       opacity: card.isArchived ? 0.55 : 1,
       // See account_screen.dart's _AccountTile for why Pressable, not InkWell.
@@ -398,6 +407,19 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (saveNote != null) ...[
+                Text(
+                  saveNote,
+                  style: BambooFonts.ui(
+                    12,
+                    weight: FontWeight.w600,
+                    color: saveStates.notSaved.contains(card.id)
+                        ? BambooInk.clay
+                        : BambooInk.ink500,
+                  ),
+                ),
+                const SizedBox(height: AppSpace.sm),
+              ],
               if (product == null)
                 Row(
                   children: [
@@ -1046,11 +1068,12 @@ class _AddCardFormState extends ConsumerState<_AddCardForm> {
 
       for (final id in plan.idsToAdd) {
         try {
-          if (local != null) {
-            await local.addCard(id, last4: last4ByProductId[id]);
-          } else {
-            await repo!.addCard(id, last4: last4ByProductId[id]);
-          }
+          // Local-first (WP-C6): queued when the server is not reachable.
+          await addCardLocalFirst(
+            ref,
+            cardProductId: id,
+            last4: last4ByProductId[id],
+          );
         } catch (e) {
           if (e is CardAlreadyAddedException ||
               (e is ApiException && e.errorCode == 'card_already_added')) {
