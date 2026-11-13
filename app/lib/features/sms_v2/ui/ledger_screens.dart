@@ -185,6 +185,27 @@ class _LedgerReportListState extends State<LedgerReportList> {
                       ('Fund balance', smsMoney(item.balanceMinor)),
                       ('Dividends', smsMoney(item.dividendMinor)),
                     ]),
+                    if (item.entries.isNotEmpty) ...[
+                      const SizedBox(height: AppSpace.sm),
+                      const Divider(),
+                      for (final e in item.entries.take(3))
+                        InvestmentMovementTile(
+                          entry: e,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      if (item.entries.length > 3)
+                        Padding(
+                          padding: const EdgeInsets.only(top: AppSpace.xs),
+                          child: Text(
+                            'View all ${item.entries.length} movements',
+                            style: BambooFonts.ui(
+                              13,
+                              weight: FontWeight.w600,
+                              color: BambooInk.jade,
+                            ),
+                          ),
+                        ),
+                    ],
                   ],
                 ),
               ),
@@ -563,18 +584,54 @@ class LinkedInstrumentUsage extends ConsumerWidget {
   }
 }
 
-/// An investment platform opened in full: its totals, then every movement behind
-/// them. Each movement opens as a transaction, where it can be reviewed and
-/// edited like any other.
-class InvestmentPlatformScreen extends StatelessWidget {
-  const InvestmentPlatformScreen({super.key, required this.summary});
-  final InvestmentSummary summary;
+/// One investment movement; tapping opens the full transaction.
+class InvestmentMovementTile extends StatelessWidget {
+  const InvestmentMovementTile({
+    super.key,
+    required this.entry,
+    this.contentPadding = _rowPadding,
+  });
+  final InvestmentEntry entry;
+  final EdgeInsetsGeometry contentPadding;
 
   static String _kindLabel(String kind) => switch (kind) {
     'taken_out' => 'Taken out',
     'dividend' => 'Dividend',
     _ => 'Put in',
   };
+
+  @override
+  Widget build(BuildContext context) => ListTile(
+    contentPadding: contentPadding,
+    onTap: () => Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            TransactionDetailScreen(transactionId: 'v2:${entry.eventId}'),
+      ),
+    ),
+    leading: BambooIconTile(
+      entry.kind == 'taken_out'
+          ? Icons.south_west_rounded
+          : entry.kind == 'dividend'
+          ? Icons.savings_outlined
+          : Icons.north_east_rounded,
+      size: 36,
+    ),
+    title: Text(entry.label),
+    subtitle: Text('${_kindLabel(entry.kind)} • ${smsDate(entry.occurredAt)}'),
+    trailing: Text(
+      smsMoney(entry.amountMinor),
+      style: BambooFonts.money(14.5, weight: FontWeight.w700),
+    ),
+  );
+}
+
+/// An investment platform opened in full: its totals, then every movement behind
+/// them. Each movement opens as a transaction, where it can be reviewed and
+/// edited like any other.
+class InvestmentPlatformScreen extends StatelessWidget {
+  const InvestmentPlatformScreen({super.key, required this.summary});
+  final InvestmentSummary summary;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -620,33 +677,7 @@ class InvestmentPlatformScreen extends StatelessWidget {
             )
           else
             _RowGroup([
-              for (final e in summary.entries)
-                ListTile(
-                  contentPadding: _rowPadding,
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => TransactionDetailScreen(
-                        transactionId: 'v2:${e.eventId}',
-                      ),
-                    ),
-                  ),
-                  leading: BambooIconTile(
-                    e.kind == 'taken_out'
-                        ? Icons.south_west_rounded
-                        : e.kind == 'dividend'
-                        ? Icons.savings_outlined
-                        : Icons.north_east_rounded,
-                    size: 36,
-                  ),
-                  title: Text(e.label),
-                  subtitle: Text(
-                    '${_kindLabel(e.kind)} • ${smsDate(e.occurredAt)}',
-                  ),
-                  trailing: Text(
-                    smsMoney(e.amountMinor),
-                    style: BambooFonts.money(14.5, weight: FontWeight.w700),
-                  ),
-                ),
+              for (final e in summary.entries) InvestmentMovementTile(entry: e),
             ]),
         ],
       ),
