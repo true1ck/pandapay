@@ -10,12 +10,16 @@ abstract final class OverlayCommand {
   static const recurringDismiss = 'recurring_dismiss';
   static const recurringUpdate = 'recurring_update';
 
+  /// A manual "Add subscription" made while the server was out of reach (H3).
+  /// Target = payload `id` = the phone's uuid.
+  static const recurringCreate = 'recurring_create';
+
   static const loungeVisit = 'lounge_visit';
   static const pointsAdjust = 'points_adjust';
 
   static const budgetKinds = {budgetDelete, budgetSave};
   static const loungeKinds = {loungeVisit};
-  static const recurringKinds = {recurringDismiss, recurringUpdate};
+  static const recurringKinds = {recurringDismiss, recurringUpdate, recurringCreate};
 }
 
 /// Shows queued budget changes on top of the last list from the server, so a
@@ -84,6 +88,11 @@ RecurringReport overlayRecurring(
   for (final command in pending) {
     final id = command.payload['id'];
     switch (command.kind) {
+      case OverlayCommand.recurringCreate:
+        if (series.any((s) => s.id == id)) break;
+        final created = _created(command.payload);
+        series = [...series, created];
+        annualPaise += created.annualCost.paise;
       case OverlayCommand.recurringDismiss:
         final hidden = series.where((s) => s.id == id);
         for (final s in hidden) {
@@ -108,6 +117,25 @@ RecurringReport overlayRecurring(
             !pending.any((c) => c.kind == OverlayCommand.recurringUpdate)
         ? base.totalAnnual
         : Money.fromPaise(annualPaise),
+  );
+}
+
+RecurringSeries _created(Map<String, Object?> p) {
+  final amount = Money.fromRupees((p['amountInr'] as num).toDouble());
+  final cadence = (p['cadenceDays'] as num).toInt();
+  return RecurringSeries(
+    id: p['id'] as String,
+    displayName: p['displayName'] as String,
+    typicalAmount: amount,
+    cadenceDays: cadence,
+    occurrenceCount: 0,
+    annualCost: cadence <= 0
+        ? Money.fromPaise(0)
+        : Money.fromPaise((amount.paise * 365 / cadence).round()),
+    nextExpectedOn: DateTime.tryParse('${p['nextExpectedOn']}'),
+    autopayStatus: (p['autopayStatus'] as String?) ?? 'unknown',
+    detectionSource: 'manual',
+    isUserEdited: true,
   );
 }
 

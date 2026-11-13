@@ -3197,8 +3197,25 @@ Map<String, CommandHandler> commandHandlersFor(
       id: p['id'] as String?,
       clientEditedAt: _editedAt(p['clientEditedAt']),
     ),
-    OverlayCommand.recurringDismiss: (p) =>
-        _goneIsDone(() => spend.dismissRecurring(p['id'] as String)),
+    // H3: client uuid + clock; the server's series id wins (a replay or an
+    // existing merchant series answers 200 and is success). A queued edit of
+    // this series made under the phone's uuid and an existing server series
+    // under another id is not remapped (documented gap).
+    OverlayCommand.recurringCreate: (p) => spend.createRecurring(
+      displayName: p['displayName'] as String,
+      amountInr: (p['amountInr'] as num).toDouble(),
+      cadenceDays: (p['cadenceDays'] as num).toInt(),
+      nextExpectedOn: DateTime.parse(p['nextExpectedOn'] as String),
+      autopayStatus: (p['autopayStatus'] as String?) ?? 'unknown',
+      id: p['id'] as String?,
+      clientEditedAt: _editedAt(p['clientEditedAt']),
+    ),
+    OverlayCommand.recurringDismiss: (p) => _goneIsDone(
+      () => spend.dismissRecurring(
+        p['id'] as String,
+        clientEditedAt: _editedAt(p['clientEditedAt']),
+      ),
+    ),
     OverlayCommand.recurringUpdate: (p) => spend.updateRecurring(
       p['id'] as String,
       displayName: p['displayName'] as String,
@@ -3206,6 +3223,7 @@ Map<String, CommandHandler> commandHandlersFor(
       cadenceDays: (p['cadenceDays'] as num).toInt(),
       nextExpectedOn: DateTime.parse(p['nextExpectedOn'] as String),
       autopayStatus: p['autopayStatus'] as String,
+      clientEditedAt: _editedAt(p['clientEditedAt']),
     ),
   },
 };
