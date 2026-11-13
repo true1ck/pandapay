@@ -272,9 +272,11 @@ void main() {
   });
 
   test(
-    'a source still waiting in a back-off holds the correction back',
+    'a source waiting after a network failure (no attempt counted) holds the correction back',
     () async {
-      sourceHasFailedSixTimes();
+      for (final record in queue.due(DateTime.utc(2100))) {
+        queue.deferUntil(record.id, now.add(const Duration(hours: 1)));
+      }
       addCorrection();
       await corrections(server()).drain();
       expect(correctionPosts, 0);

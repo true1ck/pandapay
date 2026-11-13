@@ -31,6 +31,7 @@ import '../storage/sync_state_store.dart';
 import '../storage/provisional_store.dart';
 import '../storage/stats_store.dart';
 import '../sync/learning_signals.dart';
+import '../sync/sharing_consent_mirror.dart';
 import '../sync/template_upload.dart';
 import '../sync/stats_upload.dart';
 import '../telemetry/client_metrics.dart';
@@ -510,6 +511,9 @@ class SmsV2Runtime {
         baseUri: baseUri,
         headers: headers,
         accountIsCurrent: accountIsCurrent,
+        // Consent is re-read at send time; the mirror is cleared by every
+        // server answer that is not a grant and by a withdrawal.
+        sharingGranted: () => SmsSharedLearningConsentMirror.isGranted(namespace),
         requeue: (sourceKey, eventId) => requeueForUpload(
           queue: correctionQueue,
           intake: intake,

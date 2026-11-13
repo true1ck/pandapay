@@ -433,7 +433,17 @@ class SharedExpensesRuntime extends ChangeNotifier {
         nameFailure(context.operationId) ?? nameFailure(member.operationId);
     if (refused != null) {
       // The screen tells the person now; it is not also a leftover "not synced".
-      await acknowledgeRefusal(context.operationId);
+      // Both ops may carry a refusal (the member's is a dependent when the
+      // context was refused); the one that holds the name refusal is the one
+      // the screen explained.
+      for (final op in [context, member]) {
+        if (store.operation(op.operationId)?.state ==
+                SharedCommandState.rejected ||
+            store.operation(op.operationId)?.state ==
+                SharedCommandState.conflict) {
+          await acknowledgeRefusal(op.operationId);
+        }
+      }
       throw refused;
     }
     return (contextId: id, memberId: memberId);

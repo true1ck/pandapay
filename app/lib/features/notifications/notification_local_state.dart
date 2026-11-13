@@ -142,7 +142,16 @@ Future<NotificationPreferences?> loadNotificationPreferences(
             return;
           }
           final fresh = await repo.fetch().timeout(_liveFetchTimeout);
-          await state!.writePreferences(fresh);
+          // A toggle made while the fetch was in flight is newer than this
+          // answer (WP-H2): it either queued a command or rewrote the cached
+          // copy. Drop the stale server copy.
+          final after = await ref.read(commandOutboxProvider.future);
+          final rewritten = await state!.readPreferences();
+          if (after.pendingOf({NotificationCommand.updatePreferences}).isNotEmpty ||
+              rewritten?.fetchedAt != cached.fetchedAt) {
+            return;
+          }
+          await state.writePreferences(fresh);
           if (!disposed && !_samePrefs(fresh, cached.prefs)) {
             ref.invalidateSelf();
           }

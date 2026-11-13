@@ -124,7 +124,9 @@ void main() {
     CorrectionsSync syncWith(
       http.Response Function(http.Request request) answer, {
       void Function(String sourceKey, String? eventId)? requeue,
+      Future<bool> Function()? sharingGranted,
     }) => CorrectionsSync(
+      sharingGranted: sharingGranted,
       queue: queue,
       baseUri: Uri.parse('https://api.invalid'),
       headers: () async => {},
@@ -160,6 +162,25 @@ void main() {
       expect(posts, 1);
     });
 
+    test('a correction queued while sharing was agreed shares nothing after a withdrawal', () async {
+      for (final granted in [true, false]) {
+        addCorrection('c-$granted', {
+          'sourceKey': 'S1',
+          'factIds': <String>[],
+          'redactedTemplate': 'You spent Rs <AMT>',
+          'corrected': {'category': 'food', '_template': {'hash': 'h'}},
+        });
+        Map? sent;
+        final sync = syncWith((request) {
+          sent = jsonDecode(request.body) as Map;
+          return http.Response(jsonEncode({'caseId': 'case-1'}), 200);
+        }, sharingGranted: () async => granted);
+        expect(await sync.drain(), 1);
+        expect(sent!.containsKey('redactedTemplate'), granted);
+        expect(sent!['corrected'], granted ? isNotEmpty : isEmpty);
+      }
+    });
+
     test('stops waiting for a source the server keeps refusing', () async {
       queue.enqueue('source', 'S1', {'sourceKey': 'S1'});
       for (var i = 0; i < 6; i++) {
@@ -171,12 +192,8 @@ void main() {
         posts++;
         return http.Response(jsonEncode({'caseId': 'case-1'}), 200);
       });
-      // Still inside its back-off the source may only have been waiting for a
-      // connection (Q-09): the correction is held back.
-      expect(await sync.drain(), 0);
-      expect(posts, 0);
-      // Once the back-off is over and six attempts have failed it is let go.
-      now = now.add(const Duration(hours: 1));
+      // Six server refusals (attempts > 0 means the server answered, WP-H2):
+      // released even inside the back-off, which keeps re-arming.
       expect(await sync.drain(), 1);
       expect(posts, 1);
     });

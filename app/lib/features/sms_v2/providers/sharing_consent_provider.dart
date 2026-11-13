@@ -15,3 +15,15 @@ final smsSharingGrantedProvider = FutureProvider.autoDispose<bool>((ref) {
     read: () => ref.watch(app.smsSharedLearningConsentProvider.future),
   );
 });
+
+/// A withdrawal of "share SMS fixes with the community" must call this FIRST,
+/// before the server call: it clears the local mirror at once, so a correction
+/// still queued offline is sent without its share-only parts. Then refreshes
+/// the consent providers. (Call site: privacy settings screen, WP-C11.)
+Future<void> withdrawSharedLearningLocally(WidgetRef ref) async {
+  await SmsSharedLearningConsentMirror.set(
+    ref.read(app.cacheNamespaceProvider),
+    false,
+  );
+  ref.invalidate(app.smsSharedLearningConsentProvider);
+}

@@ -144,29 +144,31 @@ class NotificationGate {
     /// replaces the earlier one instead of stacking beside it.
     int? notificationId,
   }) async {
-    NotificationPreferences? prefs;
-    try {
-      prefs = await ref.read(notificationPreferencesProvider.future);
-    } catch (_) {
-      // The provider no longer throws; if something else does, decide with
-      // the conservative defaults rather than going silent.
-      prefs = NotificationPreferences.defaults;
-    }
-    if (prefs == null) return false;
-
+    // Claimed before the first await: two overlapping sweeps for one key can
+    // no longer both get past the check (WP-H2).
+    if (!_inFlight.add(dedupeKey)) return false;
+    var reserved = false;
+    var delivered = false;
     final effectiveNow = now ?? DateTime.now();
-    if (!categoryEnabled(prefs, category)) return false;
-    if (merchantId != null && await _merchantMuted(merchantId)) return false;
-    if (inQuietHours(prefs, effectiveNow)) return false;
-    if (_inFlight.contains(dedupeKey) || await _alreadyFired(dedupeKey)) {
-      return false;
-    }
-    if (dailyCapReached(await _todayCount(effectiveNow), prefs.dailyCap)) {
-      return false;
-    }
-
-    _inFlight.add(dedupeKey);
     try {
+      NotificationPreferences? prefs;
+      try {
+        prefs = await ref.read(notificationPreferencesProvider.future);
+      } catch (_) {
+        // The provider no longer throws; if something else does, decide with
+        // the conservative defaults rather than going silent.
+        prefs = NotificationPreferences.defaults;
+      }
+      if (prefs == null) return false;
+
+      if (!categoryEnabled(prefs, category)) return false;
+      if (merchantId != null && await _merchantMuted(merchantId)) return false;
+      if (inQuietHours(prefs, effectiveNow)) return false;
+      if (await _alreadyFired(dedupeKey)) return false;
+      // The daily slot is taken atomically; given back if nothing is delivered.
+      reserved = await _reserveSlot(effectiveNow, prefs.dailyCap);
+      if (!reserved) return false;
+
       // The banner comes first: it needs no network.
       final shown = await _showBanner(
         notificationId ?? dedupeKey.hashCode,
@@ -175,8 +177,8 @@ class NotificationGate {
       );
       var recorded = false;
       if (shown) {
-        await _markDelivered(dedupeKey, effectiveNow);
-        recorded = true;
+        await _markFired(dedupeKey);
+        delivered = recorded = true;
       }
 
       final inbox = await recordAppNotificationOutcome(
@@ -194,16 +196,15 @@ class NotificationGate {
         // next check tries again.
         return false;
       }
-      if (!recorded) await _markDelivered(dedupeKey, effectiveNow);
+      if (!recorded) {
+        await _markFired(dedupeKey);
+        delivered = true;
+      }
       return true;
     } finally {
+      if (reserved && !delivered) await _releaseSlot(effectiveNow);
       _inFlight.remove(dedupeKey);
     }
-  }
-
-  Future<void> _markDelivered(String dedupeKey, DateTime now) async {
-    await _markFired(dedupeKey);
-    await _incrementTodayCount(now);
   }
 
   /// Best effort, same "must never fail the action that earned it" posture as
@@ -271,13 +272,22 @@ class NotificationGate {
   static const _dedupeKeyStoreKey = 'notification_gate_dedupe_keys_v1';
   static const _dedupeKeyStoreCap = 500;
 
+  /// Serialises every read-modify-write of the gate's SharedPreferences keys
+  /// (they span awaits, so overlapping calls lost updates).
+  Future<void> _lock = Future.value();
+  Future<T> _locked<T>(Future<T> Function() body) {
+    final result = _lock.then((_) => body());
+    _lock = result.then<void>((_) {}, onError: (_) {});
+    return result;
+  }
+
   Future<bool> _alreadyFired(String dedupeKey) async {
     final prefs = await SharedPreferences.getInstance();
     final seen = prefs.getStringList(_dedupeKeyStoreKey) ?? const [];
     return seen.contains(dedupeKey);
   }
 
-  Future<void> _markFired(String dedupeKey) async {
+  Future<void> _markFired(String dedupeKey) => _locked(() async {
     final prefs = await SharedPreferences.getInstance();
     final seen = prefs.getStringList(_dedupeKeyStoreKey) ?? const [];
     final updated = [...seen, dedupeKey];
@@ -288,19 +298,24 @@ class NotificationGate {
         ? updated.sublist(updated.length - _dedupeKeyStoreCap)
         : updated;
     await prefs.setStringList(_dedupeKeyStoreKey, trimmed);
-  }
+  });
 
   String _todayCountKey(DateTime now) =>
       'notification_gate_daily_count_v1:${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
-  Future<int> _todayCount(DateTime now) async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt(_todayCountKey(now)) ?? 0;
-  }
-
-  Future<void> _incrementTodayCount(DateTime now) async {
+  Future<bool> _reserveSlot(DateTime now, int dailyCap) => _locked(() async {
     final prefs = await SharedPreferences.getInstance();
     final key = _todayCountKey(now);
-    await prefs.setInt(key, (prefs.getInt(key) ?? 0) + 1);
-  }
+    final count = prefs.getInt(key) ?? 0;
+    if (dailyCapReached(count, dailyCap)) return false;
+    await prefs.setInt(key, count + 1);
+    return true;
+  });
+
+  Future<void> _releaseSlot(DateTime now) => _locked(() async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = _todayCountKey(now);
+    final count = prefs.getInt(key) ?? 0;
+    if (count > 0) await prefs.setInt(key, count - 1);
+  });
 }
