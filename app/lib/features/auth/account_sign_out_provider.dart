@@ -10,6 +10,7 @@ import 'package:sqlite3/sqlite3.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/portable_backup/account_recovery_operation_gate.dart';
+import '../../data/session_end_reason.dart';
 import '../sms_v2/providers/runtime_provider.dart';
 import '../sync/sync_engine.dart';
 import 'account_sign_out.dart';
@@ -262,5 +263,7 @@ final accountSignOutProvider = Provider<AccountSignOut>((ref) {
     clearWidgetsAndNotifications: clearWidgetsAndNotifications,
     clearPreferences: clearPreferences,
     resetSession: resetSession,
+    onSignOutStarted: () =>
+        ref.read(sessionEndReasonProvider).markUserSignedOut(),
   );
 });

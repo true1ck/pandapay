@@ -130,6 +130,7 @@ class AccountSignOut {
     required this.clearPreferences,
     required this.resetSession,
     this.serverStepTimeout = const Duration(seconds: 8),
+    this.onSignOutStarted,
   });
 
   final Future<void> Function() flushOutboxes;
@@ -143,6 +144,12 @@ class AccountSignOut {
   final Future<void> Function() clearPreferences;
   final void Function() resetSession;
   final Duration serverStepTimeout;
+
+  /// Called first thing in [run], before any server call or wipe step. The app
+  /// uses it to record that the person chose to sign out, so the code that
+  /// reacts to the account becoming `signed-out` clears account data for this
+  /// and not for a session the server rejected (WP-C3, L-01).
+  final void Function()? onSignOutStarted;
 
   /// Uploads what can be uploaded, then counts what would still be lost.
   Future<SignOutReport> prepare({
@@ -160,6 +167,11 @@ class AccountSignOut {
   /// A failing wipe step never stops the next one, and the session is always
   /// reset at the end.
   Future<SignOutOutcome> run() async {
+    try {
+      onSignOutStarted?.call();
+    } catch (_) {
+      // Recording the reason must never stop the wipe.
+    }
     for (final step in [unregisterPush, revokeSession]) {
       try {
         await step().timeout(serverStepTimeout);

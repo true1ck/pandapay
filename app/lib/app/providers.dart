@@ -95,6 +95,7 @@ import '../data/spend_reports_repository.dart';
 import '../data/spending_selection.dart';
 import '../data/subscription_credits_repository.dart';
 import '../data/sync_api.dart';
+import '../data/session_end_reason.dart';
 import '../data/token_store.dart';
 import '../data/upi_payment_service.dart';
 import '../data/user_cards_repository.dart';
@@ -293,6 +294,10 @@ final sessionRefreshCoordinatorProvider = Provider<SessionRefreshCoordinator>(
     readAccessToken: () => ref.read(accessTokenProvider),
     writeAccessToken: (token) =>
         ref.read(accessTokenProvider.notifier).state = token,
+    // WP-C3: tell the listeners of the `signed-out` flip that this was the
+    // server rejecting the session, not the person signing out.
+    onSessionRejected: () =>
+        ref.read(sessionEndReasonProvider).markSessionRejected(),
   ),
 );
 
@@ -940,6 +945,11 @@ class SessionRefreshCoordinator {
   final String? Function() readAccessToken;
   final void Function(String?) writeAccessToken;
 
+  /// Called just before the rejected session's access token is dropped, so
+  /// whoever reacts to the account becoming `signed-out` can tell a rejected
+  /// session from an explicit sign-out (see `session_end_reason.dart`).
+  final void Function()? onSessionRejected;
+
   Future<String?>? _refreshInProgress;
 
   SessionRefreshCoordinator({
@@ -947,6 +957,7 @@ class SessionRefreshCoordinator {
     required this.authApi,
     required this.readAccessToken,
     required this.writeAccessToken,
+    this.onSessionRejected,
   });
 
   Future<String?> refresh({String? expectedAccessToken}) {
@@ -1012,6 +1023,12 @@ class SessionRefreshCoordinator {
         // account". Clear only the unusable tokens; account-scoped local data
         // stays in SQLite and becomes available again after the same user
         // signs in.
+        //
+        // WP-C3 (L-01): this comment used to be contradicted by the code,
+        // because dropping the access token flipped the account namespace to
+        // `signed-out` and `cacheLifecycleProvider` then deleted the account's
+        // local data. The reason is recorded first so that flip keeps it.
+        onSessionRejected?.call();
         try {
           await store.clear();
         } catch (_) {
@@ -2751,7 +2768,19 @@ final displayDataSyncLifecycleProvider = Provider<void>((ref) {
 /// and deliberately NOT cleared here.
 final cacheLifecycleProvider = Provider<void>((ref) {
   ref.listen<String>(cacheNamespaceProvider, (previous, next) async {
+    final endReason = ref.read(sessionEndReasonProvider);
+    if (previous == 'signed-out' && next != 'signed-out') {
+      // A session started again: forget how the last one ended.
+      endReason.clear();
+    }
     if (previous != 'signed-out' && next == 'signed-out') {
+      // WP-C3 (L-01, D10): only an explicit sign-out clears the account. A
+      // refresh token the server rejected clears the credentials, but the
+      // phone may hold edits and phone-only data the server has never seen;
+      // they wait for the same person to sign in again. An explicit sign-out
+      // wipes the database file and its key right after this, so nothing is
+      // left behind either way.
+      if (!endReason.mayWipeAccountData) return;
       final cache = await _cacheOrNull(ref);
       final namespace = previous;
       await cache?.clearPrefix('$namespace:');
