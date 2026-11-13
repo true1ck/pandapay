@@ -9,11 +9,13 @@ import 'package:sqlite3/sqlite3.dart';
 
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/connectivity/known_connectivity.dart';
+import '../../data/local/queue_registry.dart';
+import '../../data/local/transaction_attachments_repository.dart';
 import '../../data/portable_backup/account_recovery_operation_gate.dart';
 import '../../data/session_end_reason.dart';
-import '../sms_v2/providers/runtime_provider.dart';
-import '../sync/sync_engine.dart';
 import 'account_sign_out.dart';
+import 'sign_out_queues.dart';
 import 'storage_phone_wipe_hooks.dart';
 
 /// The storage-security hooks (install key, storage root, home widgets).
@@ -37,6 +39,24 @@ class PhoneOnlyCounts {
   final int messages;
 }
 
+/// Receipt rows that may belong to [namespace]. The table has no namespace
+/// column; the account is the first folder of the stored path (see
+/// [TransactionAttachmentsRepository.storedPathMayBelongTo]), so another
+/// account's receipts on a shared phone are not reported as this one's.
+int _receiptsOfAccount(Database db, String namespace, bool tableExists) {
+  if (!tableExists) return 0;
+  var count = 0;
+  for (final row in db.select('SELECT local_path FROM transaction_attachments')) {
+    if (TransactionAttachmentsRepository.storedPathMayBelongTo(
+      row['local_path'] as String,
+      namespace,
+    )) {
+      count++;
+    }
+  }
+  return count;
+}
+
 PhoneOnlyCounts readPhoneOnlyCounts(Database db, String namespace) {
   bool exists(String table) => db.select(
     "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
@@ -50,7 +70,7 @@ PhoneOnlyCounts readPhoneOnlyCounts(Database db, String namespace) {
             as int;
   return PhoneOnlyCounts(
     smsOutbox: count('v2_outbox', 'namespace=?', [namespace]),
-    receipts: count('transaction_attachments', '1=1', const []),
+    receipts: _receiptsOfAccount(db, namespace, exists('transaction_attachments')),
     reviewItems: count('v2_review_items', "namespace=? AND status='open'", [
       namespace,
     ]),
@@ -105,25 +125,28 @@ final accountSignOutProvider = Provider<AccountSignOut>((ref) {
     }
   }
 
+  // Set when the last flush did not complete (an error, or the caller's
+  // timeout abandoned it) so `report()` can say the send did not work.
+  var flushCompleted = true;
+
+  bool offlineNow() =>
+      KnownConnectivity.knownOffline ||
+      ref.read(isOnlineProvider).valueOrNull == false;
+
   Future<void> flushOutboxes() async {
-    if (ref.read(cacheNamespaceProvider) == 'signed-out') return;
-    await attempt(() async {
-      final runtime = await ref.read(smsV2RuntimeProvider.future);
-      await runtime?.sync();
-    });
-    await attempt(() async {
-      await ref.read(syncEngineProvider).sync();
-    });
-    await attempt(() async {
-      final repo = ref.read(userCardsRepositoryProvider);
-      if (repo == null) return;
-      final outbox = await ref.read(outboxRepositoryProvider.future);
-      await outbox.flush(repo);
-      final duplicates = await ref.read(
-        duplicateResolutionOutboxRepositoryProvider.future,
-      );
-      await duplicates.flush(repo);
-    });
+    final namespace = ref.read(cacheNamespaceProvider);
+    if (namespace == 'signed-out') return;
+    flushCompleted = false;
+    // Every registered queue, not a hand-kept list (WP-C3, L-02): the command
+    // outbox, Split commands and documents, statement imports, tags and
+    // foreign payments are flushed along with the edits and SMS uploads.
+    final database = await ref.read(appDatabaseProvider.future);
+    final report = await flushSignOutQueues(
+      ref,
+      registry: QueueRegistry(database),
+      namespace: namespace,
+    );
+    flushCompleted = report.failures.isEmpty;
   }
 
   Future<SignOutReport> report() async {
@@ -135,20 +158,7 @@ final accountSignOutProvider = Provider<AccountSignOut>((ref) {
         phoneOnlyReviewItems: 0,
       );
     }
-    var queued = 0;
-    await attempt(() async {
-      queued += (await ref.read(syncQueueProvider.future)).pendingCount;
-    });
-    await attempt(() async {
-      queued += (await (await ref.read(
-        outboxRepositoryProvider.future,
-      )).all()).length;
-    });
-    await attempt(() async {
-      queued += (await ref.read(
-        duplicateResolutionOutboxRepositoryProvider.future,
-      )).pendingCount;
-    });
+    var scan = const SignOutQueueScan(unsent: 0, pending: 0, kinds: []);
     var counts = const PhoneOnlyCounts(
       smsOutbox: 0,
       receipts: 0,
@@ -156,13 +166,26 @@ final accountSignOutProvider = Provider<AccountSignOut>((ref) {
     );
     await attempt(() async {
       final database = await ref.read(appDatabaseProvider.future);
+      scan = scanSignOutQueues(QueueRegistry(database), namespace);
       counts = readPhoneOnlyCounts(database.db, namespace);
     });
+    // Waiting rows are what a connection would have delivered. Parked ones
+    // were refused for good and are lost either way, so they say nothing
+    // about the connection.
+    final connection = scan.unsent == 0
+        ? SignOutConnection.ok
+        : offlineNow()
+        ? SignOutConnection.offline
+        : (!flushCompleted || scan.pending > 0)
+        ? SignOutConnection.unreachable
+        : SignOutConnection.ok;
     return SignOutReport(
-      unsynced: queued + counts.smsOutbox,
+      unsynced: scan.unsent,
       phoneOnlyReceipts: counts.receipts,
       phoneOnlyReviewItems: counts.reviewItems,
       phoneOnlyMessages: counts.messages,
+      pendingKinds: scan.kinds,
+      connection: connection,
     );
   }
 

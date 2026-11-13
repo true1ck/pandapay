@@ -106,6 +106,35 @@ class TransactionAttachmentsRepository implements PortableReceiptVault {
     return 'guest:${sha256.convert(utf8.encode(value)).toString().substring(0, 40)}';
   }
 
+  /// The folder name under the receipts directory that holds [namespace]'s
+  /// files. Rows of `transaction_attachments` have no namespace column; this
+  /// folder (the first segment of their stored path) is what tells accounts
+  /// apart, so sign-out can count only the current account's receipts.
+  static String accountFolderFor(String namespace) => sha256
+      .convert(utf8.encode(_normalizeNamespace(namespace)))
+      .toString()
+      .substring(0, 32);
+
+  /// True when the stored attachment path [storedPath] is not known to belong
+  /// to another account: it sits under [namespace]'s folder, or under no
+  /// account folder at all (an old flat path whose owner cannot be proven, so
+  /// it is counted rather than hidden). Accepts both the relative form and the
+  /// old absolute form (`.../receipts/<folder>/...`), with either separator.
+  static bool storedPathMayBelongTo(String storedPath, String namespace) {
+    final segments = storedPath
+        .replaceAll(r'\', '/')
+        .split('/')
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (segments.isEmpty) return true;
+    final receiptsAt = segments.lastIndexOf('receipts');
+    final index = receiptsAt >= 0 ? receiptsAt + 1 : 0;
+    if (index >= segments.length) return true;
+    final folder = segments[index];
+    if (!RegExp(r'^[0-9a-f]{32}$').hasMatch(folder)) return true;
+    return folder == accountFolderFor(namespace);
+  }
+
   /// The form stored in the database: relative to the receipts folder, so a
   /// receipt keeps working when iOS moves the app's data container.
   Future<String> _storedPath(File file) async {
@@ -130,10 +159,7 @@ class TransactionAttachmentsRepository implements PortableReceiptVault {
 
   Future<Directory> _transactionDirectory(String transactionId) async {
     final root = await _receiptsDirectory();
-    final account = sha256
-        .convert(utf8.encode(_keyNamespace))
-        .toString()
-        .substring(0, 32);
+    final account = accountFolderFor(namespace);
     final safeTransaction = transactionId.replaceAll(
       RegExp(r'[^A-Za-z0-9_-]'),
       '_',
@@ -144,10 +170,7 @@ class TransactionAttachmentsRepository implements PortableReceiptVault {
   Future<bool> _accountHasReceipts() async {
     final root = await _receiptsDirectory();
     final account = Directory(
-      p.join(
-        root.path,
-        sha256.convert(utf8.encode(_keyNamespace)).toString().substring(0, 32),
-      ),
+      p.join(root.path, accountFolderFor(namespace)),
     );
     if (!await account.exists()) return false;
     return account.list(recursive: true).any((entry) => entry is File);

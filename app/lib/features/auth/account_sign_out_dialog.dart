@@ -40,21 +40,44 @@ Future<bool> confirmAndSignOut(
   }
   if (!context.mounted) return false;
   if (report.losesSomething) {
+    // Offline (or PandaPay unreachable) with changes still waiting: the usual
+    // "Sign out anyway" is too easy to tap past. Name the loss on the button
+    // and make staying the prominent choice.
+    final losing = report.unsentBecauseNoConnection;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Sign out of PandaPay?'),
+        title: Text(
+          !losing
+              ? 'Sign out of PandaPay?'
+              : report.connection == SignOutConnection.offline
+              ? "You're offline"
+              : "Can't reach PandaPay",
+        ),
         content: Text(signOutWarningMessage(report)),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
+          if (losing)
+            // A TextButton, not a FilledButton: the app theme makes filled
+            // buttons full width, which does not belong in dialog actions.
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text(
+                'Stay signed in',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            )
+          else
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text(
-              'Sign out anyway',
-              style: TextStyle(color: BambooInk.clay),
+            child: Text(
+              losing
+                  ? 'Sign out and lose ${report.unsynced == 1 ? 'this change' : '${report.unsynced} changes'}'
+                  : 'Sign out anyway',
+              style: const TextStyle(color: BambooInk.clay),
             ),
           ),
         ],
