@@ -1144,7 +1144,10 @@ class FinancialStore {
       for (final old in entities(ns, 'cards')) {
         if ((old['is_archived'] == true) == archived) {
           database.db.execute(
-            "DELETE FROM financial_entities WHERE namespace=? AND entity='cards' AND id=? AND observed_at<=?",
+            // pending=1 is a card added on this phone that the server has not
+            // confirmed yet (WP-C6, L-03): a refresh cannot know about it and
+            // must not delete it. Only the add_card command settles it.
+            "DELETE FROM financial_entities WHERE namespace=? AND entity='cards' AND id=? AND observed_at<=? AND pending=0",
             [ns, old['id'], timestamp],
           );
         }
