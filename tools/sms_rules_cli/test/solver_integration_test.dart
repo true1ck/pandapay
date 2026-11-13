@@ -13,6 +13,10 @@
 // 2. overruled: a rule for any sender (`*`) called the message information
 //    only (info or balance), and the evidence reader accepts a completed money
 //    movement in it. A wide information rule must not swallow a real debit.
+// 3. named: a rule read a single credit as salary but printed no payer. The
+//    evidence reader finds the employer next to the salary word (or sees that
+//    the money was reversed). Only the payer, or a salary typed reversal, may
+//    differ; amount, account, date and every other fact stay byte-identical.
 import 'dart:convert';
 import 'dart:io';
 
@@ -38,6 +42,38 @@ Map<String, Object?> _withoutTyping(Fact f) {
   return j;
 }
 
+/// True when [before] and [after] differ only in the payer of one salary credit
+/// (nobody named before, a name after), or in that credit's purpose going from
+/// salary to reversal. Everything else must be byte-identical.
+bool _salaryNamed(List<Fact> before, List<Fact> after) {
+  final bm = before.whereType<MovementFact>().toList();
+  final am = after.whereType<MovementFact>().toList();
+  if (bm.length != 1 || am.length != 1) return false;
+  final b = bm.single, a = am.single;
+  if (b.direction != Direction.credit || b.purpose != MovementPurpose.salary) {
+    return false;
+  }
+  final named = (b.counterparty?.name ?? '').isEmpty &&
+      (a.counterparty?.name ?? '').isNotEmpty;
+  final reversed = a.purpose == MovementPurpose.reversal;
+  if (!named && !reversed) return false;
+  Map<String, Object?> strip(Fact f) {
+    final j = Map<String, Object?>.of(f.toJson())..remove('counterparty');
+    j['attrs'] = Map<String, Object?>.of(j['attrs'] as Map<String, Object?>)
+      ..remove('purpose');
+    return j;
+  }
+  for (var i = 0; i < before.length; i++) {
+    final x = before[i], y = after[i];
+    if (identical(x, b)) {
+      if (jsonEncode(strip(x)) != jsonEncode(strip(y))) return false;
+    } else if (jsonEncode(x.toJson()) != jsonEncode(y.toJson())) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /// 'refined', 'corroborated' or 'overruled' when the difference between the
 /// reading without the pack ([bare]) and with it ([full]) is one the promise
 /// allows; null when it is not.
@@ -49,6 +85,12 @@ String? _allowedDifference(EngineOutcome bare, EngineOutcome full, RuleBundle bu
   }
   final before = bare.result.facts, after = full.result.facts;
   final mine = before.where(_countable).toList();
+  if (full.winnerId == bare.winnerId &&
+      mine.length == 1 &&
+      before.length == after.length &&
+      _salaryNamed(before, after)) {
+    return 'named';
+  }
   final unsure = mine.length == 1 &&
       (mine.single.confidence < kConfidentRead ||
           (mine.single as MovementFact).purpose == MovementPurpose.unknown);
@@ -120,6 +162,7 @@ void main() {
       final allowed = <String, int>{};
       final overruled = <String>[];
       final refined = <String>[];
+      final named = <String>[];
       for (final rule in withPack.rules) {
         for (final ex in rule.examples) {
           final msg = SmsMessage(
@@ -144,6 +187,7 @@ void main() {
               allowed[why] = (allowed[why] ?? 0) + 1;
               if (why == 'overruled') overruled.add('${a.winnerId} -> ${b.winnerId}: ${ex.body}');
               if (why == 'refined') refined.add('${rule.id}: ${ex.body}');
+              if (why == 'named') named.add(rule.id);
             }
           }
         }
@@ -163,6 +207,15 @@ void main() {
       expect(allowed['corroborated'] ?? 0, greaterThan(20));
       // Reviewed: these autopay debits were plain unknown-purpose debits that a
       // generic catch-all rule read and the solver enriched.
+      // Reviewed: these are salary examples whose rule printed no payer; the
+      // evidence reader names the employer next to the salary word and changes
+      // nothing else. A new rule id here needs the same hand review.
+      expect(named.toSet(), {
+        'BRK-DIV-NACH-NARR-01',
+        'SBI-ACCT-CREDIT-DIVIDEND-NAMED',
+        'SBI-STYLE-CR-SAL',
+        'SBI-STYLE-CR-SAL-B',
+      });
       expect(refined.map((e) => e.split(':').first).toSet(), {
         'MND-UPCOMING-01',
         'MND-UPCOMING-01-INV',

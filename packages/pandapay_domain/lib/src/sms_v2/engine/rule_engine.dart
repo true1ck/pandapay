@@ -375,6 +375,7 @@ class RuleEngine implements SmsInterpreter {
           facts = second.facts;
           stats.solverCorroborated++;
         }
+        facts = _withSalaryPayer(cb, facts, message);
         stats.matched++;
         stats.ruleHits[id] = (stats.ruleHits[id] ?? 0) + 1;
         return EngineOutcome(
@@ -515,6 +516,58 @@ class RuleEngine implements SmsInterpreter {
   /// or one ends with the other ("1234" and "234").
   static bool _masksAgree(String? a, String? b) =>
       a == null || b == null || a.endsWith(b) || b.endsWith(a);
+
+  /// A rule that reads a salary credit but prints no payer ("SALARY CREDIT ACME
+  /// TECHNOLOGIES", "has credit for SALARY ACME") leaves the row as "Unknown
+  /// sender". The evidence reader finds the employer by where the name sits next
+  /// to the salary word, in any layout. For a single credit the rule already
+  /// typed as salary it does two things and nothing else:
+  ///
+  /// * fills a MISSING payer;
+  /// * when the message itself says the money was reversed, refunded or
+  ///   returned, types it a reversal, because money handed back is not a
+  ///   month's pay.
+  ///
+  /// Amount, account, date and every other fact stay exactly as the rule read them.
+  List<Fact> _withSalaryPayer(
+    CompiledBundle cb,
+    List<Fact> facts,
+    SmsMessage msg,
+  ) {
+    final solver = cb.solver;
+    if (solver == null) return facts;
+    final movements = facts.whereType<MovementFact>().toList();
+    if (movements.length != 1) return facts;
+    final m = movements.single;
+    if (m.direction != Direction.credit ||
+        m.purpose != MovementPurpose.salary ||
+        m.evidenceOnly == true) {
+      return facts;
+    }
+    final c = m.counterparty;
+    final named =
+        (c?.name ?? '').trim().isNotEmpty || (c?.vpa ?? '').trim().isNotEmpty;
+    try {
+      final note = solver.salaryNote(msg.body);
+      if (!note.givenBack && (named || note.employer == null)) return facts;
+      final json = m.toJson();
+      if (note.givenBack) {
+        (json['attrs'] as Map)['purpose'] = MovementPurpose.reversal.wire;
+      } else {
+        json['counterparty'] = {
+          'name': note.employer,
+          'vpa': null,
+          'kind': c?.kind?.wire,
+          'accountMask': c?.accountMask,
+        };
+      }
+      final out = Fact.fromJson(json);
+      if (!out.validate().ok) return facts;
+      return [for (final f in facts) identical(f, m) ? out : f];
+    } on Object {
+      return facts;
+    }
+  }
 
   // ---- tier 2 ----
 

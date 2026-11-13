@@ -116,3 +116,21 @@ Senders: `senders/cooperative_banks.json` registers `SDCCBK` and `SDPTCS`. A hea
 | `AMTF-ACCT-DB-FROM-YOUR[-B]` | `Rs X has been debited from your A/c N [on DATE]` and nothing that names a payee, rail or purpose after it | Priority 521/526, just above `BRK-DEMAT-NSDL-DEBIT-01` (any sender, 520), which read this wording as a share movement and dropped it. Wording that names a payee or rail is left to the richer rules. The account number is anchored (`(?!\d)`) and the date check is written as two branches, because an optional date before a single negative check lets the pattern skip the date or give back a digit to dodge it. |
 
 **Check every new or edited rule against `tools/sms_golden/heldout/`** (`dart test test/generalization_guard_test.dart`) and the golden gate, every time: twice during this work a new rule counted a lookalike ("If Rs X is debited from your A/c without your consent …") or stole a richer rule's message, and only those runs showed it.
+
+## Salary credits: the employer is found by position, not by layout (14 Nov 2026)
+
+The salary rules (`GEN-ACCT-SALARY-C1/C2`, `SBI-STYLE-CR-SAL`, the per-bank ones) count a credit as salary but, in many layouts, read no employer, so the row said "Unknown sender". Adding one rule per layout was tried and dropped: it listed shapes (`ACH CR-X-SALARY`, `UPI/CR/ref/X/SALARY`, `SALARY CREDIT X`, ...) and needed a new rule for every new bank wording.
+
+The fix is one reading in the evidence solver, `EvidenceSolver.salaryNote` (`solver/evidence_solver.dart`, `_employerNearSalary`), applied by the engine (`RuleEngine._withSalaryPayer`) to any rule-read single salary credit and used by tier 2 for its own salary reads. It holds no wording or layout of its own:
+
+* the salary word is whatever the pack's `purposeCue` entries of kind `salary` say;
+* everything the pack already knows (a credit word, a rail, "from", a bank word, a month) and every number, date, account or amount is skipped as glue;
+* the employer is the nearest run of the remaining name-like words, in the salary word's sentence and within `maxCueDistance`. A hyphen or slash may separate it from the salary word (`LTD-Salary`); a comma, colon, bracket or bar may not ("Dear Customer, your salary");
+* nothing that is an account, amount, link or full date may sit between the name and the salary word, so the bank's name beside the account number is never taken for the employer; a name straight before an account number is the user's own account;
+* a name that carries on across a bracket (`ACME (INDIA) PVT LTD`) is a fragment, so no payer is better than half of one; a run longer than `partyMaxWords` is prose.
+
+It only fills a missing payer of a credit the rule already typed as salary. Amount, account, date and every other fact stay as the rule read them. One more thing it does: when the pack's `undo` wording (refunded, reversed, returned) sits next to the salary word, the credit is typed `reversal`, because money handed back is not a month's pay (the older salary rules counted it as salary).
+
+Kernel change, so it reaches new app builds only; older builds keep the payer-less salary reading (still counted as salary). No pack word list changed. The edge-case table is `tools/sms_rules_cli/test/salary_payer_generalization_test.dart`, the solver cases are `packages/pandapay_domain/test/sms_v2/solver/salary_employer_test.dart`.
+
+The app side: a salary the alert gave no employer for shows "Salary received" instead of "Unknown sender" (Activity and Money in), and `SalaryRecheck` (`app/lib/features/sms_v2/pipeline/salary_recheck.dart`) reads stored payer-less salary credits again once per rules revision, because money already read is frozen and a better reading would otherwise never reach it.

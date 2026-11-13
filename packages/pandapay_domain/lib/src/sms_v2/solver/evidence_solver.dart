@@ -233,6 +233,25 @@ class EvidenceSolver {
       senderKind,
     ).run();
   }
+
+  /// What [body] says about a salary credit a rule already read: the employer
+  /// named next to the salary word (or null), and whether the message itself says
+  /// that money was reversed, refunded or returned (so it is not a month's pay).
+  /// It decides nothing else and never rejects a message.
+  ({String? employer, bool givenBack}) salaryNote(String body) {
+    final capped = body.length > maxBody ? body.substring(0, maxBody) : body;
+    final run = _Run(
+      pack,
+      SolverText.parse(capped),
+      DateTime.now().toUtc(),
+      null,
+      null,
+    );
+    return (
+      employer: run._employerNearSalary(),
+      givenBack: run._salaryGivenBack(),
+    );
+  }
 }
 
 const _istOffset = Duration(hours: 5, minutes: 30);
@@ -997,6 +1016,10 @@ class _Run {
           ),
     );
     final purposeWire = _purpose(debitDir, amtIdx);
+    // Salary names its payer by where it sits next to the salary word, in any
+    // layout, not by a cue word ("from", "by") that many alerts do not print.
+    final salaryEmployer =
+        debitDir == false && purposeWire == 'salary' ? _employerNearSalary() : null;
 
     SolverRead kind;
     var evidenceOnly = false;
@@ -1181,8 +1204,8 @@ class _Run {
           _instrumentWire(mask?.$2, kind) ?? (senderKind == 'wallet' ? 'wallet' : null),
       // Scoring above used the cue name; a footer sentence is not reported as a
       // payee, and a layout name (card alert) is reported but never scored.
-      party: reportedParty?.$1,
-      partyIsVpa: reportedParty?.$2 ?? false,
+      party: salaryEmployer ?? reportedParty?.$1,
+      partyIsVpa: salaryEmployer != null ? false : (reportedParty?.$2 ?? false),
       debitDirection: kind == SolverRead.cardPayment && cue.how == 'biller'
           ? false
           : debitDir,
@@ -1663,6 +1686,188 @@ class _Run {
       if (words.isNotEmpty) return (words.join(' '), false);
     }
     return null;
+  }
+
+  /// The pack's "undo" wording (refunded, reversed, returned ...) sits next to
+  /// the salary word in the same sentence: money handed back, not a month's pay.
+  bool _salaryGivenBack() {
+    for (final s in hits('purposeCue')) {
+      if (s.entry.kind != 'salary') continue;
+      for (final u in hits('undo')) {
+        if (same(s.start, u.start) &&
+            (u.start - s.start).abs() <= p.maxCueDistance) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  static final _monthWord = RegExp(
+    r'^(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)$',
+    caseSensitive: false,
+  );
+  static final _namePiece = RegExp(r"^[A-Za-z][A-Za-z.&']+$");
+  static final _monthYear = RegExp(r'^[A-Za-z]{3,9}[\s\-.,]*\d{2,4}$');
+  static final _fieldDelimiter = RegExp(r'[-/.,;:|()\[\]]');
+  static final _clauseBreak = RegExp(r'[,;:|()\[\]]');
+
+  /// Who paid a salary credit, found by WHERE the name sits next to the salary
+  /// word, not by what the layout around it looks like.
+  ///
+  /// People read "...-ACME TECHNOLOGIES PVT LTD-Salary-Salary Oct 2026",
+  /// "SALARY CREDIT ACME TECHNOLOGIES", "by ACH CR-ACME-SALARY" and "Salary for
+  /// Oct from ACME" the same way: the company is the name-like words next to
+  /// "salary". Everything else in the sentence is something the pack already
+  /// knows (a credit word, a rail, "from", a bank word, a month) or a number, a
+  /// date, an account or an amount, so it is skipped. This reads no wording of
+  /// its own: the salary word and every skipped word come from the pack.
+  ///
+  /// Rules that keep it from inventing a payer:
+  /// * the name must be in the salary word's sentence, within the pack's cue
+  ///   distance, and nothing that is an account, an amount, a link or a full
+  ///   date may sit between the name and the salary word (so the bank's own name
+  ///   near the account number is not taken for the employer);
+  /// * a hyphen or slash may separate the name from the salary word ("LTD-Salary"),
+  ///   a comma, colon, bracket or bar may not ("Dear Customer, your salary");
+  /// * a name straight before an account number is the user's own account;
+  /// * a run longer than the pack's longest party is prose, not a name.
+  String? _employerNearSalary() {
+    // A word glued by "-" or "/" ("CR-ACME", "LTD-Salary") is several pieces.
+    final pieces = <Tok>[];
+    for (final t in toks) {
+      if (t.kind == TokKind.word &&
+          t.text.length > 3 &&
+          t.lower != 'a/c' &&
+          RegExp(r'[-/]').hasMatch(t.text)) {
+        var at = t.start;
+        for (final part in t.text.split(RegExp(r'[-/]'))) {
+          if (part.isNotEmpty) {
+            pieces.add(
+              Tok(
+                kind: TokKind.word,
+                text: part,
+                start: at,
+                end: at + part.length,
+                sentence: t.sentence,
+              ),
+            );
+          }
+          at += part.length + 1;
+        }
+      } else {
+        pieces.add(t);
+      }
+    }
+
+    // Pieces any lexicon of the pack claims are wording, not a name.
+    final claimed = <int>{};
+    final salary = <int>[];
+    for (final name in solverLexiconNames) {
+      for (final e in pack.lex(name)) {
+        for (final h in e.phrase.findAll(pieces)) {
+          for (var i = h.start; i < h.end; i++) {
+            claimed.add(i);
+            if (name == 'purposeCue' && e.kind == 'salary') salary.add(i);
+          }
+        }
+      }
+    }
+    if (salary.isEmpty) return null;
+
+    bool nameLike(int i) {
+      final t = pieces[i];
+      return t.kind == TokKind.word &&
+          !claimed.contains(i) &&
+          !_monthWord.hasMatch(t.text) &&
+          _namePiece.hasMatch(t.text);
+    }
+
+    String gap(int a, int b) =>
+        text.body.substring(pieces[a].end, pieces[b].start);
+
+    // Walks outward from the salary word to the first name-like piece. Returns
+    // (distance, first, last) of that name's run, or null when something in the
+    // way (an account, an amount, a full date, a clause break) says no.
+    (int, int, int)? walk(int from, int step) {
+      var i = from + step;
+      var moved = 0;
+      while (i >= 0 && i < pieces.length && moved <= p.maxCueDistance) {
+        final t = pieces[i];
+        final prev = pieces[i - step];
+        if (t.sentence != prev.sentence) return null;
+        final between = step > 0 ? gap(i - step, i) : gap(i, i - step);
+        if (_clauseBreak.hasMatch(between)) return null;
+        if (t.kind == TokKind.mask ||
+            t.kind == TokKind.amt ||
+            t.kind == TokKind.vpa ||
+            t.kind == TokKind.url ||
+            (t.kind == TokKind.date && !_monthYear.hasMatch(t.text))) {
+          return null;
+        }
+        if (nameLike(i)) {
+          // Extend over the rest of the name; a delimiter ends it.
+          var first = i, last = i;
+          while (true) {
+            final next = last + 1;
+            if (next >= pieces.length ||
+                !nameLike(next) ||
+                pieces[next].sentence != pieces[last].sentence ||
+                _fieldDelimiter.hasMatch(gap(last, next))) {
+              break;
+            }
+            last = next;
+          }
+          while (true) {
+            final before = first - 1;
+            if (before < 0 ||
+                !nameLike(before) ||
+                pieces[before].sentence != pieces[first].sentence ||
+                _fieldDelimiter.hasMatch(gap(before, first))) {
+              break;
+            }
+            first = before;
+          }
+          return (moved, first, last);
+        }
+        i += step;
+        moved++;
+      }
+      return null;
+    }
+
+    (int, int, int)? best;
+    for (final s in salary) {
+      for (final step in const [-1, 1]) {
+        final r = walk(s, step);
+        if (r != null && (best == null || r.$1 < best.$1)) best = r;
+      }
+    }
+    if (best == null) return null;
+    final (_, first, last) = best;
+    final words = [for (var i = first; i <= last; i++) pieces[i].text];
+    if (words.length > p.partyMaxWords) return null;
+    if (words.join('').length < 3) return null;
+    // "ACME (INDIA) PVT LTD": a name that carries on across a bracket is only a
+    // fragment here ("PVT LTD"). Better no payer than half of one.
+    final across = RegExp(r'^[\s()\[\]]*[()\[\]][\s()\[\]]*$');
+    if (first > 0 &&
+        nameLike(first - 1) &&
+        across.hasMatch(gap(first - 1, first))) {
+      return null;
+    }
+    if (last + 1 < pieces.length &&
+        nameLike(last + 1) &&
+        across.hasMatch(gap(last, last + 1))) {
+      return null;
+    }
+    // Right before an account number it is the user's own account, not a payer.
+    if (last + 1 < pieces.length &&
+        pieces[last + 1].kind == TokKind.mask &&
+        pieces[last + 1].sentence == pieces[last].sentence) {
+      return null;
+    }
+    return words.join(' ');
   }
 
   // ---- results ----

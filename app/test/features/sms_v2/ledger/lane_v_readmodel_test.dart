@@ -149,6 +149,19 @@ void main() {
       expect(rows.map((r) => r.payer), everyElement('Unknown payer'));
     });
 
+    test('salary the alert gave no employer for is still salary, named so', () {
+      final a = movement(
+        1,
+        '2026-11-05T00:00:00Z',
+        minor: 7000000,
+        direction: 'credit',
+        purpose: 'salary',
+      );
+      final rows = moneyIn([a], [event(a, EventType.income)], from, to);
+      expect(rows.single.kind, 'salary');
+      expect(rows.single.payer, 'Salary received');
+    });
+
     test('a payer seen once is not salary until confirmed once', () {
       final a = movement(
         1,

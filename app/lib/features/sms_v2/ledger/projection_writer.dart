@@ -73,6 +73,12 @@ TransactionEntry? transactionForEvent(
       // failed parse. It is a reward the bank paid, so say so.
       : event.type == v2.EventType.cashback && printed == null
       ? 'Cashback received'
+      // A salary credit whose alert names no employer is still salary. Say so
+      // instead of "Unknown sender".
+      : event.type == v2.EventType.income &&
+            fact.purpose == v2.MovementPurpose.salary &&
+            printed == null
+      ? 'Salary received'
       : event.type == v2.EventType.ownTransfer && printed == null
       ? (family ? 'Family transfer' : 'Transfer between your accounts')
       : fact.purpose == v2.MovementPurpose.walletTopup &&

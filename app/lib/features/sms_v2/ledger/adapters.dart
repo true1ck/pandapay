@@ -1016,6 +1016,7 @@ class MoneyInItem {
 }
 
 const _unknownPayer = 'Unknown payer';
+const _salaryNoPayer = 'Salary received';
 const _indiaOffset = Duration(hours: 5, minutes: 30);
 
 /// Who paid: the money fact's counterparty, else the counterparty of another
@@ -1088,25 +1089,29 @@ List<MoneyInItem> moneyIn(
     ))
       if (moneyFactForEvent(e, byId) case final f?)
         if (_payerName(e, byId, f) case final payer)
-          MoneyInItem(
-            eventId: e.eventId,
-            kind: e.type == v2.EventType.refund
-                ? 'refund'
-                : e.type == v2.EventType.dividend
-                ? 'dividend'
-                : e.type == v2.EventType.cashback
-                ? 'cashback'
-                : e.type == v2.EventType.p2pIn
-                ? 'person'
-                : f.purpose == v2.MovementPurpose.salary ||
-                      (payer != null &&
-                          salary.contains(normalizeMerchantText(payer)))
-                ? 'salary'
-                : 'other',
-            payer: payer ?? _unknownPayer,
-            amountMinor: e.amountMinor,
-            occurredAt: e.occurredAt,
-          ),
+          if (e.type == v2.EventType.refund
+              ? 'refund'
+              : e.type == v2.EventType.dividend
+              ? 'dividend'
+              : e.type == v2.EventType.cashback
+              ? 'cashback'
+              : e.type == v2.EventType.p2pIn
+              ? 'person'
+              : f.purpose == v2.MovementPurpose.salary ||
+                    (payer != null &&
+                        salary.contains(normalizeMerchantText(payer)))
+              ? 'salary'
+              : 'other'
+              case final kind)
+            MoneyInItem(
+              eventId: e.eventId,
+              kind: kind,
+              // Salary the alert gave no employer for is still salary.
+              payer:
+                  payer ?? (kind == 'salary' ? _salaryNoPayer : _unknownPayer),
+              amountMinor: e.amountMinor,
+              occurredAt: e.occurredAt,
+            ),
   ];
 }
 

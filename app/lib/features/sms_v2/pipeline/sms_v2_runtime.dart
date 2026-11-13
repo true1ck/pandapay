@@ -43,6 +43,7 @@ import 'capture_executor.dart';
 import 'capture_worker.dart';
 import 'receipt_review.dart';
 import 'owner_recheck.dart';
+import 'salary_recheck.dart';
 import 'rules_refresh.dart';
 
 /// One foreground account owner. Capture is available offline, and the
@@ -550,6 +551,13 @@ class SmsV2Runtime {
         _state.put('pipeline:revision', _revision(active.revision));
       });
     }
+    final salaryMarker = '${_revision(active.revision)}:salary-payer-1';
+    if (_state.get('salary:payer-recheck') != salaryMarker) {
+      await guarded(() async {
+        await _rereadPayerlessSalary();
+        _state.put('salary:payer-recheck', salaryMarker);
+      });
+    }
     // A person asked to see what a re-sort would move before it moves
     // anything, so ordinary sync leaves categories alone. The refresh sheet
     // shows the preview and applies it on a tap. [autoApplyResort] set to true
@@ -589,6 +597,32 @@ class SmsV2Runtime {
       }
     }
     return read;
+  }
+
+  Future<int> _rereadPayerlessSalary() async {
+    _checkAccount();
+    final active = await activeBundle();
+    final sources = SalaryRecheck(
+      financial: financial,
+      namespace: namespace,
+      bundle: active,
+      categoryIdBySlug: categoryIdBySlug,
+    ).sourcesToRecheck();
+    if (sources.isEmpty) return 0;
+    final intake = SmsIntakeRepository(financial.database);
+    final taken = AiWithdrawal(
+      financial: financial,
+      namespace: namespace,
+      bundle: active,
+      categoryIdBySlug: categoryIdBySlug,
+    ).withdraw(sources);
+    final messages = <QueuedSms>[
+      for (final source in taken)
+        if (intake.capturedById(namespace, source) case final entry?)
+          entry.message,
+    ];
+    if (messages.isNotEmpty) await capture(messages, backfill: true);
+    return taken.length;
   }
 
   /// Asks the next sync to read again the messages whose reading depends on who
