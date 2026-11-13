@@ -204,6 +204,20 @@ void main() {
     );
   });
 
+  test('hasDueChanges is false for empty, parked and backed-off outboxes', () async {
+    expect(await repo().hasDueChanges(), isFalse);
+    captureLocalForeignPayment(db, 'user:a', payment('a' * 64));
+    expect(await repo().hasDueChanges(), isTrue);
+    service.statusByKey['a' * 64] = 503;
+    await syncQuietly(repo());
+    expect(await repo().hasDueChanges(), isFalse, reason: 'backing off');
+    clock = clock.add(const Duration(minutes: 1));
+    expect(await repo().hasDueChanges(), isTrue);
+    service.statusByKey['a' * 64] = 422;
+    await syncQuietly(repo());
+    expect(await repo().hasDueChanges(), isFalse, reason: 'parked');
+  });
+
   test('resetBackoff makes backed-off changes due again', () async {
     captureLocalForeignPayment(db, 'user:a', payment('a' * 64));
     service.statusByKey['a' * 64] = 503;

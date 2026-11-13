@@ -77,10 +77,6 @@ class SyncEngine {
   /// failed chunk (halving), so a server outage cannot turn into hundreds.
   static const maxIsolationRequests = 24;
 
-  /// Entities whose push was accepted and removed from the queue but whose
-  /// authoritative copy could not be fetched yet. Retried at the start of the
-  /// next push step so applied changes are neither re-sent nor left stale.
-  final Set<String> _unmaterialized = {};
   bool _reregisteredDevice = false;
   int _isolationRequests = 0;
 
@@ -207,7 +203,10 @@ class SyncEngine {
   void _startForeignPaymentsSync() {
     unawaited(() async {
       try {
-        await _ref.read(foreignPaymentsRepositoryProvider).sync();
+        final foreign = _ref.read(foreignPaymentsRepositoryProvider);
+        // Only when something is queued: sync() also refreshes exchange rates,
+        // which a sign-in or resume sync has no reason to do.
+        if (await foreign.hasDueChanges()) await foreign.sync();
       } catch (_) {
         // Changes stay durable and retry on the next trigger.
       }
@@ -215,8 +214,12 @@ class SyncEngine {
   }
 
   /// Pushes queued edits in byte-bounded chunks, at most [maxPushPasses]
-  /// requests per sync. Acked rows leave the queue before anything else is
-  /// fetched, so a failure afterwards cannot make them be pushed again.
+  /// requests per sync.
+  ///
+  /// A change the server acked is marked applied straight away: it is never
+  /// pushed again, whatever happens next (a failed refetch used to leave it
+  /// queued and re-sent). It is only deleted once the fresh server copy has
+  /// been stored, because until then it is what keeps showing the edit.
   Future<int> _push(SyncApi api, SyncQueue queue, String deviceId) async {
     var applied = 0;
     var passes = 0;
@@ -229,12 +232,12 @@ class SyncEngine {
     }
     _pushHasMore =
         passes == maxPushPasses && _nextChunk(queue, attempted).isNotEmpty;
-    // Entities of accepted changes are reconciled with the server only now
-    // that every acked row is already out of the queue.
-    if (_unmaterialized.isNotEmpty) {
-      final entities = Set<String>.of(_unmaterialized);
+    // Fetch the authoritative copy of everything the server applied, including
+    // changes left over from an earlier sync (or app run) whose fetch failed.
+    final entities = queue.appliedEntities();
+    if (entities.isNotEmpty) {
       await _materialize(api, entities, queue);
-      _unmaterialized.removeAll(entities);
+      queue.purgeApplied(entities);
     }
     return applied;
   }
@@ -404,8 +407,7 @@ class SyncEngine {
           final cache = await _ref.read(responseCacheProvider.future);
           cache.financialStore.markInactive(queue.namespace, change.entityId);
         }
-        queue.remove(result.clientSeq!);
-        _unmaterialized.add(change.entity);
+        queue.markApplied(result.clientSeq!);
         applied++;
       } else if (result.isPermanentFailure) {
         // Retain rejected work for review while allowing later edits through.

@@ -168,6 +168,20 @@ void main() {
       );
     });
 
+    test('sync_pending_changes: a change the server applied is not pending', () {
+      db.db.execute(
+        'INSERT INTO sync_pending_changes '
+        '(namespace, entity, entity_id, op, payload_json, field_clocks_json, created_at, in_flight) '
+        "VALUES (?, 'transactions', 'x', 'update', '{}', '{}', 1, 1), "
+        "(?, 'transactions', 'y', 'update', '{}', '{}', 1, 2)",
+        [_a, _a],
+      );
+      expect(
+        registry.countsFor('sync_pending_changes', _a),
+        const QueueCounts(pending: 1),
+      );
+    });
+
     test('transaction_outbox_entries: parked column and backoff', () {
       db.db.execute(
         'INSERT INTO transaction_outbox_entries '

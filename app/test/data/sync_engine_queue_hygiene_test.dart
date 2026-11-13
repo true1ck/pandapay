@@ -136,6 +136,10 @@ class _FakeForeignPayments implements ForeignPaymentsRepository {
   final bool hang;
   final bool fail;
   int resets = 0;
+  bool due = true;
+
+  @override
+  Future<bool> hasDueChanges() async => due;
 
   @override
   Future<void> sync() {
@@ -390,8 +394,15 @@ void main() {
     });
   });
 
-  group('ack before materialize (Q-06)', () {
-    test('acked rows leave the queue even when materialize then throws',
+  group('applied changes are never re-pushed (Q-06)', () {
+    int appliedRows() => db.db
+        .select('SELECT COUNT(*) AS n FROM sync_pending_changes WHERE in_flight = 2')
+        .single['n'] as int;
+    int allRows() => db.db
+        .select('SELECT COUNT(*) AS n FROM sync_pending_changes')
+        .single['n'] as int;
+
+    test('a failed refetch neither re-pushes nor drops the visible edit',
         () async {
       enqueue('t1');
       final repository = _Repository(fail: true);
@@ -401,16 +412,20 @@ void main() {
 
       final result = await scope.read(syncEngineProvider).sync();
       expect(result.ranToCompletion, isFalse);
-      expect(queue.pendingCount, 0, reason: 'applied rows must not stay queued');
+      expect(queue.pendingCount, 0, reason: 'applied rows are not waiting');
+      expect(queue.pending(), isEmpty);
       expect(api.pushes.expand((c) => c), hasLength(1));
+      // ...but the edit keeps overlaying the stored row until the server's
+      // copy has been saved, so it does not flicker back to the old value.
+      expect(appliedRows(), 1);
 
-      // The next sync does not re-push them, and still reconciles the
-      // entities whose materialize failed.
+      // The next sync does not re-push, reconciles the entity, then drops it.
       repository.fail = false;
       final second = await scope.read(syncEngineProvider).sync();
       expect(second.ranToCompletion, isTrue);
       expect(api.pushes.expand((c) => c), hasLength(1));
       expect(repository.fullFetches, greaterThanOrEqualTo(1));
+      expect(allRows(), 0);
       expect(
         cache.financialStore
             .transactions('user:a', const TransactionQuery())!
@@ -419,6 +434,44 @@ void main() {
             .note,
         'server accepted',
       );
+    });
+
+    test('an applied change survives a restart and is still not re-sent',
+        () async {
+      enqueue('t1');
+      final repository = _Repository(fail: true);
+      final api = _ScriptedApi();
+      final scope = scripted(api, repository: repository);
+      addTearDown(scope.dispose);
+      await scope.read(syncEngineProvider).sync();
+      expect(appliedRows(), 1);
+
+      // A new SyncQueue on the same database is what an app restart does; it
+      // returns claimed changes to the queue but must leave applied ones.
+      final restarted = SyncQueue(db, namespace: 'user:a');
+      expect(restarted.pending(), isEmpty);
+      expect(restarted.pendingCount, 0);
+      expect(appliedRows(), 1);
+    });
+
+    test('a change enqueued meanwhile is not purged with the applied ones',
+        () async {
+      enqueue('t1');
+      final api = _ScriptedApi(
+        onPush: (device, changes) {
+          // The person edits again while the first push is in flight.
+          enqueue('t2', note: 'newer');
+          return [for (final c in changes) _applied(c)];
+        },
+      );
+      final scope = scripted(api);
+      addTearDown(scope.dispose);
+      await scope.read(syncEngineProvider).sync();
+      expect(
+        db.db.select('SELECT entity_id FROM sync_pending_changes').map((r) => r['entity_id']),
+        isNot(contains('t1')),
+      );
+      expect(queue.pendingCount, anyOf(0, 1));
     });
   });
 
@@ -697,6 +750,19 @@ void main() {
         expect(result.ranToCompletion, isTrue, reason: 'hang=$hang');
         expect(result.pushed, 1, reason: 'hang=$hang');
       }
+    });
+
+    test('nothing queued means no foreign request at all', () async {
+      final events = <String>[];
+      final foreign = _FakeForeignPayments(events)..due = false;
+      final scope = scripted(
+        _ScriptedApi(),
+        extra: [foreignPaymentsRepositoryProvider.overrideWithValue(foreign)],
+      );
+      addTearDown(scope.dispose);
+      await scope.read(syncEngineProvider).sync();
+      await Future<void>.delayed(Duration.zero);
+      expect(events, isEmpty);
     });
 
     test('foreign sync still starts when the edit push fails', () async {

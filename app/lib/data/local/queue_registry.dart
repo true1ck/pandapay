@@ -158,6 +158,8 @@ class QueueRegistry {
     QueueSpec(
       name: 'sync_pending_changes',
       table: 'sync_pending_changes',
+      // in_flight = 2: the server applied it, only its fresh copy is awaited.
+      pendingWhere: 'in_flight != 2',
       parkedWhere: 'attempts >= 5',
       parkedColumns: {'attempts'},
     ),

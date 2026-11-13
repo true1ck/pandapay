@@ -262,6 +262,17 @@ class ForeignPaymentsRepository {
         as int;
   }
 
+  /// True when at least one queued change is ready to send now. Lets a caller
+  /// that only wants to drain the outbox (the sync engine) skip [sync], which
+  /// also refreshes exchange rates over the network.
+  Future<bool> hasDueChanges() async {
+    final db = await _db();
+    return db.db.select(
+      'SELECT 1 FROM foreign_payments_outbox WHERE namespace=? AND parked=0 AND next_attempt_at<=? LIMIT 1',
+      [namespace, _now().millisecondsSinceEpoch],
+    ).isNotEmpty;
+  }
+
   /// Makes every change waiting out a backoff due again (the connection came
   /// back). Parked changes stay parked.
   Future<void> resetBackoff() async {
