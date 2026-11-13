@@ -181,9 +181,11 @@ class TransactionOutboxRepository {
         (categoryId != null && categoryId.startsWith('custom:')
             ? categoryId.substring('custom:'.length)
             : null);
+    // OR IGNORE: the same clientMutationId queued twice (a retried Save) is
+    // one entry. The server also dedupes on the id if the first was delivered.
     _appDb.db.execute(
       '''
-      INSERT INTO transaction_outbox_entries
+      INSERT OR IGNORE INTO transaction_outbox_entries
         (namespace, user_card_id, client_mutation_id, amount_paise, category_id, user_category_id, merchant_name,
          occurred_at, note, instrument, entry_kind, created_at, payment_method)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

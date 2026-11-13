@@ -2977,6 +2977,7 @@ Map<String, CommandHandler> commandHandlersFor(
   OverlayCommand.pointsAdjust: (p) => repo.adjustPointsBalance(
     p['userCardId'] as String,
     newBalance: (p['newBalance'] as num).toDouble(),
+    reason: p['reason'] as String?,
     clientMutationId: p['clientMutationId'] as String,
   ),
   if (spend != null) ...{

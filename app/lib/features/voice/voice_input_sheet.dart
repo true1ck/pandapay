@@ -6,11 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'package:uuid/uuid.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
 import '../../data/catalogue_repository.dart' show SpendCategory;
+import '../../data/local_first/pending_overlays.dart' show OverlayCommand;
 import '../../data/transaction_tags_repository.dart' show TransactionTag;
 import '../../data/user_cards_repository.dart'
     show TxnEntryKind, TxnInstrument, UserCard;
@@ -26,6 +26,7 @@ import 'understanding/language_pack.dart';
 import 'voice_action_parser.dart';
 import 'voice_draft_editor.dart';
 import 'voice_entry_review.dart';
+import 'voice_save.dart';
 import 'voice_settings.dart';
 import 'voice_speaker.dart';
 import 'voice_transcript_buffer.dart';
@@ -723,66 +724,110 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
     });
     try {
       final clock = ref.read(clockProvider).now();
-      for (final i in loggable) {
-        final editor = _editors[i];
-        final draft = _drafts[i];
-        final merchant = editor.merchantController.text.trim();
-        if (editor.type == VoiceActionType.pointsRedemption) {
-          final card = cards
-              .where((item) => item.id == editor.selectedCardId)
-              .firstOrNull!;
-          final points = editor.points!;
-          // The figure the card screen shows (bank credits left out): the
-          // server measures the correction against the same total.
-          final current = voicePointsAvailable(card);
-          if (points > current) {
-            throw StateError(
-              'This card has ${current.toStringAsFixed(0)} points available, so the entry was not saved.',
+      final outbox = await ref.read(outboxRepositoryProvider.future);
+      final running = <String, double>{};
+      final errors = <int, String>{};
+      // Local first (WP-C5): each entry is written to the phone's outbox (or
+      // the command queue for points) under a per-entry id that survives a
+      // retry, and delivered in the background. Nothing waits on the network.
+      final failed = await saveVoiceEntries<int>(
+        loggable,
+        isSaved: (i) => _editors[i].saved,
+        markSaved: (i) => _editors[i].saved = true,
+        save: (i) async {
+          try {
+            final editor = _editors[i];
+            final draft = _drafts[i];
+            final merchant = editor.merchantController.text.trim();
+            if (editor.type == VoiceActionType.pointsRedemption) {
+              final card = cards
+                  .where((item) => item.id == editor.selectedCardId)
+                  .firstOrNull!;
+              final points = editor.points!;
+              // The figure the card screen shows (bank credits left out): the
+              // server measures the correction against the same total.
+              final current = running[card.id] ?? voicePointsAvailable(card);
+              if (points > current) {
+                throw StateError(
+                  'This card has ${current.toStringAsFixed(0)} points available, so the entry was not saved.',
+                );
+              }
+              final newBalance = current - points;
+              await queueCommand(
+                ref,
+                kind: OverlayCommand.pointsAdjust,
+                target: card.id,
+                payload: {
+                  'userCardId': card.id,
+                  'newBalance': newBalance,
+                  'reason':
+                      'Voice points redemption${merchant.isEmpty ? '' : ': $merchant'}',
+                  'clientMutationId': editor.clientMutationId,
+                },
+              );
+              running[card.id] = newBalance;
+              (await ref.read(responseCacheProvider.future)).financialStore
+                  .patchCard(ref.read(cacheNamespaceProvider), card.id, {
+                    'total_points_earned': newBalance,
+                  });
+              return;
+            }
+            final isMoneyIn = editor.type == VoiceActionType.moneyIn;
+            final kind = switch (editor.type) {
+              VoiceActionType.moneyIn => TxnEntryKind.income,
+              VoiceActionType.refund => TxnEntryKind.refund,
+              _ => TxnEntryKind.spend,
+            };
+            final notes = <String>[
+              if (editor.noteController.text.trim().isNotEmpty)
+                editor.noteController.text.trim(),
+              if (draft.isForeign)
+                'Foreign amount: ${draft.foreignCurrency} ${_plain(draft.foreignAmount)}',
+              if (editor.refundOf != null)
+                'Refund for ${editor.refundOf!.label(clock)}',
+            ];
+            await outbox.enqueue(
+              userCardId:
+                  !isMoneyIn && editor.instrument == TxnInstrument.creditCard
+                  ? editor.selectedCardId
+                  : null,
+              amount: Money.fromRupees(editor.amount!),
+              categoryId: isMoneyIn ? null : editor.selectedCategoryId,
+              merchantName: merchant.isEmpty ? null : merchant,
+              note: notes.isEmpty ? null : notes.join('\n'),
+              occurredAt: editor.occurredAt ?? clock,
+              instrument: editor.instrument,
+              entryKind: kind,
+              clientMutationId: editor.clientMutationId,
             );
+            if (!isMoneyIn && editor.selectedTagIds.isNotEmpty) {
+              // Tag links are local-first: they queue in the outbox even when
+              // offline, so a failure here can never lose the saved spend.
+              await ref.read(transactionTagsProvider)?.assign([
+                'local-outbox:${editor.clientMutationId}',
+              ], editor.selectedTagIds.toList());
+            }
+          } catch (error) {
+            errors[i] = error is StateError
+                ? error.message
+                : 'Could not save this entry. Please try again.';
+            rethrow;
           }
-          await repo.adjustPointsBalance(
-            card.id,
-            newBalance: current - points,
-            reason:
-                'Voice points redemption${merchant.isEmpty ? '' : ': $merchant'}',
+        },
+      );
+      ref.read(outboxFlushRequestProvider.notifier).state++;
+      ref.invalidate(pendingOutboxCountProvider);
+      if (failed.isNotEmpty) {
+        ref.invalidate(userCardsProvider);
+        ref.invalidate(transactionsProvider);
+        if (mounted) {
+          final n = failed.first;
+          setState(
+            () => _error =
+                'Entry ${loggable[n] + 1}: ${errors[n]}${loggable.length > 1 ? ' The other entries were saved.' : ''}',
           );
-          continue;
         }
-        final isMoneyIn = editor.type == VoiceActionType.moneyIn;
-        final kind = switch (editor.type) {
-          VoiceActionType.moneyIn => TxnEntryKind.income,
-          VoiceActionType.refund => TxnEntryKind.refund,
-          _ => TxnEntryKind.spend,
-        };
-        final notes = <String>[
-          if (editor.noteController.text.trim().isNotEmpty)
-            editor.noteController.text.trim(),
-          if (draft.isForeign)
-            'Foreign amount: ${draft.foreignCurrency} ${_plain(draft.foreignAmount)}',
-          if (editor.refundOf != null)
-            'Refund for ${editor.refundOf!.label(clock)}',
-        ];
-        final transactionId = await repo.logTransaction(
-          userCardId:
-              !isMoneyIn && editor.instrument == TxnInstrument.creditCard
-              ? editor.selectedCardId
-              : null,
-          amount: Money.fromRupees(editor.amount!),
-          categoryId: isMoneyIn ? null : editor.selectedCategoryId,
-          merchantName: merchant.isEmpty ? null : merchant,
-          note: notes.isEmpty ? null : notes.join('\n'),
-          occurredAt: editor.occurredAt ?? clock,
-          instrument: editor.instrument,
-          entryKind: kind,
-          clientMutationId: const Uuid().v4(),
-        );
-        if (!isMoneyIn && editor.selectedTagIds.isNotEmpty) {
-          // Tag links are local-first: they queue in the outbox even when
-          // offline, so a failure here can never lose the saved spend.
-          await ref.read(transactionTagsProvider)?.assign([
-            transactionId,
-          ], editor.selectedTagIds.toList());
-        }
+        return;
       }
       ref.invalidate(userCardsProvider);
       ref.invalidate(myCardsProvider);
@@ -809,7 +854,9 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
     } catch (error) {
       if (mounted) {
         setState(
-          () => _error = error.toString().replaceFirst('Bad state: ', ''),
+          () => _error = error is StateError
+              ? error.message
+              : 'Could not save this entry. Please try again.',
         );
       }
     } finally {
