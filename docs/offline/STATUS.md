@@ -1,35 +1,38 @@
-# Offline-first — implementation status (branch `feature/offline-first`)
+# Offline-first: final status (branch `feature/offline-first`)
 
-Base: `dev` at `0cb453a7`. Master plan: [OFFLINE_FIRST_MASTER_PLAN.md](OFFLINE_FIRST_MASTER_PLAN.md) (per-screen inventory: [OFFLINE_FIRST_AUDIT.md](OFFLINE_FIRST_AUDIT.md)).
-Each package has its own note in this folder (`WP-*.md`): what changed, files, how to test, known gaps.
+Base: `dev` at `0cb453a7`. Master plan: [OFFLINE_FIRST_MASTER_PLAN.md](OFFLINE_FIRST_MASTER_PLAN.md) (written before the work; its
+"not started" sections are now done, see below). Per-screen inventory: [OFFLINE_FIRST_AUDIT.md](OFFLINE_FIRST_AUDIT.md).
+Every package has a note in this folder (`WP-*.md`, `H1-H3.md`). Manual checks that need a phone/backend: [WP-Q1.md](WP-Q1.md).
 
-## Done and merged (Wave 1, "critical fixes first")
-
-| Package | What it fixes |
+## What was built
+| Area | Packages |
 |---|---|
-| WP-S0/S1 (server) | Strict push mode (`ignoredFields`), device pre-check (409), clock clamp, transient vs permanent results, 1 MiB `/sync/push` body limit, uuid guards (400 instead of 500), migration restoring dropped `last4` / `annual_fee_override_inr` and adding `instrument` / `entry_kind` to the legacy list |
-| WP-C1 | Seeded connectivity, server-reachable probe, `isOfflineLike`, server-time offset for field clocks, app-status re-check on reconnect |
-| WP-C2 | Queue hygiene: park poison rows, network errors don't burn attempts, backoff reset on reconnect, byte-bounded push chunks, device re-registration, pull-poison skip, `QueueRegistry`, `LocalFirstSchema` + app DB v3 |
-| WP-C3 | A rejected session (401) no longer deletes local data; sign-out report/flush covers every queue with an explicit offline warning; backup lists derive from `QueueRegistry`; token-store write-order fix |
-| WP-C4 | Notifications work offline (cached/default preferences, banner first, inbox row queued) |
-| WP-C8 | Split: ordered offline commands, 403-while-create-unconfirmed retried, needs-attention list, reconnect backoff reset, unknown capability flags allow queueing, approve/confirm offline |
-| WP-C9 | SMS: capture before network, 8 s timeouts on App Check/headers, offline errors don't burn upload backoff, corrections never parked because of an offline spell, shared-learning consent mirror, Gemini bar offline state |
-| WP-C12a | Bundled Outfit + IBM Plex Sans (hash-verified, OFL), runtime font fetch disabled, `INTERNET` + https `<queries>` in the manifest, FCM token timeout, guarded `launchUrl` |
-| WP-banner | Small top strip across the whole app (offline / can't reach PandaPay / syncing / needs attention) with a Sync status sheet (reverses the 2026-10-18 banner removal, per owner decision) |
+| Server | S0/S1 sync hardening + allowlist migration; S2 idempotent card/override create; S3-S5 budgets, recurring, notification/consent/support-ticket/import-batch client ids; S6 privilege manifest + rollout note; S7 `user_local_state` (encrypted bank balances) |
+| Connectivity, queues, session | C1 seeded connectivity + reachability probe + server clock; C2 queue hygiene, QueueRegistry, schema v3; C3 session-rejected keeps data, sign-out counts/flushes every queue |
+| Writes offline | C5 transactions (bulk, voice, payment-sent, receipts, edit), C6 cards + overrides, C7 budgets/subscriptions/bills, C10 import/export, C11 account/consents/support, C17 sync of bill-card picks, balances and subscription choices |
+| Reads offline | C16 read paths, C8 Split fixes + local reads, bundled categories/fonts |
+| Notifications | C4 offline prefs/inbox, C14 scheduled reminders (Android boot receiver, inexact alarms) |
+| UX | top sync strip (18 dp) + Sync status sheet, offline-aware ErrorState, one "saved on this phone" message, background timeouts |
+| SMS | C9 capture before network, timeouts, corrections never parked offline, consent mirror |
+| Review rounds | H1-H3 fixed the findings of an adversarial review (403 gates parking queued work, proxy 404 deleting commands, 500 attempt burning, clock poisoning, notification gate race, privacy of queued corrections, and more) |
 
-## Verification
-- Full app suite on this branch: 4715 passed, 11 skipped. The only failures were `widget_test.dart` Chunk 19 (a pending timer from the new strip; fixed by stubbing the strip in that test) and two timing flakes under full-suite load (`transaction_attachments_repository_test`, `capture_worker_test`) which pass in isolation on both base and this branch.
-- API suite on the server package: 2471 pass, 0 fail. The new migration's SQL test was verified against PGlite, **not** a real Postgres (no `psql`/Docker available) — run `db/tests/20261123010000_*_test.sql` on a migrated scratch DB before deploy.
-- Not run: `scripts/perf_smoke_android.sh` (needs a phone), any on-device airplane-mode test. See master plan section 9.
+## Verification (final)
+- Flutter: full suite 5,003 passed, 11 skipped, 0 failed (after fixing 4 test-side issues found by the final runs).
+  `flutter analyze lib`: 0 errors, 1 warning (pre-existing on base: unused shown name in `spend_answers.dart`).
+- Offline scenario tests: `app/test/offline_e2e/` scenarios a-s (fake server that goes offline/online, idempotent like the real contract).
+- API: `node --test`: 14 failures, all `*_postgres.js` fixtures needing `initdb`; the same 14 fail on base `0cb453a7`.
+- Emulator (Pixel 9a, debug build): installs, first launch offline works, bundled fonts render, strip shows and clears, offline/online
+  toggles do not crash; INTERNET + boot receivers present in the manifest. Not testable without a backend: anything behind sign-in.
 
-## Things the investigation found that change the plan (read before continuing)
-1. **Legacy sync writer** (`SYNC_TYPED_WRITES_ENABLED=false`) assigns every field as `($1 ->> field)::text`; Postgres only accepts that for text-like columns, so most numeric/date/enum edits are **rejected** in legacy mode. The migration therefore only really helps `last4` in legacy mode; `instrument`, `entry_kind`, `annual_fee_override_inr` need the typed writer. **Find out what production actually runs** (the repo default is `false`) before deciding whether to enable typed writes (see `deploy/DEPLOY.md`, `db/scripts/release_security_check.js`).
-2. `POST /notifications` upserts on `dedupe_key` and resets `read_at`/`created_at`; a replayed inbox row re-marks a notification unread until WP-S5 adds a client mutation id column.
-3. WP-C2 marks pushed edits applied (`in_flight=2`) instead of removing them before the refetch, otherwise an edit visibly reverts; the delta-path materialize was deliberately not done (belongs with the prune work in C7).
-4. After a 401, TokenStore.clear still resets the native iOS SMS spool (not verifiable here).
-5. Locally learned merchant-category rules are still never uploaded (`pendingSync` has no callers); the upload contract does not fit (layout-scoped rule vs merchant-wide server rule). Needs an owner decision.
-6. The baseline SMS rules bundle is still empty; shipping a signed one is an owner task (see `WP-C9.md`).
+## Not verified / needs you
+1. Real Postgres: run `db/tests/20261123*_test.sql` (010000, 030000, 040000, 050000, 060000) with `psql -v ON_ERROR_STOP=1` on a migrated
+   scratch DB, plus the `*_postgres.js` fixtures. Only checked on a stand-in database here.
+2. Real phone with sign-in: the checklist in `WP-Q1.md`; profile build + `scripts/perf_smoke_android.sh`. First cold start on the
+   emulator was 3-5 s (debug build).
+3. Production value of `SYNC_TYPED_WRITES_ENABLED` (repo default `false`; the legacy writer rejects numeric/enum edits). See `WP-S6.md`.
+4. Signed SMS rules bundle (baseline is empty), and whether locally learned merchant rules should sync (`WP-C9.md`).
+5. Reminders and the iOS notification delegate are untested on a device; a bill can show both a scheduled reminder and the in-app alert.
+6. Encryption key for balances: they use the server's IMAP key ring (`WP-S7.md`); end-to-end (user-held key) is an optional future step.
 
-## Not started (next waves, in plan order)
-Server: S2 (card/override idempotent create), S3 (budgets), S4 (recurring), S5 (append-only mutation ids), S6 (privilege manifest / typed-writes rollout).
-Client: C5 (local-first transaction writes: bulk, voice, payment-sent, receipts), C6 (cards offline: add card, edit card, overrides), C7 (budgets, subscriptions v2, card-bill payment), C10 (import/export), C11 (account/settings), C12b (offline-aware ErrorState, cold-start caps, categories bundle), C14 (scheduled reminders), C16 (read-path polish), Split local reads (C8 wave 2), WP-Q (device test matrix). C15 (background sync) is a spike only.
+## Deployment order (recommended)
+Migrations and API first (backward compatible), then the app build. New clients tolerate an old server (404 / ignored fields).
