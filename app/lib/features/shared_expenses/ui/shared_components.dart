@@ -275,118 +275,125 @@ class SharedPanel extends StatelessWidget {
   );
 }
 
+/// Where the person stands, in one line, the Splitwise way: "Overall, you owe
+/// ₹500.00", or on a friend's page "You owe Ravi ₹500.00". The two gross
+/// figures appear only when both are real (somebody owes you and you owe
+/// somebody), because otherwise they only repeat the line.
 class SharedSummaryCard extends StatelessWidget {
   final SharedBalanceSummary summary;
   final bool hideAmounts;
+
+  /// The friend, on a friend's page; null for a group or the hub.
+  final String? name;
   const SharedSummaryCard({
     super.key,
     required this.summary,
     this.hideAmounts = false,
+    this.name,
   });
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(AppSpace.lg),
-    margin: const EdgeInsets.only(bottom: AppSpace.sm),
-    decoration: BoxDecoration(
-      color: BambooInk.slate,
-      borderRadius: BorderRadius.circular(AppRadius.lg),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          sharedNetLabel(summary),
-          style: BambooFonts.ui(
-            13,
-            color: BambooInk.onSlate,
-            weight: FontWeight.w600,
+  Widget build(BuildContext context) {
+    final net = summary.netBalance.paise;
+    final both = !summary.owedToYou.isZero && !summary.youOwe.isZero;
+    final color = net > 0
+        ? BambooInk.jade
+        : net < 0
+        ? BambooInk.clayInk
+        : BambooInk.ink900;
+    final who = name;
+    final label = who == null || (net == 0)
+        ? sharedOverallLabel(summary)
+        : net < 0
+        ? 'You owe $who'
+        : '$who owes you';
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpace.xs, bottom: AppSpace.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 6,
+            runSpacing: 2,
+            children: [
+              Text(
+                label,
+                style: BambooFonts.ui(
+                  16,
+                  weight: FontWeight.w700,
+                  color: net == 0 ? BambooInk.ink900 : color,
+                ),
+              ),
+              if (net != 0 || both)
+                SharedAmount(
+                  sharedNetMagnitude(summary),
+                  confidence: summary.confidence,
+                  hidden: hideAmounts,
+                  color: color,
+                  size: 18,
+                ),
+            ],
           ),
-        ),
-        const SizedBox(height: AppSpace.sm),
-        Align(
+          if (both) ...[
+            const SizedBox(height: AppSpace.xs),
+            _line('You are owed', summary.owedToYou, BambooInk.jade),
+            const SizedBox(height: 2),
+            _line('You owe', summary.youOwe, BambooInk.clayInk),
+          ],
+          if (summary.incomplete)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpace.xs),
+              child: Text(
+                'Some balances may be missing',
+                style: BambooFonts.ui(12, color: BambooInk.ink700),
+              ),
+            ),
+          if (!summary.confidence.isConfirmed)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpace.xs),
+              child: Text(
+                'Estimated amounts',
+                style: BambooFonts.ui(12, color: BambooInk.ink700),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _line(String label, Money money, Color color) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Flexible(
+        child: Text(label, style: BambooFonts.ui(12, color: BambooInk.ink700)),
+      ),
+      const SizedBox(width: 6),
+      Flexible(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
           alignment: Alignment.centerLeft,
           child: SharedAmount(
-            sharedNetMagnitude(summary),
+            money,
             confidence: summary.confidence,
             hidden: hideAmounts,
-            color: BambooInk.lime,
-            size: 32,
+            color: color,
+            size: 14,
           ),
         ),
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: AppSpace.xs),
-          child: Divider(color: BambooInk.slateHairline),
-        ),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            Widget value(String label, Money money) => Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: BambooFonts.ui(12, color: BambooInk.onSlateSubtle),
-                ),
-                const SizedBox(height: AppSpace.xs),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: SharedAmount(
-                    money,
-                    confidence: summary.confidence,
-                    hidden: hideAmounts,
-                    color: BambooInk.onSlate,
-                    size: 19,
-                  ),
-                ),
-              ],
-            );
-            final owed = value('You are owed', summary.owedToYou);
-            final owing = value('You owe', summary.youOwe);
-            if (constraints.maxWidth <
-                260 * MediaQuery.textScalerOf(context).scale(1)) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  owed,
-                  const SizedBox(height: AppSpace.md),
-                  owing,
-                ],
-              );
-            }
-            return IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(child: owed),
-                  const VerticalDivider(
-                    color: BambooInk.slateHairline,
-                    width: 28,
-                  ),
-                  Expanded(child: owing),
-                ],
-              ),
-            );
-          },
-        ),
-        if (summary.incomplete)
-          Padding(
-            padding: const EdgeInsets.only(top: AppSpace.sm),
-            child: Text(
-              'Some balances may be missing',
-              style: BambooFonts.ui(12, color: BambooInk.onSlateSubtle),
-            ),
-          ),
-        if (!summary.confidence.isConfirmed)
-          Padding(
-            padding: const EdgeInsets.only(top: AppSpace.sm),
-            child: Text(
-              'Estimated amounts',
-              style: BambooFonts.ui(12, color: BambooInk.onSlateSubtle),
-            ),
-          ),
-      ],
-    ),
+      ),
+    ],
   );
 }
+
+/// "Overall, you owe", "Overall, you are owed" or "All settled up".
+String sharedOverallLabel(SharedBalanceSummary summary) =>
+    summary.netBalance.paise > 0
+    ? 'Overall, you are owed'
+    : summary.netBalance.paise < 0
+    ? 'Overall, you owe'
+    : (summary.owedToYou.isZero && summary.youOwe.isZero)
+    ? 'All settled up'
+    : 'Overall, even';
 
 String sharedNetLabel(SharedBalanceSummary summary) =>
     summary.netBalance.paise > 0

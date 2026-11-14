@@ -6,6 +6,7 @@ import '../../sms_import/sms_background_queue.dart';
 import '../category/category_snapshot.dart';
 import '../personal/personal_rule_store.dart';
 import '../storage/provisional_store.dart';
+import '../instruments/unlinked_card_healer.dart';
 import 'sms_v2_pipeline.dart';
 
 /// One slice of a chunk that shares a backfill flag. History (`backfill`) goes
@@ -28,6 +29,7 @@ class CaptureChunkRequest {
     required this.shared,
     required this.groups,
     required this.ownerNames,
+    this.healCards = false,
     this.onCommitted,
     this.debugFault,
   });
@@ -39,6 +41,11 @@ class CaptureChunkRequest {
   final RuleBundle shared;
   final List<CaptureGroup> groups;
   final List<String> ownerNames;
+
+  /// Also link the card movements that were saved with no card to the wallet
+  /// card they name ([UnlinkedCardHealer]), after the groups. Plain data like
+  /// the rest, so the whole walk runs in the worker isolate, off the UI thread.
+  final bool healCards;
 
   /// Called on the calling isolate with the entity names a worker committed
   /// (including for a chunk whose caller already timed out), so the live
@@ -75,6 +82,7 @@ void runCaptureChunk({
   required Map<String, String> categoryIdBySlug,
   required List<CaptureGroup> groups,
   required List<String> ownerNames,
+  bool healCards = false,
   void Function(void Function() work) transact = _direct,
 }) {
   final categories = CategorySnapshot.load(
@@ -103,6 +111,17 @@ void runCaptureChunk({
         v2Backfill: group.backfill,
       ).captureBatch(namespace, group.messages),
     );
+  }
+  if (healCards) {
+    // One short transaction per step (at most 50 facts), so a writer on the
+    // other connection never waits long and a failure loses at most one step.
+    final healer = UnlinkedCardHealer(financial, namespace: namespace);
+    HealCursor? cursor;
+    do {
+      HealCursor? next;
+      transact(() => next = healer.step(after: cursor).next);
+      cursor = next;
+    } while (cursor != null);
   }
 }
 
@@ -144,6 +163,7 @@ class InProcessCaptureExecutor implements CaptureExecutor {
       categoryIdBySlug: request.categoryIdBySlug,
       groups: request.groups,
       ownerNames: request.ownerNames,
+      healCards: request.healCards,
     );
     await Future<void>.delayed(
       Duration.zero,

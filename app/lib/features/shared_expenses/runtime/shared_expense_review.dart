@@ -6,6 +6,7 @@ import '../../../app/design/app_theme.dart';
 import '../storage/shared_store.dart';
 import '../ui/shared_components.dart';
 import '../ui/shared_presentation.dart' show sharedSavedOfflineCopy;
+import 'shared_expense_summary.dart';
 import 'shared_runtime.dart';
 
 /// Reuses the group route. Accepted money and proposed revisions are separate;
@@ -168,6 +169,97 @@ class _SharedExpenseReviewSheetState extends State<SharedExpenseReviewSheet> {
 
   Widget _money(String label, Money amount) =>
       SharedMoneyLine(label, amount, confidence: Confidence.confirmed);
+
+  static const _months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  /// `2026-11-11` as `11 Nov 2026`.
+  static String _prettyDate(String? iso) {
+    final d = DateTime.tryParse(iso ?? '');
+    return d == null
+        ? (iso ?? '')
+        : '${d.day} ${_months[d.month - 1]} ${d.year}';
+  }
+
+  /// One person: who they are, what they put in, and what that leaves them
+  /// owing or owed.
+  Widget _person(SharedPersonLine p) {
+    final net = p.netMinor;
+    final parts = [
+      if (p.paidMinor > 0) 'paid ${Money.fromPaise(p.paidMinor).format()}',
+      'share ${Money.fromPaise(p.shareMinor).format()}',
+    ];
+    final amount = Money.fromPaise(net.abs()).format();
+    final result = net == 0
+        ? 'settled'
+        : net > 0
+        ? (p.isYou ? 'you get back $amount' : 'gets back $amount')
+        : (p.isYou ? 'you owe $amount' : 'owes $amount');
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          ExcludeSemantics(
+            child: CircleAvatar(
+              radius: 16,
+              backgroundColor: p.isYou
+                  ? BambooInk.lime.withValues(alpha: .35)
+                  : BambooInk.rankBadgeBg,
+              child: Text(
+                p.name.isEmpty ? '?' : p.name.characters.first.toUpperCase(),
+                style: BambooFonts.ui(13, weight: FontWeight.w700),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpace.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  p.name,
+                  style: BambooFonts.ui(15, weight: FontWeight.w600),
+                ),
+                Text(
+                  parts.join(' · '),
+                  style: BambooFonts.ui(12, color: BambooInk.ink700),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpace.sm),
+          Flexible(
+            child: Text(
+              result,
+              textAlign: TextAlign.end,
+              style: BambooFonts.ui(
+                13,
+                weight: FontWeight.w600,
+                color: net == 0
+                    ? BambooInk.ink500
+                    : net > 0
+                    ? BambooInk.jade
+                    : BambooInk.clayInk,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _revision(Map row, Map names) {
     final runtime = widget.runtime;
     final status = row['reviewState'] as String? ?? 'unknown';
@@ -195,6 +287,31 @@ class _SharedExpenseReviewSheetState extends State<SharedExpenseReviewSheet> {
         runtime.canQueueProposals &&
         operation == null &&
         !_saving;
+    final isVoid = row['void'] == true;
+    final accepted = status == 'accepted';
+    final summary = isVoid
+        ? null
+        : SharedExpenseSummary.from(
+            snapshot,
+            names,
+            row['ownMemberId'] as String?,
+          );
+    final billTotal = bill != null
+        ? sharedMoneyFromMinor(bill['totalMinor'])
+        : sharedMoneyFromMinor(row['totalMinor']);
+    final sharedTotal = sharedMoneyFromMinor(row['totalMinor']);
+    // Only what needs attention gets a label: a normal, accepted expense is
+    // just an expense.
+    final statusLabel = switch (status) {
+      'accepted' => null,
+      'voided' => 'Expense removed · history kept',
+      'rejected' => 'Proposal rejected',
+      'superseded' => 'Previous revision · no longer current',
+      'awaiting_approval' => 'Awaiting approval',
+      'awaiting_acceptance' => 'Approved · awaiting acceptance',
+      _ => 'Refresh to check review status',
+    };
+    final decision = row['yourDecision'];
     return SharedPanel(
       child: Material(
         color: Colors.transparent,
@@ -202,94 +319,134 @@ class _SharedExpenseReviewSheetState extends State<SharedExpenseReviewSheet> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(row['title'] as String, style: BambooFonts.heading(18)),
-            const SizedBox(height: AppSpace.sm),
-            Text(switch (status) {
-              'accepted' => 'Accepted expense',
-              'voided' => 'Expense removed · history kept',
-              'rejected' => 'Proposal rejected',
-              'superseded' => 'Previous revision · no longer current',
-              'awaiting_approval' => 'Awaiting approval',
-              'awaiting_acceptance' => 'Approved · awaiting acceptance',
-              _ => 'Refresh to check review status',
-            }, style: BambooFonts.ui(13, weight: FontWeight.w600)),
             if (row['occurredOn'] != null)
               Text(
-                row['occurredOn'] as String,
+                _prettyDate(row['occurredOn'] as String?),
                 style: BambooFonts.ui(12, color: BambooInk.ink700),
               ),
-            if (status != 'accepted' && status != 'voided')
-              const SharedNotice(
-                'Proposed amounts below are not included in confirmed balances or spending.',
-              ),
-            if (row['void'] != true) ...[
-              if (bill != null)
-                _money('Bill total', sharedMoneyFromMinor(bill['totalMinor'])),
-              _money('Shared total', sharedMoneyFromMinor(row['totalMinor'])),
-              _money(
-                bill == null ? 'Your shared contribution' : 'You paid',
-                fullPaid,
-              ),
-              if (fullPaid.paise != paid.paise)
-                _money('Your shared portion paid', paid),
-              _money('Your share', share),
-              if (bill != null && residual >= 0) ...[
-                _money(
-                  'Your unshared spending',
-                  sharedMoneyFromMinor('$residual'),
+            if (statusLabel != null) ...[
+              const SizedBox(height: AppSpace.sm),
+              Text(
+                statusLabel,
+                style: BambooFonts.ui(
+                  13,
+                  weight: FontWeight.w600,
+                  color: BambooInk.amber,
                 ),
-                _money(
-                  'Your personal spending',
-                  sharedMoneyFromMinor('${share.paise + residual}'),
+              ),
+            ],
+            if (!accepted && status != 'voided')
+              const SharedNotice(
+                'Not counted in balances until everyone has approved it.',
+              ),
+            if (!isVoid) ...[
+              const SizedBox(height: AppSpace.md),
+              // What is split, in big figures; a bigger bill says so beneath.
+              Text(
+                sharedTotal.format(),
+                style: BambooFonts.money(28, color: BambooInk.ink900),
+              ),
+              if (bill != null && billTotal.paise != sharedTotal.paise)
+                Text(
+                  'Part of a ${billTotal.format()} bill',
+                  style: BambooFonts.ui(12, color: BambooInk.ink500),
+                ),
+              if (summary != null)
+                Text(
+                  '${summary.paidSentence}, ${summary.splitWords}',
+                  style: BambooFonts.ui(13, color: BambooInk.ink700),
+                ),
+              if (summary != null) ...[
+                const SizedBox(height: AppSpace.sm),
+                const Divider(height: 1),
+                for (final person in summary.people) _person(person),
+                const Divider(height: 1),
+                const SizedBox(height: AppSpace.sm),
+                Container(
+                  key: const Key('expense-your-position'),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: switch (summary.position) {
+                      SharedYourPosition.owes => BambooInk.clay.withValues(
+                        alpha: .12,
+                      ),
+                      SharedYourPosition.owed => BambooInk.jade.withValues(
+                        alpha: .12,
+                      ),
+                      _ => BambooInk.paperCool,
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    summary.yourSentence,
+                    style: BambooFonts.ui(
+                      15,
+                      weight: FontWeight.w700,
+                      color: switch (summary.position) {
+                        SharedYourPosition.owes => BambooInk.clayInk,
+                        SharedYourPosition.owed => BambooInk.jade,
+                        _ => BambooInk.ink900,
+                      },
+                    ),
+                  ),
                 ),
               ],
-              if (bill == null)
-                const SharedNotice(
-                  'Full bill was not recorded for this older expense.',
+              // The accounting behind the sentence, for anyone who wants it.
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: EdgeInsets.zero,
+                shape: const Border(),
+                collapsedShape: const Border(),
+                title: Text(
+                  'More details',
+                  style: BambooFonts.ui(13, color: BambooInk.ink700),
                 ),
-              if (snapshot != null)
-                ExpansionTile(
-                  tilePadding: EdgeInsets.zero,
-                  title: Text(
-                    'Split breakdown · ${(snapshot['shares'] as List).length} people',
-                    style: BambooFonts.ui(14),
+                children: [
+                  if (bill != null) _money('Bill total', billTotal),
+                  if (bill == null || sharedTotal.paise != billTotal.paise)
+                    _money('Shared total', sharedTotal),
+                  _money(
+                    bill == null ? 'Your shared contribution' : 'You paid',
+                    fullPaid,
                   ),
-                  children: [
-                    Text(
-                      'Paid by',
-                      style: BambooFonts.ui(13, weight: FontWeight.w600),
-                    ),
-                    for (final raw
-                        in (bill?['contributions'] ?? snapshot['contributions'])
-                            as List)
+                  if (fullPaid.paise != paid.paise)
+                    _money('Your shared portion paid', paid),
+                  _money('Your share', share),
+                  if (bill != null && residual >= 0) ...[
+                    if (residual > 0)
                       _money(
-                        names[(raw as Map)['memberId']] as String? ??
-                            'Former member',
-                        sharedMoneyFromMinor(raw['amountMinor']),
+                        'Your unshared spending',
+                        sharedMoneyFromMinor('$residual'),
                       ),
-                    Text(
-                      'Shares of the shared total',
-                      style: BambooFonts.ui(13, weight: FontWeight.w600),
+                    _money(
+                      'Your personal spending',
+                      sharedMoneyFromMinor('${share.paise + residual}'),
                     ),
-                    for (final raw in snapshot['shares'] as List)
-                      _money(
-                        names[(raw as Map)['memberId']] as String? ??
-                            'Former member',
-                        sharedMoneyFromMinor(raw['amountMinor']),
-                      ),
                   ],
-                ),
-            ],
-            if (row['yourDecision'] != null)
-              Text(
-                'You ${row['yourDecision'] == 'approve' ? 'approved' : 'rejected'} this revision.',
-                style: BambooFonts.ui(13),
+                  if (bill == null)
+                    const SharedNotice(
+                      'Full bill was not recorded for this older expense.',
+                    ),
+                  if (decision != null && !accepted)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        'You ${decision == 'approve' ? 'approved' : 'rejected'} this revision.',
+                        style: BambooFonts.ui(13),
+                      ),
+                    ),
+                ],
               ),
-            if (operation != null && row['yourDecision'] == null)
+            ],
+            if (operation != null && decision == null)
               const SharedNotice(
                 'A response is already saved on this device. Sync to check its status.',
               ),
-            if (status == 'accepted' &&
-                row['void'] != true &&
+            if (accepted &&
+                !isVoid &&
                 runtime.proposalsEnabled &&
                 !runtime.offline &&
                 !_saving)
@@ -300,7 +457,7 @@ class _SharedExpenseReviewSheetState extends State<SharedExpenseReviewSheet> {
               ),
             if (canRespond) ...[
               const SharedNotice(
-                'Review the whole bill, payer contributions, and your share before approving.',
+                'Review the whole bill, who paid, and your share before approving.',
               ),
               SharedAction(
                 label: 'Approve this revision',

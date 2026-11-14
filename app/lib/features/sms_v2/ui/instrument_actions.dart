@@ -6,6 +6,7 @@ import '../../../data/local/financial_store.dart';
 import '../../../data/user_cards_repository.dart';
 import '../category/category_snapshot.dart';
 import '../instruments/card_linker.dart';
+import '../instruments/card_transaction_relinker.dart';
 import '../instruments/instrument_seeder.dart';
 import '../ledger/projection_writer.dart';
 import '../storage/event_store.dart';
@@ -109,75 +110,9 @@ class InstrumentActions {
   /// Only a rejected account changes what the ledger shows (its movements are
   /// hidden). Detected -> confirmed, or attaching a wallet card, changes no
   /// ledger row, so it must not re-project the whole history on the UI thread.
-  /// Links card movements that were saved with no instrument (none fitted at
-  /// the time, or several did) to the wallet card they name, then re-projects
-  /// only those events so their rows show the card. A fact is linked only when
-  /// exactly one wallet card has its issuer, card type and last digits, so it
-  /// never guesses between two. Returns how many facts were linked.
-  ///
-  /// Bounded: reads at most [limit] unlinked movements of the last [days] days
-  /// through the observed-time index, and the caller runs it once per change to
-  /// the wallet card set (see SmsV2Runtime), not per message.
-  int healUnlinkedCards({int days = 400, int limit = 2000, DateTime? now}) {
-    final db = financial.database.db;
-    final wallet = [
-      for (final i in InstrumentStore(db, namespace: namespace).list())
-        if (i.userCardId != null &&
-            i.status != InstrumentStatus.rejected &&
-            i.maskDigits != null &&
-            (i.kind == InstrumentKind.creditCard ||
-                i.kind == InstrumentKind.debitCard))
-          i,
-    ];
-    if (wallet.isEmpty) return 0;
-    bool sameNumber(String a, String b) =>
-        a == b ||
-        (a.length >= 4 && b.length >= 4 && (a.endsWith(b) || b.endsWith(a)));
-    final from = (now ?? DateTime.now()).toUtc().subtract(Duration(days: days));
-    final byCard = <String, ({Instrument card, Set<String> facts})>{};
-    for (final fact in FactStore(db, namespace: namespace).unlinkedMovementsSince(
-      from,
-      limit: limit,
-    )) {
-      final said = fact.instrument;
-      final mask = said?.maskDigits;
-      if (said == null ||
-          said.issuerSlug == null ||
-          mask == null ||
-          (said.kind != null &&
-              said.kind != InstrumentKind.creditCard &&
-              said.kind != InstrumentKind.debitCard)) {
-        continue;
-      }
-      final fits = [
-        for (final card in wallet)
-          if (card.issuerSlug == said.issuerSlug &&
-              (said.kind == null || card.kind == said.kind) &&
-              sameNumber(card.maskDigits!, mask))
-            card,
-      ];
-      if (fits.length != 1) continue;
-      byCard
-          .putIfAbsent(
-            fits.single.instrumentId,
-            () => (card: fits.single, facts: <String>{}),
-          )
-          .facts
-          .add(fact.factId);
-    }
-    var linked = 0;
-    for (final entry in byCard.values) {
-      _write(entry.card, reproject: true, linkFactIds: entry.facts);
-      linked += entry.facts.length;
-    }
-    return linked;
-  }
-
-  void _write(
-    Instrument instrument, {
-    bool? reproject,
-    Set<String>? linkFactIds,
-  }) {
+  /// It does change the card each saved transaction shows, which
+  /// [CardTransactionRelinker] writes without re-projecting.
+  void _write(Instrument instrument, {bool? reproject}) {
     final previous = InstrumentStore(
       financial.database.db,
       namespace: namespace,
@@ -196,6 +131,12 @@ class InstrumentActions {
           db,
           namespace: namespace,
         ).enqueue('instrument', instrument.instrumentId, instrument.toJson());
+        // A saved transaction copied its wallet card when it was saved, so a
+        // card linked now must be written onto the ones already there. The
+        // ledger is unchanged; only each row's card is. Idempotent, and bounded
+        // by this card's own rows.
+        CardTransactionRelinker(financial, namespace: namespace)
+            .relink(instrument);
       });
       return;
     }
@@ -208,23 +149,15 @@ class InstrumentActions {
         final store = InstrumentStore(db, namespace: namespace);
         store.upsert(instrument);
         final facts = FactStore(db, namespace: namespace);
-        // Healing: link the facts and re-project them in this one savepoint, so
-        // a failure leaves them unlinked and the next run tries again.
-        for (final id in linkFactIds ?? const <String>{}) {
-          facts.linkInstrument(id, instrument.instrumentId);
-        }
         final allFacts = {
           for (final fact in facts.since(DateTime.utc(1900))) fact.factId: fact,
         };
         final affected = EventStore(db, namespace: namespace).findByFactIds([
-          if (linkFactIds != null)
-            ...linkFactIds
-          else
-            for (final row in db.select(
-              'SELECT fact_id FROM v2_facts WHERE namespace=? AND instrument_id=?',
-              [namespace, instrument.instrumentId],
-            ))
-              row['fact_id'] as String,
+          for (final row in db.select(
+            'SELECT fact_id FROM v2_facts WHERE namespace=? AND instrument_id=?',
+            [namespace, instrument.instrumentId],
+          ))
+            row['fact_id'] as String,
         ]);
         final categories = CategorySnapshot.load(
           financial.database,

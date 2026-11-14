@@ -92,12 +92,27 @@ ON CONFLICT(namespace, fact_id) DO NOTHING
   ];
 
   /// Money movements seen since [from] that no instrument was linked to (none
-  /// fitted, or several did). Pinned to the observed-time index and capped, so
-  /// the read stays bounded by the window.
-  List<MovementFact> unlinkedMovementsSince(DateTime from, {int limit = 2000}) => [
+  /// fitted, or several did), oldest first, at most [limit]. [after] continues
+  /// a walk: only facts after that (observed time, fact id) pair. Pinned to the
+  /// observed-time index, so each read is bounded by its window and its limit.
+  List<MovementFact> unlinkedMovementsSince(
+    DateTime from, {
+    int limit = 50,
+    ({DateTime at, String factId})? after,
+  }) => [
     for (final f in _read(
-      "fact_type = 'movement' AND instrument_id IS NULL AND observed_at >= ?",
-      [_timestamp(from)],
+      after == null
+          ? "fact_type = 'movement' AND instrument_id IS NULL AND observed_at >= ?"
+          : "fact_type = 'movement' AND instrument_id IS NULL AND observed_at >= ? "
+                'AND (observed_at > ? OR (observed_at = ? AND fact_id > ?))',
+      after == null
+          ? [_timestamp(from)]
+          : [
+              _timestamp(from),
+              _timestamp(after.at),
+              _timestamp(after.at),
+              after.factId,
+            ],
       indexedBy: 'idx_v2_facts_observed',
       limit: limit,
     ))

@@ -115,11 +115,18 @@ ON CONFLICT(namespace, instrument_id) DO UPDATE SET
   }
 
   /// The instrument linked to the `user_cards` row [userCardId], or null.
+  ///
+  /// A live instrument wins over an archived one: an instrument made for a
+  /// wallet card is archived when the messages' own card for the same number
+  /// takes its place (see `InstrumentSeeder`), and both name the same card.
   Instrument? findByUserCardId(String userCardId) {
+    Instrument? archived;
     for (final i in list()) {
-      if (i.userCardId == userCardId) return i;
+      if (i.userCardId != userCardId) continue;
+      if (i.status != InstrumentStatus.archived) return i;
+      archived ??= i;
     }
-    return null;
+    return archived;
   }
 
   /// All instruments, newest `lastSeenAt` first, optionally narrowed by

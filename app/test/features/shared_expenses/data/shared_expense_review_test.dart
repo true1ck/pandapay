@@ -23,6 +23,7 @@ const account = '11111111-1111-4111-8111-111111111111',
 
 class Runtime extends SharedExpensesRuntime {
   bool canRespond = true;
+  String friendName = 'Rahul';
   Runtime(
     SharedExpensesStore store,
     SharedExpensesHttpTransport remote,
@@ -36,7 +37,7 @@ class Runtime extends SharedExpensesRuntime {
     String expenseId, {
     String? after,
   }) async => {
-    'memberNames': {'me': 'You', 'friend': 'Rahul'},
+    'memberNames': {'me': 'You', 'friend': friendName},
     'hasMore': false,
     'nextCursor': null,
     'items': [
@@ -126,6 +127,19 @@ void main() {
     'review shows personal spending separately and submits one durable response',
     (tester) async {
       await launch(tester);
+      // The answer first, in plain words.
+      expect(find.text('Dinner'), findsOneWidget);
+      expect(find.text('You paid ₹1,200.00, split equally'), findsOneWidget);
+      expect(find.text('Part of a ₹1,400.00 bill'), findsOneWidget);
+      expect(find.text('Rahul owes you ₹600.00'), findsOneWidget);
+      // The accounting sits behind More details.
+      expect(find.text('Bill total'), findsNothing);
+      await tester.ensureVisible(find.text('More details'));
+      await tester.pumpAndSettle();
+      await tester.tapAt(
+        tester.getTopLeft(find.text('More details')) + const Offset(8, 8),
+      );
+      await tester.pumpAndSettle();
       expect(find.text('Bill total'), findsOneWidget);
       expect(find.text('Your personal spending'), findsOneWidget);
       final approve = find.text('Approve this revision');
@@ -183,7 +197,9 @@ void main() {
     (tester) async {
       runtime.canRespond = false;
       await launch(tester);
-      expect(find.text('Accepted expense'), findsOneWidget);
+      // An accepted expense is just an expense: no status label.
+      expect(find.text('Accepted expense'), findsNothing);
+      expect(find.byKey(const Key('expense-your-position')), findsOneWidget);
       expect(find.text('Approve this revision'), findsNothing);
       // An accepted expense can be taken back out, not approved again.
       expect(find.text('Remove this expense'), findsOneWidget);
@@ -225,5 +241,21 @@ void main() {
     runtime.capabilities = {'reads': true, 'proposals': false};
     await launch(tester);
     expect(find.text('Approve this revision'), findsNothing);
+  });
+  testWidgets('a long name and a big amount fit a narrow phone at large text', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 900);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.view.reset);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    runtime.friendName = 'Priyanka Venkataramanan-Subramaniam';
+    await launch(tester);
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('owes you'), findsOneWidget);
+    await tester.drag(find.byType(ListView), const Offset(0, -400));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
   });
 }

@@ -1349,6 +1349,12 @@ class SharedExpensesRuntime extends ChangeNotifier {
   }) async {
     final before = await context(contextId);
     final names = <String, String>{};
+    // A person with no name of their own is called by what the screen calls
+    // them (a friend's page says "PandaPay friend"), not a bare "Member".
+    final contextName = '${before['name'] ?? ''}'.trim();
+    final unnamed = before['kind'] == 'direct'
+        ? (contextName.isEmpty ? 'Your friend' : contextName)
+        : 'Member';
     String? cursor;
     for (var page = 0; page < 4; page++) {
       final roster = await members(contextId, after: cursor);
@@ -1356,7 +1362,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
         final member = raw as Map;
         names[member['memberId'] as String] = member['profileId'] == accountId
             ? 'You'
-            : member['displayName'] as String? ?? 'Member';
+            : member['displayName'] as String? ?? unnamed;
       }
       if (roster['hasMore'] != true) {
         cursor = null;

@@ -245,6 +245,7 @@ class SmsCaptureWorker implements CaptureExecutor {
         ],
         request.debugFault,
         request.ownerNames,
+        request.healCards,
       ]);
       _sentBundleHash = bundle.hash;
     } catch (_) {
@@ -378,6 +379,7 @@ class _WorkerState {
     final json = v[6] as String?;
     final fault = v[8] as String?;
     final ownerNames = (v[9] as List).cast<String>();
+    final healCards = v.length > 10 && v[10] == true;
     var injected = false;
     assert(() {
       injected = true;
@@ -448,6 +450,7 @@ class _WorkerState {
       categoryIdBySlug: categoryIdBySlug,
       groups: groups,
       ownerNames: ownerNames,
+      healCards: healCards,
       transact: (work) {
         changed.clear();
         _db.execute('BEGIN IMMEDIATE');

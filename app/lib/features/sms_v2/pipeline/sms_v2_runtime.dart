@@ -17,12 +17,12 @@ import '../../../data/local/financial_store.dart';
 import '../../../data/connectivity/server_backoff.dart';
 import '../../../data/local_first/command_outbox.dart';
 import '../../../data/user_cards_repository.dart';
+import '../instruments/card_transaction_relinker.dart';
 import '../instruments/instrument_seeder.dart';
 import 'ai_withdrawal.dart';
 import '../storage/event_store.dart';
 import '../storage/fact_store.dart';
 import '../storage/instrument_store.dart';
-import '../ui/instrument_actions.dart';
 import '../ledger/card_state_adapter.dart';
 import '../../../data/local/sms_intake_repository.dart';
 import '../../sms_import/sms_background_queue.dart';
@@ -229,7 +229,7 @@ class SmsV2Runtime {
       financial.database.db,
       namespace: namespace,
     );
-    InstrumentSeeder(instrumentStore).seed(
+    final seeded = InstrumentSeeder(instrumentStore).seed(
       cards: financial
           .entities(namespace, 'cards')
           .map(UserCard.fromJson)
@@ -237,6 +237,7 @@ class SmsV2Runtime {
       issuerSlugOf: cardIssuerSlugFromCatalogue(catalogue),
       bankAccounts: const [],
     );
+    _relinkCardTransactions(seeded);
     final session = ++_captureSessions;
     for (var start = 0; start < messages.length; start += 200) {
       _checkAccount();
@@ -278,6 +279,20 @@ class SmsV2Runtime {
         .isDirty) {
       financial.notifyExternalChanges(namespace, const ['subscriptions']);
     }
+  }
+
+  /// Writes the wallet card onto the transactions saved before their card was
+  /// linked: the cards linked by this run's seeding, and once per account every
+  /// card an older build linked without doing so. Never stops a message from
+  /// being captured; a failure is retried by the next capture (the one-time
+  /// pass only records itself when it finished).
+  void _relinkCardTransactions(SeedReport seeded) {
+    try {
+      final relinker = CardTransactionRelinker(financial, namespace: namespace);
+      relinker.moveFacts(seeded.merged);
+      relinker.relinkAll(seeded.linked);
+      relinker.repairOnce();
+    } catch (_) {}
   }
 
   /// Marks as family the person payees whose names strongly look like the
@@ -676,24 +691,42 @@ class SmsV2Runtime {
         .map(UserCard.fromJson)
         .toList();
     final healMarker =
-        'card-heal-1:${([for (final c in cards) '${c.id}:${c.last4}']..sort()).join(',')}';
-    if (cards.isNotEmpty && _state.get('card:heal') != healMarker) {
+        'card-heal-3:${([for (final c in cards) '${c.id}:${c.last4}']..sort()).join(',')}';
+    // Not before the card catalogue is loaded: a card's issuer comes from it, and
+    // a card whose issuer cannot be named is skipped by the seeding. Recording a
+    // run that skipped every card would mean it is never retried.
+    if (cards.isNotEmpty &&
+        catalogue.isNotEmpty &&
+        _state.get('card:heal') != healMarker) {
       await guarded(() async {
         // The wallet card has no instrument until it is seeded, and capture
         // (which seeds) only runs when messages arrive. Seeding is idempotent.
-        InstrumentSeeder(
+        final seeded = InstrumentSeeder(
           InstrumentStore(financial.database.db, namespace: namespace),
         ).seed(
           cards: cards,
           issuerSlugOf: cardIssuerSlugFromCatalogue(catalogue),
           bankAccounts: const [],
         );
-        InstrumentActions(
-          financial: financial,
-          namespace: namespace,
-          bundle: active.bundle,
-          catalogue: catalogue,
-        ).healUnlinkedCards();
+        // Rows of facts already tied to a card the seeding just linked.
+        _relinkCardTransactions(seeded);
+        // Then the facts that were tied to no card. The walk (50 facts per short
+        // transaction) runs in the capture worker isolate on its own connection,
+        // not on the UI thread; the worker reports what it changed.
+        await _executor.run(
+          CaptureChunkRequest(
+            namespace: namespace,
+            appVersion: appVersion,
+            categoryIdBySlug: categoryIdBySlug,
+            session: _captureSessions,
+            shared: await _loadBundle(),
+            groups: const [],
+            ownerNames: ownerNames(),
+            healCards: true,
+            onCommitted: (entities) =>
+                financial.notifyExternalChanges(namespace, entities),
+          ),
+        );
         _state.put('card:heal', healMarker);
       });
     }

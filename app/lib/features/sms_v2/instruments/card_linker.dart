@@ -4,6 +4,7 @@ import 'package:pandapay_domain/sms_v2.dart' show Instrument, InstrumentKind;
 import '../../../data/card_discovery_engine.dart' show LocalCardDiscoveryEngine;
 import '../../../data/user_cards_repository.dart' show DiscoveredCard, UserCard;
 import '../storage/instrument_store.dart';
+import 'card_pairing.dart';
 import 'issuer_slugs.dart';
 
 /// What happened when a confirmed card was linked to the wallet.
@@ -60,7 +61,8 @@ class InstrumentCardLinker {
   ///
   /// If exactly one row of [userCards] has the same issuer and last 4 digits,
   /// and no other instrument already uses it, the instrument is linked and
-  /// saved. Otherwise returns [CardNeedsProduct] with up to [maxSuggestions]
+  /// saved. So is the one wallet card that has no last 4 when it is the only
+  /// card this issuer could be (see [CardPairing]). Otherwise returns [CardNeedsProduct] with up to [maxSuggestions]
   /// catalogue products read from [smsBodies] (the card's own messages; they
   /// stay on the phone) through the existing discovery engine, which is only
   /// called, never changed.
@@ -87,6 +89,20 @@ class InstrumentCardLinker {
         store.upsert(linked);
         return CardLinked(linked, matches.single);
       }
+    }
+
+    // No wallet card ends in these digits. A wallet card added without its
+    // last 4 can still be the one, when nothing else could be: it is then the
+    // issuer's only such card and this is the only found card it could be.
+    final paired = CardPairing(
+      instruments: store.list(),
+      wallet: userCards,
+      issuerSlugOf: issuerSlugOf,
+    ).cardForInstrument(card);
+    if (paired != null) {
+      final linked = card.copyWith(userCardId: paired.id);
+      store.upsert(linked);
+      return CardLinked(linked, paired);
     }
     return CardNeedsProduct(
       instrument: card,

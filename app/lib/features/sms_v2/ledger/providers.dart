@@ -7,6 +7,10 @@ import 'package:sqlite3/sqlite3.dart';
 import '../../../app/providers.dart' as app;
 import '../../../data/local/financial_store.dart';
 import '../../../data/user_cards_repository.dart';
+import '../../shared_expenses/runtime/shared_providers.dart'
+    show splitOverlayProvider;
+import '../../shared_expenses/runtime/split_share_entries.dart'
+    show SplitOverlay, applySplitOverlay;
 import '../storage/schema.dart';
 import '../storage/event_store.dart';
 import '../storage/fact_store.dart';
@@ -28,7 +32,14 @@ LedgerReadModel loadLedgerReadModel({
   required Database db,
   required FinancialStore financialStore,
   required String namespace,
+  SplitOverlay? splitOverlay,
+  Map<String, (TransactionEntry, TransactionEntry)>? splitMemo,
 }) {
+  final applied = applySplitOverlay(
+    _readTransactions(db, financialStore, namespace),
+    splitOverlay,
+    memo: splitMemo,
+  );
   SmsV2Schema.ensure(db);
   final (entries, categoryByEvent) = LedgerStore(
     db,
@@ -52,7 +63,10 @@ LedgerReadModel loadLedgerReadModel({
     ),
     facts: FactStore(db, namespace: namespace).all(),
     instruments: InstrumentStore(db, namespace: namespace).list(),
-    transactions: _readTransactions(db, financialStore, namespace),
+    // What Splits changes in spending: shares of splits somebody else paid are
+    // local-only rows that count like a manual entry, and a payment the person
+    // split is left out in favour of their share (see split_share_entries.dart).
+    transactions: [...applied.payments, ...applied.shares],
   );
 }
 
@@ -180,13 +194,19 @@ final _ledgerModelSourceProvider = FutureProvider<LedgerModelSource>((
   final namespace = ref.watch(app.cacheNamespaceProvider);
   final cache = await ref.watch(app.responseCacheProvider.future);
   final db = cache.financialStore.database.db;
+  final splitMemo = <String, (TransactionEntry, TransactionEntry)>{};
   final source = LedgerModelSource(
     () => loadLedgerReadModel(
       db: db,
       financialStore: cache.financialStore,
       namespace: namespace,
+      splitOverlay: ref.read(splitOverlayProvider).valueOrNull,
+      splitMemo: splitMemo,
     ),
   );
+  // A changed share re-reads the model once; unchanged shares keep their
+  // instances, so the model compares equal and nothing downstream rebuilds.
+  ref.listen(splitOverlayProvider, (_, _) => source.markStale());
   ref.onDispose(source.dispose);
   // The same three revisions the provider used to watch directly. Several
   // bumping in the same turn cost one re-read (see LedgerModelSource.markStale).

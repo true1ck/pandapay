@@ -7,7 +7,7 @@ import 'package:pandapay/data/local/financial_store.dart';
 import 'package:pandapay/data/local/sms_intake_repository.dart';
 import 'package:pandapay/features/sms_v2/pipeline/sms_v2_pipeline.dart';
 import 'package:pandapay/features/sms_v2/storage/instrument_store.dart';
-import 'package:pandapay/features/sms_v2/ui/instrument_actions.dart';
+import 'package:pandapay/features/sms_v2/instruments/unlinked_card_healer.dart';
 import 'package:pandapay_domain/sms_v2.dart';
 import 'package:sqlite3/sqlite3.dart';
 
@@ -26,11 +26,26 @@ void main() {
   String? factLink() => database.db
       .select("SELECT instrument_id FROM v2_facts WHERE namespace=? AND fact_type='movement'", [namespace])
       .single['instrument_id'] as String?;
-  InstrumentActions actions() => InstrumentActions(
-    financial: financial,
-    namespace: namespace,
-    bundle: bundle,
-  );
+  UnlinkedCardHealer healer() =>
+      UnlinkedCardHealer(financial, namespace: namespace);
+  // The row as an unmatched card is saved: no card type, number or name.
+  void makeRowUnmatched({String? last4}) {
+    final r = row();
+    financial.database.db.execute(
+      "UPDATE financial_entities SET payload=? WHERE namespace=? AND entity='transactions' AND id=?",
+      [
+        jsonEncode({
+          ...r,
+          'instrument': 'other',
+          'user_card_id': null,
+          'card_last4': last4,
+          'card_name': null,
+        }),
+        namespace,
+        r['id'],
+      ],
+    );
+  }
 
   setUp(() {
     database = AppDatabase.forTesting(sqlite3.openInMemory());
@@ -76,12 +91,12 @@ void main() {
       card.copyWith(status: InstrumentStatus.confirmed, userCardId: walletCardId),
     );
     expect(factLink(), isNull);
-    final linked = actions().healUnlinkedCards(now: DateTime.utc(2026, 11, 15));
+    final linked = healer().healAll(now: DateTime.utc(2026, 11, 15));
     expect(linked, 1);
     expect(factLink(), card.instrumentId);
     expect(row()['user_card_id'], walletCardId);
     // Nothing left to do on a second run.
-    expect(actions().healUnlinkedCards(now: DateTime.utc(2026, 11, 15)), 0);
+    expect(healer().healAll(now: DateTime.utc(2026, 11, 15)), 0);
   });
 
   test('a wallet card with another number is not a match', () {
@@ -92,11 +107,50 @@ void main() {
         maskDigits: '9999',
       ),
     );
-    expect(actions().healUnlinkedCards(now: DateTime.utc(2026, 11, 15)), 0);
+    expect(healer().healAll(now: DateTime.utc(2026, 11, 15)), 0);
     expect(factLink(), isNull);
   });
 
   test('without a wallet card nothing is linked', () {
-    expect(actions().healUnlinkedCards(now: DateTime.utc(2026, 11, 15)), 0);
+    expect(healer().healAll(now: DateTime.utc(2026, 11, 15)), 0);
+  });
+
+  test('a "not matched" row shows the wallet card: type, number, name', () {
+    InstrumentStore(database.db, namespace: namespace).upsert(
+      card.copyWith(status: InstrumentStatus.confirmed, userCardId: walletCardId),
+    );
+    makeRowUnmatched();
+    expect(row()['instrument'], 'other');
+    expect(healer().healAll(now: DateTime.utc(2026, 11, 15)), 1);
+    expect(row()['instrument'], 'credit_card');
+    expect(row()['user_card_id'], walletCardId);
+    expect(row()['card_last4'], card.maskDigits);
+    expect(row()['card_name'], card.displayName);
+  });
+
+  test('a row that shows another card number is not moved onto this card', () {
+    InstrumentStore(database.db, namespace: namespace).upsert(
+      card.copyWith(status: InstrumentStatus.confirmed, userCardId: walletCardId),
+    );
+    makeRowUnmatched(last4: '0000');
+    healer().healAll(now: DateTime.utc(2026, 11, 15));
+    expect(row()['user_card_id'], isNull);
+    expect(row()['card_last4'], '0000');
+  });
+
+  test('a walk one fact at a time ends, and links what fits', () {
+    InstrumentStore(database.db, namespace: namespace).upsert(
+      card.copyWith(status: InstrumentStatus.confirmed, userCardId: walletCardId),
+    );
+    var steps = 0, linked = 0;
+    HealCursor? cursor;
+    do {
+      final r = healer().step(after: cursor, now: DateTime.utc(2026, 11, 15), limit: 1);
+      linked += r.linked;
+      cursor = r.next;
+      expect(++steps, lessThan(50), reason: 'a walk must end');
+    } while (cursor != null);
+    expect(linked, 1);
+    expect(factLink(), card.instrumentId);
   });
 }

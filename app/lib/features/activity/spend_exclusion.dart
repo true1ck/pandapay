@@ -29,6 +29,8 @@ Future<String?> askExcludeReason(BuildContext context) => showDialog<String>(
 String leftOutLabel(TransactionEntry e) => switch (e.excludeReason) {
   'family' => 'Left out of spending · Family',
   'other' => 'Left out of spending · Something else',
+  // Splits counts the person's own share instead of this whole payment.
+  'split' => 'Counted as your share of a split',
   _ => 'Not counted in spending',
 };
 
