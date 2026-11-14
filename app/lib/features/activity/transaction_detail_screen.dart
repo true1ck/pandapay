@@ -202,7 +202,17 @@ final transactionDetailProvider =
           ? null
           : loaded.where((entry) => entry.id == id).firstOrNull;
       final cached = await cachedTransactionById(ref, id);
-      final fallback = fromLoaded ?? cached;
+      // F3: a saved edit that is still waiting to be sent always wins. The
+      // stored row carries it (the reader overlays it); a server copy fetched
+      // meanwhile is older and must not replace it.
+      final cache = await ref.read(responseCacheProvider.future);
+      final editWaiting =
+          cache.financialStore.hasQueuedTransactionEdit(
+            ref.read(cacheNamespaceProvider),
+            id,
+          );
+      final fallback = editWaiting ? (cached ?? fromLoaded) : (fromLoaded ?? cached);
+      if (editWaiting && fallback != null) return fallback;
       if (repo == null || id.startsWith('local-')) return fallback;
       if (fallback != null) {
         // WP-C16: the saved row paints at once; the server copy refreshes in
@@ -221,6 +231,13 @@ final transactionDetailProvider =
                 .timeout(const Duration(seconds: 8))
                 .then((row) {
                   if (disposed) return;
+                  // An edit saved while this fetch was in flight wins (F3).
+                  if (cache.financialStore.hasQueuedTransactionEdit(
+                    ref.read(cacheNamespaceProvider),
+                    id,
+                  )) {
+                    return;
+                  }
                   _freshTransactionDetails[id] = row;
                   ref.invalidateSelf();
                 })
