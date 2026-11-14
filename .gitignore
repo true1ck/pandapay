@@ -104,3 +104,17 @@ backups/
 
 app/scratch/
 scratch/
+
+# Debug leftovers from emulator/device runs. The remote is public: a device
+# database can hold real financial data, so it must never be one `git add .`
+# away from being published. (Already-tracked files are unaffected.)
+*.sqlite
+*.apk
+/*.png
+!/25-final-logo.png
+/*.xml
+/api/*.log
+/.flutter-*/
+/app/.flutter-*/
+artifacts/*.xml
+artifacts/*-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/
