@@ -43,6 +43,16 @@ timeouts, certificate behaviour and the debug SMS rig still work.
 - random 0–30 s delay for background work on cold start and resume (unscheduled starters today: settings sync, SMS v2, shared expenses, push registration, Home refresh); keep `ServerBackoff` as the reactive pause.
 - throttle redundant calls: `/auth/refresh` only when the token is near expiry (not on every resume), `/user-settings`, `/self-transfer-rules`, `/transaction-tags` at most once per N minutes unless a change is known.
 
+**D2 constraints (agreed with the offline session):**
+1. P0 user writes and everything the command outbox / sync engine sends are never cancelled by "screen left"; cancellation applies only to queued P1 reads.
+2. Queue wait must not count against any timeout (header, body, overall); the timers start at dispatch. Needs a test.
+3. Single-flight only for identical GETs carrying the same auth token. A 401-refresh retry re-enters the scheduler once, not twice.
+4. `ServerBackoff` (`app/lib/data/connectivity/server_backoff.dart`) stays the reactive pause that gates queues before they enqueue. The scheduler does not duplicate it; it only respects `isPaused` for P2/P3.
+5. Start-up/resume jitter applies to background starters only, never to anything the user taps.
+6. Backoff stays: 503 + `Retry-After` plus the client's 0–25% jitter, cap 10 minutes (compatible with the server's 5–60 s + up to 50% jitter).
+
+**Sequencing:** the stabilised, tested release comes first. The app work (A4, then A1+A2, then A3) starts on a separate branch `app/traffic-scheduler` cut from `dev` after the release suite passes; A5 only with explicit owner approval; A6 only after the bootstrap response shape is agreed.
+
 **D3. Fewer, bigger calls: a sync-session/bootstrap endpoint** (additive, versioned). One request returns the sections Home needs
 (cards, overrides, home summary, settings, user-state delta, tags delta, self-transfer rules, change cursor), each with a version token; the
 client sends the tokens it has and the server answers "unchanged" per section. The server builds it in one transaction: one auth check,
@@ -58,7 +68,7 @@ one membership check, one connection. Replaces Home's 6 parallel calls and the p
 - refusal = **503 + `Retry-After`** (whole seconds, 5–60, ±50% random jitter), small JSON body `{"error":"server_busy","retryable":true}`; pool-timeout 500s are converted to 503. **Never 500 for load**: the app parks a change for an hour after repeated 500s on the same row;
 - client: honour `Retry-After` with extra jitter, cap 10 minutes (offline session, `server_backoff.dart`).
 
-**D6. Writes.** Every mutation idempotent (client mutation id or natural key); per-user ordering; `/sync/push` becomes **set-based** (one database call for many changes instead of SAVEPOINT + call + RELEASE per change) with savepoints kept only as the fallback for a failing item. Cross-user batching only through a privileged worker role (row-level security binds a transaction to one user): later, if numbers justify it.
+**D6. Writes.** The `/sync/push` response shape (`results[].{clientSeq,applied,reason,conflicts,ignoredFields}`) must not change: the app's sync engine parses it. Every mutation idempotent (client mutation id or natural key); per-user ordering; `/sync/push` becomes **set-based** (one database call for many changes instead of SAVEPOINT + call + RELEASE per change) with savepoints kept only as the fallback for a failing item. Cross-user batching only through a privileged worker role (row-level security binds a transaction to one user): later, if numbers justify it.
 
 **D7. Scale-out.** Stateless API replicas behind nginx (`upstream` with `keepalive`, JSON gzip), pool budget `DB_POOL_MAX × replicas < max_connections` (PgBouncer in transaction mode if needed), a database-level per-user lock for pushes (admission lanes are per process), background workers already use locks/leases.
 
