@@ -16,7 +16,7 @@ Plan: `docs/OFFLINE_FIRST_MASTER_PLAN_2026-11-13.md` sections 5.1 (SRV-01..07, 0
 - `api/src/sync_push_handlers.js` (new): entity -> handler registry plus the per-item pipeline (savepoint, dispatch, result shaping). The previous inline branches are now handlers: `user_categories:insert`, `user_commitments:*`, `user_merchant_category_rules:*`, and the generic fallback (transactions / user_cards / card_overrides, legacy or typed). A later package adds handlers with `registerSyncPushHandler(entity, ops, handler, {usesFieldAllowlist})` without touching the loop.
 - `api/src/sync_request_validation.js`: `strict` flag parsed (key present only when exactly `true`, so the validated value for old clients is unchanged); fixed rejection detail for a last4 identity collision; re-exports the helpers the route needs (the route fragments are evaluated in sandboxes that only see this module's exports, see `sync_transport_routes.test.js` and `sync_transport_postgres.js`).
 - `api/src/sync_push_body.js` (new): dedicated 1 MiB JSON parser for `/sync/push`, mounted in `index.js` before the global 100 KiB parser. Only requests that already carry a validly signed access token get the larger limit; anonymous requests keep 100 KiB and then get 401 from `requireAuth`. The 200-change limit is unchanged.
-- Migration `db/supabase/migrations/20261123010000_sync_allowlist_and_clock_guard.sql` (see below) and its SQL test.
+- Migration `db/supabase/migrations/20261123015000_sync_allowlist_and_clock_guard.sql` (see below) and its SQL test.
 - `api/test/card_state_v2.test.js`: the C8 D23d source-scan guard looked for the transaction-ingest lock inside the `/sync/push` route in `index.js`; the lock now lives in `applyGenericChange` in `sync_push_handlers.js`, so that one entry points at the new file (same invariant: lock before `applyTransactionSync`).
 
 ## Request / response contract
@@ -46,7 +46,7 @@ Decisions:
 - Treat `no_syncable_fields` as permanent (surface it; it means the client queued fields the server will never accept), `transient` as retryable without burning an attempt.
 - Treat `ignoredFields` non-empty as a visible warning (this is SRV-01).
 
-## Migration `20261123010000_sync_allowlist_and_clock_guard.sql`
+## Migration `20261123015000_sync_allowlist_and_clock_guard.sql`
 
 Full-function replacement of three functions, each a strict superset of its latest definition:
 
@@ -62,14 +62,14 @@ Full-function replacement of three functions, each a strict superset of its late
 
 A last4 collision (23505 on `uq_user_cards_active_identity`) is a per-item permanent reject with the fixed detail "Another active card already uses these last four digits." Inside `/sync/push` every item error was already a per-item `rejected` (never a 500); the 500 the plan mentions is `PATCH /user-cards` (S2).
 
-SQL test: `db/tests/20261123010000_sync_allowlist_and_clock_guard_test.sql` pins the COMPLETE field list of every sync entity for `sync_fields_for` and for the typed writer (read from the function source), checks typed fields are a subset of the legacy list, last4 / annual fee / instrument / entry_kind apply, the guards, the identity collision, applied-only change_log payloads (typed and legacy), and unknown-entity / unregistered-device results.
+SQL test: `db/tests/20261123015000_sync_allowlist_and_clock_guard_test.sql` pins the COMPLETE field list of every sync entity for `sync_fields_for` and for the typed writer (read from the function source), checks typed fields are a subset of the legacy list, last4 / annual fee / instrument / entry_kind apply, the guards, the identity collision, applied-only change_log payloads (typed and legacy), and unknown-entity / unregistered-device results.
 
 ## Tests
 
 API (run from `api/`, `node --test test/<file>`):
 - new: `http_db_errors.test.js` (mapper, uuid guards on the six routes via the real route source), `sync_push_strict.test.js` (strict mode, ignoredFields, no_syncable_fields, device 409 on push/pull/ack, clamp, transient, last4 detail, registry), `sync_push_body_limit.test.js` (limit, anonymous fallback, mount order).
 - unchanged and green: `sync_request_validation`, `sync_transport_routes`, `sync_transaction_state`, `sync_typed_configuration`, `request_boundaries`; full `node --test test/*.test.js` is green.
-- SQL: `psql -v ON_ERROR_STOP=1 -f db/tests/20261123010000_sync_allowlist_and_clock_guard_test.sql` on a fully migrated scratch DB.
+- SQL: `psql -v ON_ERROR_STOP=1 -f db/tests/20261123015000_sync_allowlist_and_clock_guard_test.sql` on a fully migrated scratch DB.
 - Not runnable without a loopback Postgres: `api/test/sync_*_postgres.js` (they extract the same route fragments, which still resolve; the re-exports keep their sandboxes working).
 
 ## Known gaps / findings

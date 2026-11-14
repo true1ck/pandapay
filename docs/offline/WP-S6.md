@@ -31,7 +31,7 @@ The 14 failures are the same 14 files on both commits: `account_lifecycle_journa
 
 | File | Purpose | Reversible? | Risk |
 |---|---|---|---|
-| `20261123010000_sync_allowlist_and_clock_guard.sql` | Full re-declaration of `sync_fields_for`, `sync_apply_change_v2`, `sync_apply_change` (strict supersets): adds `user_cards.last4`, `annual_fee_override_inr`, `transactions.instrument`, `entry_kind`; typed writer validates annual fee; change_log payload now holds applied fields only | Yes, by re-applying the previous function bodies (`20261023180000`, `20261025150000`, `20261025151350`); no data change | Medium: three hot-path functions replaced. Needs the SQL test on real Postgres. The change_log payload narrowing is the only behavioural change visible to other code |
+| `20261123015000_sync_allowlist_and_clock_guard.sql` | Full re-declaration of `sync_fields_for`, `sync_apply_change_v2`, `sync_apply_change` (strict supersets): adds `user_cards.last4`, `annual_fee_override_inr`, `transactions.instrument`, `entry_kind`; typed writer validates annual fee; change_log payload now holds applied fields only | Yes, by re-applying the previous function bodies (`20261023180000`, `20261025150000`, `20261025151350`); no data change | Medium: three hot-path functions replaced. Needs the SQL test on real Postgres. The change_log payload narrowing is the only behavioural change visible to other code |
 | `20261123030000_budgets_client_edit_clock.sql` | `budgets.client_edited_at timestamptz NULL` | Yes (`DROP COLUMN`) | Low: metadata-only add |
 | `20261123040000_recurring_client_edit_clock.sql` | `recurring_series.client_edited_at timestamptz NULL` | Yes | Low |
 | `20261123050000_client_mutation_ids_append_only.sql` | `client_mutation_id uuid NULL` on `notifications`, `user_consents`, `sms_import_batches` + three partial unique indexes `(profile_id, client_mutation_id) WHERE client_mutation_id IS NOT NULL` | Yes (drop indexes, columns) | Low: non-concurrent `CREATE INDEX` takes a short write lock on each table; the index is empty of values so it builds quickly |
@@ -60,7 +60,7 @@ Runtime accepts only the exact string `true`; the repo default (API, `.env.*.exa
 ### (c) Must be verified on a real PostgreSQL before production
 All of these were only checked on PGlite with stubbed schemas, or not at all.
 ```
-psql -v ON_ERROR_STOP=1 -f db/tests/20261123010000_sync_allowlist_and_clock_guard_test.sql
+psql -v ON_ERROR_STOP=1 -f db/tests/20261123015000_sync_allowlist_and_clock_guard_test.sql
 psql -v ON_ERROR_STOP=1 -f db/tests/20261123030000_budgets_client_edit_clock_test.sql
 psql -v ON_ERROR_STOP=1 -f db/tests/20261123040000_recurring_client_edit_clock_test.sql
 psql -v ON_ERROR_STOP=1 -f db/tests/20261123050000_client_mutation_ids_append_only_test.sql
