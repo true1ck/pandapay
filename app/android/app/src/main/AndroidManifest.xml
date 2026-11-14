@@ -1,5 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
+    <!-- Declared explicitly: release builds only received INTERNET transitively
+         (google_sign_in_android), which is fragile. Only debug/profile manifests
+         carried it directly. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <!-- UA-4 (Chunk 30, extended): camera/QR card scanning (mobile_scanner,
          camera + google_mlkit_text_recognition). -->
     <uses-permission android:name="android.permission.CAMERA"/>
@@ -53,6 +57,7 @@
          needs this to actually post the background-geofence-match alert
          (and the required persistent foreground-service notification). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <uses-permission android:name="android.permission.USE_FINGERPRINT"/>
     <application
@@ -206,6 +211,19 @@
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
         </service>
+
+        <!-- WP-C14: OS-scheduled reminders (flutter_local_notifications). -->
+        <receiver android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"/>
+        <receiver android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
@@ -237,6 +255,13 @@
         <intent>
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="upi"/>
+        </intent>
+        <!-- url_launcher canLaunchUrl/launchUrl for https links (card pages,
+             issuer sites). Without this Android 11+ package visibility makes
+             canLaunchUrl return false even when a browser is installed. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
         </intent>
         <package android:name="com.phonepe.app"/>
         <package android:name="com.phonepe.app.preprod"/>

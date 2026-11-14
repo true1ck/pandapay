@@ -116,7 +116,6 @@ dependencies:
   firebase_core: ^4.1.1
   firebase_messaging: ^16.0.2
   home_widget: ^0.7.0
-  rive: ^0.14.11
   flex_color_scheme: ^8.4.0
   responsive_framework: ^1.5.1
 
@@ -149,6 +148,7 @@ dependencies:
   share_plus: ^13.3.0
   package_info_plus: ^10.2.1
   intl: ^0.20.3
+  timezone: ^0.10.1
 
   # UA-0.3 offline-first local cache (GAP_ANALYSIS.md §2, plan
   # docs/superpowers/plans/2026-08-08-offline-first-local-cache.md): raw
@@ -264,7 +264,9 @@ flutter:
     - assets/illustrations/
     - assets/avatars/
     - assets/data/bundled_catalogue.json
+    - assets/data/bundled_categories.json
     - assets/sms_rules/
+    - assets/google_fonts/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

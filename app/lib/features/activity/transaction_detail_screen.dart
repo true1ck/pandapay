@@ -1,3 +1,4 @@
+import '../../app/design/saved_offline.dart';
 import '../sms_v2/ledger/providers.dart' show suspectedRefundsProvider;
 import 'spend_exclusion_matches.dart';
 import 'transaction_badge.dart';
@@ -25,6 +26,7 @@ import '../../app/providers.dart';
 import '../../app/transaction_tag_picker.dart';
 import '../../data/merchant_identity.dart';
 import '../../data/api_exception.dart';
+import '../../data/connectivity/reachability.dart';
 import '../../data/local/split_repository.dart';
 import '../../data/local/sms_intake_repository.dart';
 import '../../data/local/transaction_attachments_repository.dart';
@@ -202,13 +204,40 @@ final transactionDetailProvider =
       final cached = await cachedTransactionById(ref, id);
       final fallback = fromLoaded ?? cached;
       if (repo == null || id.startsWith('local-')) return fallback;
+      if (fallback != null) {
+        // WP-C16: the saved row paints at once; the server copy refreshes in
+        // the background and replaces it when it lands (consumed once, so a
+        // later invalidate after an edit never replays a pre-edit row).
+        final fresh = _freshTransactionDetails.remove(id);
+        if (fresh != null) return fresh;
+        if (!ref.read(
+          serverReachabilityProvider,
+        ).shouldSkipBackgroundReads) {
+          var disposed = false;
+          ref.onDispose(() => disposed = true);
+          unawaited(
+            repo
+                .fetchTransaction(id)
+                .timeout(const Duration(seconds: 8))
+                .then((row) {
+                  if (disposed) return;
+                  _freshTransactionDetails[id] = row;
+                  ref.invalidateSelf();
+                })
+                .catchError((_) {}),
+          );
+        }
+        return fallback;
+      }
       try {
         return await repo.fetchTransaction(id);
       } catch (error) {
-        if (isAuthenticationFailure(error) || fallback != null) return fallback;
+        if (isAuthenticationFailure(error)) return fallback;
         rethrow;
       }
     });
+
+final _freshTransactionDetails = <String, TransactionEntry>{};
 
 // autoDispose: a miss must not be remembered for as long as the app stays
 // open. The first look can come before an import has saved the message, and a
@@ -551,13 +580,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         ref.invalidate(pendingSyncCountProvider);
         if (mounted) {
           setState(() => _note = note.isEmpty ? null : note);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Note saved offline — will sync when you reconnect.',
-              ),
-            ),
-          );
+          showSavedOfflineSnack(context, what: 'Note');
         }
         return;
       }
@@ -1671,7 +1694,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                     const SizedBox(height: AppSpace.xs),
                     Text(
                       _localSplit!.error ??
-                          'Saved on this device — waiting to sync.',
+                          savedOfflineCopy,
                       style: BambooFonts.ui(
                         12,
                         color: _localSplit!.blocked

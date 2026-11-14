@@ -34,6 +34,7 @@ class SupportApi {
     required String message,
     Map<String, dynamic>? diagnostics,
     String? appVersion,
+    String? id,
   }) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/support-tickets'),
@@ -43,6 +44,9 @@ class SupportApi {
         'message': message,
         'diagnostics': ?diagnostics,
         'appVersion': ?appVersion,
+        // WP-S5: a replay with the same id returns the same ticket instead of
+        // creating another. An older server ignores it.
+        'id': ?id,
       }),
     );
     if (response.statusCode != 201) {

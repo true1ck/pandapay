@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/providers.dart';
+import '../../data/api_exception.dart';
 import '../../data/consent_policy.dart';
 import '../../data/consents_api.dart';
 
@@ -37,6 +38,29 @@ class SmsReadingConsentMirror {
     }
   }
 
+  /// The policy version the mirror was written for, or null when there is no
+  /// mirror (never agreed, withdrawn, cleared).
+  static Future<String?> storedVersion(String namespace) async {
+    if (!_usable(namespace)) return null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      final v = prefs.getString(keyFor(namespace));
+      return v == null || v.isEmpty ? null : v;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// WP-C11 (decision D8): a mirror written for an OLDER policy version still
+  /// counts as agreed until the person can be asked again online, so a policy
+  /// bump while offline does not stop SMS reading. Withdrawing clears the
+  /// mirror, so this is never true after a revoke. The foreground check
+  /// ([hasSmsReadingConsent]) clears a carried-over mirror once the server
+  /// answers and has no current grant, which is what triggers the re-prompt.
+  static Future<bool> isGrantedOrCarriedOver(String namespace) async =>
+      await storedVersion(namespace) != null;
+
   static Future<void> set(String namespace, bool granted) async {
     if (!_usable(namespace)) return;
     try {
@@ -60,9 +84,20 @@ Future<bool> hasSmsReadingConsent({
   required String namespace,
   required ConsentsApi? api,
 }) async {
-  if (await SmsReadingConsentMirror.isGranted(namespace)) return true;
+  final stored = await SmsReadingConsentMirror.storedVersion(namespace);
+  if (stored == consentPolicyVersion) return true;
   if (api == null) return false;
-  final latest = await api.fetchLatest();
+  final List<ConsentRecord> latest;
+  try {
+    latest = await api.fetchLatest().timeout(const Duration(seconds: 8));
+  } catch (error) {
+    // D8: agreed to an earlier policy and the server cannot be asked right
+    // now: keep reading rather than pause on a version bump.
+    if (stored != null && isOfflineLike(error, knownOffline: false)) {
+      return true;
+    }
+    rethrow;
+  }
   final granted = latest.any(
     (c) =>
         c.purpose == smsReadingConsentPurpose &&
@@ -70,7 +105,13 @@ Future<bool> hasSmsReadingConsent({
         c.revokedAt == null &&
         c.policyVersion == consentPolicyVersion,
   );
-  if (granted) await SmsReadingConsentMirror.set(namespace, true);
+  if (granted) {
+    await SmsReadingConsentMirror.set(namespace, true);
+  } else if (stored != null) {
+    // The server has no current grant (a newer policy, or withdrawn on
+    // another device): stop carrying the old agreement and ask again.
+    await SmsReadingConsentMirror.set(namespace, false);
+  }
   return granted;
 }
 

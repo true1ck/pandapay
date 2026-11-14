@@ -158,7 +158,8 @@ class Analytics {
           if (token != null) 'Authorization': 'Bearer $token',
         },
         body: jsonEncode({'events': batch}),
-      );
+      ).timeout(const Duration(seconds: 8)); // WP-C12b: no hung flush
+
       if (response.statusCode != 202) {
         _restore(batch);
       }

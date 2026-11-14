@@ -480,6 +480,10 @@ class BudgetStatus {
   final double elapsedFraction;
   final Money? projected;
 
+  /// True when [spent] was computed on this phone (a budget created offline)
+  /// and the server has not yet returned its own figure.
+  final bool isEstimate;
+
   const BudgetStatus({
     required this.id,
     required this.scope,
@@ -494,6 +498,7 @@ class BudgetStatus {
     required this.consumedFraction,
     required this.elapsedFraction,
     this.projected,
+    this.isEstimate = false,
   });
 
   Money get remaining => amount - spent;
@@ -643,12 +648,17 @@ class SpendReportsRepository {
         .toList();
   }
 
+  /// [id] and [clientEditedAt] make a replay safe on a server that knows them
+  /// (WP-S3: replay -> 200 replayed, stale -> 200 superseded; both are success).
+  /// An older server ignores both fields and answers 201.
   Future<void> saveBudget({
     required BudgetScope scope,
     String? scopeRefId,
     required BudgetPeriod period,
     required Money amount,
     bool rollover = false,
+    String? id,
+    DateTime? clientEditedAt,
   }) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/budgets'),
@@ -659,9 +669,12 @@ class SpendReportsRepository {
         'period': period.wireValue,
         'amountInr': amount.rupees,
         'rollover': rollover,
+        'id': ?id,
+        if (clientEditedAt != null)
+          'clientEditedAt': clientEditedAt.toUtc().toIso8601String(),
       }),
     );
-    if (response.statusCode != 201) {
+    if (response.statusCode != 201 && response.statusCode != 200) {
       throw ApiException(
         'POST /budgets failed: ${response.statusCode} ${response.body}',
       );
@@ -716,12 +729,19 @@ class SpendReportsRepository {
     );
   }
 
-  Future<void> createRecurring({
+  /// [id] / [clientEditedAt] make a replay safe on a server that knows them
+  /// (WP-S4); an older server ignores both and answers 201 `{id}`. Returns the
+  /// id of the series the server holds (it may differ from [id] when the
+  /// merchant already had a series): adopt it. 200 (`replayed`, `superseded`)
+  /// is success.
+  Future<String?> createRecurring({
     required String displayName,
     required double amountInr,
     required int cadenceDays,
     required DateTime nextExpectedOn,
     String autopayStatus = 'unknown',
+    String? id,
+    DateTime? clientEditedAt,
   }) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/recurring'),
@@ -735,22 +755,42 @@ class SpendReportsRepository {
             '${nextExpectedOn.month.toString().padLeft(2, '0')}-'
             '${nextExpectedOn.day.toString().padLeft(2, '0')}',
         'autopayStatus': autopayStatus,
+        'id': ?id,
+        if (clientEditedAt != null)
+          'clientEditedAt': clientEditedAt.toUtc().toIso8601String(),
       }),
     );
-    if (response.statusCode != 201) {
+    if (response.statusCode != 201 && response.statusCode != 200) {
       throw ApiException(
         'POST /recurring failed: ${response.statusCode} ${response.body}',
       );
+    }
+    try {
+      final json = jsonDecode(response.body);
+      final series = json is Map ? json['series'] : null;
+      final adopted = (series is Map ? series['id'] : null) ?? (json is Map ? json['id'] : null);
+      return adopted is String ? adopted : null;
+    } catch (_) {
+      return null;
     }
   }
 
   /// "I cancelled this." Marks the series dismissed server-side so the next
   /// detection run doesn't immediately re-add it — a dismissal that lasted
   /// only until the screen was reopened would make the feature feel broken.
-  Future<void> dismissRecurring(String seriesId) async {
+  /// A 200 `{superseded:true}` (a newer edit won) is success too.
+  Future<void> dismissRecurring(
+    String seriesId, {
+    DateTime? clientEditedAt,
+  }) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/recurring/$seriesId/dismiss'),
       headers: _headers,
+      body: clientEditedAt == null
+          ? null
+          : jsonEncode({
+              'clientEditedAt': clientEditedAt.toUtc().toIso8601String(),
+            }),
     );
     if (response.statusCode != 200) {
       throw ApiException(
@@ -759,6 +799,8 @@ class SpendReportsRepository {
     }
   }
 
+  /// A 200 `{superseded:true}` means a newer edit already won: success, the
+  /// caller's refresh then shows the server's values.
   Future<void> updateRecurring(
     String seriesId, {
     required String displayName,
@@ -766,6 +808,7 @@ class SpendReportsRepository {
     required int cadenceDays,
     required DateTime nextExpectedOn,
     required String autopayStatus,
+    DateTime? clientEditedAt,
   }) async {
     final response = await _client.patch(
       Uri.parse('$apiBaseUrl/recurring/$seriesId'),
@@ -777,6 +820,8 @@ class SpendReportsRepository {
         'nextExpectedOn':
             '${nextExpectedOn.year.toString().padLeft(4, '0')}-${nextExpectedOn.month.toString().padLeft(2, '0')}-${nextExpectedOn.day.toString().padLeft(2, '0')}',
         'autopayStatus': autopayStatus,
+        if (clientEditedAt != null)
+          'clientEditedAt': clientEditedAt.toUtc().toIso8601String(),
       }),
     );
     if (response.statusCode != 200) {
@@ -786,11 +831,16 @@ class SpendReportsRepository {
     }
   }
 
-  Future<void> deleteBudget(String budgetId) async {
+  Future<void> deleteBudget(String budgetId, {DateTime? clientEditedAt}) async {
     final response = await _client.delete(
       Uri.parse('$apiBaseUrl/budgets/$budgetId'),
-      headers: _headers,
+      headers: {
+        ..._headers,
+        if (clientEditedAt != null)
+          'X-Client-Edited-At': clientEditedAt.toUtc().toIso8601String(),
+      },
     );
+    // 200 also covers {superseded:true}: a newer server edit won.
     if (response.statusCode != 200) {
       throw ApiException(
         'DELETE /budgets failed: ${response.statusCode} ${response.body}',

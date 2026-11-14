@@ -83,7 +83,7 @@ void main() {
       isNotEmpty,
     );
     expect(result.read(onboardingCompleteProvider).valueOrNull, isFalse);
-    expect(find.textContaining('try again'), findsOneWidget);
+    expect(find.textContaining('Try again'), findsOneWidget);
 
     api.fail = false;
     await tester.tap(find.text('Take me Home'));
@@ -164,7 +164,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.textContaining('check your connection and try again'),
+        find.textContaining('Try again'),
         findsOneWidget,
       );
       expect(

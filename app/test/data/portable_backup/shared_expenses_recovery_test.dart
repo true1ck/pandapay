@@ -73,7 +73,7 @@ void main() {
           ),
           hasLength(1),
         );
-        expect(owner.db.select('PRAGMA user_version').single.values.first, 2);
+        expect(owner.db.select('PRAGMA user_version').single.values.first, 3);
       } finally {
         owner.close();
       }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../data/api_exception.dart' show isOfflineLike;
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
@@ -72,6 +73,7 @@ class DataTransferScreen extends ConsumerWidget {
             _RecentImportsSection(
               imports: ref.watch(statementImportsProvider),
               onRetry: () => ref.invalidate(statementImportsProvider),
+              updatedAt: ref.watch(importListFetchedAtProvider('statement')).valueOrNull,
             ),
             const SizedBox(height: AppSpace.lg),
             _TransferSection(
@@ -115,8 +117,13 @@ class DataTransferScreen extends ConsumerWidget {
 class _RecentImportsSection extends StatefulWidget {
   final AsyncValue<List<StatementImport>> imports;
   final VoidCallback onRetry;
+  final DateTime? updatedAt;
 
-  const _RecentImportsSection({required this.imports, required this.onRetry});
+  const _RecentImportsSection({
+    required this.imports,
+    required this.onRetry,
+    this.updatedAt,
+  });
 
   @override
   State<_RecentImportsSection> createState() => _RecentImportsSectionState();
@@ -127,6 +134,12 @@ class _RecentImportsSectionState extends State<_RecentImportsSection> {
 
   @override
   Widget build(BuildContext context) {
+    // Offline with nothing saved: hide the section instead of showing an error.
+    if (widget.imports.hasError &&
+        widget.imports.valueOrNull == null &&
+        isOfflineLike(widget.imports.error!)) {
+      return const SizedBox.shrink();
+    }
     final sortedImports =
         (widget.imports.valueOrNull ?? const <StatementImport>[]).toList()
           ..sort((a, b) => b.importedAt.compareTo(a.importedAt));
@@ -167,7 +180,9 @@ class _RecentImportsSectionState extends State<_RecentImportsSection> {
           ),
           const SizedBox(height: AppSpace.xs),
           Text(
-            'See when a statement was imported and how many rows were processed.',
+            widget.updatedAt == null
+                ? 'See when a statement was imported and how many rows were processed.'
+                : 'Updated ${DateFormat('d MMM, h:mm a').format(widget.updatedAt!)}.',
             style: BambooFonts.ui(12.5, color: BambooInk.ink500),
           ),
           const SizedBox(height: AppSpace.md),

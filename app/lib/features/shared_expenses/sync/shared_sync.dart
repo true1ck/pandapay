@@ -56,6 +56,9 @@ class SharedExpensesSync {
               existingContextId: error is SharedTransportException
                   ? error.existingContextId
                   : null,
+              retryAfter: error is SharedTransportException
+                  ? error.retryAfter
+                  : null,
               now: now(),
             );
             if (status == null ||

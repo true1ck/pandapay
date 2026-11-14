@@ -320,6 +320,16 @@ class FinancialStore {
     _cardDateSyncFingerprints[ns] = _repairFingerprint(ns);
   }
 
+  /// Stored transaction rows (incl. pending); one COUNT, no row decode.
+  int transactionCount(String ns) =>
+      database.db
+              .select(
+                "SELECT COUNT(*) AS n FROM financial_entities WHERE namespace=? AND entity='transactions'",
+                [ns],
+              )
+              .single['n']
+          as int;
+
   bool hasPendingTransactions(String ns) => database.db.select(
     "SELECT 1 FROM financial_entities WHERE namespace=? AND entity='transactions' AND pending=1 LIMIT 1",
     [ns],
@@ -651,8 +661,19 @@ class FinancialStore {
     _transaction(() {
       if (completeQuery != null) {
         final ids = rows.map((r) => r.id).toSet();
+        // WP-C7 (L-04): 'v2:<eventId>' rows are projected from on-phone SMS
+        // facts the server may not hold yet; absence from a server list says
+        // nothing about them, so they are not pruned here. H3-6: unless the
+        // source event is gone from the phone's own v2 ledger (a deleted
+        // event); then the projection is stale and is pruned like any row.
+        final hasV2Events = database.db.select(
+          "SELECT 1 FROM sqlite_master WHERE type='table' AND name='v2_events'",
+        ).isNotEmpty;
+        final pruneCandidate = hasV2Events
+            ? "(id NOT LIKE 'v2:%' OR NOT EXISTS (SELECT 1 FROM v2_events e WHERE e.namespace=financial_entities.namespace AND e.event_id=substr(financial_entities.id,4)))"
+            : "id NOT LIKE 'v2:%'";
         final existing = database.db.select(
-          "SELECT id, payload FROM financial_entities WHERE namespace=? AND entity='transactions' AND pending=0 AND observed_at <= ? AND NOT EXISTS (SELECT 1 FROM sync_pending_changes p WHERE p.namespace=financial_entities.namespace AND p.entity='transactions' AND p.entity_id=financial_entities.id)",
+          "SELECT id, payload FROM financial_entities WHERE namespace=? AND entity='transactions' AND pending=0 AND observed_at <= ? AND $pruneCandidate AND NOT EXISTS (SELECT 1 FROM sync_pending_changes p WHERE p.namespace=financial_entities.namespace AND p.entity='transactions' AND p.entity_id=financial_entities.id)",
           [ns, timestamp],
         );
         for (final old in existing) {
@@ -938,6 +959,50 @@ class FinancialStore {
     }
   }
 
+  /// WP-C17: the raw row of a synced-state entity and when it was last edited
+  /// (`observed_at`, which every user edit sets to "now"). Null when absent.
+  ({Map<String, dynamic> body, int editedAtMs})? userStateEntity(
+    String ns,
+    String entity,
+    String id,
+  ) {
+    final rows = database.db.select(
+      'SELECT payload, observed_at FROM financial_entities '
+      'WHERE namespace=? AND entity=? AND id=?',
+      [ns, entity, id],
+    );
+    if (rows.isEmpty) return null;
+    return (
+      body: jsonDecode(rows.single['payload'] as String) as Map<String, dynamic>,
+      editedAtMs: rows.single['observed_at'] as int,
+    );
+  }
+
+  /// WP-C17: writes a row pulled from the server, stamped with the edit time
+  /// the server holds. Plain (no pending flag); never queues anything.
+  void applyUserStateEntity(
+    String ns,
+    String entity,
+    String id,
+    Map<String, dynamic> body,
+    int editedAtMs,
+  ) {
+    database.db.execute(
+      'DELETE FROM financial_entities WHERE namespace=? AND entity=? AND id=?',
+      [ns, entity, id],
+    );
+    _upsert(ns, entity, id, body, editedAtMs);
+    _notify(ns, entity: entity == 'bill_card_assignments' ? 'observations' : entity);
+  }
+
+  void removeUserStateEntity(String ns, String entity, String id) {
+    database.db.execute(
+      'DELETE FROM financial_entities WHERE namespace=? AND entity=? AND id=?',
+      [ns, entity, id],
+    );
+    _notify(ns, entity: entity == 'bill_card_assignments' ? 'observations' : entity);
+  }
+
   List<BankAccountSummary> bankAccounts(String ns) {
     final observations = entities(ns, 'sms_observations')
       ..sort(
@@ -1037,6 +1102,23 @@ class FinancialStore {
     if (database.db.updatedRows > 0) _notify(ns);
   }
 
+  /// Rows that were deleted or taken out of spending on this phone (status
+  /// `ignored`, refund/reversal excluded as those stay visible in Activity).
+  /// Backs the Deleted transactions list when the server list is not reachable.
+  List<TransactionEntry> deletedTransactions(String ns) => database.db
+      .select(
+        "SELECT payload FROM financial_entities WHERE namespace=? AND entity='transactions' AND json_extract(payload, '\$.status')='ignored'",
+        [ns],
+      )
+      .map(
+        (r) => TransactionEntry.fromJson(
+          jsonDecode(r['payload'] as String) as Map<String, dynamic>,
+        ),
+      )
+      .where((r) => !_isDisplayable(r))
+      .toList()
+    ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+
   void markInactive(String ns, String id, {String? reason}) {
     final rows = database.db.select(
       "SELECT payload FROM financial_entities WHERE namespace=? AND entity='transactions' AND id=?",
@@ -1132,6 +1214,36 @@ class FinancialStore {
     _notify(ns);
   }
 
+  /// Overlays [fields] on a stored transaction (WP-C5: a queued payment-method
+  /// change). A null value removes the key. Does nothing when the row is not
+  /// stored.
+  void patchTransaction(String ns, String id, Map<String, Object?> fields) {
+    final rows = database.db.select(
+      "SELECT payload FROM financial_entities WHERE namespace=? AND entity='transactions' AND id=?",
+      [ns, id],
+    );
+    if (rows.isEmpty) return;
+    final body =
+        jsonDecode(rows.single['payload'] as String) as Map<String, dynamic>;
+    final next = {...body};
+    fields.forEach((key, value) {
+      if (value == null) {
+        next.remove(key);
+      } else {
+        next[key] = value;
+      }
+    });
+    _upsert(
+      ns,
+      'transactions',
+      id,
+      next,
+      DateTime.now().millisecondsSinceEpoch,
+      sourceKey: body['source_key'] as String?,
+    );
+    _notify(ns);
+  }
+
   void replaceCards(
     String ns,
     List<UserCard> cards, {
@@ -1144,7 +1256,10 @@ class FinancialStore {
       for (final old in entities(ns, 'cards')) {
         if ((old['is_archived'] == true) == archived) {
           database.db.execute(
-            "DELETE FROM financial_entities WHERE namespace=? AND entity='cards' AND id=? AND observed_at<=?",
+            // pending=1 is a card added on this phone that the server has not
+            // confirmed yet (WP-C6, L-03): a refresh cannot know about it and
+            // must not delete it. Only the add_card command settles it.
+            "DELETE FROM financial_entities WHERE namespace=? AND entity='cards' AND id=? AND observed_at<=? AND pending=0",
             [ns, old['id'], timestamp],
           );
         }

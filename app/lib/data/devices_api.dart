@@ -56,6 +56,17 @@ class LinkedDevice {
     );
   }
 
+  /// Saved-copy form (WP-C11); [LinkedDevice.fromJson] reads it back.
+  Map<String, dynamic> toJson() => {
+    'device_identifier': deviceIdentifier,
+    'device_platform': platform,
+    'device_model': model,
+    'os_version': osVersion,
+    'app_version': appVersion,
+    'first_seen_at': firstSeenAt?.toUtc().toIso8601String(),
+    'last_seen_at': lastSeenAt?.toUtc().toIso8601String(),
+  };
+
   /// Older records often lack model data. Use a useful generic label instead
   /// of exposing backend sentinel values such as "unknown" to the user.
   String get displayName => model ?? switch (platform) {

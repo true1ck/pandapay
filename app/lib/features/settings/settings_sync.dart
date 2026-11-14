@@ -1,10 +1,14 @@
 import 'dart:async';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/providers.dart';
+import '../../data/authenticated_http_client.dart';
+import '../../data/connectivity/reachability.dart';
 import '../../data/user_settings_api.dart';
+import '../account/account_local_first.dart' show kAccountLocalFirst;
 import 'appearance_providers.dart';
 import 'whats_new_providers.dart';
 
@@ -257,10 +261,20 @@ final settingsSyncProvider = Provider<SettingsSync>(SettingsSync.new);
 /// The `previous == null && next != null` guard is what keeps it to actual
 /// sign-ins rather than every rotation.
 final settingsSyncLifecycleProvider = Provider<void>((ref) {
-  ref.listen<String>(cacheNamespaceProvider, (previous, next) async {
-    if (previous != 'signed-out' || next == 'signed-out') return;
+  var running = false;
+  Future<void> sync({bool coldStart = false}) async {
+    if (running || ref.read(cacheNamespaceProvider) == 'signed-out') return;
+    // WP-C12b: the sign-in/cold-start pull is a background read; skip it while
+    // the server is known unreachable (reconnect and resume still run it).
+    if (coldStart &&
+        ref.read(serverReachabilityProvider).shouldSkipBackgroundReads) {
+      return;
+    }
+    running = true;
     try {
-      final applied = await ref.read(settingsSyncProvider).pullAndApply();
+      final applied = await AuthenticatedHttpTimeoutPolicy.runBackground(
+        () => ref.read(settingsSyncProvider).pullAndApply(),
+      );
       if (applied.isEmpty) return;
       // The preference controllers load from SharedPreferences once, at
       // construction, so a value written underneath them is invisible until
@@ -276,7 +290,37 @@ final settingsSyncLifecycleProvider = Provider<void>((ref) {
       ref.invalidate(lastSeenAppVersionProvider);
     } catch (_) {
       // Offline, or the server is unreachable. Every preference is already
-      // correct locally; the pull retries on the next sign-in.
+      // correct locally; changed keys stay marked dirty and go out on the
+      // next trigger (reconnect, app resume, sign-in).
+    } finally {
+      running = false;
     }
+  }
+
+  ref.listen<String>(cacheNamespaceProvider, (previous, next) {
+    if (previous != 'signed-out' || next == 'signed-out') return;
+    unawaited(sync(coldStart: true));
   });
+  // WP-C11: also replay dirty preferences and pull when the phone comes back
+  // online and when the app returns to the foreground.
+  if (kAccountLocalFirst) {
+    ref.listen<AsyncValue<bool>>(isOnlineProvider, (previous, next) {
+      if (previous?.valueOrNull == false && next.valueOrNull == true) {
+        unawaited(sync());
+      }
+    });
+    final observer = _ResumeObserver(() => unawaited(sync()));
+    WidgetsBinding.instance.addObserver(observer);
+    ref.onDispose(() => WidgetsBinding.instance.removeObserver(observer));
+  }
 });
+
+class _ResumeObserver with WidgetsBindingObserver {
+  _ResumeObserver(this._onResume);
+  final void Function() _onResume;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _onResume();
+  }
+}

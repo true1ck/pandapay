@@ -51,6 +51,16 @@ class SharedNameException implements Exception {
   String toString() => 'Shared name refused: $code';
 }
 
+/// A command the server keeps answering with a temporary error (5xx, 408, 429,
+/// retryable 409) is sent this many times and then handed to the person as
+/// "not synced" instead of retrying for ever. An unreachable network never
+/// counts: being offline is not the command's fault.
+const sharedMaxAttempts = 10;
+
+/// Set on a command that was waiting for another command (its context was
+/// created in the same offline session) when that command was refused.
+const sharedDependencyRejected = 'dependency_rejected';
+
 class SharedLocalException implements Exception {
   final String code;
   const SharedLocalException(this.code);
@@ -129,6 +139,8 @@ class SharedExpensesStore {
   final bool Function() isCurrent;
   final void Function()? onChanged;
   var _sequence = 0;
+  var _lastStamp = 0;
+  var _stampSeeded = false;
   SharedExpensesStore(
     this.database, {
     required this.namespace,
@@ -149,6 +161,42 @@ class SharedExpensesStore {
     SharedExpensesSchema.discardUnsubmittedEditors(database.db, namespace);
   }
   static bool _alwaysCurrent() => true;
+
+  /// Real enqueue time that never repeats or goes backwards in this process, so
+  /// two commands saved in the same millisecond still send in the order they
+  /// were saved. A caller-supplied positive time is kept exactly.
+  int _stamp(int requested) {
+    // After a restart the wall clock may have gone back: never stamp below
+    // what is already stored (WP-H2).
+    if (!_stampSeeded) {
+      _stampSeeded = true;
+      final top = database.db
+          .select(
+            'SELECT MAX(created_at) AS m FROM shared_commands WHERE namespace=?',
+            [namespace],
+          )
+          .single['m'];
+      if (top is int && top > _lastStamp) _lastStamp = top;
+    }
+    if (requested > 0) {
+      if (requested > _lastStamp) _lastStamp = requested;
+      return requested;
+    }
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _lastStamp = now > _lastStamp ? now : _lastStamp + 1;
+    return _lastStamp;
+  }
+
+  /// The `context.create` for [contextId] that may still commit (queued, in
+  /// flight, waiting to retry or for sign-in), or null.
+  String? _unconfirmedCreate(String contextId) {
+    final rows = database.db.select(
+      "SELECT operation_id FROM shared_commands WHERE namespace=? AND context_id=? AND kind='context.create' AND state IN ('pending','sending','retry','awaitingAuth') LIMIT 1",
+      [namespace, contextId],
+    );
+    return rows.isEmpty ? null : rows.single['operation_id'] as String;
+  }
+
   Future<T> _write<T>(T Function() action) => recoveryGate.run(() async {
     if (!isCurrent()) throw const SharedLocalException('account_changed');
     final name = 'shared_write_${_sequence++}';
@@ -289,6 +337,15 @@ class SharedExpensesStore {
         throw const SharedLocalException('invalid_dependency');
       }
     }
+    // A command that names a context created earlier in this same offline
+    // session cannot succeed before that create does (the server answers 403
+    // for a context it has not seen), so it waits for the create's receipt.
+    if (command.kind != 'context.create') {
+      final create = _unconfirmedCreate(command.contextId);
+      if (create != null && !dependsOn.contains(create)) {
+        dependsOn = [...dependsOn, create];
+      }
+    }
     for (final key in sourceDependencies) {
       if (key.isEmpty || key.length > 256) {
         throw const SharedLocalException('invalid_source_dependency');
@@ -306,7 +363,7 @@ class SharedExpensesStore {
         command.kind,
         command.canonicalJson,
         command.requestHash,
-        createdAt,
+        _stamp(createdAt),
       ],
     );
     for (final id in dependsOn) {
@@ -505,46 +562,171 @@ ORDER BY c.created_at,c.operation_id LIMIT 1''',
       'DELETE FROM shared_provisional WHERE namespace=? AND operation_id=?',
       [namespace, receipt.operationId],
     );
+    if (receipt.kind == 'context.create') _adoptOwnerMemberId(receipt);
     return true;
   });
+
+  /// Commands queued against a group that was created offline name its owner
+  /// by [sharedPendingOwnerMemberId]; now the server's real id is known, so
+  /// rewrite them (same operation id, new bytes and hash) before they send.
+  void _adoptOwnerMemberId(SharedOperationReceipt receipt) {
+    final result = receipt.result;
+    final real = result is Map ? result['memberId'] : null;
+    if (!sharedUuid(real)) return;
+    final stand = sharedPendingOwnerMemberId(receipt.contextId);
+    final rows = database.db.select(
+      "SELECT * FROM shared_commands WHERE namespace=? AND context_id=? AND state!='committed' AND instr(request_json,?)>0",
+      [namespace, receipt.contextId, stand],
+    );
+    Object? swap(Object? v) => v is String
+        ? (v == stand ? real : v)
+        : v is List
+        ? [for (final e in v) swap(e)]
+        : v is Map
+        ? {for (final e in v.entries) e.key: swap(e.value)}
+        : v;
+    for (final row in rows) {
+      final next = SharedCommand.fromJson(
+        swap(jsonDecode(row['request_json'] as String)),
+      );
+      // The immutability trigger guards UPDATEs; the row is replaced whole
+      // (same key, same state, attempts and dependencies) in this transaction.
+      final key = [namespace, row['operation_id']];
+      database.db.execute(
+        'DELETE FROM shared_commands WHERE namespace=? AND operation_id=?',
+        key,
+      );
+      database.db.execute(
+        'INSERT INTO shared_commands(namespace,operation_id,context_id,kind,request_json,request_hash,state,created_at,attempts,next_attempt,lease_id,lease_expires,error_code) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
+        [
+          namespace,
+          row['operation_id'],
+          row['context_id'],
+          row['kind'],
+          next.canonicalJson,
+          next.requestHash,
+          row['state'],
+          row['created_at'],
+          row['attempts'],
+          row['next_attempt'],
+          row['lease_id'],
+          row['lease_expires'],
+          row['error_code'],
+        ],
+      );
+    }
+  }
   Future<void> fail(
     SharedCommandClaim claim, {
     int? statusCode,
     bool retryable = false,
     String? serverCode,
     String? existingContextId,
+    Duration? retryAfter,
     required int now,
   }) => _write(() {
     if (!_owns(claim)) return;
-    final attempts = operation(claim.command.operationId)!.attempts + 1;
+    // next_attempt==1 marks "made due early by resetBackoff": this try was not
+    // sent after a real wait, so it must not use up the attempt budget
+    // (~10 app opens during an outage would otherwise reject queued work).
+    final earlyRetry =
+        database.db
+            .select(
+              'SELECT next_attempt FROM shared_commands WHERE namespace=? AND operation_id=?',
+              [namespace, claim.command.operationId],
+            )
+            .single['next_attempt'] ==
+        _resetMarker;
+    final previous = operation(claim.command.operationId)!.attempts;
+    final attempts = statusCode != null && earlyRetry && previous > 0
+        ? previous
+        : previous + 1;
+    // The server answers 403 for a context it has not seen yet exactly as for
+    // one the person does not own. While this context's own create is still
+    // on its way, that 403 is "not yet", not "never".
+    final createPending =
+        statusCode == 403 &&
+        serverCode == 'context_not_authorized' &&
+        claim.command.kind != 'context.create' &&
+        _unconfirmedCreate(claim.command.contextId) != null;
     final transient =
         retryable ||
+        createPending ||
         statusCode == null ||
         statusCode == 408 ||
         statusCode == 429 ||
         statusCode >= 500;
-    final state = statusCode == 409 && !retryable
+    var state = statusCode == 409 && !retryable
         ? SharedCommandState.conflict
         : statusCode == 401
         ? SharedCommandState.awaitingAuth
         : transient
         ? SharedCommandState.retry
         : SharedCommandState.rejected;
-    final delay = 5000 * (1 << attempts.clamp(0, 6));
+    var error = statusCode == null
+        ? 'network_unavailable'
+        : 'http_$statusCode${sharedNameCodes.contains(serverCode) ? ':$serverCode${existingContextId != null && sharedUuid(existingContextId) ? ':$existingContextId' : ''}' : ''}';
+    // A temporary server error is not retried for ever. The network being
+    // unreachable (no status) never counts: that is not the command's fault.
+    if (state == SharedCommandState.retry &&
+        statusCode != null &&
+        attempts >= sharedMaxAttempts) {
+      state = SharedCommandState.rejected;
+      error = 'retry_limit:$error';
+    }
+    var delay = 5000 * (1 << attempts.clamp(0, 6));
+    if (retryAfter != null) {
+      final asked = retryAfter.inMilliseconds.clamp(0, 3600000);
+      if (asked > delay) delay = asked;
+    }
     database.db.execute(
       'UPDATE shared_commands SET state=?,attempts=?,next_attempt=?,lease_id=NULL,lease_expires=0,error_code=? WHERE namespace=? AND operation_id=?',
       [
         state.name,
         attempts,
         now + delay,
-        statusCode == null
-            ? 'network_unavailable'
-            : 'http_$statusCode${sharedNameCodes.contains(serverCode) ? ':$serverCode${existingContextId != null && sharedUuid(existingContextId) ? ':$existingContextId' : ''}' : ''}',
+        error,
         namespace,
         claim.command.operationId,
       ],
     );
+    if (state == SharedCommandState.rejected ||
+        state == SharedCommandState.conflict) {
+      _rejectDependents(claim.command.operationId);
+    }
   });
+
+  /// Commands still waiting for [operationId] can never be sent once it is
+  /// refused: refuse them too (listed under it, not as separate problems).
+  void _rejectDependents(String operationId) {
+    final queue = [operationId];
+    while (queue.isNotEmpty) {
+      final current = queue.removeLast();
+      final rows = database.db.select(
+        "SELECT c.operation_id FROM shared_commands c JOIN shared_command_dependencies d ON d.namespace=c.namespace AND d.operation_id=c.operation_id WHERE c.namespace=? AND d.depends_on=? AND c.state IN ('pending','sending','retry','awaitingAuth')",
+        [namespace, current],
+      );
+      for (final row in rows) {
+        final id = row['operation_id'] as String;
+        database.db.execute(
+          "UPDATE shared_commands SET state='rejected',lease_id=NULL,lease_expires=0,error_code=? WHERE namespace=? AND operation_id=?",
+          [sharedDependencyRejected, namespace, id],
+        );
+        queue.add(id);
+      }
+    }
+  }
+
+  /// A reconnect should not wait out a backoff earned while offline: queued
+  /// rows become due now. Attempt counts are kept, so the cap still applies.
+  static const _resetMarker = 1;
+  Future<void> resetBackoff() => _write(
+    () => database.db.execute(
+      "UPDATE shared_commands SET next_attempt=$_resetMarker WHERE namespace=? AND state IN ('retry','pending') AND next_attempt>$_resetMarker",
+      [namespace],
+    ),
+  );
+
   Future<void> resumeAuthentication() => _write(
     () => database.db.execute(
       "UPDATE shared_commands SET state='retry',next_attempt=0,error_code=NULL WHERE namespace=? AND state='awaitingAuth'",
@@ -827,6 +1009,109 @@ ${contextId == null ? '' : 'AND c.context_id=?'} ORDER BY c.operation_id LIMIT ?
       rows.length > limit ? items.last.command.operationId : null,
     );
   }
+
+  static const _attentionWhere =
+      "c.namespace=? AND c.state IN ('rejected','conflict') AND coalesce(c.error_code,'')!='$sharedDependencyRejected' AND NOT EXISTS(SELECT 1 FROM shared_sync_state s WHERE s.namespace=c.namespace AND s.key='revoked:'||c.context_id)";
+
+  /// Commands the server refused for good (or kept failing on): what the
+  /// person has to look at. A command refused only because the one it waited
+  /// on was refused is folded into that one and not counted again.
+  int get attentionCount =>
+      database.db.select(
+            'SELECT COUNT(*) AS n FROM shared_commands c WHERE $_attentionWhere',
+            [namespace],
+          ).single['n']
+          as int;
+
+  /// Oldest first, so the list reads in the order things were saved.
+  List<SharedQueuedCommand> readAttention({int limit = 100}) {
+    if (limit < 1 || limit > 100) {
+      throw const SharedLocalException('invalid_query');
+    }
+    final rows = database.db.select(
+      'SELECT c.* FROM shared_commands c WHERE $_attentionWhere ORDER BY c.created_at,c.operation_id LIMIT ?',
+      [namespace, limit],
+    );
+    return List.unmodifiable([
+      for (final row in rows)
+        SharedQueuedCommand(
+          _command(row),
+          SharedCommandState.values.byName(row['state'] as String),
+          row['attempts'] as int,
+          row['error_code'] as String?,
+        ),
+    ]);
+  }
+
+  /// [operationId] plus every command refused only because it waited on it.
+  List<String> _withDependents(String operationId) {
+    final out = [operationId];
+    for (var i = 0; i < out.length; i++) {
+      final rows = database.db.select(
+        "SELECT c.operation_id FROM shared_commands c JOIN shared_command_dependencies d ON d.namespace=c.namespace AND d.operation_id=c.operation_id WHERE c.namespace=? AND d.depends_on=? AND c.state='rejected' AND c.error_code=?",
+        [namespace, out[i], sharedDependencyRejected],
+      );
+      for (final row in rows) {
+        final id = row['operation_id'] as String;
+        if (!out.contains(id)) out.add(id);
+      }
+    }
+    return out;
+  }
+
+  /// Retry: puts a refused command back in the queue with a fresh attempt
+  /// budget. The stored bytes, operation id and hash do not change, so the
+  /// server replays rather than duplicates it. False when it is not refused.
+  Future<bool> requeue(String operationId) => _write(() {
+    final queued = operation(operationId);
+    if (queued == null ||
+        (queued.state != SharedCommandState.rejected &&
+            queued.state != SharedCommandState.conflict)) {
+      return false;
+    }
+    for (final id in _withDependents(operationId)) {
+      database.db.execute(
+        "UPDATE shared_commands SET state='pending',attempts=0,next_attempt=0,lease_id=NULL,lease_expires=0,error_code=NULL WHERE namespace=? AND operation_id=?",
+        [namespace, id],
+      );
+    }
+    return true;
+  });
+
+  /// Discard: forgets a refused command (and any that waited on it) together
+  /// with its on-phone preview. False when it is not refused.
+  Future<bool> discard(String operationId) => _write(() {
+    final queued = operation(operationId);
+    if (queued == null ||
+        (queued.state != SharedCommandState.rejected &&
+            queued.state != SharedCommandState.conflict)) {
+      return false;
+    }
+    for (final id in _withDependents(operationId)) {
+      final db = database.db;
+      db.execute(
+        'DELETE FROM shared_provisional WHERE namespace=? AND operation_id=?',
+        [namespace, id],
+      );
+      db.execute(
+        'DELETE FROM shared_command_dependencies WHERE namespace=? AND (operation_id=? OR depends_on=?)',
+        [namespace, id, id],
+      );
+      db.execute(
+        'DELETE FROM shared_source_dependencies WHERE namespace=? AND operation_id=?',
+        [namespace, id],
+      );
+      db.execute(
+        'DELETE FROM shared_editor_receipts WHERE namespace=? AND draft_id=?',
+        [namespace, id],
+      );
+      db.execute(
+        'DELETE FROM shared_commands WHERE namespace=? AND operation_id=?',
+        [namespace, id],
+      );
+    }
+    return true;
+  });
 
   bool isContextRevoked(String contextId) => database.db.select(
     'SELECT 1 FROM shared_sync_state WHERE namespace=? AND key=?',

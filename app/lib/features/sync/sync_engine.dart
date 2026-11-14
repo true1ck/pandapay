@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/widgets.dart' show AppLifecycleListener;
 
 import '../../app/providers.dart';
+import '../../data/session_end_reason.dart';
+import '../../data/api_exception.dart';
 import '../../data/local/sync_queue.dart';
 import '../../data/sync_api.dart';
 import '../../data/sync_transaction_delta.dart';
@@ -59,6 +61,34 @@ class SyncEngine {
   bool _running = false;
   Timer? _continuation;
   bool _pullHasMore = false;
+  bool _pushHasMore = false;
+
+  /// Largest request body pushed in one go. The API rejects bodies over
+  /// 100 KiB for the whole request, so one oversize change would otherwise
+  /// block every change behind it for ever. Changes are never split, so a
+  /// single change larger than this goes alone and is judged on its own.
+  static const maxPushBytes = 60 * 1024;
+  static const maxPushChanges = 200;
+
+  /// Requests per sync. A bigger backlog continues in a follow-up sync, so a
+  /// long queue cannot monopolise the isolate or the connection.
+  static const maxPushPasses = 5;
+
+  /// Extra requests a sync may spend on isolating one bad change inside a
+  /// failed chunk (halving), so a server outage cannot turn into hundreds.
+  static const maxIsolationRequests = 24;
+
+  /// Safety valve (H1-2): a 500 aborts the sync without blaming any row, so a
+  /// row that deterministically crashes the server would block the queue for
+  /// ever. After this many 500 aborts in a row that all start with the same
+  /// head row, that row alone is held back for [headRowBackoff].
+  static const headRowAbortLimit = 8;
+  static const headRowBackoff = Duration(hours: 1);
+  int? _abortHead;
+  int _abortCount = 0;
+
+  bool _reregisteredDevice = false;
+  int _isolationRequests = 0;
 
   SyncEngine(this._ref) {
     _ref.onDispose(() {
@@ -100,12 +130,12 @@ class SyncEngine {
     _running = true;
     _continuation?.cancel();
     _pullHasMore = false;
+    _pushHasMore = false;
+    _reregisteredDevice = false;
+    _isolationRequests = 0;
     final namespace = _ref.read(cacheNamespaceProvider);
     final token = _ref.read(accessTokenProvider);
     try {
-      await (await _ref.read(
-        splitRepositoryProvider.future,
-      )).sync(reconnect: true);
       final queue = await _ref.read(syncQueueProvider.future);
 
       var deviceId = queue.deviceId;
@@ -117,7 +147,19 @@ class SyncEngine {
         queue.deviceId = deviceId;
       }
 
-      final pushed = await _push(api, queue, deviceId);
+      int pushed;
+      try {
+        pushed = await _push(api, queue, deviceId);
+      } finally {
+        // Split documents and foreign-payment changes are independent of
+        // field edits. Start their sync after the edit push, without waiting
+        // for it: a hung or failing one must never hold up (or abort) the
+        // push, the pull or the next sync cycle.
+        _startSplitSync();
+        _startForeignPaymentsSync();
+      }
+      // A re-registration during the push may have issued a new device id.
+      deviceId = queue.deviceId ?? deviceId;
       final (pulled, conflicts) = await _pullAndApply(api, queue, deviceId);
       await _refreshSelfTransferRules(api, queue);
       await _ref.read(transactionTagsProvider)?.sync();
@@ -130,6 +172,7 @@ class SyncEngine {
       );
     } catch (_) {
       _pullHasMore = false;
+      _pushHasMore = false;
       // Offline, or the server is unreachable. Everything the user did is
       // still in the local queue; the next trigger tries again.
       return const SyncResult(
@@ -140,7 +183,7 @@ class SyncEngine {
       );
     } finally {
       _running = false;
-      if (_pullHasMore) {
+      if (_pullHasMore || _pushHasMore) {
         // Yield after a bounded catch-up pass, then resume its durable cursor.
         _continuation = Timer(const Duration(milliseconds: 100), () {
           if (_ref.read(cacheNamespaceProvider) == namespace &&
@@ -153,58 +196,269 @@ class SyncEngine {
     }
   }
 
-  Future<int> _push(SyncApi api, SyncQueue queue, String deviceId) async {
-    final pending = queue.pending();
-    if (pending.isEmpty) return 0;
+  void _startSplitSync() {
+    unawaited(() async {
+      try {
+        await (await _ref.read(
+          splitRepositoryProvider.future,
+        )).sync(reconnect: true);
+      } catch (_) {
+        // Split documents stay durable and retry on the next trigger.
+      }
+    }());
+  }
 
-    queue.claim(pending);
+  /// Drains the foreign-payments outbox (it used to drain only when its
+  /// screen read it or a change was made, so a reconnect never sent it).
+  void _startForeignPaymentsSync() {
+    unawaited(() async {
+      try {
+        final foreign = _ref.read(foreignPaymentsRepositoryProvider);
+        // Only when something is queued: sync() also refreshes exchange rates,
+        // which a sign-in or resume sync has no reason to do.
+        if (await foreign.hasDueChanges()) await foreign.sync();
+      } catch (_) {
+        // Changes stay durable and retry on the next trigger.
+      }
+    }());
+  }
+
+  /// Pushes queued edits in byte-bounded chunks, at most [maxPushPasses]
+  /// requests per sync.
+  ///
+  /// A change the server acked is marked applied straight away: it is never
+  /// pushed again, whatever happens next (a failed refetch used to leave it
+  /// queued and re-sent). It is only deleted once the fresh server copy has
+  /// been stored, because until then it is what keeps showing the edit.
+  Future<int> _push(SyncApi api, SyncQueue queue, String deviceId) async {
+    var applied = 0;
+    var passes = 0;
+    final attempted = <int>{};
+    while (passes < maxPushPasses) {
+      final chunk = _nextChunk(queue, attempted);
+      if (chunk.isEmpty) break;
+      passes++;
+      applied += await _pushChunk(api, queue, chunk, attempted);
+    }
+    _pushHasMore =
+        passes == maxPushPasses && _nextChunk(queue, attempted).isNotEmpty;
+    // Fetch the authoritative copy of everything the server applied, including
+    // changes left over from an earlier sync (or app run) whose fetch failed.
+    final entities = queue.appliedEntities();
+    if (entities.isNotEmpty) {
+      await _materialize(api, entities, queue);
+      queue.purgeApplied(entities);
+    }
+    return applied;
+  }
+
+  /// The next run of queued changes, in queue order, that fits one request.
+  /// Order matters (a later edit of a row must not overtake an earlier one),
+  /// so the run ends at the first change that does not fit.
+  List<SyncChange> _nextChunk(SyncQueue queue, Set<int> attempted) {
+    final candidates = queue.pending(limit: maxPushChanges + attempted.length);
+    final chunk = <SyncChange>[];
+    var bytes = 64; // envelope: deviceId and braces
+    for (final change in candidates) {
+      if (attempted.contains(change.clientSeq)) continue;
+      final size = utf8.encode(jsonEncode(change.toJson())).length + 1;
+      if (chunk.isNotEmpty && bytes + size > maxPushBytes) break;
+      chunk.add(change);
+      bytes += size;
+      if (chunk.length >= maxPushChanges) break;
+    }
+    return chunk;
+  }
+
+  Future<int> _pushChunk(
+    SyncApi api,
+    SyncQueue queue,
+    List<SyncChange> chunk,
+    Set<int> attempted,
+  ) async {
+    attempted.addAll(chunk.map((c) => c.clientSeq));
+    queue.claim(chunk);
     try {
-      final results = await api.push(deviceId: deviceId, changes: pending);
-      final accepted = results
-          .where((r) => r.applied)
-          .map((r) => r.clientSeq)
-          .toSet();
-      final entities = pending
-          .where((c) => accepted.contains(c.clientSeq))
-          .map((c) => c.entity)
-          .toSet();
-      if (entities.isNotEmpty) await _materialize(api, entities, queue);
-      var applied = 0;
-      for (final result in results) {
-        if (result.clientSeq == null) continue;
-        if (result.applied) {
-          final change = pending
-              .where((c) => c.clientSeq == result.clientSeq)
-              .first;
-          if (change.entity == 'transactions' &&
-              (change.op == 'delete' ||
-                  change.payload['status'] == 'ignored')) {
-            final cache = await _ref.read(responseCacheProvider.future);
-            cache.financialStore.markInactive(queue.namespace, change.entityId);
+      List<SyncPushResult> results;
+      try {
+        results = await _pushOnce(api, queue, chunk);
+      } on ApiException catch (error) {
+        if (_chunkIsToBlame(error)) return await _isolate(api, queue, chunk, error, attempted);
+        if (error.statusCode == 500) {
+          final head = chunk.first.clientSeq;
+          _abortCount = _abortHead == head ? _abortCount + 1 : 1;
+          _abortHead = head;
+          if (_abortCount >= headRowAbortLimit) {
+            queue.defer(head, headRowBackoff, 'server error');
+            _abortHead = null;
+            _abortCount = 0;
           }
-          queue.remove(result.clientSeq!);
-          applied++;
-        } else if (result.isPermanentFailure) {
-          // Retain rejected work for review while allowing later edits through.
+        }
+        rethrow;
+      }
+      _abortHead = null;
+      _abortCount = 0;
+      return await _applyResults(queue, chunk, results);
+    } finally {
+      queue.release(chunk);
+    }
+  }
+
+  /// One push request, with device recovery: when the server says (or, for an
+  /// older server, every item answers) that this device is not registered, the
+  /// device is registered again and the same request is retried once, before
+  /// anything is rejected.
+  Future<List<SyncPushResult>> _pushOnce(
+    SyncApi api,
+    SyncQueue queue,
+    List<SyncChange> chunk,
+  ) async {
+    List<SyncPushResult> results;
+    try {
+      results = await api.push(deviceId: queue.deviceId!, changes: chunk);
+    } on ApiException catch (error) {
+      if (_isDeviceNotRegistered(error) && !_reregisteredDevice) {
+        await _reregisterDevice(api, queue);
+        return api.push(deviceId: queue.deviceId!, changes: chunk);
+      }
+      rethrow;
+    }
+    // An older server cannot say "unknown device"; it answers not_found or
+    // rejected for every item. One item failing that way is a real rejection,
+    // all of them failing that way is far more likely the device. A single
+    // item proves nothing (H1-5), so it is not re-registered for.
+    final everyItemRefused =
+        results.length >= 2 &&
+        results.every(
+          (r) =>
+              !r.applied && (r.reason == 'not_found' || r.reason == 'rejected'),
+        );
+    if (everyItemRefused && !_reregisteredDevice) {
+      await _reregisterDevice(api, queue);
+      return api.push(deviceId: queue.deviceId!, changes: chunk);
+    }
+    return results;
+  }
+
+  bool _isDeviceNotRegistered(ApiException error) =>
+      error.statusCode == 409 && error.errorCode == 'device_not_registered';
+
+  Future<void> _reregisterDevice(SyncApi api, SyncQueue queue) async {
+    _reregisteredDevice = true;
+    queue.deviceId = await api.registerDevice(
+      platform: _platform,
+      appVersion: _ref.read(appVersionProvider).valueOrNull,
+      deviceId: queue.deviceId,
+    );
+  }
+
+  /// True when the server's answer is about the content of this request
+  /// rather than about the server, the session or the network: a request that
+  /// is too large (413) or invalid (400, 422). Everything else (401, 403, 408,
+  /// 429, every 5xx, no status) aborts the sync and records nothing. A 500 is
+  /// deliberately not here (H1-2): the server answers a bare internal_error for
+  /// any unmapped database failure, an outage included, so halving the chunk
+  /// would burn attempts on rows that did nothing wrong.
+  bool _chunkIsToBlame(ApiException error) {
+    final status = error.statusCode;
+    return status == 413 || status == 400 || status == 422;
+  }
+
+  /// A request failed because of what it contained. Halve it until the bad
+  /// change stands alone, so one poison change cannot block the rest.
+  Future<int> _isolate(
+    SyncApi api,
+    SyncQueue queue,
+    List<SyncChange> chunk,
+    ApiException error,
+    Set<int> attempted,
+  ) async {
+    if (chunk.length == 1) {
+      final change = chunk.single;
+      final message = error.statusCode == 413
+          ? 'Change is too large to sync'
+          : (error.userMessage);
+      queue.reject(change.clientSeq, message);
+      return 0;
+    }
+    if (_isolationRequests >= maxIsolationRequests) throw error;
+    final middle = chunk.length ~/ 2;
+    var applied = 0;
+    for (final half in [chunk.sublist(0, middle), chunk.sublist(middle)]) {
+      if (_isolationRequests >= maxIsolationRequests) throw error;
+      _isolationRequests++;
+      queue.claim(half);
+      try {
+        List<SyncPushResult> results;
+        try {
+          results = await _pushOnce(api, queue, half);
+        } on ApiException catch (halfError) {
+          if (!_chunkIsToBlame(halfError)) rethrow;
+          applied += await _isolate(api, queue, half, halfError, attempted);
+          continue;
+        }
+        applied += await _applyResults(queue, half, results);
+      } finally {
+        queue.release(half);
+      }
+    }
+    return applied;
+  }
+
+  /// Records the server's verdict per change. Accepted rows leave the queue
+  /// here, before their entities are fetched again.
+  Future<int> _applyResults(
+    SyncQueue queue,
+    List<SyncChange> chunk,
+    List<SyncPushResult> results,
+  ) async {
+    var applied = 0;
+    for (final result in results) {
+      if (result.clientSeq == null) continue;
+      if (result.applied) {
+        final change = chunk
+            .where((c) => c.clientSeq == result.clientSeq)
+            .firstOrNull;
+        if (change == null) continue;
+        if (change.entity == 'transactions' &&
+            (change.op == 'delete' || change.payload['status'] == 'ignored')) {
+          final cache = await _ref.read(responseCacheProvider.future);
+          cache.financialStore.markInactive(queue.namespace, change.entityId);
+        }
+        if (result.ignoredFields.isNotEmpty) {
+          // The server kept the rest but dropped these fields. Never silent:
+          // keep the change for review with a plain reason.
           queue.reject(
             result.clientSeq!,
-            result.reason ?? 'Change needs attention',
+            "Some details weren't saved: ${result.ignoredFields.join(', ')}",
           );
-        } else {
-          queue.recordFailure(result.clientSeq!, result.reason ?? 'unknown');
+          continue;
         }
+        queue.markApplied(result.clientSeq!);
+        applied++;
+      } else if (result.isPermanentFailure) {
+        // Retain rejected work for review while allowing later edits through.
+        queue.reject(
+          result.clientSeq!,
+          result.reason == 'no_syncable_fields'
+              ? 'PandaPay no longer accepts this kind of edit'
+              : (result.reason ?? 'Change needs attention'),
+        );
+      } else if (result.isTransient) {
+        // A database hiccup on the server: nothing to count, try next sync.
+      } else {
+        queue.recordFailure(result.clientSeq!, result.reason ?? 'unknown');
       }
-      return applied;
-    } finally {
-      queue.release(pending);
     }
+    return applied;
   }
 
   Future<(int, int)> _pullAndApply(
     SyncApi api,
     SyncQueue queue,
-    String deviceId,
+    String initialDeviceId,
   ) async {
+    var deviceId = initialDeviceId;
     var totalPulled = 0;
     var totalConflicts = 0;
     var since = queue.lastServerSeq;
@@ -221,7 +475,15 @@ class SyncEngine {
     // pass schedules a continuation after yielding when the backlog remains.
     for (var page = 0; page < 4; page++) {
       if (!isCurrent()) throw StateError('Account changed during sync');
-      final batch = await api.pull(deviceId: deviceId, since: since, limit: 25);
+      SyncPullBatch batch;
+      try {
+        batch = await api.pull(deviceId: deviceId, since: since, limit: 25);
+      } on ApiException catch (error) {
+        if (!_isDeviceNotRegistered(error) || _reregisteredDevice) rethrow;
+        await _reregisterDevice(api, queue);
+        deviceId = queue.deviceId!;
+        batch = await api.pull(deviceId: deviceId, since: since, limit: 25);
+      }
       if (!isCurrent()) throw StateError('Account changed during sync');
       totalConflicts += batch.conflicts.length;
 
@@ -229,8 +491,22 @@ class SyncEngine {
         _pullHasMore = false;
         break;
       }
-      if (batch.changes.length > 25 || batch.latestServerSeq <= since) {
+      if (batch.changes.length > 25) {
         throw const FormatException('Invalid sync pull progress');
+      }
+      if (batch.latestServerSeq <= since) {
+        // The server is behind this device's cursor (a restored database, a
+        // reset change log). Throwing here would fail every sync for ever;
+        // start again from the beginning instead. Nothing from this pass has
+        // been committed or acknowledged. Reset only once: if the server is
+        // still behind from zero, it really is inconsistent, so fail loudly
+        // rather than loop.
+        if (since == 0) {
+          throw const FormatException('Invalid sync pull progress');
+        }
+        queue.lastServerSeq = 0;
+        _pullHasMore = true;
+        return (0, 0);
       }
 
       // Gather the bounded backlog before fetching authoritative snapshots.
@@ -433,10 +709,30 @@ final syncLifecycleProvider = Provider<void>((ref) {
         }
       });
     }
-    if (previous != 'signed-out' && next == 'signed-out') {
+    if (previous == 'signed-out' && next != 'signed-out') {
+      // A session started again; the cache lifecycle forgets it too.
+      ref.read(sessionEndReasonProvider).clear();
+    }
+    if (previous != 'signed-out' &&
+        next == 'signed-out' &&
+        // WP-C3 (L-01): after a session the server rejected, the same person
+        // signs in again and resumes. Keep the device id and cursor with the
+        // queued edits (they are keyed by namespace and survive), so the
+        // device is not registered afresh and the history is not pulled again.
+        // An explicit sign-out wipes the file, so this reset only matters there.
+        ref.read(sessionEndReasonProvider).mayWipeAccountData) {
       // Sign-out: the queue and cursor belong to the account that just left.
-      final db = await ref.read(appDatabaseProvider.future);
-      SyncQueue(db, namespace: previous!).resetCursor();
+      // H1-7: sign-out closes the database and then invalidates the provider;
+      // awaiting `.future` here could reopen (and recreate) the file that is
+      // being deleted. Use only a database that is still alive.
+      if (!ref.exists(appDatabaseProvider)) return;
+      final db = ref.read(appDatabaseProvider).valueOrNull;
+      if (db == null) return;
+      try {
+        SyncQueue(db, namespace: previous!).resetCursor();
+      } catch (_) {
+        // Already closed: the file is deleted by the sign-out anyway.
+      }
     }
   });
 
@@ -444,6 +740,19 @@ final syncLifecycleProvider = Provider<void>((ref) {
     final cameOnline =
         previous?.valueOrNull == false && next.valueOrNull == true;
     if (cameOnline) {
+      // Backoffs were about problems that may have passed; do not wait them
+      // out a second time after being offline.
+      ref.read(transactionTagsProvider)?.resetBackoff();
+      try {
+        (await ref.read(syncQueueProvider.future)).resetBackoff();
+      } catch (_) {
+        // The sync below still runs; the backoff just expires on its own.
+      }
+      try {
+        await ref.read(foreignPaymentsRepositoryProvider).resetBackoff();
+      } catch (_) {
+        // Entries keep their backoff; the sync below still runs.
+      }
       await ref.read(syncEngineProvider).sync();
     }
   });

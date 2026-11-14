@@ -251,7 +251,7 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
   /// The server lets the owner rename anyone who is still around and everyone
   /// rename themselves; it refuses people who left or were removed.
   bool _canRename(SharedRoster roster, SharedEditorMember member) {
-    if (!widget.runtime.proposalsEnabled) return false;
+    if (!widget.runtime.canQueueProposals) return false;
     final self = member.id == roster.ownMemberId;
     final owner = roster.members.any(
       (m) => m.id == roster.ownMemberId && m.role == 'owner',
@@ -761,12 +761,14 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
           },
         );
       }
-      if (!_authorized || !widget.runtime.proposalsEnabled) return;
+      if (!_authorized || !widget.runtime.canQueueProposals) return;
       await widget.runtime.store.enqueue(_pending!);
       await widget.runtime.flushEditor();
       final refused = widget.runtime.nameFailure(_pending!.operationId);
       if (refused != null) {
-        // Roll back: nothing was added, so let them change the name.
+        // Roll back: nothing was added, so let them change the name. The
+        // refusal is explained here, so it is not also left as "not synced".
+        await widget.runtime.acknowledgeRefusal(_pending!.operationId);
         if (mounted) {
           final message = sharedInviteIssueMessage(
             SharedTransportException(code: refused.code),

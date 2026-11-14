@@ -309,18 +309,108 @@ void main() {
     },
   );
 
-  test(
-    'unknown offline documents remain unknown and can retry on reconnect',
-    () async {
-      online = false;
-      await expectLater(store.read('t1'), throwsStateError);
-      expect(
-        () => store.save('t1', [share(100)], Money.fromRupees(1000)),
-        throwsStateError,
-      );
-      online = true;
-      await store.read('t1');
-      expect(remote.gets, 1);
-    },
-  );
+  test('blockedCount counts only refused documents of this account', () async {
+    await store.read('t1');
+    await store.read('t2');
+    store.save('t1', [share(100)], Money.fromRupees(1000));
+    store.save('t2', [share(100)], Money.fromRupees(1000));
+    expect(store.pendingCount, 2);
+    expect(store.blockedCount, 0);
+    remote.failure = ApiException('PUT splits failed: 400 {}');
+    await store.sync();
+    // A 4xx is permanent for that document: both stay unsent but are blocked.
+    expect(store.blockedCount, 2);
+    expect(store.pendingCount, 2);
+    expect(create('account-b').blockedCount, 0);
+    remote.failure = null;
+    await store.sync(reconnect: true);
+    // Blocked ones are left alone until the person resolves them.
+    expect(store.blockedCount, 2);
+    await store.resolve('t1', keepLocal: false);
+    expect(store.blockedCount, 1);
+  });
+
+  test('a never-loaded split opens empty offline and saves durably', () async {
+    online = false;
+    final first = await store.read('t1');
+    expect(first.document.splits, isEmpty);
+    expect(first.version, 0);
+    expect(first.pending, false);
+    store.save('t1', [share(100)], Money.fromRupees(1000));
+    expect(store.local('t1')!.pending, true);
+    expect(remote.gets, 0);
+    store.dispose();
+    store = create();
+    expect(store.local('t1')!.document.splits.single.amount.rupees, 100);
+    online = true;
+    await store.sync();
+    expect(store.local('t1')!.pending, false);
+    expect(remote.server.splits.single.amount.rupees, 100);
+  });
+
+  test('an offline empty baseline reconciles through the 409 flow', () async {
+    online = false;
+    await store.read('t1');
+    store.save('t1', [share(100)], Money.fromRupees(1000));
+    // The split already existed on the server (never seen on this phone).
+    remote.server = doc([share(200)]);
+    online = true;
+    await store.sync();
+    expect(store.local('t1')!.blocked, true);
+    expect(store.blockedCount, 1);
+    expect(store.local('t1')!.document.splits.single.amount.rupees, 100);
+    await store.resolve('t1', keepLocal: true);
+    await store.sync();
+    expect(remote.server.splits.single.amount.rupees, 100);
+    expect(store.local('t1')!.pending, false);
+  });
+
+  test('an unedited offline baseline is replaced by the server copy', () async {
+    online = false;
+    await store.read('t1');
+    remote.server = doc([share(250)]);
+    online = true;
+    await store.read('t1'); // returns the baseline, refreshes behind it
+    await Future<void>.delayed(Duration.zero);
+    expect(store.local('t1')!.document.splits.single.amount.rupees, 250);
+  });
+
+  test('a failed first fetch (network down) also opens empty', () async {
+    remote.failure = null;
+    final failing = _FailingFetch();
+    final repo = SplitRepository(
+      database,
+      namespace: 'account-z',
+      remote: () => failing,
+      canSync: () => true,
+      now: () => time,
+      autoSync: false,
+    );
+    expect((await repo.read('t9')).document.splits, isEmpty);
+    repo.dispose();
+  });
+
+  test('a refusal on first fetch (not a network failure) is still an error', () async {
+    final repo = SplitRepository(
+      database,
+      namespace: 'account-y',
+      remote: () => _FailingFetch(ApiException('GET splits failed: 403 {}')),
+      canSync: () => true,
+      now: () => time,
+      autoSync: false,
+    );
+    await expectLater(repo.read('t9'), throwsA(isA<ApiException>()));
+    repo.dispose();
+  });
+}
+
+class _FailingFetch implements UserCardsRepository {
+  final Object error;
+  _FailingFetch([Object? error])
+    : error = error ?? http.ClientException('Failed host lookup');
+  @override
+  Future<TransactionSplitDocument> fetchSplitDocument(String id) async =>
+      throw error;
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

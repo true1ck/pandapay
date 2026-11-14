@@ -30,6 +30,21 @@ class AuthenticatedHttpTimeoutPolicy {
     refresh: Duration(seconds: 8),
   );
 
+  /// Non-user-initiated reads on cold start (WP-C12b). Opted into only through
+  /// [runBackground]; user-initiated writes keep [standard].
+  static const background = AuthenticatedHttpTimeoutPolicy(
+    header: Duration(seconds: 6),
+    body: Duration(seconds: 6),
+    overall: Duration(seconds: 8),
+    refresh: Duration(seconds: 5),
+  );
+
+  static const _backgroundKey = #pandapayBackgroundHttp;
+
+  /// Runs [body] so every request it starts uses [background].
+  static Future<T> runBackground<T>(Future<T> Function() body) =>
+      runZoned(body, zoneValues: {_backgroundKey: true});
+
   static const longOperation = AuthenticatedHttpTimeoutPolicy(
     header: Duration(seconds: 20),
     body: Duration(seconds: 30),
@@ -144,7 +159,7 @@ class AuthenticatedHttpClient extends http.BaseClient {
         originalSubject != null &&
         (liveToken == null || currentSubject != originalSubject)) {
       throw ApiException(
-        'Account changed before request',
+        accountChangedDebugMessage,
         userMessage:
             'Your account changed. Please retry from the current account.',
       );
@@ -309,6 +324,9 @@ class AuthenticatedHttpClient extends http.BaseClient {
   static AuthenticatedHttpTimeoutPolicy _defaultTimeoutFor(
     http.BaseRequest request,
   ) {
+    if (Zone.current[AuthenticatedHttpTimeoutPolicy._backgroundKey] == true) {
+      return AuthenticatedHttpTimeoutPolicy.background;
+    }
     final path = request.url.path.toLowerCase();
     final longOperation =
         path.contains('/import') ||

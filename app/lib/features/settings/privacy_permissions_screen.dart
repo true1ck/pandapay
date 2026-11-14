@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../account/contributions_opt_in.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/device_permissions.dart';
@@ -11,6 +12,9 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/consent_policy.dart';
 import '../../data/consents_api.dart';
+import '../account/account_local_first.dart';
+import '../consent/consent_commands.dart';
+import '../consent/consents_cache.dart';
 import '../consent/sms_access_disclosure.dart';
 import '../consent/sms_reading_consent.dart';
 import '../consent/template_sharing_disclosure.dart';
@@ -22,9 +26,13 @@ import '../import/gmail_connect_service.dart';
 /// registered go_router route, same pattern as ToolsHubScreen's children.
 final _consentHistoryProvider = FutureProvider.autoDispose<List<ConsentRecord>>(
   (ref) async {
-    final api = ref.watch(consentsApiProvider);
-    if (api == null) return const [];
-    return api.fetchHistory();
+    ref.watch(consentsApiProvider);
+    ref.watch(commandOutboxRevisionProvider);
+    return loadConsentsCacheFirst(
+      ref,
+      history: true,
+      onRefreshed: ref.invalidateSelf,
+    );
   },
 );
 
@@ -544,11 +552,8 @@ class _ContributionToggle extends ConsumerWidget {
           ),
           value: optedIn,
           onChanged: (v) async {
-            final repo = ref.read(userCardsRepositoryProvider);
-            if (repo == null) return;
             try {
-              await repo.setContributionsOptIn(v);
-              ref.invalidate(profileProvider);
+              await setContributionsOptInLocalFirst(ref, v);
             } catch (e) {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -576,9 +581,13 @@ class _ContributionToggle extends ConsumerWidget {
 /// reviewed.
 final _latestConsentsProvider =
     FutureProvider.autoDispose<Map<String, ConsentRecord>>((ref) async {
-      final api = ref.watch(consentsApiProvider);
-      if (api == null) return const {};
-      final latest = await api.fetchLatest();
+      ref.watch(consentsApiProvider);
+      ref.watch(commandOutboxRevisionProvider);
+      final latest = await loadConsentsCacheFirst(
+        ref,
+        history: false,
+        onRefreshed: ref.invalidateSelf,
+      );
       return {for (final c in latest) c.purpose: c};
     });
 
@@ -618,25 +627,22 @@ class _PurposeConsents extends ConsumerWidget {
         return;
       }
       try {
-        await api.submit(
+        // WP-C11: a withdrawal clears the local mirrors first and is queued
+        // when the server cannot be reached (never lost, never blocked).
+        // Every row records the policy version it was given against (all
+        // purposes share one; SMS shared learning keeps its own).
+        final result = await submitConsentLocalFirst(
+          ref,
           purpose: purpose,
           granted: granted,
-          // Every consent row records the policy version it was given
-          // against, which is what makes a later policy change detectable as
-          // "this person agreed to something older" rather than silently
-          // inheriting agreement. All purposes share one policy version;
-          // SMS shared learning keeps its own because the database matches it.
-          policyVersion: purpose == smsSharedLearningPurpose
-              ? smsSharedLearningPolicyVersion
-              : consentPolicyVersion,
           sourceScreen: 'privacy_permissions',
         );
+        if (result == AccountWrite.queued && context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text(savedOfflineMessage)));
+        }
         if (purpose == smsReadingConsentPurpose) {
-          // Withdrawn: stop reading on this phone for this account.
-          await SmsReadingConsentMirror.set(
-            ref.read(cacheNamespaceProvider),
-            false,
-          );
           ref.invalidate(smsReadingConsentProvider);
         }
         ref.invalidate(_latestConsentsProvider);

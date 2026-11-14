@@ -30,10 +30,10 @@ List<String> _outboxColumns(Database db) => db
 
 void main() {
   group('outbox payment_method migration (v1 -> v2)', () {
-    test('a fresh database is at v2 and has the nullable column', () {
+    test('a fresh database is at v3 and has the nullable column', () {
       final fresh = openInMemoryForTesting();
       addTearDown(fresh.close);
-      expect(fresh.db.select('PRAGMA user_version').single.values.first, 2);
+      expect(fresh.db.select('PRAGMA user_version').single.values.first, 3);
       final column = fresh.db
           .select('PRAGMA table_info(transaction_outbox_entries)')
           .firstWhere((r) => r['name'] == 'payment_method');
@@ -74,7 +74,7 @@ void main() {
       final migrated = AppDatabase.forTesting(raw);
       addTearDown(migrated.close);
 
-      expect(migrated.db.select('PRAGMA user_version').single.values.first, 2);
+      expect(migrated.db.select('PRAGMA user_version').single.values.first, 3);
       expect(_outboxColumns(migrated.db), contains('payment_method'));
 
       // Every pre-existing column value is untouched; the new one is NULL.
@@ -137,9 +137,10 @@ void main() {
           'amountInr': Money.fromPaise(99900).rupees,
           'categoryId': 'dining',
           'merchantName': 'Cafe',
+          // The repository sends UTC (WP-C5), whatever the machine's zone.
           'occurredAt': DateTime.fromMillisecondsSinceEpoch(
             1700000000000,
-          ).toIso8601String(),
+          ).toUtc().toIso8601String(),
           'note': 'lunch',
           'instrument': 'cash',
           'entryKind': 'spend',
@@ -200,7 +201,7 @@ void main() {
           migrated.db.select('SELECT * FROM transaction_outbox_entries').single;
       expect(row['user_card_id'], 'legacy-card');
       expect(row['payment_method'], isNull);
-      expect(migrated.db.select('PRAGMA user_version').single.values.first, 2);
+      expect(migrated.db.select('PRAGMA user_version').single.values.first, 3);
     });
   });
 

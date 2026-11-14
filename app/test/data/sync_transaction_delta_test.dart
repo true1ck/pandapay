@@ -95,19 +95,55 @@ void main() {
         'local',
       );
       expect(queue.pendingCount, 1);
+    },
+  );
+
+  test('a 404 for an insert/update is skipped, not fatal (Q-10)', () async {
+    store.saveTransactions('user:a', [row('still-here')]);
+    final delta = await fetchSyncTransactionDelta(
+      [
+        {'entity_id': 'gone', 'op': 'update'},
+        {'entity_id': 'new-one', 'op': 'insert'},
+        {'entity_id': 'still-here', 'op': 'update'},
+      ],
+      fetch: (id) async {
+        if (id == 'gone') {
+          throw ApiException('GET /transactions/:id failed: 404 {}');
+        }
+        return row(id);
+      },
+      isCurrent: () => true,
+    );
+    expect(delta.rows.map((r) => r.id), ['new-one', 'still-here']);
+    expect(delta.skippedIds, {'gone'});
+    expect(delta.deletedIds, isEmpty);
+    // The skipped row is not deleted locally either.
+    store.saveTransactions('user:a', [row('gone')]);
+    store.commitTransactionDelta(
+      'user:a',
+      delta.rows,
+      delta.deletedIds,
+      serverSeq: 9,
+    );
+    expect(store.entities('user:a', 'transactions', id: 'gone'), isNotEmpty);
+  });
+
+  test('non-404 failures still abort so the cursor is replayed', () async {
+    for (final status in [401, 403, 500, 503]) {
       await expectLater(
         fetchSyncTransactionDelta(
           [
-            {'entity_id': 'missing', 'op': 'update'},
+            {'entity_id': 'x', 'op': 'update'},
           ],
           fetch: (_) async =>
-              throw ApiException('GET /transactions/:id failed: 404 {}'),
+              throw ApiException('GET /transactions/:id failed: $status {}'),
           isCurrent: () => true,
         ),
         throwsA(isA<ApiException>()),
+        reason: '$status',
       );
-    },
-  );
+    }
+  });
 
   test('failed cursor commit rolls back affected rows', () {
     db.db.execute(

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -5,10 +6,12 @@ import 'package:intl/intl.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/env.dart';
 import '../../app/providers.dart';
+import '../../data/api_exception.dart';
 import '../../data/bills_projection_api.dart';
 import '../../data/commitments_repository.dart';
 import '../../data/local/response_cache.dart';
 import 'bills_horizon.dart';
+import 'insights_local_first.dart';
 
 String _identity(String? value) =>
     (value ?? '').toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
@@ -87,7 +90,39 @@ final centralBillsProjectionProvider =
     FutureProvider<BillProjectionSnapshot>((ref) async {
   final api = ref.watch(centralBillsProjectionApiProvider);
   if (api == null) return const BillProjectionSnapshot.unavailable();
-  return api.fetch();
+  if (!kInsightsLocalFirst) return api.fetch();
+  // WP-C7: keep the last good response so the section does not vanish offline
+  // (stale-ok: any failure except a rejected session serves the saved copy).
+  ResponseCache? cache;
+  try {
+    cache = await ref.watch(responseCacheProvider.future);
+  } catch (_) {
+    cache = null;
+  }
+  final key = '${ref.watch(cacheNamespaceProvider)}:bills_projections';
+  try {
+    String? body;
+    final fresh = await api.fetch(onBody: (b) => body = b);
+    if (fresh.available && body != null) {
+      try {
+        await cache?.put(key, body!);
+      } catch (_) {}
+    }
+    return fresh;
+  } catch (error) {
+    final status = error is ApiException ? error.statusCode : null;
+    if (status == 401 || status == 403) rethrow;
+    final saved = await cache?.read(key);
+    if (saved == null) rethrow;
+    try {
+      final decoded = jsonDecode(saved.rawJson);
+      return BillProjectionSnapshot.fromJson(
+        Map<String, dynamic>.from(decoded as Map),
+      );
+    } catch (_) {
+      rethrow;
+    }
+  }
 });
 
 /// Optional server-backed rows for Bills & Commitments. Errors are hidden so a

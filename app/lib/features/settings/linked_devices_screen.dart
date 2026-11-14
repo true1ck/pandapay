@@ -10,6 +10,7 @@ import '../../app/providers.dart';
 import '../../data/analytics.dart';
 import '../../data/api_exception.dart';
 import '../../data/devices_api.dart';
+import '../account/needs_internet.dart';
 
 final _linkedDevicesCacheProvider =
     StateProvider<Map<String, List<LinkedDevice>>>((ref) => const {});
@@ -43,9 +44,26 @@ String? _userIdFromToken(String? token) {
 /// token has no short expiry (see `TokenStore`'s own comment).
 final linkedDevicesProvider = FutureProvider.autoDispose<List<LinkedDevice>>((ref) async {
   final userId = _userIdFromToken(ref.watch(accessTokenProvider));
-  final cached = userId == null
+  var cached = userId == null
       ? null
       : ref.read(_linkedDevicesCacheProvider)[userId];
+  // WP-C11: the last list also survives an app restart (account-scoped).
+  final savedKey = '${ref.read(cacheNamespaceProvider)}:linked_devices';
+  dynamic store;
+  try {
+    store = await ref.read(responseCacheProvider.future);
+  } catch (_) {}
+  if (cached == null && store != null) {
+    try {
+      final raw = await store.get(savedKey) as String?;
+      if (raw != null) {
+        cached = [
+          for (final m in jsonDecode(raw) as List)
+            LinkedDevice.fromJson(Map<String, dynamic>.from(m as Map)),
+        ];
+      }
+    } catch (_) {}
+  }
   final api = ref.watch(devicesApiProvider);
   if (api == null) return cached ?? const [];
 
@@ -67,7 +85,10 @@ final linkedDevicesProvider = FutureProvider.autoDispose<List<LinkedDevice>>((re
   }
 
   try {
-    final devices = await api.fetchDevices();
+    final devices = await api.fetchDevices().timeout(const Duration(seconds: 8));
+    try {
+      await store?.put(savedKey, jsonEncode([for (final d in devices) d.toJson()]));
+    } catch (_) {}
     if (userId != null) {
       ref.read(_linkedDevicesCacheProvider.notifier).update(
         (cache) => {...cache, userId: devices},
@@ -209,7 +230,9 @@ class _LinkedDevicesScreenState extends ConsumerState<LinkedDevicesScreen> {
                     device: device,
                     busy: _revoking == device.deviceIdentifier,
                     isThisDevice: localDeviceId != null && device.deviceIdentifier == localDeviceId,
-                    onRevoke: () => _confirmAndRevoke(device),
+                    onRevoke: ref.watch(needsInternetProvider)
+                        ? null
+                        : () => _confirmAndRevoke(device),
                   );
                 },
               ),
@@ -225,7 +248,7 @@ class _DeviceTile extends StatelessWidget {
   final LinkedDevice device;
   final bool busy;
   final bool isThisDevice;
-  final VoidCallback onRevoke;
+  final VoidCallback? onRevoke;
 
   const _DeviceTile({
     required this.device,
@@ -313,7 +336,10 @@ class _DeviceTile extends StatelessWidget {
             // token still valid until it naturally expires, but no way to
             // refresh it). Signing this device out has its own dedicated,
             // unambiguous "Sign out" action elsewhere in the app.
-            TextButton(onPressed: onRevoke, child: const Text('Sign out')),
+            TextButton(
+              onPressed: onRevoke,
+              child: Text(onRevoke == null ? needsInternetHint : 'Sign out'),
+            ),
         ],
       ),
     );

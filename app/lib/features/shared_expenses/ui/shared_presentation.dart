@@ -1,3 +1,4 @@
+import '../../../app/design/saved_offline.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 /// Presentation contracts only. The authenticated repository supplies accepted
@@ -161,6 +162,10 @@ class SharedExpenseTotals {
     this.incomplete = false,
   });
 }
+
+/// Shown when a change was kept on this phone because the server cannot be
+/// reached: it is safe, and it goes out by itself.
+const sharedSavedOfflineCopy = savedOfflineCopy;
 
 class SharedHubPresentation {
   final SharedBalanceSummary? summary;

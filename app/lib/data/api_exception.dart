@@ -1,12 +1,21 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show SocketException;
 
 import 'package:http/http.dart' as http;
+
+import 'connectivity/known_connectivity.dart';
 
 /// Shared HTTP-failure exception for every repository/API client in lib/data/.
 /// Carries a technical [debugMessage] (method, path, status, raw body — for
 /// logs) separate from [userMessage] (safe to render directly in the UI).
 /// Screens should show `userMessage`, never `toString()`/`debugMessage`.
+/// Debug text of the error thrown for a request whose account is no longer the
+/// signed-in one (session ended, or another account signed in). It says nothing
+/// about the data in the request, so queues treat it as "no connection", not as
+/// an attempt (WP-Q1).
+const accountChangedDebugMessage = 'Account changed before request';
+
 class ApiException implements Exception {
   final String userMessage;
   final String debugMessage;
@@ -109,6 +118,9 @@ class AuthenticationUnavailableException implements Exception {
   String toString() => message;
 }
 
+/// Shared offline copy (WP-C12b); `ErrorState` uses the same wording.
+const offlineErrorMessage = "You're offline. Try again when you're connected.";
+
 /// Converts any caught error into UI-safe copy. Use this at every screen's
 /// catch site instead of `e.toString()`.
 ///
@@ -117,6 +129,12 @@ class AuthenticationUnavailableException implements Exception {
 /// purpose (see nearby_merchants_screen.dart's location-permission checks).
 String userFacingErrorMessage(Object error) {
   if (error is ApiException) return error.userMessage;
+  // WP-C12b: a dead network is not "something went wrong".
+  if (error is http.ClientException ||
+      error is TimeoutException ||
+      error is SocketException) {
+    return offlineErrorMessage;
+  }
   if (error is AuthenticationUnavailableException) return error.message;
   if (error is CardAlreadyAddedException) return error.message;
   if (error is StateError) return error.message;
@@ -128,7 +146,8 @@ String userFacingErrorMessage(Object error) {
     final text = error.message as String;
     if (text.isNotEmpty) return text;
   }
-  return 'Something went wrong. Please check your connection and try again.';
+  if (KnownConnectivity.knownOffline) return offlineErrorMessage;
+  return 'Something went wrong. Try again.';
 }
 
 /// Transport failures can happen while the device still has Wi-Fi or mobile
@@ -142,6 +161,22 @@ bool isTransientNetworkFailure(Object error) {
     return status != null && status >= 500;
   }
   return false;
+}
+
+/// True when [error] looks like "the network or server is not there" rather
+/// than a real answer from the API: a transient network failure
+/// ([isTransientNetworkFailure], plus a raw [SocketException]) or any error
+/// raised while the app already knows the device is offline.
+///
+/// [knownOffline] defaults to what `isOnlineProvider` last reported
+/// ([KnownConnectivity]); an unknown state counts as online. Use this to pick
+/// "saved offline" copy and queue fallbacks; keep [isTransientNetworkFailure]
+/// where the narrower meaning is wanted.
+bool isOfflineLike(Object error, {bool? knownOffline}) {
+  if (isTransientNetworkFailure(error) || error is SocketException) {
+    return true;
+  }
+  return knownOffline ?? KnownConnectivity.knownOffline;
 }
 
 /// True when an authenticated read was rejected by the API rather than

@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../data/local/financial_store.dart';
+import 'card_bill_payment.dart';
+import 'insights_local_first.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
@@ -19,6 +21,7 @@ import '../../data/bills_projection_api.dart';
 import '../../data/commitments_repository.dart';
 import '../../data/past_bill_receipts.dart';
 import '../../data/user_cards_repository.dart';
+import '../sync_state/user_state_sync.dart';
 import 'bill_proof_section.dart';
 import 'bills_horizon.dart';
 import 'central_bills_section.dart';
@@ -177,14 +180,23 @@ final paymentsDueProvider = FutureProvider<List<DuePayment>>((ref) async {
   if (active.isNotEmpty) {
 
   final earliestCycleStart = DateTime(now.year, now.month - 2, 1);
-  final transactions = repo == null
-      ? const <TransactionEntry>[]
-      : await loadTransactionsWithOfflineCache(
-          ref,
-          repo: repo,
-          cacheKey: 'transactions:payments_due',
-          from: earliestCycleStart,
-        );
+  // WP-C7: the SMS-v2 branch below reads the ledger read model, not this list,
+  // and the legacy branch must not turn an empty offline cache into an error
+  // screen (cardBillLedgerProvider already degrades the same way).
+  final v2Reporting = ref.watch(smsV2ReportingEnabledProvider);
+  var transactions = const <TransactionEntry>[];
+  if (repo != null && !(kInsightsLocalFirst && v2Reporting)) {
+    try {
+      transactions = await loadTransactionsWithOfflineCache(
+        ref,
+        repo: repo,
+        cacheKey: 'transactions:payments_due',
+        from: earliestCycleStart,
+      );
+    } catch (_) {
+      if (!kInsightsLocalFirst) rethrow;
+    }
+  }
 
   // active rows loop
   for (final card in active) {
@@ -1493,6 +1505,9 @@ class _CardBillDetailSheetState extends ConsumerState<_CardBillDetailSheet> {
           dueDate: _selectedDate,
           statementDate: _selectedDate.subtract(const Duration(days: 20)),
         );
+        unawaited(
+          queueUserStatePush(ref, UserStateKind.billCardAssignment, obsId),
+        );
       }
 
       final pairs = ref.read(myCardsWithProductProvider).valueOrNull ?? const [];
@@ -1537,6 +1552,9 @@ class _CardBillDetailSheetState extends ConsumerState<_CardBillDetailSheet> {
         dueDate: _selectedDate,
         statementDate: _selectedDate.subtract(const Duration(days: 20)),
       );
+      unawaited(
+        queueUserStatePush(ref, UserStateKind.billCardAssignment, manualId),
+      );
 
       final txnId =
           'payment-${card.id}-${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}';
@@ -1557,9 +1575,29 @@ class _CardBillDetailSheetState extends ConsumerState<_CardBillDetailSheet> {
           userCardId: card.id,
           cardLast4: card.last4,
         );
-        store.saveTransactions(namespace, [paymentTxn]);
+        if (kInsightsLocalFirst) {
+          await enqueueCardBillPayment(
+            await ref.read(outboxRepositoryProvider.future),
+            txnId: txnId,
+            amount: Money.fromPaise(amountPaise),
+            cardId: card.id,
+            cardName: card.cardName,
+            last4: card.last4,
+          );
+        } else {
+          store.saveTransactions(namespace, [paymentTxn]);
+        }
       } else if (!_isPaid && _initialIsPaid) {
-        store.deleteTransaction(namespace, txnId);
+        if (kInsightsLocalFirst) {
+          undoCardBillPayment(
+            await ref.read(outboxRepositoryProvider.future),
+            store,
+            namespace,
+            txnId,
+          );
+        } else {
+          store.deleteTransaction(namespace, txnId);
+        }
       }
 
       ref.invalidate(cardBillLedgerProvider);
@@ -1596,7 +1634,16 @@ class _CardBillDetailSheetState extends ConsumerState<_CardBillDetailSheet> {
 
       store.removeCardBillAssignment(namespace, manualId);
       store.deleteObservation(namespace, manualId);
-      store.deleteTransaction(namespace, txnId);
+      if (kInsightsLocalFirst) {
+        undoCardBillPayment(
+          await ref.read(outboxRepositoryProvider.future),
+          store,
+          namespace,
+          txnId,
+        );
+      } else {
+        store.deleteTransaction(namespace, txnId);
+      }
       if (_selectedObservationId != null) {
         store.removeCardBillAssignment(namespace, _selectedObservationId!);
       }
@@ -2505,7 +2552,10 @@ class _CommitmentDetailSheet extends ConsumerWidget {
                     // tombstone with the full identity or the next refresh
                     // would recreate the dismissed item.
                     await repository.save(
-                      commitment.copyWith(status: CommitmentStatus.dismissed),
+                      commitment.copyWith(
+                        status: CommitmentStatus.dismissed,
+                        isUserConfirmed: true,
+                      ),
                     );
                   } else {
                     await repository.delete(commitment.id);

@@ -176,6 +176,10 @@ void main() {
       fields: {'note': 'a'},
     );
     queue.recordFailure(queue.pending().first.clientSeq, 'offline');
+    // It waits out a backoff (H1-2) but is never discarded.
+    expect(queue.pendingCount, 1);
+    expect(queue.pending(), isEmpty);
+    queue.resetBackoff();
     expect(
       queue.pending(),
       hasLength(1),
@@ -277,5 +281,78 @@ void main() {
     a.lastServerSeq = 10;
     expect(b.pending(), isEmpty);
     expect(b.lastServerSeq, 0);
+  });
+
+  group('applied changes (in_flight = 2)', () {
+    int rows() =>
+        appDb.db.select('SELECT COUNT(*) AS n FROM sync_pending_changes').single['n'] as int;
+
+    void edit(String id) => queue.enqueueUpdate(
+      entity: 'transactions',
+      entityId: id,
+      fields: {'note': 'x'},
+    );
+
+    test('markApplied takes a change out of pending and the count', () {
+      edit('a');
+      edit('b');
+      final seq = queue.pending().first.clientSeq;
+      queue.markApplied(seq);
+      expect(queue.pending().map((c) => c.entityId), ['b']);
+      expect(queue.pendingCount, 1);
+      expect(rows(), 2, reason: 'still stored, so it keeps overlaying the row');
+    });
+
+    test('release never revives an applied change', () {
+      edit('a');
+      final changes = queue.pending();
+      queue.claim(changes);
+      queue.markApplied(changes.single.clientSeq);
+      queue.release(changes);
+      expect(queue.pending(), isEmpty);
+      expect(queue.appliedEntities(), {'transactions'});
+    });
+
+    test('a restart returns claimed changes to the queue, applied ones stay',
+        () {
+      edit('claimed');
+      edit('applied');
+      final both = queue.pending();
+      queue.claim(both);
+      queue.markApplied(both.last.clientSeq);
+      final restarted = SyncQueue(appDb);
+      expect(restarted.pending().map((c) => c.entityId), ['claimed']);
+      expect(restarted.appliedEntities(), {'transactions'});
+    });
+
+    test('purgeApplied removes only applied changes of those entities', () {
+      edit('a');
+      queue.enqueueUpdate(
+        entity: 'user_cards',
+        entityId: 'c',
+        fields: {'nickname': 'n'},
+      );
+      queue.enqueueUpdate(
+        entity: 'user_cards',
+        entityId: 'd',
+        fields: {'nickname': 'n'},
+      );
+      final all = queue.pending();
+      queue.markApplied(all[0].clientSeq);
+      queue.markApplied(all[1].clientSeq);
+      queue.purgeApplied(['transactions']);
+      expect(rows(), 2);
+      expect(queue.appliedEntities(), {'user_cards'});
+      // The unapplied card change is untouched either way.
+      expect(queue.pending().map((c) => c.entityId), ['d']);
+    });
+
+    test('a new edit of the same row after applying is a separate change', () {
+      edit('a');
+      queue.markApplied(queue.pending().single.clientSeq);
+      edit('a');
+      expect(queue.pending(), hasLength(1));
+      expect(rows(), 2);
+    });
   });
 }

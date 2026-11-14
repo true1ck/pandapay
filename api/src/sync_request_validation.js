@@ -1,5 +1,8 @@
 'use strict';
 
+const httpDbErrors = require('./http_db_errors');
+const syncPushHandlers = require('./sync_push_handlers');
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SYNC_OPS = new Set(['insert', 'update', 'delete']);
 const SYNC_REJECTION_DETAILS = Object.freeze({
@@ -12,10 +15,17 @@ const SYNC_REJECTION_DETAILS = Object.freeze({
   SYNC_TRANSACTION_DOMAIN_REQUIRED: 'Use the transaction status route for status changes or deletion.',
   SYNC_SPLIT_TOTAL_CONFLICT: 'amount is less than saved split shares; edit or clear the split first',
 });
+// uq_user_cards_active_identity (20261014120000): a last4 edit that collides
+// with another active wallet row for the same product. Permanent for this
+// payload, so it is a fixed, explainable rejection rather than a generic one.
+const SYNC_CARD_IDENTITY_DETAIL = 'Another active card already uses these last four digits.';
 
 /** Return only fixed, non-sensitive text for a failed sync item. */
 function syncRejectionDetail(err) {
   const code = err?.code;
+  if (code === '23505' && err?.constraint === 'uq_user_cards_active_identity') {
+    return SYNC_CARD_IDENTITY_DETAIL;
+  }
   return typeof code === 'string' && Object.hasOwn(SYNC_REJECTION_DETAILS, code)
     ? SYNC_REJECTION_DETAILS[code]
     : 'The change could not be applied.';
@@ -73,7 +83,13 @@ function validateSyncPushRequest(body) {
   if (!isUuid(body.deviceId)) return error('deviceId is required and must be a UUID');
   if (!Array.isArray(body.changes)) return error('changes must be an array');
   if (body.changes.length > 200) return error('too many changes in one push', 413);
-  return success({ deviceId: body.deviceId, changes: body.changes });
+  // `strict` is opt-in: the key is only present when the client asked for it,
+  // so the value for an old client is exactly what it always was.
+  return success({
+    deviceId: body.deviceId,
+    changes: body.changes,
+    ...(body.strict === true ? { strict: true } : {}),
+  });
 }
 
 /**
@@ -150,6 +166,15 @@ function validateSyncConflictId(id) {
 }
 
 module.exports = {
+  // The sync route fragments in index.js are evaluated in sandboxes that only
+  // see this module's exports (sync_transport_routes.test.js and the Postgres
+  // harness), so the helpers they call are re-exported here.
+  respondDbError: httpDbErrors.respondDbError,
+  createSyncPushContext: syncPushHandlers.createSyncPushContext,
+  processSyncPushItem: syncPushHandlers.processSyncPushItem,
+  syncDeviceExists: syncPushHandlers.syncDeviceExists,
+  respondUnknownSyncDevice: syncPushHandlers.respondUnknownSyncDevice,
+  SYNC_CARD_IDENTITY_DETAIL,
   validateSyncRegistration,
   validateSyncPushRequest,
   validateSyncPushChange,

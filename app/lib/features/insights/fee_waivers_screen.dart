@@ -5,6 +5,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import 'as_of_caption.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
@@ -86,6 +87,7 @@ class FeeWaiversScreen extends ConsumerWidget {
           shrinkWrap: embedded,
           physics: embedded ? const NeverScrollableScrollPhysics() : null,
           children: [
+            const AsOfLastSyncCaption(),
             for (final group in groups.values.where(
               (g) => cardId == null || g.userCard.id == cardId,
             ))

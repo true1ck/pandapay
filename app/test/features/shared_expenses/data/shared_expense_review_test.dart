@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:pandapay/features/shared_expenses/ui/shared_presentation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -192,4 +193,37 @@ void main() {
       expect(find.textContaining('no longer available'), findsOneWidget);
     },
   );
+  testWidgets(
+    'offline: approve and reject stay tappable and say the response is saved on this phone',
+    (tester) async {
+      runtime.offline = true;
+      await launch(tester);
+      expect(find.text('Approve this revision'), findsOneWidget);
+      expect(find.text('Reject this revision'), findsOneWidget);
+      final approve = find.text('Approve this revision');
+      await tester.ensureVisible(approve);
+      await tester.pumpAndSettle();
+      await tester.tap(approve);
+      await tester.pumpAndSettle();
+      expect(runtime.store.pendingCount, 1);
+      expect(find.text(sharedSavedOfflineCopy), findsOneWidget);
+      // Replayable: the same deterministic operation id, no second command.
+      expect(find.text('Approve this revision'), findsNothing);
+    },
+  );
+  testWidgets('with no saved capability flags the buttons are still offered', (
+    tester,
+  ) async {
+    runtime.capabilities = null;
+    runtime.offline = true;
+    await launch(tester);
+    expect(find.text('Approve this revision'), findsOneWidget);
+  });
+  testWidgets('a known-off proposals flag still hides the buttons', (
+    tester,
+  ) async {
+    runtime.capabilities = {'reads': true, 'proposals': false};
+    await launch(tester);
+    expect(find.text('Approve this revision'), findsNothing);
+  });
 }

@@ -960,14 +960,52 @@ DateTime? _chainedReceipt(
   return found;
 }
 
+/// [manualCopies] are the person's own saved copies of derived bills (a
+/// "mark paid" or "dismiss" on an SMS bill). A copy applies to the bill with
+/// the same id (`v2:<factId>`), else to the bill with the same identity
+/// ([smsBillIdentityForCommitment]) and due day, so the action survives the
+/// bill being re-projected under a new fact id. Dismissed bills are dropped.
 List<Commitment> billsFromFacts(
   Iterable<v2.Fact> facts,
   Iterable<v2.Event> events, {
   Map<String, String> transactionIdByEvent = const {},
-}) => [
-  for (final record in _billRecords(facts, events))
-    _commitment(record, transactionIdByEvent: transactionIdByEvent),
-];
+  Iterable<Commitment> manualCopies = const [],
+}) {
+  final copies = manualCopies.toList();
+  Commitment? copyFor(Commitment bill) {
+    if (copies.isEmpty) return null;
+    for (final c in copies) {
+      if (c.id == bill.id) return c;
+    }
+    final identity = smsBillIdentityForCommitment(bill);
+    for (final c in copies) {
+      if (smsBillIdentityForCommitment(c) == identity &&
+          c.dueOn.year == bill.dueOn.year &&
+          c.dueOn.month == bill.dueOn.month &&
+          c.dueOn.day == bill.dueOn.day) {
+        return c;
+      }
+    }
+    return null;
+  }
+
+  final out = <Commitment>[];
+  for (final record in _billRecords(facts, events)) {
+    final bill = _commitment(record, transactionIdByEvent: transactionIdByEvent);
+    final copy = copyFor(bill);
+    if (copy == null) {
+      out.add(bill);
+    } else if (copy.status == CommitmentStatus.dismissed) {
+      continue;
+    } else if (copy.status == CommitmentStatus.paid &&
+        bill.status != CommitmentStatus.paid) {
+      out.add(bill.copyWith(status: CommitmentStatus.paid, paidOn: copy.paidOn));
+    } else {
+      out.add(bill);
+    }
+  }
+  return out;
+}
 Commitment _commitment(
   _BillRecord record, {
   Map<String, String> transactionIdByEvent = const {},

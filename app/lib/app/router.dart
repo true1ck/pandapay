@@ -6,6 +6,7 @@ import '../features/insights/subscriptions_screen.dart';
 import '../features/sms_v2/ui/ledger_screens.dart';
 import '../features/shared_expenses/data/shared_invitations.dart'
     show splitJoinLocationForUri;
+import '../features/notifications/scheduled_reminders.dart' show reminderLifecycleProvider;
 import '../features/shared_expenses/runtime/shared_providers.dart';
 import '../features/shared_expenses/runtime/shared_join_route.dart';
 import '../features/shared_expenses/runtime/shared_routes.dart';
@@ -1376,6 +1377,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
       // points-expiry/monthly-report/needs-review notifications. Same "read
       // once from the shell" reasoning as everything else on this list.
       ref.watch(notificationTriggerLifecycleProvider);
+      ref.watch(reminderLifecycleProvider); // WP-C14
       ref.watch(smsBackgroundFlushProvider);
       ref.watch(smsListenerLifecycleProvider);
       ref.watch(iosSmsIntakeLifecycleProvider);

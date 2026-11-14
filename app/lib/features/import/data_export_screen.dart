@@ -12,12 +12,15 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/local/financial_store.dart' show TransactionQuery;
+import '../../data/local_export.dart';
+import '../../data/user_cards_repository.dart' show UserCard;
 
 /// ui-spec.md F6 Data Export. "Your data is yours."
 ///
-/// CSV/JSON exports come from the authenticated API. PDF is generated locally
-/// from the CSV rows, keeping the server format-agnostic while still giving
-/// the user a shareable document.
+/// CSV/JSON/PDF are all built locally from the stored rows (WP-C10), so the
+/// export works offline and includes unsynced changes. The JSON/CSV layout
+/// matches the server's `GET /export`; PDF is rendered from the CSV rows.
 class DataExportScreen extends ConsumerStatefulWidget {
   const DataExportScreen({super.key});
 
@@ -35,21 +38,30 @@ class _DataExportScreenState extends ConsumerState<DataExportScreen> {
   String? _exportMime;
 
   Future<void> _generate() async {
-    final repo = ref.read(importRepositoryProvider);
-    if (repo == null) return;
+    if (ref.read(importRepositoryProvider) == null) return;
     setState(() {
       _generating = true;
       _preview = null;
       _exportBytes = null;
     });
     try {
-      // The API's canonical interchange formats are JSON and CSV. PDF is a
-      // presentation export built locally from the same CSV rows, so the
-      // server never needs a PDF-specific table schema.
+      // Built from the rows stored on this phone (works offline and includes
+      // changes not uploaded yet), in the same layout as the server export.
+      // PDF is a presentation of the CSV rows.
       final sourceFormat = _format == 'pdf' ? 'csv' : _format;
-      final (body, _, _) = await repo.fetchExport(
+      final cache = await ref.read(responseCacheProvider.future);
+      final snapshot = await cache.readTransactions(
+        ref.read(cacheNamespaceProvider),
+        const TransactionQuery(),
+      );
+      final cards = _scope == 'transactions'
+          ? const <UserCard>[]
+          : await ref.read(userCardsProvider.future);
+      final body = buildLocalExport(
         scope: _scope,
         format: sourceFormat,
+        transactions: snapshot?.rows ?? const [],
+        cards: cards,
       );
       final bytes = _format == 'pdf' ? _buildPdf(body) : utf8.encode(body);
       setState(() {
@@ -158,7 +170,7 @@ class _DataExportScreenState extends ConsumerState<DataExportScreen> {
               ),
               const SizedBox(height: AppSpace.sm),
               Text(
-                'Export a copy of your transactions and/or cards. Transaction exports include category, subcategory, tags, type, payment method, and notes when available. Nothing here is shared with anyone else.',
+                'Export a copy of your transactions and/or cards, built on this phone so it works offline and includes changes not uploaded yet. Transaction exports include category, subcategory, tags, type, payment method, and notes when available. Nothing here is shared with anyone else.',
                 style: BambooFonts.ui(13.5, color: BambooInk.ink500),
               ),
               const SizedBox(height: AppSpace.lg),

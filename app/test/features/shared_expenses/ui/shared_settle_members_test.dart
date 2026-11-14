@@ -224,7 +224,7 @@ void main() {
       await tap(tester, 'Check status');
       expect(runtime.store.pendingCount, 1);
       expect(
-        find.text('Saved on this device · waiting to sync'),
+        find.text("Saved on this phone. It will sync when you're online."),
         findsOneWidget,
       );
       expect(
@@ -349,7 +349,7 @@ void main() {
       expect(runtime.store.pendingCount, 1);
       expect(find.text('Payment confirmed'), findsNothing);
       expect(find.text('Confirm received'), findsNothing);
-      expect(find.text('Saved on this device · waiting to sync'), findsWidgets);
+      expect(find.text("Saved on this phone. It will sync when you're online."), findsWidgets);
       await expectLater(
         runtime.respondToSettlement(group, report, 'reject'),
         throwsA(isA<SharedLocalException>()),
@@ -597,6 +597,25 @@ void main() {
       await tap(tester, 'Record payment');
       expect(runtime.store.pendingCount, 0);
       expect(find.textContaining('1,00,00,000'), findsOneWidget);
+    },
+  );
+  testWidgets(
+    'offline: confirming a payment report is allowed and says it is saved on this phone',
+    (tester) async {
+      runtime.offline = true;
+      await show(
+        tester,
+        SharedSettlementsSheet(
+          runtime: runtime,
+          contextId: group,
+          groupName: 'Trip Group',
+        ),
+      );
+      expect(find.text('Confirm received'), findsOneWidget);
+      await tap(tester, 'Confirm received');
+      expect(runtime.store.pendingCount, 1);
+      expect(find.text(sharedSavedOfflineCopy), findsWidgets);
+      expect(find.text('Confirm received'), findsNothing);
     },
   );
 }

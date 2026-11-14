@@ -67,9 +67,52 @@ class NotificationPreferences {
       categoryBudgetExceeded: json['category_budget_exceeded'] as bool? ?? true,
       quietHoursStart: json['quiet_hours_start'] as String?,
       quietHoursEnd: json['quiet_hours_end'] as String?,
-      dailyCap: json['daily_cap'] is int ? json['daily_cap'] as int : int.parse(json['daily_cap'].toString()),
+      dailyCap: _dailyCapOf(json['daily_cap']),
     );
   }
+
+  /// What a brand-new account gets from GET /notification-preferences (the
+  /// server returns its own column defaults for a user with no row; these are
+  /// the same values: location and the monthly report opt-in, everything else
+  /// on, cap 3, no quiet hours). Used when there is neither a network nor a
+  /// cached copy, so local alerts still follow the conservative defaults.
+  static const NotificationPreferences defaults = NotificationPreferences(
+    categoryLocation: false,
+    categoryCaps: true,
+    categoryMilestones: true,
+    categoryFeeWaivers: true,
+    categoryBills: true,
+    categoryExpiry: true,
+    categoryMonthlyReport: false,
+    categoryNeedsReview: true,
+    dailyCap: _defaultDailyCap,
+  );
+
+  static const int _defaultDailyCap = 3;
+
+  static int _dailyCapOf(Object? raw) {
+    if (raw is int) return raw;
+    return int.tryParse('$raw') ?? _defaultDailyCap;
+  }
+
+  /// Snake_case column names, the same shape the server returns and
+  /// [fromJson] reads, so a copy can be kept in the local response cache.
+  Map<String, dynamic> toJson() => {
+    'category_location': categoryLocation,
+    'category_caps': categoryCaps,
+    'category_milestones': categoryMilestones,
+    'category_fee_waivers': categoryFeeWaivers,
+    'category_bills': categoryBills,
+    'category_expiry': categoryExpiry,
+    'category_monthly_report': categoryMonthlyReport,
+    'category_needs_review': categoryNeedsReview,
+    'category_transactions': categoryTransactions,
+    'category_budget_warning': categoryBudgetWarning,
+    'category_budget_exceeded': categoryBudgetExceeded,
+    'quiet_hours_start': quietHoursStart,
+    'quiet_hours_end': quietHoursEnd,
+    'daily_cap': dailyCap,
+  };
 }
 
 /// One row from `notification_muted_merchants`, joined with the merchant's
@@ -88,6 +131,12 @@ class MutedMerchant {
       merchantName: json['merchant_name'] as String? ?? 'Unknown merchant',
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'merchant_id': merchantId,
+    'muted_at': mutedAt.toUtc().toIso8601String(),
+    'merchant_name': merchantName,
+  };
 }
 
 class NotificationPreferencesRepository {

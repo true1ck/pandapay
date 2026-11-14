@@ -82,10 +82,14 @@ final sharedExpensesLifecycleProvider = Provider.autoDispose<void>((ref) {
   final runtime = value.valueOrNull;
   if (runtime == null) return;
   void refresh() => unawaited(runtime.refresh());
-  final observer = _SharedResumeObserver(refresh);
+  // Coming back to the app or the network must not wait out a backoff earned
+  // while it was away; `reconnect` never throws. The timer below does not do
+  // this: it keeps honouring the backoff.
+  void reconnect() => unawaited(runtime.reconnect());
+  final observer = _SharedResumeObserver(reconnect);
   WidgetsBinding.instance.addObserver(observer);
   final subscription = Connectivity().onConnectivityChanged.listen((values) {
-    if (!values.contains(ConnectivityResult.none)) refresh();
+    if (!values.contains(ConnectivityResult.none)) reconnect();
   });
   // Retry backoff is durable; this only schedules a small bounded attempt.
   final timer = Timer.periodic(const Duration(seconds: 45), (_) {
@@ -99,6 +103,30 @@ final sharedExpensesLifecycleProvider = Provider.autoDispose<void>((ref) {
     unawaited(subscription.cancel());
     timer.cancel();
   });
+});
+
+/// How many saved Split changes the server refused or kept failing on. Quietly
+/// 0 whenever it cannot be read. The Split hub shows it as "not synced".
+final sharedAttentionCountProvider = StreamProvider.autoDispose<int>((ref) {
+  if (!ref.watch(sharedExpensesEnabledProvider)) return Stream.value(0);
+  final runtime = ref.watch(sharedExpensesRuntimeProvider).valueOrNull;
+  if (runtime == null) return Stream.value(0);
+  final counts = StreamController<int>();
+  void changed() {
+    try {
+      counts.add(runtime.attentionCount);
+    } catch (_) {
+      counts.add(0);
+    }
+  }
+
+  runtime.addListener(changed);
+  changed();
+  ref.onDispose(() {
+    runtime.removeListener(changed);
+    unawaited(counts.close());
+  });
+  return counts.stream;
 });
 
 /// Invites for me plus join requests waiting on me, shown as a badge on the

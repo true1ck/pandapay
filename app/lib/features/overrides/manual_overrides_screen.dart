@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/design/saved_offline.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
@@ -9,6 +10,7 @@ import '../../data/api_exception.dart';
 import '../../data/card_overrides_repository.dart';
 import '../../data/catalogue_repository.dart' show SpendCategory;
 import '../../data/user_cards_repository.dart' show UserCard;
+import 'override_local_first.dart';
 
 /// B8 ("was missing" per ui-spec.md): view and manage every "always use X
 /// here" rule.
@@ -180,29 +182,13 @@ class _OverrideTile extends ConsumerWidget {
       return;
     }
     try {
-      await repo.setEnabled(rule.id, !rule.isEnabled);
-      ref.invalidate(cardOverridesProvider);
-      ref.invalidate(rankedRecommendationsProvider);
-    } catch (err) {
-      // is_enabled is a plain field update on a row that already exists —
-      // pandapay.sync_fields_for('card_overrides') allows it, so this
-      // queues the same way edit_transaction_screen.dart's _save does.
-      final offline = ref.read(isOnlineProvider).valueOrNull == false;
-      if (offline) {
-        final queue = await ref.read(syncQueueProvider.future);
-        queue.enqueueUpdate(
-          entity: 'card_overrides',
-          entityId: rule.id,
-          fields: {'is_enabled': !rule.isEnabled},
-        );
-        ref.invalidate(pendingSyncCountProvider);
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Saved offline — will sync when you reconnect.')),
-          );
-        }
-        return;
+      // WP-C6: a reachable server is asked first; otherwise the change is
+      // queued and the list shows it at once (queued-work overlay).
+      final saved = await updateOverrideLocalFirst(ref, rule, isEnabled: !rule.isEnabled);
+      if (!saved && context.mounted) {
+        showSavedOfflineSnack(context);
       }
+    } catch (err) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(err))));
       }
@@ -241,9 +227,12 @@ class _OverrideTile extends ConsumerWidget {
       return;
     }
     try {
-      await repo.delete(rule.id);
-      ref.invalidate(cardOverridesProvider);
-      ref.invalidate(rankedRecommendationsProvider);
+      final saved = await deleteOverrideLocalFirst(ref, rule.id);
+      if (!saved && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Deleted — will sync when you reconnect.')),
+        );
+      }
     } catch (err) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(err))));
@@ -297,17 +286,24 @@ class _CreateOverrideSheetState extends ConsumerState<_CreateOverrideSheet> {
     }
     setState(() => _saving = true);
     try {
-      await repo.createOverride(
-        userCardId: _selectedUserCardId!,
+      final saved = await createOverrideLocalFirst(
+        ref,
+        card: widget.userCards.firstWhere((c) => c.id == _selectedUserCardId),
         scope: _scope,
         vpa: _scope == OverrideScope.vpa ? _vpaController.text.trim() : null,
         merchantName: _scope == OverrideScope.merchantName ? _merchantController.text.trim() : null,
         categoryId: _scope == OverrideScope.category ? _selectedCategoryId : null,
+        categoryName: _scope == OverrideScope.category
+            ? widget.categories.where((c) => c.id == _selectedCategoryId).firstOrNull?.name
+            : null,
         reasonNote: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
       );
-      ref.invalidate(cardOverridesProvider);
-      ref.invalidate(rankedRecommendationsProvider);
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) {
+        if (!saved) {
+          showSavedOfflineSnack(context);
+        }
+        Navigator.of(context).pop();
+      }
     } catch (err) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(err))));
@@ -511,40 +507,22 @@ class _EditOverrideSheetState extends ConsumerState<_EditOverrideSheet> {
     }
     setState(() => _saving = true);
     try {
-      await repo.updateOverride(
-        widget.rule.id,
+      // Always sent (even empty) so clearing the note field actually clears
+      // it server-side — see updateOverride's doc comment. A reachable server
+      // is asked first; otherwise it is queued and shown at once (WP-C6).
+      final saved = await updateOverrideLocalFirst(
+        ref,
+        widget.rule,
         userCardId: _selectedUserCardId,
-        // Always sent (even empty) so clearing the note field actually
-        // clears it server-side — see updateOverride's doc comment.
         reasonNote: _noteController.text.trim(),
       );
-      ref.invalidate(cardOverridesProvider);
-      ref.invalidate(rankedRecommendationsProvider);
-      if (mounted) Navigator.of(context).pop();
-    } catch (err) {
-      // user_card_id and reason_note are both plain field updates on a row
-      // that already exists — pandapay.sync_fields_for('card_overrides')
-      // allows both — so this queues the same way _toggle above does.
-      final offline = ref.read(isOnlineProvider).valueOrNull == false;
-      if (offline) {
-        final queue = await ref.read(syncQueueProvider.future);
-        queue.enqueueUpdate(
-          entity: 'card_overrides',
-          entityId: widget.rule.id,
-          fields: {
-            'user_card_id': _selectedUserCardId,
-            'reason_note': _noteController.text.trim(),
-          },
-        );
-        ref.invalidate(pendingSyncCountProvider);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Saved offline — will sync when you reconnect.')),
-          );
-          Navigator.of(context).pop();
+      if (mounted) {
+        if (!saved) {
+          showSavedOfflineSnack(context);
         }
-        return;
+        Navigator.of(context).pop();
       }
+    } catch (err) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(err))));
       }

@@ -1,6 +1,12 @@
 'use strict';
 const { safeErrorCode } = require('./safeErrorCode');
 const { enqueueNotification } = require('./notification_outbox');
+const { isUuid } = require('./http_db_errors');
+
+// Mirrors notifications_category_check (20261026110000); anything else used to
+// surface as a 500 CHECK violation and poison the client's retry queue.
+const NOTIFICATION_CATEGORIES = new Set(['location', 'caps', 'milestones', 'fee_waivers', 'bills', 'expiry',
+  'monthly_report', 'needs_review', 'streak', 'card_added', 'budget_warning', 'budget_exceeded', 'transactions']);
 
 function createNotificationPostHandler({ withUserClient, notificationService, outboxEnabled = false,
   enqueue = enqueueNotification, logger = console } = {}) {
@@ -8,7 +14,8 @@ function createNotificationPostHandler({ withUserClient, notificationService, ou
       || typeof notificationService?.send !== 'function' || typeof enqueue !== 'function'
       || typeof outboxEnabled !== 'boolean') throw new TypeError('notification handler dependencies required');
   return async (req, res) => {
-  const { category, severity, title, body, deepLink, dedupeKey, sendRemote = false } = req.body || {};
+  const { category, severity, title, body, deepLink, dedupeKey, sendRemote = false,
+    clientMutationId, createdAt } = req.body || {};
   if (!category || !title) {
     return res.status(400).json({ error: 'category and title are required' });
   }
@@ -21,6 +28,17 @@ function createNotificationPostHandler({ withUserClient, notificationService, ou
       || (deepLink != null && (typeof deepLink !== 'string' || Buffer.byteLength(deepLink) > 1024)))) {
     return res.status(400).json({ error: 'invalid_notification_payload' });
   }
+  if (typeof category !== 'string' || !NOTIFICATION_CATEGORIES.has(category)) {
+    return res.status(422).json({ error: 'invalid_category' });
+  }
+  if (clientMutationId !== undefined && clientMutationId !== null && !isUuid(clientMutationId)) {
+    return res.status(400).json({ error: 'invalid_id' });
+  }
+  if (createdAt !== undefined && createdAt !== null &&
+      (typeof createdAt !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(createdAt) || Number.isNaN(Date.parse(createdAt)))) {
+    return res.status(400).json({ error: 'invalid_created_at' });
+  }
+  const mutationId = clientMutationId || null;
   // 'streak' and 'card_added' have no preference column — they're in-app
   // consequences of the user's own action, not push-style interruptions.
   const PREFERENCE_COLUMN = {
@@ -51,6 +69,30 @@ function createNotificationPostHandler({ withUserClient, notificationService, ou
         // anything; 0019's own column defaults are the intent, so deliver.
         if (pref.rowCount > 0 && pref.rows[0].enabled === false) return null;
       }
+      if (mutationId) {
+        // Idempotent path: a replay returns the stored row untouched (read_at and
+        // created_at are NOT reset). created_at is the client's occurrence time,
+        // clamped to [now - 8 days, now] so it can neither hide nor future-date a row.
+        const ins = await client.query(
+          `INSERT INTO notifications (profile_id, category, severity, title, body, deep_link, dedupe_key, client_mutation_id, created_at)
+           VALUES ($1, $2, COALESCE($3, 'info'), $4, $5, $6, $7, $8,
+                   LEAST(GREATEST(COALESCE($9::timestamptz, now()), now() - interval '8 days'), now()))
+           ON CONFLICT DO NOTHING
+           RETURNING *`,
+          [req.userId, category, severity, title, body || null, deepLink || null, dedupeKey || null, mutationId, createdAt || null]
+        );
+        if (ins.rows.length) {
+          if (outboxEnabled && sendRemote) await enqueue(client, ins.rows[0].id);
+          return { row: ins.rows[0], replayed: false };
+        }
+        const existing = await client.query(
+          `SELECT * FROM notifications WHERE profile_id = $1
+              AND (client_mutation_id = $2 OR ($3::text IS NOT NULL AND dedupe_key = $3))
+            ORDER BY (client_mutation_id = $2) DESC NULLS LAST LIMIT 1`,
+          [req.userId, mutationId, dedupeKey || null]
+        );
+        return { row: existing.rows[0], replayed: true };
+      }
       const result = await client.query(
         `INSERT INTO notifications (profile_id, category, severity, title, body, deep_link, dedupe_key)
          VALUES ($1, $2, COALESCE($3, 'info'), $4, $5, $6, $7)
@@ -65,28 +107,31 @@ function createNotificationPostHandler({ withUserClient, notificationService, ou
         [req.userId, category, severity, title, body || null, deepLink || null, dedupeKey || null]
       );
       if (outboxEnabled && sendRemote) await enqueue(client, result.rows[0].id);
-      return result.rows[0];
+      const { client_mutation_id: _omit, ...plain } = result.rows[0];
+      return { row: plain, replayed: false };
     });
     // 204 (not an error) when the user has that category muted — the caller
     // asked for a delivery and got a definitive "not delivered, by choice".
     if (!inserted) return res.status(204).end();
+    const row = inserted.row;
 
     // The enabled outbox committed atomically with the inbox. During the
     // disabled compatibility path, remote delivery remains best effort.
+    if (inserted.replayed) return res.status(200).json({ notification: row, replayed: true });
     if (sendRemote && !outboxEnabled && notificationService.isConfigured()) {
       notificationService
         .send({
           subscriberId: req.userId,
-          title: inserted.title,
-          body: inserted.body,
-          category: inserted.category,
-          severity: inserted.severity,
-          deepLink: inserted.deep_link,
-          dedupeKey: inserted.dedupe_key,
+          title: row.title,
+          body: row.body,
+          category: row.category,
+          severity: row.severity,
+          deepLink: row.deep_link,
+          dedupeKey: row.dedupe_key,
         })
         .catch((err) => logger.error('remote notification delivery failed', safeErrorCode(err)));
     }
-    res.status(201).json({ notification: inserted });
+    res.status(201).json({ notification: row });
   } catch (err) {
     logger.error('POST /notifications error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });

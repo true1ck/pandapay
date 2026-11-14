@@ -1,6 +1,8 @@
 import '../features/sms_v2/providers/data_providers.dart' as sms_v2_data;
 import '../features/sms_v2/instruments/bank_summary_adapter.dart';
 import '../features/sms_v2/providers/runtime_provider.dart';
+import '../features/import/statement_import_continuation_provider.dart' show statementImportAutoResumeProvider;
+import '../features/sync_state/user_state_pull.dart' show userStatePullProvider;
 import '../features/consent/sms_reading_consent.dart';
 import '../features/sms_v2/ledger/providers.dart';
 import '../features/sms_v2/ledger/adapters.dart' as sms_v2_adapters;
@@ -14,6 +16,9 @@ import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:crypto/crypto.dart';
+import '../data/local/subscription_overrides_store.dart';
+import '../features/insights/insights_local_first.dart';
+import '../features/insights/local_budgets.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -31,6 +36,9 @@ import '../data/analytics.dart';
 import '../data/app_status_repository.dart';
 import '../data/api_exception.dart';
 import '../data/auth_api.dart';
+import '../data/connectivity/known_connectivity.dart';
+import '../data/connectivity/online_stream.dart';
+import '../data/connectivity/reachability.dart';
 import '../data/product_access_api.dart';
 import '../data/api_request_headers_client.dart';
 import '../data/authenticated_http_client.dart';
@@ -60,6 +68,7 @@ import '../data/local/sms_import_store.dart';
 import '../data/local/sync_queue.dart';
 import '../data/local_first/local_first_cards.dart';
 import '../data/local_first/command_outbox.dart';
+import '../data/local_first/command_outcomes.dart';
 import '../data/local_first/pending_overlays.dart';
 import '../data/local/duplicate_resolution_outbox.dart';
 import '../data/local/transaction_outbox_repository.dart';
@@ -92,6 +101,8 @@ import '../data/spend_reports_repository.dart';
 import '../data/spending_selection.dart';
 import '../data/subscription_credits_repository.dart';
 import '../data/sync_api.dart';
+import '../data/local/queue_registry.dart';
+import '../data/session_end_reason.dart';
 import '../data/token_store.dart';
 import '../data/upi_payment_service.dart';
 import '../data/user_cards_repository.dart';
@@ -102,7 +113,15 @@ import '../features/geofence/geofence_monitor_service.dart';
 import '../features/geofence/background_alerts_controller.dart';
 import '../features/geofence/nearby_merchants_repository.dart';
 import '../features/home_widget/home_widget_service.dart';
+import '../features/payments/payment_method_command.dart';
+import '../features/account/account_commands.dart';
+import '../features/account/account_local_first.dart' show kAccountLocalFirst;
+import '../features/notifications/notification_read.dart';
+import '../features/notifications/notification_commands.dart';
+import '../features/cards/add_card_local_first.dart';
+import '../data/local_first/card_overrides_overlay.dart';
 import '../features/notifications/notification_gate.dart';
+import '../features/notifications/notification_local_state.dart';
 import '../features/notifications/notification_triggers.dart';
 import '../features/notifications/push_notification_service.dart';
 import '../features/sms_import/sms_listener_service.dart';
@@ -288,6 +307,10 @@ final sessionRefreshCoordinatorProvider = Provider<SessionRefreshCoordinator>(
     readAccessToken: () => ref.read(accessTokenProvider),
     writeAccessToken: (token) =>
         ref.read(accessTokenProvider.notifier).state = token,
+    // WP-C3: tell the listeners of the `signed-out` flip that this was the
+    // server rejecting the session, not the person signing out.
+    onSessionRejected: () =>
+        ref.read(sessionEndReasonProvider).markSessionRejected(),
   ),
 );
 
@@ -482,6 +505,12 @@ final categorySpendProvider = FutureProvider<List<CategorySpend>>((ref) async {
       if (_isAuthenticationFailure(error)) {
         return const [];
       }
+      // WP-C16: no snapshot and the server is unreachable: derive the same
+      // trailing-12-month totals from the transactions saved on this phone.
+      if (cached == null && isOfflineLike(error)) {
+        final local = await _localCategorySpend(ref);
+        if (local != null) return local;
+      }
       rethrow;
     }
     try {
@@ -492,6 +521,33 @@ final categorySpendProvider = FutureProvider<List<CategorySpend>>((ref) async {
     }
   }
 });
+
+/// Trailing-12-month spend by category from locally saved transactions, or
+/// null when nothing has ever been saved (so the caller keeps its error).
+Future<List<CategorySpend>?> _localCategorySpend(Ref ref) async {
+  final rows = await _cachedTransactionsForReports(ref);
+  if (rows == null) return null;
+  final now = DateTime.now();
+  final spend = _activeLocalRows(
+    rows,
+    DateTime(now.year, now.month - 12, now.day),
+    now.add(const Duration(days: 1)),
+  ).where((row) => row.countsAsSpend);
+  final groups = <String?, List<TransactionEntry>>{};
+  for (final row in spend) {
+    (groups[row.categoryId] ??= []).add(row);
+  }
+  return [
+    for (final entry in groups.entries)
+      CategorySpend(
+        categoryId: entry.key,
+        categorySlug: null,
+        categoryName: entry.value.first.categoryName,
+        totalSpend: _sumLocalAmounts(entry.value),
+        txnCount: entry.value.length,
+      ),
+  ]..sort((a, b) => b.totalSpend.paise.compareTo(a.totalSpend.paise));
+}
 
 final acquisitionRecommenderProvider = Provider<CardAcquisitionRecommender>((
   ref,
@@ -681,6 +737,16 @@ final pendingSyncCountProvider = FutureProvider<int>((ref) async {
   return (await ref.watch(syncQueueProvider.future)).pendingCount;
 });
 
+/// Counts of queued work that needs a look, read through [QueueRegistry]
+/// (WP-C3, Q-11) so every queue is covered, and a change the server already
+/// applied (waiting only for its stored copy) is not counted.
+///
+/// Keys: `sms` (messages waiting to be read), `blocked` (refused for good in
+/// the three queues the recovery screen can retry: edits, duplicate decisions,
+/// queued commands), `parked` (refused for good in every other queue),
+/// `awaiting` (held until something else happens, e.g. a sign-in), `legacy`
+/// (rows from before accounts were namespaced). The first, second and last
+/// keep their old meaning.
 final pendingRecoveryStatusProvider = FutureProvider<Map<String, int>>((
   ref,
 ) async {
@@ -688,23 +754,37 @@ final pendingRecoveryStatusProvider = FutureProvider<Map<String, int>>((
   final namespace = ref.watch(cacheNamespaceProvider);
   final cache = await ref.watch(responseCacheProvider.future);
   final db = cache.financialStore.database;
+  final registry = QueueRegistry(db);
   int count(String table, String where, List<Object?> args) =>
       db.db
               .select('SELECT COUNT(*) AS n FROM $table WHERE $where', args)
               .single['n']
           as int;
+  const retryable = {
+    'sync_pending_changes',
+    'duplicate_resolution_outbox',
+    // Commands the server refused (for example ignoring a transaction it
+    // no longer has) stay visible here instead of failing silently.
+    'command_outbox',
+  };
+  var blocked = 0;
+  var parked = 0;
+  var awaiting = 0;
+  for (final spec in registry.queues) {
+    if (spec.kind != QueueKind.outbox) continue;
+    final counts = registry.countsFor(spec.name, namespace);
+    if (retryable.contains(spec.name)) {
+      blocked += counts.parked;
+    } else {
+      parked += counts.parked;
+    }
+    awaiting += counts.blocked;
+  }
   return {
-    'sms': count('sms_intake', 'namespace=?', [namespace]),
-    'blocked':
-        count('sync_pending_changes', 'namespace=? AND attempts>=5', [
-          namespace,
-        ]) +
-        count('duplicate_resolution_outbox', 'namespace=? AND attempts>=5', [
-          namespace,
-        ]) +
-        // Commands the server refused (for example ignoring a transaction it
-        // no longer has) stay visible here instead of failing silently.
-        count('command_outbox', 'namespace=? AND parked=1', [namespace]),
+    'sms': registry.countsFor('sms_intake', namespace).total,
+    'blocked': blocked,
+    'parked': parked,
+    'awaiting': awaiting,
     'legacy':
         count('sync_pending_changes', "namespace='legacy'", []) +
         count('transaction_outbox_entries', "namespace='legacy'", []) +
@@ -935,6 +1015,11 @@ class SessionRefreshCoordinator {
   final String? Function() readAccessToken;
   final void Function(String?) writeAccessToken;
 
+  /// Called just before the rejected session's access token is dropped, so
+  /// whoever reacts to the account becoming `signed-out` can tell a rejected
+  /// session from an explicit sign-out (see `session_end_reason.dart`).
+  final void Function()? onSessionRejected;
+
   Future<String?>? _refreshInProgress;
 
   SessionRefreshCoordinator({
@@ -942,6 +1027,7 @@ class SessionRefreshCoordinator {
     required this.authApi,
     required this.readAccessToken,
     required this.writeAccessToken,
+    this.onSessionRejected,
   });
 
   Future<String?> refresh({String? expectedAccessToken}) {
@@ -1007,6 +1093,12 @@ class SessionRefreshCoordinator {
         // account". Clear only the unusable tokens; account-scoped local data
         // stays in SQLite and becomes available again after the same user
         // signs in.
+        //
+        // WP-C3 (L-01): this comment used to be contradicted by the code,
+        // because dropping the access token flipped the account namespace to
+        // `signed-out` and `cacheLifecycleProvider` then deleted the account's
+        // local data. The reason is recorded first so that flip keeps it.
+        onSessionRejected?.call();
         try {
           await store.clear();
         } catch (_) {
@@ -1349,14 +1441,21 @@ final commitmentsProvider = FutureProvider<List<Commitment>>((ref) async {
   if (ref.watch(smsV2ReportingEnabledProvider)) {
     final model = await ref.watch(smsV2LedgerReadModelProvider.future);
     final manual = await ref.watch(commitmentsRepositoryProvider).fetchAll();
+    // WP-C7: a saved 'v2:' copy of a derived bill is the person's mark-paid /
+    // dismiss; it overrides the derived bill instead of listing twice.
+    bool isCopy(Commitment c) =>
+        c.source == CommitmentSource.sms && c.id.startsWith('v2:');
     return [
       ...manual.where(
-        (item) => item.source != CommitmentSource.sms || item.isUserConfirmed,
+        (item) =>
+            !isCopy(item) &&
+            (item.source != CommitmentSource.sms || item.isUserConfirmed),
       ),
       ...sms_v2_adapters.billsFromFacts(
         model.facts,
         model.ledger.events,
         transactionIdByEvent: model.transactionIdByEvent,
+        manualCopies: manual.where((c) => isCopy(c) && c.isUserConfirmed),
       ),
     ];
   }
@@ -1755,7 +1854,7 @@ final profileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   // Offline with nothing cached: a profile row is display metadata, not the
   // session itself. Render the signed-in shell instead of waiting out a
   // request that cannot succeed.
-  if (_isKnownOffline()) return null;
+  if (_skipBackgroundRead(ref)) return null;
 
   try {
     final profile = await fetch();
@@ -1802,6 +1901,20 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
       ref
           .read(transactionTagsProvider)
           ?.remapTransaction('local-outbox:$mutationId', transactionId);
+      // A receipt saved offline under the queued alias follows the
+      // transaction to its real id (WP-C5). Fire and forget: a failure leaves
+      // the receipt under the alias and the next delivery repeat retries it.
+      unawaited(
+        ref
+            .read(transactionAttachmentsRepositoryProvider.future)
+            .then(
+              (attachments) => attachments.remapTransaction(
+                'local-outbox:$mutationId',
+                transactionId,
+              ),
+            )
+            .catchError((Object _) {}),
+      );
     },
   );
   return repository;
@@ -2006,9 +2119,25 @@ final selectedSpendQueryProvider = StateProvider<SpendReportQuery>(
 /// watch this; the server list underneath is [budgetsServerProvider].
 final budgetsProvider = FutureProvider<List<BudgetStatus>>((ref) async {
   ref.watch(commandOutboxRevisionProvider);
-  final base = await ref.watch(budgetsServerProvider.future);
+  // WP-C7: budgets created on the phone (spent computed locally) join the
+  // server list; with no server list at all they are the source.
+  var server = const <BudgetStatus>[];
+  Object? serverError;
+  try {
+    server = await ref.watch(budgetsServerProvider.future);
+  } catch (error) {
+    if (!kInsightsLocalFirst) rethrow;
+    serverError = error;
+  }
+  final local = kInsightsLocalFirst
+      ? await localBudgetsFor(ref, server)
+      : const <BudgetStatus>[];
+  if (serverError != null && local.isEmpty) throw serverError;
   final commands = await ref.watch(commandOutboxProvider.future);
-  return overlayBudgets(base, commands.pendingOf(OverlayCommand.budgetKinds));
+  return overlayBudgets([
+    ...server,
+    ...local,
+  ], commands.pendingOf(OverlayCommand.budgetKinds));
 });
 
 final budgetsServerProvider = FutureProvider<List<BudgetStatus>>((ref) async {
@@ -2073,10 +2202,22 @@ recurringReportProvider = FutureProvider<RecurringReport?>((ref) async {
   final base = await ref.watch(recurringReportServerProvider.future);
   if (base == null) return null;
   final commands = await ref.watch(commandOutboxProvider.future);
-  return overlayRecurring(
+  final overlaid = overlayRecurring(
     base,
     commands.pendingOf(OverlayCommand.recurringKinds),
   );
+  // WP-C7: device-local hide/edit/manual-add (SMS-v2 and projection series
+  // have no server row, so they never go through the command outbox).
+  try {
+    final cache = await ref.watch(responseCacheProvider.future);
+    final ns = ref.watch(cacheNamespaceProvider);
+    return applySubscriptionOverrides(
+      overlaid,
+      SubscriptionOverridesStore(cache.financialStore.database, ns).all(),
+    );
+  } catch (_) {
+    return overlaid;
+  }
 });
 
 /// The saved subscription rows (see `SubscriptionStore`): the one source every
@@ -2507,6 +2648,7 @@ final cardOverridesRepositoryProvider = Provider<CardOverridesRepository?>((
 final cardOverridesProvider = FutureProvider<List<CardOverride>>((ref) async {
   final repo = ref.watch(cardOverridesRepositoryProvider);
   if (repo == null) return const [];
+  ref.watch(commandOutboxRevisionProvider);
   final cache = await _cacheOrNull(ref);
   final cacheKey = _scopedCacheKey(ref, _cardOverridesCacheKey);
   final cached = await cache?.get(cacheKey);
@@ -2524,6 +2666,49 @@ final cardOverridesProvider = FutureProvider<List<CardOverride>>((ref) async {
     }
   }
 
+  // WP-C6 (W-08): queued creates, deletes and edits are shown on top of
+  // whatever list this returns, so a change made offline is visible at once.
+  Future<List<CardOverride>> withQueued(List<CardOverride> base) async {
+    try {
+      final commands = await ref.read(commandOutboxProvider.future);
+      final db = cache?.financialStore.database.db;
+      if (db == null) return base;
+      final labels = {
+        for (final c in ref.read(userCardsProvider).valueOrNull ?? const <UserCard>[])
+          c.id: (name: c.cardName, nickname: c.nickname),
+      };
+      return overlayCardOverrides(
+        base,
+        commands.pendingOf({CardCommand.createOverride, CardCommand.deleteOverride}),
+        pendingOverrideEdits(db, ref.read(cacheNamespaceProvider)),
+        cardLabels: labels,
+      );
+    } catch (_) {
+      return base;
+    }
+  }
+
+  // Cache first: a saved list is returned at once and refreshed in the
+  // background (never a 15 s wait on dead Wi-Fi); with nothing saved and the
+  // server known to be unreachable the list is just the queued rules.
+  if (kCardsLocalFirst) {
+    final saved = decodeCached();
+    if (saved != null || serverKnownUnreachable(ref)) {
+      if (saved != null && !serverKnownUnreachable(ref)) {
+        final at = await cache?.fetchedAt(cacheKey);
+        if (at == null ||
+            DateTime.now().difference(at) > const Duration(seconds: 30)) {
+          _backgroundDisplayRefresh(ref, cache, cacheKey, repo.fetchOverrides, (
+            List<CardOverride> overrides,
+          ) {
+            return {'overrides': overrides.map((o) => o.toJson()).toList()};
+          });
+        }
+      }
+      return withQueued(saved ?? const []);
+    }
+  }
+
   // After a live edit/delete/toggle invalidates this provider, fetch first so
   // the screen cannot immediately rehydrate the pre-mutation snapshot.
   // Cached data remains the fallback for an offline or unavailable API.
@@ -2538,16 +2723,44 @@ final cardOverridesProvider = FutureProvider<List<CardOverride>>((ref) async {
       // A local-database write must never turn a successful override fetch
       // into an error. The next successful fetch will repair the snapshot.
     }
-    return overrides;
+    return withQueued(overrides);
   } catch (error) {
     if (!_canUseReadCache(error)) rethrow;
     // Overrides are an enhancement to ranking, not a prerequisite for
     // showing the wallet. If this is the first signed-in request and there is
     // no cache yet, fail open with the base catalogue instead of replacing
     // Home with an error state while the API is unavailable.
-    return decodeCached() ?? const [];
+    return withQueued(decodeCached() ?? const []);
   }
 });
+
+/// One quiet background refresh per cache key (WP-C6): saves the fetched value
+/// and rebuilds the provider only when it differs from what is saved.
+void _backgroundDisplayRefresh<T>(
+  Ref ref,
+  ResponseCache? cache,
+  String key,
+  Future<T> Function() fetch,
+  Object? Function(T) encode,
+) {
+  if (cache == null || _backgroundDisplayRefreshes.containsKey(key)) return;
+  final namespace = ref.read(cacheNamespaceProvider);
+  var disposed = false;
+  ref.onDispose(() => disposed = true);
+  final work = fetch()
+      .timeout(_homeRequestTimeout)
+      .then((value) async {
+        if (disposed || ref.read(cacheNamespaceProvider) != namespace) return;
+        final next = jsonEncode(encode(value));
+        final before = await cache.get(key);
+        await cache.put(key, next);
+        if (!disposed && before != next) ref.invalidateSelf();
+      })
+      .catchError((Object _) {})
+      .whenComplete(() => _backgroundDisplayRefreshes.remove(key));
+  _backgroundDisplayRefreshes[key] = work;
+  unawaited(work);
+}
 
 /// Refreshes Home's small set of inputs without blocking its first frame.
 /// Read providers above are cache-first; this provider writes a fresh snapshot
@@ -2556,17 +2769,24 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
   final userRepo = ref.watch(userCardsRepositoryProvider);
   final cache = await _cacheOrNull(ref);
   if (cache == null) return;
+  // WP-C16: no refresh burst while the radio is down or the API is known
+  // unreachable; saved data stays on screen and nothing is invalidated.
+  if (_skipBackgroundRead(ref)) return;
+  var anyOk = false;
+  final startedAt = DateTime.now();
+  _lastHomeRefresh = (ref.read(cacheNamespaceProvider), startedAt);
 
   Future<void> refreshUserCards() async {
     if (userRepo == null) return;
     try {
       final cards = await userRepo.fetchUserCards().timeout(
-        _homeRequestTimeout,
+        _backgroundReadTimeout,
       );
       await cache.put(
         _scopedCacheKey(ref, _userCardsCacheKey),
         jsonEncode({'userCards': cards.map((c) => c.toJson()).toList()}),
       );
+      anyOk = true;
     } catch (_) {}
   }
 
@@ -2577,9 +2797,10 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
           .read(catalogueRepositoryProvider)
           .loader(
             cache: ResponseCacheCatalogueStore(cache),
-            timeout: _homeRequestTimeout,
+            timeout: _backgroundReadTimeout,
           )
           .refreshCache();
+      anyOk = true;
     } catch (_) {}
   }
 
@@ -2588,11 +2809,12 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
       final categories = await ref
           .read(categoryRepositoryProvider)
           .fetchCategories()
-          .timeout(_homeRequestTimeout);
+          .timeout(_backgroundReadTimeout);
       await cache.put(
         _categoriesCacheKey,
         jsonEncode({'categories': categories.map((c) => c.toJson()).toList()}),
       );
+      anyOk = true;
     } catch (_) {}
   }
 
@@ -2602,12 +2824,13 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
     if (overridesRepo == null) return;
     try {
       final overrides = await overridesRepo.fetchOverrides().timeout(
-        _homeRequestTimeout,
+        _backgroundReadTimeout,
       );
       await cache.put(
         _scopedCacheKey(ref, _cardOverridesCacheKey),
         jsonEncode({'overrides': overrides.map((o) => o.toJson()).toList()}),
       );
+      anyOk = true;
     } catch (_) {}
   }
 
@@ -2619,7 +2842,8 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
             anchor: DateTime.now().toUtc(),
             timeZone: ref.read(deviceTimeZoneProvider),
           )
-          .timeout(_homeRequestTimeout);
+          .timeout(_backgroundReadTimeout);
+      anyOk = true;
       if (summary != null) {
         await cache.put(
           _scopedCacheKey(ref, 'home_summary'),
@@ -2642,7 +2866,8 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
       // freshly fetched rows to every consumer rather than leaving an older
       // in-memory Activity result alive beside a newer SQLite snapshot.
       ref.invalidate(transactionsProvider);
-      await ref.read(transactionsProvider.future).timeout(_homeRequestTimeout);
+      await ref.read(transactionsProvider.future).timeout(_backgroundReadTimeout);
+      anyOk = true;
     } catch (_) {}
   }
 
@@ -2672,6 +2897,12 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
     refreshHomeSummary(),
     refreshTransactions(),
   ]);
+  if (!anyOk) {
+    // Every request failed: keep the snapshots on screen, and let a later
+    // reconnect refresh straight away instead of treating this as done.
+    _lastHomeRefresh = null;
+    return;
+  }
   ref.invalidate(userCardsProvider);
   ref.invalidate(catalogueProvider);
   ref.invalidate(categoriesProvider);
@@ -2696,6 +2927,12 @@ final displayDataSyncLifecycleProvider = Provider<void>((ref) {
     if (ref.read(isOnlineProvider).valueOrNull == false) return;
     final namespace = ref.read(cacheNamespaceProvider);
     final now = DateTime.now();
+    final homeRefresh = _lastHomeRefresh;
+    if (homeRefresh != null &&
+        homeRefresh.$1 == namespace &&
+        now.difference(homeRefresh.$2) < const Duration(seconds: 15)) {
+      return;
+    }
     if (!force &&
         lastNamespace == namespace &&
         lastStarted != null &&
@@ -2747,7 +2984,19 @@ final displayDataSyncLifecycleProvider = Provider<void>((ref) {
 /// and deliberately NOT cleared here.
 final cacheLifecycleProvider = Provider<void>((ref) {
   ref.listen<String>(cacheNamespaceProvider, (previous, next) async {
+    final endReason = ref.read(sessionEndReasonProvider);
+    if (previous == 'signed-out' && next != 'signed-out') {
+      // A session started again: forget how the last one ended.
+      endReason.clear();
+    }
     if (previous != 'signed-out' && next == 'signed-out') {
+      // WP-C3 (L-01, D10): only an explicit sign-out clears the account. A
+      // refresh token the server rejected clears the credentials, but the
+      // phone may hold edits and phone-only data the server has never seen;
+      // they wait for the same person to sign in again. An explicit sign-out
+      // wipes the database file and its key right after this, so nothing is
+      // left behind either way.
+      if (!endReason.mayWipeAccountData) return;
       final cache = await _cacheOrNull(ref);
       final namespace = previous;
       await cache?.clearPrefix('$namespace:');
@@ -2764,12 +3013,19 @@ bool connectivityResultToIsOnline(List<ConnectivityResult> results) {
   return results.any((r) => r != ConnectivityResult.none);
 }
 
+///
+/// WP-C1: the stream is seeded with the current state (see
+/// [connectivityOnlineStream]) so readers never see "unknown" on a late
+/// subscription, and [KnownConnectivity] (behind `_isKnownOffline`) is updated
+/// on every emission. It is subscribed at the app root
+/// (`connectivityBootstrapProvider`) so the value is known before the
+/// signed-in shell's lifecycle listeners start.
 final isOnlineProvider = StreamProvider<bool>((ref) {
-  return Connectivity().onConnectivityChanged.map((results) {
-    final online = connectivityResultToIsOnline(results);
-    _lastKnownOffline = !online;
-    return online;
-  });
+  return connectivityOnlineStream(
+    ref.watch(connectivityProvider),
+    toOnline: connectivityResultToIsOnline,
+    onValue: (online) => KnownConnectivity.online = online,
+  );
 });
 
 final outboxRepositoryProvider = FutureProvider<TransactionOutboxRepository>((
@@ -2814,9 +3070,11 @@ final transactionAttachmentsProvider =
     });
 
 final pendingOutboxCountProvider = FutureProvider<int>((ref) async {
+  // `all()`, not `pending()`: rows waiting out a backoff or parked are still
+  // unsent work the person has to be told about.
   final items = await (await ref.watch(
     outboxRepositoryProvider.future,
-  )).pending();
+  )).all();
   final duplicateOutbox = await ref.watch(
     duplicateResolutionOutboxRepositoryProvider.future,
   );
@@ -2873,13 +3131,36 @@ abstract final class OutboxCommand {
 Map<String, CommandHandler> commandHandlersFor(
   UserCardsRepository repo, {
   SpendReportsRepository? spend,
+  NotificationPreferencesRepository? notificationPrefs,
+  void Function()? onNotificationInboxSynced,
+  Map<String, CommandHandler> accountHandlers = const {},
+  CardCommandContext? cards,
+  Future<bool> Function(String tagId)? tagReady,
 }) => {
-  OutboxCommand.ignoreTransaction: (p) => repo.ignoreTransaction(
-    p['id'] as String,
+  // WP-C11: consents, name, opt-in, tickets, card reports, inbox read marks.
+  ...accountHandlers,
+  // WP-C6: card adds, card field patches and card overrides queued offline.
+  if (cards != null) ...cardCommandHandlers(cards),
+  // WP-C4: inbox rows and notification settings queued while offline.
+  ...notificationCommandHandlers(
+    userCards: repo,
+    prefs: notificationPrefs,
+    onInboxSynced: onNotificationInboxSynced,
+  ),
+  // WP-C5: payment-method change queued while offline.
+  ...paymentMethodCommandHandlers(repo),
+  // A repeat answers 409/404 although the state the person wanted is already
+  // in place; that is success, not a refusal (SRV-17).
+  OutboxCommand.ignoreTransaction: (p) => ignoreAlreadyDoneIsDone(
+    () => repo.ignoreTransaction(
+      p['id'] as String,
+      reason: p['reason'] as String,
+    ),
     reason: p['reason'] as String,
   ),
-  OutboxCommand.restoreTransaction: (p) =>
-      repo.restoreTransaction(p['id'] as String),
+  OutboxCommand.restoreTransaction: (p) => restoreAlreadyDoneIsDone(
+    () => repo.restoreTransaction(p['id'] as String),
+  ),
   OutboxCommand.setSpendExclusion: (p) => repo.setSpendExclusion(
     p['id'] as String,
     excluded: p['excluded'] as bool,
@@ -2896,23 +3177,54 @@ Map<String, CommandHandler> commandHandlersFor(
   OverlayCommand.pointsAdjust: (p) => repo.adjustPointsBalance(
     p['userCardId'] as String,
     newBalance: (p['newBalance'] as num).toDouble(),
+    reason: p['reason'] as String?,
     clientMutationId: p['clientMutationId'] as String,
   ),
   if (spend != null) ...{
     // Deleting something the server no longer has is already done.
     OverlayCommand.budgetDelete: (p) =>
-        _goneIsDone(() => spend.deleteBudget(p['id'] as String)),
-    OverlayCommand.budgetSave: (p) => spend.saveBudget(
-      scope: BudgetScope.values.firstWhere((s) => s.wireValue == p['scope']),
-      scopeRefId: p['scopeRefId'] as String?,
-      period: BudgetPeriod.values.firstWhere(
-        (x) => x.wireValue == p['period'],
+        _goneIsDone(
+          () => spend.deleteBudget(
+            p['id'] as String,
+            clientEditedAt: _editedAt(p['clientEditedAt']),
+          ),
+        ),
+    OverlayCommand.budgetSave: (p) => saveBudgetResolvingTag(
+      () => spend.saveBudget(
+        scope: BudgetScope.values.firstWhere((s) => s.wireValue == p['scope']),
+        scopeRefId: p['scopeRefId'] as String?,
+        period: BudgetPeriod.values.firstWhere(
+          (x) => x.wireValue == p['period'],
+        ),
+        amount: Money.fromRupees((p['amountInr'] as num).toDouble()),
+        rollover: p['rollover'] as bool? ?? false,
+        id: p['id'] as String?,
+        clientEditedAt: _editedAt(p['clientEditedAt']),
       ),
-      amount: Money.fromRupees((p['amountInr'] as num).toDouble()),
-      rollover: p['rollover'] as bool? ?? false,
+      tagId: p['scope'] == BudgetScope.tag.wireValue
+          ? p['scopeRefId'] as String?
+          : null,
+      tagReady: tagReady,
     ),
-    OverlayCommand.recurringDismiss: (p) =>
-        _goneIsDone(() => spend.dismissRecurring(p['id'] as String)),
+    // H3: client uuid + clock; the server's series id wins (a replay or an
+    // existing merchant series answers 200 and is success). A queued edit of
+    // this series made under the phone's uuid and an existing server series
+    // under another id is not remapped (documented gap).
+    OverlayCommand.recurringCreate: (p) => spend.createRecurring(
+      displayName: p['displayName'] as String,
+      amountInr: (p['amountInr'] as num).toDouble(),
+      cadenceDays: (p['cadenceDays'] as num).toInt(),
+      nextExpectedOn: DateTime.parse(p['nextExpectedOn'] as String),
+      autopayStatus: (p['autopayStatus'] as String?) ?? 'unknown',
+      id: p['id'] as String?,
+      clientEditedAt: _editedAt(p['clientEditedAt']),
+    ),
+    OverlayCommand.recurringDismiss: (p) => _goneIsDone(
+      () => spend.dismissRecurring(
+        p['id'] as String,
+        clientEditedAt: _editedAt(p['clientEditedAt']),
+      ),
+    ),
     OverlayCommand.recurringUpdate: (p) => spend.updateRecurring(
       p['id'] as String,
       displayName: p['displayName'] as String,
@@ -2920,40 +3232,110 @@ Map<String, CommandHandler> commandHandlersFor(
       cadenceDays: (p['cadenceDays'] as num).toInt(),
       nextExpectedOn: DateTime.parse(p['nextExpectedOn'] as String),
       autopayStatus: p['autopayStatus'] as String,
+      clientEditedAt: _editedAt(p['clientEditedAt']),
     ),
   },
 };
 
-Future<void> _goneIsDone(Future<void> Function() call) async {
+/// H3-5c: a budget on a tag the server does not know yet (the tag is still in
+/// the tag outbox) is refused with 422 `tag_unknown`. Send the tag first
+/// ([tagReady] syncs tags and says whether the tag exists), then retry once.
+/// A tag that really is gone parks the budget with a plain reason.
+Future<void> saveBudgetResolvingTag(
+  Future<void> Function() save, {
+  String? tagId,
+  Future<bool> Function(String tagId)? tagReady,
+}) async {
   try {
-    await call();
-  } on ApiException catch (error) {
-    if (error.statusCode != 404) rethrow;
+    await save();
+  } on ApiException catch (e) {
+    if (tagId == null ||
+        tagReady == null ||
+        e.statusCode != 422 ||
+        e.errorCode != 'tag_unknown') {
+      rethrow;
+    }
+    if (!await tagReady(tagId)) {
+      throw ApiException(
+        'The tag for this budget no longer exists, so the budget was not '
+        'saved. (POST /budgets failed: 422 tag_unknown)',
+      );
+    }
+    await save();
   }
 }
+
+DateTime? _editedAt(Object? v) => v is String ? DateTime.tryParse(v) : null;
+
+Future<void> _goneIsDone(Future<void> Function() call) => goneIsDone(call);
+
+/// How often [outboxFlushProvider] re-checks for queued work whose backoff
+/// has expired while the app stays open.
+const outboxDueRecheckInterval = Duration(minutes: 5);
+
+/// Pause between two passes of one reconnect flush while the previous pass still
+/// delivered something.
+const outboxContinueInterval = Duration(milliseconds: 250);
 
 /// Bump to ask [outboxFlushProvider] to send queued quick-adds now. A save
 /// writes the outbox and bumps this; it never waits for the delivery.
 final outboxFlushRequestProvider = StateProvider<int>((ref) => 0);
 
 final outboxFlushProvider = Provider<void>((ref) {
+  // WP-C10: saved statement imports resume on the same triggers.
+  ref.read(statementImportAutoResumeProvider);
+  // WP-C17: server state for bill cards, typed balances, subscription edits.
+  ref.read(userStatePullProvider);
   var running = false;
   var disposed = false;
   final startup = ref.read(startupWorkSchedulerProvider);
+  // Armed only while something is still queued after a flush (see the end of
+  // flush); an idle outbox keeps no timer running.
+  Timer? dueTimer;
+  late final Future<void> Function() flushRef;
   Future<void> flush() async {
     if (running || disposed) return;
     final namespace = ref.read(cacheNamespaceProvider);
     final repo = ref.read(userCardsRepositoryProvider);
     if (repo == null || ref.read(isOnlineProvider).valueOrNull == false) return;
     running = true;
+    var workRemains = false;
+    // True when this pass delivered something: a long queue (a reconnect after
+    // hours offline) is sent in passes of 20 and must not wait minutes between
+    // them (WP-Q1).
+    var progressed = false;
     try {
       final outbox = await ref.read(outboxRepositoryProvider.future);
       if (disposed || outbox.namespace != namespace) return;
-      final sent = await outbox.flush(repo);
       final commands = await ref.read(commandOutboxProvider.future);
-      final commandsSent = await commands.flush(
-        commandHandlersFor(repo, spend: ref.read(spendReportsRepositoryProvider)),
+      final handlers = commandHandlersFor(
+        repo,
+        spend: ref.read(spendReportsRepositoryProvider),
+        notificationPrefs: ref.read(notificationPreferencesRepositoryProvider),
+        onNotificationInboxSynced: () => ref.invalidate(notificationsProvider),
+        accountHandlers: accountCommandHandlers(ref),
+        cards: await cardCommandContext(ref),
+        tagReady: (tagId) async {
+          final tags = ref.read(transactionTagsProvider);
+          if (tags == null) return false;
+          await tags.sync();
+          return tags.allTags.any((t) => t.id == tagId && !t.isArchived);
+        },
       );
+      // WP-C6: a card added offline must exist on the server (and its id be
+      // remapped) before queued transactions that name it are sent.
+      final addedCards = await commands.flush(
+        handlers,
+        onlyKinds: CardCommand.addFirst,
+      );
+      final sent = await outbox.flush(
+        repo,
+        holdCardIds: unsentCardAddTargets(commands),
+      );
+      // H3-3: one pass per trigger. A dead network already cost one timeout.
+      final commandsSent =
+          addedCards +
+          (commands.lastFlushUnreachable ? 0 : await commands.flush(handlers));
       if (commandsSent > 0) {
         // Drop the cached server lists so the next read shows what the server
         // now holds, not the snapshot taken before these changes.
@@ -2971,6 +3353,11 @@ final outboxFlushProvider = Provider<void>((ref) {
         duplicateResolutionOutboxRepositoryProvider.future,
       );
       final duplicateSent = await duplicateOutbox.flush(repo);
+      progressed = sent > 0 || duplicateSent > 0 || commandsSent > 0;
+      workRemains =
+          commands.pendingCount > 0 ||
+          duplicateOutbox.pendingCount > 0 ||
+          (await outbox.all()).any((entry) => !entry.parked);
       if (!disposed &&
           ref.read(cacheNamespaceProvider) == namespace &&
           (sent > 0 || duplicateSent > 0 || commandsSent > 0)) {
@@ -2984,13 +3371,40 @@ final outboxFlushProvider = Provider<void>((ref) {
       }
     } catch (_) {
       /* Durable entries remain queued. */
+      workRemains = true;
     } finally {
       running = false;
+      // Nothing else triggers a flush between a failure and the next resume or
+      // reconnect, so look again for commands whose backoff has run out. A
+      // flush that finds nothing due does no network work.
+      dueTimer?.cancel();
+      dueTimer = null;
+      if (workRemains && !disposed) {
+        dueTimer = Timer(
+          progressed ? outboxContinueInterval : outboxDueRecheckInterval,
+          () => unawaited(flushRef()),
+        );
+      }
+    }
+  }
+
+  flushRef = flush;
+
+  // Coming back online: a backoff was about a server problem that may have
+  // passed, and time spent offline must not be waited out a second time.
+  Future<void> resetBackoffs() async {
+    try {
+      (await ref.read(outboxRepositoryProvider.future)).resetBackoff();
+      (await ref.read(commandOutboxProvider.future)).resetBackoff();
+    } catch (_) {
+      /* Entries keep their backoff; the next trigger still flushes. */
     }
   }
 
   ref.listen(isOnlineProvider, (_, next) {
-    if (next.valueOrNull == true) unawaited(flush());
+    if (next.valueOrNull == true) {
+      unawaited(resetBackoffs().then((_) => flush()));
+    }
   });
   ref.listen(outboxFlushRequestProvider, (_, _) => unawaited(flush()));
   ref.listen(cacheNamespaceProvider, (_, next) {
@@ -3010,6 +3424,7 @@ final outboxFlushProvider = Provider<void>((ref) {
   final lifecycle = AppLifecycleListener(onResume: () => unawaited(flush()));
   ref.onDispose(() {
     disposed = true;
+    dueTimer?.cancel();
     startup.cancel('outbox-flush');
     lifecycle.dispose();
   });
@@ -3027,10 +3442,60 @@ final duplicateCandidatesProvider = FutureProvider<List<DuplicateCandidate>>((
 ) async {
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return const [];
+  // WP-C6 (W-15): the list is kept in the response cache (so it opens without
+  // the network) and pairs the person already decided, waiting in the
+  // duplicate-resolution outbox, are hidden (they are done, only unsent).
+  final cache = await _cacheOrNull(ref);
+  final cacheKey = _scopedCacheKey(ref, 'duplicate_candidates');
+  final cachedRaw = await cache?.get(cacheKey);
+  List<DuplicateCandidate>? decodeCached() {
+    if (cachedRaw == null) return null;
+    try {
+      return [
+        for (final c in jsonDecode(cachedRaw) as List)
+          DuplicateCandidate.fromJson(Map<String, dynamic>.from(c as Map)),
+      ];
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<List<DuplicateCandidate>> withoutDecided(
+    List<DuplicateCandidate> all,
+  ) async {
+    try {
+      final outbox = await ref.read(
+        duplicateResolutionOutboxRepositoryProvider.future,
+      );
+      final decided = {for (final e in outbox.pending()) e.candidateId};
+      if (decided.isEmpty) return all;
+      return [
+        for (final c in all)
+          if (!decided.contains(c.id)) c,
+      ];
+    } catch (_) {
+      return all;
+    }
+  }
+
+  final saved = decodeCached();
+  if (kCardsLocalFirst && saved != null && serverKnownUnreachable(ref)) {
+    return withoutDecided(saved);
+  }
   try {
-    return await repo.fetchDuplicateCandidates();
+    final fresh = await repo.fetchDuplicateCandidates();
+    try {
+      await cache?.put(
+        cacheKey,
+        jsonEncode([for (final c in fresh) c.toJson()]),
+      );
+    } catch (_) {}
+    return withoutDecided(fresh);
   } catch (error) {
     if (isAuthenticationFailure(error)) return const [];
+    if (kCardsLocalFirst && saved != null && _canUseReadCache(error)) {
+      return withoutDecided(saved);
+    }
     rethrow;
   }
 });
@@ -3098,6 +3563,47 @@ final archivedCardsProvider = FutureProvider<List<UserCard>>((ref) async {
   try {
     final repo = ref.watch(userCardsRepositoryProvider);
     if (repo == null) return const [];
+    // WP-C6: a saved include-archived snapshot is shown at once (refreshed in
+    // the background), and a server known to be unreachable is not waited on.
+    // A card change clears the snapshot, so a removal is never replayed stale;
+    // without a snapshot and with no server, the phone's own copy answers.
+    if (kCardsLocalFirst) {
+      final cache = await _cacheOrNull(ref);
+      final key = _scopedCacheKey(ref, _userCardsWithArchivedCacheKey);
+      final raw = await cache?.get(key);
+      if (raw != null) {
+        try {
+          final cards = [
+            for (final c in (jsonDecode(raw) as Map)['userCards'] as List)
+              UserCard.fromJson(Map<String, dynamic>.from(c as Map)),
+          ].where((card) => card.isArchived).toList();
+          if (!serverKnownUnreachable(ref)) {
+            final at = await cache?.fetchedAt(key);
+            if (at == null ||
+                DateTime.now().difference(at) > const Duration(seconds: 30)) {
+              _backgroundDisplayRefresh(
+                ref,
+                cache,
+                key,
+                () => repo.fetchUserCards(includeArchived: true),
+                (List<UserCard> all) => {
+                  'userCards': all.map((c) => c.toJson()).toList(),
+                },
+              );
+            }
+          }
+          return cards;
+        } catch (_) {
+          // A corrupt snapshot falls through to the normal read below.
+        }
+      } else if (cache != null && serverKnownUnreachable(ref)) {
+        return cache.financialStore
+            .entities(ref.read(cacheNamespaceProvider), 'cards')
+            .map(UserCard.fromJson)
+            .where((card) => card.isArchived)
+            .toList();
+      }
+    }
     return await _loadUserCardsWithOfflineCache(
       ref,
       repo,
@@ -3479,7 +3985,7 @@ final loungeUsageServerProvider = FutureProvider<List<LoungeVisit>>((ref) async 
           .cast<Map<String, dynamic>>()
           .map(LoungeVisit.fromJson)
           .toList();
-  if (_isKnownOffline() && cached != null) return decode(cached);
+  if (_skipBackgroundRead(ref) && cached != null) return decode(cached);
   try {
     final visits = await repo.fetchLoungeUsage();
     try {
@@ -3527,7 +4033,7 @@ final pointsLedgerProvider =
               .cast<Map<String, dynamic>>()
               .map(PointsLedgerEntry.fromJson)
               .toList();
-      if (_isKnownOffline() && cached != null) return decode(cached);
+      if (_skipBackgroundRead(ref) && cached != null) return decode(cached);
       try {
         final entries = await repo.fetchPointsLedger(userCardId);
         try {
@@ -3899,7 +4405,7 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
     );
   }).toList();
 
-  if (_isKnownOffline()) {
+  if (_skipBackgroundRead(ref)) {
     final offlineAccounts = localAccounts != null && localAccounts.isNotEmpty
         ? localAccounts
         : cached != null
@@ -4230,6 +4736,28 @@ final notificationsProvider =
         );
       }
 
+      // WP-C11 (R-07): the saved inbox paints first and refreshes behind the
+      // screen; read marks still waiting to be sent are laid over it.
+      if (kAccountLocalFirst && cached != null) {
+        try {
+          final inbox = decode(cached);
+          _warmDisplay(
+            ref,
+            cache,
+            key,
+            cached.fetchedAt,
+            () => repo.fetchNotifications().timeout(const Duration(seconds: 8)),
+            (inbox) => {
+              'notifications': inbox.items.map((item) => item.toJson()).toList(),
+              'unreadCount': inbox.unreadCount,
+            },
+          );
+          return await applyPendingReadMarks(ref, inbox);
+        } catch (_) {
+          await cache?.clear(key);
+        }
+      }
+
       if (_isKnownOffline() && cached != null) return decode(cached);
 
       try {
@@ -4281,21 +4809,17 @@ Future<void> recordAppNotification(
   String? deepLink,
   String? dedupeKey,
 }) async {
-  final repo = ref.read(userCardsRepositoryProvider);
-  if (repo == null) return; // guest mode has no server-side inbox
-  try {
-    await repo.recordNotification(
-      category: category,
-      title: title,
-      body: body,
-      severity: severity,
-      deepLink: deepLink,
-      dedupeKey: dedupeKey,
-    );
-    ref.invalidate(notificationsProvider);
-  } catch (_) {
-    // Intentionally silent — see the doc comment.
-  }
+  // One immediate attempt, as before; if it cannot be made the row is queued
+  // durably (WP-C4, notification_commands.dart) and still never throws.
+  await recordAppNotificationOutcome(
+    ref,
+    category: category,
+    title: title,
+    body: body,
+    severity: severity,
+    deepLink: deepLink,
+    dedupeKey: dedupeKey,
+  );
 }
 
 /// Just the badge count, so a widget showing the badge doesn't rebuild on
@@ -4324,12 +4848,9 @@ final notificationPreferencesProvider =
     FutureProvider<NotificationPreferences?>((ref) async {
       final repo = ref.watch(notificationPreferencesRepositoryProvider);
       if (repo == null) return null;
-      try {
-        return await repo.fetch();
-      } catch (error) {
-        if (isAuthenticationFailure(error)) return null;
-        rethrow;
-      }
+      // WP-C4: cache first, then the live fetch, then the defaults; never an
+      // error. See notification_local_state.dart.
+      return loadNotificationPreferences(ref, repo);
     });
 
 /// Design 25's Invite friends payload. Null when signed out — an invite
@@ -4423,6 +4944,7 @@ final contributionNetworkStatsProvider =
         );
       }
 
+      if (_skipBackgroundRead(ref) && cached != null) return decodeCached();
       try {
         final stats = await repo.fetchContributionNetworkStats();
         try {
@@ -4508,18 +5030,67 @@ final inboundEmailsProvider = FutureProvider<List<InboundEmail>>((ref) async {
   }
 });
 
+const _statementImportsCacheKey = 'statement_imports';
+const _smsImportBatchesCacheKey = 'sms_import_batches';
+
+/// WP-C10: fetch an import-history list, remember the raw body, and fall back
+/// to the last one when the server cannot be reached (never on an auth failure).
+Future<List<T>> _cachedImportList<T>(
+  Ref ref,
+  String key,
+  Future<List<T>> Function(void Function(String) onRaw) fetch,
+  List<T> Function(String raw) parse,
+) async {
+  final cache = await _cacheOrNull(ref);
+  String? raw;
+  try {
+    final list = await fetch((body) => raw = body);
+    final body = raw;
+    if (body != null) {
+      try {
+        await cache?.put(key, body);
+      } catch (_) {}
+    }
+    return list;
+  } catch (error) {
+    if (isAuthenticationFailure(error)) return const [];
+    final cached = await cache?.read(key);
+    if (cached != null && isOfflineLike(error)) {
+      try {
+        return parse(cached.rawJson);
+      } catch (_) {}
+    }
+    rethrow;
+  }
+}
+
+/// When the cached import-history list was fetched (null = nothing cached).
+final importListFetchedAtProvider = FutureProvider.family<DateTime?, String>((
+  ref,
+  which,
+) async {
+  ref.watch(which == 'sms' ? smsImportBatchesProvider : statementImportsProvider);
+  final cache = await _cacheOrNull(ref);
+  final key = _scopedCacheKey(
+    ref,
+    which == 'sms' ? _smsImportBatchesCacheKey : _statementImportsCacheKey,
+  );
+  return (await cache?.read(key))?.fetchedAt;
+});
+
 /// F2/F1: recent statement imports, newest first.
 final statementImportsProvider = FutureProvider<List<StatementImport>>((
   ref,
 ) async {
   final repo = ref.watch(importRepositoryProvider);
   if (repo == null) return const [];
-  try {
-    return await repo.fetchStatementImports();
-  } catch (error) {
-    if (isAuthenticationFailure(error)) return const [];
-    rethrow;
-  }
+  final key = _scopedCacheKey(ref, _statementImportsCacheKey);
+  return _cachedImportList(
+    ref,
+    key,
+    (onRaw) => repo.fetchStatementImports(onRaw: onRaw),
+    ImportRepository.parseStatementImports,
+  );
 });
 
 /// F4/F1: recent SMS backup-file import batches.
@@ -4528,12 +5099,13 @@ final smsImportBatchesProvider = FutureProvider<List<SmsImportBatch>>((
 ) async {
   final repo = ref.watch(importRepositoryProvider);
   if (repo == null) return const [];
-  try {
-    return await repo.fetchSmsImportBatches();
-  } catch (error) {
-    if (isAuthenticationFailure(error)) return const [];
-    rethrow;
-  }
+  final key = _scopedCacheKey(ref, _smsImportBatchesCacheKey);
+  return _cachedImportList(
+    ref,
+    key,
+    (onRaw) => repo.fetchSmsImportBatches(onRaw: onRaw),
+    ImportRepository.parseSmsImportBatches,
+  );
 });
 
 /// F5: backup/restore status + this user's sync-conflict log.
@@ -4829,9 +5401,24 @@ bool _isAuthenticationFailure(Object error) {
   return isAuthenticationFailure(error);
 }
 
-bool _lastKnownOffline = false;
+/// True once `isOnlineProvider` has reported the radio down (and until it
+/// reports it up). Unknown counts as online. The value lives in
+/// [KnownConnectivity] so code outside this file (`isOfflineLike`, the
+/// reachability probe) reads the same state.
+bool _isKnownOffline() => KnownConnectivity.knownOffline;
 
-bool _isKnownOffline() => _lastKnownOffline;
+/// WP-C16: radio known down, or the reachability probe says the API is not
+/// serving (captive/dead Wi-Fi). Unknown reachability is NOT a reason to skip,
+/// so an unprobed healthy user behaves exactly as before. Background and
+/// cache-backed reads use this to serve saved data instead of waiting 15 s.
+bool _skipBackgroundRead(Ref ref) {
+  if (_isKnownOffline()) return true;
+  try {
+    return ref.read(serverReachabilityProvider).shouldSkipBackgroundReads;
+  } catch (_) {
+    return false;
+  }
+}
 
 /// The cache is always best-effort — every offline-cache-aware provider
 /// below calls this instead of watching responseCacheProvider directly, so
@@ -4973,6 +5560,12 @@ const _cardOverridesCacheKey = 'card_overrides';
 // completes must become a cache/fallback/error state instead of leaving the
 // recommendation section in AsyncLoading forever.
 const _homeRequestTimeout = Duration(seconds: 15);
+// WP-C16: cold-start background reads give up sooner than user-initiated ones
+// (a hung socket must not hold the refresh burst for 15 s).
+const _backgroundReadTimeout = Duration(seconds: 8);
+// Namespace + start of Home's own refresh, so the lifecycle provider does not
+// fire a second forced burst right behind it.
+(String, DateTime)? _lastHomeRefresh;
 const _spendReportCacheKey = 'spend_report';
 const _transactionsCacheKey = 'transactions';
 
@@ -4999,7 +5592,7 @@ void _warmDisplay<T>(
   Object? Function(T) encode,
 ) {
   if (cache == null ||
-      _isKnownOffline() ||
+      _skipBackgroundRead(ref) ||
       _backgroundDisplayRefreshes.containsKey(key) ||
       (!cache.needsRefresh(key) &&
           DateTime.now().difference(fetchedAt) < const Duration(seconds: 15))) {
@@ -6111,6 +6704,13 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
     if (isAuthenticationFailure(error)) {
       throw const AuthenticationUnavailableException();
     }
+    // WP-C16: a store that has synced before knows this filter matches nothing
+    // locally; offline that is an honest empty list, not an error. Only a
+    // never-synced store (local == null) still surfaces the failure.
+    if (local != null && isOfflineLike(error)) {
+      ready = true;
+      return local.rows;
+    }
     rethrow;
   }
 }
@@ -6285,6 +6885,13 @@ final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
       }
     } catch (_) {}
   }
+  // WP-C16: first-ever launch with no network and nothing cached: serve the
+  // bundled built-in categories instead of waiting out a request that cannot
+  // succeed. Not cached, so the first online refresh replaces it.
+  if (cached == null && _skipBackgroundRead(ref)) {
+    final bundled = await loadBundledCategories();
+    if (bundled.isNotEmpty) return [...bundled, ...customCategories];
+  }
   try {
     final categories = await ref
         .watch(categoryRepositoryProvider)
@@ -6317,7 +6924,7 @@ final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
     // Category ids improve the ranking but are not required to produce a
     // truthful base-rate recommendation. The engine safely falls back to
     // catch-all card rules until the next refresh can load the ids.
-    return customCategories;
+    return [...await loadBundledCategories(), ...customCategories];
   }
 });
 
@@ -6691,7 +7298,14 @@ final pushNotificationServiceProvider = Provider<PushNotificationService?>((
 final pushNotificationLifecycleProvider = Provider<void>((ref) {
   final service = ref.watch(pushNotificationServiceProvider);
   if (service == null) return;
-  unawaited(service.start());
+  unawaited(AuthenticatedHttpTimeoutPolicy.runBackground(service.start));
+  // WP-C4: retry token registration the moment the network is back, instead
+  // of waiting for the next backoff timer.
+  ref.listen<AsyncValue<bool>>(isOnlineProvider, (previous, next) {
+    if (next.valueOrNull == true && previous?.valueOrNull == false) {
+      unawaited(service.onReconnected());
+    }
+  });
   ref.listen<String>(cacheNamespaceProvider, (previous, next) {
     if (next == 'signed-out') {
       unawaited(service.stop());

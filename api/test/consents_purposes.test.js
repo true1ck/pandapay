@@ -3,10 +3,11 @@ process.env.JWT_ACCESS_SECRET ||= 'ci_only_not_a_real_secret';
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { registerConsentRoute } = require('../src/consents_route');
 
-// POST /consents is registered inside index.js, which boots the whole server,
-// so (like consent_ordering_pg.test.js) the route source is evaluated against
-// a fake database client instead of importing the module.
+// POST /consents lives in consents_route.js (moved out of index.js in WP-S5);
+// CONSENT_PURPOSES is still read from the index.js source, which boots the
+// whole server and so cannot be imported.
 const source = fs.readFileSync(require.resolve('../src/index.js'), 'utf8');
 
 function purposes() {
@@ -20,10 +21,9 @@ function postConsent(body) {
   const end = source.indexOf('\n});', start) + 5;
   let handler;
   const inserted = [];
-  new Function('app', 'requireAuth', 'withUserClient', 'CONSENT_PURPOSES', 'safeErrorCode', source.slice(start, end))(
+  registerConsentRoute(
     { post: (_path, _auth, fn) => { handler = fn; } },
-    () => {},
-    async (_profile, fn) => fn({
+    { requireAuth: () => {}, CONSENT_PURPOSES: purposes(), withUserClient: async (_profile, fn) => fn({
       query: async (sql, params) => {
         if (/INSERT INTO user_consents/.test(sql)) {
           inserted.push(params);
@@ -31,9 +31,7 @@ function postConsent(body) {
         }
         return { rows: [] };
       },
-    }),
-    purposes(),
-    (error) => error?.code || 'unknown',
+    }) },
   );
   const res = {
     code: null,

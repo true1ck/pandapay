@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../app/design/saved_offline.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart'
@@ -11,6 +12,8 @@ import '../../app/providers.dart'
         notificationPreferencesRepositoryProvider;
 import '../../data/api_exception.dart';
 import '../../data/notification_preferences_repository.dart';
+import '../notifications/notification_commands.dart';
+import '../notifications/notification_local_state.dart';
 
 /// Task H3 Notification Settings. notificationPreferencesProvider/
 /// notificationPreferencesRepositoryProvider now live in app/providers.dart
@@ -22,7 +25,8 @@ final _mutedMerchantsProvider = FutureProvider<List<MutedMerchant>>((
 ) async {
   final repo = ref.watch(notificationPreferencesRepositoryProvider);
   if (repo == null) return const [];
-  return repo.fetchMutedMerchants();
+  // Cache first (works offline); the list rebuilds if the refresh differs.
+  return loadMutedMerchants(ref, repo, onRefreshed: ref.invalidateSelf);
 });
 
 /// ui-spec.md H3 Notification Settings. Every toggle/slider/time-picker
@@ -103,8 +107,12 @@ class _NotificationSettingsBodyState
     final repo = ref.read(notificationPreferencesRepositoryProvider);
     if (repo == null) return;
     try {
-      await repo.update(changes);
-      ref.invalidate(notificationPreferencesProvider);
+      // The phone's copy changes at once; the server write is sent now or,
+      // with no connection, queued and sent later (WP-C4).
+      final result = await updateNotificationPreferences(ref, changes);
+      if (result == SettingsWrite.queued && context.mounted) {
+        showSavedOfflineSnack(context);
+      }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(
@@ -467,7 +475,7 @@ class _MutedMerchantsList extends ConsumerWidget {
                     );
                     if (repo == null) return;
                     try {
-                      await repo.unmuteMerchant(m.merchantId);
+                      await unmuteNotificationMerchant(ref, m.merchantId);
                       ref.invalidate(_mutedMerchantsProvider);
                     } catch (e) {
                       if (context.mounted) {

@@ -60,6 +60,17 @@ class PushNotificationService {
     this.onOpenLink,
   });
 
+  /// How long [start] waits for `FirebaseMessaging.getToken()`.
+  static const tokenReadTimeout = Duration(seconds: 8);
+
+  /// Bounds a token read so a hung Firebase call becomes a retryable
+  /// [TimeoutException] instead of leaving [start] waiting forever.
+  @visibleForTesting
+  static Future<String?> boundedTokenRead(
+    Future<String?> pending, {
+    Duration timeout = tokenReadTimeout,
+  }) => pending.timeout(timeout);
+
   void _openLink(RemoteMessage message) {
     final link = pushDeepLink(message.data['deepLink']);
     debugPrint(
@@ -109,7 +120,11 @@ class PushNotificationService {
         final initial = await messaging.getInitialMessage();
         if (initial != null) _openLink(initial);
       }
-      final token = await messaging.getToken();
+      // getToken() has no Dart-side deadline and can hang with no network or
+      // while Google Play Services is unreachable. A TimeoutException lands in
+      // the catch below, which tears the attempt down and schedules the
+      // existing backoff retry.
+      final token = await boundedTokenRead(messaging.getToken());
       if (!_started || generation != _lifecycleGeneration) return;
       if (token == null || token.isEmpty) {
         // getToken() can legitimately be empty during the first few seconds
@@ -177,6 +192,34 @@ class PushNotificationService {
       final token = _lastToken;
       if (token != null && _started) unawaited(_registerToken(token));
     });
+  }
+
+  /// The network came back. If token registration (or the whole push startup)
+  /// was waiting on a backoff timer, try again now instead of when it fires.
+  /// A healthy, already-registered service does nothing here.
+  Future<void> onReconnected() async {
+    if (!_started) {
+      if (_startupRetryTimer == null) return;
+      _startupRetryTimer?.cancel();
+      _startupRetryTimer = null;
+      _startupRetryAttempt = 0;
+      await start();
+      return;
+    }
+    final token = _lastToken;
+    if (token == null || _registrationRetryTimer == null) return;
+    _registrationRetryTimer?.cancel();
+    _registrationRetryTimer = null;
+    _registrationRetryAttempt = 0;
+    await _registerToken(token);
+  }
+
+  /// Registers [token] as if Firebase had produced it. Lets a test exercise
+  /// the registration retry without native Firebase.
+  @visibleForTesting
+  Future<void> debugRegisterToken(String token) {
+    _started = true;
+    return _registerToken(token);
   }
 
   void _scheduleStartupRetry() {

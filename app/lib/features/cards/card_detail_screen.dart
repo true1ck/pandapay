@@ -2766,6 +2766,35 @@ class _BenefitsTab extends ConsumerWidget {
   }
 }
 
+/// Opens an issuer portal in the browser. [launcher] is injectable for tests.
+///
+/// Never throws: `launchUrl` returns false when nothing can handle the link
+/// and throws a `PlatformException` when the platform side fails, and either
+/// way the caller only needs to know whether it worked.
+@visibleForTesting
+Future<bool> tryOpenExternalUrl(
+  String url, {
+  Future<bool> Function(Uri uri)? launcher,
+}) async {
+  try {
+    final uri = Uri.parse(url);
+    final launch =
+        launcher ?? (u) => launchUrl(u, mode: LaunchMode.externalApplication);
+    return await launch(uri);
+  } catch (_) {
+    return false;
+  }
+}
+
+Future<void> _openOfficialPortal(BuildContext context, String url) async {
+  final messenger = ScaffoldMessenger.of(context);
+  if (!await tryOpenExternalUrl(url)) {
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Could not open your browser.')),
+    );
+  }
+}
+
 class _StatementTab extends StatelessWidget {
   final UserCard userCard;
   final CardProduct? product;
@@ -2971,10 +3000,7 @@ class _StatementTab extends StatelessWidget {
                   ),
                 ),
                 TextButton(
-                  onPressed: () => launchUrl(
-                    Uri.parse(autopayUrl),
-                    mode: LaunchMode.externalApplication,
-                  ),
+                  onPressed: () => _openOfficialPortal(context, autopayUrl),
                   child: const Text('Open portal'),
                 ),
               ],

@@ -6,14 +6,25 @@ import 'user_cards_repository.dart';
 class SyncTransactionDelta {
   final List<TransactionEntry> rows;
   final Set<String> deletedIds;
-  SyncTransactionDelta(List<TransactionEntry> rows, Set<String> deletedIds)
-    : rows = List.unmodifiable(rows),
-      deletedIds = Set.unmodifiable(deletedIds);
+
+  /// Ids the pull named as inserted/updated but the server no longer has
+  /// (404). They are neither saved nor deleted locally: only an explicit
+  /// delete change, or a complete snapshot, removes a local row.
+  final Set<String> skippedIds;
+  SyncTransactionDelta(
+    List<TransactionEntry> rows,
+    Set<String> deletedIds, {
+    Set<String> skippedIds = const {},
+  }) : rows = List.unmodifiable(rows),
+       deletedIds = Set.unmodifiable(deletedIds),
+       skippedIds = Set.unmodifiable(skippedIds);
 }
 
 /// Fetches current affected rows rather than materializing all history. A 404
-/// is deletion evidence only when the pull explicitly named a delete. Other
-/// failures leave the caller's durable cursor unchanged for replay.
+/// is deletion evidence only when the pull explicitly named a delete; for an
+/// insert/update it means the row is gone by now, so it is skipped rather than
+/// aborting the pass (one vanished row must not block the cursor for ever).
+/// Any other failure leaves the caller's durable cursor unchanged for replay.
 Future<SyncTransactionDelta> fetchSyncTransactionDelta(
   Iterable<Map<String, dynamic>> changes, {
   required Future<TransactionEntry> Function(String id) fetch,
@@ -45,6 +56,7 @@ Future<SyncTransactionDelta> fetchSyncTransactionDelta(
   final ids = operations.keys.toList();
   final rows = <TransactionEntry>[];
   final deleted = <String>{};
+  final skipped = <String>{};
   for (var offset = 0; offset < ids.length; offset += concurrency) {
     check();
     final group = ids.skip(offset).take(concurrency);
@@ -57,8 +69,12 @@ Future<SyncTransactionDelta> fetchSyncTransactionDelta(
           }
           return row;
         } on ApiException catch (error) {
-          if (error.statusCode != 404 || operations[id] != 'delete') rethrow;
-          deleted.add(id);
+          if (error.statusCode != 404) rethrow;
+          if (operations[id] == 'delete') {
+            deleted.add(id);
+          } else {
+            skipped.add(id);
+          }
           return null;
         }
       }),
@@ -69,5 +85,5 @@ Future<SyncTransactionDelta> fetchSyncTransactionDelta(
       await Future<void>.delayed(Duration.zero);
     }
   }
-  return SyncTransactionDelta(rows, deleted);
+  return SyncTransactionDelta(rows, deleted, skippedIds: skipped);
 }

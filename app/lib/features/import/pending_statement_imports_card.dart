@@ -121,6 +121,7 @@ class _PendingStatementImportsCardState
   @override
   Widget build(BuildContext context) {
     if (!Env.statementImportContinuationEnabled) return const SizedBox.shrink();
+    ref.watch(statementImportRevisionProvider);
     return ref
         .watch(statementImportContinuationProvider)
         .when(
@@ -174,9 +175,10 @@ class _PendingStatementImportsCardState
                         '${session.completedBatches} of ${session.batchCount} batches confirmed',
                       ),
                       subtitle: Text(
-                        session.needsReview
+                        continuation.parkedReasons[session.sessionId] ??
+                            (session.needsReview
                             ? 'Saved for more than 14 days. Review before continuing.'
-                            : 'Ready to continue when you choose.',
+                            : "Saved on this phone. Uploads automatically when you're back online."),
                       ),
                       trailing: TextButton(
                         style: BambooButtons.quiet,

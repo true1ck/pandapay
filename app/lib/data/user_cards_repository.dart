@@ -1580,6 +1580,54 @@ class UserCardsRepository {
     return (body['userCard'] as Map<String, dynamic>)['id'] as String;
   }
 
+  /// WP-C6: [addCard] for the offline queue. Sends the phone's own [clientId]
+  /// so a replay cannot create a second card. Returns the id the SERVER uses:
+  /// an old server ignores `id` and answers with its own, and a card the person
+  /// already had (409 `card_already_added`, or a natural-key 200) answers with
+  /// that card's id and `existing: true`. The caller remaps its local id.
+  Future<({String id, bool existing})> addCardWithClientId(
+    String clientId,
+    String cardProductId, {
+    String? nickname,
+    String? last4,
+    // A queued replay merges into the card the person already has (409
+    // card_already_added); a direct tap keeps showing that as an error.
+    bool mergeExisting = true,
+  }) async {
+    final response = await _client
+        .post(
+          Uri.parse('$apiBaseUrl/user-cards'),
+          headers: _headers,
+          body: jsonEncode({
+            'id': clientId,
+            'cardProductId': cardProductId,
+            'nickname': ?nickname,
+            'last4': ?last4,
+          }),
+        )
+        .timeout(const Duration(seconds: 60));
+    Map<String, dynamic>? decoded;
+    try {
+      final raw = jsonDecode(response.body);
+      if (raw is Map<String, dynamic>) decoded = raw;
+    } catch (_) {}
+    final userCard = decoded?['userCard'];
+    final returned = userCard is Map ? userCard['id'] as String? : null;
+    if ((response.statusCode == 200 || response.statusCode == 201) &&
+        returned != null) {
+      return (id: returned, existing: decoded?['linkedExisting'] == true);
+    }
+    if (mergeExisting &&
+        response.statusCode == 409 &&
+        decoded?['error'] == 'card_already_added' &&
+        returned != null) {
+      return (id: returned, existing: true);
+    }
+    throw ApiException(
+      'POST /user-cards failed: ${response.statusCode} ${response.body}',
+    );
+  }
+
   Future<void> archiveCard(String userCardId) async {
     final response = await _client
         .post(
@@ -1763,7 +1811,9 @@ class UserCardsRepository {
             'merchantName': ?merchantName,
             'merchantVpa': ?merchantVpa,
             'mcc': ?mcc,
-            'occurredAt': occurredAt?.toIso8601String(),
+            // UTC with a 'Z': a local DateTime has no offset, which the server
+            // could read in its own zone (SRV-21).
+            'occurredAt': occurredAt?.toUtc().toIso8601String(),
             'note': ?note,
             'rail': ?rail,
             'instrument': instrument.wireValue,
@@ -2112,7 +2162,7 @@ class UserCardsRepository {
         : categoryId;
     final body = <String, dynamic>{
       'amountInr': ?amountInr,
-      if (occurredAt != null) 'occurredAt': occurredAt.toIso8601String(),
+      if (occurredAt != null) 'occurredAt': occurredAt.toUtc().toIso8601String(),
       if (clearCategory) 'categoryId': null,
       if (clearCategory) 'userCategoryId': null,
       if (!clearCategory) 'categoryId': ?serverCategoryId,
@@ -2537,6 +2587,49 @@ class UserCardsRepository {
     String severity = 'info',
     String? deepLink,
     String? dedupeKey,
+  }) => _postNotification(
+    category: category,
+    title: title,
+    body: body,
+    severity: severity,
+    deepLink: deepLink,
+    dedupeKey: dedupeKey,
+  );
+
+  /// Sends an inbox row that was queued while the phone could not reach the
+  /// server. [dedupeKey] makes the repeat harmless (the server updates the one
+  /// row for that key). [clientMutationId] and [createdAt] ride along as extra
+  /// fields: a server that does not know them ignores them.
+  Future<void> replayQueuedNotification({
+    required String category,
+    required String title,
+    String? body,
+    String severity = 'info',
+    String? deepLink,
+    required String dedupeKey,
+    String? clientMutationId,
+    DateTime? createdAt,
+  }) => _postNotification(
+    category: category,
+    title: title,
+    body: body,
+    severity: severity,
+    deepLink: deepLink,
+    dedupeKey: dedupeKey,
+    extra: {
+      'clientMutationId': ?clientMutationId,
+      'createdAt': ?createdAt?.toUtc().toIso8601String(),
+    },
+  );
+
+  Future<void> _postNotification({
+    required String category,
+    required String title,
+    String? body,
+    String severity = 'info',
+    String? deepLink,
+    String? dedupeKey,
+    Map<String, Object?> extra = const {},
   }) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/notifications'),
@@ -2552,9 +2645,15 @@ class UserCardsRepository {
         // explicit server-side action, otherwise one event becomes two banners
         // after FCM is configured.
         'sendRemote': false,
+        ...extra,
       }),
     );
-    if (response.statusCode != 201 && response.statusCode != 204) {
+    // 200: the server already holds this row (a replay with the same client
+    // mutation id, WP-S5). That is success; treating it as a failure kept the
+    // queued row retrying for ever after a lost answer.
+    if (response.statusCode != 200 &&
+        response.statusCode != 201 &&
+        response.statusCode != 204) {
       throw ApiException(
         'POST /notifications failed: ${response.statusCode} ${response.body}',
       );
@@ -3167,6 +3266,17 @@ class DuplicateTransactionSummary {
       cardDisplayName: (nickname?.isNotEmpty == true) ? nickname : cardName,
     );
   }
+
+  /// Cache round-trip (WP-C6): [fromJson] reads it back unchanged.
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'amount_inr': amount.rupees,
+    'occurred_at': occurredAt.toIso8601String(),
+    'merchant_name': merchantName,
+    'source': source,
+    'status': status,
+    'card_name': cardDisplayName,
+  };
 }
 
 class DuplicateCandidate {
@@ -3197,4 +3307,12 @@ class DuplicateCandidate {
       matchReason: json['match_reason'] as String,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'txn_a': txnA.toJson(),
+    'txn_b': txnB.toJson(),
+    'match_score': matchScore,
+    'match_reason': matchReason,
+  };
 }

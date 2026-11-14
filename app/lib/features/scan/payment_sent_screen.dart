@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
@@ -73,6 +74,11 @@ class PaymentSentScreen extends ConsumerStatefulWidget {
 
 class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
   bool _logging = false;
+
+  /// One identity for this screen's "log it", reused on every retry so a
+  /// second tap (or a lost reply) can never record the payment twice.
+  final String _clientMutationId = const Uuid().v4();
+  DateTime? _paidAt;
   bool _logged = false;
   String? _error;
   bool _acceptanceAnswered = false;
@@ -120,8 +126,10 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
           ),
         );
       }
-    } on ApiException catch (e) {
-      if (mounted) {
+    } catch (e) {
+      // Any failure (offline, timeout, a refused report) is information at
+      // most: the screen never waits on or fails because of this.
+      if (mounted && e is ApiException) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(e.userMessage)));
@@ -142,7 +150,10 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
       _error = null;
     });
     try {
-      await repo.logTransaction(
+      // Local first: saved in the phone's outbox under this screen's id and
+      // delivered in the background (offline included).
+      final outbox = await ref.read(outboxRepositoryProvider.future);
+      await outbox.enqueue(
         userCardId: widget.userCardId!,
         amount: widget.amount,
         categoryId: widget.categoryId,
@@ -150,7 +161,11 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
         merchantVpa: widget.merchantVpa,
         mcc: widget.mcc,
         rail: 'upi_qr',
+        occurredAt: _paidAt ??= DateTime.now(),
+        clientMutationId: _clientMutationId,
       );
+      ref.read(outboxFlushRequestProvider.notifier).state++;
+      ref.invalidate(pendingOutboxCountProvider);
       ref.invalidate(userCardsProvider);
       ref.invalidate(transactionsProvider);
       ref.invalidate(utilizationTransactionsProvider);

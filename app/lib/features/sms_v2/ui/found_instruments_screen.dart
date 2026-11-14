@@ -10,6 +10,8 @@ import '../../../app/design/widgets.dart';
 import '../../../app/required_field.dart';
 
 import '../../../app/providers.dart' as app;
+import '../../../data/user_cards_repository.dart' show UserCard;
+import '../../cards/add_card_local_first.dart';
 import '../../cards/card_picker_screen.dart';
 import '../instruments/card_linker.dart';
 import '../instruments/bank_summary_adapter.dart'
@@ -130,17 +132,34 @@ class FoundInstrumentsScreen extends ConsumerWidget {
             throw ArgumentError('Choose one card for this account');
           }
           for (final product in selected) {
-            final cardId = await repository.addCard(
-              product.id,
+            // WP-C6: one bounded attempt, else the card is kept on the phone
+            // and sent later (the instrument then links to the pending card).
+            final outcome = await addCardLocalFirst(
+              ref,
+              cardProductId: product.id,
+              product: product,
               last4: maskDigits,
             );
-            final cards = await repository.fetchUserCards();
             if (!context.mounted ||
                 namespace != ref.read(app.cacheNamespaceProvider)) {
               return;
             }
-            cache.financialStore.replaceCards(namespace, cards);
-            final card = cards.where((c) => c.id == cardId).single;
+            final UserCard card;
+            if (outcome.queued) {
+              card = UserCard.fromJson(
+                cache.financialStore
+                    .entities(namespace, 'cards')
+                    .firstWhere((c) => c['id'] == outcome.id),
+              );
+            } else {
+              final cards = await repository.fetchUserCards();
+              if (!context.mounted ||
+                  namespace != ref.read(app.cacheNamespaceProvider)) {
+                return;
+              }
+              cache.financialStore.replaceCards(namespace, cards);
+              card = cards.where((c) => c.id == outcome.id).single;
+            }
             actions.attachCard(instrument.instrumentId, card);
             ref.invalidate(app.userCardsProvider);
           }

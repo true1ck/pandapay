@@ -16,6 +16,7 @@ import '../pipeline/sms_v2_runtime.dart';
 import '../sync/bundle_verifier.dart';
 import '../sync/rule_keys.dart';
 import '../sync/attestation.dart';
+import '../sync/sharing_consent_mirror.dart';
 
 final FutureProvider<SmsV2Runtime?>
 smsV2RuntimeProvider = FutureProvider<SmsV2Runtime?>((ref) async {
@@ -72,6 +73,8 @@ smsV2RuntimeProvider = FutureProvider<SmsV2Runtime?>((ref) async {
     loadShippedBundle: () =>
         rootBundle.loadString('assets/sms_rules/baseline_bundle.json'),
     accountIsCurrent: current,
+    // Known offline: reading messages carries on, the network steps wait.
+    isOffline: () => ref.read(app.isOnlineProvider).valueOrNull == false,
     // Who the account owner is: the profile name when it is a real name (a
     // username is ignored), the names they typed, the payees they marked and
     // the names learned from their greetings.
@@ -84,10 +87,12 @@ smsV2RuntimeProvider = FutureProvider<SmsV2Runtime?>((ref) async {
     },
     hasSharingConsent: () async {
       if (!current()) return false;
-      final granted = await ref.read(
-        app.smsSharedLearningConsentProvider.future,
+      // The server's answer, or its local mirror when it cannot be reached.
+      final granted = await sharingConsentWithMirror(
+        namespace: namespace,
+        read: () => ref.read(app.smsSharedLearningConsentProvider.future),
       );
-      return current() && granted != null;
+      return current() && granted;
     },
     categoryIdBySlug: {
       for (final category in categories) category.slug: category.id,
@@ -98,10 +103,15 @@ smsV2RuntimeProvider = FutureProvider<SmsV2Runtime?>((ref) async {
 final smsV2LifecycleProvider = Provider<void>((ref) {
   var disposed = false;
   ref.onDispose(() => disposed = true);
-  Future<void> run() async {
+  Future<void> run({bool reconnected = false}) async {
     if (disposed) return;
     try {
       final runtime = await ref.read(smsV2RuntimeProvider.future);
+      // Waits set while the phone had no connection say nothing about the
+      // server: when it returns, everything queued is tried at once (Q-08).
+      if (!disposed && runtime != null && reconnected) {
+        runtime.resetUploadBackoff();
+      }
       if (!disposed && runtime != null) await runtime.sync();
     } catch (_) {
       // Local intake and the queue retain failed work for the next trigger.
@@ -113,7 +123,7 @@ final smsV2LifecycleProvider = Provider<void>((ref) {
   }, fireImmediately: true);
   ref.listen(app.isOnlineProvider, (previous, next) {
     if (previous?.valueOrNull == false && next.valueOrNull == true) {
-      unawaited(run());
+      unawaited(run(reconnected: true));
     }
   });
   ref.listen(app.smsFlushTriggerProvider, (_, _) => unawaited(run()));

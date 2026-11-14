@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/data/commitments_repository.dart';
 import 'package:pandapay/features/sms_v2/ledger/adapters.dart';
 import 'package:pandapay_domain/sms_v2.dart';
 
@@ -191,6 +192,32 @@ void main() {
             {'role': 'posted', 'minor': minor, 'unit': 'INR'},
           ],
         }) as MovementFact;
+
+    test('WP-C7: a manual paid/dismissed copy overrides the derived bill', () {
+      final bill = statement('a1', '2026-10-10', '2026-10-25', 10000);
+      final derived = billsFromFacts([bill], const []).single;
+      expect(derived.status.name, 'due');
+      Commitment copy(String status, {String? id}) => derived.copyWith(
+        id: id,
+        status: CommitmentStatus.values.byName(status),
+        paidOn: DateTime(2026, 10, 20),
+        isUserConfirmed: true,
+      );
+      final paid = billsFromFacts([bill], const [],
+          manualCopies: [copy('paid')]).single;
+      expect(paid.status.name, 'paid');
+      // Re-projected under a new fact id: identity + due day still match.
+      final reprojected = statement('zz9', '2026-10-10', '2026-10-25', 10000);
+      expect(
+        billsFromFacts([reprojected], const [],
+            manualCopies: [copy('paid', id: 'v2:old')]).single.status.name,
+        'paid',
+      );
+      expect(
+        billsFromFacts([bill], const [], manualCopies: [copy('dismissed')]),
+        isEmpty,
+      );
+    });
 
     test('a payment made before the statement exists does not settle it', () {
       final bill = statement('a1', '2026-10-10', '2026-10-25', 10000);

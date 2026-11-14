@@ -17,6 +17,7 @@ import '../ui/shared_presentation.dart';
 import '../composer/shared_editor.dart';
 import '../data/shared_pending_phones.dart';
 import 'shared_expense_mapping.dart';
+import 'shared_local_reads.dart';
 
 class SharedRuntimeUnavailable implements Exception {
   /// Why: `reads_off` (flag off on the server), `disabled` (off in this
@@ -126,8 +127,18 @@ class SharedExpensesRuntime extends ChangeNotifier {
   /// Zone flag: answer from the saved copy only (no network). Used to paint
   /// the last known screen at once while the live load runs behind it.
   static const _cacheOnlyKey = #sharedCacheOnly;
-  Future<R> runCacheOnly<R>(Future<R> Function() action) =>
-      runZoned(action, zoneValues: {_cacheOnlyKey: true});
+  ///
+  /// [allowLocal] also lets a section with no saved copy be built from this
+  /// phone's stored Split records and waiting commands (the offline fallback
+  /// after a live load failed); the first-paint call leaves it off.
+  Future<R> runCacheOnly<R>(
+    Future<R> Function() action, {
+    bool allowLocal = false,
+  }) => runZoned(action, zoneValues: {_cacheOnlyKey: allowLocal ? 'local' : true});
+  static bool get _cacheOnly => Zone.current[_cacheOnlyKey] != null;
+
+  /// What this phone has stored for a screen, in the server's JSON shape.
+  late final SharedLocalReads _local = SharedLocalReads(store, accountId);
   int _accessGeneration = 0;
   final _queries = <String, Object>{};
   SharedExpensesRuntime({
@@ -148,6 +159,16 @@ class SharedExpensesRuntime extends ChangeNotifier {
   bool get proposalsEnabled => capabilities?['proposals'] == true;
   bool get settlementsEnabled => capabilities?['settlements'] == true;
   bool get sourceFundingEnabled => capabilities?['sourceFunding'] == true;
+
+  /// Saving a change on this phone (create a group, add a friend, rename,
+  /// respond) only needs the feature not to be known-off. With no flags yet
+  /// (never loaded, or a bad connection at launch) the change is queued and
+  /// the server decides when it is sent; hiding the button would lose it.
+  bool get canQueueProposals => capabilities == null || proposalsEnabled;
+  bool get canQueueSettlements => capabilities == null || settlementsEnabled;
+
+  /// Saved changes the server refused (see [SharedExpensesStore.attentionCount]).
+  int get attentionCount => store.attentionCount;
   int get accessGeneration => _accessGeneration;
   String get accountId => store.namespace.substring(5);
   void _current() {
@@ -158,13 +179,22 @@ class SharedExpensesRuntime extends ChangeNotifier {
     if (!_disposed && isCurrent()) notifyListeners();
   }
 
+  /// Drops the saved query copies for this account but keeps the saved feature
+  /// flags: they are not private data, and losing them would make the next
+  /// offline launch treat the feature as unknown.
+  Future<void> _clearSharedCache() async {
+    await cache.clearPrefix('${store.namespace}:shared:');
+    final flags = capabilities;
+    if (flags != null) await _saveCapabilities(flags);
+  }
+
   /// Invalidate in-flight aggregates before any asynchronous purge. A late
   /// authorized-at-start response must never resurrect revoked private data.
   Future<void> revokeContext(String contextId) async {
     _current();
     _accessGeneration++;
     await store.recoveryGate.run(() async {
-      await cache.clearPrefix('${store.namespace}:shared:');
+      await _clearSharedCache();
       _current();
       await store.revokeContext(contextId);
       dataVersion++;
@@ -250,6 +280,21 @@ class SharedExpensesRuntime extends ChangeNotifier {
     return _running = _refreshLoop(maxPullPages);
   }
 
+  /// The network came back (or the app returned to the foreground): do not
+  /// wait out a backoff earned while it was down. Due rows go now; the attempt
+  /// cap still applies. Never throws, so a listener can fire and forget.
+  Future<void> reconnect() async {
+    try {
+      _current();
+      await store.resetBackoff();
+      _retryAt = null;
+      _failures = 0;
+      await refresh();
+    } catch (_) {
+      // A disposed runtime or a busy recovery: the next resume tries again.
+    }
+  }
+
   Future<void> _refreshLoop(int maxPullPages) async {
     do {
       _again = false;
@@ -295,7 +340,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
           if (page.revokedContextIds.isNotEmpty) {
             // Remove stale query summaries before acknowledging access loss.
             _accessGeneration++;
-            await cache.clearPrefix('${store.namespace}:shared:');
+            await _clearSharedCache();
             _current();
           }
           await store.applyPageOffThread(page, expectedCursor: before);
@@ -339,10 +384,10 @@ class SharedExpensesRuntime extends ChangeNotifier {
     Map<String, Object?>? provisional,
   }) async {
     _current();
-    if (!readsEnabled ||
+    if (capabilities != null && !readsEnabled ||
         (kind.startsWith('settlement.')
-            ? !settlementsEnabled
-            : !proposalsEnabled)) {
+            ? !canQueueSettlements
+            : !canQueueProposals)) {
       throw const SharedRuntimeUnavailable();
     }
     final command = SharedCommand(
@@ -372,7 +417,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     String name,
   ) async {
     _current();
-    if (!proposalsEnabled ||
+    if (!canQueueProposals ||
         name.trim().isEmpty ||
         name.length > 120 ||
         RegExp(r'[\x00-\x1f\x7f]').hasMatch(name)) {
@@ -399,7 +444,21 @@ class SharedExpensesRuntime extends ChangeNotifier {
     // friend, so the person just picks another name.
     final refused =
         nameFailure(context.operationId) ?? nameFailure(member.operationId);
-    if (refused != null) throw refused;
+    if (refused != null) {
+      // The screen tells the person now; it is not also a leftover "not synced".
+      // Both ops may carry a refusal (the member's is a dependent when the
+      // context was refused); the one that holds the name refusal is the one
+      // the screen explained.
+      for (final op in [context, member]) {
+        if (store.operation(op.operationId)?.state ==
+                SharedCommandState.rejected ||
+            store.operation(op.operationId)?.state ==
+                SharedCommandState.conflict) {
+          await acknowledgeRefusal(op.operationId);
+        }
+      }
+      throw refused;
+    }
     return (contextId: id, memberId: memberId);
   }
 
@@ -634,6 +693,36 @@ class SharedExpensesRuntime extends ChangeNotifier {
     return SharedNameException.fromStored(op.errorCode);
   }
 
+  /// A refusal the screen has already explained (a taken name) is dealt with:
+  /// forget the command so it does not also show up as "not synced".
+  Future<void> acknowledgeRefusal(String operationId) async {
+    try {
+      await store.discard(operationId);
+    } catch (_) {}
+    _notify();
+  }
+
+  /// Needs-attention "Retry": back into the queue with a fresh budget, sent now.
+  Future<void> retryRefused(String operationId) async {
+    _current();
+    if (await store.requeue(operationId)) {
+      syncLag = true;
+      _notify();
+      await refresh();
+      dataVersion++;
+      _notify();
+    }
+  }
+
+  /// Needs-attention "Discard": forget it (the server never accepted it).
+  Future<void> discardRefused(String operationId) async {
+    _current();
+    if (await store.discard(operationId)) {
+      dataVersion++;
+      _notify();
+    }
+  }
+
   /// The last list fetched in this session, so the requests page can show
   /// something at once while it refreshes. In memory only.
   List<SharedJoinRequest>? cachedJoinRequests;
@@ -725,10 +814,16 @@ class SharedExpensesRuntime extends ChangeNotifier {
       throw const SharedRuntimeUnavailable();
     }
     final cacheKey = '${store.namespace}:shared:$key';
-    if (Zone.current[_cacheOnlyKey] == true) {
+    if (_cacheOnly) {
       final saved = await cache.get(cacheKey);
       _current();
-      if (saved == null) throw const SharedRuntimeUnavailable('no_saved_copy');
+      if (saved == null) {
+        final stored = Zone.current[_cacheOnlyKey] == 'local'
+            ? _local.read(key)
+            : null;
+        if (stored != null) return stored;
+        throw const SharedRuntimeUnavailable('no_saved_copy');
+      }
       return Map<String, Object?>.from(jsonDecode(saved) as Map);
     }
     final accessGeneration = _accessGeneration, request = Object();
@@ -770,7 +865,15 @@ class SharedExpensesRuntime extends ChangeNotifier {
       authorized();
       final saved = await cache.get(cacheKey);
       authorized();
-      if (saved == null) rethrow;
+      if (saved == null) {
+        // Never opened online: build it from the pulled records and the
+        // commands still waiting on this phone, if there are any.
+        final stored = _local.read(key);
+        if (stored == null) rethrow;
+        _servedStale = true;
+        offline = true;
+        return stored;
+      }
       _servedStale = true;
       offline = true;
       return Map<String, Object?>.from(jsonDecode(saved) as Map);
@@ -893,7 +996,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     if (clean == null || clean.length > sharedMemberNameMax) {
       throw const FormatException('Invalid member name');
     }
-    if (!proposalsEnabled || store.isContextRevoked(contextId)) {
+    if (!canQueueProposals || store.isContextRevoked(contextId)) {
       throw const SharedRuntimeUnavailable();
     }
     final command = SharedCommand(
@@ -919,6 +1022,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
       _renameOverlay.remove('$contextId:$memberId');
       if (directCounterpart) _directTitles.remove(contextId);
       _notify();
+      await acknowledgeRefusal(command.operationId);
       throw refused;
     }
     // Once the server has it, its roster is the truth again.
@@ -1006,7 +1110,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
       members: List<SharedEditorMember>.unmodifiable(roster),
       direct: current['kind'] == 'direct',
       canInvite:
-          proposalsEnabled &&
+          canQueueProposals &&
           ownMember.role == 'owner' &&
           (current['kind'] != 'direct' || roster.length < 2),
       canShareLink: proposalsEnabled && ownMember.role == 'owner',
@@ -1074,7 +1178,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     String decision,
   ) async {
     _current();
-    if (!proposalsEnabled || !{'approve', 'reject'}.contains(decision)) {
+    if (!canQueueProposals || !{'approve', 'reject'}.contains(decision)) {
       throw const SharedRuntimeUnavailable();
     }
     final command = SharedCommand(
@@ -1104,7 +1208,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     String decision,
   ) async {
     _current();
-    if (!settlementsEnabled || !{'confirm', 'reject'}.contains(decision)) {
+    if (!canQueueSettlements || !{'confirm', 'reject'}.contains(decision)) {
       throw const SharedRuntimeUnavailable();
     }
     final command = SharedCommand(
@@ -1132,7 +1236,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     String? reference,
   }) async {
     _current();
-    if (!settlementsEnabled) {
+    if (!canQueueSettlements) {
       throw const SharedRuntimeUnavailable();
     }
     final command = SharedCommand(
@@ -1188,7 +1292,10 @@ class SharedExpensesRuntime extends ChangeNotifier {
         'Not accepted. Open the item to review it.',
       SharedCommandState.awaitingAuth =>
         'Saved on this device. Sign in to sync.',
-      _ => 'Saved on this device · waiting to sync',
+      _ =>
+        offline
+            ? sharedSavedOfflineCopy
+            : sharedSavedOfflineCopy,
     };
   }
 
@@ -1310,7 +1417,10 @@ class SharedExpensesRuntime extends ChangeNotifier {
           rethrow;
         } else {
           try {
-            final saved = await runCacheOnly(() => _groupSectionsLegacy(id));
+            final saved = await runCacheOnly(
+              () => _groupSectionsLegacy(id),
+              allowLocal: true,
+            );
             _servedStale = true;
             return saved;
           } catch (_) {
@@ -1320,7 +1430,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
       } on SharedRuntimeUnavailable {
         // Nothing saved under the new key yet: only the cache-only first
         // paint may fall back to the older saved sections.
-        if (Zone.current[_cacheOnlyKey] != true) rethrow;
+        if (!_cacheOnly) rethrow;
       }
     }
     return _groupSectionsLegacy(id, expenseAfter, balanceAfter);
@@ -1346,7 +1456,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     _servedStale = false;
     final results = await _groupSections(id, expenseAfter, balanceAfter);
     _current();
-    if (!_servedStale && Zone.current[_cacheOnlyKey] != true) {
+    if (!_servedStale && !_cacheOnly) {
       _groupLive[id] = (at: DateTime.now(), version: dataVersion);
     }
     final details = results[0],
@@ -1386,6 +1496,17 @@ class SharedExpensesRuntime extends ChangeNotifier {
         ),
       );
     }
+    // Expenses saved on this phone and not yet confirmed lead the first page,
+    // marked "Waiting to sync"; the server's copy replaces them by expense id.
+    final shown = {for (final row in expenseRows) row.id};
+    final waitingRows = <SharedExpenseRow>[
+      if (expenseAfter == null)
+        for (final op in _local.pending(contextId: id))
+          if (op.command.kind == 'expense.propose')
+            if (_waitingExpense(op, own) case final row?)
+              if (shown.add(row.id)) row,
+    ];
+    expenseRows.insertAll(0, waitingRows);
     return SharedGroupPresentation(
       id: id,
       direct: details['kind'] == 'direct',
@@ -1398,7 +1519,8 @@ class SharedExpensesRuntime extends ChangeNotifier {
         nextCursor: expensePage['nextCursor'] as String?,
         incomplete:
             syncLag ||
-            expenseRows.length != (expensePage['items'] as List).length,
+            expenseRows.length - waitingRows.length !=
+                (expensePage['items'] as List).length,
       ),
       balances: SharedPage(
         items: balanceRows,
@@ -1420,13 +1542,106 @@ class SharedExpensesRuntime extends ChangeNotifier {
     );
   }
 
+  /// A queued expense as a row marked "Waiting to sync". Its numbers come
+  /// from the command itself (the bill, contributions and shares it carries).
+  SharedExpenseRow? _waitingExpense(SharedQueuedCommand op, String own) {
+    final p = op.command.toJson()['payload'] as Map;
+    final snapshot = (p['snapshot'] as Map?) ?? const {};
+    String sum(Object? rows) {
+      var total = BigInt.zero;
+      if (rows is List) {
+        for (final r in rows) {
+          if (r is Map && r['memberId'] == own) {
+            total += BigInt.tryParse('${r['amountMinor']}') ?? BigInt.zero;
+          }
+        }
+      }
+      return total.toString();
+    }
+
+    final row = mapSharedExpenseRecord({
+      'expenseId': p['expenseId'],
+      'totalMinor': null,
+      'pendingRevision': {
+        'title': p['title'],
+        'occurredOn': p['occurredOn'],
+        'totalMinor': snapshot['totalMinor'],
+        'bill': p['bill'],
+        'void': p['void'] == true,
+        'yourPaidMinor': sum(snapshot['contributions']),
+        'yourShareMinor': sum(snapshot['shares']),
+      },
+    }, own);
+    if (row == null) return null;
+    return SharedExpenseRow(
+      id: row.id,
+      title: row.title,
+      billTotal: row.billTotal,
+      yourPaid: row.yourPaid,
+      yourShare: row.yourShare,
+      paidBy: row.paidBy,
+      payerLabel: row.payerLabel,
+      totalLabel: row.totalLabel,
+      paidLabel: row.paidLabel,
+      occurredAtLabel: row.occurredAtLabel,
+      proposed: true,
+      reviewLabel: 'Waiting to sync',
+      participation: row.participation,
+    );
+  }
+
+  /// Everything needed to open the expense editor on a split, read only from
+  /// this phone (no network, no saved-copy lookup): the group's name, the
+  /// viewer's member id and the people who can be added to an expense. A group
+  /// created offline answers with just its owner (and any friend added
+  /// offline); the owner's id is a stand-in the store swaps for the server's
+  /// when the group's create commits. Null when this phone knows nothing about
+  /// [contextId] (use [editorContext] online for that).
+  ({String name, String ownMemberId, List<SharedEditorMember> members})?
+  offlineEditorContext(String contextId) {
+    _current();
+    if (!sharedUuid(contextId) || store.isContextRevoked(contextId)) return null;
+    final details = _local.detail(contextId);
+    final own = _local.ownMemberId(contextId);
+    if (details == null || own == null || details['state'] != 'active') {
+      return null;
+    }
+    final names = _pendingRenames(contextId);
+    return (
+      name: _directTitles[contextId] ?? details['name'] as String,
+      ownMemberId: own,
+      members: List<SharedEditorMember>.unmodifiable([
+        for (final row in _local.memberRows(contextId))
+          if (row['state'] == 'active' || row['state'] == 'invited')
+            SharedEditorMember(
+              row['memberId'] as String,
+              row['profileId'] == accountId
+                  ? 'You'
+                  : names[row['memberId']] ??
+                        row['displayName'] as String? ??
+                        'Member',
+              state: row['state'] as String,
+              role: row['role'] as String? ?? 'member',
+              profileId: row['profileId'] as String?,
+              rawName: names[row['memberId']] ?? row['displayName'] as String?,
+            ),
+      ]),
+    );
+  }
+
   /// Errors that must still surface: access was refused or the account moved.
-  static bool _isDenied(Object e) =>
-      e is! SharedTransportException ||
-      e.statusCode == 401 ||
-      e.statusCode == 403 ||
-      e.statusCode == 404 ||
-      e.code == 'account_changed';
+  static bool _isDenied(Object e) {
+    // "Nothing saved for this extra section" is not a refusal: the screen
+    // marks the section incomplete and still shows the rest.
+    if (e is SharedRuntimeUnavailable && e.reason == 'no_saved_copy') {
+      return false;
+    }
+    return e is! SharedTransportException ||
+        e.statusCode == 401 ||
+        e.statusCode == 403 ||
+        e.statusCode == 404 ||
+        e.code == 'account_changed';
+  }
 
   bool _combinedHub = true;
 
@@ -1515,6 +1730,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
           try {
             final saved = await runCacheOnly(
               () => _hubSectionsLegacy(after, searches),
+              allowLocal: true,
             );
             _servedStale = true;
             return saved;
@@ -1523,7 +1739,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
           }
         }
       } on SharedRuntimeUnavailable {
-        if (Zone.current[_cacheOnlyKey] != true) rethrow;
+        if (!_cacheOnly) rethrow;
       }
     }
     return _hubSectionsLegacy(after, searches);
@@ -1592,16 +1808,47 @@ class SharedExpensesRuntime extends ChangeNotifier {
     final summaryKnown = sections.summaryKnown,
         activityKnown = sections.activityKnown;
     _current();
-    if (!_servedStale && Zone.current[_cacheOnlyKey] != true) {
+    if (!_servedStale && !_cacheOnly) {
       _hubLiveAt = DateTime.now();
       _hubLiveVersion = dataVersion;
     }
+    // Commands still on this phone: groups and friends the server has not
+    // confirmed yet, and a "Waiting to sync" line per change. Matched by the
+    // context id, so the server's copy replaces them the moment it arrives.
+    final waiting = _local.pending();
+    final onPage = {
+      for (final data in [results[0], results[1]])
+        for (final raw in data['items'] as List) (raw as Map)['contextId'],
+    };
+    final waitingNames = <Object?, String>{
+      for (final op in waiting)
+        if (op.command.kind == 'context.create')
+          op.command.contextId:
+              (op.command.toJson()['payload'] as Map)['name'] as String,
+    };
     SharedPage<SharedContextRow> contextPage(
       Map<String, Object?> data,
       SharedHubTab tab,
     ) {
+      final first = after[tab] == null && (searches[tab] ?? '').isEmpty;
+      final kind = tab == SharedHubTab.friends ? 'direct' : 'group';
       return SharedPage(
-        items: contextRows(data['items'] as List),
+        items: [
+          if (first)
+            for (final op in waiting)
+              if (op.command.kind == 'context.create' &&
+                  (op.command.toJson()['payload'] as Map)['contextKind'] ==
+                      kind &&
+                  !onPage.contains(op.command.contextId))
+                _contextRow({
+                  ...(Map<String, Object?>.from(
+                    op.command.toJson()['payload'] as Map,
+                  )),
+                  'contextId': op.command.contextId,
+                  'waiting': true,
+                }),
+          ...contextRows(data['items'] as List),
+        ],
         hasMore: data['hasMore'] == true,
         incomplete: syncLag,
         hasPrevious: after[tab] != null,
@@ -1624,6 +1871,19 @@ class SharedExpensesRuntime extends ChangeNotifier {
       groups: contextPage(results[1], SharedHubTab.groups),
       activity: SharedPage(
         items: [
+          if (after[SharedHubTab.activity] == null &&
+              (searches[SharedHubTab.activity] ?? '').isEmpty)
+            for (final op in waiting.take(20))
+              if (_waitingCopy(op.command.kind) case final copy?)
+                SharedActivityRow(
+                  id: op.command.contextId,
+                  description: 'Waiting to sync · $copy',
+                  contextLabel:
+                      _directTitles[op.command.contextId] ??
+                      waitingNames[op.command.contextId] ??
+                      _nameOnPage(results, op.command.contextId),
+                  occurredAtLabel: 'Just now',
+                ),
           for (final raw in activityPage['items'] as List)
             SharedActivityRow(
               id: (raw as Map)['contextId'] as String,
@@ -1684,8 +1944,12 @@ class SharedExpensesRuntime extends ChangeNotifier {
 
   SharedContextRow _contextRow(Map<String, Object?> row) {
     final invited = row['membershipState'] == 'invited';
-    final known = row['owedMinor'] is String && row['owingMinor'] is String;
-    final balance = known
+    final waiting = row['waiting'] == true;
+    final known =
+        waiting || row['owedMinor'] is String && row['owingMinor'] is String;
+    final balance = waiting
+        ? _summary('0', '0')
+        : known
         ? _summary(row['owedMinor'], row['owingMinor'])
         : const SharedBalanceSummary(
             owedToYou: Money.zero(),
@@ -1697,7 +1961,10 @@ class SharedExpensesRuntime extends ChangeNotifier {
       id: row['contextId'] as String,
       title: _directTitles[row['contextId']] ?? row['name'] as String,
       balance: balance,
-      state: invited
+      subtitle: waiting ? 'Waiting to sync' : null,
+      state: waiting
+          ? SharedContextState.active
+          : invited
           ? SharedContextState.pendingInvite
           : !known
           ? SharedContextState.incomplete
@@ -1710,6 +1977,29 @@ class SharedExpensesRuntime extends ChangeNotifier {
           : SharedContextState.active,
     );
   }
+
+  static String? _nameOnPage(
+    List<Map<String, Object?>> results,
+    String contextId,
+  ) {
+    for (final data in [results[0], results[1]]) {
+      for (final raw in data['items'] as List) {
+        if ((raw as Map)['contextId'] == contextId) return raw['name'] as String?;
+      }
+    }
+    return null;
+  }
+
+  /// What a command still waiting to be sent is called on the activity tab.
+  static String? _waitingCopy(String kind) => switch (kind) {
+    'context.create' => 'Group created',
+    'member.invite' => 'Member added',
+    'expense.propose' => 'Expense submitted for review',
+    'settlement.report' => 'Payment reported',
+    'settlement.respond' => 'Payment response',
+    'expense.respond' => 'Expense review',
+    _ => null,
+  };
 
   static String _activityCopy(Object? kind) => switch (kind) {
     'context.created' => 'Group created',

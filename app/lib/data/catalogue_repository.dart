@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show compute;
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:pandapay_domain/pandapay_domain.dart';
 
@@ -147,10 +148,34 @@ class SpendCategory {
 
 bool isCustomCategoryId(String? id) => id?.startsWith('custom:') == true;
 
+/// Snapshot of the built-in categories shipped with the app, the last
+/// fallback of `categoriesProvider` when there is no cache and no network.
+const String bundledCategoriesAsset = 'assets/data/bundled_categories.json';
+
+/// Placeholder ids (`bundled:<slug>`): the server owns the real UUIDs.
+bool isBundledCategoryId(String? id) => id?.startsWith('bundled:') == true;
+
+/// Parses the bundled file with the same model the network response uses.
+List<SpendCategory> parseBundledCategories(String raw) =>
+    ((jsonDecode(raw) as Map<String, dynamic>)['categories'] as List)
+        .cast<Map<String, dynamic>>()
+        .map(SpendCategory.fromJson)
+        .toList();
+
+Future<List<SpendCategory>> loadBundledCategories() async {
+  try {
+    return parseBundledCategories(await rootBundle.loadString(bundledCategoriesAsset));
+  } catch (_) {
+    return const [];
+  }
+}
+
 String? categoryIdForServer(
   String? id, [
   Iterable<SpendCategory> categories = const <SpendCategory>[],
 ]) {
+  // A bundled placeholder id means nothing to the API: send no category.
+  if (isBundledCategoryId(id)) return null;
   if (!isCustomCategoryId(id)) return id;
   final selected = categories.where((category) => category.id == id).firstOrNull;
   return selected?.parentCategoryId;

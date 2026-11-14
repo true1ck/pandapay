@@ -61,6 +61,19 @@ class _CardRepository implements UserCardsRepository {
     return 'one';
   }
 
+  // The first-run add now goes through addCardLocalFirst (WP-C6).
+  @override
+  Future<({String id, bool existing})> addCardWithClientId(
+    String clientId,
+    String cardProductId, {
+    String? nickname,
+    String? last4,
+    bool mergeExisting = true,
+  }) async {
+    additions++;
+    return (id: 'one', existing: false);
+  }
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

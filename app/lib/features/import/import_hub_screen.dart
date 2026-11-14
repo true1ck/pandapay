@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../data/api_exception.dart' show isOfflineLike;
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../app/design/app_theme.dart';
@@ -79,6 +80,7 @@ class _ImportHubScreenState extends ConsumerState<ImportHubScreen>
   Widget build(BuildContext context) {
     final statementImports = ref.watch(statementImportsProvider);
     final smsBatches = ref.watch(smsImportBatchesProvider);
+    final updatedAt = ref.watch(importListFetchedAtProvider('statement')).valueOrNull;
     final body = AppBackground(
       child: ListView(
         padding: const EdgeInsets.all(AppSpace.lg),
@@ -176,6 +178,7 @@ class _ImportHubScreenState extends ConsumerState<ImportHubScreen>
           _ImportHistorySection(
             statementImports: statementImports,
             smsBatches: smsBatches,
+            updatedAt: updatedAt,
             onRetry: () {
               ref.invalidate(statementImportsProvider);
               ref.invalidate(smsImportBatchesProvider);
@@ -207,11 +210,13 @@ class _ImportHubScreenState extends ConsumerState<ImportHubScreen>
 class _ImportHistorySection extends StatelessWidget {
   final AsyncValue<List<StatementImport>> statementImports;
   final AsyncValue<List<SmsImportBatch>> smsBatches;
+  final DateTime? updatedAt;
   final VoidCallback onRetry;
 
   const _ImportHistorySection({
     required this.statementImports,
     required this.smsBatches,
+    this.updatedAt,
     required this.onRetry,
   });
 
@@ -240,6 +245,14 @@ class _ImportHistorySection extends StatelessWidget {
         (statementImports.isLoading && statementImports.valueOrNull == null) ||
         (smsBatches.isLoading && smsBatches.valueOrNull == null);
     final hasError = statementImports.hasError || smsBatches.hasError;
+    // Offline with nothing saved: hide the section instead of showing an error.
+    if (entries.isEmpty &&
+        hasError &&
+        [statementImports, smsBatches].every(
+          (v) => !v.hasError || isOfflineLike(v.error!),
+        )) {
+      return const SizedBox.shrink();
+    }
 
     return Container(
       padding: const EdgeInsets.all(AppSpace.lg),
@@ -267,7 +280,9 @@ class _ImportHistorySection extends StatelessWidget {
           ),
           const SizedBox(height: AppSpace.xs),
           Text(
-            'Your latest completed imports, with the time they were added.',
+            updatedAt == null
+                ? 'Your latest completed imports, with the time they were added.'
+                : 'Your latest completed imports. Updated ${DateFormat('d MMM, h:mm a').format(updatedAt!)}.',
             style: BambooFonts.ui(12.5, color: BambooInk.ink500),
           ),
           const SizedBox(height: AppSpace.md),

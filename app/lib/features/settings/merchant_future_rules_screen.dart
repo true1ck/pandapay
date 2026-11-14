@@ -6,6 +6,8 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../account/account_local_first.dart';
+import 'merchant_rules_offline.dart';
 import '../../data/catalogue_repository.dart';
 import '../../data/merchant_category_rules_repository.dart';
 import '../../data/merchant_issue_rules_repository.dart';
@@ -27,6 +29,23 @@ class _MerchantFutureRulesScreenState
   bool _loading = true;
   String? _error;
   String? _busyId;
+  Set<String> _pending = {};
+
+  static MerchantCategoryRule _copy(
+    MerchantCategoryRule r, {
+    bool? isActive,
+    String? categoryId,
+    String? userCategoryId,
+  }) {
+    final j = r.toJson();
+    if (isActive != null) j['isActive'] = isActive;
+    if (isActive == null) {
+      j['categoryId'] = categoryId;
+      j['userCategoryId'] = userCategoryId;
+      j['categoryName'] = null;
+    }
+    return MerchantCategoryRule.fromJson(j);
+  }
 
   @override
   void initState() {
@@ -44,14 +63,61 @@ class _MerchantFutureRulesScreenState
       _loading = true;
       _error = null;
     });
+    // WP-C11: the saved list paints first; the live read is bounded.
+    final saved = await readRulesCache(ref);
+    if (saved != null && mounted) {
+      setState(() {
+        _rules = saved;
+        _loading = false;
+      });
+    }
     try {
-      final rules = await repository.fetchRules();
+      final rules = await repository.fetchRules().timeout(
+        const Duration(seconds: 8),
+      );
+      await writeRulesCache(ref, rules);
+      _pending = await pendingRuleIds(ref);
       if (mounted) setState(() => _rules = rules);
     } catch (error) {
-      if (mounted) setState(() => _error = userFacingErrorMessage(error));
+      _pending = await pendingRuleIds(ref);
+      if (mounted && saved == null) {
+        setState(() => _error = userFacingErrorMessage(error));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// Sends the edit now or queues it with the rule's expected version; a
+  /// queued edit shows on the card at once and the rule waits (no second edit
+  /// on a version that is about to change).
+  Future<MerchantCategoryRule?> _write(
+    MerchantCategoryRule rule, {
+    required Future<MerchantCategoryRule> Function() live,
+    required MerchantCategoryRule Function() optimistic,
+    required String kind,
+    required Map<String, Object?> payload,
+  }) async {
+    MerchantCategoryRule? updated;
+    final result = await sendOrQueue(
+      ref,
+      kind: kind,
+      target: 'merchant_rule:${rule.id}',
+      payload: {...payload, 'ruleId': rule.id, 'expectedVersion': rule.version},
+      live: () async => updated = await live(),
+    );
+    if (result == AccountWrite.sent) return updated;
+    final local = optimistic();
+    _pending = {..._pending, rule.id};
+    await writeRulesCache(ref, [
+      for (final item in _rules) item.id == rule.id ? local : item,
+    ]);
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(savedOfflineMessage)));
+    }
+    return local;
   }
 
   Future<void> _setActive(MerchantCategoryRule rule, bool active) async {
@@ -62,14 +128,22 @@ class _MerchantFutureRulesScreenState
       _error = null;
     });
     try {
-      final updated = active
-          ? await repository.update(
-              rule.id,
-              isActive: true,
-              expectedVersion: rule.version,
-            )
-          : await repository.disable(rule.id, expectedVersion: rule.version);
-      if (mounted) {
+      final updated = await _write(
+        rule,
+        kind: active
+            ? AccountCommand.merchantRuleUpdate
+            : AccountCommand.merchantRuleDisable,
+        payload: active ? {'isActive': true} : {},
+        live: () => active
+            ? repository.update(
+                rule.id,
+                isActive: true,
+                expectedVersion: rule.version,
+              )
+            : repository.disable(rule.id, expectedVersion: rule.version),
+        optimistic: () => _copy(rule, isActive: active),
+      );
+      if (mounted && updated != null) {
         setState(() {
           _rules = [
             for (final item in _rules) item.id == updated.id ? updated : item,
@@ -110,13 +184,26 @@ class _MerchantFutureRulesScreenState
       _error = null;
     });
     try {
-      final updated = await repository.update(
-        rule.id,
-        categoryId: isCustom ? null : value,
-        userCategoryId: isCustom ? userCategoryIdForServer(value) : null,
-        expectedVersion: rule.version,
+      final updated = await _write(
+        rule,
+        kind: AccountCommand.merchantRuleUpdate,
+        payload: {
+          'categoryId': isCustom ? null : value,
+          'userCategoryId': isCustom ? userCategoryIdForServer(value) : null,
+        },
+        live: () => repository.update(
+          rule.id,
+          categoryId: isCustom ? null : value,
+          userCategoryId: isCustom ? userCategoryIdForServer(value) : null,
+          expectedVersion: rule.version,
+        ),
+        optimistic: () => _copy(
+          rule,
+          categoryId: isCustom ? null : value,
+          userCategoryId: isCustom ? userCategoryIdForServer(value) : null,
+        ),
       );
-      if (mounted) {
+      if (mounted && updated != null) {
         setState(() {
           _rules = [
             for (final item in _rules) item.id == updated.id ? updated : item,
@@ -216,6 +303,11 @@ class _MerchantFutureRulesScreenState
             const SizedBox(height: 8),
             if (busy)
               const LinearProgressIndicator()
+            else if (_pending.contains(rule.id))
+              Text(
+                'Saved — waiting to send',
+                style: BambooFonts.ui(12, color: BambooInk.ink500),
+              )
             else
               Wrap(
                 spacing: AppSpace.sm,

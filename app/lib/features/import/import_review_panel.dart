@@ -15,6 +15,8 @@ import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart'
     show SpendCategory, categoryIdForServer, userCategoryIdForServer;
 import '../../data/import_models.dart';
+import '../../data/local/financial_store.dart' show TransactionQuery;
+import '../../data/statement_import_continuation.dart';
 import '../../data/transaction_import_pipeline.dart';
 import '../../data/user_cards_repository.dart';
 
@@ -41,6 +43,7 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
   );
   bool _done = false;
   bool _preparingContinuation = false;
+  bool _savedOffline = false;
   String _filter = 'All';
   List<TransactionEntry> _saved = [];
   bool _checking = false;
@@ -107,11 +110,16 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
       _duplicateError = null;
     });
     try {
-      // Fetch from the database, not the potentially stale Activity cache.
-      final saved = await repository.fetchTransactions();
+      // Local store (works offline, includes unsynced rows); the server stays
+      // the final dedupe at import time.
+      final cache = await ref.read(responseCacheProvider.future);
+      final snapshot = await cache.readTransactions(
+        ref.read(cacheNamespaceProvider),
+        const TransactionQuery(),
+      );
       if (!mounted) return;
       setState(() {
-        _saved = saved;
+        _saved = snapshot?.rows ?? const [];
         _savedCheckUnavailable = false;
         session.checkSavedDuplicates(_saved);
       });
@@ -151,8 +159,9 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
       _error = null;
       _preparingContinuation = true;
     });
+    StatementImportContinuation? continuation;
     try {
-      final continuation = Env.statementImportContinuationEnabled
+      continuation = Env.statementImportContinuationEnabled
           ? await ref.read(statementImportContinuationProvider.future)
           : null;
       if (Env.statementImportContinuationEnabled && continuation == null) {
@@ -180,6 +189,26 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
       }
       if (mounted) setState(() => _done = true);
     } catch (error) {
+      // WP-C10: the batches were saved encrypted before the first upload, so a
+      // network failure is not an error; they upload when the phone is back.
+      final saved = continuation;
+      if (saved != null &&
+          isImportTransportFailure(error) &&
+          saved.outbox.pendingCountFor(session.continuationSessionId) > 0) {
+        ref.read(statementImportRevisionProvider.notifier).state++;
+        if (mounted) {
+          setState(() {
+            _savedOffline = true;
+            _done = true;
+          });
+        }
+        return;
+      }
+      final parked = saved?.parkedReasons[session.continuationSessionId];
+      if (parked != null) {
+        if (mounted) setState(() => _error = parked);
+        return;
+      }
       if (mounted) {
         final message =
             error is ApiException && error.errorCode == 'internal_error'
@@ -242,7 +271,13 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
                 widget.doneTitle,
                 style: Theme.of(context).textTheme.titleLarge,
               ),
-              Text(session.progress.description, textAlign: TextAlign.center),
+              if (_savedOffline)
+                const Text(
+                  "Saved on this phone — will upload when you're back online.",
+                  textAlign: TextAlign.center,
+                )
+              else
+                Text(session.progress.description, textAlign: TextAlign.center),
               Text(
                 '${session.rows.length - session.selected.length} detected rows were skipped or held for duplicate review. ${rejected.length} unrecognized rows were not imported.',
               ),

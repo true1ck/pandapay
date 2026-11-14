@@ -19,6 +19,7 @@ import '../import/email_forwarding_screen.dart';
 import '../import/statement_pdf_import_screen.dart';
 import '../sms_import/sms_listener_service.dart';
 import 'card_network_util.dart';
+import 'add_card_local_first.dart';
 import 'card_picker_screen.dart';
 
 /// "Find my cards" — design 30's fastest add-a-card path, over **both**
@@ -113,22 +114,13 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         final smsResult = subset.isEmpty
             ? null
             : await _discoverLocally(subset);
-        try {
-          final emailResult = await repo
-              .discoverCards()
-              .timeout(const Duration(seconds: 20));
-          final result = smsResult == null
-              ? emailResult
-              : _mergeDiscovery(smsResult, emailResult);
-          // The server can identify an SMS-only card only as a generic
-          // issuer/suffix placeholder. Reconcile against the current wallet
-          // before rendering so a card already owned under a named product
-          // cannot be selected and later fail as a duplicate.
-          CardDiscoveryResult filteredResult = result;
+        // The wallet reconcile (placeholder suggestions for cards already owned
+        // under a named product) is local, so it never waits on the network.
+        Future<CardDiscoveryResult> reconcile(CardDiscoveryResult result) async {
           try {
             final owned = await ref.read(userCardsProvider.future);
             final catalogue = await ref.read(catalogueProvider.future);
-            filteredResult = CardDiscoveryResult(
+            return CardDiscoveryResult(
               suggestions: filterOwnedCardSuggestions(
                 suggestions: result.suggestions,
                 ownedCards: owned,
@@ -139,19 +131,36 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
             );
           } catch (_) {
             // Discovery remains useful if a cached wallet/catalogue read is
-            // unavailable; the local fallback still reconciles physical-card
-            // identity before rendering.
+            // unavailable.
+            return result;
           }
+        }
+
+        // WP-C10: show the on-phone SMS result immediately; the forwarded-email
+        // answer is merged in when (and if) the server responds.
+        if (smsResult != null) {
+          final shown = await reconcile(smsResult);
+          if (!mounted || generation != _scanGeneration) return;
+          setState(() {
+            _result = shown;
+            _scanning = false;
+          });
+        }
+        try {
+          final emailResult = await repo
+              .discoverCards()
+              .timeout(const Duration(seconds: 20));
+          final result = smsResult == null
+              ? emailResult
+              : _mergeDiscovery(smsResult, emailResult);
+          final filteredResult = await reconcile(result);
           if (mounted && generation == _scanGeneration) {
             setState(() => _result = filteredResult);
           }
         } catch (_) {
-          // The SMS scan is local-first. A slow/cold API must not turn a
-          // device-side card discovery into a blank or crashing screen.
+          // The SMS result (if any) is already on screen. A slow/cold/offline
+          // API must not blank or break a device-side discovery.
           if (smsResult == null) rethrow;
-          if (mounted && generation == _scanGeneration) {
-            setState(() => _result = smsResult);
-          }
         }
       } else {
         // Guest mode / on-device matching against local catalogue
@@ -350,17 +359,11 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
       MaterialPageRoute(builder: (_) => const CardPickerScreen()),
     );
     if (picked != null && picked.isNotEmpty && mounted) {
-      final repo = ref.read(userCardsRepositoryProvider);
-      final local = repo == null
-          ? await ref.read(localUserCardsRepositoryProvider.future)
-          : null;
       for (final card in picked) {
         if (!mounted) return;
-        if (repo != null) {
-          await repo.addCard(card.id);
-        } else {
-          await local!.addCard(card.id);
-        }
+        // Local-first (WP-C6): saved on the phone and queued when the server
+        // is not there; a reachable server is asked first, as before.
+        await addCardLocalFirst(ref, cardProductId: card.id, product: card);
         _added.add(card.id);
       }
       await _reconcileAfterCardAdded();
@@ -531,28 +534,19 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         setState(() => _addingKey = addingKey);
         final messenger = ScaffoldMessenger.of(context);
         try {
-          final repo = ref.read(userCardsRepositoryProvider);
-          final local = repo == null
-              ? await ref.read(localUserCardsRepositoryProvider.future)
-              : null;
           for (final c in picked) {
             if (!mounted) return;
-            if (repo != null) {
-              final userCardId = await repo.addCard(
-                c.id,
-                last4: picked.length == 1 && card.last4.isNotEmpty
-                    ? card.last4.first
-                    : null,
-              );
-              if (picked.length == 1 && card.creditLimit != null) {
-                await repo.updateCard(
-                  userCardId,
-                  creditLimitInr: card.creditLimit!.rupees,
-                );
-              }
-            } else {
-              await local!.addCard(c.id);
-            }
+            await addCardLocalFirst(
+              ref,
+              cardProductId: c.id,
+              product: c,
+              last4: picked.length == 1 && card.last4.isNotEmpty
+                  ? card.last4.first
+                  : null,
+              creditLimitInr: picked.length == 1 && card.creditLimit != null
+                  ? card.creditLimit!.rupees
+                  : null,
+            );
           }
           await _reconcileAfterCardAdded();
           if (!mounted) return;
@@ -584,28 +578,16 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
     final productId = variant?.id ?? card.cardProductId;
     final displayName = variant?.name ?? card.name;
     try {
-      final repo = ref.read(userCardsRepositoryProvider);
-      final local = repo == null
-          ? await ref.read(localUserCardsRepositoryProvider.future)
-          : null;
-      if (repo != null) {
-        final userCardId = await repo.addCard(
-          productId,
-          last4: card.last4.isEmpty ? null : card.last4.first,
-        );
-        // A limit discovered in a bank alert is useful immediately, but is
-        // still written through the normal card-edit endpoint so the server
-        // remains the source of truth and the value is visible to
-        // utilization without a second manual setup step.
-        if (card.creditLimit != null) {
-          await repo.updateCard(
-            userCardId,
-            creditLimitInr: card.creditLimit!.rupees,
-          );
-        }
-      } else {
-        await local!.addCard(productId);
-      }
+      // A limit discovered in a bank alert is useful immediately, but is
+      // still written through the normal card-edit endpoint (or queued with
+      // the add) so the server remains the source of truth and the value is
+      // visible to utilization without a second manual setup step.
+      await addCardLocalFirst(
+        ref,
+        cardProductId: productId,
+        last4: card.last4.isEmpty ? null : card.last4.first,
+        creditLimitInr: card.creditLimit?.rupees,
+      );
       await _reconcileAfterCardAdded();
       if (!mounted) return;
       // Update the discovery card before the optional inbox write. A card

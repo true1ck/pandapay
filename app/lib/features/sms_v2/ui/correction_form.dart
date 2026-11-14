@@ -9,6 +9,7 @@ import '../../../app/required_field.dart';
 import '../../consent/template_sharing_disclosure.dart';
 import '../pipeline/trace.dart';
 import '../providers/data_providers.dart';
+import '../providers/sharing_consent_provider.dart';
 
 const correctionLabels = <CorrectionKind, String>{
   CorrectionKind.notFinancial: 'This isn’t a financial message',
@@ -292,11 +293,11 @@ class _SharingStatusLine extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final style = BambooFonts.ui(12.5, color: BambooInk.ink500, height: 1.4);
-    final consent = ref.watch(app.smsSharedLearningConsentProvider);
+    final consent = ref.watch(smsSharingGrantedProvider);
     if (consent.isLoading && !consent.hasValue) return const SizedBox.shrink();
     final local = Text('This fix stays on your phone.', style: style);
     if (kind == CorrectionKind.preferenceOnly) return local;
-    if (consent.valueOrNull != null) {
+    if (consent.valueOrNull == true) {
       return Text(
         'This fix helps everyone. It\'s shared without amounts, names or numbers.',
         style: style,

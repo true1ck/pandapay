@@ -278,5 +278,27 @@ void main() {
         expect(userCardsRepo.recordedCategories, ['caps']);
       },
     );
+
+    test('two overlapping fire() calls for one key deliver once (WP-H2)', () async {
+      container = buildContainer(prefs: _prefs());
+      final gate = NotificationGate(ref: ref, notifications: FlutterLocalNotificationsPlugin());
+      final results = await Future.wait([
+        gate.fire(category: 'caps', title: 't', body: 'b', dedupeKey: 'same'),
+        gate.fire(category: 'caps', title: 't', body: 'b', dedupeKey: 'same'),
+      ]);
+      expect(results.where((r) => r).length, 1);
+      expect(userCardsRepo.recordedCategories, hasLength(1));
+    });
+
+    test('concurrent different keys near the daily cap respect the cap (WP-H2)', () async {
+      container = buildContainer(prefs: _prefs(dailyCap: 2));
+      final gate = NotificationGate(ref: ref, notifications: FlutterLocalNotificationsPlugin());
+      final results = await Future.wait([
+        for (var i = 0; i < 5; i++)
+          gate.fire(category: 'caps', title: 't', body: 'b', dedupeKey: 'k$i'),
+      ]);
+      expect(results.where((r) => r).length, 2);
+      expect(userCardsRepo.recordedCategories, hasLength(2));
+    });
   });
 }

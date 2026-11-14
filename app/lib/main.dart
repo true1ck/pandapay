@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -23,11 +24,13 @@ import 'app/assistant_action.dart';
 import 'app/router.dart';
 import 'app/startup_timing.dart';
 import 'data/api_request_headers_client.dart';
+import 'data/connectivity/connectivity_bootstrap.dart';
 import 'data/local/database_key.dart';
 import 'data/secure_storage/install_guard.dart';
 import 'data/spend_reports_repository.dart';
 import 'data/product_access_api.dart';
 import 'features/settings/appearance_providers.dart';
+import 'features/sync_status/sync_status_banner.dart';
 import 'features/sms_import/ios_sms_background.dart' as ios_background;
 
 @pragma('vm:entry-point')
@@ -38,6 +41,10 @@ void main() {
   if (kProfileMode) {
     developer.Timeline.instantSync('PandaPay startup: Dart main');
   }
+  // Outfit and IBM Plex Sans ship as assets (assets/google_fonts/, covered by
+  // test/app/offline_fonts_test.dart). Never fetch fonts at runtime: a first
+  // offline launch must not hit fonts.gstatic.com, throw, or retry every build.
+  GoogleFonts.config.allowRuntimeFetching = false;
   // Every `http.Client()` the app creates (including repository defaults)
   // adds X-App-Version, and X-Sms-Pipeline when v2 is on, for the PandaPay
   // API origin only. Other origins and request contents are untouched.
@@ -435,6 +442,9 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
   Widget build(BuildContext context) {
     final ref = this.ref;
     final textScale = ref.watch(textScaleProvider);
+    // Subscribe isOnlineProvider (seeded with the current connectivity) and
+    // re-check appStatus on reconnect, before the shell starts its listeners.
+    ref.watch(connectivityBootstrapProvider);
     // Keep push registration attached to the application root. The service
     // is still gated by the authenticated access token, but it must not wait
     // for a particular tab/shell route to finish rendering after a cold
@@ -449,6 +459,7 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
     // Restore saved location monitoring for every entry point, including
     // assistant links that open a screen outside the tab shell.
     ref.watch(backgroundAlertsLifecycleProvider);
+    final router = ref.watch(goRouterProvider);
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'PandaPay',
@@ -459,9 +470,19 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
       builder: (context, child) => GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-        child: _scaledTextMediaQuery(context, child, textScale),
+        // The sync-status strip (offline / can't reach / syncing / needs
+        // attention) lives above every route. Zero-size and layout-neutral
+        // while healthy; see features/sync_status/sync_status_banner.dart.
+        child: _scaledTextMediaQuery(
+          context,
+          SyncStatusBanner(
+            navigatorKey: router.routerDelegate.navigatorKey,
+            child: child,
+          ),
+          textScale,
+        ),
       ),
-      routerConfig: ref.watch(goRouterProvider),
+      routerConfig: router,
     );
   }
 }

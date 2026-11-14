@@ -418,6 +418,7 @@ GeminiBarState geminiBarState({
   required int unreadOnPhone,
   required int openItems,
   bool sharingOff = false,
+  bool offline = false,
 }) {
   String plural(int n, String one, [String? many]) =>
       '$n ${n == 1 ? one : (many ?? '${one}s')}';
@@ -435,6 +436,20 @@ GeminiBarState geminiBarState({
   if (server == null) {
     final waiting = local?.checkingTemplates.length ?? 0;
     final read = local?.resolved.length ?? 0;
+    // No connection: say so, and say it is not Gemini or the server that is
+    // at fault. Nothing is lost; the status comes back with the connection.
+    if (offline) {
+      return GeminiBarState(
+        tone: GeminiTone.unknown,
+        title: "You're offline",
+        detail:
+            "Gemini's status will show again when you're back online. "
+            'This phone knows: '
+            '${waiting > 0 ? '$waiting waiting · ' : ''}$read read by AI'
+            '${unreadOnPhone > 0 ? ' · $unreadOnPhone could not be read' : ''}'
+            ' · $openItems still need you',
+      );
+    }
     if (waiting > 0) {
       return GeminiBarState(
         tone: GeminiTone.ok,
@@ -508,6 +523,9 @@ GeminiBarState geminiBarState({
 final geminiServerStatusProvider = FutureProvider.autoDispose<AiServerStatus?>((
   ref,
 ) async {
+  // Offline there is nothing to ask. Watching the connection also asks again
+  // the moment it returns.
+  if (ref.watch(app.isOnlineProvider).valueOrNull == false) return null;
   final runtime = await ref.watch(smsV2RuntimeProvider.future);
   if (runtime == null) return null;
   final status = await fetchAiServerStatus(
@@ -557,6 +575,8 @@ class _GeminiStatusBarState extends ConsumerState<GeminiStatusBar> {
     // Ask again every 30 s, or every 10 s while the server is not answering.
     _refresh = Timer.periodic(const Duration(seconds: 10), (_) {
       if (!mounted) return;
+      // No connection, no polling: it asks again when the connection returns.
+      if (ref.read(app.isOnlineProvider).valueOrNull == false) return;
       final answering =
           ref.read(geminiServerStatusProvider).valueOrNull != null;
       final due =
@@ -586,6 +606,7 @@ class _GeminiStatusBarState extends ConsumerState<GeminiStatusBar> {
         DateTime.now().difference(_lastGoodAt!) < _keepLastFor;
     final consent = ref.watch(app.smsSharedLearningConsentProvider);
     final state = geminiBarState(
+      offline: ref.watch(app.isOnlineProvider).valueOrNull == false,
       server: answer ?? (recent ? _lastGood : null),
       local: ref.watch(aiReviewStatusProvider).valueOrNull,
       unreadOnPhone: ref.watch(aiUnreadCountProvider).valueOrNull ?? 0,

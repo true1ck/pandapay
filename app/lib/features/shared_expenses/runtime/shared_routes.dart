@@ -15,6 +15,7 @@ import '../ui/shared_settle_sheet.dart';
 import '../ui/shared_members_sheet.dart';
 import '../ui/shared_name_sheet.dart';
 import '../ui/shared_add_friend_sheet.dart';
+import '../ui/shared_attention_sheet.dart';
 import '../ui/shared_invite_inbox.dart';
 import '../ui/shared_join_requests_page.dart';
 import '../ui/shared_settlements_sheet.dart';
@@ -144,6 +145,20 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
         'name': name,
       });
       _reload();
+      // Offline the group is only saved on this phone for now, and people are
+      // added from the server's copy of it: say so instead of opening a sheet
+      // that cannot load.
+      if (mounted && runtime.isCurrent() && runtime.offline) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Group saved on this phone. It will be created when you are '
+              'online; then you can add people.',
+            ),
+          ),
+        );
+        return;
+      }
       // A group is only useful with people in it: go straight to adding them.
       if (mounted && runtime.isCurrent()) {
         await SharedMembersSheet.show(
@@ -228,21 +243,27 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
             return SharedExpensesScreen(
               key: ValueKey(runtime.store.namespace),
               data: data ?? _loadingHub,
-              header: SharedInviteInbox(
-                runtime: runtime,
-                onJoined: _reload,
-                onReviewRequests: widget.onOpenRequests == null
-                    ? null
-                    : () => _gate.run(widget.onOpenRequests!),
+              header: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SharedInviteInbox(
+                    runtime: runtime,
+                    onJoined: _reload,
+                    onReviewRequests: widget.onOpenRequests == null
+                        ? null
+                        : () => _gate.run(widget.onOpenRequests!),
+                  ),
+                  SharedNeedsAttentionRow(runtime: runtime),
+                ],
               ),
               onOpenFriend: _open,
               onOpenGroup: _open,
               onOpenActivity: _open,
               onAddExpense: () => unawaited(_gate.run(widget.onAddExpense)),
-              onCreateGroup: runtime.proposalsEnabled
+              onCreateGroup: runtime.canQueueProposals
                   ? () => unawaited(_gate.run(() => _create(runtime)))
                   : null,
-              onAddFriend: runtime.proposalsEnabled
+              onAddFriend: runtime.canQueueProposals
                   ? () => unawaited(_gate.run(() => _createFriend(runtime)))
                   : null,
               onRetry: (_) => _reload(),

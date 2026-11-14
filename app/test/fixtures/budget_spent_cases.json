@@ -1,0 +1,81 @@
+{
+  "_comment": "Synthetic golden cases for budget spent. Mirrors api/src/spend_reports.js budgetSpend + budgetPeriodBounds. Times are local wall time; amounts in paise.",
+  "now": "2026-11-14T12:00:00",
+  "cases": [
+    {
+      "name": "overall monthly counts spend only, active only, excluded out",
+      "budget": {"scope": "overall", "period": "monthly"},
+      "txns": [
+        {"amountPaise": 10000, "occurredAt": "2026-11-02T10:00:00"},
+        {"amountPaise": 5000, "occurredAt": "2026-11-13T23:59:59"},
+        {"amountPaise": 7000, "occurredAt": "2026-11-05T10:00:00", "status": "ignored"},
+        {"amountPaise": 8000, "occurredAt": "2026-11-05T10:00:00", "entryKind": "transfer"},
+        {"amountPaise": 9000, "occurredAt": "2026-11-05T10:00:00", "excludeFromSpend": true},
+        {"amountPaise": 0, "occurredAt": "2026-11-05T10:00:00"},
+        {"amountPaise": 1000, "occurredAt": "2026-10-31T23:59:59"},
+        {"amountPaise": 2000, "occurredAt": "2026-12-01T00:00:00"}
+      ],
+      "expected": {"spentPaise": 15000, "txnCount": 2, "start": "2026-11-01T00:00:00", "end": "2026-12-01T00:00:00"}
+    },
+    {
+      "name": "category budget includes the category, the user category and child user categories",
+      "budget": {"scope": "category", "scopeRefId": "cat-food", "period": "monthly"},
+      "txns": [
+        {"amountPaise": 100, "occurredAt": "2026-11-03T10:00:00", "categoryId": "cat-food"},
+        {"amountPaise": 200, "occurredAt": "2026-11-03T10:00:00", "userCategoryId": "cat-food"},
+        {"amountPaise": 400, "occurredAt": "2026-11-03T10:00:00", "userCategoryId": "child-1", "parentUserCategoryId": "cat-food"},
+        {"amountPaise": 800, "occurredAt": "2026-11-03T10:00:00", "categoryId": "cat-other"}
+      ],
+      "expected": {"spentPaise": 700, "txnCount": 3, "start": "2026-11-01T00:00:00", "end": "2026-12-01T00:00:00"}
+    },
+    {
+      "name": "card budget counts one card",
+      "budget": {"scope": "card", "scopeRefId": "card-a", "period": "monthly"},
+      "txns": [
+        {"amountPaise": 1500, "occurredAt": "2026-11-04T10:00:00", "userCardId": "card-a"},
+        {"amountPaise": 2500, "occurredAt": "2026-11-04T10:00:00", "userCardId": "card-b"},
+        {"amountPaise": 3500, "occurredAt": "2026-11-04T10:00:00"}
+      ],
+      "expected": {"spentPaise": 1500, "txnCount": 1, "start": "2026-11-01T00:00:00", "end": "2026-12-01T00:00:00"}
+    },
+    {
+      "name": "tag budget counts transactions linked to the tag",
+      "budget": {"scope": "tag", "scopeRefId": "tag-trip", "period": "monthly"},
+      "txns": [
+        {"amountPaise": 600, "occurredAt": "2026-11-06T10:00:00", "tagIds": ["tag-trip", "tag-x"]},
+        {"amountPaise": 700, "occurredAt": "2026-11-06T10:00:00", "tagIds": ["tag-x"]}
+      ],
+      "expected": {"spentPaise": 600, "txnCount": 1, "start": "2026-11-01T00:00:00", "end": "2026-12-01T00:00:00"}
+    },
+    {
+      "name": "weekly budget anchored on a Thursday runs Thursday to Wednesday",
+      "budget": {"scope": "overall", "period": "weekly", "startsOn": "2026-10-01T00:00:00"},
+      "txns": [
+        {"amountPaise": 100, "occurredAt": "2026-11-12T09:00:00"},
+        {"amountPaise": 200, "occurredAt": "2026-11-18T23:00:00"},
+        {"amountPaise": 400, "occurredAt": "2026-11-11T23:00:00"},
+        {"amountPaise": 800, "occurredAt": "2026-11-19T00:00:00"}
+      ],
+      "expected": {"spentPaise": 300, "txnCount": 2, "start": "2026-11-12T00:00:00", "end": "2026-11-19T00:00:00"}
+    },
+    {
+      "name": "quarterly budget covers Oct-Dec",
+      "budget": {"scope": "overall", "period": "quarterly"},
+      "txns": [
+        {"amountPaise": 100, "occurredAt": "2026-10-01T00:00:00"},
+        {"amountPaise": 200, "occurredAt": "2026-12-31T23:59:59"},
+        {"amountPaise": 400, "occurredAt": "2026-09-30T23:59:59"}
+      ],
+      "expected": {"spentPaise": 300, "txnCount": 2, "start": "2026-10-01T00:00:00", "end": "2027-01-01T00:00:00"}
+    },
+    {
+      "name": "yearly budget covers the calendar year",
+      "budget": {"scope": "overall", "period": "yearly"},
+      "txns": [
+        {"amountPaise": 100, "occurredAt": "2026-01-01T00:00:00"},
+        {"amountPaise": 200, "occurredAt": "2025-12-31T23:59:59"}
+      ],
+      "expected": {"spentPaise": 100, "txnCount": 1, "start": "2026-01-01T00:00:00", "end": "2027-01-01T00:00:00"}
+    }
+  ]
+}

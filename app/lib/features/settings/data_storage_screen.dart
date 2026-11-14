@@ -11,6 +11,7 @@ import '../../data/api_exception.dart';
 import '../../data/account_api.dart';
 import '../../data/portable_backup/account_recovery_operation_gate.dart';
 import '../sms_import/ios_sms_intake_service.dart';
+import '../account/needs_internet.dart';
 import 'storage_util.dart';
 
 /// H5 Data & Storage. Cache management stays device-local; account reset uses
@@ -33,10 +34,11 @@ final _cacheSizeProvider = FutureProvider.autoDispose<int>((ref) async {
 /// mirrors that shape for transactions via a single `fetchTransactions()`
 /// call rather than counting on every rebuild.
 final _transactionCountProvider = FutureProvider.autoDispose<int>((ref) async {
-  final repo = ref.watch(userCardsRepositoryProvider);
-  if (repo == null) return 0;
-  final transactions = await repo.fetchTransactions();
-  return transactions.length;
+  // Local COUNT: no network, no rows materialised (works offline, WP-C10).
+  final cache = await ref.watch(responseCacheProvider.future);
+  return cache.financialStore.transactionCount(
+    ref.watch(cacheNamespaceProvider),
+  );
 });
 
 class DataStorageScreen extends ConsumerWidget {
@@ -299,14 +301,22 @@ class _EraseUserDataDialogState extends State<_EraseUserDataDialog> {
         onPressed: () => Navigator.of(context).pop(false),
         child: const Text('Cancel'),
       ),
-      TextButton(
-        onPressed: _phraseController.text.trim() == 'ERASE'
-            ? () => Navigator.of(context).pop(true)
-            : null,
-        child: const Text(
-          'Erase data',
-          style: TextStyle(color: BambooInk.clay),
-        ),
+      Consumer(
+        builder: (context, ref, _) {
+          final offline = ref.watch(needsInternetProvider);
+          return Tooltip(
+            message: offline ? needsInternetHint : '',
+            child: TextButton(
+              onPressed: !offline && _phraseController.text.trim() == 'ERASE'
+                  ? () => Navigator.of(context).pop(true)
+                  : null,
+              child: Text(
+                offline ? 'Needs internet' : 'Erase data',
+                style: const TextStyle(color: BambooInk.clay),
+              ),
+            ),
+          );
+        },
       ),
     ],
   );

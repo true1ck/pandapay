@@ -48,6 +48,18 @@ class ConsentRecord {
   }
 }
 
+extension ConsentRecordJson on ConsentRecord {
+  /// Same shape the server sends, so a cached list decodes with fromJson.
+  Map<String, dynamic> toJson() => {
+    'purpose': purpose,
+    'granted': granted,
+    'granted_at': grantedAt.toIso8601String(),
+    'revoked_at': revokedAt?.toIso8601String(),
+    'policy_version': policyVersion,
+    'source_screen': sourceScreen,
+  };
+}
+
 class ConsentsApi {
   final String apiBaseUrl;
   final String accessToken;
@@ -104,6 +116,8 @@ class ConsentsApi {
     required bool granted,
     required String policyVersion,
     String? sourceScreen,
+    String? clientMutationId,
+    DateTime? clientRecordedAt,
   }) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/consents'),
@@ -113,9 +127,14 @@ class ConsentsApi {
         'granted': granted,
         'policyVersion': policyVersion,
         'sourceScreen': ?sourceScreen,
+        // WP-S5: a replayed queued write is recognised by this id. An older
+        // server ignores both fields.
+        'clientMutationId': ?clientMutationId,
+        'clientRecordedAt': ?clientRecordedAt?.toUtc().toIso8601String(),
       }),
     );
-    if (response.statusCode != 201) {
+    // 201 new row; 200 {replayed:true} when a queued write was already stored.
+    if (response.statusCode != 201 && response.statusCode != 200) {
       throw ApiException(
         'POST /consents failed: ${response.statusCode} ${response.body}',
       );

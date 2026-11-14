@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../app/design/saved_offline.dart';
 import '../sms_v2/similar/similar_changes.dart';
 import '../sync/sync_engine.dart';
 import '../sms_v2/similar/similar_offer_sheet.dart';
@@ -26,7 +27,9 @@ import '../../data/self_transfer.dart';
 import '../../data/local/financial_store.dart' show canonicalBankSender;
 import '../../data/local/self_transfer_rules.dart';
 import '../../data/local/sms_intake_repository.dart';
+import '../../data/connectivity/reachability.dart';
 import '../payments/payment_method_catalogue.dart';
+import '../payments/payment_method_command.dart';
 import '../payments/payment_method_picker.dart';
 import '../payments/payment_method_rules.dart';
 import 'category_bulk_review_sheet.dart';
@@ -175,6 +178,11 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
 
   bool get _methodChanged => _methodToSend != null || _clearMethod;
 
+  /// The phone is known to be offline, or the server cannot be reached.
+  bool _offlineNow() =>
+      ref.read(isOnlineProvider).valueOrNull == false ||
+      ref.read(serverReachabilityProvider).serverReachable == false;
+
   Future<void> _save() async {
     final amount = double.tryParse(_amountController.text.trim());
     if (amount == null || !amount.isFinite || amount <= 0) {
@@ -182,20 +190,25 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       setState(() => _error = 'Enter a valid amount greater than zero.');
       return;
     }
+    // A self-transfer decision runs several server checks and rules (it can
+    // also re-label older transactions), so it is not safe to replay later:
+    // it needs the connection, and says so in plain words.
     if ((_selfTransfer != null || _clearedSelfTransfer != null) &&
-        ref.read(isOnlineProvider).valueOrNull == false) {
+        _offlineNow()) {
       setState(
         () => _error =
-            'Connect to the internet to confirm or undo this self-transfer.',
+            'You are offline. Confirming or undoing a self-transfer needs a connection. Try again when you are back online.',
       );
       return;
     }
-    // A payment method is not part of the offline edit queue, so changing it
-    // needs the server rather than being dropped silently.
+    // A payment method change is a queued command offline. A row that exists
+    // only as a queued quick-add has no server id to send it to yet.
     if (_methodChanged &&
-        ref.read(isOnlineProvider).valueOrNull == false) {
+        _offlineNow() &&
+        widget.transactionId.startsWith('local')) {
       setState(
-        () => _error = 'Connect to the internet to change how this was paid.',
+        () => _error =
+            'You are offline. This entry has not reached your account yet, so how it was paid can be changed once it has.',
       );
       return;
     }
@@ -247,29 +260,17 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       ref.invalidate(budgetsProvider);
       _confirmSaved(original);
 
-      // The original row is saved before this optional bulk flow starts. A
-      // preview is only useful for a real online category change; tags and
-      // other edits retain the existing one-row behaviour. The repository
-      // adapter is intentionally invoked through the dynamic boundary here so
-      // old app builds and lightweight repository fakes can keep compiling
-      // while the typed data-layer methods roll out.
-      if (categoryChanged &&
-          original.pipelineVersion != 2 &&
-          ref.read(isOnlineProvider).valueOrNull != false) {
-        final result = await _offerCategoryBulkReview(
-          targetCategoryId: _categoryId,
-        );
-        if (result != null && mounted && result.changedCount > 0) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Applied ${result.changedCount} more transaction${result.changedCount == 1 ? '' : 's'} to ${_categoryLabel(_categoryId)}.',
-              ),
-            ),
-          );
-        }
-        await _offerFutureCategoryRule(targetCategoryId: _categoryId);
-      }
+      // The original row is saved before the optional online offers (bulk
+      // review of related transactions, future rule). They never hold the
+      // screen: it closes first and the offers run from the screen below with
+      // a short time limit, and are skipped when the phone is offline or the
+      // server cannot be reached.
+      final runOffers =
+          categoryChanged && original.pipelineVersion != 2 && !_offlineNow();
+      final offerContext = Navigator.of(context, rootNavigator: true).context;
+      final offerContainer = ProviderScope.containerOf(context, listen: false);
+      final offerCategoryId = _categoryId;
+      final offerCategoryLabel = _categoryLabel(_categoryId);
       try {
         await _offerSimilar();
       } catch (_) {
@@ -277,6 +278,17 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         // or reports it as failed.
       }
       if (mounted) context.pop(true);
+      if (runOffers) {
+        unawaited(
+          _runCategoryOffers(
+            ctx: offerContext,
+            container: offerContainer,
+            txId: widget.transactionId,
+            categoryId: offerCategoryId,
+            categoryLabel: offerCategoryLabel,
+          ),
+        );
+      }
     } catch (e) {
       // Plan Phase 4. Before this, an edit made offline simply failed and the
       // user's typing was gone the moment they left the screen — only B6
@@ -313,11 +325,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         );
         ref.invalidate(pendingSyncCountProvider);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Saved offline — will sync when you reconnect.'),
-            ),
-          );
+          showSavedOfflineSnack(context);
           context.pop(true);
         }
         return;
@@ -375,10 +383,10 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     final onPhone = original?.pipelineVersion == 2;
     final text = onPhone
         ? (offline
-              ? 'Saved on this phone. It will sync when you are back online.'
+              ? savedOfflineCopy
               : 'Saved on this phone. Syncing in the background.')
         : (offline
-              ? 'Saved on this phone. It will sync when you are back online.'
+              ? savedOfflineCopy
               : 'Saved. Syncing in the background.');
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -500,12 +508,41 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     // the change because the entity reader overlays queued edits. A
     // self-transfer decision needs the server's own checks, and a row that
     // only exists as a queued quick-add has no server id yet, so those keep
-    // the direct call below.
+    // the direct call below. A payment-method change is sent directly while
+    // online (as before) and queued as a command while offline.
+    final methodOffline = _methodChanged && _offlineNow();
     if (_selfTransfer == null &&
         _clearedSelfTransfer == null &&
-        !_methodChanged &&
+        (!_methodChanged || methodOffline) &&
         !widget.transactionId.startsWith('local')) {
       final fields = _changedServerFields(original, amount);
+      // WP-C5: `instrument` / `entry_kind` are typed columns that the legacy
+      // sync writer may refuse. While online they go through the domain PATCH
+      // route (the same one the screen used before local-first saves), so the
+      // edit is never lost; offline they are queued and, if the server later
+      // refuses them, the row is parked and counted as "needs attention" by
+      // the sync status strip instead of silently reverting.
+      final typed = <String, Object?>{
+        for (final key in const ['instrument', 'entry_kind'])
+          if (fields.containsKey(key)) key: fields.remove(key),
+      };
+      var patchedDirectly = false;
+      if (typed.isNotEmpty && !_offlineNow()) {
+        final direct = ref.read(userCardsRepositoryProvider);
+        if (direct != null) {
+          try {
+            await direct.editTransaction(
+              widget.transactionId,
+              instrument: typed.containsKey('instrument') ? _instrument : null,
+              entryKind: typed.containsKey('entry_kind') ? _entryKind : null,
+            );
+            patchedDirectly = true;
+          } catch (error) {
+            if (!isOfflineLike(error)) rethrow;
+          }
+        }
+      }
+      if (typed.isNotEmpty && !patchedDirectly) fields.addAll(typed);
       if (fields.isNotEmpty) {
         final queue = await ref.read(syncQueueProvider.future);
         queue.enqueueUpdate(
@@ -514,6 +551,23 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           fields: fields,
         );
         ref.invalidate(pendingSyncCountProvider);
+      }
+      if (methodOffline) {
+        final method = _methodToSend;
+        await queueCommand(
+          ref,
+          kind: PaymentMethodCommand.set,
+          target: widget.transactionId,
+          payload: {'id': widget.transactionId, 'paymentMethod': method},
+        );
+        (await ref.read(responseCacheProvider.future)).financialStore
+            .patchTransaction(
+              ref.read(cacheNamespaceProvider),
+              widget.transactionId,
+              {'payment_method': method},
+            );
+      }
+      if (fields.isNotEmpty || patchedDirectly) {
         unawaited(ref.read(syncEngineProvider).sync());
       }
       return;
@@ -744,14 +798,57 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     return 'this category';
   }
 
+  /// Runs both offers after the edit screen has closed. [ctx] is the root
+  /// navigator's context (still mounted) and [container] the app's provider
+  /// container, because this State is gone by now.
+  Future<void> _runCategoryOffers({
+    required BuildContext ctx,
+    required ProviderContainer container,
+    required String txId,
+    required String? categoryId,
+    required String categoryLabel,
+  }) async {
+    try {
+      final result = await _offerCategoryBulkReview(
+        ctx: ctx,
+        container: container,
+        txId: txId,
+        targetCategoryId: categoryId,
+      );
+      if (result != null && ctx.mounted && result.changedCount > 0) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Applied ${result.changedCount} more transaction${result.changedCount == 1 ? '' : 's'} to $categoryLabel.',
+            ),
+          ),
+        );
+      }
+      await _offerFutureCategoryRule(
+        ctx: ctx,
+        container: container,
+        txId: txId,
+        targetCategoryId: categoryId,
+      );
+    } catch (_) {
+      // Optional extras: the edit itself is saved and nothing here undoes it.
+    }
+  }
+
+  /// How long an optional offer may wait for the server before it is dropped.
+  static const _offerTimeout = Duration(seconds: 4);
+
   /// Invokes the category-bulk data contract after the original row is saved.
   /// Preview and apply both use server-owned IDs and selection tiers; the UI
   /// never reconstructs merchant matches locally.
   Future<CategoryBulkApplyResult?> _offerCategoryBulkReview({
+    required BuildContext ctx,
+    required ProviderContainer container,
+    required String txId,
     required String? targetCategoryId,
   }) async {
     if (targetCategoryId == null || targetCategoryId.isEmpty) return null;
-    final repo = ref.read(userCardsRepositoryProvider);
+    final repo = container.read(userCardsRepositoryProvider);
     if (repo == null) return null;
     final isCustomCategory = targetCategoryId.startsWith('custom:');
     final serverCategoryId = isCustomCategory ? null : targetCategoryId;
@@ -761,17 +858,17 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
 
     Future<RelatedCategoryPreview> fetchPreview() =>
         repo.fetchCategoryRelatedPreview(
-          widget.transactionId,
+          txId,
           targetCategoryId: serverCategoryId,
           targetUserCategoryId: serverUserCategoryId,
-        );
+        ).timeout(_offerTimeout);
 
     RelatedCategoryPreview preview;
     try {
       preview = await fetchPreview();
     } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      if (ctx.mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
           const SnackBar(
             content: Text(
               'Saved this transaction. Related transactions could not be loaded.',
@@ -781,7 +878,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       }
       return null;
     }
-    if (!mounted || preview.candidates.isEmpty) return null;
+    if (!ctx.mounted || preview.candidates.isEmpty) return null;
 
     Future<CategoryBulkApplyResult> apply(Set<String> ids) =>
         repo.applyCategoryBulk(
@@ -792,15 +889,15 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         );
 
     final result = await showCategoryBulkReviewSheet(
-      context: context,
+      context: ctx,
       preview: preview,
       onRetry: fetchPreview,
       onApply: apply,
     );
     if (result != null) {
-      ref.invalidate(transactionsProvider);
-      ref.invalidate(utilizationTransactionsProvider);
-      ref.invalidate(homeSummaryProvider);
+      container.invalidate(transactionsProvider);
+      container.invalidate(utilizationTransactionsProvider);
+      container.invalidate(homeSummaryProvider);
     }
     return result;
   }
@@ -809,10 +906,13 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   /// The server derives merchant identity from the owned source transaction;
   /// the client never sends a merchant name, VPA, narration, or phone number.
   Future<MerchantCategoryRule?> _offerFutureCategoryRule({
+    required BuildContext ctx,
+    required ProviderContainer container,
+    required String txId,
     required String? targetCategoryId,
   }) async {
     if (targetCategoryId == null || targetCategoryId.isEmpty) return null;
-    final repo = ref.read(merchantCategoryRulesRepositoryProvider);
+    final repo = container.read(merchantCategoryRulesRepositoryProvider);
     if (repo == null) return null;
     final isCustomCategory = targetCategoryId.startsWith('custom:');
     final categoryId = isCustomCategory ? null : targetCategoryId;
@@ -822,16 +922,16 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     MerchantCategoryRulePreview preview;
     try {
       preview = await repo.preview(
-        sourceTransactionId: widget.transactionId,
+        sourceTransactionId: txId,
         categoryId: categoryId,
         userCategoryId: userCategoryId,
-      );
+      ).timeout(_offerTimeout);
     } catch (_) {
       // The saved one-time category edit remains complete if the optional
       // future-rule service is unavailable. Do not turn this into an edit
       // failure or imply that a rule was created.
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      if (ctx.mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
           const SnackBar(
             content: Text(
               'Saved this transaction. Future rule options could not be loaded.',
@@ -841,10 +941,10 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       }
       return null;
     }
-    if (!mounted || !preview.hasUsableIdentity) return null;
+    if (!ctx.mounted || !preview.hasUsableIdentity) return null;
 
     Future<MerchantCategoryRule> create() => repo.create(
-      sourceTransactionId: widget.transactionId,
+      sourceTransactionId: txId,
       categoryId: categoryId,
       userCategoryId: userCategoryId,
     );
@@ -858,11 +958,11 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         );
 
     return showMerchantFutureRuleSheet(
-      context: context,
+      context: ctx,
       preview: preview,
       onCreate: create,
       onUpdate: update,
-      offline: ref.read(isOnlineProvider).valueOrNull == false,
+      offline: container.read(isOnlineProvider).valueOrNull == false,
     );
   }
 

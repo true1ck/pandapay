@@ -124,7 +124,9 @@ void main() {
     CorrectionsSync syncWith(
       http.Response Function(http.Request request) answer, {
       void Function(String sourceKey, String? eventId)? requeue,
+      Future<bool> Function()? sharingGranted,
     }) => CorrectionsSync(
+      sharingGranted: sharingGranted,
       queue: queue,
       baseUri: Uri.parse('https://api.invalid'),
       headers: () async => {},
@@ -160,6 +162,25 @@ void main() {
       expect(posts, 1);
     });
 
+    test('a correction queued while sharing was agreed shares nothing after a withdrawal', () async {
+      for (final granted in [true, false]) {
+        addCorrection('c-$granted', {
+          'sourceKey': 'S1',
+          'factIds': <String>[],
+          'redactedTemplate': 'You spent Rs <AMT>',
+          'corrected': {'category': 'food', '_template': {'hash': 'h'}},
+        });
+        Map? sent;
+        final sync = syncWith((request) {
+          sent = jsonDecode(request.body) as Map;
+          return http.Response(jsonEncode({'caseId': 'case-1'}), 200);
+        }, sharingGranted: () async => granted);
+        expect(await sync.drain(), 1);
+        expect(sent!.containsKey('redactedTemplate'), granted);
+        expect(sent!['corrected'], granted ? isNotEmpty : isEmpty);
+      }
+    });
+
     test('stops waiting for a source the server keeps refusing', () async {
       queue.enqueue('source', 'S1', {'sourceKey': 'S1'});
       for (var i = 0; i < 6; i++) {
@@ -171,6 +192,8 @@ void main() {
         posts++;
         return http.Response(jsonEncode({'caseId': 'case-1'}), 200);
       });
+      // Six server refusals (attempts > 0 means the server answered, WP-H2):
+      // released even inside the back-off, which keeps re-arming.
       expect(await sync.drain(), 1);
       expect(posts, 1);
     });
@@ -189,7 +212,7 @@ void main() {
     }
 
     test(
-      'facts the server cannot find are sent again, then the correction is tried once more and kept off the queue if refused again',
+      'facts the server cannot find are sent again, then the correction is tried again after a wait, up to a cap, and kept off the queue if refused every time',
       () async {
         addCorrection('c1', {
           'sourceKey': 'S1',
@@ -211,18 +234,32 @@ void main() {
         expect(resent, ['S1/E1']);
         expect(posts, 1);
         expect(
-          queue.due(now).firstWhere((r) => r.kind == 'correction').json['_resent'],
-          true,
+          queue
+              .due(DateTime.utc(2100))
+              .firstWhere((r) => r.kind == 'correction')
+              .json['_resent'],
+          1,
         );
         // It waits for the resent facts, so nothing more is asked of the server yet.
         expect(await sync.drain(), 0);
         expect(posts, 1);
         uploaded();
+        // ...and then for its own growing wait.
         expect(await sync.drain(), 0);
-        expect(posts, 2);
-        expect(resent, ['S1/E1'], reason: 'only one resend per correction');
+        expect(posts, 1, reason: 'one minute has not passed');
+        for (var i = 0; i < 12 && queue.due(DateTime.utc(2100)).isNotEmpty; i++) {
+          now = now.add(const Duration(hours: 1));
+          await sync.drain();
+          uploaded();
+        }
+        expect(posts, CorrectionsSync.maxFactsNotFoundRefusals);
+        expect(
+          resent.length,
+          CorrectionsSync.maxFactsNotFoundRefusals - 1,
+          reason: 'each refusal but the last sends the facts again',
+        );
         expect(seen.last.containsKey('_resent'), false, reason: 'markers stay on the phone');
-        expect(queue.due(now), isEmpty, reason: 'it left the queue');
+        expect(queue.due(DateTime.utc(2100)), isEmpty, reason: 'it left the queue');
         final row = review('c1');
         expect(row['status'], 'resolved');
         expect(row['notSent'], 'correction_facts_not_found');
@@ -244,6 +281,7 @@ void main() {
       );
       expect(await sync.drain(), 0);
       uploaded();
+      now = now.add(const Duration(minutes: 2));
       expect(await sync.drain(), 1);
       expect(queue.due(now), isEmpty);
       expect(review('c1')['caseId'], 'case-1');

@@ -49,7 +49,8 @@ class _FakeLocalUserCardsRepository implements LocalUserCardsRepository {
 
 /// A signed-in user's repository that records what card discovery sends.
 class _RecordingUserCardsRepository implements UserCardsRepository {
-  _RecordingUserCardsRepository({this.result, this.fail = false});
+  _RecordingUserCardsRepository({this.result, this.fail = false, this.gate});
+  final Completer<CardDiscoveryResult>? gate;
 
   final CardDiscoveryResult? result;
   final bool fail;
@@ -282,11 +283,13 @@ void main() {
     Future<_RecordingUserCardsRepository> pumpSignedIn(
       WidgetTester tester, {
       CardDiscoveryResult? serverResult,
+      Completer<CardDiscoveryResult>? gate,
       bool serverFails = false,
     }) async {
       final repo = _RecordingUserCardsRepository(
         result: serverResult,
         fail: serverFails,
+        gate: gate,
       );
       await tester.pumpWidget(
         ProviderScope(
@@ -317,6 +320,20 @@ void main() {
       expect(repo.requests, 1, reason: 'forwarded email is still asked');
       expect(find.text('HDFC Millennia'), findsOneWidget);
       expect(find.text('Yes, I have HDFC Millennia'), findsOneWidget);
+    });
+
+    testWidgets("SMS result shows at once while the server is still silent", (
+      tester,
+    ) async {
+      final gate = Completer<CardDiscoveryResult>();
+      final repo = await pumpSignedIn(tester, gate: gate);
+      expect(repo.requests, 1);
+      expect(find.text("HDFC Millennia"), findsOneWidget);
+      gate.complete(
+        const CardDiscoveryResult(suggestions: [], emailsScanned: 0, smsScanned: 0),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text("HDFC Millennia"), findsOneWidget);
     });
 
     testWidgets('a server failure still shows the cards found from SMS', (

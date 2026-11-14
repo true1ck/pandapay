@@ -7,6 +7,8 @@ import 'package:crypto/crypto.dart';
 import '../user_cards_repository.dart';
 import 'app_database.dart';
 import 'financial_store.dart';
+import 'queue_retry_policy.dart';
+import '../local_first/provisional_cards.dart';
 
 /// Plain value holder for one queued row — mirrors the
 /// transaction_outbox_entries columns 1:1 (see app_database.dart).
@@ -25,9 +27,25 @@ class TransactionOutboxEntry {
   final DateTime createdAt;
   final String? lastError;
 
+  /// Delivery attempts that counted (a pure network failure does not count).
+  final int attempts;
+
+  /// Earliest time the next automatic attempt may run; null when due now.
+  final DateTime? nextAttemptAt;
+
+  /// True once the server permanently rejected the entry. A parked entry is
+  /// kept (and its provisional row stays visible) but never retried
+  /// automatically; see [TransactionOutboxRepository.retryParked].
+  final bool parked;
+
   /// Optional contract wire value (payment_methods_v1.json); null for every
   /// row queued before the column existed and whenever the user chose none.
   final String? paymentMethod;
+
+  /// Set only by a payment-sent "log it" (reward matching needs them).
+  final String? merchantVpa;
+  final String? mcc;
+  final String? rail;
 
   const TransactionOutboxEntry({
     required this.id,
@@ -44,6 +62,12 @@ class TransactionOutboxEntry {
     required this.createdAt,
     this.lastError,
     this.paymentMethod,
+    this.merchantVpa,
+    this.mcc,
+    this.rail,
+    this.attempts = 0,
+    this.nextAttemptAt,
+    this.parked = false,
   });
 }
 
@@ -61,11 +85,13 @@ class TransactionOutboxRepository {
   final AppDatabase _appDb;
   final String namespace;
   final FinancialStore? financialStore;
+  final DateTime Function() _now;
   TransactionOutboxRepository(
     this._appDb, {
     this.namespace = 'legacy',
     this.financialStore,
-  });
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now;
   String _sourceKey(String mutationId) {
     final account = namespace.startsWith('user:')
         ? namespace.substring(5)
@@ -79,30 +105,71 @@ class TransactionOutboxRepository {
         .toString();
   }
 
-  Future<void> restoreLocalEntries() async {
-    for (final entry in await pending()) {
-      financialStore?.saveProvisional(
-        namespace,
-        TransactionEntry(
-          id: 'local-outbox:${entry.clientMutationId}',
-          sourceKey: _sourceKey(entry.clientMutationId),
-          amount: Money.fromPaise(entry.amountPaise),
-          occurredAt: entry.occurredAt ?? entry.createdAt,
-          userCardId: entry.userCardId,
-          categoryId: entry.categoryId ??
-              (entry.userCategoryId == null
-                  ? null
-                  : 'custom:${entry.userCategoryId}'),
-          merchantName: entry.merchantName,
-          note: entry.note,
-          instrument: entry.instrument,
-          paymentMethod: entry.paymentMethod,
-          entryKind: entry.entryKind,
-          source: 'manual',
-          status: 'active',
-        ),
+  TransactionEntry _provisional(TransactionOutboxEntry entry) =>
+      TransactionEntry(
+        id: 'local-outbox:${entry.clientMutationId}',
+        sourceKey: _sourceKey(entry.clientMutationId),
+        amount: Money.fromPaise(entry.amountPaise),
+        occurredAt: entry.occurredAt ?? entry.createdAt,
+        userCardId: entry.userCardId,
+        categoryId: entry.categoryId ??
+            (entry.userCategoryId == null
+                ? null
+                : 'custom:${entry.userCategoryId}'),
+        merchantName: entry.merchantName,
+        note: entry.note,
+        instrument: entry.instrument,
+        paymentMethod: entry.paymentMethod,
+        entryKind: entry.entryKind,
+        source: 'manual',
+        status: 'active',
       );
+
+  Future<void> restoreLocalEntries() async {
+    // Every queued entry, including parked ones and ones waiting out a
+    // backoff: the person still sees what they saved until it is delivered.
+    for (final entry in await all()) {
+      financialStore?.saveProvisional(namespace, _provisional(entry));
     }
+  }
+
+  /// Changes the category and/or card of an entry that has not been sent yet
+  /// (a bulk edit that includes a row saved offline). [categoryId] may be a
+  /// `custom:<id>` value. Returns false when the entry is no longer queued, i.e.
+  /// it has been delivered and the caller should edit the server row instead.
+  Future<bool> editQueued(
+    String clientMutationId, {
+    String? categoryId,
+    String? userCardId,
+  }) async {
+    final custom = categoryId != null && categoryId.startsWith('custom:');
+    if (categoryId != null) {
+      _appDb.db.execute(
+        'UPDATE transaction_outbox_entries SET category_id=?, user_category_id=? '
+        'WHERE namespace=? AND client_mutation_id=?',
+        [
+          custom ? null : categoryId,
+          custom ? categoryId.substring('custom:'.length) : null,
+          namespace,
+          clientMutationId,
+        ],
+      );
+      if (_appDb.db.updatedRows == 0) return false;
+    }
+    if (userCardId != null) {
+      _appDb.db.execute(
+        'UPDATE transaction_outbox_entries SET user_card_id=? '
+        'WHERE namespace=? AND client_mutation_id=?',
+        [userCardId, namespace, clientMutationId],
+      );
+      if (_appDb.db.updatedRows == 0) return false;
+    }
+    for (final entry in await all()) {
+      if (entry.clientMutationId == clientMutationId) {
+        financialStore?.saveProvisional(namespace, _provisional(entry));
+      }
+    }
+    return true;
   }
 
   Future<void> enqueue({
@@ -117,18 +184,24 @@ class TransactionOutboxRepository {
     TxnEntryKind entryKind = TxnEntryKind.spend,
     String? clientMutationId,
     String? paymentMethod,
+    String? merchantVpa,
+    String? mcc,
+    String? rail,
   }) async {
     final mutationId = clientMutationId ?? const Uuid().v4();
     final effectiveUserCategoryId = userCategoryId ??
         (categoryId != null && categoryId.startsWith('custom:')
             ? categoryId.substring('custom:'.length)
             : null);
+    // OR IGNORE: the same clientMutationId queued twice (a retried Save) is
+    // one entry. The server also dedupes on the id if the first was delivered.
     _appDb.db.execute(
       '''
-      INSERT INTO transaction_outbox_entries
+      INSERT OR IGNORE INTO transaction_outbox_entries
         (namespace, user_card_id, client_mutation_id, amount_paise, category_id, user_category_id, merchant_name,
-         occurred_at, note, instrument, entry_kind, created_at, payment_method)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         occurred_at, note, instrument, entry_kind, created_at, payment_method,
+         merchant_vpa, mcc, rail)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ''',
       [
         namespace,
@@ -144,6 +217,9 @@ class TransactionOutboxRepository {
         entryKind.wireValue,
         DateTime.now().millisecondsSinceEpoch,
         paymentMethod,
+        merchantVpa,
+        mcc,
+        rail,
       ],
     );
     financialStore?.saveProvisional(
@@ -190,15 +266,69 @@ class TransactionOutboxRepository {
     return rows.isEmpty ? null : rows.first['id'] as String;
   }
 
+  /// Entries due for delivery now: not parked and past their backoff, ordered
+  /// by `(parked, next_attempt_at, created_at)` so a row that keeps failing
+  /// never sits in front of a row that has not been tried yet.
   Future<List<TransactionOutboxEntry>> pending({int? limit}) async {
+    return _select(
+      'parked = 0 AND next_attempt_at <= ?',
+      [_now().millisecondsSinceEpoch],
+      limit: limit,
+    );
+  }
+
+  /// Every queued entry of this account in the same order, whatever its state
+  /// (due, waiting out a backoff or parked). Use this for counts and for
+  /// rebuilding the provisional rows; use [pending] to decide what to send.
+  Future<List<TransactionOutboxEntry>> all({int? limit}) async {
+    return _select('1 = 1', const [], limit: limit);
+  }
+
+  /// Entries the server permanently rejected. They stay queued (and visible)
+  /// until [retryParked] or [cancel].
+  Future<List<TransactionOutboxEntry>> parked() async {
+    return _select('parked = 1', const []);
+  }
+
+  /// Puts a parked entry back in the queue, due now, with a fresh attempt
+  /// count. Returns false when no parked entry has [id].
+  Future<bool> retryParked(int id) async {
+    _appDb.db.execute(
+      'UPDATE transaction_outbox_entries '
+      'SET parked = 0, attempts = 0, next_attempt_at = 0, last_error = NULL '
+      'WHERE namespace = ? AND id = ? AND parked = 1',
+      [namespace, id],
+    );
+    return _appDb.db.updatedRows > 0;
+  }
+
+  /// Makes every entry waiting out a backoff due again. Called when the
+  /// connection comes back: the delay was about a server problem that may
+  /// well have passed, and offline time should not be waited out twice.
+  /// Parked entries stay parked.
+  Future<void> resetBackoff() async {
+    _appDb.db.execute(
+      'UPDATE transaction_outbox_entries SET next_attempt_at = 0 '
+      'WHERE namespace = ? AND parked = 0 AND next_attempt_at > 0',
+      [namespace],
+    );
+  }
+
+  List<TransactionOutboxEntry> _select(
+    String where,
+    List<Object?> parameters, {
+    int? limit,
+  }) {
     final boundedLimit = limit?.clamp(1, 200);
     final limitClause = boundedLimit == null ? '' : ' LIMIT $boundedLimit';
     final rows = _appDb.db.select(
-      'SELECT * FROM transaction_outbox_entries WHERE namespace=? '
-      'ORDER BY created_at ASC$limitClause',
-      [namespace],
+      'SELECT * FROM transaction_outbox_entries WHERE namespace=? AND $where '
+      'ORDER BY parked ASC, next_attempt_at ASC, created_at ASC, id ASC'
+      '$limitClause',
+      [namespace, ...parameters],
     );
     return rows.map((row) {
+      final nextAttemptAt = row['next_attempt_at'] as int? ?? 0;
       return TransactionOutboxEntry(
         id: row['id'] as int,
         clientMutationId: row['client_mutation_id'] as String,
@@ -218,20 +348,32 @@ class TransactionOutboxRepository {
         ),
         lastError: row['last_error'] as String?,
         paymentMethod: row['payment_method'] as String?,
+        merchantVpa: row['merchant_vpa'] as String?,
+        mcc: row['mcc'] as String?,
+        rail: row['rail'] as String?,
+        attempts: row['attempts'] as int? ?? 0,
+        nextAttemptAt: nextAttemptAt == 0
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(nextAttemptAt),
+        parked: (row['parked'] as int? ?? 0) != 0,
       );
     }).toList();
   }
 
-  /// Attempts every queued entry once. A success removes the row; a
-  /// failure records [TransactionOutboxEntry.lastError] and leaves it
-  /// queued for the next flush — never silently drops a queued transaction.
+  /// Attempts every entry that is due, once. A success removes the row; a
+  /// failure records [TransactionOutboxEntry.lastError] and leaves it queued,
+  /// never silently dropping a queued transaction. What happens next depends
+  /// on [classifyQueueFailure]: a network failure changes nothing and ends the
+  /// pass; a retryable server failure counts an attempt and backs off; a
+  /// permanent rejection parks the row so it cannot starve newer ones.
   Future<int> flush(
     UserCardsRepository repo, {
     int maxEntries = defaultFlushBatchSize,
+    Set<String> holdCardIds = const {},
   }) async {
     try {
       return await AccountRecoveryOperationGate.process.run(
-        () => _flush(repo, maxEntries: maxEntries),
+        () => _flush(repo, maxEntries: maxEntries, holdCardIds: holdCardIds),
       );
     } on AccountRecoveryBusy {
       return 0;
@@ -241,9 +383,35 @@ class TransactionOutboxRepository {
   Future<int> _flush(
     UserCardsRepository repo, {
     required int maxEntries,
+    required Set<String> holdCardIds,
   }) async {
     var sent = 0;
-    for (final entry in await pending(limit: maxEntries)) {
+    // An entry naming a card whose queued add has not reached the server yet
+    // is held back: sent now it would be answered 404 and parked for good
+    // (WP-Q1). It goes once the add succeeded (its card id is remapped then).
+    final due = holdCardIds.isEmpty
+        ? await pending(limit: maxEntries)
+        : [
+            for (final e in await pending())
+              if (e.userCardId == null || !holdCardIds.contains(e.userCardId))
+                e,
+          ].take(maxEntries).toList();
+    // H3-2: a card that is only on the phone is not on the server yet.
+    final provisional = provisionalCardIds(_appDb.db, namespace);
+    for (final entry in due) {
+      final card = entry.userCardId;
+      if (card != null && provisional.contains(card)) {
+        if (cardAddParked(_appDb.db, namespace, card)) {
+          _appDb.db.execute(
+            'UPDATE transaction_outbox_entries SET last_error = ?, parked = 1 WHERE id = ?',
+            [
+              'The card this was added for could not be saved. Fix or remove the card, then retry.',
+              entry.id,
+            ],
+          );
+        }
+        continue; // waits for the remap; no attempt counted
+      }
       try {
         final id = await repo.logTransaction(
           userCardId: entry.userCardId,
@@ -260,6 +428,9 @@ class TransactionOutboxRepository {
           entryKind: entry.entryKind,
           clientMutationId: entry.clientMutationId,
           paymentMethod: entry.paymentMethod,
+          merchantVpa: entry.merchantVpa,
+          mcc: entry.mcc,
+          rail: entry.rail,
         );
         financialStore?.saveTransactions(namespace, [
           TransactionEntry(
@@ -284,15 +455,44 @@ class TransactionOutboxRepository {
         );
         sent++;
       } catch (e) {
-        _appDb.db.execute(
-          'UPDATE transaction_outbox_entries SET last_error = ? WHERE id = ?',
-          [e.toString(), entry.id],
-        );
+        final failure = classifyQueueFailure(e);
+        _recordFailure(entry, e, failure);
+        // The connection itself is down: the rest would only each wait out
+        // their own timeout. Leave them for the next trigger.
+        if (failure == QueueFailure.network) break;
       }
       // Let Flutter service pending input and paint work between network/DB
       // items when this is called from a lifecycle or connectivity callback.
       await Future<void>.delayed(Duration.zero); // perf-ok: bounded 20-row outbox batch
     }
     return sent;
+  }
+
+  void _recordFailure(
+    TransactionOutboxEntry entry,
+    Object error,
+    QueueFailure failure,
+  ) {
+    switch (failure) {
+      case QueueFailure.network:
+        _appDb.db.execute(
+          'UPDATE transaction_outbox_entries SET last_error = ? WHERE id = ?',
+          [error.toString(), entry.id],
+        );
+      case QueueFailure.retryable:
+        final attempts = entry.attempts + 1;
+        final next = _now().add(queueBackoff(attempts));
+        _appDb.db.execute(
+          'UPDATE transaction_outbox_entries '
+          'SET last_error = ?, attempts = ?, next_attempt_at = ? WHERE id = ?',
+          [error.toString(), attempts, next.millisecondsSinceEpoch, entry.id],
+        );
+      case QueueFailure.permanent:
+        _appDb.db.execute(
+          'UPDATE transaction_outbox_entries '
+          'SET last_error = ?, attempts = ?, parked = 1 WHERE id = ?',
+          [error.toString(), entry.attempts + 1, entry.id],
+        );
+    }
   }
 }

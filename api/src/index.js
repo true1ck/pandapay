@@ -6,7 +6,15 @@ const crypto = require('crypto');
 const express = require('express');
 const { createCorsPolicy } = require('./cors_policy');
 const { jsonBodyParser, jsonBodyErrorHandler } = require('./request_limits');
-const { validateSyncRegistration, validateSyncPushRequest, validateSyncPushChange, validateSyncPullQuery, validateSyncAck, validateSyncConflictId, syncRejectionDetail } = require('./sync_request_validation');
+const { rejectInvalidUuid } = require('./http_db_errors');
+const { createUserCardsAddHandler } = require('./user_cards_add');
+const { createCardOverridesPostHandler } = require('./card_overrides_write');
+const { createBudgetPostHandler, createBudgetDeleteHandler } = require('./budgets_write');
+const { registerConsentRoute } = require('./consents_route');
+const { createSmsImportBatchPostHandler } = require('./sms_import_batches_route');
+const { createRecurringPostHandler, createRecurringPatchHandler } = require('./recurring_write');
+const { syncPushBodyParser } = require('./sync_push_body');
+const { validateSyncRegistration, validateSyncPushRequest, validateSyncPushChange, validateSyncPullQuery, validateSyncAck, validateSyncConflictId, syncRejectionDetail, createSyncPushContext, processSyncPushItem, syncDeviceExists, respondUnknownSyncDevice, respondDbError } = require('./sync_request_validation');
 const { createLoungeUsagePostHandler } = require('./lounge_usage_route');
 const { createCatalogueHandler } = require('./catalogue_route');
 const config = require('./config');
@@ -154,6 +162,8 @@ app.use(...createCorsPolicy());
 require('./sms_v2').registerSmsV2(app, { requireAuth, requireAdmin, withUserClient, loadUserCardForState, applyTransactionState, reverseTransactionState });
 // LANE-D-1: clients that do not send `X-Sms-Pipeline: v2` (every shipped app) get `transfer` instead of `refund` in JSON answers.
 app.use(require('./legacy_entry_kind').legacyEntryKindFilter);
+// /sync/push carries up to 200 changes (16 KiB commitment documents): larger, explicit limit, mounted first so the 100 KiB global parser skips the parsed body.
+app.use('/sync/push', syncPushBodyParser);
 app.use(jsonBodyParser);
 app.use(jsonBodyErrorHandler);
 
@@ -1130,6 +1140,7 @@ app.post('/sync/register-device', requireAuth, async (req, res) => {
     res.status(201).json({ deviceId: result.rows[0].device_id });
   } catch (err) {
     console.error('POST /sync/register-device error', safeErrorCode(err));
+    if (respondDbError(res, err)) return;
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -1278,10 +1289,17 @@ app.post('/notifications/test', requireAuth, async (req, res) => {
 app.post('/sync/push', requireAuth, async (req, res) => {
   const checked = validateSyncPushRequest(req.body);
   if (checked.error) return res.status(checked.status).json({ error: checked.error });
-  const { deviceId, changes } = checked.value;
+  const { deviceId, changes, strict } = checked.value;
 
   try {
     const results = await withUserClient(req.userId, async (client) => {
+      // Opt-in (strict) pre-check: refuse the whole batch, before anything is
+      // applied, when this device id is unknown to the account. Without it the
+      // per-item RPCs reject every change as a permanent 'rejected'.
+      if (strict === true && !(await syncDeviceExists(client, req.userId, deviceId))) return null;
+      const ctx = createSyncPushContext({
+        userId: req.userId, deviceId, config, applyTransactionSync, strict, rejectionDetail: syncRejectionDetail,
+      });
       const out = [];
       for (const change of changes) {
         const item = validateSyncPushChange(change);
@@ -1289,162 +1307,20 @@ app.post('/sync/push', requireAuth, async (req, res) => {
           out.push({ clientSeq: Number.isSafeInteger(change?.clientSeq) ? change.clientSeq : null, applied: false, reason: 'malformed' });
           continue;
         }
-        const { entity, entityId, op, payload, fieldClocks, clientSeq } = item.value;
-        await client.query('SAVEPOINT sync_item');
-        try {
-          // Transaction status and deletion require the ordinary domain route,
-          // whose reversal work cannot be replaced by a raw sync UPDATE/DELETE.
-          if (entity === 'transactions' && (op === 'delete' || Object.hasOwn(payload, 'status'))) {
-            throw Object.assign(new Error('Use the transaction status route'), { code: 'SYNC_TRANSACTION_DOMAIN_REQUIRED' });
-          }
-          if (entity === 'user_categories' && op === 'insert') {
-            const categoryResult = await client.query(
-              `SELECT out_applied, out_reason
-                 FROM pandapay.sync_insert_user_category(
-                   $1, $2, $3, $4, $5, $6::uuid, $7::uuid, $8::text[], $9::jsonb, $10)`,
-              [
-                req.userId,
-                deviceId,
-                entityId,
-                typeof payload?.name === 'string' ? payload.name : null,
-                typeof payload?.slug === 'string' ? payload.slug : null,
-                typeof payload?.parent_category_id === 'string' ? payload.parent_category_id : null,
-                typeof payload?.parent_user_category_id === 'string' ? payload.parent_user_category_id : null,
-                Array.isArray(payload?.match_terms) ? payload.match_terms.filter((term) => typeof term === 'string') : [],
-                JSON.stringify(fieldClocks || {}),
-                Number.isFinite(clientSeq) ? clientSeq : 0,
-              ]
-            );
-            const categoryRow = categoryResult.rows[0];
-            await client.query('RELEASE SAVEPOINT sync_item');
-            out.push({
-              clientSeq: clientSeq ?? null,
-              entityId,
-              applied: categoryRow.out_applied,
-              conflicts: 0,
-              reason: categoryRow.out_reason,
-            });
-            continue;
-          }
-          if (entity === 'user_commitments') {
-            const billResult = await client.query(
-              `SELECT out_applied, out_conflicts, out_reason
-                 FROM pandapay.sync_apply_user_commitment(
-                   $1, $2, $3, $4, $5::jsonb, $6
-                 )`,
-              [
-                req.userId,
-                deviceId,
-                entityId,
-                op,
-                JSON.stringify(payload || {}),
-                Number.isFinite(clientSeq) ? clientSeq : 0,
-              ],
-            );
-            const billRow = billResult.rows[0];
-            await client.query('RELEASE SAVEPOINT sync_item');
-            out.push({
-              clientSeq: clientSeq ?? null,
-              entityId,
-              applied: billRow.out_applied,
-              conflicts: billRow.out_conflicts,
-              reason: billRow.out_reason,
-            });
-            continue;
-          }
-          if (entity === 'user_merchant_category_rules') {
-            const ruleResult = await client.query(
-              `SELECT out_applied, out_conflicts, out_reason
-                 FROM pandapay.sync_apply_user_merchant_category_rule(
-                   $1, $2, $3, $4, $5::jsonb, $6
-                 )`,
-              [
-                req.userId,
-                deviceId,
-                entityId,
-                op,
-                JSON.stringify(payload || {}),
-                Number.isFinite(clientSeq) ? clientSeq : 0,
-              ],
-            );
-            const ruleRow = ruleResult.rows[0];
-            await client.query('RELEASE SAVEPOINT sync_item');
-            out.push({
-              clientSeq: clientSeq ?? null,
-              entityId,
-              applied: ruleRow.out_applied,
-              conflicts: ruleRow.out_conflicts,
-              reason: ruleRow.out_reason,
-            });
-            continue;
-          }
-          const args = [
-            req.userId, deviceId, entity, entityId, op,
-            JSON.stringify(payload), JSON.stringify(fieldClocks),
-            Number.isFinite(clientSeq) ? clientSeq : 0,
-          ];
-          // card-rewards (WP8, C8 D23d): the typed applier locks the row and
-          // reverses/re-applies card state; take the user's ingest lock first.
-          if (config.syncTypedWritesEnabled && entity === 'transactions') {
-            await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [
-              `transaction-ingest:${req.userId}`,
-            ]);
-          }
-          const row = config.syncTypedWritesEnabled && entity === 'transactions'
-            ? await applyTransactionSync(client, {
-                userId: req.userId, deviceId, entityId, op, payload, fieldClocks, clientSeq,
-              })
-            : (await client.query(
-                config.syncTypedWritesEnabled
-                  ? `SELECT out_applied, out_conflicts, out_reason FROM pandapay.sync_apply_change_v2($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8)`
-                  : `SELECT out_applied, out_conflicts, out_reason FROM pandapay.sync_apply_change($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8)`,
-                args,
-              )).rows[0];
-          // Offline transaction edits use this RPC rather than PATCH. Enforce
-          // the same split invariant before accepting the item; a failure
-          // rolls back the entire item, including its sync log/reward state.
-          if (!config.syncTypedWritesEnabled && row.out_applied && entity === 'transactions' && payload?.amount_inr != null) {
-            const splitCheck = await client.query(
-              `SELECT t.amount_inr, COALESCE((SELECT SUM(s.amount_inr)
-                 FROM transaction_splits s WHERE s.transaction_id=t.id), 0) AS split_total
-                 FROM transactions t WHERE t.id=$1 AND t.profile_id=$2 FOR UPDATE`,
-              [entityId, req.userId]
-            );
-            const checked = splitCheck.rows[0];
-            if (checked && Math.round(Number(checked.split_total) * 100) > Math.round(Number(checked.amount_inr) * 100)) {
-              throw Object.assign(new Error('amount is less than saved split shares; edit or clear the split first'), { code: 'SYNC_SPLIT_TOTAL_CONFLICT' });
-            }
-          }
-          await client.query('RELEASE SAVEPOINT sync_item');
-          out.push({
-            clientSeq: clientSeq ?? null,
-            entityId,
-            applied: row.out_applied,
-            conflicts: row.out_conflicts,
-            reason: row.out_reason,
-          });
-        } catch (itemErr) {
-          await client.query('ROLLBACK TO SAVEPOINT sync_item');
-          // Keep per-item rejection semantics while excluding PostgreSQL
-          // messages, constraint names and submitted values from the response.
-          out.push({
-            clientSeq: clientSeq ?? null,
-            entityId,
-            applied: false,
-            reason: 'rejected',
-            detail: syncRejectionDetail(itemErr),
-          });
-        }
+        // Per-entity dispatch lives in sync_push_handlers.js (registry).
+        out.push(await processSyncPushItem(client, item.value, ctx));
       }
       return out;
     });
 
+    if (results === null) return res.status(409).json({ error: 'device_not_registered' });
     res.json({
       results,
       appliedCount: results.filter((r) => r.applied).length,
     });
   } catch (err) {
     console.error('POST /sync/push error', safeErrorCode(err));
+    if (respondDbError(res, err)) return;
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -1490,6 +1366,8 @@ app.get('/sync/pull', requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('GET /sync/pull error', safeErrorCode(err));
+    if (await respondUnknownSyncDevice({ withUserClient, userId: req.userId, res, err, deviceId })) return;
+    if (respondDbError(res, err)) return;
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -1541,6 +1419,8 @@ app.post('/sync/ack', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('POST /sync/ack error', safeErrorCode(err));
+    if (await respondUnknownSyncDevice({ withUserClient, userId: req.userId, res, err, deviceId })) return;
+    if (respondDbError(res, err)) return;
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -1561,6 +1441,7 @@ app.post('/sync/conflicts/:id/acknowledge', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('POST /sync/conflicts/:id/acknowledge error', safeErrorCode(err));
+    if (respondDbError(res, err)) return;
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -2068,128 +1949,8 @@ app.get('/user-cards', requireAuth, async (req, res) => {
  * pattern as POST /profile, so a user can never add a card to someone
  * else's wallet even if they tampered with the request.
  */
-app.post('/user-cards', requireAuth, async (req, res) => {
-  const { cardProductId, nickname, last4 } = req.body || {};
-  const normalizedLast4 = normalizeCardLast4(last4);
-  if (!cardProductId || typeof cardProductId !== 'string') {
-    return res.status(400).json({ error: 'cardProductId is required' });
-  }
-  // Four digits or nothing. Validated here as well as by the column CHECK so
-  // the caller gets a clear 400 rather than a 500 from a constraint
-  // violation — and so this route can never be the way a longer number
-  // reaches a column that must only ever hold a matching key.
-  if (normalizedLast4 !== null && !/^[0-9]{4}$/.test(normalizedLast4)) {
-    return res.status(400).json({ error: 'last4 must be exactly 4 digits' });
-  }
-  // The whole-history repair is scheduled after the response is sent. Running
-  // it inside this request held the card add (and the app's spinner) for
-  // minutes on an account with a long SMS history.
-  let deferredRepair = null;
-  try {
-    const result = await withUserClient(req.userId, async (client) => {
-      // Serialize adds for the same account/product pair. The UI performs a
-      // fast local duplicate check, but this transaction-level lock is the
-      // authoritative guard for two scans/taps racing each other.
-      await client.query(
-        'SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))',
-        [req.userId, cardProductId],
-      );
-      const card = await client.query(
-        `SELECT id, issuer_id, card_type
-           FROM card_products
-          WHERE id = $1 AND status = 'published'`,
-        [cardProductId]
-      );
-      if (card.rows.length === 0) return null;
-
-      // Serialize physical-card adds as well as product adds. This closes the
-      // race where two catalogue variants for the same bank card are tapped
-      // at nearly the same time.
-      await client.query(
-        `SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`,
-        [`card-identity:${req.userId}:${card.rows[0].issuer_id || ''}:${card.rows[0].card_type || ''}:${normalizedLast4 || ''}`],
-      );
-
-      const existing = await client.query(
-        `SELECT uc.id, uc.card_product_id, uc.nickname, uc.last4,
-                uc.is_default, uc.sort_order, uc.created_at,
-                 uc.is_archived, cp.name AS card_name,
-                 cp.issuer_id, cp.card_type
-           FROM user_cards uc
-           JOIN card_products cp ON cp.id = uc.card_product_id
-          WHERE uc.profile_id = $1 AND uc.is_archived = false
-          ORDER BY uc.created_at ASC, uc.id ASC`,
-        [req.userId],
-      );
-      const conflict = findCardAddConflict(existing.rows, {
-        cardProductId,
-        last4: normalizedLast4,
-        issuerId: card.rows[0].issuer_id,
-        cardType: card.rows[0].card_type,
-      });
-      if (conflict?.kind === 'already_present') {
-        return { alreadyPresent: true, userCard: conflict.userCard };
-      }
-      if (conflict?.kind === 'link_existing') {
-        const linked = await client.query(
-          `UPDATE user_cards
-              SET last4 = $1,
-                  nickname = COALESCE(NULLIF($2, ''), nickname)
-            WHERE id = $3 AND profile_id = $4 AND is_archived = false
-            RETURNING id, card_product_id, nickname, last4, is_default, sort_order, created_at`,
-          [normalizedLast4, nickname || null, conflict.userCard.id, req.userId],
-        );
-        if (linked.rows.length > 0) {
-          deferredRepair = { reviewCrossSource: true, reviewCardId: linked.rows[0].id };
-          return { linkedExisting: true, userCard: linked.rows[0] };
-        }
-      }
-
-      const inserted = await client.query(
-        `INSERT INTO user_cards (profile_id, card_product_id, nickname, last4)
-         VALUES ($1, $2, $3, $4)
-         RETURNING id, card_product_id, nickname, last4, is_default, sort_order, created_at`,
-        [req.userId, cardProductId, nickname || null, normalizedLast4]
-      );
-      // When SMS history arrived before the user added this card, repair
-      // attribution in the same transaction so Spending stops showing the
-      // matching suffix as "unlinked" immediately after card creation.
-      // A camera/manual add has no reliable card suffix, so there is nothing
-      // for repairSmsHistory to match and the full repair scan only adds
-      // latency. Discovery/import paths that know the suffix still get the
-      // immediate attribution repair.
-      if (inserted.rows.length > 0 && normalizedLast4) {
-        deferredRepair = { reviewCrossSource: true, reviewCardId: inserted.rows[0].id };
-      }
-      return inserted.rows[0];
-    });
-
-    if (!result) return res.status(404).json({ error: 'card_product not found or not published' });
-    if (result.alreadyPresent) {
-      return res.status(409).json({
-        error: 'card_already_added',
-        message: 'This card is already in your wallet.',
-        userCard: result.userCard,
-      });
-    }
-    if (result.linkedExisting) {
-      res.status(200).json({ userCard: result.userCard, linkedExisting: true });
-      if (deferredRepair) scheduleSmsRepair(req.userId, deferredRepair, 'POST /user-cards');
-      return;
-    }
-    res.status(201).json({ userCard: result });
-    if (deferredRepair) scheduleSmsRepair(req.userId, deferredRepair, 'POST /user-cards');
-  } catch (err) {
-    if (err && err.code === '23505' && err.constraint === 'uq_user_cards_active_identity') {
-      return res.status(409).json({
-        error: 'card_already_added',
-        message: 'This physical card is already in your wallet.',
-      });
-    }
-    console.error('POST /user-cards error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+// Logic lives in user_cards_add.js (WP-S2: optional client `id` makes the add idempotent).
+app.post('/user-cards', requireAuth, createUserCardsAddHandler({ withUserClient, scheduleSmsRepair, safeErrorCode }));
 
 /**
  * POST /user-cards/import — plan Phase 1.2. Hands a guest's on-device
@@ -2482,48 +2243,8 @@ app.get('/card-overrides', requireAuth, async (req, res) => {
  * override_scope_populated CHECK constraint exactly so a bad request fails
  * with a clear 400 instead of a raw constraint-violation 500.
  */
-app.post('/card-overrides', requireAuth, async (req, res) => {
-  const { userCardId, scope, vpa, merchantName, categoryId, reasonNote } = req.body || {};
-  if (!userCardId || typeof userCardId !== 'string') {
-    return res.status(400).json({ error: 'userCardId is required' });
-  }
-  if (!['vpa', 'merchant_name', 'category'].includes(scope)) {
-    return res.status(400).json({ error: "scope must be 'vpa', 'merchant_name', or 'category'" });
-  }
-  if (scope === 'vpa' && !vpa) {
-    return res.status(400).json({ error: 'vpa is required when scope is vpa' });
-  }
-  if (scope === 'merchant_name' && !merchantName) {
-    return res.status(400).json({ error: 'merchantName is required when scope is merchant_name' });
-  }
-  if (scope === 'category' && !categoryId) {
-    return res.status(400).json({ error: 'categoryId is required when scope is category' });
-  }
-
-  try {
-    const result = await withUserClient(req.userId, async (client) => {
-      const owns = await client.query(
-        `SELECT id FROM user_cards WHERE id = $1 AND profile_id = $2 AND is_archived = false`,
-        [userCardId, req.userId]
-      );
-      if (owns.rows.length === 0) return null;
-
-      const inserted = await client.query(
-        `INSERT INTO card_overrides (profile_id, user_card_id, scope, vpa, merchant_name, category_id, reason_note)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         RETURNING id, user_card_id, scope, vpa, merchant_name, category_id, reason_note, is_enabled, created_at`,
-        [req.userId, userCardId, scope, vpa || null, merchantName || null, categoryId || null, reasonNote || null]
-      );
-      return inserted.rows[0];
-    });
-
-    if (!result) return res.status(404).json({ error: 'user_card not found or not owned by you' });
-    res.status(201).json({ override: result });
-  } catch (err) {
-    console.error('POST /card-overrides error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+// Logic lives in card_overrides_write.js (WP-S2: optional client `id` makes the create idempotent).
+app.post('/card-overrides', requireAuth, createCardOverridesPostHandler({ withUserClient, safeErrorCode }));
 
 /**
  * PATCH /card-overrides/:id — B8's edit + enable/disable toggle. Only
@@ -2535,6 +2256,7 @@ app.post('/card-overrides', requireAuth, async (req, res) => {
  * scope-defining columns).
  */
 app.patch('/card-overrides/:id', requireAuth, async (req, res) => {
+  if (rejectInvalidUuid(res, req.params.id)) return;
   const { isEnabled, reasonNote, userCardId } = req.body || {};
   const sets = [];
   const params = [];
@@ -2590,6 +2312,7 @@ app.patch('/card-overrides/:id', requireAuth, async (req, res) => {
  * dialog per this plan's Global Constraints).
  */
 app.delete('/card-overrides/:id', requireAuth, async (req, res) => {
+  if (rejectInvalidUuid(res, req.params.id)) return;
   try {
     const result = await withUserClient(req.userId, (client) =>
       client.query(
@@ -2799,6 +2522,9 @@ app.patch('/user-cards/:id', requireAuth, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ error: 'user_card not found' });
     res.json({ userCard: result.rows[0] });
   } catch (err) {
+    if (err?.code === '23505' && err.constraint === 'uq_user_cards_active_identity') {
+      return res.status(409).json({ error: 'card_already_added' });
+    }
     console.error('PATCH /user-cards/:id error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
@@ -7288,74 +7014,8 @@ app.get('/budgets', requireAuth, async (req, res) => {
  * it", not "fail". The old row is DEACTIVATED, not deleted, so the
  * `budget_periods` history that references it survives.
  */
-app.post('/budgets', requireAuth, async (req, res) => {
-  const { scope, scopeRefId, period, amountInr, startsOn, rollover } = req.body || {};
-  if (!BUDGET_SCOPES.includes(scope)) {
-    return res.status(400).json({ error: `scope must be one of ${BUDGET_SCOPES.join(', ')}` });
-  }
-  if (!BUDGET_PERIODS.includes(period)) {
-    return res.status(400).json({ error: `period must be one of ${BUDGET_PERIODS.join(', ')}` });
-  }
-  const amount = Number(amountInr);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return res.status(400).json({ error: 'amountInr must be a positive number' });
-  }
-  if (scope === 'overall' && scopeRefId) {
-    return res.status(400).json({ error: 'an overall budget takes no scopeRefId' });
-  }
-  if (scope !== 'overall' && (!scopeRefId || typeof scopeRefId !== 'string')) {
-    return res.status(400).json({ error: 'scopeRefId is required for a category or card budget' });
-  }
-
-  try {
-    const result = await withUserClient(req.userId, async (client) => {
-      // Validate the referent exists and, for a card, belongs to this user.
-      // The column is deliberately not a foreign key (it points at two
-      // different tables depending on scope), so this check is the only
-      // thing standing between a typo and a budget that can never match
-      // any spend.
-      if (scope === 'category') {
-        const found = await client.query(
-          `SELECT id FROM spend_categories WHERE id = $1
-           UNION ALL
-           SELECT id FROM user_categories WHERE id = $1 AND profile_id = $2`,
-          [scopeRefId, req.userId],
-        );
-        if (found.rows.length === 0) return { status: 404, error: 'category not found' };
-      } else if (scope === 'tag') {
-        const found = await client.query('SELECT id FROM transaction_tags WHERE id=$1 AND profile_id=$2 AND archived_at IS NULL', [scopeRefId,req.userId]);
-        if (!found.rows.length) return { status:404,error:'tag not found' };
-      } else if (scope === 'card') {
-        const found = await client.query(
-          `SELECT id FROM user_cards WHERE id = $1 AND profile_id = $2 AND is_archived = false`,
-          [scopeRefId, req.userId]
-        );
-        if (found.rows.length === 0) return { status: 404, error: 'card not found' };
-      }
-
-      await client.query(
-        `UPDATE budgets SET is_active = false
-          WHERE profile_id = $1 AND is_active AND scope = $2 AND period = $3
-            AND scope_ref_id IS NOT DISTINCT FROM $4`,
-        [req.userId, scope, period, scopeRefId || null]
-      );
-
-      const inserted = await client.query(
-        `INSERT INTO budgets (profile_id, scope, scope_ref_id, period, amount_inr, starts_on, rollover)
-         VALUES ($1, $2, $3, $4, $5, COALESCE($6::date, CURRENT_DATE), COALESCE($7, false))
-         RETURNING id, scope, scope_ref_id, period, amount_inr, starts_on, rollover, is_active`,
-        [req.userId, scope, scopeRefId || null, period, amount, startsOn || null, rollover]
-      );
-      return { status: 201, budget: inserted.rows[0] };
-    });
-
-    if (result.status !== 201) return res.status(result.status).json({ error: result.error });
-    res.status(201).json({ budget: result.budget });
-  } catch (err) {
-    console.error('POST /budgets error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+require('./user_local_state_route').registerUserLocalStateRoutes(app, { requireAuth, withUserClient, keyring: config.imapKeyring });
+app.post('/budgets', requireAuth, createBudgetPostHandler({ withUserClient, BUDGET_SCOPES, BUDGET_PERIODS }));
 
 /**
  * DELETE /budgets/:id — deactivates rather than deletes, so any
@@ -7363,23 +7023,7 @@ app.post('/budgets', requireAuth, async (req, res) => {
  * budget last March?" must not become unanswerable because the budget was
  * removed in April.
  */
-app.delete('/budgets/:id', requireAuth, async (req, res) => {
-  try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
-        `UPDATE budgets SET is_active = false
-          WHERE id = $1 AND profile_id = $2 AND is_active
-          RETURNING id`,
-        [req.params.id, req.userId]
-      )
-    );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'budget not found' });
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('DELETE /budgets/:id error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+app.delete('/budgets/:id', requireAuth, createBudgetDeleteHandler({ withUserClient }));
 
 /**
  * GET /recurring — the user's subscriptions, detected from their own
@@ -7723,86 +7367,9 @@ app.get('/recurring', requireAuth, async (req, res) => {
   }
 });
 
-app.post('/recurring', requireAuth, async (req, res) => {
-  const { displayName, typicalAmountInr, cadenceDays, nextExpectedOn } = req.body || {};
-  const autopayStatus = req.body?.autopayStatus || 'unknown';
-  const name = typeof displayName === 'string' ? displayName.trim() : '';
-  const amount = Number(typicalAmountInr);
-  const cadence = Number(cadenceDays);
-  const dateIsValid = typeof nextExpectedOn === 'string'
-    && /^\d{4}-\d{2}-\d{2}$/.test(nextExpectedOn)
-    && !Number.isNaN(Date.parse(`${nextExpectedOn}T00:00:00Z`))
-    && new Date(`${nextExpectedOn}T00:00:00Z`).toISOString().slice(0, 10) === nextExpectedOn;
+app.post('/recurring', requireAuth, createRecurringPostHandler({ withUserClient }));
 
-  if (!isUsableSubscriptionName(name) || name.length > 80 ||
-      !Number.isFinite(amount) || amount <= 0 || amount > 10000000 ||
-      ![30, 365].includes(cadence) ||
-      !['active', 'cancelled', 'unknown'].includes(autopayStatus) ||
-      !dateIsValid) {
-    return res.status(400).json({ error: 'invalid_subscription' });
-  }
-
-  const merchantKey = merchantSeriesKey(name);
-  if (!merchantKey) return res.status(400).json({ error: 'invalid_subscription' });
-
-  try {
-    const result = await withUserClient(req.userId, (client) => client.query(
-      `INSERT INTO recurring_series
-         (profile_id, merchant_key, display_name, typical_amount_inr,
-          cadence_days, occurrence_count, first_seen_on, last_seen_on,
-          next_expected_on, detection_source, user_edited, autopay_status)
-       VALUES ($1, $2, $3, $4, $5, 0, NULL, NULL, $6, 'manual', true, $7)
-       ON CONFLICT (profile_id, merchant_key) DO UPDATE SET
-         display_name = EXCLUDED.display_name,
-         typical_amount_inr = EXCLUDED.typical_amount_inr,
-         cadence_days = EXCLUDED.cadence_days,
-         next_expected_on = EXCLUDED.next_expected_on,
-         detection_source = 'manual',
-         user_edited = true,
-         lifecycle_status = 'active',
-         autopay_status = EXCLUDED.autopay_status,
-         mandate_reference = NULL,
-         mandate_started_on = NULL,
-         mandate_cancelled_at = NULL,
-         is_active = true,
-         dismissed_at = NULL,
-         updated_at = now()
-       RETURNING id`,
-      [req.userId, merchantKey, name, amount, cadence, nextExpectedOn, autopayStatus]
-    ));
-    res.status(201).json({ id: result.rows[0].id });
-  } catch (err) {
-    console.error('POST /recurring error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
-
-app.patch('/recurring/:id', requireAuth, async (req, res) => {
-  const { displayName, typicalAmountInr, cadenceDays, nextExpectedOn } = req.body || {};
-  const autopayStatus = req.body?.autopayStatus;
-  if (typeof displayName !== 'string' || displayName.trim().length < 2 || displayName.trim().length > 80 ||
-      !Number.isFinite(Number(typicalAmountInr)) || Number(typicalAmountInr) <= 0 || Number(typicalAmountInr) > 10000000 ||
-      !Number.isInteger(Number(cadenceDays)) || Number(cadenceDays) < 1 || Number(cadenceDays) > 3650 ||
-      (autopayStatus !== undefined && !['active', 'cancelled', 'unknown'].includes(autopayStatus)) ||
-      typeof nextExpectedOn !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(nextExpectedOn) || Number.isNaN(Date.parse(`${nextExpectedOn}T00:00:00Z`))) {
-    return res.status(400).json({ error: 'invalid_subscription' });
-  }
-  try {
-    const result = await withUserClient(req.userId, (client) => client.query(
-      `UPDATE recurring_series SET display_name = $1, typical_amount_inr = $2,
-              cadence_days = $3, next_expected_on = $4,
-              autopay_status = COALESCE($5, autopay_status), user_edited = true,
-              cadence_confirmed = true
-        WHERE id = $6 AND profile_id = $7 AND dismissed_at IS NULL RETURNING id`,
-      [displayName.trim(), Number(typicalAmountInr), Number(cadenceDays), nextExpectedOn, autopayStatus ?? null, req.params.id, req.userId]
-    ));
-    if (!result.rows.length) return res.status(404).json({ error: 'not_found' });
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('PATCH /recurring error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+app.patch('/recurring/:id', requireAuth, createRecurringPatchHandler({ withUserClient }));
 
 /**
  * POST /recurring/:id/dismiss — "I cancelled this."
@@ -7812,6 +7379,7 @@ app.patch('/recurring/:id', requireAuth, async (req, res) => {
  * exactly until the user next opened the screen.
  */
 app.post('/recurring/:id/dismiss', requireAuth, async (req, res) => {
+  if (rejectInvalidUuid(res, req.params.id)) return;
   try {
     const result = await withUserClient(req.userId, (client) =>
       client.query(
@@ -8022,6 +7590,7 @@ app.get('/notifications', requireAuth, async (req, res) => {
  */
 app.post('/notifications/read', requireAuth, async (req, res) => {
   const { id } = req.body || {};
+  if (id && rejectInvalidUuid(res, id)) return;
   try {
     const result = await withUserClient(req.userId, (client) =>
       id
@@ -8315,43 +7884,7 @@ app.get('/consents/history', requireAuth, async (req, res) => {
  * revocation is its own new row with granted=false, not an edit to the
  * grant row.
  */
-app.post('/consents', requireAuth, async (req, res) => {
-  const { purpose, granted, policyVersion, sourceScreen } = req.body || {};
-  if (!CONSENT_PURPOSES.includes(purpose)) {
-    return res.status(400).json({ error: `purpose must be one of ${CONSENT_PURPOSES.join(', ')}` });
-  }
-  if (typeof granted !== 'boolean') {
-    return res.status(400).json({ error: 'granted must be a boolean' });
-  }
-  if (!policyVersion || typeof policyVersion !== 'string') {
-    return res.status(400).json({ error: 'policyVersion is required' });
-  }
-  try {
-    const result = await withUserClient(req.userId, async (client) => {
-      if (purpose === 'sms_shared_learning') {
-        // Match the feedback route's lock so revocation/purge cannot race an
-        // in-flight contribution write under the previous grant.
-        await client.query(
-          'SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))',
-          [`sms-shared-learning-consent:${req.userId}`],
-        );
-      }
-      const inserted = await client.query(
-        `INSERT INTO user_consents (profile_id, purpose, policy_version, granted, source_screen)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING purpose, granted, granted_at, policy_version, source_screen`,
-        [req.userId, purpose, policyVersion, granted, sourceScreen || null]
-      );
-      // Revoking sms_shared_learning purges the v2 template data in the database
-      // (trigger sms_v2_revoke_template_consent), inside this transaction.
-      return inserted;
-    });
-    res.status(201).json({ consent: result.rows[0] });
-  } catch (err) {
-    console.error('POST /consents error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+registerConsentRoute(app, { requireAuth, withUserClient, CONSENT_PURPOSES });
 
 // PATCH /user-cards/:id was independently started here as "Task H-0b" to
 // unblock A9/H — since consolidated into the single Task C-4 implementation
@@ -9355,29 +8888,14 @@ app.get('/statement-imports', requireAuth, async (req, res) => {
  * built, per the plan's explicit instruction), so this table's counts are a
  * true summary, not a guess.
  */
-app.post('/sms-import-batches', requireAuth, async (req, res) => {
-  const { messageCount, parsedCount, failedCount } = req.body || {};
-  try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
-        `INSERT INTO sms_import_batches (profile_id, message_count, parsed_count, failed_count)
-         VALUES ($1, $2, $3, $4) RETURNING *`,
-        [req.userId, messageCount ?? 0, parsedCount ?? 0, failedCount ?? 0]
-      )
-    );
-    res.status(201).json({ smsImportBatch: result.rows[0] });
-  } catch (err) {
-    console.error('POST /sms-import-batches error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+app.post('/sms-import-batches', requireAuth, createSmsImportBatchPostHandler({ withUserClient }));
 
 /** GET /sms-import-batches — F1/F4 history read. */
 app.get('/sms-import-batches', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, (client) =>
       client.query(
-        `SELECT * FROM sms_import_batches WHERE profile_id = $1 ORDER BY imported_at DESC LIMIT 20`,
+        `SELECT id, profile_id, message_count, parsed_count, failed_count, imported_at FROM sms_import_batches WHERE profile_id = $1 ORDER BY imported_at DESC LIMIT 20`,
         [req.userId]
       )
     );

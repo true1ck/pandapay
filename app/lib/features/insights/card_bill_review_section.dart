@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -8,6 +10,7 @@ import '../../app/providers.dart';
 import '../../app/required_field.dart';
 import '../../data/card_bill_ledger.dart';
 import '../../data/user_cards_repository.dart';
+import '../sync_state/user_state_sync.dart';
 
 /// Captured bill messages that need a card choice remain visible here. A
 /// manually linked message stays available so the choice can be corrected.
@@ -183,6 +186,13 @@ class _CardBillReviewSheetState extends ConsumerState<_CardBillReviewSheet> {
         amountDuePaise: Money.fromRupees(amount).paise,
         dueDate: due,
         statementDate: statement,
+      );
+      unawaited(
+        queueUserStatePush(
+          ref,
+          UserStateKind.billCardAssignment,
+          widget.item.id,
+        ),
       );
       ref.invalidate(cardBillLedgerProvider);
       ref.invalidate(cardBillReviewItemsProvider);

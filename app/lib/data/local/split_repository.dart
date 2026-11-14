@@ -71,6 +71,15 @@ class SplitRepository extends ChangeNotifier {
             [namespace],
           ).single['count']
           as int;
+
+  /// Documents the server refused for good or flagged as a conflict. They are
+  /// still pending (never sent) but will not retry by themselves.
+  int get blockedCount =>
+      database.db.select(
+            'SELECT COUNT(*) AS count FROM split_documents WHERE namespace=? AND pending=1 AND blocked=1',
+            [namespace],
+          ).single['count']
+          as int;
   void _changed() {
     if (!_disposed) notifyListeners();
   }
@@ -140,7 +149,32 @@ class SplitRepository extends ChangeNotifier {
       }
       return saved;
     }
-    await refresh(id);
+    try {
+      await refresh(id);
+    } catch (error) {
+      // Never loaded and the server is not reachable: open an empty, editable
+      // split instead of an error. The first save is sent with the empty
+      // baseline's fingerprint, so a split that already exists on the server
+      // is caught by the normal 409 flow (blocked, resolve on reconnect).
+      if (local(id) == null &&
+          (!_online || isOfflineLike(error, knownOffline: false))) {
+        _seedEmptyOffline(id);
+      } else {
+        rethrow;
+      }
+    }
+    return local(id) ?? _seedEmptyOffline(id);
+  }
+
+  /// An empty version-0 baseline. `fetched_at` is the epoch so the first read
+  /// after reconnect refreshes it from the server (unless it was edited).
+  LocalSplitDocument _seedEmptyOffline(String id) {
+    database.db.execute(
+      'INSERT OR IGNORE INTO split_documents '
+      '(namespace,transaction_id,document_json,fetched_at,version) VALUES (?,?,?,0,0)',
+      [namespace, id, jsonEncode(_versioned(TransactionSplitDocument([])).toJson())],
+    );
+    _changed();
     return local(id)!;
   }
 

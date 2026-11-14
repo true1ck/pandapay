@@ -70,6 +70,24 @@ class MerchantCategoryRule {
     this.sourceTransactionId,
   });
 
+  /// Saved-copy form (WP-C11); [MerchantCategoryRule.fromJson] reads it back.
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'action': action.wireValue,
+    'flag': flag,
+    'displayMerchantName': displayMerchantName,
+    'matchBasis': matchBasis.wireValue,
+    'matchValue': matchValue,
+    'categoryId': categoryId,
+    'userCategoryId': userCategoryId,
+    'categoryName': categoryName,
+    'isActive': isActive,
+    'version': version,
+    'createdAt': createdAt?.toIso8601String(),
+    'updatedAt': updatedAt?.toIso8601String(),
+    'sourceTransactionId': sourceTransactionId,
+  };
+
   factory MerchantCategoryRule.fromJson(Map<String, dynamic> json) {
     final displayName = _firstString(json, const [
       'displayMerchantName',

@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
+import '../account/account_local_first.dart';
+import '../account/card_reports.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
@@ -72,7 +74,8 @@ class _RequestUnsupportedCardScreenState extends ConsumerState<RequestUnsupporte
       _error = null;
     });
     try {
-      await api.submit(
+      final result = await requestUnsupportedCardLocalFirst(
+        ref,
         issuerName: _issuerController.text.trim(),
         productName: _productController.text.trim(),
         networkGuess: _networkGuess?.name,
@@ -82,7 +85,11 @@ class _RequestUnsupportedCardScreenState extends ConsumerState<RequestUnsupporte
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('Thanks — we\'ve logged this.'),
-            content: const Text("We'll let you know when it's added."),
+            content: Text(
+              result == AccountWrite.queued
+                  ? savedOfflineMessage
+                  : "We'll let you know when it's added.",
+            ),
             actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('OK'))],
           ),
         );

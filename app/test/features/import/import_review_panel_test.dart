@@ -13,6 +13,7 @@ import 'package:pandapay/data/transaction_import_pipeline.dart';
 import 'package:pandapay/data/user_cards_repository.dart' show TxnInstrument;
 import 'package:pandapay/features/import/import_mapping_dialog.dart';
 import 'package:pandapay/features/import/import_review_panel.dart';
+import '../../support/memory_import_continuation.dart';
 
 /// Required fields use a rich-text `label` (text + red ' *'), so match on it.
 Finder _field(String label) => find.byWidgetPredicate((w) {
@@ -253,6 +254,7 @@ void main() {
             userCardsProvider.overrideWith((ref) async => const []),
             userCardsRepositoryProvider.overrideWithValue(null),
             importRepositoryProvider.overrideWithValue(repository),
+            memoryContinuationOverride(repository),
             categoriesProvider.overrideWith((ref) async => const []),
           ],
           child: MaterialApp(
@@ -304,6 +306,7 @@ void main() {
           payload = jsonDecode(request.body) as Map<String, dynamic>;
           return http.Response(
             jsonEncode({
+              'receiptVersion': 1,
               'statementImport': {
                 'id': 'batch',
                 'user_card_id': null,
@@ -342,6 +345,7 @@ void main() {
           overrides: [
             userCardsProvider.overrideWith((ref) async => const []),
             importRepositoryProvider.overrideWithValue(repository),
+            memoryContinuationOverride(repository),
             categoriesProvider.overrideWith((ref) async => const []),
           ],
           child: MaterialApp(
