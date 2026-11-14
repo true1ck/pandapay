@@ -1,3 +1,4 @@
+import 'dart:ffi';
 import 'dart:io';
 import 'dart:math';
 
@@ -24,6 +25,75 @@ void main() {
 
   test('hex encoding of key bytes', () {
     expect(keyBytesToHex([0, 1, 255, 16]), '0001ff10');
+  });
+
+  group('openCipherOnIos', () {
+    // Two distinct handles stand in for SQLCipher.framework and the process.
+    final cipher = DynamicLibrary.process();
+    final process = DynamicLibrary.executable();
+
+    test('binds to the SQLCipher framework by its own name', () {
+      final asked = <String>[];
+      final library = openCipherOnIos(
+        openLibrary: (path) {
+          asked.add(path);
+          return cipher;
+        },
+        isSqlCipher: (_) => true,
+        fallback: () => process,
+      );
+      expect(identical(library, cipher), isTrue);
+      expect(asked, [iosSqlCipherPaths.first]);
+    });
+
+    test('tries the short framework path when the first is not found', () {
+      final asked = <String>[];
+      final library = openCipherOnIos(
+        openLibrary: (path) {
+          asked.add(path);
+          if (path == iosSqlCipherPaths.first) throw ArgumentError('missing');
+          return cipher;
+        },
+        isSqlCipher: (_) => true,
+        fallback: () => process,
+      );
+      expect(identical(library, cipher), isTrue);
+      expect(asked, iosSqlCipherPaths);
+    });
+
+    test('skips a library that does not export sqlite3_key', () {
+      final library = openCipherOnIos(
+        openLibrary: (_) => cipher,
+        isSqlCipher: (_) => false,
+        fallback: () => process,
+      );
+      expect(identical(library, process), isTrue);
+    });
+
+    test('falls back to the process lookup when no framework loads', () {
+      var fallbacks = 0;
+      final library = openCipherOnIos(
+        openLibrary: (_) => throw ArgumentError('missing'),
+        isSqlCipher: (_) => true,
+        fallback: () {
+          fallbacks++;
+          return process;
+        },
+      );
+      expect(identical(library, process), isTrue);
+      expect(fallbacks, 1);
+    });
+
+    test('the real iOS framework names are the ones the app embeds', () {
+      expect(iosSqlCipherPaths, contains('@rpath/SQLCipher.framework/SQLCipher'));
+    });
+
+    test('ensureSqlCipherLoaded leaves host (test) sqlite alone', () {
+      ensureSqlCipherLoaded();
+      final db = sqlite3.openInMemory();
+      expect(db.select('SELECT 1 AS one').single['one'], 1);
+      db.dispose();
+    });
   });
 
   group('DatabaseKeyLoader', () {

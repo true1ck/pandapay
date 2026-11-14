@@ -22,6 +22,12 @@ final iosSmsIntakeControllerProvider =
         requestUpload: () => ref.read(smsFlushTriggerProvider.notifier).state++,
         smsReadingConsent: () => currentAccountHasSmsReadingConsent(ref),
         capture: (namespace, generation, rows) async {
+          // A failed database open stays cached for the rest of the run, so
+          // "Retry processing" would fail the same way until the app was
+          // restarted. Drop the failed open so this attempt tries it again.
+          if (ref.read(appDatabaseProvider).hasError) {
+            ref.invalidate(appDatabaseProvider);
+          }
           final owner = ref.read(smsAutoImportProvider);
           final batch = await owner.captureShortcutMessages(
             expectedNamespace: namespace,

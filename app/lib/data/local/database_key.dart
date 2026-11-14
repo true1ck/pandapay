@@ -1,3 +1,4 @@
+import 'dart:ffi';
 import 'dart:io';
 
 import 'package:sqlcipher_flutter_libs/sqlcipher_flutter_libs.dart';
@@ -10,12 +11,56 @@ import '../secure_storage/local_database_key_custody.dart';
 final _hexKey = RegExp(r'^[0-9a-f]{64}$');
 
 /// Call once in every isolate before the first sqlite3 use (main, workers,
-/// background SMS entry points). iOS links SQLCipher statically; Android
-/// must load libsqlcipher instead of the system libsqlite. Safe to repeat.
+/// background SMS entry points). Android must load libsqlcipher instead of the
+/// system libsqlite, and iOS must be pinned to SQLCipher.framework (see
+/// [openCipherOnIos]). Safe to repeat.
 void ensureSqlCipherLoaded() {
   if (Platform.isAndroid) {
     open.overrideFor(OperatingSystem.android, openCipherOnAndroid);
+  } else if (Platform.isIOS) {
+    open.overrideFor(OperatingSystem.iOS, openCipherOnIos);
   }
+}
+
+/// Where the iOS app keeps SQLCipher: a dynamic framework that CocoaPods
+/// embeds (`use_frameworks!`). The first path is how the dynamic linker names
+/// it, the second the short form it also accepts.
+const iosSqlCipherPaths = [
+  '@rpath/SQLCipher.framework/SQLCipher',
+  'SQLCipher.framework/SQLCipher',
+];
+
+/// Opens SQLCipher on iOS by name instead of searching the whole process.
+///
+/// The iOS app contains two SQLite builds that export the same `sqlite3_*`
+/// names: Apple's `libsqlite3.dylib` (Firebase Messaging links it, and it comes
+/// first in the app's link order) and `SQLCipher.framework`. `package:sqlite3`
+/// otherwise looks the names up in the whole process, so which build a phone
+/// gets is not pinned. When it was Apple's, `PRAGMA cipher_version` came back
+/// empty and the app refused to open the database ("SQLCipher is not
+/// linked"). Opening the framework itself binds every call to SQLCipher.
+///
+/// [openLibrary], [isSqlCipher] and [fallback] exist for tests. A library that
+/// does not load, or does not export `sqlite3_key`, is skipped; if none does,
+/// the process-wide lookup is used, as before.
+DynamicLibrary openCipherOnIos({
+  DynamicLibrary Function(String path)? openLibrary,
+  bool Function(DynamicLibrary library)? isSqlCipher,
+  DynamicLibrary Function()? fallback,
+}) {
+  final load = openLibrary ?? DynamicLibrary.open;
+  final isCipher =
+      isSqlCipher ?? (DynamicLibrary lib) => lib.providesSymbol('sqlite3_key');
+  for (final path in iosSqlCipherPaths) {
+    try {
+      final library = load(path);
+      if (isCipher(library)) return library;
+      // ignore: avoid_catching_errors
+    } on ArgumentError {
+      // Not at this path; try the next one.
+    }
+  }
+  return (fallback ?? DynamicLibrary.process)();
 }
 
 String keyBytesToHex(List<int> bytes) =>
