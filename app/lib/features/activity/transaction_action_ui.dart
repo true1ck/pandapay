@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/design/app_theme.dart';
 import '../../data/user_cards_repository.dart';
 import '../sms_v2/ui/owner_identity_actions.dart';
+import 'scope_candidate_tile.dart';
 import 'spend_exclusion.dart';
 import 'transaction_action_flow.dart';
 import 'transaction_badge.dart';
@@ -97,7 +98,8 @@ Future<String?> showTransactionActionSheet(
                     icon: Icons.credit_card_rounded,
                     tint: BambooInk.slate,
                     title: TxnAction.cardBill.label,
-                    subtitle: 'Paying off a card. Not counted again as spending.',
+                    subtitle:
+                        'Paying off a card. Not counted again as spending.',
                     onTap: () => pick(TxnAction.cardBill.name),
                   ),
               ],
@@ -135,7 +137,8 @@ Future<String?> showTransactionActionSheet(
                         onTap: () => pick(TxnAction.refund.name),
                       ),
                     ),
-                  if (kind != TxnBadgeKind.refund && kind != TxnBadgeKind.reversal)
+                  if (kind != TxnBadgeKind.refund &&
+                      kind != TxnBadgeKind.reversal)
                     const SizedBox(width: AppSpace.sm),
                   if (kind != TxnBadgeKind.reversal)
                     Expanded(
@@ -245,7 +248,10 @@ class _ActionCard extends StatelessWidget {
                 ),
               ),
               if (!compact)
-                const Icon(Icons.chevron_right_rounded, color: BambooInk.ink500),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: BambooInk.ink500,
+                ),
             ],
           ),
         ),
@@ -307,7 +313,8 @@ class _ActionScopePageState extends State<ActionScopePage> {
     return p.isEmpty ? 'this payee' : p;
   }
 
-  bool get _ready => widget.action.isTransfer ? (_always ? _canAlways : _canOnce) : true;
+  bool get _ready =>
+      widget.action.isTransfer ? (_always ? _canAlways : _canOnce) : true;
 
   void _confirm() {
     Navigator.of(context).pop(
@@ -338,106 +345,148 @@ class _ActionScopePageState extends State<ActionScopePage> {
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text(a.label, style: BambooFonts.heading(18, color: BambooInk.ink900)),
+        title: Text(
+          a.label,
+          style: BambooFonts.heading(18, color: BambooInk.ink900),
+        ),
       ),
       body: SafeArea(
         child: Column(
           children: [
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(AppSpace.lg),
-                children: [
-                  Text(
-                    _payee(),
-                    style: BambooFonts.heading(18, color: BambooInk.ink900),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    widget.entry.amount.format(),
-                    style: BambooFonts.money(20, color: BambooInk.ink900),
-                  ),
-                  const SizedBox(height: AppSpace.lg),
-                  Text(
-                    'How far should this go?',
-                    style: BambooFonts.ui(14.5, weight: FontWeight.w700, color: BambooInk.ink900),
-                  ),
-                  const SizedBox(height: AppSpace.sm),
-                  if (a.isTransfer) ...[
-                    _Choice(
-                      key: const Key('scope-once'),
-                      selected: !_always,
-                      enabled: _canOnce,
-                      title: 'Only this payment',
-                      subtitle: 'Other payments to ${_payee()} stay as they are.',
-                      onTap: () => setState(() => _always = false),
+              child: CustomScrollView(
+                slivers: [
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpace.lg,
+                      AppSpace.lg,
+                      AppSpace.lg,
+                      AppSpace.sm,
                     ),
-                    _Choice(
-                      key: const Key('scope-always'),
-                      selected: _always,
-                      enabled: _canAlways,
-                      title: 'This payee, past and future',
-                      subtitle: plan != null && !plan.canRemember
-                          ? 'Not offered: the message shows no name, UPI ID or account to recognise.'
-                          : '${_payee()}: $futureWords.',
-                      onTap: () => setState(() => _always = true),
-                    ),
-                  ] else if (widget.candidates.isEmpty)
-                    _Choice(
-                      selected: true,
-                      enabled: true,
-                      title: 'Only this payment',
-                      subtitle: 'There are no other open payments to ${_payee()}.',
-                      onTap: () {},
-                    )
-                  else ...[
-                    _Choice(
-                      selected: true,
-                      enabled: true,
-                      title: 'This payment',
-                      subtitle: 'Always included.',
-                      onTap: () {},
-                    ),
-                    const SizedBox(height: AppSpace.sm),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Also apply to other payments to ${_payee()}',
-                            style: BambooFonts.ui(13, color: BambooInk.ink700),
+                    sliver: SliverList(
+                      delegate: SliverChildListDelegate([
+                        Text(
+                          _payee(),
+                          style: BambooFonts.heading(
+                            18,
+                            color: BambooInk.ink900,
                           ),
                         ),
-                        TextButton(
-                          onPressed: () => setState(() {
-                            _ticked.length == widget.candidates.length
-                                ? _ticked.clear()
-                                : _ticked.addAll(widget.candidates.map((e) => e.id));
-                          }),
-                          child: Text(
-                            _ticked.length == widget.candidates.length
-                                ? 'Clear'
-                                : 'Select all',
+                        const SizedBox(height: 4),
+                        Text(
+                          widget.entry.amount.format(),
+                          style: BambooFonts.money(20, color: BambooInk.ink900),
+                        ),
+                        const SizedBox(height: AppSpace.lg),
+                        Text(
+                          'How far should this go?',
+                          style: BambooFonts.ui(
+                            14.5,
+                            weight: FontWeight.w700,
+                            color: BambooInk.ink900,
                           ),
                         ),
-                      ],
+                        const SizedBox(height: AppSpace.sm),
+                        if (a.isTransfer) ...[
+                          _Choice(
+                            key: const Key('scope-once'),
+                            selected: !_always,
+                            enabled: _canOnce,
+                            title: 'Only this payment',
+                            subtitle:
+                                'Other payments to ${_payee()} stay as they are.',
+                            onTap: () => setState(() => _always = false),
+                          ),
+                          _Choice(
+                            key: const Key('scope-always'),
+                            selected: _always,
+                            enabled: _canAlways,
+                            title: 'This payee, past and future',
+                            subtitle: plan != null && !plan.canRemember
+                                ? 'Not offered: the message shows no name, UPI ID or account to recognise.'
+                                : '${_payee()}: $futureWords.',
+                            onTap: () => setState(() => _always = true),
+                          ),
+                        ] else if (widget.candidates.isEmpty)
+                          _Choice(
+                            selected: true,
+                            enabled: true,
+                            title: 'Only this payment',
+                            subtitle:
+                                'There are no other open payments to ${_payee()}.',
+                            onTap: () {},
+                          )
+                        else ...[
+                          _Choice(
+                            selected: true,
+                            enabled: true,
+                            title: 'This payment',
+                            subtitle: 'Always included.',
+                            onTap: () {},
+                          ),
+                          const SizedBox(height: AppSpace.sm),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Also apply to other payments to ${_payee()}',
+                                  style: BambooFonts.ui(
+                                    13,
+                                    color: BambooInk.ink700,
+                                  ),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () => setState(() {
+                                  _ticked.length == widget.candidates.length
+                                      ? _ticked.clear()
+                                      : _ticked.addAll(
+                                          widget.candidates.map((e) => e.id),
+                                        );
+                                }),
+                                child: Text(
+                                  _ticked.length == widget.candidates.length
+                                      ? 'Clear'
+                                      : 'Select all',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ]),
                     ),
-                    for (final e in widget.candidates)
-                      CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        value: _ticked.contains(e.id),
-                        onChanged: (v) => setState(
-                          () => v == true ? _ticked.add(e.id) : _ticked.remove(e.id),
-                        ),
-                        title: Text(
-                          '${e.amount.format()} · ${e.occurredAt.toLocal().day}/'
-                          '${e.occurredAt.toLocal().month}/${e.occurredAt.toLocal().year}',
-                        ),
+                  ),
+                  if (!a.isTransfer && widget.candidates.isNotEmpty)
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpace.lg,
                       ),
-                  ],
-                  const SizedBox(height: AppSpace.md),
-                  Text(
-                    'Nothing is final: you can undo this from History.',
-                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                      sliver: SliverList.separated(
+                        itemCount: widget.candidates.length,
+                        separatorBuilder: (_, _) =>
+                            const SizedBox(height: AppSpace.sm),
+                        itemBuilder: (_, i) {
+                          final e = widget.candidates[i];
+                          return ScopeCandidateTile(
+                            entry: e,
+                            selected: _ticked.contains(e.id),
+                            onTap: () => setState(
+                              () => _ticked.contains(e.id)
+                                  ? _ticked.remove(e.id)
+                                  : _ticked.add(e.id),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  SliverPadding(
+                    padding: const EdgeInsets.all(AppSpace.lg),
+                    sliver: SliverToBoxAdapter(
+                      child: Text(
+                        'Nothing is final: you can undo this from History.',
+                        style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -516,7 +565,9 @@ class _Choice extends StatelessWidget {
             child: Row(
               children: [
                 Icon(
-                  selected ? Icons.radio_button_checked : Icons.radio_button_off,
+                  selected
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_off,
                   color: BambooInk.ink900,
                 ),
                 const SizedBox(width: AppSpace.md),
@@ -526,10 +577,17 @@ class _Choice extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style: BambooFonts.ui(14.5, weight: FontWeight.w700, color: BambooInk.ink900),
+                        style: BambooFonts.ui(
+                          14.5,
+                          weight: FontWeight.w700,
+                          color: BambooInk.ink900,
+                        ),
                       ),
                       const SizedBox(height: 2),
-                      Text(subtitle, style: BambooFonts.ui(12.5, color: BambooInk.ink700)),
+                      Text(
+                        subtitle,
+                        style: BambooFonts.ui(12.5, color: BambooInk.ink700),
+                      ),
                     ],
                   ),
                 ),
