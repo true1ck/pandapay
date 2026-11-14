@@ -2648,7 +2648,12 @@ class UserCardsRepository {
         ...extra,
       }),
     );
-    if (response.statusCode != 201 && response.statusCode != 204) {
+    // 200: the server already holds this row (a replay with the same client
+    // mutation id, WP-S5). That is success; treating it as a failure kept the
+    // queued row retrying for ever after a lost answer.
+    if (response.statusCode != 200 &&
+        response.statusCode != 201 &&
+        response.statusCode != 204) {
       throw ApiException(
         'POST /notifications failed: ${response.statusCode} ${response.body}',
       );

@@ -12,6 +12,7 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:pandapay/features/shared_expenses/data/shared_commands.dart';
 
 /// What the network does right now. Switchable at any time mid-test.
 enum NetMode {
@@ -374,6 +375,8 @@ class FakeServer {
     }
     if (p == '/users/me/name') return _json(200, {'ok': true});
     if (segs.isNotEmpty && segs[0] == 'recurring') return _recurring(r, segs);
+    if (segs.isNotEmpty && segs[0] == 'shared-expenses') return _shared(r, segs);
+    if (p == '/statement-imports') return _statementImport(r);
     if (p == '/consents' && r.method == 'GET') {
       final latest = <String, Map<String, dynamic>>{};
       for (final c in consents) {
@@ -982,5 +985,101 @@ class FakeServer {
     }
     unhandled.add('${r.method} ${r.path}');
     return _json(404, {'error': 'not_found'});
+  }
+
+  // ---- Split (shared expenses) ----
+  /// Commands the server committed, in arrival order (one per operation id).
+  final List<({String operationId, String kind, String? contextId})>
+  splitCommands = [];
+  final Set<String> splitOps = {};
+  int splitCommandPosts = 0;
+
+  Future<http.Response> _shared(RecordedRequest r, List<String> segs) async {
+    final last = segs.last;
+    if (r.method == 'POST' && last == 'commands') {
+      splitCommandPosts++;
+      final c = SharedCommand.fromJson(r.body!);
+      if (splitOps.add(c.operationId)) {
+        splitCommands.add((
+          operationId: c.operationId,
+          kind: c.kind,
+          contextId: c.contextId,
+        ));
+      }
+      return _json(200, {
+        'receipt': {
+          'operationId': c.operationId,
+          'kind': c.kind,
+          'requestHash': c.requestHash,
+          'contextId': c.contextId,
+          'result': {'status': 'created'},
+          'state': 'committed',
+        },
+        'records': <Object>[],
+      });
+    }
+    if (r.method == 'GET' && r.path.contains('/operations/')) {
+      return _json(404, {'error': 'operation_not_found'});
+    }
+    return _json(200, switch (last) {
+      'capabilities' => {
+        'schemaVersion': 1,
+        'available': true,
+        'reads': true,
+        'proposals': true,
+        'acceptedWrites': true,
+        'settlements': true,
+        'sourceFunding': false,
+      },
+      'changes' => {
+        'records': <Object>[],
+        'nextCursor': null,
+        'hasMore': false,
+        'revokedContextIds': <Object>[],
+        'grantedContextIds': <Object>[],
+      },
+      _ => <String, Object?>{},
+    });
+  }
+
+  // ---- statement imports ----
+  final Map<String, Map<String, dynamic>> importsByKey = {};
+  int importPosts = 0;
+
+  Future<http.Response> _statementImport(RecordedRequest r) async {
+    if (r.method == 'GET') return _json(200, {'imports': <Object>[]});
+    importPosts++;
+    final b = r.body ?? {};
+    final key = b['importKey'] as String;
+    final txns = (b['transactions'] as List).cast<Map<String, dynamic>>();
+    final replay = importsByKey.containsKey(key);
+    if (!replay) {
+      importsByKey[key] = {'id': newId(), 'count': txns.length};
+      for (final t in txns) {
+        seedTransaction(
+          amount: (t['amountInr'] as num).toDouble(),
+          merchant: (t['merchantName'] as String?) ?? 'Imported',
+          at: DateTime.tryParse('${t['occurredAt']}'),
+        )['source'] = 'statement';
+      }
+    }
+    return _json(replay ? 200 : 201, {
+      'receiptVersion': 1,
+      'summary': {
+        'imported': replay ? 0 : txns.length,
+        'pendingDuplicates': 0,
+        'exactRetries': replay ? txns.length : 0,
+      },
+      'statementImport': {
+        'id': importsByKey[key]!['id'],
+        'user_card_id': b['userCardId'],
+        'statement_from': b['statementFrom'],
+        'statement_to': b['statementTo'],
+        'txn_count': txns.length,
+        'reconciled_count': 0,
+        'imported_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      'duplicate': replay,
+    });
   }
 }

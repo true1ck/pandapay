@@ -8,7 +8,6 @@ import 'package:pandapay/features/account/support_submit.dart';
 import 'package:pandapay/features/auth/account_sign_out.dart';
 import 'package:pandapay/features/auth/account_sign_out_provider.dart';
 import 'package:pandapay/features/cards/add_card_local_first.dart';
-import 'package:pandapay/features/sync/sync_engine.dart';
 import 'package:pandapay/features/sync_status/sync_status_providers.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
@@ -155,7 +154,9 @@ void main() {
     final watch = Stopwatch()..start();
     final cards = await app.c.read(userCardsProvider.future);
     final txns = await app.c.read(transactionsProvider.future);
-    await app.c.read(budgetsProvider.future).catchError((_) => <BudgetStatusPlaceholder>[]);
+    try {
+      await app.c.read(budgetsProvider.future);
+    } catch (_) {}
     watch.stop();
     expect(cards, hasLength(1));
     expect(txns.map((t) => t.merchantName), contains('Cafe'));
@@ -408,6 +409,3 @@ void main() {
   }, timeout: const Timeout(Duration(seconds: 120)));
 }
 
-// Placeholder so the captive read above type-checks without importing the
-// budget model just for a fallback value.
-typedef BudgetStatusPlaceholder = Object;
