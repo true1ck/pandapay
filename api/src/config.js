@@ -148,7 +148,9 @@ module.exports = {
   imapPollDatabaseUrl: process.env.IMAP_POLL_DATABASE_URL || null,
   accountLifecycleEnabled: ['true','1'].includes(process.env.ACCOUNT_LIFECYCLE_ENABLED),
   // Schema-first rollout: typed sync requires financial-state acceptance.
-  syncTypedWritesEnabled: process.env.SYNC_TYPED_WRITES_ENABLED === 'true',
+  // Default ON (owner decision): typed writes apply amount/category/instrument edits and run the reward-aware applier.
+  // Set SYNC_TYPED_WRITES_ENABLED=false only as an emergency switch.
+  syncTypedWritesEnabled: process.env.SYNC_TYPED_WRITES_ENABLED !== 'false',
   accountLifecycleDatabaseUrl: process.env.ACCOUNT_LIFECYCLE_DATABASE_URL || null,
   notificationServiceUrl:
     process.env.NOTIFICATION_SERVICE_URL

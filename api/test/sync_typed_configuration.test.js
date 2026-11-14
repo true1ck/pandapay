@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-test('actual runtime config keeps typed sync off unless explicitly true', () => {
+test('actual runtime config keeps typed sync on unless explicitly false', () => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sync-config-'));
   try {
     for (const value of [undefined, '', 'false', '1', 'TRUE', 'true']) {
@@ -21,7 +21,7 @@ test('actual runtime config keeps typed sync off unless explicitly true', () => 
         'process.stdout.write(JSON.stringify(require(process.argv[1]).syncTypedWritesEnabled))',
         require.resolve('../src/config'),
       ], { cwd, env, encoding: 'utf8', timeout: 5000 });
-      assert.equal(JSON.parse(output), value === 'true');
+      assert.equal(JSON.parse(output), value !== 'false');
     }
   } finally {
     fs.rmSync(cwd, { recursive: true, force: true });
