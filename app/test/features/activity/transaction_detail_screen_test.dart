@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -177,6 +179,55 @@ Future<void> _pump(
 }
 
 void main() {
+
+  testWidgets(
+    'a saved amount edit that is still waiting beats the older server copy (F3)',
+    (tester) async {
+      final database = openInMemoryForTesting();
+      addTearDown(database.close);
+      const namespace = 'user:test';
+      final older = TransactionEntry(
+        id: 't1',
+        amount: Money.fromRupees(888),
+        occurredAt: DateTime(2026, 11, 1),
+        merchantName: 'TESTSHOP',
+        source: 'manual',
+        status: 'active',
+      );
+      ResponseCache(database).financialStore; // creates the tables
+      database.db.execute(
+        "INSERT INTO financial_entities(namespace, entity, id, payload, observed_at, pending) "
+        "VALUES (?, 'transactions', 't1', ?, 1, 0)",
+        [
+          namespace,
+          jsonEncode({
+            'id': 't1',
+            'amount_inr': 888,
+            'occurred_at': '2026-11-01T00:00:00.000',
+            'merchant_name': 'TESTSHOP',
+            'status': 'active',
+          }),
+        ],
+      );
+      // The edit is saved on the phone; the server keeps refusing it (503), so
+      // its own copy of the row still says 888.
+      CommandOutbox(database, namespace: namespace).enqueue(
+        kind: 'transaction_typed_fields',
+        target: 't1',
+        payload: {'id': 't1', 'amountInr': 999},
+      );
+      await _pump(
+        tester,
+        repo: _FakeUserCardsRepository(older),
+        initialEntry: older,
+        extraOverrides: _outboxOverrides(database),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('999'), findsWidgets);
+      expect(find.textContaining('888'), findsNothing);
+    },
+  );
 
   group('SMS evidence privacy notes', () {
     const present = 'The original SMS stays on this phone and is never sent to PandaPay.';

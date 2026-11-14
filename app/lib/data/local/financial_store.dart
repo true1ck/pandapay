@@ -331,10 +331,71 @@ class FinancialStore {
               .single['n']
           as int;
 
-  bool hasPendingTransactions(String ns) => database.db.select(
-    "SELECT 1 FROM financial_entities WHERE namespace=? AND entity='transactions' AND pending=1 LIMIT 1",
-    [ns],
+  bool hasPendingTransactions(String ns) =>
+      database.db.select(
+        "SELECT 1 FROM financial_entities WHERE namespace=? AND entity='transactions' AND pending=1 LIMIT 1",
+        [ns],
+      ).isNotEmpty ||
+      database.db.select(
+        "SELECT 1 FROM command_outbox WHERE namespace=? AND kind IN ($_transactionEditKinds) LIMIT 1",
+        [ns],
+      ).isNotEmpty;
+
+  /// True while an edit of this one transaction waits to be delivered.
+  bool hasQueuedTransactionEdit(String ns, String id) => database.db.select(
+    "SELECT 1 FROM command_outbox WHERE namespace=? AND target=? AND kind IN ($_transactionEditKinds) LIMIT 1",
+    [ns, id],
   ).isNotEmpty;
+
+  static const _transactionEditKinds =
+      "'transaction_typed_fields','transaction_payment_method'";
+
+  /// A transaction edit saved on the phone travels as a typed PATCH command.
+  /// Until it is delivered it is laid over the stored row, so an older server
+  /// copy (a refresh, the detail fetch) never shows the edit as undone, and
+  /// every reader, rows and totals alike, sees the same value (F3, F2).
+  void _overlayQueuedTransactionFields(
+    String ns,
+    List<Map<String, dynamic>> rows,
+  ) {
+    if (rows.isEmpty) return;
+    final commands = database.db.select(
+      "SELECT target, payload_json FROM command_outbox WHERE namespace=? AND kind IN ($_transactionEditKinds) ORDER BY id",
+      [ns],
+    );
+    if (commands.isEmpty) return;
+    final indexes = <Object?, int>{
+      for (var index = 0; index < rows.length; index++) rows[index]['id']: index,
+    };
+    for (final command in commands) {
+      final index = indexes[command['target']];
+      if (index == null) continue;
+      final payload = jsonDecode(command['payload_json'] as String);
+      if (payload is! Map) continue;
+      final next = {...rows[index]};
+      payload.forEach((key, value) {
+        if (key == 'id') return;
+        final column = _transactionColumnOfWireKey(key as String);
+        if (value == null) {
+          next.remove(column);
+        } else {
+          next[column] = value;
+        }
+      });
+      rows[index] = next;
+    }
+  }
+
+  static String _transactionColumnOfWireKey(String k) => switch (k) {
+    'entryKind' => 'entry_kind',
+    'amountInr' => 'amount_inr',
+    'occurredAt' => 'occurred_at',
+    'categoryId' => 'category_id',
+    'userCategoryId' => 'user_category_id',
+    'userCardId' => 'user_card_id',
+    'paymentMethod' => 'payment_method',
+    _ => k,
+  };
 
   final void Function(String namespace)? onChanged;
   final void Function(FinancialChange change)? onEntityChanged;
@@ -502,6 +563,7 @@ class FinancialStore {
     }
     if (entity == 'cards') _overlayQueuedCardFields(ns, rows, id);
     if (entity == 'transactions') {
+      _overlayQueuedTransactionFields(ns, rows);
       _enrichSmsPaymentMethod(ns, rows);
     }
     return rows;

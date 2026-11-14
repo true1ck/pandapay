@@ -171,11 +171,17 @@ void main() {
             pendingCount: 3,
           ),
         ),
-        'Offline, 3 changes waiting. Tap for details',
+        'Offline mode · changes saved on this phone. Tap for details',
       );
       expect(
         syncStatusSemanticsLabel(_offline),
-        'Offline, showing saved data. Tap for details',
+        'Offline mode · changes saved on this phone. Tap for details',
+      );
+      expect(
+        syncStatusSemanticsLabel(
+          const SyncStatusSummary(mode: SyncStatusMode.unreachable),
+        ),
+        "Can't reach PandaPay · changes saved on this phone. Tap for details",
       );
       expect(
         syncStatusSemanticsLabel(
@@ -268,12 +274,12 @@ void main() {
         const SyncStatusSummary(mode: SyncStatusMode.offline, pendingCount: 3),
       );
       expect(
-        find.bySemanticsLabel('Offline, 3 changes waiting. Tap for details'),
+        find.bySemanticsLabel('Offline mode · changes saved on this phone. Tap for details'),
         findsOneWidget,
       );
       final data = tester
           .getSemantics(
-            find.bySemanticsLabel('Offline, 3 changes waiting. Tap for details'),
+            find.bySemanticsLabel('Offline mode · changes saved on this phone. Tap for details'),
           )
           .getSemanticsData();
       expect(data.hasAction(SemanticsAction.tap), isTrue);
