@@ -158,7 +158,8 @@ bool isTransientNetworkFailure(Object error) {
   if (error is http.ClientException || error is TimeoutException) return true;
   if (error is ApiException) {
     final status = error.statusCode;
-    return status != null && status >= 500;
+    // 408/429 mean "later", like 5xx: queue, never show an error.
+    return status != null && (status >= 500 || status == 408 || status == 429);
   }
   return false;
 }

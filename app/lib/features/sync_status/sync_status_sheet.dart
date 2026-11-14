@@ -73,6 +73,7 @@ class _SyncStatusSheetState extends ConsumerState<SyncStatusSheet> {
     final mode = ref.watch(syncStatusSummaryProvider.select((s) => s.mode));
     final lines = ref.watch(syncQueueBreakdownProvider).valueOrNull ?? const [];
     final retry = ref.watch(syncRetryActionsProvider);
+    final discard = ref.watch(syncDiscardActionsProvider);
     final lastSynced = ref.watch(lastSyncedAtProvider).valueOrNull;
     final splitAttention = ref.watch(needsAttentionCountProvider);
 
@@ -135,6 +136,9 @@ class _SyncStatusSheetState extends ConsumerState<SyncStatusSheet> {
                 onRetry: line.counts.parked > 0 && retry[line.queue] != null
                     ? () => _retry(line.queue, retry[line.queue]!)
                     : null,
+                onDiscard: line.counts.parked > 0 && discard[line.queue] != null
+                    ? () => _retry(line.queue, discard[line.queue]!)
+                    : null,
               ),
             if (splitAttention > 0)
               _SplitRow(count: splitAttention, onReview: _reviewSplit),
@@ -158,11 +162,19 @@ class _SyncStatusSheetState extends ConsumerState<SyncStatusSheet> {
 }
 
 class _QueueRow extends StatelessWidget {
-  const _QueueRow({required this.line, required this.busy, this.onRetry});
+  const _QueueRow({
+    required this.line,
+    required this.busy,
+    this.onRetry,
+    this.onDiscard,
+  });
 
   final SyncQueueLine line;
   final bool busy;
   final VoidCallback? onRetry;
+
+  /// Gives up on what the server refused; its own copy then shows.
+  final VoidCallback? onDiscard;
 
   @override
   Widget build(BuildContext context) {
@@ -183,9 +195,21 @@ class _QueueRow extends StatelessWidget {
                   line.description,
                   style: BambooFonts.ui(13, color: BambooInk.ink700),
                 ),
+                if (onDiscard != null)
+                  Text(
+                    'Some changes could not be saved. Retry them, or discard '
+                    'them to go back to what PandaPay has.',
+                    style: BambooFonts.ui(13, color: BambooInk.ink700),
+                  ),
               ],
             ),
           ),
+          if (onDiscard != null)
+            TextButton(
+              key: Key('sync-discard-${line.queue}'),
+              onPressed: busy ? null : onDiscard,
+              child: const Text('Discard'),
+            ),
           if (onRetry != null)
             TextButton(
               key: Key('sync-retry-${line.queue}'),

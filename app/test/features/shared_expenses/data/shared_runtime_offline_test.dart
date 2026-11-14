@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:pandapay/data/connectivity/server_backoff.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -140,6 +142,7 @@ void main() {
         'contextKind': 'group',
         'name': 'Trip',
       });
+      await runtime.settled(); // the send is background work
       expect(
         runtime.store.operation(id)!.state,
         isNot(SharedCommandState.rejected),
@@ -211,8 +214,11 @@ void main() {
         'memberId': fixtures.op2,
         'displayName': 'Sam',
       });
+      await runtime.settled();
       expect(runtime.store.operation(id)!.state, SharedCommandState.retry);
       commandStatus = 200;
+      // (the 503 also paused every queue for the server's Retry-After)
+      ServerBackoff.process.resetForTest();
       // An ordinary refresh respects the backoff earned a moment ago...
       await runtime.refresh();
       expect(posted, [id]);
@@ -267,6 +273,7 @@ void main() {
         'memberId': fixtures.op2,
         'displayName': 'Sam',
       });
+      await runtime.settled();
       nameClash = false;
       return id;
     }

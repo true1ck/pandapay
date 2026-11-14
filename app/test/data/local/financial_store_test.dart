@@ -359,6 +359,24 @@ void main() {
     queue.remove(queue.pending().single.clientSeq);
     expect(store.transactions('a', all)!.rows.single.note, 'remote');
   });
+  test('a refused (parked) edit no longer overlays the row; Discard removes it',
+      () {
+    store.saveTransactions('a', [row('id', note: 'server')], completeQuery: all);
+    final queue = SyncQueue(db, namespace: 'a');
+    final seq = queue.enqueueUpdate(
+      entity: 'transactions',
+      entityId: 'id',
+      fields: {'note': 'refused value'},
+    );
+    expect(store.transactions('a', all)!.rows.single.note, 'refused value');
+    queue.reject(seq, 'rejected');
+    expect(
+      store.transactions('a', all)!.rows.single.note,
+      'server',
+      reason: 'the server value shows again; the edit stays for review',
+    );
+    expect(queue.pendingCount, 1);
+  });
   test('local search matches notes as well as merchants', () {
     store.saveTransactions('a', [row('id', note: 'Insurance renewal')]);
     expect(

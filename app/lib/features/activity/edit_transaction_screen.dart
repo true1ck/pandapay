@@ -38,6 +38,29 @@ import '../sms_v2/similar/similar_runner.dart';
 import '../sms_v2/storage/event_store.dart';
 import 'merchant_future_rule_sheet.dart';
 
+/// The date picker shows the date only, so picking a date keeps the time of
+/// day the transaction already had (it used to reset to 00:00). Picking the
+/// same local day returns [current] untouched.
+@visibleForTesting
+DateTime withPickedDate(DateTime? current, DateTime picked) {
+  if (current == null) return picked;
+  final local = current.toLocal();
+  if (local.year == picked.year &&
+      local.month == picked.month &&
+      local.day == picked.day) {
+    return current;
+  }
+  return DateTime(
+    picked.year,
+    picked.month,
+    picked.day,
+    local.hour,
+    local.minute,
+    local.second,
+    local.millisecond,
+  );
+}
+
 /// D3 Edit Transaction (ui-spec Group D). All fields editable, explicit
 /// save/cancel; recomputes caps/milestones on save — that recompute is
 /// entirely server-side (Task C-0c's PATCH /transactions/:id, verified
@@ -206,7 +229,8 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     // only as a queued quick-add has no server id to send it to yet.
     if (_methodChanged &&
         _offlineNow() &&
-        widget.transactionId.startsWith('local')) {
+        widget.transactionId.startsWith('local') &&
+        !widget.transactionId.startsWith('local-outbox:')) {
       setState(
         () => _error =
             'You are offline. This entry has not reached your account yet, so how it was paid can be changed once it has.',
@@ -499,6 +523,33 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     // decision needs the server's own checks, and a row that exists only as a
     // queued quick-add has no server id yet, so those keep the direct call
     // below.
+    // A row that is only a queued quick-add has no server id: rewrite the
+    // queued entry itself, so the edit works offline and is sent with it.
+    const queuedPrefix = 'local-outbox:';
+    if (_selfTransfer == null &&
+        _clearedSelfTransfer == null &&
+        widget.transactionId.startsWith(queuedPrefix)) {
+      final fields = _changedServerFields(original, amount);
+      final columns = <String, Object?>{
+        for (final e in fields.entries)
+          if (e.key == 'amount_inr')
+            'amount_paise': Money.fromRupees(amount).paise
+          else if (e.key == 'occurred_at')
+            'occurred_at': _occurredAt?.millisecondsSinceEpoch
+          else
+            e.key: e.value,
+        if (_methodChanged) 'payment_method': _methodToSend,
+      };
+      final outbox = await ref.read(outboxRepositoryProvider.future);
+      if (await outbox.updateQueued(
+        widget.transactionId.substring(queuedPrefix.length),
+        columns,
+      )) {
+        ref.invalidate(pendingOutboxCountProvider);
+        return;
+      }
+      // Already delivered: fall through to the server row's edit below.
+    }
     if (_selfTransfer == null &&
         _clearedSelfTransfer == null &&
         !widget.transactionId.startsWith('local')) {
@@ -1343,8 +1394,14 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                             firstDate: DateTime(2000),
                             lastDate: DateTime.now(),
                           );
-                          if (picked != null)
-                            setState(() => _occurredAt = picked);
+                          if (picked != null) {
+                            setState(
+                              () => _occurredAt = withPickedDate(
+                                _occurredAt,
+                                picked,
+                              ),
+                            );
+                          }
                         },
                       ),
                     ),

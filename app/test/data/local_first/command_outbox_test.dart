@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:pandapay/data/api_exception.dart';
+import 'package:pandapay/data/connectivity/server_backoff.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local_first/command_outbox.dart';
 
@@ -17,7 +18,10 @@ void main() {
     clock = DateTime(2026, 11, 10, 12);
     outbox = CommandOutbox(db, namespace: 'a', now: () => clock);
   });
-  tearDown(() => db.close());
+  tearDown(() {
+    ServerBackoff.process.resetForTest();
+    db.close();
+  });
 
   Map<String, CommandHandler> record(List<String> calls) => {
     'ignore': (p) async => calls.add('ignore ${p['id']}'),
@@ -86,15 +90,42 @@ void main() {
 
     final failing = {'ignore': (Map<String, Object?> p) async => throw ApiException('down')};
     await outbox.flush(failing);
-    expect(outbox.nextDueIn(), const Duration(seconds: 30));
+    // 30 s plus up to 20 % jitter.
+    final first = outbox.nextDueIn()!;
+    expect(first, greaterThanOrEqualTo(const Duration(seconds: 30)));
+    expect(first, lessThanOrEqualTo(const Duration(seconds: 36)));
 
     clock = clock.add(const Duration(seconds: 12));
-    expect(outbox.nextDueIn(), const Duration(seconds: 18));
+    expect(outbox.nextDueIn(), first - const Duration(seconds: 12));
 
-    clock = clock.add(const Duration(seconds: 18));
+    clock = clock.add(first - const Duration(seconds: 12));
     expect(outbox.nextDueIn(), isNull, reason: 'due now');
     expect(await outbox.flush({'ignore': (p) async {}}), 1);
     expect(outbox.nextDueIn(), isNull);
+  });
+
+  test('partial typed edits merge; a new category replaces the old one', () {
+    const kind = 'transaction_typed_fields';
+    outbox.enqueue(kind: kind, target: 't1', payload: {'id': 't1', 'amountInr': 700});
+    outbox.enqueue(kind: kind, target: 't1', payload: {'id': 't1', 'categoryId': 'c1'});
+    outbox.enqueue(
+      kind: kind,
+      target: 't1',
+      payload: {'id': 't1', 'userCategoryId': 'u1'},
+    );
+    final merged = outbox.pendingOf({kind}).single.payload;
+    expect(merged, {'id': 't1', 'amountInr': 700, 'userCategoryId': 'u1'});
+  });
+
+  test('a command naming a held id waits, without a failure', () async {
+    outbox.enqueue(kind: 'ignore', target: 't1', payload: {'cardId': 'local-card'});
+    final sent = <String>[];
+    final handlers = {'ignore': (Map<String, Object?> p) async => sent.add('x')};
+    expect(await outbox.flush(handlers, holdIds: {'local-card'}), 0);
+    expect(sent, isEmpty);
+    expect(outbox.pendingCount, 1);
+    expect(outbox.parkedCount, 0);
+    expect(await outbox.flush(handlers), 1);
   });
 
   test('a server refusal is parked with its error and not retried', () async {
@@ -163,6 +194,30 @@ void main() {
           .single,
     );
 
+    test('a 503 that started a server pause is no attempt and no extra backoff',
+        () async {
+      outbox.enqueue(kind: 'ignore', target: 't1');
+      outbox.enqueue(kind: 'ignore', target: 't2');
+      final sent = <String>[];
+      final handlers = {
+        'ignore': (Map<String, Object?> p) async {
+          if (sent.isEmpty) {
+            sent.add('503');
+            ServerBackoff.process.noteResponse(503, '30', method: 'PATCH');
+            throw ApiException('PATCH /x failed: 503 {"error":"server_busy"}');
+          }
+          sent.add('ok');
+        },
+      };
+      expect(await outbox.flush(handlers), 0);
+      expect(sent, ['503'], reason: 'nothing more goes out during the pause');
+      expect(row('t1')['attempts'], 0);
+      expect(row('t1')['next_attempt_at'], 0);
+      ServerBackoff.process.resetForTest();
+      // The pause is over: both go out at once, the refused head included.
+      expect(await outbox.flush(handlers), 2);
+    });
+
     for (final error in <Object>[
       const SocketException('no route'),
       TimeoutException('slow'),
@@ -207,10 +262,11 @@ void main() {
             throw ApiException('POST failed: 503 {"error":"x"}'),
       });
       expect(row('t1')['attempts'], 1);
-      expect(
-        row('t1')['next_attempt_at'],
-        clock.add(const Duration(seconds: 30)).millisecondsSinceEpoch,
-      );
+      // 30 s plus up to 20 % jitter.
+      final at = row('t1')['next_attempt_at'] as int;
+      final base = clock.millisecondsSinceEpoch;
+      expect(at, greaterThanOrEqualTo(base + 30000));
+      expect(at, lessThanOrEqualTo(base + 36000));
     });
 
     test('resetBackoff makes backed-off commands due again', () async {

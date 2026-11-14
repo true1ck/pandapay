@@ -1,4 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/data/local/app_database.dart' show openInMemoryForTesting;
+import 'package:pandapay/data/local/financial_store.dart';
+import 'package:pandapay/data/local_first/command_outbox.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/sms_v2/ledger/card_state_adapter.dart';
 import 'package:pandapay_domain/pandapay_domain.dart' show Money;
@@ -81,4 +84,45 @@ void main() {
       expect(repo.patches.length, 2);
     },
   );
+
+  test('with an outbox the learned value is stored locally and queued, never sent live',
+      () async {
+    final db = openInMemoryForTesting();
+    final store = FinancialStore(db);
+    final commands = CommandOutbox(db, namespace: 'ns');
+    final repo = Repository();
+    final state = CardStateAdapter(
+      repo,
+      commands: commands,
+      store: store,
+      namespace: 'ns',
+    );
+    expect(await state.apply(instrument(10000, 100), card()), isTrue);
+    expect(repo.patches, isEmpty);
+    expect(commands.pendingCount, 2);
+    final limit = commands.pendingOf({'card_fields_patch'}).single;
+    expect(limit.payload['creditLimitInr'], 100);
+    expect(commands.pendingOf({'points_adjust'}).single.payload['newBalance'], 100);
+  });
+
+  test('a learned limit keeps the field edit already queued for the card', () async {
+    final db = openInMemoryForTesting();
+    final commands = CommandOutbox(db, namespace: 'ns');
+    // The person renamed the card offline; the SMS then teaches a limit.
+    commands.enqueue(
+      kind: 'card_fields_patch',
+      target: 'card',
+      payload: {'cardId': 'card', 'nickname': 'Travel'},
+    );
+    final state = CardStateAdapter(
+      Repository(),
+      commands: commands,
+      store: FinancialStore(db),
+      namespace: 'ns',
+    );
+    expect(await state.apply(instrument(10000, 100), card()), isTrue);
+    final patch = commands.pendingOf({'card_fields_patch'}).single;
+    expect(patch.payload['nickname'], 'Travel');
+    expect(patch.payload['creditLimitInr'], 100);
+  });
 }

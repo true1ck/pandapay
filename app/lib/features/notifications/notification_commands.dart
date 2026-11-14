@@ -10,9 +10,9 @@ import '../../app/providers.dart'
         isOnlineProvider,
         notificationPreferencesRepositoryProvider,
         notificationsProvider,
+        outboxFlushRequestProvider,
         pendingOutboxCountProvider,
         userCardsRepositoryProvider;
-import '../../data/api_exception.dart';
 import '../../data/local_first/command_outbox.dart';
 import '../../data/notification_preferences_repository.dart';
 import '../../data/user_cards_repository.dart';
@@ -37,7 +37,13 @@ Map<String, CommandHandler> notificationCommandHandlers({
   required UserCardsRepository userCards,
   NotificationPreferencesRepository? prefs,
   void Function()? onInboxSynced,
+  // Called when the server refused a settings command for good: the phone's
+  // copy is read again, and the server's value wins (a parked command no
+  // longer holds the stored value back).
+  void Function()? onRefused,
 }) {
+  Future<void> guarded(Future<void> Function() call) =>
+      undoIfRefused(call, () => onRefused?.call());
   NotificationPreferencesRepository need() =>
       prefs ?? (throw StateError('Notification settings are not available yet'));
   return {
@@ -54,13 +60,13 @@ Map<String, CommandHandler> notificationCommandHandlers({
       );
       onInboxSynced?.call();
     },
-    NotificationCommand.updatePreferences: (p) async {
+    NotificationCommand.updatePreferences: (p) => guarded(() async {
       await need().update(Map<String, dynamic>.from(p['changes'] as Map));
-    },
+    }),
     NotificationCommand.muteMerchant: (p) =>
-        need().muteMerchant(p['merchantId'] as String),
+        guarded(() => need().muteMerchant(p['merchantId'] as String)),
     NotificationCommand.unmuteMerchant: (p) =>
-        need().unmuteMerchant(p['merchantId'] as String),
+        guarded(() => need().unmuteMerchant(p['merchantId'] as String)),
   };
 }
 
@@ -143,6 +149,7 @@ Future<InboxWrite> recordAppNotificationOutcome(
 void _announceQueueChange(dynamic ref) {
   try {
     ref.read(commandOutboxRevisionProvider.notifier).state++;
+    ref.read(outboxFlushRequestProvider.notifier).state++;
     ref.invalidate(pendingOutboxCountProvider);
   } catch (_) {}
 }
@@ -154,14 +161,6 @@ enum SettingsWrite {
 
   /// Applied on this phone and queued; it syncs when the network is back.
   queued,
-}
-
-bool _isRefusal(Object error) {
-  if (error is! ApiException) return false;
-  final status = error.statusCode;
-  if (status == null) return false;
-  if (status == 401 || status == 408 || status == 429) return false;
-  return status >= 400 && status < 500;
 }
 
 /// True only when the phone's radio is known to be down. (`valueOrNull` is an
@@ -180,9 +179,8 @@ bool _knownOffline(dynamic ref) {
 }
 
 /// Changes notification preferences. The phone's copy changes first, so every
-/// alert decision sees the new value at once; the server write is then tried
-/// live and queued if it cannot be made. A refusal by the server (a 4xx other
-/// than "log in again"/"slow down") restores the old copy and is rethrown.
+/// alert decision sees the new value at once; the server write is always a
+/// queued background command (retried with backoff), never awaited here.
 Future<SettingsWrite> updateNotificationPreferences(
   dynamic ref,
   Map<String, dynamic> changes,
@@ -205,23 +203,6 @@ Future<SettingsWrite> updateNotificationPreferences(
   } catch (_) {}
   final waiting =
       commands?.pendingOf({NotificationCommand.updatePreferences}) ?? const [];
-
-  // An older toggle still queued must go first, so this one queues behind it.
-  if (waiting.isEmpty && !_knownOffline(ref)) {
-    try {
-      final saved = await repo.update(changes);
-      await state?.writePreferences(saved);
-      refreshNotificationPreferences(ref);
-      return SettingsWrite.saved;
-    } catch (error) {
-      if (_isRefusal(error)) {
-        await state?.writePreferences(before);
-        refreshNotificationPreferences(ref);
-        rethrow;
-      }
-    }
-  }
-
   if (commands == null) return SettingsWrite.saved;
   final merged = <String, dynamic>{
     for (final w in waiting)
@@ -234,11 +215,13 @@ Future<SettingsWrite> updateNotificationPreferences(
     payload: {'changes': merged},
   );
   _announceQueueChange(ref);
-  return SettingsWrite.queued;
+  // Local first: the copy above is already the saved value and the send is
+  // background work, so the "saved on this phone" note is only for offline.
+  return _knownOffline(ref) ? SettingsWrite.queued : SettingsWrite.saved;
 }
 
 /// Mutes a merchant's notifications. Same shape as
-/// [updateNotificationPreferences]: local copy first, then live, then queue.
+/// [updateNotificationPreferences]: local copy first, then a queued background send.
 Future<SettingsWrite> muteNotificationMerchant(
   dynamic ref,
   String merchantId, {
@@ -283,29 +266,6 @@ Future<SettingsWrite> _changeMute(
     commands = await ref.read(commandOutboxProvider.future) as CommandOutbox;
   } catch (_) {}
   final target = 'merchant:$merchantId';
-  final waiting =
-      commands?.pendingOf({
-        NotificationCommand.muteMerchant,
-        NotificationCommand.unmuteMerchant,
-      }).where((c) => c.target == target) ??
-      const [];
-
-  if (waiting.isEmpty && !_knownOffline(ref)) {
-    try {
-      if (mute) {
-        await repo.muteMerchant(merchantId);
-      } else {
-        await repo.unmuteMerchant(merchantId);
-      }
-      return SettingsWrite.saved;
-    } catch (error) {
-      if (_isRefusal(error)) {
-        await state?.writeMutedMerchants(before);
-        rethrow;
-      }
-    }
-  }
-
   if (commands == null) return SettingsWrite.saved;
   final queued = commands.enqueue(
     kind: mute
@@ -322,5 +282,7 @@ Future<SettingsWrite> _changeMute(
   _announceQueueChange(ref);
   // An opposite command that was still queued cancelled this one: the server
   // never heard of either, so there is nothing left to send.
-  return queued ? SettingsWrite.queued : SettingsWrite.saved;
+  return queued && _knownOffline(ref)
+      ? SettingsWrite.queued
+      : SettingsWrite.saved;
 }

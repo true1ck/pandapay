@@ -49,6 +49,37 @@ Map<String, ParkedRetry> buildSyncRetryActions(Ref ref) => {
   },
 };
 
+/// Gives up on one queue's parked rows (the "Discard" next to Retry): the
+/// server's own copy then shows. Only for queues where dropping is safe.
+final syncDiscardActionsProvider = Provider<Map<String, ParkedRetry>>(
+  (ref) => {
+    // A refused edit: drop it so the server's own copy shows (F-4).
+    'sync_pending_changes': () async {
+      final namespace = ref.read(cacheNamespaceProvider);
+      final database = await ref.read(appDatabaseProvider.future);
+      database.db.execute(
+        'DELETE FROM sync_pending_changes '
+        'WHERE namespace = ? AND attempts >= ? AND in_flight != 2',
+        [namespace, SyncQueue.maxAttempts],
+      );
+      ref.read(commandOutboxRevisionProvider.notifier).state++;
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(homeSummaryProvider);
+      ref.invalidate(pendingSyncCountProvider);
+    },
+    'command_outbox': () async {
+      final commands = await ref.read(commandOutboxProvider.future);
+      for (final parked in commands.parked()) {
+        commands.discardParked(parked.id);
+      }
+      ref.read(commandOutboxRevisionProvider.notifier).state++;
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(homeSummaryProvider);
+      ref.invalidate(userCardsProvider);
+    },
+  },
+);
+
 /// Asks the normal machinery to send what was just put back: the outbox flush
 /// (transactions, commands, duplicates), the sync engine (edits, tags,
 /// foreign payments, Split documents) and a recount for the strip. Override in

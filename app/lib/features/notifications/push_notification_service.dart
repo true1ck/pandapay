@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../data/connectivity/server_backoff.dart';
 import '../../data/notification_devices_api.dart';
 import 'notification_gate.dart';
 import 'push_deep_link.dart';
@@ -168,6 +169,11 @@ class PushNotificationService {
     _lastToken = token;
     _registrationRetryTimer?.cancel();
     _registrationRetryTimer = null;
+    // The server asked every client to wait: do not add a request to the pile.
+    if (ServerBackoff.process.isPaused) {
+      _scheduleRegistrationRetry();
+      return;
+    }
     try {
       await api.register(token: token, platform: _platformName());
       _registrationRetryAttempt = 0;
@@ -185,9 +191,12 @@ class PushNotificationService {
       return;
     }
     final exponent = _registrationRetryAttempt.clamp(0, 5).toInt();
-    final seconds = (5 * (1 << exponent)).clamp(5, 120).toInt();
+    // 15 s, 30 s ... 5 min. Push is additive and a refusal here is usually the
+    // server's configuration, so it is not worth a request every few seconds.
+    final backoff = Duration(seconds: (15 * (1 << exponent)).clamp(15, 300));
+    final wait = ServerBackoff.process.remaining + const Duration(seconds: 1);
     _registrationRetryAttempt++;
-    _registrationRetryTimer = Timer(Duration(seconds: seconds), () {
+    _registrationRetryTimer = Timer(wait > backoff ? wait : backoff, () {
       _registrationRetryTimer = null;
       final token = _lastToken;
       if (token != null && _started) unawaited(_registerToken(token));

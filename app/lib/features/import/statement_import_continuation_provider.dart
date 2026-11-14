@@ -9,6 +9,7 @@ import '../../app/env.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/authenticated_http_client.dart';
+import '../../data/connectivity/server_backoff.dart';
 import '../../data/import_repository.dart';
 import '../../data/local/statement_import_outbox.dart';
 import '../../data/local/statement_import_pending.dart';
@@ -128,7 +129,13 @@ final statementImportRevisionProvider = StateProvider<int>((ref) => 0);
 bool isImportTransportFailure(Object error) {
   if (error is ApiException) {
     final status = error.statusCode;
-    return status == null || status == 502 || status == 503 || status == 504;
+    // 408/429/502-504 say "later", not "no": the batches are already saved. A
+    // plain 500 is the server failing on this very import (a bug or bad data),
+    // so it is a hard failure, not something to retry for ever.
+    return status == null ||
+        status == 408 ||
+        status == 429 ||
+        (status >= 500 && status != 500);
   }
   return isOfflineLike(error);
 }
@@ -145,6 +152,7 @@ final statementImportAutoResumeProvider = Provider<void>((ref) {
 
   Future<void> resume() async {
     if (running || disposed) return;
+    if (ServerBackoff.process.isPaused) return; // resumed below when it ends
     final namespace = ref.read(cacheNamespaceProvider);
     if (!namespace.startsWith('user:') ||
         ref.read(accessTokenProvider) == null ||
@@ -191,6 +199,10 @@ final statementImportAutoResumeProvider = Provider<void>((ref) {
     }
   }
 
+  final backoffSub = ServerBackoff.process.resumed.listen(
+    (_) => unawaited(resume()),
+  );
+  ref.onDispose(backoffSub.cancel);
   ref.listen(isOnlineProvider, (_, next) {
     if (next.valueOrNull == true) unawaited(resume());
   });

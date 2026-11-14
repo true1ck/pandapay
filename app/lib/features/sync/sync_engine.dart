@@ -65,7 +65,7 @@ class SyncEngine {
   bool _pushHasMore = false;
 
   /// Largest request body pushed in one go. The API rejects bodies over
-  /// 100 KiB for the whole request, so one oversize change would otherwise
+  /// 1 MiB for the whole request (this client stays well under at 60 KiB), so one oversize change would otherwise
   /// block every change behind it for ever. Changes are never split, so a
   /// single change larger than this goes alone and is judged on its own.
   static const maxPushBytes = 60 * 1024;
@@ -168,6 +168,14 @@ class SyncEngine {
       }
       // A re-registration during the push may have issued a new device id.
       deviceId = queue.deviceId ?? deviceId;
+      if (ServerBackoff.process.isPaused) {
+        return SyncResult(
+          pushed: pushed,
+          pulled: 0,
+          conflicts: 0,
+          ranToCompletion: false,
+        );
+      }
       final (pulled, conflicts) = await _pullAndApply(api, queue, deviceId);
       await _refreshSelfTransferRules(api, queue);
       await _ref.read(transactionTagsProvider)?.sync();
@@ -243,6 +251,7 @@ class SyncEngine {
     var passes = 0;
     final attempted = <int>{};
     while (passes < maxPushPasses) {
+      if (ServerBackoff.process.isPaused) break; // the server asked us to wait
       final chunk = _nextChunk(queue, attempted);
       if (chunk.isEmpty) break;
       passes++;

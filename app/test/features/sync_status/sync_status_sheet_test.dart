@@ -24,6 +24,7 @@ Future<void> _open(
   ),
   List<SyncQueueLine> lines = const [],
   Map<String, ParkedRetry> retry = const {},
+  Map<String, ParkedRetry> discard = const {},
   DateTime? lastSynced,
   int shared = 0,
   void Function()? onNudge,
@@ -38,6 +39,7 @@ Future<void> _open(
         syncStatusSummaryProvider.overrideWithValue(summary),
         syncQueueBreakdownProvider.overrideWith((_) async => lines),
         syncRetryActionsProvider.overrideWithValue(retry),
+        syncDiscardActionsProvider.overrideWithValue(discard),
         syncNudgeProvider.overrideWithValue(onNudge ?? () {}),
         lastSyncedAtProvider.overrideWith((_) async => lastSynced),
         needsAttentionCountProvider.overrideWithValue(shared),
@@ -140,6 +142,27 @@ void main() {
     await tester.pumpAndSettle();
     expect(queue.retried, 1);
     expect(nudges, 1);
+  });
+
+  testWidgets('refused changes can be discarded, with a plain message', (
+    tester,
+  ) async {
+    var discarded = 0;
+    await _open(
+      tester,
+      lines: [
+        SyncQueueLine(
+          'command_outbox',
+          'Other changes',
+          const QueueCounts(parked: 1),
+        ),
+      ],
+      discard: {'command_outbox': () async => discarded += 1},
+    );
+    expect(find.textContaining('Some changes could not be saved'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('sync-discard-command_outbox')));
+    await tester.pumpAndSettle();
+    expect(discarded, 1);
   });
 
   testWidgets('a queue with nothing parked has no Retry button', (tester) async {

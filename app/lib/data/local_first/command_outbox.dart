@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../api_exception.dart';
+import '../connectivity/server_backoff.dart';
 import '../local/app_database.dart';
 import '../local/queue_retry_policy.dart';
 
@@ -18,6 +19,21 @@ class PendingCommand {
 
 /// Runs one queued command against the server. Throw to report failure.
 typedef CommandHandler = Future<void> Function(Map<String, Object?> payload);
+
+/// Runs [call]; when the server refuses it for good (the command is about to be
+/// parked) first runs [undo], so the phone's own copy goes back to what the
+/// server holds instead of staying different for ever. The error is rethrown.
+Future<void> undoIfRefused(
+  Future<void> Function() call,
+  void Function() undo,
+) async {
+  try {
+    await call();
+  } catch (error) {
+    if (classifyQueueFailure(error) == QueueFailure.permanent) undo();
+    rethrow;
+  }
+}
 
 /// The general "do this on the server later" queue.
 ///
@@ -74,15 +90,18 @@ class CommandOutbox {
   final String namespace;
   final DateTime Function() _now;
 
-  static const _maxBackoffSeconds = 1800;
-
   /// True when the last [flush] stopped because the server could not be
   /// reached (H3-3): a second pass right after it would only cost another
   /// timeout.
   bool lastFlushUnreachable = false;
 
+  /// Kinds that carry only the fields that changed (a transaction edit, a card
+  /// field patch): a new command of the kind is merged into the queued one
+  /// instead of replacing it.
+  static const mergedKinds = {'transaction_typed_fields', 'card_fields_patch'};
+
   /// Queues [kind] for [target]. A queued command of the same kind and target
-  /// is replaced, since only the latest intent matters. Any queued command in
+  /// is replaced, since only the latest intent matters (see [mergedKinds]). Any queued command in
   /// [cancels] for the same target is removed, and when one was, nothing is
   /// queued: the server is already in the state the person ended up in.
   /// Returns true when a command was queued.
@@ -107,6 +126,26 @@ class CommandOutbox {
         [namespace, opposite, target],
       );
       if (_appDb.db.updatedRows > 0) return false;
+    }
+    if (mergedKinds.contains(kind)) {
+      // A partial edit (only what changed) replaces the earlier one of the same
+      // kind: fold the earlier fields in so a second edit (category after
+      // amount) does not drop the first.
+      const categoryKeys = {'categoryId', 'userCategoryId'};
+      final changesCategory = payload.keys.any(categoryKeys.contains);
+      final earlier = _appDb.db.select(
+        'SELECT payload_json FROM command_outbox '
+        'WHERE namespace=? AND kind=? AND target=? AND parked=0 ORDER BY id',
+        [namespace, kind, target],
+      );
+      payload = {
+        for (final row in earlier)
+          for (final e
+              in (jsonDecode(row['payload_json'] as String) as Map).entries)
+            if (!(changesCategory && categoryKeys.contains(e.key)))
+              e.key as String: e.value,
+        ...payload,
+      };
     }
     _appDb.db.execute(
       'DELETE FROM command_outbox WHERE namespace=? AND kind=? AND target=?',
@@ -192,6 +231,22 @@ class CommandOutbox {
     [namespace],
   );
 
+  /// How many commands the server refused for good (see [parked]).
+  int get parkedCount =>
+      _appDb.db
+              .select(
+                'SELECT COUNT(*) AS c FROM command_outbox WHERE namespace=? AND parked=1',
+                [namespace],
+              )
+              .first['c']
+          as int;
+
+  /// Drops a parked command the person chose to give up on.
+  void discardParked(int id) => _appDb.db.execute(
+    'DELETE FROM command_outbox WHERE namespace=? AND id=? AND parked=1',
+    [namespace, id],
+  );
+
   /// Puts a parked command back in the queue (explicit retry).
   void retryParked(int id) {
     _appDb.db.execute(
@@ -210,6 +265,7 @@ class CommandOutbox {
     Map<String, CommandHandler> handlers, {
     int limit = 20,
     Set<String>? onlyKinds,
+    Set<String> holdIds = const {},
   }) async {
     lastFlushUnreachable = false;
     final now = _now().millisecondsSinceEpoch;
@@ -226,6 +282,21 @@ class CommandOutbox {
       final target = row['target'] as String;
       if (blocked.contains(target)) continue;
       if (onlyKinds != null && !onlyKinds.contains(row['kind'])) continue;
+      // The server asked us to wait (429/503): stop the pass, send nothing
+      // more, count no attempt. [ServerBackoff.resumed] starts the next one.
+      if (ServerBackoff.process.isPaused) {
+        lastFlushUnreachable = true;
+        return delivered;
+      }
+      // Names an id that exists only on the phone (a card add not delivered
+      // yet): hold it, neither failed nor parked, until that id is real.
+      if (holdIds.isNotEmpty && !holdIds.contains(target)) {
+        final text = row['payload_json'] as String;
+        if (holdIds.any(text.contains)) {
+          blocked.add(target);
+          continue;
+        }
+      }
       final handler = handlers[row['kind'] as String];
       if (handler == null) {
         // H3-4: no handler means the command context was unavailable (a
@@ -266,6 +337,13 @@ class CommandOutbox {
           case QueueFailure.retryable:
             if (_isInternalError(error) && !isServerId(target)) {
               _park(id, '$error');
+            } else if (ServerBackoff.process.isPaused &&
+                error is ApiException &&
+                (error.statusCode == 503 || error.statusCode == 429)) {
+              // The server asked everyone to wait: the pause is the delay. No
+              // attempt counted and no extra command backoff on top of it, so
+              // the command goes out as soon as the pause ends.
+              blocked.add(target);
             } else {
               _backoff(id, row['attempts'] as int, '$error');
               blocked.add(target);
@@ -297,13 +375,11 @@ class CommandOutbox {
   );
 
   void _backoff(int id, int attempts, String error) {
-    final seconds = (30 * (1 << attempts.clamp(0, 6))).clamp(
-      30,
-      _maxBackoffSeconds,
-    );
+    // Jittered so phones that failed together do not return together.
+    final delay = queueBackoffJittered(attempts + 1);
     _appDb.db.execute(
       'UPDATE command_outbox SET attempts=attempts+1, last_error=?, next_attempt_at=? WHERE id=?',
-      [error, _now().millisecondsSinceEpoch + seconds * 1000, id],
+      [error, _now().millisecondsSinceEpoch + delay.inMilliseconds, id],
     );
   }
 

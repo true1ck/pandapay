@@ -3139,6 +3139,7 @@ Map<String, CommandHandler> commandHandlersFor(
   SpendReportsRepository? spend,
   NotificationPreferencesRepository? notificationPrefs,
   void Function()? onNotificationInboxSynced,
+  void Function()? onNotificationRefused,
   Map<String, CommandHandler> accountHandlers = const {},
   CardCommandContext? cards,
   Future<bool> Function(String tagId)? tagReady,
@@ -3152,6 +3153,7 @@ Map<String, CommandHandler> commandHandlersFor(
     userCards: repo,
     prefs: notificationPrefs,
     onInboxSynced: onNotificationInboxSynced,
+    onRefused: onNotificationRefused,
   ),
   // WP-C5: payment-method change queued while offline.
   ...paymentMethodCommandHandlers(repo),
@@ -3311,8 +3313,15 @@ final outboxFlushProvider = Provider<void>((ref) {
   // flush); an idle outbox keeps no timer running.
   Timer? dueTimer;
   late final Future<void> Function() flushRef;
+  // A request that arrives mid-pass (a save made while sending) is remembered
+  // and served by one more pass when this one ends, not dropped.
+  var rerun = false;
   Future<void> flush() async {
-    if (running || disposed) return;
+    if (disposed) return;
+    if (running) {
+      rerun = true;
+      return;
+    }
     final namespace = ref.read(cacheNamespaceProvider);
     final repo = ref.read(userCardsRepositoryProvider);
     if (repo == null || ref.read(isOnlineProvider).valueOrNull == false) return;
@@ -3334,6 +3343,11 @@ final outboxFlushProvider = Provider<void>((ref) {
         spend: ref.read(spendReportsRepositoryProvider),
         notificationPrefs: ref.read(notificationPreferencesRepositoryProvider),
         onNotificationInboxSynced: () => ref.invalidate(notificationsProvider),
+        // One event-loop turn later, so the refused command is parked (and no
+        // longer holds the stored value back) before the settings are re-read.
+        onNotificationRefused: () => Timer.run(() {
+          if (!disposed) ref.invalidate(notificationPreferencesProvider);
+        }),
         accountHandlers: accountCommandHandlers(ref),
         cards: await cardCommandContext(ref),
         tagReady: (tagId) async {
@@ -3343,6 +3357,7 @@ final outboxFlushProvider = Provider<void>((ref) {
           return tags.allTags.any((t) => t.id == tagId && !t.isArchived);
         },
       );
+      final parkedBefore = commands.parkedCount;
       // WP-C6: a card added offline must exist on the server (and its id be
       // remapped) before queued transactions that name it are sent.
       final addedCards = await commands.flush(
@@ -3356,7 +3371,14 @@ final outboxFlushProvider = Provider<void>((ref) {
       // H3-3: one pass per trigger. A dead network already cost one timeout.
       final commandsSent =
           addedCards +
-          (commands.lastFlushUnreachable ? 0 : await commands.flush(handlers));
+          (commands.lastFlushUnreachable
+              ? 0
+              : await commands.flush(
+                  handlers,
+                  // A command naming a card still only on the phone waits for
+                  // its add (held, not failed, never parked).
+                  holdIds: unsentCardAddTargets(commands),
+                ));
       if (commandsSent > 0) {
         // Drop the cached server lists so the next read shows what the server
         // now holds, not the snapshot taken before these changes.
@@ -3369,6 +3391,14 @@ final outboxFlushProvider = Provider<void>((ref) {
         ref.read(commandOutboxRevisionProvider.notifier).state++;
         ref.invalidate(budgetsServerProvider);
         ref.invalidate(recurringReportServerProvider);
+      }
+      // A command the server refused is parked and no longer overlays the row:
+      // every screen holding the refused value (list, totals, an open detail)
+      // must read the server's value again (F-6).
+      if (!disposed && commands.parkedCount != parkedBefore) {
+        ref.read(commandOutboxRevisionProvider.notifier).state++;
+        ref.invalidate(transactionsProvider);
+        ref.invalidate(homeSummaryProvider);
       }
       final duplicateOutbox = await ref.read(
         duplicateResolutionOutboxRepositoryProvider.future,
@@ -3395,6 +3425,10 @@ final outboxFlushProvider = Provider<void>((ref) {
       workRemains = true;
     } finally {
       running = false;
+      if (rerun && !disposed) {
+        rerun = false;
+        unawaited(flushRef());
+      }
       // Nothing else triggers a flush between a failure and the next resume or
       // reconnect, so look again for commands whose backoff has run out. A
       // flush that finds nothing due does no network work.

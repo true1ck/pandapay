@@ -9,7 +9,8 @@ void main() {
 
   test('parses seconds and HTTP dates, ignores junk', () {
     expect(ServerBackoff.parseRetryAfter('7', t0), const Duration(seconds: 7));
-    expect(ServerBackoff.parseRetryAfter(' 0 ', t0), isNull);
+    expect(ServerBackoff.parseRetryAfter(' 0 ', t0), Duration.zero);
+    expect(ServerBackoff.parseRetryAfter('-3', t0), isNull);
     expect(ServerBackoff.parseRetryAfter('soon', t0), isNull);
     expect(ServerBackoff.parseRetryAfter(null, t0), isNull);
     expect(
@@ -31,12 +32,54 @@ void main() {
     expect(b.isPaused, isTrue);
     expect(b.remaining, greaterThanOrEqualTo(const Duration(seconds: 10)));
     expect(b.remaining, lessThanOrEqualTo(const Duration(milliseconds: 12500)));
-    b.noteResponse(429, '99999');
-    expect(b.remaining, ServerBackoff.maxDelay);
+    b.resetForTest();
+    // Capped before the jitter, so a capped value still spreads.
+    b.noteResponse(503, '99999');
+    expect(b.remaining, greaterThanOrEqualTo(ServerBackoff.maxDelay));
+    expect(b.remaining, lessThanOrEqualTo(ServerBackoff.maxDelay * 1.25));
     b.resetForTest();
     b.noteResponse(429, null);
     expect(b.remaining, greaterThanOrEqualTo(ServerBackoff.defaultDelay));
     b.resetForTest();
+  });
+
+  test('Retry-After 0 is a short pause, not the 30 s default', () {
+    final b = ServerBackoff.test(now: () => t0, random: Random(1));
+    b.noteResponse(503, '0');
+    expect(b.isPaused, isTrue);
+    expect(b.remaining, lessThanOrEqualTo(const Duration(seconds: 2)));
+    b.resetForTest();
+  });
+
+  test('a 429 is clamped to 120 s and an /auth/ limiter never pauses', () {
+    final b = ServerBackoff.test(now: () => t0, random: Random(1));
+    b.noteResponse(429, '3600', path: '/auth/otp/send');
+    expect(b.isPaused, isFalse);
+    b.noteResponse(429, '3600', path: '/sync/push');
+    expect(b.isPaused, isTrue);
+    expect(b.remaining, lessThanOrEqualTo(const Duration(seconds: 150)));
+    b.resetForTest();
+  });
+
+  test('phone endpoints never pause either', () {
+    final b = ServerBackoff.test(now: () => t0, random: Random(1));
+    b.noteResponse(429, '30', path: '/users/me/phone');
+    b.noteResponse(429, '30', path: '/users/me/phone/change');
+    expect(b.isPaused, isFalse);
+  });
+
+  test('no Timer is armed unless something listens; a listener gets the resume',
+      () async {
+    final b = ServerBackoff.test(random: Random(1));
+    b.noteResponse(503, '1');
+    expect(b.isPaused, isTrue);
+    expect(b.hasPendingTimer, isFalse);
+
+    final resumed = b.resumed.first; // listening arms the timer
+    expect(b.hasPendingTimer, isTrue);
+    await resumed.timeout(const Duration(seconds: 3));
+    expect(b.isPaused, isFalse);
+    expect(b.hasPendingTimer, isFalse);
   });
 
   test('a shorter later hint never shortens the pause', () {
@@ -58,5 +101,20 @@ void main() {
         lessThanOrEqualTo((base.inMilliseconds * 1.2).ceil()),
       );
     }
+  });
+
+  test('a push-provider 503 and a read 429 never pause the write queues', () {
+    final b = ServerBackoff.test(now: () => t0, random: Random(1));
+    b.noteResponse(503, null, path: '/notification-devices', method: 'POST');
+    expect(b.isPaused, isFalse);
+    b.noteResponse(429, '1909', path: '/sms/v2/rules', method: 'GET');
+    expect(b.isPaused, isFalse);
+    // A 503 on a read, and a 429 on a write, are the server asking for room.
+    b.noteResponse(503, '5', path: '/sms/v2/rules', method: 'GET');
+    expect(b.isPaused, isTrue);
+    b.resetForTest();
+    b.noteResponse(429, '5', path: '/transactions/x', method: 'PATCH');
+    expect(b.isPaused, isTrue);
+    b.resetForTest();
   });
 }

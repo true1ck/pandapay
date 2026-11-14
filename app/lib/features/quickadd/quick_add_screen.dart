@@ -1316,16 +1316,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     final clientMutationId = _pendingClientMutationId!;
     final effectiveOccurredAt = _pendingOccurredAt!;
     try {
-      // Local first. Without a receipt the transaction is saved in the
-      // phone's outbox (it shows in Activity at once) and delivered in the
-      // background; the screen never waits on the API. A receipt needs the
-      // server's transaction id to attach to, so that case keeps the direct
-      // call below.
-      // With a receipt the direct call is kept while the network is there, but
-      // when the phone is known to be offline (or the server unreachable) the
-      // receipt is stored on the phone under the queued entry's alias and
-      // moved to the real transaction once the outbox delivers it.
-      if (_receipt == null || _knownOffline()) {
+      // Local first, receipt or not: saved in the phone's outbox (shown in
+      // Activity at once), receipt stored under the queued entry's alias and
+      // moved to the real transaction on delivery. Never waits on the API.
+      {
         await _saveLocalFirst(
           repo: repo,
           amount: amount,
@@ -1338,116 +1332,6 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         _pendingPayloadFingerprint = null;
         _pendingOccurredAt = null;
         return;
-      }
-      final transactionId = await repo.logTransaction(
-        userCardId:
-            _instrument == TxnInstrument.creditCard ||
-                _instrument == TxnInstrument.debitCard
-            ? _selectedUserCardId
-            : null,
-        amount: Money.fromRupees(amount),
-        categoryId: _selectedCategoryId,
-        merchantName: merchantName,
-        occurredAt: effectiveOccurredAt,
-        note: note,
-        instrument: _instrument,
-        entryKind: _entryKind,
-        clientMutationId: clientMutationId,
-        paymentMethod: _paymentMethod,
-      );
-      String? receiptError;
-      if (_selectedTagIds.isNotEmpty) {
-        try {
-          await ref.read(transactionTagsProvider)?.assign([
-            transactionId,
-          ], _selectedTagIds.toList());
-        } catch (error) {
-          receiptError =
-              'Transaction saved. Tags could not be saved: ${userFacingErrorMessage(error)}';
-        }
-      }
-      if (_receipt != null) {
-        try {
-          await _saveReceipt(transactionId);
-        } catch (error) {
-          receiptError =
-              'Transaction saved, but its receipt could not be attached: $error';
-        }
-      }
-      _pendingClientMutationId = null;
-      _pendingPayloadFingerprint = null;
-      _pendingOccurredAt = null;
-      if (_selectedUserCardId != null &&
-          _instrument == TxnInstrument.creditCard) {
-        await _rememberLastUsedCard(_selectedUserCardId!);
-      }
-      // Remembers whatever merchant name was actually used this save, even
-      // if typed freehand rather than picked from a suggestion — "remembers"
-      // per ui-spec B6 means next time's quick-add, not just this session's
-      // typeahead picks.
-      if (merchantName != null) await _rememberMerchant(merchantName);
-      // These providers already do the cap/milestone/points/fee-waiver
-      // recompute server-side inside logTransaction above — invalidating
-      // them here just pulls that already-updated state back down so Home
-      // and Activity reflect it without a manual pull-to-refresh.
-      await refreshViews(ref);
-      if (mounted) {
-        // Captured BEFORE pop() — by the time a user actually taps "Undo"
-        // (the snackbar lives ~4s, the pop animation completes in ~300ms),
-        // this screen's own `context`/`State` is deactivated/disposed.
-        // `messenger` stays valid because it's the ScaffoldMessenger
-        // instance itself, not a context lookup. `container` (the
-        // ProviderContainer, not this State's `ref`) is the same fix for
-        // Riverpod: `ref.invalidate(...)` after this State disposes throws
-        // "used after dispose" — caught by the try/catch below, so it never
-        // crashed, but silently always fell to "Could not undo." instead of
-        // ever running the real undo. Found by actually exercising this
-        // path in a test, not assumed correct from reading the code.
-        final messenger = ScaffoldMessenger.of(context);
-        final container = ProviderScope.containerOf(context, listen: false);
-        Navigator.of(context).pop();
-        messenger.showSnackBar(
-          SnackBar(
-            // Flutter 3.29+ keeps a snackbar with an action on screen until it
-            // is dismissed; this one must go away on its own like any toast.
-            persist: false,
-            content: Text(
-              receiptError ??
-                  'Logged ${Money.fromRupees(amount).format()} ${_entryKind == TxnEntryKind.income ? 'income' : 'spend'}',
-            ),
-            action: SnackBarAction(
-              label: 'Undo',
-              // Real undo: POST /transactions/:id/ignore with reason
-              // 'reversal' already exists server-side and does exactly
-              // what this needs — reverseTransactionState() reverses the
-              // cap/milestone/points/fee-waiver update logTransaction just
-              // made, and the row is marked 'ignored' so it no longer
-              // counts anywhere. No DELETE route needed.
-              onPressed: () async {
-                try {
-                  // Local first: hide the row now and let the command outbox
-                  // tell the server (retried until it accepts).
-                  await _undoDelivered(container, transactionId);
-                  container.invalidate(userCardsProvider);
-                  container.invalidate(transactionsProvider);
-                  container.invalidate(utilizationTransactionsProvider);
-                  container.invalidate(homeSummaryProvider);
-                  messenger.showSnackBar(
-                    const SnackBar(content: Text('Undone.')),
-                  );
-                } catch (e) {
-                  messenger.showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Could not undo. ${userFacingErrorMessage(e)}',
-                      ),
-                    ),
-                  );
-                }
-              },
-            ),
-          ),
-        );
       }
     } catch (err) {
       // UA-0.3 offline queue (GAP_ANALYSIS.md §2): only route into the
@@ -1549,11 +1433,6 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     container.read(outboxFlushRequestProvider.notifier).state++;
     container.invalidate(pendingOutboxCountProvider);
   }
-
-  /// The phone is known to be offline, or the server cannot be reached.
-  bool _knownOffline() =>
-      ref.read(isOnlineProvider).valueOrNull == false ||
-      ref.read(serverReachabilityProvider).serverReachable == false;
 
   Future<void> _saveLocalFirst({
     required UserCardsRepository repo,

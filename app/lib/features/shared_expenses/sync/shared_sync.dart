@@ -1,3 +1,4 @@
+import '../../../data/connectivity/server_backoff.dart';
 import '../../../data/portable_backup/account_recovery_operation_gate.dart';
 import '../data/shared_transport.dart';
 import '../storage/shared_store.dart';
@@ -28,6 +29,8 @@ class SharedExpensesSync {
     try {
       await store.recoveryGate.run(() async {
         for (var index = 0; index < maxCommands && isCurrent(); index++) {
+          // The server asked every queue to wait: claim nothing, count nothing.
+          if (ServerBackoff.process.isPaused) break;
           final claim = await store.claim(now: now(), leaseId: leaseId);
           if (claim == null) break;
           try {
