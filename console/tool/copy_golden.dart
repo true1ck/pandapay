@@ -1,6 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
+/// Sort key independent of the OS path separator (a Windows backslash sorts
+/// differently from a slash), so every platform writes the same bundle.
+String _key(File f) => f.path.replaceAll(r'\', '/');
+
 /// Run from console/ before tests or web builds.
 void main() {
   final source = Directory('../tools/sms_golden');
@@ -14,7 +18,7 @@ void main() {
             .whereType<File>()
             .where((file) => file.path.endsWith('.json'))
             .toList()
-          ..sort((a, b) => a.path.compareTo(b.path));
+          ..sort((a, b) => _key(a).compareTo(_key(b)));
     for (final file in files) {
       final body = jsonDecode(file.readAsStringSync());
       for (final row in body is List ? body : [body]) {
@@ -31,7 +35,7 @@ void main() {
               in (Directory(
                   '../rules/sms/v2/senders',
                 ).listSync().whereType<File>().toList()
-                ..sort((a, b) => a.path.compareTo(b.path))))
+                ..sort((a, b) => _key(a).compareTo(_key(b)))))
             ...jsonDecode(file.readAsStringSync()) as List,
         ],
       },
