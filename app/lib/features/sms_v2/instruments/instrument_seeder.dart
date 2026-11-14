@@ -15,6 +15,7 @@ import '../../../data/local/financial_store.dart'
 import '../../../data/user_cards_repository.dart'
     show BankAccountSummary, UserCard;
 import '../storage/instrument_store.dart';
+import 'card_pairing.dart';
 import 'issuer_slugs.dart';
 
 /// What a seeding run did. Running it again on the same input reports zero
@@ -26,6 +27,7 @@ class SeedReport {
     this.accountsCreated = 0,
     this.accountsUpdated = 0,
     this.skipped = const [],
+    this.linked = const [],
   });
 
   final int cardsCreated;
@@ -35,6 +37,11 @@ class SeedReport {
 
   /// Rows that could not become instruments, each with the reason.
   final List<String> skipped;
+
+  /// Card instruments that gained their wallet card in this run. The
+  /// transactions saved before the link still carry no card, so the caller
+  /// stamps them (see `CardTransactionRelinker`).
+  final List<Instrument> linked;
 
   int get created => cardsCreated + accountsCreated;
   int get updated => cardsUpdated + accountsUpdated;
@@ -47,7 +54,6 @@ class SeedReport {
 final RegExp _uuid = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
 );
-final RegExp _mask = RegExp(r'^\d{2,6}$');
 final RegExp _last4Digits = RegExp(r'^\d{4}$');
 
 /// Builds the function that turns a `user_cards` row into its issuer slug,
@@ -94,6 +100,15 @@ class InstrumentSeeder {
         accountsCreated = 0,
         accountsUpdated = 0;
     final skipped = <String>[];
+    final linked = <Instrument>[];
+    // Pairing is decided on what was stored BEFORE this run, so the answer does
+    // not depend on which wallet card is seeded first (a card seeded earlier
+    // would otherwise look like it was no longer a rival).
+    final pairing = CardPairing(
+      instruments: store.list(),
+      wallet: cards,
+      issuerSlugOf: issuerSlugOf,
+    );
 
     for (final card in cards) {
       if (!_uuid.hasMatch(card.id)) {
@@ -105,7 +120,7 @@ class InstrumentSeeder {
         skipped.add('card ${card.id}: issuer unknown');
         continue;
       }
-      switch (_seedCard(card, issuer, now)) {
+      switch (_seedCard(card, issuer, now, pairing, linked)) {
         case _Change.created:
           cardsCreated++;
         case _Change.updated:
@@ -140,23 +155,32 @@ class InstrumentSeeder {
       accountsCreated: accountsCreated,
       accountsUpdated: accountsUpdated,
       skipped: skipped,
+      linked: linked,
     );
   }
 
   // ------------------------------------------------------------------ cards
 
-  _Change _seedCard(UserCard card, String issuer, DateTime now) {
-    final kind = switch (card.cardType) {
-      'debit' => InstrumentKind.debitCard,
-      'prepaid' => InstrumentKind.prepaidCard,
-      _ => InstrumentKind.creditCard,
-    };
-    final last4 = card.last4;
-    final mask = last4 != null && _mask.hasMatch(last4) ? last4 : null;
+  _Change _seedCard(
+    UserCard card,
+    String issuer,
+    DateTime now,
+    CardPairing pairing,
+    List<Instrument> linked,
+  ) {
+    final kind = cardKindOf(card);
+    final mask = cardMaskOf(card);
 
     // Already seeded, or already detected from SMS under the same key.
     var existing = store.findByUserCardId(card.id);
     existing ??= mask == null ? null : store.findByKey(kind, issuer, mask);
+    // Else the card the messages found when one side has no number: a wallet
+    // card added without its last 4, or a found card whose messages never
+    // printed one. Taking it here keeps it ONE card; creating a second would
+    // leave the transactions on a card the wallet does not know.
+    final paired = existing == null ? pairing.instrumentForCard(card) : null;
+    // Re-read: an earlier card in this run may have changed it.
+    existing ??= paired == null ? null : store.get(paired.instrumentId);
     if (existing != null &&
         existing.userCardId != null &&
         existing.userCardId != card.id) {
@@ -199,8 +223,21 @@ class InstrumentSeeder {
     // Link or refresh the instrument we already have. Only fields the seed
     // owns change, so a second run finds nothing to do.
     final names = existing.aliases.productNames;
+    final adoptedMask =
+        existing.maskDigits == null &&
+            mask != null &&
+            store.findByKey(kind, issuer, mask) == null
+        ? mask
+        : null;
     var next = existing.copyWith(
       userCardId: existing.userCardId ?? card.id,
+      maskDigits: adoptedMask,
+      displayName:
+          adoptedMask != null &&
+              existing.displayName ==
+                  defaultDisplayName(defaultIssuerLabel(issuer), kind, null)
+          ? defaultDisplayName(defaultIssuerLabel(issuer), kind, adoptedMask)
+          : null,
       status: existing.status == InstrumentStatus.detected
           ? InstrumentStatus.confirmed
           : existing.status,
@@ -224,6 +261,7 @@ class InstrumentSeeder {
     }
     if (_sameInstrument(next, existing)) return _Change.none;
     store.upsert(next);
+    if (existing.userCardId == null && next.userCardId != null) linked.add(next);
     return _Change.updated;
   }
 

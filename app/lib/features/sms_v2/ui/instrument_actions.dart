@@ -6,6 +6,7 @@ import '../../../data/local/financial_store.dart';
 import '../../../data/user_cards_repository.dart';
 import '../category/category_snapshot.dart';
 import '../instruments/card_linker.dart';
+import '../instruments/card_transaction_relinker.dart';
 import '../instruments/instrument_seeder.dart';
 import '../ledger/projection_writer.dart';
 import '../storage/event_store.dart';
@@ -109,6 +110,8 @@ class InstrumentActions {
   /// Only a rejected account changes what the ledger shows (its movements are
   /// hidden). Detected -> confirmed, or attaching a wallet card, changes no
   /// ledger row, so it must not re-project the whole history on the UI thread.
+  /// It does change the card each saved transaction shows, which
+  /// [CardTransactionRelinker] writes without re-projecting.
   void _write(Instrument instrument, {bool? reproject}) {
     final previous = InstrumentStore(
       financial.database.db,
@@ -128,6 +131,12 @@ class InstrumentActions {
           db,
           namespace: namespace,
         ).enqueue('instrument', instrument.instrumentId, instrument.toJson());
+        // A saved transaction copied its wallet card when it was saved, so a
+        // card linked now must be written onto the ones already there. The
+        // ledger is unchanged; only each row's card is. Idempotent, and bounded
+        // by this card's own rows.
+        CardTransactionRelinker(financial, namespace: namespace)
+            .relink(instrument);
       });
       return;
     }

@@ -17,6 +17,7 @@ import '../../../data/local/financial_store.dart';
 import '../../../data/connectivity/server_backoff.dart';
 import '../../../data/local_first/command_outbox.dart';
 import '../../../data/user_cards_repository.dart';
+import '../instruments/card_transaction_relinker.dart';
 import '../instruments/instrument_seeder.dart';
 import 'ai_withdrawal.dart';
 import '../storage/event_store.dart';
@@ -228,7 +229,7 @@ class SmsV2Runtime {
       financial.database.db,
       namespace: namespace,
     );
-    InstrumentSeeder(instrumentStore).seed(
+    final seeded = InstrumentSeeder(instrumentStore).seed(
       cards: financial
           .entities(namespace, 'cards')
           .map(UserCard.fromJson)
@@ -236,6 +237,7 @@ class SmsV2Runtime {
       issuerSlugOf: cardIssuerSlugFromCatalogue(catalogue),
       bankAccounts: const [],
     );
+    _relinkCardTransactions(seeded.linked);
     final session = ++_captureSessions;
     for (var start = 0; start < messages.length; start += 200) {
       _checkAccount();
@@ -277,6 +279,19 @@ class SmsV2Runtime {
         .isDirty) {
       financial.notifyExternalChanges(namespace, const ['subscriptions']);
     }
+  }
+
+  /// Writes the wallet card onto the transactions saved before their card was
+  /// linked: the cards linked by this run's seeding, and once per account every
+  /// card an older build linked without doing so. Never stops a message from
+  /// being captured; a failure is retried by the next capture (the one-time
+  /// pass only records itself when it finished).
+  void _relinkCardTransactions(List<Instrument> linked) {
+    try {
+      final relinker = CardTransactionRelinker(financial, namespace: namespace);
+      relinker.relinkAll(linked);
+      relinker.repairOnce();
+    } catch (_) {}
   }
 
   /// Marks as family the person payees whose names strongly look like the

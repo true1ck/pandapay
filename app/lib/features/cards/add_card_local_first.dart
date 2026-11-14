@@ -16,6 +16,8 @@ import '../../data/local/financial_store.dart';
 import '../../data/local_first/command_outbox.dart';
 import '../../data/local_first/command_outcomes.dart';
 import '../../data/user_cards_repository.dart';
+import '../sms_v2/instruments/card_transaction_relinker.dart';
+import '../sms_v2/instruments/wallet_card_link.dart';
 
 /// WP-C6 master switch. `false` restores the old network-first card flows
 /// (the screens still call the helpers, which then go straight to the server).
@@ -355,6 +357,7 @@ Future<AddCardOutcome> addCardLocalFirst(
       creditLimitInr: creditLimitInr,
     ),
   );
+  await _linkFoundCards(ref, cache.financialStore, ns);
   await queueCommand(
     ref,
     kind: CardCommand.addCard,
@@ -369,6 +372,17 @@ Future<AddCardOutcome> addCardLocalFirst(
   );
   refreshCardProviders(ref);
   return AddCardOutcome(id: id, queued: true);
+}
+
+/// Links the card just added to the card the SMS already found for it, and
+/// gives that card the transactions imported before it existed. Without this
+/// the link waited for the next incoming message and the old transactions
+/// never got a card. A failure never stops the card from being added: the next
+/// capture seeds the wallet again.
+Future<void> _linkFoundCards(WidgetRef ref, FinancialStore store, String ns) async {
+  try {
+    linkWalletCards(store, ns, await ref.read(catalogueProvider.future));
+  } catch (_) {}
 }
 
 Future<void> _patchLimit(UserCardsRepository repo, String id, double? limit) async {
@@ -504,6 +518,17 @@ Map<String, CommandHandler> cardCommandHandlers(CardCommandContext c) => {
     // The phone's id is replaced by the server's (the same id on a current
     // server, another on an older one or when the card already existed).
     remapLocalId(c.db, c.namespace, id, result.id);
+    if (result.id != id) {
+      // The instrument followed the new id; so must the rows stamped with the
+      // phone's id. A failure here must not re-send the add.
+      try {
+        final store = c.store;
+        if (store != null) {
+          CardTransactionRelinker(store, namespace: c.namespace)
+              .relinkCard(result.id);
+        }
+      } catch (_) {}
+    }
     final patch = p['patch'];
     if (patch is Map && patch.isNotEmpty) {
       // A separate command, so a failing patch never re-sends the add.

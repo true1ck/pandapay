@@ -1392,6 +1392,80 @@ class FinancialStore {
     _notify(ns);
   }
 
+  /// The lookup behind [stampCardOnSmsTransactions] for [keys] source keys:
+  /// one indexed search per key, then only the rows that still need the card.
+  /// Parameters: the namespace, the keys, then the wallet card id.
+  static String stampSelectSql(int keys) =>
+      'SELECT id, payload, pending, source_key '
+      'FROM financial_entities INDEXED BY financial_source_identity '
+      "WHERE namespace=? AND source_key IN (${List.filled(keys, '?').join(',')}) "
+      "AND entity='transactions' "
+      "AND json_extract(payload, '\$.event_id') IS NOT NULL "
+      "AND json_extract(payload, '\$.user_card_id') IS NOT ?";
+
+  /// Puts [userCardId] on the saved SMS (v2) card transactions that came from
+  /// [sourceKeys].
+  ///
+  /// A transaction copies the wallet card id from the card the messages found
+  /// at the moment it is saved. A card added or linked later therefore leaves
+  /// everything imported before it without a card; this fills it in. Only rows
+  /// that show no number yet or the same one ([cardLast4]) are changed, so a
+  /// row can never be moved to another card by a key they happen to share. Bounded by the card's own rows: source keys are
+  /// looked up through `financial_source_identity` in chunks of 400, and only
+  /// rows that need the change are decoded. Returns how many rows changed.
+  int stampCardOnSmsTransactions(
+    String ns,
+    Iterable<String> sourceKeys, {
+    required String userCardId,
+    String? cardLast4,
+  }) {
+    final keys = sourceKeys.toSet().toList();
+    if (keys.isEmpty) return 0;
+    final at = DateTime.now().millisecondsSinceEpoch;
+    var changed = 0;
+    _transaction(() {
+      for (var offset = 0; offset < keys.length; offset += 400) {
+        final chunk = keys.skip(offset).take(400).toList();
+        final rows = database.db.select(stampSelectSql(chunk.length), [
+          ns,
+          ...chunk,
+          userCardId,
+        ]);
+        for (final row in rows) {
+          final body =
+              jsonDecode(row['payload'] as String) as Map<String, dynamic>;
+          final entry = TransactionEntry.fromJson(body);
+          final isCard =
+              entry.instrument == TxnInstrument.creditCard ||
+              entry.instrument == TxnInstrument.debitCard;
+          // A row projected before the card had a number shows none; one that
+          // shows a different number belongs to another card.
+          if (!isCard ||
+              (entry.cardLast4 != null && entry.cardLast4 != cardLast4)) {
+            continue;
+          }
+          _upsert(
+            ns,
+            'transactions',
+            row['id'] as String,
+            {
+              ...body,
+              'user_card_id': userCardId,
+              if (entry.cardLast4 == null && cardLast4 != null)
+                'card_last4': cardLast4,
+            },
+            at,
+            pending: row['pending'] == 1,
+            sourceKey: row['source_key'] as String?,
+          );
+          changed++;
+        }
+      }
+    });
+    if (changed > 0) _notify(ns);
+    return changed;
+  }
+
   void replaceCards(
     String ns,
     List<UserCard> cards, {
