@@ -32,6 +32,9 @@ void main() {
     container.listen(cacheNamespaceProvider, (_, _) {});
     expect(container.read(cacheNamespaceProvider), ns);
     container.read(syncLifecycleProvider);
+    // In the running app the database provider is alive for the whole session;
+    // the sign-out reset only touches a database that is still open (H1-7).
+    await container.read(appDatabaseProvider.future);
     return (container, db);
   }
 
