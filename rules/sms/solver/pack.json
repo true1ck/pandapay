@@ -1,6 +1,6 @@
 {
   "schema": "pandapay.sms.solver/1",
-  "version": 5,
+  "version": 6,
   "params": {
     "accept": 0.8,
     "maxCueDistance": 8,
@@ -1161,7 +1161,10 @@
       "at",
       "towards",
       "info",
-      "purchase of"
+      "purchase of",
+      "fvg",
+      "favouring",
+      "favoring"
     ],
     "payeeCredit": [
       "from",
@@ -1243,6 +1246,7 @@
     ],
     "nonParty": [
       "your",
+      "another",
       "a/c",
       "account",
       "card",

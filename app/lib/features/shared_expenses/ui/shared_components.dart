@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../../app/design/app_theme.dart';
+import '../../../app/design/party_avatar.dart';
+import '../../../app/design/app_icons.dart';
 import '../../../app/design/widgets.dart';
 import '../../../main.dart' show MoneyText;
 import 'shared_presentation.dart';
@@ -275,6 +277,15 @@ class SharedPanel extends StatelessWidget {
   );
 }
 
+/// The white rounded box every Splits row and header sits in, the same look as
+/// the Activity rows: one thing per box, so lists read as separate, tappable
+/// items on the page background.
+BoxDecoration sharedCardDecoration() => BoxDecoration(
+  color: BambooInk.glassFillOnPaper,
+  borderRadius: BorderRadius.circular(AppRadius.lg),
+  border: Border.all(color: BambooInk.hairlineOnPaper),
+);
+
 /// Where the person stands, in one line, the Splitwise way: "Overall, you owe
 /// ₹500.00", or on a friend's page "You owe Ravi ₹500.00". The two gross
 /// figures appear only when both are real (somebody owes you and you owe
@@ -306,8 +317,10 @@ class SharedSummaryCard extends StatelessWidget {
         : net < 0
         ? 'You owe $who'
         : '$who owes you';
-    return Padding(
-      padding: const EdgeInsets.only(top: AppSpace.xs, bottom: AppSpace.md),
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpace.md),
+      padding: const EdgeInsets.all(AppSpace.lg),
+      decoration: sharedCardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -441,39 +454,22 @@ class SharedTextAction extends StatelessWidget {
   );
 }
 
+/// A person or a group, drawn with the same tiles the rest of the app uses for
+/// people (the violet person tile of a transfer in Activity) and for groups.
 class SharedAvatar extends StatelessWidget {
   final String name;
   final bool group;
-  const SharedAvatar({super.key, required this.name, this.group = false});
+  final double size;
+  const SharedAvatar({
+    super.key,
+    required this.name,
+    this.group = false,
+    this.size = 40,
+  });
   @override
-  Widget build(BuildContext context) => ExcludeSemantics(
-    child: Container(
-      width: 40,
-      height: 40,
-      alignment: Alignment.center,
-      decoration: const BoxDecoration(
-        color: BambooInk.rankBadgeBg,
-        shape: BoxShape.circle,
-      ),
-      child: group
-          ? const Icon(
-              Icons.people_outline_rounded,
-              color: BambooInk.jade,
-              size: 22,
-            )
-          : Text(
-              name.trim().isEmpty
-                  ? '·'
-                  : name.trim().characters.first.toUpperCase(),
-              textScaler: TextScaler.noScaling,
-              style: BambooFonts.ui(
-                17,
-                weight: FontWeight.w600,
-                color: BambooInk.jade,
-              ),
-            ),
-    ),
-  );
+  Widget build(BuildContext context) => group
+      ? TintedIconTile(AppIcons.group, BambooChartColors.violet, size: size)
+      : PartyAvatar(AvatarKind.person, size: size);
 }
 
 String? sharedStateLabel(SharedContextState state) => switch (state) {
@@ -488,6 +484,11 @@ String? sharedStateLabel(SharedContextState state) => switch (state) {
   SharedContextState.incomplete => 'Some balances missing',
 };
 
+/// A friend or a group in the Splits lists, the Splitwise way: who, then what
+/// that means for you on the right ("owes you ₹1,500.00", "you owe ₹500.00",
+/// "settled up"), lined up the same on every row. A friend you share groups
+/// with gets a line per place under the name, so one glance tells where the
+/// money sits.
 class SharedContextTile extends StatelessWidget {
   final SharedContextRow row;
   final bool hideAmounts;
@@ -503,149 +504,179 @@ class SharedContextTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mixed = !row.balance.owedToYou.isZero && !row.balance.youOwe.isZero;
-    final owed = row.balance.youOwe.isZero;
-    final label = mixed
-        ? (row.balance.netBalance.isZero ? 'Net' : sharedNetLabel(row.balance))
-        : owed
-        ? 'You are owed'
-        : 'You owe';
-    final color = mixed
-        ? (row.balance.netBalance.paise > 0
-              ? BambooInk.jade
-              : row.balance.netBalance.paise < 0
-              ? BambooInk.clayInk
-              : BambooInk.ink900)
-        : owed
-        ? BambooInk.jade
-        : BambooInk.clayInk;
-    final value = mixed
-        ? sharedNetMagnitude(row.balance)
-        : owed
-        ? row.balance.owedToYou
-        : row.balance.youOwe;
+    final net = row.balance.netBalance.paise;
+    final mixed =
+        !row.balance.owedToYou.isZero &&
+        !row.balance.youOwe.isZero &&
+        row.breakdown.isEmpty;
     final hasBalance =
         !row.balance.owedToYou.isZero || !row.balance.youOwe.isZero;
-    final state =
-        row.state == SharedContextState.settled && !row.canHideAsSettled
-        ? 'Balance changed · needs review'
-        : sharedStateLabel(row.state);
-    final identity = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          row.title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: BambooFonts.heading(15),
-        ),
-        if (row.subtitle != null)
-          Text(
-            row.subtitle!,
-            style: BambooFonts.ui(12, color: BambooInk.ink700),
-          ),
+    final color = net > 0
+        ? BambooInk.jade
+        : net < 0
+        ? BambooInk.clayInk
+        : BambooInk.ink500;
+    final caption = !hasBalance
+        ? (sharedStateLabel(row.state) ?? 'settled up').toLowerCase()
+        : net > 0
+        ? (isGroup ? 'you are owed' : 'owes you')
+        : net < 0
+        ? 'you owe'
+        : 'even';
+    // What is happening with the row, under the name, so the right side only
+    // ever says money.
+    final stateLabel = sharedStateLabel(row.state);
+    final status = <String>[
+      ?row.subtitle,
+      if (hasBalance &&
+          stateLabel != null &&
+          row.state != SharedContextState.settled)
+        stateLabel,
+      if (row.state == SharedContextState.settled && !row.canHideAsSettled)
+        'Balance changed · needs review',
+      if (row.balance.incomplete) 'Some balances may be missing',
+      if (!row.balance.confidence.isConfirmed) 'Estimated amounts',
+    ];
+    final lines = <(String, String, Money, String, bool)>[
+      for (final line in row.breakdown)
+        line.owedToYou
+            ? ('${row.title} owes you ', '', line.amount, _where(line), true)
+            : ('You owe ${row.title} ', '', line.amount, _where(line), false),
+      if (mixed) ...[
+        ('You are owed ', '', row.balance.owedToYou, '', true),
+        ('You owe ', '', row.balance.youOwe, '', false),
       ],
-    );
-    final position = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (state != null)
-          Text(state, style: BambooFonts.ui(12, color: BambooInk.ink700)),
-        if (hasBalance) ...[
-          Text(label, style: BambooFonts.ui(12, color: color)),
-          const SizedBox(height: AppSpace.xs),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: SharedAmount(
-              value,
-              confidence: row.balance.confidence,
-              hidden: hideAmounts,
-              color: color,
-            ),
-          ),
-        ],
-        if (row.balance.incomplete)
-          Text(
-            'Some balances may be missing',
-            style: BambooFonts.ui(12, color: BambooInk.ink700),
-          ),
-        if (!row.balance.confidence.isConfirmed)
-          Text(
-            'Estimated amounts',
-            style: BambooFonts.ui(12, color: BambooInk.ink700),
-          ),
-      ],
-    );
+    ];
     return Pressable(
       onTap: onTap,
-      child: SharedPanel(
+      child: Container(
+        margin: const EdgeInsets.only(bottom: AppSpace.sm),
+        padding: const EdgeInsets.all(AppSpace.md),
+        decoration: sharedCardDecoration(),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             LayoutBuilder(
-              builder: (context, constraints) {
-                final stacked =
-                    constraints.maxWidth <
-                    285 * MediaQuery.textScalerOf(context).scale(1);
-                return Row(
+              builder: (context, constraints) => Row(
+                children: [
+                  SharedAvatar(name: row.title, group: isGroup),
+                  const SizedBox(width: AppSpace.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          row.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: BambooFonts.ui(16, weight: FontWeight.w600),
+                        ),
+                        for (final text in status)
+                          Text(
+                            text,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: BambooFonts.ui(12, color: BambooInk.ink500),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpace.sm),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: constraints.maxWidth * .42,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          caption,
+                          textAlign: TextAlign.end,
+                          style: BambooFonts.ui(12, color: color),
+                        ),
+                        if (hasBalance)
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerRight,
+                            child: SharedAmount(
+                              Money.fromPaise(net.abs()),
+                              confidence: row.balance.confidence,
+                              hidden: hideAmounts,
+                              color: color,
+                              size: 16,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (onTap != null)
+                    const Padding(
+                      padding: EdgeInsets.only(left: 2),
+                      child: Icon(
+                        Icons.chevron_right_rounded,
+                        size: 18,
+                        color: BambooInk.ink500,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            if (lines.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.only(left: 19, top: AppSpace.xs),
+                padding: const EdgeInsets.only(left: 33),
+                decoration: const BoxDecoration(
+                  border: Border(
+                    left: BorderSide(
+                      color: BambooInk.hairlineOnPaper,
+                      width: 1.5,
+                    ),
+                  ),
+                ),
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SharedAvatar(name: row.title, group: isGroup),
-                    const SizedBox(width: AppSpace.md),
-                    Expanded(
-                      child: stacked
-                          ? Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [identity, position],
-                            )
-                          : Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Expanded(child: identity),
-                                const SizedBox(width: AppSpace.sm),
-                                Flexible(child: position),
-                              ],
+                    for (final (lead, _, money, where, owed) in lines)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Text.rich(
+                          TextSpan(
+                            style: BambooFonts.ui(
+                              12.5,
+                              color: BambooInk.ink700,
                             ),
-                    ),
-                    if (onTap != null)
-                      const Padding(
-                        padding: EdgeInsets.only(top: AppSpace.sm),
-                        child: Icon(
-                          Icons.chevron_right_rounded,
-                          size: 18,
-                          color: BambooInk.ink700,
+                            children: [
+                              TextSpan(text: lead),
+                              TextSpan(
+                                text: hideAmounts ? '••••' : money.format(),
+                                style: TextStyle(
+                                  color: owed
+                                      ? BambooInk.jade
+                                      : BambooInk.clayInk,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (where.isNotEmpty) TextSpan(text: ' $where'),
+                            ],
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                   ],
-                );
-              },
-            ),
-            // Netting is informational; opposite obligations stay distinct below it.
-            if (mixed) ...[
-              const Divider(color: BambooInk.hairlineOnPaper),
-              SharedMoneyLine(
-                'You are owed',
-                row.balance.owedToYou,
-                confidence: row.balance.confidence,
-                hidden: hideAmounts,
-                color: BambooInk.jade,
+                ),
               ),
-              SharedMoneyLine(
-                'You owe',
-                row.balance.youOwe,
-                confidence: row.balance.confidence,
-                hidden: hideAmounts,
-                color: BambooInk.clayInk,
-              ),
-            ],
           ],
         ),
       ),
     );
   }
+
+  static String _where(SharedBreakdownLine line) => line.groupName == null
+      ? 'in non-group expenses'
+      : 'in “${line.groupName}”';
 }
 
-/// Keeps each tab's scroll and local controls while another tab is selected.
 class SharedPageBody extends StatefulWidget {
   final SharedLoadState state;
   final bool hasItems;

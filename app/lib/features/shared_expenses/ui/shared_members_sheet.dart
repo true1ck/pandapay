@@ -74,7 +74,7 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
   @override
   void initState() {
     super.initState();
-    _roster = widget.runtime.contextRoster(widget.contextId);
+    _roster = widget.runtime.quickRoster(widget.contextId);
     _loadInvitations();
     _loadGroupLink();
     _loadPendingPhones();

@@ -132,10 +132,7 @@ void main() {
 
       await tester.tap(find.byKey(const Key('spending_donut_center')));
       await tester.pumpAndSettle();
-      expect(
-        find.text('Spending tab opened'),
-        findsOneWidget,
-      );
+      expect(find.text('Spending tab opened'), findsOneWidget);
 
       // Return to Home so the card-level tap can be verified independently
       // from the donut's center navigation.
@@ -149,6 +146,61 @@ void main() {
       expect(find.text('Spending tab opened'), findsOneWidget);
     },
   );
+
+  testWidgets('bank accounts card lists accounts and shows no balances', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(360, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          rankedRecommendationsProvider.overrideWithValue(
+            const AsyncValue.data([]),
+          ),
+          bankAccountSummariesProvider.overrideWith(
+            (ref) async => [
+              BankAccountSummary(
+                accountLast4: '1234',
+                availableBalance: Money.fromRupees(98765),
+                latestSmsAt: DateTime(2026, 11, 1),
+                smsCount: 3,
+                issuerSlug: 'hdfc',
+                issuerShortName: 'HDFC',
+              ),
+            ],
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: HomeScreen())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final title = find.text('Your bank accounts');
+    await tester.scrollUntilVisible(
+      title,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('1 account'), findsOneWidget);
+    await tester.ensureVisible(title);
+    await tester.pumpAndSettle();
+    await tester.tap(title);
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Account ending 1234'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Account ending 1234'), findsOneWidget);
+
+    // Balances are hidden for now: no balance copy, amount, lock or edit pencil.
+    expect(find.textContaining('Balance from SMS'), findsNothing);
+    expect(find.textContaining('balances'), findsNothing);
+    expect(find.textContaining('98,765'), findsNothing);
+    expect(find.byTooltip('View and edit balances'), findsNothing);
+    expect(find.byIcon(Icons.lock_outline_rounded), findsNothing);
+  });
 
   testWidgets('rank-0 recommendation gets the compact best-card surface', (
     tester,
@@ -604,11 +656,13 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            clockProvider
-                .overrideWithValue(_TestClock(DateTime(2026, 10, 26, 12))),
+            clockProvider.overrideWithValue(
+              _TestClock(DateTime(2026, 10, 26, 12)),
+            ),
             paymentsDueProvider.overrideWith((ref) async => [expiredRow]),
-            rankedRecommendationsProvider
-                .overrideWithValue(const AsyncValue.data([])),
+            rankedRecommendationsProvider.overrideWithValue(
+              const AsyncValue.data([]),
+            ),
           ],
           child: const MaterialApp(home: Scaffold(body: HomeScreen())),
         ),

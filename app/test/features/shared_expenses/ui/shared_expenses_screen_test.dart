@@ -112,9 +112,10 @@ void main() {
       expect(find.text('You paid ₹1,200.00 (shared amount)'), findsOneWidget);
       expect(find.text('Bill total'), findsNothing);
       expect(find.text('You paid'), findsNothing);
-      await tester.tap(find.text('Totals'));
-      await tester.pumpAndSettle();
-      expect(find.text('Your shared contributions'), findsOneWidget);
+      // Totals sit in the header with their own honest labels.
+      expect(find.text('Shared total'), findsOneWidget);
+      expect(find.text('Your part paid'), findsOneWidget);
+      expect(find.text('Total bills'), findsNothing);
       expect(find.text('You paid'), findsNothing);
     },
   );
@@ -171,10 +172,23 @@ void main() {
           ),
         ),
       );
-      expect(find.text('Net owed to you'), findsOneWidget);
+      // The net on the right, both directions spelled out under the name.
+      expect(find.text('owes you'), findsOneWidget);
       expect(find.text(const Money.fromPaise(700).format()), findsOneWidget);
-      expect(find.text(const Money.fromPaise(1000).format()), findsOneWidget);
-      expect(find.text(const Money.fromPaise(300).format()), findsOneWidget);
+      expect(
+        find.textContaining(
+          'You are owed ${const Money.fromPaise(1000).format()}',
+          findRichText: true,
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining(
+          'You owe ${const Money.fromPaise(300).format()}',
+          findRichText: true,
+        ),
+        findsOneWidget,
+      );
     },
   );
 
@@ -183,13 +197,13 @@ void main() {
     (tester) async {
       await pump(tester, SharedExpensesScreen(data: hub()));
       expect(
-        tester.getTopLeft(find.text('Show settled friends')).dy,
+        tester.getTopLeft(find.text('Show 1 settled-up friend')).dy,
         greaterThan(tester.getBottomLeft(find.text('Rahul')).dy),
       );
-      await tester.tap(find.text('Show settled friends'));
+      await tester.tap(find.text('Show 1 settled-up friend'));
       await tester.pumpAndSettle();
       expect(find.text('Old trip'), findsOneWidget);
-      await tester.tap(find.text('Hide settled friends'));
+      await tester.tap(find.text('Hide settled-up friends'));
       await tester.pumpAndSettle();
       expect(find.text('Old trip'), findsNothing);
       await pump(
@@ -270,11 +284,7 @@ void main() {
       // No tabs any more: Balances and Totals open in place, and the plus
       // stays reachable whatever is open.
       expect(find.byType(TabBar), findsNothing);
-      for (final section in [null, 'Balances', 'Totals']) {
-        if (section != null) {
-          await tester.tap(find.text(section));
-          await tester.pumpAndSettle();
-        }
+      for (var i = 0; i < 3; i++) {
         await tester.tap(find.byTooltip('Add expense'));
         await tester.pumpAndSettle();
       }
@@ -379,7 +389,8 @@ void main() {
     expect(find.text('Rahul'), findsOneWidget);
     await tester.tap(find.text('Groups'));
     await tester.pumpAndSettle();
-    expect(find.text('Show settled groups'), findsOneWidget);
+    // No settled groups, so no line inviting you to show them.
+    expect(find.textContaining('settled-up groups'), findsNothing);
   });
 
   testWidgets('hub balance and compact rows fit narrow screens at large text', (
@@ -533,23 +544,31 @@ void main() {
         ),
       );
       await pump(tester, SharedGroupScreen(data: data));
-      // One scroll: no tab bar; Balances and Totals are actions under the
-      // balance and open in place.
+      // One scroll, nothing to open: no tab bar, the totals in the header.
       expect(find.byType(TabBar), findsNothing);
-      for (final label in ['Balances', 'Totals']) {
-        expect(find.text(label), findsOneWidget);
+      expect(find.text('Balances'), findsNothing);
+      for (final label in ['Total bills', 'You paid', 'Your share']) {
+        expect(find.text(label), findsOneWidget, reason: 'a stat tile');
       }
       expect(find.text('Friends'), findsNothing);
       // One plain line per expense: who paid, and what it means for you.
       expect(find.text('Rahul paid ₹1,200.00'), findsOneWidget);
-      expect(find.text('you owe'), findsOneWidget);
-      expect(find.text(const Money.fromPaise(40000).format()), findsOneWidget);
-      for (final label in ['Bill total', 'You paid', 'Your share']) {
-        expect(find.text(label), findsNothing, reason: 'the numbers live in the expense');
-      }
-      await tester.tap(find.text('Totals'));
-      await tester.pumpAndSettle();
-      expect(find.text('Total bills'), findsOneWidget);
+      expect(find.text('you borrowed'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(SharedExpenseTile),
+          matching: find.text(const Money.fromPaise(40000).format()),
+        ),
+        findsOneWidget,
+      );
+      // The rows carry no accounting labels; the totals are the header's tiles.
+      expect(
+        find.descendant(
+          of: find.byType(SharedExpenseTile),
+          matching: find.text('Your share'),
+        ),
+        findsNothing,
+      );
     },
   );
 
@@ -661,8 +680,7 @@ void main() {
         );
         expect(tester.takeException(), isNull);
         expect(find.text(maximum.format()), findsNWidgets(3));
-        // Label and value may merge into one accessible row. Check the full
-        // value survives rather than requiring a particular node topology.
+        // Each full value survives in what a screen reader is told.
         for (var index = 0; index < 3; index++) {
           expect(
             tester.getSemantics(find.text(maximum.format()).at(index)).label,
@@ -803,21 +821,20 @@ void main() {
     expect(find.text('November 2026'), findsOneWidget, reason: 'once, not per row');
     expect(find.text('October 2026'), findsOneWidget);
     expect(find.text('you lent'), findsNWidgets(2));
-    expect(find.text('you owe'), findsOneWidget);
+    expect(find.text('you borrowed'), findsOneWidget);
   });
 
-  testWidgets('the overall card shows the gross lines only when both are real', (
+  testWidgets('the overall line shows the gross lines only when both are real', (
     tester,
   ) async {
     Future<void> show(SharedBalanceSummary summary) => pump(
       tester,
-      SharedGroupScreen(
-        data: SharedGroupPresentation(
-          id: 'g',
-          title: 'Flatmates',
+      SharedExpensesScreen(
+        data: SharedHubPresentation(
           summary: summary,
-          expenses: SharedPage(),
-          balances: SharedPage(),
+          friends: SharedPage(items: const [rahul]),
+          groups: SharedPage(),
+          activity: SharedPage(),
         ),
       ),
     );
@@ -833,7 +850,7 @@ void main() {
       ),
     );
     expect(inCard('Overall, you owe'), findsOneWidget);
-    expect(inCard('You are owed'), findsNothing, reason: 'it would only repeat the headline');
+    expect(inCard('You are owed'), findsNothing, reason: 'it would only repeat the line');
     await show(
       SharedBalanceSummary(
         owedToYou: Money.fromPaise(100000),
@@ -844,21 +861,13 @@ void main() {
     expect(inCard('Overall, you are owed'), findsOneWidget);
     expect(inCard('You are owed'), findsOneWidget);
     expect(inCard('You owe'), findsOneWidget);
-    await show(
-      SharedBalanceSummary(
-        owedToYou: Money.zero(),
-        youOwe: Money.zero(),
-        netBalance: Money.zero(),
-      ),
-    );
-    expect(inCard('All settled up'), findsOneWidget);
   });
 
-  testWidgets('Settle up sits under the balance, and only when there is one', (
+  testWidgets('Settle up is always one tap away, like Splitwise', (
     tester,
   ) async {
     var tapped = 0;
-    Future<void> show(SharedBalanceSummary summary) => pump(
+    await pump(
       tester,
       SharedGroupScreen(
         onSettleUp: () => tapped++,
@@ -866,32 +875,22 @@ void main() {
           id: 'g',
           title: 'Ravi',
           direct: true,
-          summary: summary,
+          summary: SharedBalanceSummary(
+            owedToYou: Money.zero(),
+            youOwe: Money.zero(),
+            netBalance: Money.zero(),
+          ),
           expenses: SharedPage(),
           balances: SharedPage(),
         ),
       ),
     );
-    await show(
-      SharedBalanceSummary(
-        owedToYou: Money.zero(),
-        youOwe: const Money.fromPaise(50000),
-        netBalance: const Money.fromPaise(-50000),
-      ),
-    );
+    expect(find.textContaining('All settled up', findRichText: true), findsOneWidget);
     await tester.tap(find.byKey(const Key('expenses-settle-up')));
     expect(tapped, 1);
-    await show(
-      SharedBalanceSummary(
-        owedToYou: Money.zero(),
-        youOwe: Money.zero(),
-        netBalance: Money.zero(),
-      ),
-    );
-    expect(find.byKey(const Key('expenses-settle-up')), findsNothing);
   });
 
-  testWidgets('a friend page reads like Splitwise: who owes whom, no tabs', (
+  testWidgets('a friend page shows everything at once: who owes whom, where, totals', (
     tester,
   ) async {
     var history = 0;
@@ -905,10 +904,23 @@ void main() {
           title: 'Sujay',
           direct: true,
           summary: SharedBalanceSummary(
-            owedToYou: Money.zero(),
-            youOwe: const Money.fromPaise(50000),
-            netBalance: const Money.fromPaise(-50000),
+            owedToYou: const Money.fromPaise(200000),
+            youOwe: Money.zero(),
+            netBalance: const Money.fromPaise(200000),
           ),
+          breakdown: const [
+            SharedBreakdownLine(
+              contextId: 'f',
+              amount: Money.fromPaise(200000),
+              owedToYou: true,
+            ),
+            SharedBreakdownLine(
+              contextId: 'goa',
+              groupName: 'Goa trip',
+              amount: Money.fromPaise(50000),
+              owedToYou: false,
+            ),
+          ],
           expenses: SharedPage(
             items: const [
               SharedExpenseRow(
@@ -931,24 +943,24 @@ void main() {
         ),
       ),
     );
+    Finder rich(String text) => find.textContaining(text, findRichText: true);
     expect(find.byType(TabBar), findsNothing);
-    expect(find.text('You owe Sujay'), findsOneWidget);
-    expect(find.text('Sujay paid ₹1,000.00'), findsOneWidget);
-    expect(find.text('Balances'), findsNothing, reason: 'the line above says it');
-    expect(find.text('Settle up'), findsOneWidget);
-    // Totals open in place, and close again.
-    expect(find.text('Total bills'), findsNothing);
-    await tester.tap(find.text('Totals'));
-    await tester.pumpAndSettle();
+    // The total over every place, then where it sits, all without a tap.
+    expect(find.text('Sujay owes you overall'), findsOneWidget);
+    expect(find.text('₹1,500.00'), findsOneWidget);
+    expect(find.text('Friend · 1 expense'), findsOneWidget);
+    expect(rich('Sujay owes you ₹2,000.00 in non-group expenses'), findsOneWidget);
+    expect(rich('You owe Sujay ₹500.00 in “Goa trip”'), findsOneWidget);
     expect(find.text('Total bills'), findsOneWidget);
-    await tester.tap(find.text('Totals').first);
-    await tester.pumpAndSettle();
-    expect(find.text('Total bills'), findsNothing);
-    await tester.tap(find.text('Payment history'));
+    expect(find.text('Your share'), findsOneWidget);
+    expect(find.text('Sujay paid ₹1,000.00'), findsOneWidget);
+    expect(find.text('Settle up'), findsOneWidget);
+    expect(find.text('Remind'), findsOneWidget, reason: 'they owe you');
+    await tester.tap(find.text('History'));
     expect(history, 1);
   });
 
-  testWidgets('a group keeps its balances: open in place, tap one to settle', (
+  testWidgets('a group shows who owes whom at the top; a tap settles with them', (
     tester,
   ) async {
     String? opened;
@@ -961,15 +973,36 @@ void main() {
           title: 'Flatmates',
           summary: balances,
           expenses: SharedPage(),
-          balances: SharedPage(items: const [rahul]),
+          balances: SharedPage(
+            items: const [
+              SharedContextRow(
+                id: 'ravi',
+                title: 'Ravi',
+                balance: SharedBalanceSummary(
+                  owedToYou: Money.fromPaise(120000),
+                  youOwe: zero,
+                  netBalance: Money.fromPaise(120000),
+                ),
+              ),
+              SharedContextRow(
+                id: 'sam',
+                title: 'Sam',
+                balance: SharedBalanceSummary(
+                  owedToYou: zero,
+                  youOwe: Money.fromPaise(50000),
+                  netBalance: Money.fromPaise(-50000),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
-    expect(find.text('Rahul'), findsNothing);
-    await tester.tap(find.text('Balances'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Rahul'));
-    expect(opened, 'rahul');
+    Finder rich(String text) => find.textContaining(text, findRichText: true);
+    expect(rich('Ravi owes you ₹1,200.00'), findsOneWidget);
+    expect(rich('You owe Sam ₹500.00'), findsOneWidget);
+    await tester.tap(rich('You owe Sam'));
+    expect(opened, 'sam');
   });
 
   testWidgets('opening on Balances or Totals still works for old links', (
@@ -987,6 +1020,52 @@ void main() {
         ),
       ),
     );
-    expect(find.text('Rahul'), findsOneWidget);
+    expect(
+      find.textContaining('You and Rahul are even', findRichText: true),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a friend on the home list shows where the money sits, Splitwise-style', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      SharedExpensesScreen(
+        data: hub(
+          friends: SharedPage(
+            items: const [
+              SharedContextRow(
+                id: 'sujay',
+                title: 'Sujay',
+                balance: SharedBalanceSummary(
+                  owedToYou: Money.fromPaise(200000),
+                  youOwe: Money.fromPaise(50000),
+                  netBalance: Money.fromPaise(150000),
+                ),
+                breakdown: [
+                  SharedBreakdownLine(
+                    contextId: 'sujay',
+                    amount: Money.fromPaise(200000),
+                    owedToYou: true,
+                  ),
+                  SharedBreakdownLine(
+                    contextId: 'goa',
+                    groupName: 'Goa trip',
+                    amount: Money.fromPaise(50000),
+                    owedToYou: false,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    Finder rich(String text) => find.textContaining(text, findRichText: true);
+    expect(find.text('owes you'), findsOneWidget);
+    expect(find.text(const Money.fromPaise(150000).format()), findsOneWidget);
+    expect(rich('Sujay owes you ₹2,000.00 in non-group expenses'), findsOneWidget);
+    expect(rich('You owe Sujay ₹500.00 in “Goa trip”'), findsOneWidget);
   });
 }

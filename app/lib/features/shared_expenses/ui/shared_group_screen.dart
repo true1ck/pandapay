@@ -1,21 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:pandapay_domain/pandapay_domain.dart' show Money;
+import 'package:pandapay_domain/pandapay_domain.dart' show Confidence, Money;
+import 'package:share_plus/share_plus.dart';
 
 import '../../../app/design/app_theme.dart';
+import '../../../app/design/app_icons.dart';
+import '../../../app/design/merchant_brand.dart';
+import '../../../app/design/merchant_brand_tile.dart';
+import '../../../app/design/party_avatar.dart';
 import '../../../app/design/widgets.dart';
 import 'shared_components.dart';
 import 'shared_presentation.dart';
 
-/// A friend's or a group's page, the Splitwise way: one scroll. The balance in
-/// words at the top, a row of actions (Settle up, Balances, Totals, Payment
-/// history), then every expense under its month. Balances and Totals open in
-/// place under the actions instead of being tabs of their own, so nothing the
-/// tabs held is lost and nothing needs a second tap level.
+/// A friend's or a group's page, the Splitwise way: one scroll, nothing to
+/// open. At the top, who it is and the balance in words; under it where that
+/// balance sits (each group and non-group expenses for a friend, each member
+/// for a group, a tap settles with them), what was shared in total, and the
+/// actions (Settle up, Remind, History). Then every expense under its month.
 class SharedGroupScreen extends StatefulWidget {
   final SharedGroupPresentation data;
 
-  /// 0 opens on the expenses; 1 opens with Balances shown, 2 with Totals.
+  /// Kept for old links that opened a tab; everything is on one page now.
   final int initialIndex;
   final VoidCallback? onAddExpense;
   final VoidCallback? onSettings;
@@ -48,41 +53,388 @@ class SharedGroupScreen extends StatefulWidget {
 }
 
 class _SharedGroupScreenState extends State<SharedGroupScreen> {
-  late SharedGroupTab? _open = switch (widget.initialIndex) {
-    1 => SharedGroupTab.balances,
-    2 => SharedGroupTab.totals,
-    _ => null,
-  };
+  bool _allBalances = false;
+  static const _shownBalances = 5;
 
   SharedGroupPresentation get data => widget.data;
 
-  void _toggle(SharedGroupTab section) =>
-      setState(() => _open = _open == section ? null : section);
-
-  bool get _hasBalance {
-    final summary = data.summary;
-    return summary == null ||
-        !summary.youOwe.isZero ||
-        !summary.owedToYou.isZero;
+  /// The balance shown at the top: on a friend's page, the total over every
+  /// place you share; otherwise this page's own.
+  SharedBalanceSummary? get _summary {
+    final lines = data.breakdown;
+    if (!data.direct || lines.isEmpty) return data.summary;
+    var owed = 0, owing = 0;
+    for (final line in lines) {
+      if (line.owedToYou) {
+        owed += line.amount.paise;
+      } else {
+        owing += line.amount.paise;
+      }
+    }
+    return SharedBalanceSummary(
+      owedToYou: Money.fromPaise(owed),
+      youOwe: Money.fromPaise(owing),
+      netBalance: Money.fromPaise(owed - owing),
+      confidence: data.summary?.confidence ?? Confidence.confirmed,
+      incomplete: data.summary?.incomplete ?? false,
+    );
   }
 
-  Widget _chip({
-    required String label,
-    required IconData icon,
-    required VoidCallback onTap,
-    bool selected = false,
+  String _money(Money money) => data.hideAmounts ? '••••' : money.format();
+
+  /// The balance, the first thing to read: who owes whom, the amount large,
+  /// then where it sits, on a soft tint of its direction.
+  Widget _balanceBlock(SharedBalanceSummary? summary, List<Widget> where) {
+    if (summary == null) {
+      // No total to show yet; who owes whom still is.
+      return where.isEmpty
+          ? const SizedBox.shrink()
+          : Container(
+              key: const Key('group-headline'),
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: BambooInk.paperCool,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: where,
+              ),
+            );
+    }
+    final net = summary.netBalance.paise;
+    final settled = summary.owedToYou.isZero && summary.youOwe.isZero;
+    final tone = net > 0
+        ? BambooInk.jade
+        : net < 0
+        ? BambooInk.clayInk
+        : BambooInk.ink700;
+    final overall = net != 0 && (!data.direct || data.breakdown.isNotEmpty);
+    final label = net > 0
+        ? (data.direct ? '${data.title} owes you' : 'You are owed')
+        : net < 0
+        ? (data.direct ? 'You owe ${data.title}' : 'You owe')
+        : settled
+        ? 'All settled up'
+        : data.direct
+        ? 'You and ${data.title} are even'
+        : 'You are even';
+    return Container(
+      key: const Key('group-headline'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: net > 0
+            ? BambooInk.jade.withValues(alpha: .09)
+            : net < 0
+            ? BambooInk.clay.withValues(alpha: .09)
+            : BambooInk.paperCool,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                net > 0
+                    ? AppIcons.moneyIn
+                    : net < 0
+                    ? AppIcons.moneyOut
+                    : Icons.check_circle_outline_rounded,
+                size: 16,
+                color: tone,
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  overall ? '$label overall' : label,
+                  style: BambooFonts.ui(
+                    13.5,
+                    weight: FontWeight.w700,
+                    color: tone,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (net != 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: SharedAmount(
+                  Money.fromPaise(net.abs()),
+                  confidence: summary.confidence,
+                  hidden: data.hideAmounts,
+                  color: tone,
+                  size: 30,
+                ),
+              ),
+            ),
+          if (where.isNotEmpty) ...[
+            const SizedBox(height: AppSpace.sm),
+            Container(
+              padding: const EdgeInsets.only(left: AppSpace.md),
+              decoration: BoxDecoration(
+                border: Border(
+                  left: BorderSide(
+                    color: tone.withValues(alpha: .35),
+                    width: 2,
+                  ),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: where,
+              ),
+            ),
+          ],
+          if (summary.incomplete)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpace.xs),
+              child: Text(
+                'Some balances may be missing',
+                style: BambooFonts.ui(12, color: BambooInk.ink500),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// What was shared, at a glance: three small tiles with the app's icons. The
+  /// labels come with the totals, so a shared amount whose full bill is
+  /// unknown is never called the bill.
+  Widget _stats(SharedExpenseTotals totals) {
+    String short(String label) => switch (label) {
+      'Shared expense total' => 'Shared total',
+      'Your shared contributions' => 'Your part paid',
+      _ => label,
+    };
+    Widget tile(IconData icon, Color tone, String label, Money money) =>
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: BambooInk.paper,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: BambooInk.hairlineOnPaper),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TintedIconTile(icon, tone, size: 28),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                ),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: SharedAmount(
+                    money,
+                    confidence: totals.confidence,
+                    hidden: data.hideAmounts,
+                    size: 14.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        tile(
+          AppIcons.bill,
+          BambooChartColors.pink,
+          short(totals.totalLabel),
+          totals.billTotal,
+        ),
+        const SizedBox(width: AppSpace.sm),
+        tile(
+          AppIcons.wallet,
+          BambooChartColors.teal,
+          short(totals.paidLabel),
+          totals.yourPaid,
+        ),
+        const SizedBox(width: AppSpace.sm),
+        tile(
+          AppIcons.share,
+          BambooChartColors.violet,
+          'Your share',
+          totals.yourShare,
+        ),
+      ],
+    );
+  }
+
+  Widget _line(
+    String lead,
+    Money money,
+    bool owedToYou, {
+    String tail = '',
+    VoidCallback? onTap,
+  }) {
+    final text = Text.rich(
+      TextSpan(
+        style: BambooFonts.ui(13, color: BambooInk.ink700),
+        children: [
+          TextSpan(text: lead),
+          TextSpan(
+            text: _money(money),
+            style: TextStyle(
+              color: owedToYou ? BambooInk.jade : BambooInk.clayInk,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (tail.isNotEmpty) TextSpan(text: ' $tail'),
+        ],
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: onTap == null
+          ? text
+          : Pressable(
+              onTap: onTap,
+              child: Row(
+                children: [
+                  Expanded(child: text),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 16,
+                    color: BambooInk.ink500,
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  /// Where the balance sits: per place for a friend, per member for a group.
+  List<Widget> _whereLines() {
+    if (data.direct) {
+      return [
+        for (final line in data.breakdown)
+          line.owedToYou
+              ? _line(
+                  '${data.title} owes you ',
+                  line.amount,
+                  true,
+                  tail: line.groupName == null
+                      ? 'in non-group expenses'
+                      : 'in “${line.groupName}”',
+                )
+              : _line(
+                  'You owe ${data.title} ',
+                  line.amount,
+                  false,
+                  tail: line.groupName == null
+                      ? 'in non-group expenses'
+                      : 'in “${line.groupName}”',
+                ),
+      ];
+    }
+    final page = data.balances;
+    final owing = [
+      for (final row in page.items)
+        if (!row.balance.owedToYou.isZero || !row.balance.youOwe.isZero) row,
+    ];
+    final shown = _allBalances ? owing : owing.take(_shownBalances).toList();
+    return [
+      for (final row in shown)
+        row.balance.netBalance.isZero
+            // Both directions, cancelling out: still somebody to settle with.
+            ? Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Pressable(
+                  onTap: widget.onOpenBalance == null
+                      ? null
+                      : () => widget.onOpenBalance!(row.id),
+                  child: Text(
+                    'You and ${row.title} are even, with debts both ways',
+                    style: BambooFonts.ui(13, color: BambooInk.ink700),
+                  ),
+                ),
+              )
+            : row.balance.netBalance.paise > 0
+            ? _line(
+                '${row.title} owes you ',
+                Money.fromPaise(row.balance.netBalance.paise),
+                true,
+                onTap: widget.onOpenBalance == null
+                    ? null
+                    : () => widget.onOpenBalance!(row.id),
+              )
+            : _line(
+                'You owe ${row.title} ',
+                Money.fromPaise(-row.balance.netBalance.paise),
+                false,
+                onTap: widget.onOpenBalance == null
+                    ? null
+                    : () => widget.onOpenBalance!(row.id),
+              ),
+      if (owing.length > _shownBalances)
+        SharedTextAction(
+          label: _allBalances
+              ? 'Show fewer'
+              : 'Show all ${owing.length} balances',
+          onTap: () => setState(() => _allBalances = !_allBalances),
+        ),
+      if (page.hasMore && widget.onLoadMore != null)
+        SharedTextAction(
+          label: page.loadingMore ? 'Loading…' : 'More balances',
+          onTap: () => widget.onLoadMore!(SharedGroupTab.balances),
+        ),
+      if (page.hasPrevious && widget.onPreviousPage != null)
+        SharedTextAction(
+          label: 'Previous balances',
+          onTap: () => widget.onPreviousPage!(SharedGroupTab.balances),
+        ),
+      if (page.items.isEmpty && page.state == SharedLoadState.error)
+        SharedTextAction(
+          label: 'Could not load balances · Try again',
+          onTap: () => widget.onRetry?.call(SharedGroupTab.balances),
+        ),
+    ];
+  }
+
+  Future<void> _remind() async {
+    final summary = _summary;
+    if (summary == null || summary.netBalance.paise <= 0) return;
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          text:
+              'Hi ${data.title}, a quick reminder from PandaPay: you owe me '
+              '${Money.fromPaise(summary.netBalance.paise).format()}.',
+        ),
+      );
+    } catch (_) {}
+  }
+
+  Widget _button(
+    String label,
+    IconData icon,
+    VoidCallback onTap, {
+    bool primary = false,
     Key? key,
   }) => Pressable(
     key: key,
     onTap: onTap,
     semanticLabel: label,
     child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: selected ? BambooInk.slate : BambooInk.glassFillOnPaper,
+        color: primary ? BambooInk.slate : BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
-          color: selected ? BambooInk.slate : BambooInk.hairlineOnPaper,
+          color: primary ? BambooInk.slate : BambooInk.hairlineOnPaper,
         ),
       ),
       child: Row(
@@ -91,7 +443,7 @@ class _SharedGroupScreenState extends State<SharedGroupScreen> {
           Icon(
             icon,
             size: 18,
-            color: selected ? BambooInk.lime : BambooInk.ink900,
+            color: primary ? BambooInk.lime : BambooInk.ink900,
           ),
           const SizedBox(width: 6),
           Text(
@@ -99,7 +451,7 @@ class _SharedGroupScreenState extends State<SharedGroupScreen> {
             style: BambooFonts.ui(
               13.5,
               weight: FontWeight.w700,
-              color: selected ? BambooInk.lime : BambooInk.ink900,
+              color: primary ? BambooInk.lime : BambooInk.ink900,
             ),
           ),
         ],
@@ -107,165 +459,90 @@ class _SharedGroupScreenState extends State<SharedGroupScreen> {
     ),
   );
 
-  Widget _actions() => Padding(
-    padding: const EdgeInsets.only(bottom: AppSpace.sm),
-    child: Wrap(
-      spacing: AppSpace.sm,
-      runSpacing: AppSpace.sm,
-      children: [
-        if (widget.onSettleUp != null && _hasBalance)
-          _chip(
-            key: const Key('expenses-settle-up'),
-            label: 'Settle up',
-            icon: Icons.payments_outlined,
-            onTap: widget.onSettleUp!,
-          ),
-        // A friend's page already says what is owed both ways at the top.
-        if (!data.direct)
-          _chip(
-            label: 'Balances',
-            icon: Icons.account_balance_wallet_outlined,
-            selected: _open == SharedGroupTab.balances,
-            onTap: () => _toggle(SharedGroupTab.balances),
-          ),
-        _chip(
-          label: 'Totals',
-          icon: Icons.bar_chart_rounded,
-          selected: _open == SharedGroupTab.totals,
-          onTap: () => _toggle(SharedGroupTab.totals),
-        ),
-        if (widget.onViewSettlements != null)
-          _chip(
-            label: 'Payment history',
-            icon: Icons.receipt_long_outlined,
-            onTap: widget.onViewSettlements!,
-          ),
-      ],
-    ),
-  );
-
-  Widget _sectionTitle(String text) => Padding(
-    padding: const EdgeInsets.only(top: AppSpace.xs, bottom: AppSpace.sm),
-    child: Text(
-      text,
-      style: BambooFonts.ui(
-        13,
-        weight: FontWeight.w700,
-        color: BambooInk.ink700,
-      ),
-    ),
-  );
-
-  List<Widget> _balances() {
-    final page = data.balances;
+  List<Widget> _header() {
+    final summary = _summary;
+    final totals = data.totals;
+    final where = _whereLines();
+    final owedToYou = (summary?.netBalance.paise ?? 0) > 0;
     return [
-      _sectionTitle('Balances'),
-      if (page.hasPrevious && widget.onPreviousPage != null)
-        SharedTextAction(
+      SharedPanel(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: _headerContent(summary, totals, where, owedToYou),
+        ),
+      ),
+      if (data.expenses.hasPrevious && widget.onPreviousPage != null)
+        SharedAction(
           label: 'Previous page',
-          onTap: () => widget.onPreviousPage!(SharedGroupTab.balances),
+          onTap: () => widget.onPreviousPage!(SharedGroupTab.expenses),
         ),
-      if (page.incomplete) const SharedNotice(sharedCatchingUpCopy),
-      if (page.items.isEmpty)
-        switch (page.state) {
-          SharedLoadState.loading => const Padding(
-            padding: EdgeInsets.all(AppSpace.md),
-            child: Center(child: CircularProgressIndicator()),
-          ),
-          SharedLoadState.error => Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SharedNotice('Could not refresh balances'),
-              if (widget.onRetry != null)
-                SharedTextAction(
-                  label: 'Try again',
-                  onTap: () => widget.onRetry!(SharedGroupTab.balances),
-                ),
-            ],
-          ),
-          _ => const SharedNotice(
-            'No balances yet. Reviewed shared expenses will appear here.',
-          ),
-        },
-      for (final row in page.items)
-        SharedContextTile(
-          row: row,
-          hideAmounts: data.hideAmounts,
-          onTap: widget.onOpenBalance == null
-              ? null
-              : () => widget.onOpenBalance!(row.id),
-        ),
-      if (page.hasMore && widget.onLoadMore != null)
-        SharedTextAction(
-          label: page.loadingMore ? 'Loading…' : page.nextLabel,
-          onTap: () => widget.onLoadMore!(SharedGroupTab.balances),
-        ),
-      const SizedBox(height: AppSpace.sm),
     ];
   }
 
-  List<Widget> _totals() {
-    final totals = data.totals;
+  List<Widget> _headerContent(
+    SharedBalanceSummary? summary,
+    SharedExpenseTotals? totals,
+    List<Widget> where,
+    bool owedToYou,
+  ) {
+    final count = data.expenses.items.length;
+    final countText =
+        '$count${data.expenses.hasMore ? '+' : ''} '
+        'expense${count == 1 && !data.expenses.hasMore ? '' : 's'}';
     return [
-      _sectionTitle('Totals'),
-      if (totals == null)
-        switch (data.totalsState) {
-          SharedLoadState.loading => const Padding(
-            padding: EdgeInsets.all(AppSpace.md),
-            child: Center(child: CircularProgressIndicator()),
-          ),
-          SharedLoadState.error => Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SharedNotice('Could not refresh totals'),
-              if (widget.onRetry != null)
-                SharedTextAction(
-                  label: 'Try again',
-                  onTap: () => widget.onRetry!(SharedGroupTab.totals),
-                ),
-            ],
-          ),
-          _ => const SharedNotice(
-            'Expense totals will appear after shared expenses are reviewed.',
-          ),
-        }
-      else
-        SharedPanel(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (totals.periodLabel != null)
+      Row(
+        children: [
+          SharedAvatar(name: data.title, group: !data.direct, size: 52),
+          const SizedBox(width: AppSpace.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Text(
-                  totals.periodLabel!,
-                  style: BambooFonts.ui(13, color: BambooInk.ink700),
+                  data.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: BambooFonts.heading(22),
                 ),
-              SharedMoneyLine(
-                totals.totalLabel,
-                totals.billTotal,
-                confidence: totals.confidence,
-                hidden: data.hideAmounts,
-              ),
-              SharedMoneyLine(
-                totals.paidLabel,
-                totals.yourPaid,
-                confidence: totals.confidence,
-                hidden: data.hideAmounts,
-              ),
-              SharedMoneyLine(
-                'Your share',
-                totals.yourShare,
-                confidence: totals.confidence,
-                hidden: data.hideAmounts,
-              ),
-              const SharedNotice(
-                'Payments settle balances; they are separate from expense totals.',
-              ),
-              if (totals.incomplete)
-                const SharedNotice('Some totals may be missing'),
-            ],
+                Text(
+                  '${data.direct ? 'Friend' : 'Group'} · $countText',
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
+              ],
+            ),
           ),
+        ],
+      ),
+      const SizedBox(height: AppSpace.md),
+      _balanceBlock(summary, where),
+      if (totals != null && !totals.billTotal.isZero) ...[
+        const SizedBox(height: AppSpace.md),
+        _stats(totals),
+      ],
+      if (data.expenses.incomplete)
+        const Padding(
+          padding: EdgeInsets.only(top: AppSpace.sm),
+          child: SharedNotice(sharedCatchingUpCopy),
         ),
-      const SizedBox(height: AppSpace.sm),
+      const SizedBox(height: AppSpace.md),
+      Wrap(
+        spacing: AppSpace.sm,
+        runSpacing: AppSpace.sm,
+        children: [
+          if (widget.onSettleUp != null)
+            _button(
+              'Settle up',
+              AppIcons.settleUp,
+              widget.onSettleUp!,
+              primary: true,
+              key: const Key('expenses-settle-up'),
+            ),
+          if (data.direct && owedToYou)
+            _button('Remind', AppIcons.remind, _remind),
+          if (widget.onViewSettlements != null)
+            _button('History', AppIcons.history, widget.onViewSettlements!),
+        ],
+      ),
     ];
   }
 
@@ -274,23 +551,7 @@ class _SharedGroupScreenState extends State<SharedGroupScreen> {
     state: data.expenses.state,
     hasItems: data.expenses.items.isNotEmpty,
     nextLabel: data.expenses.nextLabel,
-    header: [
-      if (data.summary case final summary?)
-        SharedSummaryCard(
-          summary: summary,
-          hideAmounts: data.hideAmounts,
-          name: data.direct ? data.title : null,
-        ),
-      if (data.expenses.incomplete) const SharedNotice(sharedCatchingUpCopy),
-      _actions(),
-      if (_open == SharedGroupTab.balances) ..._balances(),
-      if (_open == SharedGroupTab.totals) ..._totals(),
-      if (data.expenses.hasPrevious && widget.onPreviousPage != null)
-        SharedAction(
-          label: 'Previous page',
-          onTap: () => widget.onPreviousPage!(SharedGroupTab.expenses),
-        ),
-    ],
+    header: _header(),
     itemCount: data.expenses.items.length,
     itemBuilder: (_, index) {
       final row = data.expenses.items[index];
@@ -303,13 +564,13 @@ class _SharedGroupScreenState extends State<SharedGroupScreen> {
         children: [
           if (month != null && month != previous)
             Padding(
-              padding: const EdgeInsets.only(top: AppSpace.sm, bottom: 6),
+              padding: const EdgeInsets.only(top: AppSpace.md, bottom: 2),
               child: Text(
                 month,
                 style: BambooFonts.ui(
-                  12,
+                  13,
                   weight: FontWeight.w700,
-                  color: BambooInk.ink500,
+                  color: BambooInk.ink700,
                 ),
               ),
             ),
@@ -344,12 +605,6 @@ class _SharedGroupScreenState extends State<SharedGroupScreen> {
     appBar: AppBar(
       backgroundColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
-      title: Text(
-        data.title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: BambooFonts.heading(17),
-      ),
       actions: [
         if (widget.onMembers != null)
           IconButton(
@@ -407,7 +662,7 @@ class SharedExpenseTile extends StatelessWidget {
         : row.proposed
         ? 'pending'
         : net < 0
-        ? 'you owe'
+        ? 'you borrowed'
         : net > 0
         ? 'you lent'
         : 'settled';
@@ -416,100 +671,109 @@ class SharedExpenseTile extends StatelessWidget {
         : net < 0
         ? BambooInk.clayInk
         : BambooInk.jade;
-    final amount = Money.fromPaise(net.abs());
+    final extra = <String>[
+      if (row.reviewLabel != null)
+        row.proposed ? 'Waiting for approval' : 'Change waiting for approval',
+      ?sharedStateLabel(row.state),
+      if (!row.confidence.isConfirmed) 'Estimated amounts',
+    ];
     return Pressable(
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: AppSpace.sm),
-        padding: const EdgeInsets.all(AppSpace.md),
-        decoration: BoxDecoration(
-          color: BambooInk.glassFillOnPaper,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(color: BambooInk.hairlineOnPaper),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpace.md,
+          vertical: 12,
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 34),
-              child: date == null
-                  ? const SizedBox.shrink()
-                  : Column(
-                      children: [
-                        Text('${date.day}', style: BambooFonts.heading(17)),
-                        Text(
-                          DateFormat.MMM().format(date),
-                          style: BambooFonts.ui(11, color: BambooInk.ink500),
-                        ),
-                      ],
-                    ),
-            ),
-            const SizedBox(width: AppSpace.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    row.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: BambooFonts.heading(15),
-                  ),
-                  Text(
-                    // A shared amount without its full bill is not called the bill.
-                    '$_paidBy ${row.billTotal.format()}'
-                    '${row.totalLabel == 'Bill total' ? '' : ' (shared amount)'}',
-                    style: BambooFonts.ui(12, color: BambooInk.ink700),
-                  ),
-                  if (row.proposed && row.reviewLabel != null)
-                    Text(
-                      'Waiting for approval',
-                      style: BambooFonts.ui(12, color: BambooInk.amber),
-                    )
-                  else if (row.reviewLabel != null)
-                    Text(
-                      'Change waiting for approval',
-                      style: BambooFonts.ui(12, color: BambooInk.amber),
-                    ),
-                  if (sharedStateLabel(row.state) case final label?)
-                    Text(
-                      label,
-                      style: BambooFonts.ui(12, color: BambooInk.ink700),
-                    ),
-                  if (!row.confidence.isConfirmed)
-                    Text(
-                      'Estimated amounts',
-                      style: BambooFonts.ui(12, color: BambooInk.ink700),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(width: AppSpace.sm),
-            Flexible(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    caption,
-                    textAlign: TextAlign.end,
-                    style: BambooFonts.ui(12, color: color),
-                  ),
-                  if (involved && !row.proposed && net != 0)
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerRight,
-                      child: SharedAmount(
-                        amount,
-                        confidence: row.confidence,
-                        hidden: hideAmounts,
-                        color: color,
-                        size: 15,
+        decoration: sharedCardDecoration(),
+        child: LayoutBuilder(
+          builder: (context, constraints) => Row(
+            children: [
+              ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 36),
+                child: date == null
+                    ? const SizedBox.shrink()
+                    : Column(
+                        children: [
+                          Text(
+                            DateFormat.MMM().format(date),
+                            style: BambooFonts.ui(11, color: BambooInk.ink500),
+                          ),
+                          Text('${date.day}', style: BambooFonts.heading(17)),
+                        ],
                       ),
-                    ),
-                ],
               ),
-            ),
-          ],
+              const SizedBox(width: AppSpace.sm),
+              // The merchant's logo when it is a known brand, else the bill
+              // tile: the same marks the expense has everywhere else.
+              MerchantBrandTile(
+                brand: MerchantBrand.forName(row.title),
+                fallback: const PartyAvatar(AvatarKind.bill),
+              ),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      row.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: BambooFonts.ui(15.5, weight: FontWeight.w600),
+                    ),
+                    Text(
+                      // A shared amount without its full bill is not called the
+                      // bill.
+                      '$_paidBy ${row.billTotal.format()}'
+                      '${row.totalLabel == 'Bill total' ? '' : ' (shared amount)'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                    ),
+                    for (final text in extra)
+                      Text(
+                        text,
+                        style: BambooFonts.ui(
+                          12,
+                          color: text.contains('approval')
+                              ? BambooInk.amber
+                              : BambooInk.ink500,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpace.sm),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  minWidth: 76,
+                  maxWidth: constraints.maxWidth * .36,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      caption,
+                      textAlign: TextAlign.end,
+                      style: BambooFonts.ui(12, color: color),
+                    ),
+                    if (involved && !row.proposed && net != 0)
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: SharedAmount(
+                          Money.fromPaise(net.abs()),
+                          confidence: row.confidence,
+                          hidden: hideAmounts,
+                          color: color,
+                          size: 15.5,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -46,4 +46,11 @@ abstract final class AppIcons {
   static const IconData health = LucideIcons300.heartPulse;
   static const IconData entertainment = LucideIcons300.clapperboard;
   static const IconData otherCategory = LucideIcons300.shapes;
+
+  // Splits.
+  static const IconData group = LucideIcons300.usersRound;
+  static const IconData settleUp = LucideIcons300.handCoins;
+  static const IconData remind = LucideIcons300.bellRing;
+  static const IconData history = LucideIcons300.history;
+  static const IconData share = LucideIcons300.chartPie;
 }

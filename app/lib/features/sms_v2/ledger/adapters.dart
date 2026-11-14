@@ -1056,6 +1056,7 @@ class MoneyInItem {
 
 const _unknownPayer = 'Unknown payer';
 const _salaryNoPayer = 'Salary received';
+const _cashbackNoPayer = 'Cashback received';
 const _indiaOffset = Duration(hours: 5, minutes: 30);
 
 /// Who paid: the money fact's counterparty, else the counterparty of another
@@ -1145,9 +1146,14 @@ List<MoneyInItem> moneyIn(
             MoneyInItem(
               eventId: e.eventId,
               kind: kind,
-              // Salary the alert gave no employer for is still salary.
+              // Salary / cashback the alert named no payer for is still that.
               payer:
-                  payer ?? (kind == 'salary' ? _salaryNoPayer : _unknownPayer),
+                  payer ??
+                  switch (kind) {
+                    'salary' => _salaryNoPayer,
+                    'cashback' => _cashbackNoPayer,
+                    _ => _unknownPayer,
+                  },
               amountMinor: e.amountMinor,
               occurredAt: e.occurredAt,
             ),

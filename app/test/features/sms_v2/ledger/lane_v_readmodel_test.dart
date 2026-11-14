@@ -162,6 +162,19 @@ void main() {
       expect(rows.single.payer, 'Salary received');
     });
 
+    test('a bank cashback credit with no payer reads "Cashback received"', () {
+      final a = movement(
+        1,
+        '2026-11-09T10:37:00Z',
+        minor: 12900,
+        direction: 'credit',
+        purpose: 'cashback',
+      );
+      final rows = moneyIn([a], [event(a, EventType.cashback)], from, to);
+      expect(rows.single.kind, 'cashback');
+      expect(rows.single.payer, 'Cashback received');
+    });
+
     test('a payer seen once is not salary until confirmed once', () {
       final a = movement(
         1,
