@@ -154,8 +154,7 @@ class TransactionDetailScreen extends ConsumerWidget {
                             ),
                           ],
                           if (entry.paymentMethod == 'upi' ||
-                              _DetailBodyState._methodLabel(entry) !=
-                                  null) ...[
+                              _DetailBodyState._methodLabel(entry) != null) ...[
                             const SizedBox(height: AppSpace.sm),
                             Text(
                               entry.paymentMethod == 'upi'
@@ -212,12 +211,13 @@ final transactionDetailProvider =
       // stored row carries it (the reader overlays it); a server copy fetched
       // meanwhile is older and must not replace it.
       final cache = await ref.read(responseCacheProvider.future);
-      final editWaiting =
-          cache.financialStore.hasQueuedTransactionEdit(
-            ref.read(cacheNamespaceProvider),
-            id,
-          );
-      final fallback = editWaiting ? (cached ?? fromLoaded) : (fromLoaded ?? cached);
+      final editWaiting = cache.financialStore.hasQueuedTransactionEdit(
+        ref.read(cacheNamespaceProvider),
+        id,
+      );
+      final fallback = editWaiting
+          ? (cached ?? fromLoaded)
+          : (fromLoaded ?? cached);
       if (editWaiting && fallback != null) return fallback;
       if (repo == null || id.startsWith('local-')) return fallback;
       if (fallback != null) {
@@ -226,9 +226,7 @@ final transactionDetailProvider =
         // later invalidate after an edit never replays a pre-edit row).
         final fresh = _freshTransactionDetails.remove(id);
         if (fresh != null) return fresh;
-        if (!ref.read(
-          serverReachabilityProvider,
-        ).shouldSkipBackgroundReads) {
+        if (!ref.read(serverReachabilityProvider).shouldSkipBackgroundReads) {
           var disposed = false;
           ref.onDispose(() => disposed = true);
           unawaited(
@@ -267,14 +265,14 @@ final _freshTransactionDetails = <String, TransactionEntry>{};
 // cached "not found" would then hide it after the import finishes.
 final _capturedSmsProvider = FutureProvider.autoDispose
     .family<SmsIntakeEntry?, String>((ref, sourceKey) async {
-  if (sourceKey.isEmpty) return null;
-  final namespace = ref.read(cacheNamespaceProvider);
-  if (namespace == 'signed-out') return null;
-  final cache = await ref.read(responseCacheProvider.future);
-  return SmsIntakeRepository(
-    cache.financialStore.database,
-  ).capturedById(namespace, sourceKey);
-});
+      if (sourceKey.isEmpty) return null;
+      final namespace = ref.read(cacheNamespaceProvider);
+      if (namespace == 'signed-out') return null;
+      final cache = await ref.read(responseCacheProvider.future);
+      return SmsIntakeRepository(
+        cache.financialStore.database,
+      ).capturedById(namespace, sourceKey);
+    });
 
 /// How many original messages this phone holds for the signed-in account. Shown
 /// only when one is missing, so it is clear whether none are saved at all or
@@ -359,7 +357,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   /// private-split endpoint only knows server UUIDs, so there is nothing to
   /// load (and nothing to fail) for them yet.
   bool get _hasServerId =>
-      !widget.entry.id.startsWith('v2:') && !widget.entry.id.startsWith('local');
+      !widget.entry.id.startsWith('v2:') &&
+      !widget.entry.id.startsWith('local');
 
   Future<void> _loadSplits() async {
     if (!_hasServerId) {
@@ -662,7 +661,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     if (!mounted) return;
     setState(() => _savingSplits = true);
     try {
-      final SplitRepository store = await ref.read(splitRepositoryProvider.future);
+      final SplitRepository store = await ref.read(
+        splitRepositoryProvider.future,
+      );
       if (store.namespace != ref.read(cacheNamespaceProvider) ||
           namespace != ref.read(cacheNamespaceProvider)) {
         throw StateError(
@@ -1076,7 +1077,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(text), action: action));
+      // persist:false — a SnackBar with an action otherwise never times out.
+      ..showSnackBar(
+        SnackBar(content: Text(text), action: action, persist: false),
+      );
   }
 
   /// Applies [action] and stays on this screen: the page only closes when the
@@ -1098,16 +1102,19 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       if (reason != null) {
         // The row is hidden from the lists; this screen keeps its own copy so
         // the badge and the restore button show right away.
-        final note = '[ignored: $reason]${before.note == null ? '' : ' ${before.note}'}';
+        final note =
+            '[ignored: $reason]${before.note == null ? '' : ' ${before.note}'}';
         setState(() {
           _entry = _entry.copyWith(status: 'ignored', note: note);
           _note = note;
         });
       } else if (action == TxnAction.excludeSpend) {
-        setState(() => _entry = _entry.copyWith(
-          excludeFromSpend: true,
-          excludeReason: _excludeReason,
-        ));
+        setState(
+          () => _entry = _entry.copyWith(
+            excludeFromSpend: true,
+            excludeReason: _excludeReason,
+          ),
+        );
       } else {
         ref.invalidate(transactionDetailProvider(widget.entry.id));
       }
@@ -1441,6 +1448,49 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                         ],
                       ),
                     ),
+                  if (isActive && entry.excludeFromSpend)
+                    Container(
+                      key: const Key('not-counted-banner'),
+                      margin: const EdgeInsets.only(bottom: AppSpace.lg),
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpace.md,
+                        AppSpace.xs,
+                        AppSpace.xs,
+                        AppSpace.xs,
+                      ),
+                      decoration: BoxDecoration(
+                        color: BambooInk.paperMuted,
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.block_outlined,
+                            size: 16,
+                            color: BambooInk.ink700,
+                          ),
+                          const SizedBox(width: AppSpace.xs),
+                          Expanded(
+                            child: Text(
+                              "Don't count in spending\n${entry.excludeReason == null ? 'Left out of your spending totals' : leftOutLabel(entry)}",
+                              style: BambooFonts.ui(
+                                12.5,
+                                weight: FontWeight.w600,
+                                color: BambooInk.ink700,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            key: const Key('not-counted-undo'),
+                            style: TextButton.styleFrom(
+                              minimumSize: const Size(0, 48),
+                            ),
+                            onPressed: () => _setSpendExclusion(false),
+                            child: const Text('Undo'),
+                          ),
+                        ],
+                      ),
+                    ),
                   Center(
                     child: Column(
                       children: [
@@ -1733,8 +1783,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                   if (_localSplit?.pending == true) ...[
                     const SizedBox(height: AppSpace.xs),
                     Text(
-                      _localSplit!.error ??
-                          savedOfflineCopy,
+                      _localSplit!.error ?? savedOfflineCopy,
                       style: BambooFonts.ui(
                         12,
                         color: _localSplit!.blocked

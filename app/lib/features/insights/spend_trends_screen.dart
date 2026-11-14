@@ -254,6 +254,13 @@ class _SpendTrendsScreenState extends ConsumerState<SpendTrendsScreen> {
         ),
         actions: [
           IconButton(
+            key: const Key('spending-history'),
+            icon: const Icon(Icons.history_rounded, size: 22),
+            color: BambooInk.ink900,
+            tooltip: 'History',
+            onPressed: () => context.push('/activity/history'),
+          ),
+          IconButton(
             icon: const Icon(Icons.sync_rounded, size: 22),
             color: BambooInk.ink900,
             tooltip: 'Refresh rules and re-sort',

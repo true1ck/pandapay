@@ -56,7 +56,10 @@ class _TransferMarkPanelState extends ConsumerState<TransferMarkPanel> {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(text), action: action));
+      // persist:false — a SnackBar with an action otherwise never times out.
+      ..showSnackBar(
+        SnackBar(content: Text(text), action: action, persist: false),
+      );
   }
 
   /// The list, the totals and this screen all read the same rows.
@@ -189,7 +192,9 @@ class _TransferMarkPanelState extends ConsumerState<TransferMarkPanel> {
           Row(
             children: [
               Icon(
-                isFamily ? Icons.family_restroom_rounded : Icons.swap_horiz_rounded,
+                isFamily
+                    ? Icons.family_restroom_rounded
+                    : Icons.swap_horiz_rounded,
                 size: 20,
                 color: isSelf || isFamily ? BambooInk.ink900 : BambooInk.ink500,
               ),
@@ -197,7 +202,11 @@ class _TransferMarkPanelState extends ConsumerState<TransferMarkPanel> {
               Expanded(
                 child: Text(
                   title,
-                  style: BambooFonts.ui(14.5, color: BambooInk.ink900, weight: FontWeight.w700),
+                  style: BambooFonts.ui(
+                    14.5,
+                    color: BambooInk.ink900,
+                    weight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],
@@ -215,7 +224,11 @@ class _TransferMarkPanelState extends ConsumerState<TransferMarkPanel> {
                 if (isSelf || isFamily)
                   TextButton(
                     onPressed: _unmark,
-                    child: Text(isFamily ? 'Not a family transfer' : 'Not a self transfer'),
+                    child: Text(
+                      isFamily
+                          ? 'Not a family transfer'
+                          : 'Not a self transfer',
+                    ),
                   ),
                 if (!isSelf)
                   OutlinedButton(
@@ -243,7 +256,9 @@ Future<MarkScope?> showTransferScopeSheet({
   required MarkPlan plan,
 }) {
   final family = mark == TransferMark.family;
-  final payee = (plan.payee ?? '').trim().isEmpty ? 'this payee' : plan.payee!.trim();
+  final payee = (plan.payee ?? '').trim().isEmpty
+      ? 'this payee'
+      : plan.payee!.trim();
   final earlier = plan.earlier == 0
       ? 'every payment from now on'
       : plan.earlier == 1
@@ -256,13 +271,20 @@ Future<MarkScope?> showTransferScopeSheet({
     backgroundColor: BambooInk.paper,
     builder: (sheet) => SafeArea(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, AppSpace.lg),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpace.lg,
+          0,
+          AppSpace.lg,
+          AppSpace.lg,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              family ? 'Mark as a family transfer?' : 'Mark as a self transfer?',
+              family
+                  ? 'Mark as a family transfer?'
+                  : 'Mark as a self transfer?',
               style: BambooFonts.heading(18, color: BambooInk.ink900),
             ),
             const SizedBox(height: 4),
@@ -323,10 +345,17 @@ class _ScopeTile extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: BambooFonts.ui(14.5, color: BambooInk.ink900, weight: FontWeight.w700),
+                    style: BambooFonts.ui(
+                      14.5,
+                      color: BambooInk.ink900,
+                      weight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 2),
-                  Text(subtitle, style: BambooFonts.ui(12.5, color: BambooInk.ink700)),
+                  Text(
+                    subtitle,
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink700),
+                  ),
                 ],
               ),
             ),

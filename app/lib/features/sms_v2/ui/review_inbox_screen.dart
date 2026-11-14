@@ -235,6 +235,7 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
                     ? 'Marked as not financial.'
                     : '$n messages marked as not financial.',
               ),
+              persist: false,
               duration: const Duration(seconds: 8),
               action: SnackBarAction(
                 label: 'Undo',

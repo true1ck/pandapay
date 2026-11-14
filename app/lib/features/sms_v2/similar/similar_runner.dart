@@ -60,6 +60,7 @@ Future<void> applySimilarInBackground({
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
       SnackBar(
+        persist: false,
         content: Text(
           result.stopped
               ? 'Stopped after changing ${result.changed}.$waiting'

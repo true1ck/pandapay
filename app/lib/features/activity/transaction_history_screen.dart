@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
@@ -76,57 +77,82 @@ class TransactionHistoryScreen extends ConsumerWidget {
               : ListView.separated(
                   padding: const EdgeInsets.all(AppSpace.lg),
                   itemCount: items.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: AppSpace.sm),
+                  separatorBuilder: (_, _) =>
+                      const SizedBox(height: AppSpace.sm),
                   itemBuilder: (context, i) {
                     final r = items[i];
-                    return Container(
-                      padding: const EdgeInsets.all(AppSpace.md),
-                      decoration: BoxDecoration(
-                        color: BambooInk.glassFillOnPaper,
+                    return Material(
+                      color: BambooInk.glassFillOnPaper,
+                      shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: BambooInk.hairlineOnPaper),
+                        side: const BorderSide(
+                          color: BambooInk.hairlineOnPaper,
+                        ),
                       ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _label(r.action),
-                                  style: BambooFonts.ui(
-                                    14.5,
-                                    weight: FontWeight.w700,
-                                    color: r.isUndone
-                                        ? BambooInk.ink500
-                                        : BambooInk.ink900,
-                                  ),
+                      clipBehavior: Clip.antiAlias,
+                      // Tap opens the payment itself so it can be reviewed
+                      // (and undone) with all its details in view.
+                      child: InkWell(
+                        key: Key('history-open-${r.id}'),
+                        onTap: r.targets.isEmpty
+                            ? null
+                            : () => context.push(
+                                '/activity/${Uri.encodeComponent(r.targets.first)}',
+                              ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppSpace.md),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _label(r.action),
+                                      style: BambooFonts.ui(
+                                        14.5,
+                                        weight: FontWeight.w700,
+                                        color: r.isUndone
+                                            ? BambooInk.ink500
+                                            : BambooInk.ink900,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${r.title} · ₹${(r.amountPaise / 100).toStringAsFixed(r.amountPaise % 100 == 0 ? 0 : 2)}',
+                                      style: BambooFonts.ui(
+                                        13,
+                                        color: BambooInk.ink700,
+                                      ),
+                                    ),
+                                    Text(
+                                      '${r.scope} · ${_when(r.at)}',
+                                      style: BambooFonts.ui(
+                                        12,
+                                        color: BambooInk.ink500,
+                                      ),
+                                    ),
+                                    if (r.isUndone)
+                                      Text(
+                                        'Undone ${_when(r.undoneAt!)}',
+                                        style: BambooFonts.ui(
+                                          12,
+                                          color: BambooInk.ink500,
+                                        ),
+                                      ),
+                                  ],
                                 ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  '${r.title} · ₹${(r.amountPaise / 100).toStringAsFixed(r.amountPaise % 100 == 0 ? 0 : 2)}',
-                                  style: BambooFonts.ui(13, color: BambooInk.ink700),
+                              ),
+                              if (!r.isUndone)
+                                TextButton(
+                                  key: Key('history-undo-${r.id}'),
+                                  onPressed: () => _undo(context, ref, r),
+                                  child: const Text('Undo'),
                                 ),
-                                Text(
-                                  '${r.scope} · ${_when(r.at)}',
-                                  style: BambooFonts.ui(12, color: BambooInk.ink500),
-                                ),
-                                if (r.isUndone)
-                                  Text(
-                                    'Undone ${_when(r.undoneAt!)}',
-                                    style: BambooFonts.ui(12, color: BambooInk.ink500),
-                                  ),
-                              ],
-                            ),
+                            ],
                           ),
-                          if (!r.isUndone)
-                            TextButton(
-                              key: Key('history-undo-${r.id}'),
-                              onPressed: () => _undo(context, ref, r),
-                              child: const Text('Undo'),
-                            ),
-                        ],
+                        ),
                       ),
                     );
                   },
