@@ -29,7 +29,7 @@ function isLoopbackAddress(value) {
 }
 
 function routeFixture(client, { typed = false, transactionApplier } = {}) {
-  const source = fs.readFileSync(require.resolve('../src/index'), 'utf8');
+  const source = fs.readFileSync(require.resolve('../src/index'), 'utf8').replace(/\r\n/g, '\n'); // markers contain a newline; a Windows checkout has CRLF
   const routes = new Map();
   let inspectBeforeRollback;
   let preserveRequestWrites = false;
