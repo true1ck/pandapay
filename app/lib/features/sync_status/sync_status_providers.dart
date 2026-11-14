@@ -1,4 +1,3 @@
-import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -103,32 +102,6 @@ final _serverDownProvider = Provider<bool>(
   (ref) => ref.watch(reachabilityMonitorProvider) == false,
 );
 
-/// Online, reachable and something is waiting. A bool on purpose: the delay
-/// below restarts only when this flips, not on every count change.
-final _waitingToSyncProvider = Provider<bool>(
-  (ref) =>
-      !ref.watch(_radioDownProvider) &&
-      !ref.watch(_serverDownProvider) &&
-      ref.watch(_pendingCountProvider) > 0,
-);
-
-/// True once [_waitingToSyncProvider] has stayed true for
-/// [syncingStripDelay]. A queue that shrinks (3, 2, 1) keeps the state; one
-/// that empties, or an offline spell, drops it at once.
-class _SyncingDelay extends Notifier<bool> {
-  @override
-  bool build() {
-    if (!ref.watch(_waitingToSyncProvider)) return false;
-    final timer = Timer(syncingStripDelay, () => state = true);
-    ref.onDispose(timer.cancel);
-    return false;
-  }
-}
-
-final _syncingDelayProvider = NotifierProvider<_SyncingDelay, bool>(
-  _SyncingDelay.new,
-);
-
 /// The single, narrow input of the strip. Built from `isOnlineProvider`, the
 /// debounced reachability monitor, [QueueRegistry] counts and Split's
 /// `needsAttentionCountProvider`. Signed out (no account), only the first two
@@ -142,11 +115,12 @@ final syncStatusSummaryProvider = Provider<SyncStatusSummary>((ref) {
     mode = SyncStatusMode.offline;
   } else if (ref.watch(_serverDownProvider)) {
     mode = SyncStatusMode.unreachable;
-  } else if (pending > 0 && ref.watch(_syncingDelayProvider)) {
-    mode = SyncStatusMode.syncing;
-  } else if (attention > 0) {
-    mode = SyncStatusMode.needsAttention;
+  // Syncing is background work: never shown. Only "offline" and "can't reach
+  // PandaPay" ever reach the user.
   } else {
+    // Local-first: a change the server refused stays saved on the phone. We
+    // never ask the user to act on it from the strip (attention is still counted
+    // for the details sheet), so this is hidden.
     mode = SyncStatusMode.hidden;
   }
 

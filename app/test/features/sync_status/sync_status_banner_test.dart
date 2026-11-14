@@ -87,7 +87,7 @@ void main() {
 
   group('copy', () {
     test('offline', () {
-      expect(syncStatusLabel(_offline), 'Offline · showing saved data');
+      expect(syncStatusLabel(_offline), 'Offline mode · changes saved on this phone');
       expect(
         syncStatusLabel(
           const SyncStatusSummary(
@@ -95,14 +95,14 @@ void main() {
             pendingCount: 3,
           ),
         ),
-        'Offline · showing saved data · 3 waiting to sync',
+        'Offline mode · changes saved on this phone',
       );
     });
 
     test('unreachable', () {
       expect(
         syncStatusLabel(const SyncStatusSummary(mode: SyncStatusMode.unreachable)),
-        "Can't reach PandaPay · showing saved data",
+        "Can't reach PandaPay · changes saved on this phone",
       );
       expect(
         syncStatusLabel(
@@ -111,7 +111,7 @@ void main() {
             pendingCount: 1,
           ),
         ),
-        "Can't reach PandaPay · showing saved data · 1 waiting to sync",
+        "Can't reach PandaPay · changes saved on this phone",
       );
     });
 
@@ -120,13 +120,13 @@ void main() {
         syncStatusLabel(
           const SyncStatusSummary(mode: SyncStatusMode.syncing, pendingCount: 1),
         ),
-        'Syncing 1 change…',
+        'Syncing…',
       );
       expect(
         syncStatusLabel(
           const SyncStatusSummary(mode: SyncStatusMode.syncing, pendingCount: 4),
         ),
-        'Syncing 4 changes…',
+        'Syncing…',
       );
       expect(
         syncStatusLabel(
@@ -135,7 +135,7 @@ void main() {
             attentionCount: 1,
           ),
         ),
-        '1 change needs attention',
+        'Some changes are saved on this phone',
       );
       expect(
         syncStatusLabel(
@@ -144,7 +144,7 @@ void main() {
             attentionCount: 2,
           ),
         ),
-        '2 changes need attention',
+        'Some changes are saved on this phone',
       );
     });
 
@@ -184,7 +184,7 @@ void main() {
             attentionCount: 2,
           ),
         ),
-        '2 changes need attention. Tap for details',
+        'Some changes are saved on this phone. Tap for details',
       );
     });
   });
@@ -192,7 +192,7 @@ void main() {
   group('states', () {
     testWidgets('offline', (tester) async {
       await _show(tester, _offline);
-      expect(find.text('Offline · showing saved data'), findsOneWidget);
+      expect(find.text('Offline mode · changes saved on this phone'), findsOneWidget);
       expect(find.byKey(_stripKey), findsOneWidget);
     });
 
@@ -202,7 +202,7 @@ void main() {
         const SyncStatusSummary(mode: SyncStatusMode.offline, pendingCount: 3),
       );
       expect(
-        find.text('Offline · showing saved data · 3 waiting to sync'),
+        find.text('Offline mode · changes saved on this phone'),
         findsOneWidget,
       );
     });
@@ -213,7 +213,7 @@ void main() {
         const SyncStatusSummary(mode: SyncStatusMode.unreachable),
       );
       expect(
-        find.text("Can't reach PandaPay · showing saved data"),
+        find.text("Can't reach PandaPay · changes saved on this phone"),
         findsOneWidget,
       );
     });
@@ -223,7 +223,7 @@ void main() {
         tester,
         const SyncStatusSummary(mode: SyncStatusMode.syncing, pendingCount: 2),
       );
-      expect(find.text('Syncing 2 changes…'), findsOneWidget);
+      expect(find.text('Syncing…'), findsOneWidget);
     });
 
     testWidgets('needs attention', (tester) async {
@@ -234,7 +234,7 @@ void main() {
           attentionCount: 3,
         ),
       );
-      expect(find.text('3 changes need attention'), findsOneWidget);
+      expect(find.text('Some changes are saved on this phone'), findsOneWidget);
     });
 
     testWidgets('hidden renders no strip at all', (tester) async {
@@ -442,7 +442,7 @@ void main() {
 
     testWidgets('renders in dark mode', (tester) async {
       await _show(tester, _offline, themeMode: ThemeMode.dark);
-      expect(find.text('Offline · showing saved data'), findsOneWidget);
+      expect(find.text('Offline mode · changes saved on this phone'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });
@@ -529,7 +529,7 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.text('Offline · showing saved data'), findsOneWidget);
+        expect(find.text('Offline mode · changes saved on this phone'), findsOneWidget);
         expect(find.textContaining('waiting to sync'), findsNothing);
       },
     );

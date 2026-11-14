@@ -267,7 +267,7 @@ void main() {
       expect(app.pending, 0);
       expect(app.attention, 1);
       final s = await app.summaryNow();
-      expect(s.mode, SyncStatusMode.needsAttention);
+      expect(s.mode, SyncStatusMode.hidden);
       expect(s.attentionCount, 1);
     });
 

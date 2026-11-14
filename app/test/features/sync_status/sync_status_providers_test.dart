@@ -126,49 +126,15 @@ void main() {
     expect(_read(c).mode, SyncStatusMode.hidden);
   });
 
-  testWidgets('syncing shows only after the queue persisted for 2 seconds', (
+  testWidgets('a waiting queue online is background work: strip stays hidden', (
     tester,
   ) async {
     final c = await _pump(tester, _overrides());
     c.read(_totals.notifier).state = const SyncQueueTotals(pending: 2);
     await _tick(tester);
-    await _tick(tester);
+    await tester.pump(const Duration(seconds: 5));
     expect(_read(c).mode, SyncStatusMode.hidden);
-    await tester.pump(const Duration(milliseconds: 1900));
-    expect(_read(c).mode, SyncStatusMode.hidden);
-    await tester.pump(const Duration(milliseconds: 200));
-    expect(_read(c).mode, SyncStatusMode.syncing);
     expect(_read(c).pendingCount, 2);
-    // A shrinking queue keeps the state; an empty one hides it at once.
-    c.read(_totals.notifier).state = const SyncQueueTotals(pending: 1);
-    await _tick(tester);
-    await _tick(tester);
-    expect(_read(c).mode, SyncStatusMode.syncing);
-    expect(_read(c).pendingCount, 1);
-    c.read(_totals.notifier).state = SyncQueueTotals.zero;
-    await _tick(tester);
-    await _tick(tester);
-    expect(_read(c).mode, SyncStatusMode.hidden);
-  });
-
-  testWidgets('a queue that drains inside 2 seconds never flashes', (
-    tester,
-  ) async {
-    final c = await _pump(tester, _overrides());
-    c.read(_totals.notifier).state = const SyncQueueTotals(pending: 2);
-    await _tick(tester);
-    await tester.pump(const Duration(milliseconds: 1500));
-    c.read(_totals.notifier).state = SyncQueueTotals.zero;
-    await _tick(tester);
-    await tester.pump(const Duration(seconds: 3));
-    expect(_read(c).mode, SyncStatusMode.hidden);
-    // A new burst starts its own 2 second wait.
-    c.read(_totals.notifier).state = const SyncQueueTotals(pending: 1);
-    await _tick(tester);
-    await tester.pump(const Duration(milliseconds: 1500));
-    expect(_read(c).mode, SyncStatusMode.hidden);
-    await tester.pump(const Duration(milliseconds: 600));
-    expect(_read(c).mode, SyncStatusMode.syncing);
   });
 
   testWidgets('parked rows plus shared attention need attention', (
@@ -178,19 +144,7 @@ void main() {
     c.read(_totals.notifier).state = const SyncQueueTotals(attention: 1);
     await _tick(tester);
     await _tick(tester);
-    expect(_read(c).mode, SyncStatusMode.needsAttention);
-    expect(_read(c).attentionCount, 3);
-  });
-
-  testWidgets('syncing outranks needs attention', (tester) async {
-    final c = await _pump(tester, _overrides(shared: 2));
-    c.read(_totals.notifier).state = const SyncQueueTotals(
-      pending: 4,
-      attention: 1,
-    );
-    await _tick(tester);
-    await tester.pump(const Duration(seconds: 3));
-    expect(_read(c).mode, SyncStatusMode.syncing);
+    expect(_read(c).mode, SyncStatusMode.hidden); // local-first: never nag
     expect(_read(c).attentionCount, 3);
   });
 

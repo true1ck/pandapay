@@ -72,13 +72,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Offline · showing saved data'), findsOneWidget);
+    expect(find.text('Offline mode · changes saved on this phone'), findsOneWidget);
     expect(find.textContaining("You're offline"), findsNothing);
     // The strip is not part of HomeScreen.
     expect(
       find.descendant(
         of: find.byType(HomeScreen),
-        matching: find.text('Offline · showing saved data'),
+        matching: find.text('Offline mode · changes saved on this phone'),
       ),
       findsNothing,
     );

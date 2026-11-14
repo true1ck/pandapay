@@ -7,22 +7,17 @@ String _changes(int n) => n == 1 ? '1 change' : '$n changes';
 
 /// The single line shown in the strip.
 String syncStatusLabel(SyncStatusSummary summary) {
-  final waiting = summary.pendingCount > 0
-      ? ' · ${summary.pendingCount} waiting to sync'
-      : '';
   switch (summary.mode) {
     case SyncStatusMode.hidden:
       return '';
     case SyncStatusMode.offline:
-      return 'Offline · showing saved data$waiting';
+      return 'Offline mode · changes saved on this phone';
     case SyncStatusMode.unreachable:
-      return "Can't reach PandaPay · showing saved data$waiting";
+      return "Can't reach PandaPay · changes saved on this phone";
     case SyncStatusMode.syncing:
-      return 'Syncing ${_changes(summary.pendingCount)}…';
+      return 'Syncing…';
     case SyncStatusMode.needsAttention:
-      return summary.attentionCount == 1
-          ? '1 change needs attention'
-          : '${summary.attentionCount} changes need attention';
+      return 'Some changes are saved on this phone';
   }
 }
 
