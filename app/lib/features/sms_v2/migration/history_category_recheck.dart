@@ -116,6 +116,12 @@ class HistoryCategoryRecheck {
   late final _ledger = LedgerStore(db, namespace: namespace);
   late final _queue = OutboxStore(db, namespace: namespace);
 
+  /// A look (dry run) writes nothing, so a purchase and its refund that fall in
+  /// two different chunks would each be found "changed" again by the second
+  /// chunk, which never sees the first one's result. This remembers what was
+  /// already counted so each spend is counted once, as a real pass would.
+  final _countedInLook = <String>{};
+
   // A changed bundle or newly imported event set creates a new explicit job.
   // Runtime downloads do not call this operation.
   Set<String> _pendingMoneyEvents() => {
@@ -487,20 +493,31 @@ class HistoryCategoryRecheck {
       confirmedHistory: categories.confirmedHistory,
       lockedCategories: locked,
     );
+    // The ledger rows each event keeps today (the same events the snapshot was
+    // projected from). They decide below what a pass could actually change.
+    final storedRows = _ledger.forEvents(snapshot.events.map((e) => e.eventId));
     final changed = snapshot.categoryByEvent.entries
         .where((entry) {
           if (customCategories.contains(entry.key)) return false;
+          // An event with no ledger row has nowhere to keep a category, so a
+          // pass can never move it. Counting it made the same spend "would
+          // move" again after every Apply.
+          final rows = storedRows[entry.key];
+          if (rows == null || rows.isEmpty) return false;
           final old = before[entry.key];
           final next = entry.value;
-          return old?.slug != next.slug ||
-              old?.source != next.source ||
-              old?.ruleId != next.ruleId ||
+          if (old?.slug != next.slug || old?.source != next.source) return true;
+          // A refund row keeps its category only as the two wire fields (see
+          // LedgerStore.categoryDecisions): it reads back with no rule id and a
+          // confidence of 1, so those two can never match a fresh decision. They
+          // are not something this pass can store, so they are not a change.
+          if (rows.any((row) => row.isRefundShaped)) return false;
+          return old?.ruleId != next.ruleId ||
               old?.confidence != next.confidence;
         })
         .map((entry) => entry.key)
         .toSet();
     // A category pass may never change money, counts, dates or instrument legs.
-    final storedRows = _ledger.forEvents(snapshot.events.map((e) => e.eventId));
     final projectedRows = <String, List<LedgerEntry>>{};
     for (final entry in snapshot.entries) {
       (projectedRows[entry.eventId] ??= []).add(entry);
@@ -565,8 +582,13 @@ class HistoryCategoryRecheck {
         'observations',
       ]);
     }
+    var counted = changed.length;
+    if (dryRun) {
+      counted = changed.difference(_countedInLook).length;
+      _countedInLook.addAll(changed);
+    }
     return (
-      changed.length,
+      counted,
       targetIds
           .where(
             (id) =>
