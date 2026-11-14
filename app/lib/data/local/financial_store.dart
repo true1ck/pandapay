@@ -959,6 +959,50 @@ class FinancialStore {
     }
   }
 
+  /// WP-C17: the raw row of a synced-state entity and when it was last edited
+  /// (`observed_at`, which every user edit sets to "now"). Null when absent.
+  ({Map<String, dynamic> body, int editedAtMs})? userStateEntity(
+    String ns,
+    String entity,
+    String id,
+  ) {
+    final rows = database.db.select(
+      'SELECT payload, observed_at FROM financial_entities '
+      'WHERE namespace=? AND entity=? AND id=?',
+      [ns, entity, id],
+    );
+    if (rows.isEmpty) return null;
+    return (
+      body: jsonDecode(rows.single['payload'] as String) as Map<String, dynamic>,
+      editedAtMs: rows.single['observed_at'] as int,
+    );
+  }
+
+  /// WP-C17: writes a row pulled from the server, stamped with the edit time
+  /// the server holds. Plain (no pending flag); never queues anything.
+  void applyUserStateEntity(
+    String ns,
+    String entity,
+    String id,
+    Map<String, dynamic> body,
+    int editedAtMs,
+  ) {
+    database.db.execute(
+      'DELETE FROM financial_entities WHERE namespace=? AND entity=? AND id=?',
+      [ns, entity, id],
+    );
+    _upsert(ns, entity, id, body, editedAtMs);
+    _notify(ns, entity: entity == 'bill_card_assignments' ? 'observations' : entity);
+  }
+
+  void removeUserStateEntity(String ns, String entity, String id) {
+    database.db.execute(
+      'DELETE FROM financial_entities WHERE namespace=? AND entity=? AND id=?',
+      [ns, entity, id],
+    );
+    _notify(ns, entity: entity == 'bill_card_assignments' ? 'observations' : entity);
+  }
+
   List<BankAccountSummary> bankAccounts(String ns) {
     final observations = entities(ns, 'sms_observations')
       ..sort(

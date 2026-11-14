@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import '../../app/design/bamboo_components.dart';
+import '../sync_state/user_state_sync.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:uuid/uuid.dart';
@@ -404,12 +405,15 @@ class SubscriptionsScreen extends ConsumerWidget {
     // WP-C7: in SMS-v2 mode the list is built on the phone, so a typed-in
     // subscription is kept on the phone too (local-only; no server row).
     if (kInsightsLocalFirst && ref.read(smsV2ReportingEnabledProvider)) {
-      (await _overridesStore(ref)).addManual(
+      final manualId = (await _overridesStore(ref)).addManual(
         displayName: draft.displayName,
         amountInr: draft.amountInr,
         cadenceDays: draft.cadenceDays,
         nextExpectedOn: draft.nextExpectedOn,
         autopayStatus: draft.autopayStatus,
+      );
+      unawaited(
+        queueUserStatePush(ref, UserStateKind.subscriptionOverride, manualId),
       );
       ref.invalidate(recurringReportProvider);
       if (context.mounted) {
@@ -1799,6 +1803,13 @@ class _SeriesCard extends ConsumerWidget {
             nextExpectedOn: n,
             autopayStatus: autopayStatus,
           );
+          unawaited(
+            queueUserStatePush(
+              ref,
+              UserStateKind.subscriptionOverride,
+              series.id,
+            ),
+          );
         } else {
           await queueCommand(
             ref,
@@ -1868,6 +1879,9 @@ class _SeriesCard extends ConsumerWidget {
       // the same subscription is dropped because it is about to disappear.
       if (kInsightsLocalFirst && isDeviceLocalSeriesId(series.id)) {
         (await _overridesStore(ref)).hide(series.id);
+        unawaited(
+          queueUserStatePush(ref, UserStateKind.subscriptionOverride, series.id),
+        );
       } else {
         await queueCommand(
           ref,

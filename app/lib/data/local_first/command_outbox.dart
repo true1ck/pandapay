@@ -91,7 +91,16 @@ class CommandOutbox {
     required String target,
     Map<String, Object?> payload = const {},
     List<String> cancels = const [],
+    List<String> replaces = const [],
   }) {
+    // Unlike [cancels], these are dropped and this command is still queued:
+    // the latest intent for the target wins whichever kind it is (WP-C17).
+    for (final other in replaces) {
+      _appDb.db.execute(
+        'DELETE FROM command_outbox WHERE namespace=? AND kind=? AND target=?',
+        [namespace, other, target],
+      );
+    }
     for (final opposite in cancels) {
       _appDb.db.execute(
         'DELETE FROM command_outbox WHERE namespace=? AND kind=? AND target=?',

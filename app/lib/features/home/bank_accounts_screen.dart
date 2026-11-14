@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import '../sms_v2/ui/ledger_screens.dart';
 import 'package:flutter/material.dart';
 import '../../app/design/bamboo_components.dart';
@@ -10,6 +12,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
 import '../../data/user_cards_repository.dart' show BankAccountSummary;
+import '../sync_state/user_state_sync.dart';
 
 class BankAccountsScreen extends ConsumerStatefulWidget {
   const BankAccountsScreen({super.key});
@@ -174,6 +177,13 @@ class _BankAccountsScreenState extends ConsumerState<BankAccountsScreen> {
       );
     }
     ref.invalidate(bankAccountSummariesProvider);
+    unawaited(
+      queueUserStatePush(
+        ref,
+        UserStateKind.bankBalance,
+        bankBalanceKey(issuer, account.accountLast4),
+      ),
+    );
     if (mounted) {
       _showMessage(
         value < 0 ? 'Using the latest SMS balance' : 'Balance updated',
