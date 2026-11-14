@@ -1,3 +1,4 @@
+import '../../data/connectivity/server_backoff.dart';
 import 'invalidation_coalescer.dart';
 import 'dart:async';
 import 'dart:io' show Platform;
@@ -91,7 +92,13 @@ class SyncEngine {
   int _isolationRequests = 0;
 
   SyncEngine(this._ref) {
+    // The server asked every queue to wait (429/503 Retry-After); retry as
+    // soon as that pause ends instead of waiting for another trigger.
+    final resumeSub = ServerBackoff.process.resumed.listen(
+      (_) => unawaited(sync()),
+    );
     _ref.onDispose(() {
+      resumeSub.cancel();
       _continuation?.cancel();
       _invalidations.dispose();
     });
@@ -124,6 +131,7 @@ class SyncEngine {
 
   Future<SyncResult> _sync() async {
     if (_running) return SyncResult.idle;
+    if (ServerBackoff.process.isPaused) return SyncResult.idle;
     final api = _ref.read(syncApiProvider);
     if (api == null) return SyncResult.idle;
 

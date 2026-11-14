@@ -481,7 +481,7 @@ class TransactionOutboxRepository {
         );
       case QueueFailure.retryable:
         final attempts = entry.attempts + 1;
-        final next = _now().add(queueBackoff(attempts));
+        final next = _now().add(queueBackoffJittered(attempts));
         _appDb.db.execute(
           'UPDATE transaction_outbox_entries '
           'SET last_error = ?, attempts = ?, next_attempt_at = ? WHERE id = ?',

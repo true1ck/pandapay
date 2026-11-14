@@ -603,7 +603,7 @@ class TransactionTagsRepository extends ChangeNotifier {
           [
             attempts,
             lastError,
-            _now().add(queueBackoff(attempts)).millisecondsSinceEpoch,
+            _now().add(queueBackoffJittered(attempts)).millisecondsSinceEpoch,
             namespace,
             row['mutation_id'],
           ],

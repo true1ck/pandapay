@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:http/http.dart' as http;
 
@@ -89,4 +90,15 @@ Duration queueBackoff(
   final shift = attempts - 1 > 20 ? 20 : attempts - 1;
   final delay = base * (1 << shift);
   return delay > max ? max : delay;
+}
+
+final _jitterRandom = Random();
+
+/// [queueBackoff] plus 0-20 % random extra, so many phones that failed together
+/// (a server outage or a deploy) do not all retry on the same second.
+Duration queueBackoffJittered(int attempts, {Random? random}) {
+  final base = queueBackoff(attempts);
+  final extra = (base.inMilliseconds * 0.2 * (random ?? _jitterRandom).nextDouble())
+      .round();
+  return base + Duration(milliseconds: extra);
 }

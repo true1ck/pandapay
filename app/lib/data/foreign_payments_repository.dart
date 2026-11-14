@@ -759,7 +759,7 @@ class ForeignPaymentsRepository {
                 [
                   lastError,
                   attempts,
-                  _now().add(queueBackoff(attempts)).millisecondsSinceEpoch,
+                  _now().add(queueBackoffJittered(attempts)).millisecondsSinceEpoch,
                   namespace,
                   row['seq'],
                 ],

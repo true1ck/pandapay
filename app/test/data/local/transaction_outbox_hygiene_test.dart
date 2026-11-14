@@ -136,22 +136,29 @@ void main() {
       expect(row['attempts'], 1);
       expect(row['parked'], 0);
       expect(
-        row['next_attempt_at'],
+      row['next_attempt_at'] as int,
+      inInclusiveRange(
         clock.add(const Duration(seconds: 30)).millisecondsSinceEpoch,
-      );
+        clock.add(const Duration(seconds: 36)).millisecondsSinceEpoch,
+      ),
+      reason: '30 s plus up to 20 % jitter',
+    );
       // Not due yet: neither pending() nor another flush touches it.
       expect(await outbox.pending(), isEmpty);
       expect(await outbox.flush(server), 0);
       expect(server.attempted, ['a']);
 
-      clock = clock.add(const Duration(seconds: 31));
+      clock = clock.add(const Duration(seconds: 37));
       expect(await outbox.pending(), hasLength(1));
       await outbox.flush(server);
       row = _row(appDb, 'a');
       expect(row['attempts'], 2);
       expect(
-        row['next_attempt_at'],
-        clock.add(const Duration(minutes: 1)).millisecondsSinceEpoch,
+        row['next_attempt_at'] as int,
+        inInclusiveRange(
+          clock.add(const Duration(minutes: 1)).millisecondsSinceEpoch,
+          clock.add(const Duration(seconds: 72)).millisecondsSinceEpoch,
+        ),
       );
     });
 
