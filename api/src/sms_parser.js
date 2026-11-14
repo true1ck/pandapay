@@ -1285,9 +1285,26 @@ function senderMatches(senderPattern, sender) {
  * @returns {{ok: true, fields: {amountInr?: number, merchant?: string, last4?: string, date?: string}}
  *          | {ok: false, reason: string}}
  */
-function parseSms(pattern, sms) {
-  const amountReview = paymentReviewReason(sms?.body);
-  if (amountReview) return { ok: false, reason: amountReview };
+// A configured regex is compiled once per distinct source, not once per message
+// per pattern. Non-global patterns are stateless for exec(), so sharing is safe.
+// ponytail: unbounded by distinct patterns (rows in parser_patterns); cap it if that ever grows past thousands.
+const patternRegexCache = new Map();
+function compiledPattern(source) {
+  let re = patternRegexCache.get(source);
+  if (re === undefined) {
+    try { re = new RegExp(source); } catch (_) { re = null; }
+    patternRegexCache.set(source, re);
+  }
+  return re;
+}
+
+// `bodyGuardsPassed`: the caller already ran the amount-evidence and OTP guards on this
+// exact body (parseSmsAgainstPatterns does, once, before looping every pattern).
+function parseSms(pattern, sms, bodyGuardsPassed = false) {
+  if (!bodyGuardsPassed) {
+    const amountReview = paymentReviewReason(sms?.body);
+    if (amountReview) return { ok: false, reason: amountReview };
+  }
   if (!pattern || typeof pattern.regex !== 'string' || !pattern.regex) {
     return { ok: false, reason: 'invalid_pattern' };
   }
@@ -1297,19 +1314,15 @@ function parseSms(pattern, sms) {
   if (sms.body.length > MAX_MESSAGE_LENGTH) {
     return { ok: false, reason: 'body_too_long' };
   }
-  if (isSecurityOrOtpMessage(sms.body)) {
+  if (!bodyGuardsPassed && isSecurityOrOtpMessage(sms.body)) {
     return { ok: false, reason: 'security_message' };
   }
   if (!senderMatches(pattern.sender_pattern, sms.sender)) {
     return { ok: false, reason: 'sender_mismatch' };
   }
 
-  let re;
-  try {
-    re = new RegExp(pattern.regex);
-  } catch (err) {
-    return { ok: false, reason: 'invalid_regex' };
-  }
+  const re = compiledPattern(pattern.regex);
+  if (!re) return { ok: false, reason: 'invalid_regex' };
 
   const match = re.exec(sms.body);
   if (!match) {
@@ -1571,7 +1584,7 @@ function parseSmsAgainstPatterns(patterns, sms) {
   let lastReason = configuredPatterns.length > 0 ? 'no_regex_match' : 'no_transaction_match';
   const matches = [];
   for (const pattern of configuredPatterns) {
-    const result = parseSms(pattern, sms);
+    const result = parseSms(pattern, sms, true);
     if (result.ok) {
       matches.push({
         ...result,

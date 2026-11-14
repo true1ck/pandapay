@@ -344,6 +344,20 @@ async function spendByMerchant(client, userId, { start, end }, limit = 15) {
   }));
 }
 
+// The account/card suffix a transaction's latest SMS observation carries. One lookup per row; this used
+// to be up to four separate correlated subqueries per row (one per column and per use of the column).
+// Skipped for rows that already carry both facts themselves.
+const LATEST_SMS_OBSERVATION_JOIN = `LEFT JOIN LATERAL (
+           SELECT o.metadata->>'accountLast4' AS account_last4,
+                  o.metadata->>'cardLast4' AS card_last4
+             FROM transaction_observations o
+            WHERE o.transaction_id = t.id
+              AND o.source IN ('sms', 'sms_bulk')
+              AND (t.source_account_last4 IS NULL OR t.user_card_id IS NULL)
+            ORDER BY o.observed_at DESC
+            LIMIT 1
+         ) obs ON true`;
+
 /**
  * Spend and rewards split by card, plus the EFFECTIVE rate each card
  * actually paid over the period.
@@ -388,27 +402,15 @@ async function spendByCard(client, userId, { start, end }) {
               cp.name AS card_name, uc.nickname AS card_nickname,
               COALESCE(uc.annual_fee_override_inr, cp.annual_fee_inr) AS annual_fee_inr,
               t.amount_inr, t.expected_value_inr,
-              COALESCE(t.source_account_last4,
-                (SELECT o.metadata->>'accountLast4'
-                   FROM transaction_observations o
-                  WHERE o.transaction_id = t.id
-                    AND o.source IN ('sms', 'sms_bulk')
-                  ORDER BY o.observed_at DESC
-                  LIMIT 1)) AS account_last4,
-              CASE WHEN t.user_card_id IS NULL THEN
-                (SELECT o.metadata->>'cardLast4'
-                   FROM transaction_observations o
-                  WHERE o.transaction_id = t.id
-                    AND o.source IN ('sms', 'sms_bulk')
-                  ORDER BY o.observed_at DESC
-                  LIMIT 1)
-              END AS card_last4
+              COALESCE(t.source_account_last4, obs.account_last4) AS account_last4,
+              CASE WHEN t.user_card_id IS NULL THEN obs.card_last4 END AS card_last4
          FROM transactions t
          LEFT JOIN unique_replacement_cards replacement
            ON replacement.archived_card_id = t.user_card_id
          LEFT JOIN user_cards uc
            ON uc.id = COALESCE(replacement.active_card_id, t.user_card_id)
          LEFT JOIN card_products cp ON cp.id = uc.card_product_id
+${LATEST_SMS_OBSERVATION_JOIN}
         WHERE t.profile_id = $1 AND t.status = 'active' AND t.entry_kind = 'spend'
         AND NOT t.exclude_from_spend
           AND t.amount_inr > 0
@@ -517,27 +519,15 @@ async function spendByCardCategory(client, userId, { start, end }) {
               COALESCE(t.category_id, ucat.parent_user_category_id, t.user_category_id) AS category_id,
               COALESCE(parent_sc.name, parent_uc.name, sc.name, ucat.name) AS category_name,
               t.amount_inr,
-              COALESCE(t.source_account_last4,
-                (SELECT o.metadata->>'accountLast4'
-                   FROM transaction_observations o
-                  WHERE o.transaction_id = t.id
-                    AND o.source IN ('sms', 'sms_bulk')
-                  ORDER BY o.observed_at DESC
-                  LIMIT 1)) AS account_last4,
-              CASE WHEN t.user_card_id IS NULL THEN
-                (SELECT o.metadata->>'cardLast4'
-                   FROM transaction_observations o
-                  WHERE o.transaction_id = t.id
-                    AND o.source IN ('sms', 'sms_bulk')
-                  ORDER BY o.observed_at DESC
-                  LIMIT 1)
-              END AS card_last4
+              COALESCE(t.source_account_last4, obs.account_last4) AS account_last4,
+              CASE WHEN t.user_card_id IS NULL THEN obs.card_last4 END AS card_last4
          FROM transactions t
          LEFT JOIN unique_replacement_cards replacement
            ON replacement.archived_card_id = t.user_card_id
          LEFT JOIN user_cards uc
            ON uc.id = COALESCE(replacement.active_card_id, t.user_card_id)
          LEFT JOIN card_products cp ON cp.id = uc.card_product_id
+${LATEST_SMS_OBSERVATION_JOIN}
          LEFT JOIN spend_categories sc ON sc.id = t.category_id
          LEFT JOIN user_categories ucat ON ucat.id = t.user_category_id AND ucat.profile_id = t.profile_id
          LEFT JOIN spend_categories parent_sc ON parent_sc.id = ucat.parent_category_id

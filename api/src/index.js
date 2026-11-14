@@ -4724,67 +4724,94 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, (client) =>
       client.query(
-        `WITH account_observations AS (
-           SELECT o.metadata->>'accountLast4' AS account_last4,
+        `WITH sms_obs AS MATERIALIZED (
+           -- Everything below reads the same SMS observations. Pull each JSON
+           -- field out once here instead of once per use, per row.
+           SELECT o.transaction_id, o.observed_at,
+                  o.metadata->>'accountLast4' AS account_last4,
+                  o.metadata->>'cardLast4' AS card_last4,
                   o.metadata->>'patternIssuerId' AS issuer_id,
-                  -- DLT channel prefixes ("AD-"/"AX-") and suffixes ("-S")
-                  -- are transport metadata, not account identity. Fall back
-                  -- to the channel-stripped bank code so legacy rows without
-                  -- an issuer id still collapse into one account.
-                  COALESCE(
-                    o.metadata->>'accountIdentity',
-                    o.metadata->>'patternIssuerId',
-                    NULLIF(regexp_replace(
-                             regexp_replace(
-                               lower(o.metadata->>'senderBank'),
-                               '^[a-z0-9]{2}-', ''
-                             ),
-                             '[-][a-z]$', ''
-                           ), ''),
-                    'legacy:' || (o.metadata->>'accountLast4')
-                  ) AS account_identity,
-                  NULLIF(o.metadata->>'senderBank', '') AS sender_bank,
-                  CASE
-                    WHEN o.metadata->>'availableBalanceInr' ~ '^[0-9]+(\\.[0-9]+)?$'
-                    THEN (o.metadata->>'availableBalanceInr')::numeric
-                    ELSE NULL
-                  END AS available_balance_inr,
-                  o.observed_at,
-                  'sms' AS source_kind
+                  o.metadata->>'accountIdentity' AS explicit_identity,
+                  o.metadata->>'senderBank' AS sender_bank_raw,
+                  o.metadata->>'availableBalanceInr' AS balance_raw,
+                  o.metadata->>'isBankAccount' AS is_bank_account
              FROM transaction_observations o
-             JOIN transactions t
-               ON t.id = o.transaction_id
-              AND t.profile_id = o.profile_id
-             LEFT JOIN issuers oi
-               ON oi.id::text = o.metadata->>'patternIssuerId'
-             WHERE o.profile_id = $1
-               AND t.status = 'active'
-               AND o.source IN ('sms', 'sms_bulk')
-               AND o.metadata->>'accountLast4' ~ '^[0-9]{4}$'
-               AND t.instrument IN ('upi_bank', 'debit_card')
-               AND t.entry_kind <> 'investment'
-               AND COALESCE(o.metadata->>'isBankAccount', 'legacy') <> 'false'
-               -- UPI-platform senders (SBIUPI & friends) quote the
-               -- counterparty's masked account, never the user's own; they
-               -- must not mint account rows regardless of parser verdict.
-               AND lower(coalesce(o.metadata->>'senderBank', '')) !~ 'upi'
-               -- Axio Pay Later identifiers are lending liabilities, not
-               -- deposit-bank accounts. Keep historical true verdicts out.
-               AND lower(coalesce(o.metadata->>'senderBank', '')) !~ 'axio'
-               AND (
-                o.metadata->>'isBankAccount' = 'true'
+            WHERE o.profile_id = $1
+              AND o.source IN ('sms', 'sms_bulk')
+         ), account_verdicts AS (
+           -- Whether a sender looks like a deposit bank depends only on these
+           -- three values. A profile has a handful of distinct combinations but
+           -- thousands of observations, so decide each combination once rather
+           -- than running ~20 regexes on every observation row.
+           SELECT k.sender_key, k.bank_flag, k.issuer_key
+             FROM (
+               SELECT DISTINCT lower(coalesce(sender_bank_raw, '')) AS sender_key,
+                      coalesce(is_bank_account, '~null') AS bank_flag,
+                      coalesce(issuer_id, '') AS issuer_key
+                 FROM sms_obs
+             ) k
+             LEFT JOIN issuers oi ON oi.id::text = NULLIF(k.issuer_key, '')
+            WHERE k.bank_flag <> 'false'
+              -- UPI-platform senders (SBIUPI & friends) quote the
+              -- counterparty's masked account, never the user's own; they
+              -- must not mint account rows regardless of parser verdict.
+              AND k.sender_key !~ 'upi'
+              -- Axio Pay Later identifiers are lending liabilities, not
+              -- deposit-bank accounts. Keep historical true verdicts out.
+              AND k.sender_key !~ 'axio'
+              AND (
+                k.bank_flag = 'true'
                 OR (
-                  o.metadata->>'isBankAccount' IS NULL
-                  AND lower(coalesce(o.metadata->>'senderBank', '')) !~ '(lic|licind|dhan|dhanhq|paytm[-_ ]*money|trading|demat|broker|mutual|investment|portfolio|groww|zerodha|upstox|angel)'
+                  k.bank_flag = '~null'
+                  AND k.sender_key !~ '(lic|licind|dhan|dhanhq|paytm[-_ ]*money|trading|demat|broker|mutual|investment|portfolio|groww|zerodha|upstox|angel)'
                   AND lower(coalesce(oi.slug, '')) !~ '(lic|licind|dhan|dhanhq|paytm[-_ ]*money|trading|demat|broker|mutual|investment|portfolio|groww|zerodha|upstox|angel)'
                   AND lower(coalesce(oi.name, '')) !~ '(lic|licind|dhan|dhanhq|paytm[-_ ]*money|trading|demat|broker|mutual|investment|portfolio|groww|zerodha|upstox|angel)'
                   AND (
-                    lower(coalesce(o.metadata->>'senderBank', '')) ~ '(bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|eqt|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb)'
+                    k.sender_key ~ '(bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|eqt|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb)'
                     OR lower(coalesce(oi.slug, '')) ~ '(bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|eqt|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb)'
                     OR lower(coalesce(oi.name, '')) ~ '(bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|eqt|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb)'
                   )
                 )
               )
+         ), account_observations AS (
+           SELECT so.account_last4,
+                  so.issuer_id,
+                  -- DLT channel prefixes ("AD-"/"AX-") and suffixes ("-S")
+                  -- are transport metadata, not account identity. Fall back
+                  -- to the channel-stripped bank code so legacy rows without
+                  -- an issuer id still collapse into one account.
+                  COALESCE(
+                    so.explicit_identity,
+                    so.issuer_id,
+                    NULLIF(regexp_replace(
+                             regexp_replace(
+                               lower(so.sender_bank_raw),
+                               '^[a-z0-9]{2}-', ''
+                             ),
+                             '[-][a-z]$', ''
+                           ), ''),
+                    'legacy:' || so.account_last4
+                  ) AS account_identity,
+                  NULLIF(so.sender_bank_raw, '') AS sender_bank,
+                  CASE
+                    WHEN so.balance_raw ~ '^[0-9]+(\\.[0-9]+)?$'
+                    THEN so.balance_raw::numeric
+                    ELSE NULL
+                  END AS available_balance_inr,
+                  so.observed_at,
+                  'sms' AS source_kind
+             FROM sms_obs so
+             JOIN transactions t
+               ON t.id = so.transaction_id
+              AND t.profile_id = $1
+             JOIN account_verdicts v
+               ON v.sender_key = lower(coalesce(so.sender_bank_raw, ''))
+              AND v.bank_flag = coalesce(so.is_bank_account, '~null')
+              AND v.issuer_key = coalesce(so.issuer_id, '')
+            WHERE t.status = 'active'
+              AND so.account_last4 ~ '^[0-9]{4}$'
+              AND t.instrument IN ('upi_bank', 'debit_card')
+              AND t.entry_kind <> 'investment'
          ), transaction_accounts AS (
            SELECT t.source_account_last4 AS account_last4,
                   NULL::text AS issuer_id,
@@ -4808,30 +4835,13 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
               )
               AND EXISTS (
                 SELECT 1
-                  FROM transaction_observations bo
-                  LEFT JOIN issuers bi
-                    ON bi.id::text = bo.metadata->>'patternIssuerId'
-                 WHERE bo.profile_id = t.profile_id
-                   AND bo.transaction_id = t.id
-                   AND bo.source IN ('sms', 'sms_bulk')
-                    AND bo.metadata->>'accountLast4' = t.source_account_last4
-                    AND COALESCE(bo.metadata->>'isBankAccount', 'legacy') <> 'false'
-                    AND lower(coalesce(bo.metadata->>'senderBank', '')) !~ 'upi'
-                    AND lower(coalesce(bo.metadata->>'senderBank', '')) !~ 'axio'
-                    AND (
-                     bo.metadata->>'isBankAccount' = 'true'
-                     OR (
-                       bo.metadata->>'isBankAccount' IS NULL
-                       AND lower(coalesce(bo.metadata->>'senderBank', '')) !~ '(lic|licind|dhan|dhanhq|paytm[-_ ]*money|trading|demat|broker|mutual|investment|portfolio|groww|zerodha|upstox|angel)'
-                       AND lower(coalesce(bi.slug, '')) !~ '(lic|licind|dhan|dhanhq|paytm[-_ ]*money|trading|demat|broker|mutual|investment|portfolio|groww|zerodha|upstox|angel)'
-                       AND lower(coalesce(bi.name, '')) !~ '(lic|licind|dhan|dhanhq|paytm[-_ ]*money|trading|demat|broker|mutual|investment|portfolio|groww|zerodha|upstox|angel)'
-                       AND (
-                         lower(coalesce(bo.metadata->>'senderBank', '')) ~ '(bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|eqt|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb)'
-                         OR lower(coalesce(bi.slug, '')) ~ '(bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|eqt|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb)'
-                         OR lower(coalesce(bi.name, '')) ~ '(bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|eqt|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb)'
-                       )
-                     )
-                   )
+                  FROM sms_obs bo
+                  JOIN account_verdicts bv
+                    ON bv.sender_key = lower(coalesce(bo.sender_bank_raw, ''))
+                   AND bv.bank_flag = coalesce(bo.is_bank_account, '~null')
+                   AND bv.issuer_key = coalesce(bo.issuer_id, '')
+                 WHERE bo.transaction_id = t.id
+                   AND bo.account_last4 = t.source_account_last4
               )
             GROUP BY t.source_account_last4
          ), account_sources AS (
@@ -4886,10 +4896,8 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
              WHERE uc.profile_id = $1 AND uc.last4 = r.account_last4
           )
             AND NOT EXISTS (
-              SELECT 1 FROM transaction_observations card_o
-               WHERE card_o.profile_id = $1
-                 AND card_o.source IN ('sms', 'sms_bulk')
-                 AND card_o.metadata->>'cardLast4' = r.account_last4
+              SELECT 1 FROM sms_obs card_o
+               WHERE card_o.card_last4 = r.account_last4
             )
           ORDER BY r.account_last4, r.account_identity`,
         [req.userId],
