@@ -3279,6 +3279,18 @@ Future<void> _goneIsDone(Future<void> Function() call) => goneIsDone(call);
 /// has expired while the app stays open.
 const outboxDueRecheckInterval = Duration(minutes: 5);
 
+/// When [outboxFlushProvider] should look again while work remains: soon after
+/// a pass that delivered something, else at the earliest backoff expiry
+/// ([nextDue], so a short Retry-After is not waited out five minutes), and never
+/// later than [outboxDueRecheckInterval]. One bounded timer, no polling.
+Duration outboxRecheckDelay({required bool progressed, Duration? nextDue}) {
+  if (progressed) return outboxContinueInterval;
+  if (nextDue == null || nextDue >= outboxDueRecheckInterval) {
+    return outboxDueRecheckInterval;
+  }
+  return nextDue + const Duration(milliseconds: 250);
+}
+
 /// Pause between two passes of one reconnect flush while the previous pass still
 /// delivered something.
 const outboxContinueInterval = Duration(milliseconds: 250);
@@ -3386,11 +3398,17 @@ final outboxFlushProvider = Provider<void>((ref) {
       // Nothing else triggers a flush between a failure and the next resume or
       // reconnect, so look again for commands whose backoff has run out. A
       // flush that finds nothing due does no network work.
+      Duration? nextDue;
+      if (workRemains && !disposed) {
+        try {
+          nextDue = (await ref.read(commandOutboxProvider.future)).nextDueIn();
+        } catch (_) {}
+      }
       dueTimer?.cancel();
       dueTimer = null;
       if (workRemains && !disposed) {
         dueTimer = Timer(
-          progressed ? outboxContinueInterval : outboxDueRecheckInterval,
+          outboxRecheckDelay(progressed: progressed, nextDue: nextDue),
           () => unawaited(flushRef()),
         );
       }

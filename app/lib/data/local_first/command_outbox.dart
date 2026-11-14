@@ -168,6 +168,21 @@ class CommandOutbox {
       ),
   ];
 
+  /// How long until the earliest backed-off command is due; null when none is
+  /// waiting out a backoff (nothing queued, or everything is already due).
+  Duration? nextDueIn() {
+    final at = _appDb.db
+        .select(
+          'SELECT MIN(next_attempt_at) AS at FROM command_outbox '
+          'WHERE namespace=? AND parked=0 AND next_attempt_at>?',
+          [namespace, _now().millisecondsSinceEpoch],
+        )
+        .first['at'] as int?;
+    return at == null
+        ? null
+        : Duration(milliseconds: at - _now().millisecondsSinceEpoch);
+  }
+
   /// Makes every unparked command due again. Called when the connection
   /// returns: a backoff was about a server problem that may have passed, and
   /// time spent offline should not be waited out a second time.

@@ -78,6 +78,25 @@ void main() {
     expect(outbox.pendingCount, 0);
   });
 
+  test('nextDueIn names the earliest backoff expiry (fake time), null when idle',
+      () async {
+    expect(outbox.nextDueIn(), isNull, reason: 'empty queue: nothing to wake for');
+    outbox.enqueue(kind: 'ignore', target: 't1');
+    expect(outbox.nextDueIn(), isNull, reason: 'already due: not a backoff');
+
+    final failing = {'ignore': (Map<String, Object?> p) async => throw ApiException('down')};
+    await outbox.flush(failing);
+    expect(outbox.nextDueIn(), const Duration(seconds: 30));
+
+    clock = clock.add(const Duration(seconds: 12));
+    expect(outbox.nextDueIn(), const Duration(seconds: 18));
+
+    clock = clock.add(const Duration(seconds: 18));
+    expect(outbox.nextDueIn(), isNull, reason: 'due now');
+    expect(await outbox.flush({'ignore': (p) async {}}), 1);
+    expect(outbox.nextDueIn(), isNull);
+  });
+
   test('a server refusal is parked with its error and not retried', () async {
     outbox.enqueue(kind: 'ignore', target: 't1');
     var attempts = 0;
