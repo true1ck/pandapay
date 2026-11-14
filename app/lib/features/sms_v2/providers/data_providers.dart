@@ -10,6 +10,7 @@ import '../../../app/providers.dart' as app;
 import '../../../data/local/sms_intake_repository.dart';
 import '../../../data/local/sms_learning_feedback.dart';
 import '../ledger/providers.dart';
+import '../personal/owner_identity_store.dart';
 import '../ledger/reports.dart' show LedgerReadModel;
 import '../storage/schema.dart';
 import '../storage/fact_store.dart';
@@ -22,7 +23,35 @@ final instrumentsProvider = FutureProvider<List<Instrument>>((ref) async {
   return ref.watch(liveInstrumentsProvider.future);
 });
 
-final eventsProvider = FutureProvider<List<Event>>((ref) async {
+/// Accounts that look like someone else's ([notMineSuggestions]). Only a hint
+/// on the "Accounts and cards we found" screen; nothing is rejected by it.
+final notMineSuggestionsProvider = FutureProvider<Set<String>>((ref) async {
+  final instruments = await ref.watch(instrumentsProvider.future);
+  if (!instruments.any(
+    (i) =>
+        i.kind == InstrumentKind.bankAccount &&
+        i.status == InstrumentStatus.detected,
+  )) {
+    return const {};
+  }
+  final namespace = ref.watch(app.cacheNamespaceProvider);
+  final cache = await ref.watch(app.responseCacheProvider.future);
+  final events = await ref.watch(eventsProvider.future);
+  final database = cache.financialStore.database;
+  final facts = FactStore(database.db, namespace: namespace);
+  return notMineSuggestions(
+    instruments: instruments,
+    facts: facts.movementsSince(DateTime.utc(1900)),
+    instrumentIdByFactId: facts.instrumentIdsSince(DateTime.utc(1900)),
+    events: events,
+    identity: OwnerIdentityStore(
+      database.db,
+      namespace: namespace,
+    ).identity(profileName: database.profileDisplayName(namespace)),
+  );
+});
+
+final eventsProvider =FutureProvider<List<Event>>((ref) async {
   return (await ref.watch(smsV2LedgerReadModelProvider.future)).ledger.events;
 });
 

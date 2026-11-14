@@ -728,6 +728,11 @@ class _Run {
     final ft = other.match.factType;
     if (ft != null && ft != FactType.movement) return [range(byType[ft])];
     final tol = rule.join.amountTolerancePct ?? 0;
+    if (kind == LinkRuleKind.cardBill && tol == 0 && a != null) {
+      // Exact amount first (as always), then a bill app that rounds or adds a
+      // small fee: the amount test in _amountOk allows the small gap.
+      return [byAmount[a] ?? const [], range(byType[FactType.movement])];
+    }
     if (tol == 0 && a != null) return [byAmount[a] ?? const []];
     if (kind == LinkRuleKind.refund) {
       if (i == null) return const []; // a refund needs its card or account
@@ -786,9 +791,36 @@ class _Run {
       if (_isReference(role)) return a >= b;
       return true;
     }
-    if (tol == 0) return a == b;
+    if (tol == 0) {
+      if (a == b) return true;
+      if (kinds[rule] != LinkRuleKind.cardBill) return false;
+      // A bill app (CRED, CHEQ, Kiwi...) with coins or discounts: the bank
+      // debit is at most the card credit, by any gap. Anything else: 25 rupees.
+      final (d, c) = role == LegRole.debitLeg ? (f, g) : (g, f);
+      if (_isBillApp(d) && (_principal(d) ?? 0) <= (_principal(c) ?? 0)) {
+        return true;
+      }
+      return _nearBill(a, b);
+    }
     return (a - b).abs() * 100 <= (a > b ? a : b) * tol;
   }
+
+  /// A card-payment debit to a named bill-pay app: it names no card number.
+  /// ponytail: the payee list lives in counterparty_purposes.json and has
+  /// already given the debit its purpose; this only checks the shape.
+  bool _isBillApp(Fact d) {
+    final c = d.counterparty;
+    return d is MovementFact &&
+        d.purpose == MovementPurpose.cardPayment &&
+        c != null &&
+        c.accountMask == null &&
+        (c.name ?? c.vpa ?? '').trim().isNotEmpty;
+  }
+
+  /// A card bill paid through an app: at most 25 rupees apart.
+  /// ponytail: no percentage; 0.5% of a large bill is 100+ rupees and made
+  /// look-alike bills pair in an order-dependent way.
+  static bool _nearBill(int a, int b) => (a - b).abs() <= 2500;
 
   static bool _isReference(LegRole r) =>
       r == LegRole.holdPlaced || r == LegRole.original;
@@ -957,6 +989,13 @@ class _Run {
       final fi = _instId(f);
       final gi = _instId(g);
       if (fi != null && gi != null && fi != gi) continue;
+      // Days apart (LINK-DUP-CARD-PAYMENT-3D): only on the same known card.
+      if (rule.join.windowHours > 24 &&
+          moneyLeg.match.instrumentKind?.contains(InstrumentKind.creditCard) ==
+              true &&
+          (fi == null || fi != gi)) {
+        continue;
+      }
       final shared = _sharesRef(f, g);
       if (!shared && _conflictingRefs(f, g)) continue;
       // The same template on the same account twice is two real payments.
@@ -993,6 +1032,16 @@ class _Run {
     if (a != null) step((c) => _principal(c.fact) == a);
     final i = _instId(f);
     if (i != null) step((c) => _instId(c.fact) == i);
+    // A bill app paid less than the card credit (no exact amount among the
+    // candidates): the closest in time, and a tie stays ambiguous.
+    if (kinds[rule] == LinkRuleKind.cardBill &&
+        list.length > 1 &&
+        a != null &&
+        list.every((c) => _principal(c.fact) != a)) {
+      int gap(_Cand c) => c.fact.effectiveAt.difference(f.effectiveAt).abs().inMicroseconds;
+      final best = list.map(gap).reduce((x, y) => x < y ? x : y);
+      list = [for (final c in list) if (gap(c) == best) c];
+    }
     return list;
   }
 

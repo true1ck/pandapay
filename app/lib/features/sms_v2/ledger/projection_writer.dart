@@ -277,6 +277,8 @@ class ProjectionWriter {
                   // The person's own choice survives a re-projection, like a
                   // note or a tag does.
                   if (old.excludeFromSpend) 'exclude_from_spend': true,
+                  if (old.excludeFromSpend && old.excludeReason != null)
+                    'exclude_reason': old.excludeReason,
                   'tags': old.tags.map((t) => t.toJson()).toList(),
                   if (old.userCategoryId != null) ...{
                     'category_id': null,

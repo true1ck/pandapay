@@ -1,0 +1,47 @@
+{
+  "id": "card_bill_gap_without_bill_app_not_linked",
+  "description": "A bank debit that names its own card is not matched to a card credit 500 rupees away.",
+  "knownInstruments": [
+    {
+      "kind": "bank_account",
+      "issuerSlug": "hdfc",
+      "maskDigits": "1234"
+    }
+  ],
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.10,500.00 debited from A/c XX1234 on 12-11-26 towards BillPay - HDFC Bank Credit Card XX5678. Ref 9876543. -HDFC Bank",
+      "observedAt": "2026-11-12T10:15:00Z"
+    },
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Payment of Rs.10,000.00 received towards your HDFC Bank Credit Card XX5678 on 12-11-26. Thank you. -HDFC Bank",
+      "observedAt": "2026-11-12T10:20:00Z"
+    }
+  ],
+  "expect": {
+    "events": [
+      {
+        "type": "card_bill_payment",
+        "legRoles": [
+          "debit_leg"
+        ]
+      },
+      {
+        "type": "card_bill_payment",
+        "legRoles": [
+          "credit_leg"
+        ]
+      }
+    ],
+    "totals": {
+      "from": "2026-10-31T18:30:00Z",
+      "to": "2026-11-30T18:30:00Z",
+      "spendMinor": 0,
+      "incomeMinor": 0,
+      "investmentMinor": 0,
+      "transactionCount": 0
+    }
+  }
+}

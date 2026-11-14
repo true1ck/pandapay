@@ -639,12 +639,15 @@ class FinancialStore {
   static TransactionEntry _remapOntoLocal(
     TransactionEntry row,
     String localId,
-    Map<String, bool> localExcluded,
-  ) => TransactionEntry.fromJson({
+    Map<String, bool> localExcluded, [
+    Map<String, String> localReason = const {},
+  ]) => TransactionEntry.fromJson({
     ...row.toJson(),
     'id': localId,
     if (localId.startsWith('v2:'))
       'exclude_from_spend': localExcluded[localId] == true,
+    if (localId.startsWith('v2:') && localReason[localId] != null)
+      'exclude_reason': localReason[localId],
   });
 
   /// A "don't count in spending" choice still waiting in the command outbox is
@@ -688,21 +691,25 @@ class FinancialStore {
       // The "don't count in spending" choice of each local row a server row is
       // remapped onto. For an SMS (v2) row it exists only on the phone.
       final localExcluded = <String, bool>{};
+      final localReason = <String, String>{};
       for (var offset = 0; offset < remoteEvents.length; offset += 400) {
         final chunk = remoteEvents.skip(offset).take(400).toList();
         final marks = List.filled(chunk.length, '?').join(',');
         for (final row in database.db.select(
-          "SELECT id,json_extract(payload,'\$.event_id') AS event_id,json_extract(payload,'\$.exclude_from_spend') AS excluded FROM financial_entities WHERE namespace=? AND entity='transactions' AND json_extract(payload,'\$.event_id') IN ($marks)",
+          "SELECT id,json_extract(payload,'\$.event_id') AS event_id,json_extract(payload,'\$.exclude_from_spend') AS excluded,json_extract(payload,'\$.exclude_reason') AS reason FROM financial_entities WHERE namespace=? AND entity='transactions' AND json_extract(payload,'\$.event_id') IN ($marks)",
           [ns, ...chunk],
         )) {
           byEvent[row['event_id'] as String] = row['id'] as String;
           localExcluded[row['id'] as String] = row['excluded'] == 1;
+          if (row['reason'] is String) {
+            localReason[row['id'] as String] = row['reason'] as String;
+          }
         }
       }
       rows = [
         for (final row in rows)
           if (byEvent[row.eventId] != null && byEvent[row.eventId] != row.id)
-            _remapOntoLocal(row, byEvent[row.eventId]!, localExcluded)
+            _remapOntoLocal(row, byEvent[row.eventId]!, localExcluded, localReason)
           else row,
       ];
     }
@@ -1240,7 +1247,7 @@ class FinancialStore {
 
   /// Sets the "don't count in spending" choice on the stored row. Nothing else
   /// about the row changes: it stays active, visible and in Money out.
-  void setExcludeFromSpend(String ns, String id, bool excluded) {
+  void setExcludeFromSpend(String ns, String id, bool excluded, {String? reason}) {
     final rows = database.db.select(
       "SELECT payload FROM financial_entities WHERE namespace=? AND entity='transactions' AND id=?",
       [ns, id],
@@ -1251,8 +1258,10 @@ class FinancialStore {
     final next = {...body};
     if (excluded) {
       next['exclude_from_spend'] = true;
+      if (reason != null) next['exclude_reason'] = reason;
     } else {
       next.remove('exclude_from_spend');
+      next.remove('exclude_reason');
     }
     _upsert(
       ns,

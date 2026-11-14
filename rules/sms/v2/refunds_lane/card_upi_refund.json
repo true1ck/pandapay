@@ -1,0 +1,78 @@
+[
+  {
+    "id": "CARD-UPI-REFUND-RECEIVED",
+    "version": 1,
+    "family": "card_refund",
+    "senders": [
+      "*"
+    ],
+    "priority": 800,
+    "match": {
+      "pattern": "(?:an\\s+)?amount\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|was\\s+)?received\\s+on\\s+your\\s+(?:[a-z][a-z ]{0,30}?\\s)?card(?:\\s+(?:ending|no\\.?)(?:\\s+with)?\\s*[x*•.]*\\s?(?<mask>\\d{2,6}))?\\s+from\\s+upi[_\\s-]+(?<merchant>[^\\r\\n]{1,80}?)(?=\\s+on\\s+\\d|\\s*[.,;]|\\s*$)(?:\\s+on\\s+(?<date>\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}))?",
+      "flags": "i",
+      "rejectAny": [
+        "not received",
+        "will be",
+        "failed",
+        "declined"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "unit": "INR",
+            "from": "amt"
+          }
+        ],
+        "occurredAt": {
+          "formats": [
+            "dd-MM-yyyy",
+            "dd/MM/yyyy",
+            "dd-MM-yy",
+            "dd/MM/yy",
+            "dd-MMM-yyyy",
+            "dd MMM yyyy"
+          ],
+          "from": "date"
+        },
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "An amount of INR 450.00 received on your card from UPI_EXAMPLEMART on 05-11-2026",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "An amount of INR 450.00 will be received on your card from UPI_EXAMPLEMART on 05-11-2026",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "spend-accuracy-d2",
+    "updatedAt": "2026-11-14T00:00:00Z"
+  }
+]

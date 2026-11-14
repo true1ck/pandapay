@@ -1,8 +1,36 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
 import '../../data/user_cards_repository.dart';
 import '../sms_v2/ui/review_controller.dart';
+
+/// Asks "Why?" when a payment is left out of spending. Null if dismissed.
+Future<String?> askExcludeReason(BuildContext context) => showDialog<String>(
+  context: context,
+  builder: (c) => SimpleDialog(
+    title: const Text('Why?'),
+    children: [
+      SimpleDialogOption(
+        key: const Key('exclude-reason-family'),
+        onPressed: () => Navigator.pop(c, 'family'),
+        child: const Text('Family'),
+      ),
+      SimpleDialogOption(
+        key: const Key('exclude-reason-other'),
+        onPressed: () => Navigator.pop(c, 'other'),
+        child: const Text('Something else'),
+      ),
+    ],
+  ),
+);
+
+/// "Left out of spending · reason" for a row or detail screen.
+String leftOutLabel(TransactionEntry e) => switch (e.excludeReason) {
+  'family' => 'Left out of spending · Family',
+  'other' => 'Left out of spending · Something else',
+  _ => 'Not counted in spending',
+};
 
 /// Whether [entry] can be left out of spending: a settled spend row that has a
 /// server or phone record to carry the choice. A quick-add that has not reached
@@ -41,6 +69,7 @@ Future<int> setSpendExclusion(
   WidgetRef ref,
   Iterable<TransactionEntry> entries, {
   required bool excluded,
+  String? reason,
 }) async {
   final targets = entries
       .where(canExcludeFromSpend)
@@ -63,6 +92,7 @@ Future<int> setSpendExclusion(
           namespace,
           entry.id,
           excluded,
+          reason: reason,
         );
       }
     });
@@ -77,6 +107,7 @@ Future<int> setSpendExclusion(
           namespace,
           entry.id,
           excluded,
+          reason: reason,
         );
         commands.enqueue(
           kind: OutboxCommand.setSpendExclusion,

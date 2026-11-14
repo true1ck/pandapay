@@ -188,6 +188,8 @@ class FoundInstrumentsScreen extends ConsumerWidget {
               SmsError(onRetry: () => ref.invalidate(instrumentsProvider)),
           data: (items) => FoundInstrumentsList(
             instruments: items,
+            notMineHints:
+                ref.watch(notMineSuggestionsProvider).valueOrNull ?? const {},
             onConfirm: (i) => _act(context, ref, i, 'confirm'),
             onReject: (i) => _act(context, ref, i, 'reject'),
             onRename: (i) => _act(context, ref, i, 'rename'),
@@ -211,8 +213,13 @@ class FoundInstrumentsList extends StatelessWidget {
     required this.onRename,
     required this.onOpen,
     this.onResolveKind,
+    this.notMineHints = const {},
   });
   final List<Instrument> instruments;
+
+  /// Ids of accounts that look like someone else's: they get a hint beside
+  /// "Not mine". Nothing is rejected for them.
+  final Set<String> notMineHints;
   final ValueChanged<Instrument> onConfirm, onReject, onRename, onOpen;
 
   /// Called with the bank-account reading and true when the user says it is a
@@ -270,6 +277,9 @@ class FoundInstrumentsList extends StatelessWidget {
                       )
                     : _InstrumentPanel(
                         instrument: instrument,
+                        suggestNotMine: notMineHints.contains(
+                          instrument.instrumentId,
+                        ),
                         onConfirm: onConfirm,
                         onReject: onReject,
                         onRename: onRename,
@@ -434,8 +444,10 @@ class _InstrumentPanel extends StatelessWidget {
     required this.onReject,
     required this.onRename,
     required this.onOpen,
+    this.suggestNotMine = false,
   });
   final Instrument instrument;
+  final bool suggestNotMine;
   final ValueChanged<Instrument> onConfirm, onReject, onRename, onOpen;
 
   @override
@@ -547,6 +559,15 @@ class _InstrumentPanel extends StatelessWidget {
               ],
             ),
           ),
+          if (suggestNotMine)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpace.sm),
+              child: Text(
+                'Your name never appears on this account. If it is not yours, tap Not mine.',
+                key: const Key('not-mine-hint'),
+                style: BambooFonts.ui(12.5, color: BambooInk.ink700),
+              ),
+            ),
           _ActionRow(
             quiet: [
               TextButton(

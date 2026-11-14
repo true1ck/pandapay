@@ -2965,11 +2965,19 @@ class TransactionEntry {
   /// subscriptions, recurring detection, card dues or reward state.
   final bool excludeFromSpend;
 
+  /// Why it was left out: 'family' or 'other' (null when not asked).
+  final String? excludeReason;
+
   /// Whether this row is part of the person's spending: a spend row that they
   /// have not excluded. Use this wherever a spending total is built; use
   /// [entryKind] alone for card-side figures (dues, utilisation, rewards).
   bool get countsAsSpend =>
       entryKind == TxnEntryKind.spend && !excludeFromSpend;
+
+  /// Money out: spending (including what was left out of spending) plus money
+  /// put into investments. The one definition Home totals and Activity share.
+  bool get countsAsMoneyOut =>
+      entryKind == TxnEntryKind.spend || entryKind == TxnEntryKind.investment;
 
   const TransactionEntry({
     this.selfTransferRule,
@@ -3005,6 +3013,7 @@ class TransactionEntry {
     this.note,
     this.rewardValue,
     this.excludeFromSpend = false,
+    this.excludeReason,
     this.tags = const [],
   });
 
@@ -3057,6 +3066,7 @@ class TransactionEntry {
       'note': note,
       'expected_value_inr': rewardValue?.rupees,
       if (excludeFromSpend) 'exclude_from_spend': true,
+      if (excludeFromSpend && excludeReason != null) 'exclude_reason': excludeReason,
       'tags': tags.map((tag) => tag.toJson()).toList(),
     };
   }
@@ -3067,6 +3077,7 @@ class TransactionEntry {
     String? merchantName,
     TxnEntryKind? entryKind,
     bool? excludeFromSpend,
+    String? excludeReason,
     bool clearNote = false,
   }) {
     return TransactionEntry(
@@ -3104,6 +3115,9 @@ class TransactionEntry {
       tags: tags,
       rewardValue: rewardValue,
       excludeFromSpend: excludeFromSpend ?? this.excludeFromSpend,
+      excludeReason: (excludeFromSpend ?? this.excludeFromSpend)
+          ? (excludeReason ?? this.excludeReason)
+          : null,
     );
   }
 
@@ -3199,6 +3213,7 @@ class TransactionEntry {
           : Money.fromRupees(_num(json['expected_value_inr'])),
       // Absent on older servers and older stored rows: not excluded.
       excludeFromSpend: json['exclude_from_spend'] == true,
+      excludeReason: json['exclude_reason'] as String?,
       tags: (json['tags'] as List? ?? const [])
           .map((item) => TransactionTag.fromJson(item as Map<String, dynamic>))
           .toList(),
