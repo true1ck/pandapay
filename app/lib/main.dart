@@ -23,6 +23,7 @@ import 'app/providers.dart';
 import 'app/assistant_action.dart';
 import 'app/router.dart';
 import 'app/startup_timing.dart';
+import 'app/stale_keyboard_guard.dart';
 import 'data/api_request_headers_client.dart';
 import 'data/connectivity/connectivity_bootstrap.dart';
 import 'data/local/database_key.dart';
@@ -469,17 +470,22 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
       // Tapping any non-interactive area closes the on-screen keyboard, app-wide.
       builder: (context, child) => GestureDetector(
         behavior: HitTestBehavior.translucent,
-        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        onTap: () {
+          FocusManager.instance.primaryFocus?.unfocus();
+          scheduleStaleKeyboardCheck(const Duration(milliseconds: 150));
+        },
         // The sync-status strip (offline / can't reach / syncing / needs
         // attention) lives above every route. Zero-size and layout-neutral
         // while healthy; see features/sync_status/sync_status_banner.dart.
-        child: _scaledTextMediaQuery(
-          context,
-          SyncStatusBanner(
-            navigatorKey: router.routerDelegate.navigatorKey,
-            child: child,
+        child: StaleKeyboardGuard(
+          child: _scaledTextMediaQuery(
+            context,
+            SyncStatusBanner(
+              navigatorKey: router.routerDelegate.navigatorKey,
+              child: child,
+            ),
+            textScale,
           ),
-          textScale,
         ),
       ),
       routerConfig: router,

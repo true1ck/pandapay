@@ -100,6 +100,7 @@ import 'assistant_action.dart';
 import 'providers.dart';
 import '../data/product_access_api.dart' show invitationCodeFromUri;
 import 'tutorial_keys.dart';
+import 'stale_keyboard_guard.dart';
 
 /// Route paths as constants so a typo becomes a compile-time-adjacent grep
 /// hit instead of a silent 404 — every `context.go(...)` call in the app
@@ -400,6 +401,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
 
   return GoRouter(
     initialLocation: AppRoute.splash,
+    observers: [StaleKeyboardObserver()],
     refreshListenable: refresh,
     // Without this, an unmatched or failed route falls through to
     // go_router's own bare default error page — functional, but off-brand
@@ -1107,7 +1109,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       ShellRoute(
         navigatorKey: _shellNavigatorKey,
-        observers: [_ShellStackObserver()],
+        observers: [_ShellStackObserver(), StaleKeyboardObserver()],
         builder: (context, state, child) =>
             _AppShell(location: state.uri.path, child: child),
         routes: [
