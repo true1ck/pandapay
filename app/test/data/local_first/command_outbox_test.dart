@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:pandapay/data/api_exception.dart';
+import 'package:pandapay/data/connectivity/server_backoff.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local_first/command_outbox.dart';
 
@@ -17,7 +18,10 @@ void main() {
     clock = DateTime(2026, 11, 10, 12);
     outbox = CommandOutbox(db, namespace: 'a', now: () => clock);
   });
-  tearDown(() => db.close());
+  tearDown(() {
+    ServerBackoff.process.resetForTest();
+    db.close();
+  });
 
   Map<String, CommandHandler> record(List<String> calls) => {
     'ignore': (p) async => calls.add('ignore ${p['id']}'),
@@ -189,6 +193,30 @@ void main() {
           .select('SELECT * FROM command_outbox WHERE target = ?', [target])
           .single,
     );
+
+    test('a 503 that started a server pause is no attempt and no extra backoff',
+        () async {
+      outbox.enqueue(kind: 'ignore', target: 't1');
+      outbox.enqueue(kind: 'ignore', target: 't2');
+      final sent = <String>[];
+      final handlers = {
+        'ignore': (Map<String, Object?> p) async {
+          if (sent.isEmpty) {
+            sent.add('503');
+            ServerBackoff.process.noteResponse(503, '30', method: 'PATCH');
+            throw ApiException('PATCH /x failed: 503 {"error":"server_busy"}');
+          }
+          sent.add('ok');
+        },
+      };
+      expect(await outbox.flush(handlers), 0);
+      expect(sent, ['503'], reason: 'nothing more goes out during the pause');
+      expect(row('t1')['attempts'], 0);
+      expect(row('t1')['next_attempt_at'], 0);
+      ServerBackoff.process.resetForTest();
+      // The pause is over: both go out at once, the refused head included.
+      expect(await outbox.flush(handlers), 2);
+    });
 
     for (final error in <Object>[
       const SocketException('no route'),

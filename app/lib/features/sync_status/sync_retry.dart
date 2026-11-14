@@ -53,6 +53,20 @@ Map<String, ParkedRetry> buildSyncRetryActions(Ref ref) => {
 /// server's own copy then shows. Only for queues where dropping is safe.
 final syncDiscardActionsProvider = Provider<Map<String, ParkedRetry>>(
   (ref) => {
+    // A refused edit: drop it so the server's own copy shows (F-4).
+    'sync_pending_changes': () async {
+      final namespace = ref.read(cacheNamespaceProvider);
+      final database = await ref.read(appDatabaseProvider.future);
+      database.db.execute(
+        'DELETE FROM sync_pending_changes '
+        'WHERE namespace = ? AND attempts >= ? AND in_flight != 2',
+        [namespace, SyncQueue.maxAttempts],
+      );
+      ref.read(commandOutboxRevisionProvider.notifier).state++;
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(homeSummaryProvider);
+      ref.invalidate(pendingSyncCountProvider);
+    },
     'command_outbox': () async {
       final commands = await ref.read(commandOutboxProvider.future);
       for (final parked in commands.parked()) {
@@ -60,6 +74,7 @@ final syncDiscardActionsProvider = Provider<Map<String, ParkedRetry>>(
       }
       ref.read(commandOutboxRevisionProvider.notifier).state++;
       ref.invalidate(transactionsProvider);
+      ref.invalidate(homeSummaryProvider);
       ref.invalidate(userCardsProvider);
     },
   },

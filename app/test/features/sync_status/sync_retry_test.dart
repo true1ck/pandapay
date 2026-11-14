@@ -113,6 +113,25 @@ void main() {
     expect(counts('sync_pending_changes'), const QueueCounts(pending: 2));
   });
 
+  test('edits: Discard drops only the refused ones', () async {
+    final queue = SyncQueue(db, namespace: _a);
+    final first = queue.enqueueUpdate(
+      entity: 'transactions',
+      entityId: 't1',
+      fields: {'note': 'a'},
+    );
+    queue.enqueueUpdate(
+      entity: 'transactions',
+      entityId: 't2',
+      fields: {'note': 'b'},
+    );
+    queue.reject(first, 'rejected');
+
+    await container.read(syncDiscardActionsProvider)['sync_pending_changes']!();
+
+    expect(counts('sync_pending_changes'), const QueueCounts(pending: 1));
+  });
+
   test('another account is never touched', () async {
     final other = CommandOutbox(db, namespace: 'user:other');
     other.enqueue(kind: 'ignore_transaction', target: 'x');

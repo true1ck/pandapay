@@ -147,6 +147,11 @@ final spendPeriodTransactionsProvider =
       ref,
       query,
     ) async {
+      // The merchant rows list these entries: a queued or delivered edit of a
+      // transaction must show in them as it does in the category header and
+      // the detail (F-5).
+      ref.watch(financialStoreRevisionProvider('transactions'));
+      ref.watch(commandOutboxRevisionProvider);
       if (ref.watch(smsV2ReportingEnabledProvider)) {
         final model = await ref.watch(smsV2LedgerReadModelProvider.future);
         final (from, to) = reportBounds(query, ref.watch(clockProvider).now());

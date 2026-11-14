@@ -100,7 +100,11 @@ class TransactionDetailScreen extends ConsumerWidget {
               '/activity/history?tx=${Uri.encodeQueryComponent(transactionId)}',
             ),
           ),
-          if (entry?.status == 'active' && !transactionId.startsWith('local-'))
+          // A quick-add that has not synced yet (`local-outbox:`) is edited in
+          // place: the edit rewrites the queued entry itself.
+          if (entry?.status == 'active' &&
+              (!transactionId.startsWith('local-') ||
+                  transactionId.startsWith('local-outbox:')))
             IconButton(
               tooltip: 'Edit',
               icon: const Icon(Icons.edit_outlined),
@@ -165,7 +169,7 @@ class TransactionDetailScreen extends ConsumerWidget {
                           ],
                           const SizedBox(height: AppSpace.md),
                           const Text(
-                            'Saved on this device. Details and editing will be available after this entry syncs.',
+                            'Saved on this device. It will sync when you are online.',
                           ),
                         ],
                       ),
@@ -196,6 +200,8 @@ class TransactionDetailScreen extends ConsumerWidget {
 /// showing the pre-restore status until the app restarts.
 final transactionDetailProvider =
     FutureProvider.family<TransactionEntry?, String>((ref, id) async {
+      // A queued edit being parked or discarded changes what the row shows.
+      ref.watch(commandOutboxRevisionProvider);
       final repo = ref.watch(userCardsRepositoryProvider);
       final loaded = ref.read(transactionsProvider).valueOrNull;
       final fromLoaded = loaded == null

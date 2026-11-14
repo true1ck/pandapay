@@ -337,6 +337,13 @@ class CommandOutbox {
           case QueueFailure.retryable:
             if (_isInternalError(error) && !isServerId(target)) {
               _park(id, '$error');
+            } else if (ServerBackoff.process.isPaused &&
+                error is ApiException &&
+                (error.statusCode == 503 || error.statusCode == 429)) {
+              // The server asked everyone to wait: the pause is the delay. No
+              // attempt counted and no extra command backoff on top of it, so
+              // the command goes out as soon as the pause ends.
+              blocked.add(target);
             } else {
               _backoff(id, row['attempts'] as int, '$error');
               blocked.add(target);

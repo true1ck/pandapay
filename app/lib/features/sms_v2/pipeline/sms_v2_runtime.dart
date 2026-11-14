@@ -14,6 +14,7 @@ import 'package:pandapay_domain/sms_v2.dart';
 import 'package:pandapay_domain/pandapay_domain.dart' show CardProduct;
 
 import '../../../data/local/financial_store.dart';
+import '../../../data/connectivity/server_backoff.dart';
 import '../../../data/local_first/command_outbox.dart';
 import '../../../data/local_first/pending_overlays.dart' show OverlayCommand;
 import '../../../data/user_cards_repository.dart';
@@ -326,6 +327,8 @@ class SmsV2Runtime {
         clock().difference(previous) < _rulesCheckEvery) {
       return;
     }
+    // The server asked every client to wait: do not add a request to the pile.
+    if (!force && ServerBackoff.process.isPaused) return;
     final current = await _loadBundle();
     _checkAccount();
     final response = await client
@@ -346,6 +349,23 @@ class SmsV2Runtime {
         )
         .timeout(const Duration(seconds: 30));
     _checkAccount();
+    if (response.statusCode == 429) {
+      // A read limit is per endpoint (it said how long, often half an hour):
+      // ask again after that, not on every sync.
+      final wait =
+          ServerBackoff.parseRetryAfter(
+            response.headers['retry-after'],
+            clock(),
+          ) ??
+          const Duration(minutes: 15);
+      final shift = _rulesCheckEvery - wait;
+      _state.put(
+        'rules:last-check',
+        clock().subtract(shift.isNegative ? Duration.zero : shift)
+            .toUtc()
+            .toIso8601String(),
+      );
+    }
     if (response.statusCode != 200 && response.statusCode != 304) {
       await _metrics.bundleDownloadFailed();
       _state.put(
