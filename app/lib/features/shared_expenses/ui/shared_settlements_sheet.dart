@@ -65,7 +65,7 @@ class _SharedSettlementsSheetState extends State<SharedSettlementsSheet> {
   bool _refreshing = false;
 
   Future<({SharedRoster roster, Map<String, Object?> page})> _load() async {
-    final roster = await widget.runtime.contextRoster(widget.contextId);
+    final roster = await widget.runtime.quickRoster(widget.contextId);
     final page = await widget.runtime.settlements(
       widget.contextId,
       after: _history.last,

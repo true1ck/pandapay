@@ -113,7 +113,7 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
 
   Future<void> _load() async {
     try {
-      final roster = await widget.runtime.contextRoster(widget.contextId);
+      final roster = await widget.runtime.quickRoster(widget.contextId);
       if (!mounted || !_authorized) return;
       final members = roster.members.where((m) => m.canSettle).toList();
       if (!members.any((m) => m.id == roster.ownMemberId)) {

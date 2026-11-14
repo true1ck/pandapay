@@ -318,6 +318,27 @@ class _SharedGroupScreenState extends State<SharedGroupScreen> {
     final where = _whereLines();
     final owedToYou = (summary?.netBalance.paise ?? 0) > 0;
     return [
+      SharedPanel(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: _headerContent(summary, totals, where, owedToYou),
+        ),
+      ),
+      if (data.expenses.hasPrevious && widget.onPreviousPage != null)
+        SharedAction(
+          label: 'Previous page',
+          onTap: () => widget.onPreviousPage!(SharedGroupTab.expenses),
+        ),
+    ];
+  }
+
+  List<Widget> _headerContent(
+    SharedBalanceSummary? summary,
+    SharedExpenseTotals? totals,
+    List<Widget> where,
+    bool owedToYou,
+  ) {
+    return [
       Row(
         children: [
           SharedAvatar(name: data.title, group: !data.direct),
@@ -396,12 +417,6 @@ class _SharedGroupScreenState extends State<SharedGroupScreen> {
             ),
         ],
       ),
-      const SizedBox(height: AppSpace.md),
-      if (data.expenses.hasPrevious && widget.onPreviousPage != null)
-        SharedAction(
-          label: 'Previous page',
-          onTap: () => widget.onPreviousPage!(SharedGroupTab.expenses),
-        ),
     ];
   }
 
@@ -538,8 +553,13 @@ class SharedExpenseTile extends StatelessWidget {
     ];
     return Pressable(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 9),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: AppSpace.sm),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpace.md,
+          vertical: 12,
+        ),
+        decoration: sharedCardDecoration(),
         child: LayoutBuilder(
           builder: (context, constraints) => Row(
             children: [

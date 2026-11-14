@@ -44,11 +44,37 @@ class _SharedExpenseReviewSheetState extends State<SharedExpenseReviewSheet> {
     super.dispose();
   }
 
-  Future<Map<String, Object?>> _load() => widget.runtime.expenseReviewPage(
-    widget.contextId,
-    widget.expenseId,
-    after: _history.last,
-  );
+  int _loadToken = 0;
+
+  /// Opens at once from this phone (the last saved answer, else the stored
+  /// expense), then shows the live version when the server answers. Only the
+  /// live version can offer Approve or Reject.
+  Future<Map<String, Object?>> _load() async {
+    final runtime = widget.runtime;
+    final after = _history.last, token = ++_loadToken;
+    Future<Map<String, Object?>> live() => runtime.expenseReviewPage(
+      widget.contextId,
+      widget.expenseId,
+      after: after,
+    );
+    if (after == null) {
+      try {
+        final quick = await runtime.runCacheOnly(live, allowLocal: true);
+        unawaited(
+          live().then<void>((fresh) {
+            if (mounted && token == _loadToken) {
+              setState(() {
+                _page = Future.value(fresh);
+              });
+            }
+          }, onError: (Object _) {}),
+        );
+        return quick;
+      } catch (_) {}
+    }
+    return live();
+  }
+
   void _changed() {
     if (!mounted || widget.runtime.busy) return;
     // Reload only when the data really changed. Every sync tick notifies, and

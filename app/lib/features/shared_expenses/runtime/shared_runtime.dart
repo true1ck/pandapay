@@ -333,6 +333,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
         // Each queued kind remains capability checked by the authoritative SQL
         // command; a disabled flag cannot silently change a stored command.
         if (proposalsEnabled || settlementsEnabled) await sync.flush();
+        final wasLagging = syncLag;
         for (var i = 0; i < maxPullPages; i++) {
           final before = store.cursor,
               page = await remote.pull(cursor: before, limit: 100);
@@ -354,6 +355,10 @@ class SharedExpensesRuntime extends ChangeNotifier {
           await Future<void>.delayed(const Duration(milliseconds: 60));
         }
         if (offline) dataVersion++; // back online: screens re-fetch
+        // Caught up: screens built while catching up showed "Syncing your
+        // latest changes"; without a reload that line stayed forever when the
+        // pull brought nothing new.
+        if (wasLagging && !syncLag) dataVersion++;
         offline = false;
         _failures = 0;
         _retryAt = null;
@@ -1051,6 +1056,21 @@ class SharedExpensesRuntime extends ChangeNotifier {
   /// number, and refused if a change landed in between. On an active split (or
   /// while this phone's own change is syncing) that happens for no reason the
   /// person can see, so read once more before giving up.
+  /// The people in a split for a pop-up that is opening: this phone's copy at
+  /// once (the last answer saved, else the stored members), with the live
+  /// roster fetched behind it so the next open is current too. Writes still
+  /// go through the queue and the server checks every one, so a slightly old
+  /// roster can only change what is pre-selected, never what is saved.
+  Future<SharedRoster> quickRoster(String id) async {
+    try {
+      final local = await runCacheOnly(() => contextRoster(id), allowLocal: true);
+      unawaited(contextRoster(id).then<void>((_) {}, onError: (Object _) {}));
+      return local;
+    } catch (_) {
+      return contextRoster(id);
+    }
+  }
+
   Future<SharedRoster> contextRoster(String id) async {
     try {
       return await _contextRosterOnce(id);
@@ -1915,6 +1935,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     }
 
     final activityPage = results[3];
+    final activityLookups = <String, _ActivityLookup>{};
     return SharedHubPresentation(
       summary: summaryKnown
           ? _summary(results[2]['owedMinor'], results[2]['owingMinor'])
@@ -1942,14 +1963,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
                   occurredAtLabel: 'Just now',
                 ),
           for (final raw in activityPage['items'] as List)
-            SharedActivityRow(
-              id: (raw as Map)['contextId'] as String,
-              description: _activityCopy(raw['kind']),
-              contextLabel:
-                  _directTitles[raw['contextId']] ??
-                  raw['contextName'] as String?,
-              occurredAtLabel: raw['createdAt'] as String,
-            ),
+            _activityRow(raw as Map, activityLookups),
         ],
         hasMore: activityPage['hasMore'] == true,
         incomplete: syncLag || !activityKnown,
@@ -2059,6 +2073,118 @@ class SharedExpensesRuntime extends ChangeNotifier {
     _ => null,
   };
 
+  /// One Activity row in words a person reads at a glance: who did what to
+  /// which expense, and what it meant for them ("Sujay added “ZOMATO”",
+  /// "You lent ₹2,000.00"). The server's event says only what kind of thing
+  /// happened and to which expense or payment; the names, titles and amounts
+  /// come from this phone's copy of the split. An amount is shown only when it
+  /// belongs to that very event (the expense's accepted version is the one the
+  /// event is about, or the payment's own amount), never today's figure on an
+  /// old event.
+  @visibleForTesting
+  SharedActivityRow describeActivity(Map<Object?, Object?> raw) =>
+      _activityRow(raw, {});
+
+  SharedActivityRow _activityRow(
+    Map<Object?, Object?> raw,
+    Map<String, _ActivityLookup> cache,
+  ) {
+    final contextId = raw['contextId'] as String;
+    final contextLabel =
+        _directTitles[contextId] ?? raw['contextName'] as String?;
+    final createdAt = raw['createdAt'] as String;
+    final kind = raw['kind'];
+    final payload = raw['payload'] is Map ? raw['payload'] as Map : const {};
+    SharedActivityRow plain([String? text]) => SharedActivityRow(
+      id: contextId,
+      description: text ?? _activityCopy(kind),
+      contextLabel: contextLabel,
+      occurredAtLabel: createdAt,
+    );
+    _ActivityLookup? look;
+    try {
+      look = cache[contextId] ??= _ActivityLookup.read(
+        store,
+        _local,
+        contextId,
+        accountId,
+      );
+    } catch (_) {
+      return plain();
+    }
+    final actor = raw['actorProfileId'] == accountId
+        ? 'You'
+        : look.nameOfProfile(raw['actorProfileId']) ?? 'Someone';
+    String member(Object? id) => look!.nameOfMember(id) ?? 'Someone';
+    switch (kind) {
+      case 'expense.proposed' || 'expense.accepted' || 'expense.responded':
+        final head = look.expenses[payload['expenseId']];
+        final title = head?.title;
+        if (title == null) return plain();
+        final current =
+            head!.acceptedRevisionId != null &&
+            head.acceptedRevisionId == payload['revisionId'];
+        final text = switch (kind) {
+          'expense.responded' => '$actor reviewed “$title”',
+          _ when current && head.isVoid => '$actor removed “$title”',
+          'expense.proposed' => '$actor added “$title” · waiting for approval',
+          _ => '$actor added “$title”',
+        };
+        if (!current || head.isVoid || kind == 'expense.responded') {
+          return plain(text);
+        }
+        final net = head.yourPaidMinor - head.yourShareMinor;
+        return SharedActivityRow(
+          id: contextId,
+          description: text,
+          contextLabel: contextLabel,
+          occurredAtLabel: createdAt,
+          impactLabel: head.yourPaidMinor == 0 && head.yourShareMinor == 0
+              ? 'Not involved'
+              : net < 0
+              ? 'You borrowed'
+              : net > 0
+              ? 'You lent'
+              : 'You paid your share',
+          impactAmount: net == 0 ? null : Money.fromPaise(net.abs()),
+        );
+      case 'settlement.reported' ||
+          'settlement.confirmed' ||
+          'settlement.rejected':
+        final payer = member(payload['payerMemberId']);
+        final receiver = member(payload['receiverMemberId']);
+        final amount = int.tryParse('${payload['amountMinor']}');
+        final paid = payer == 'You'
+            ? 'You paid $receiver'
+            : receiver == 'You'
+            ? '$payer paid you'
+            : '$payer paid $receiver';
+        final money = amount == null
+            ? ''
+            : ' ${Money.fromPaise(amount).format()}';
+        return plain(switch (kind) {
+          'settlement.reported' => '$paid$money · waiting for confirmation',
+          'settlement.confirmed' => '$paid$money · confirmed',
+          _ => '$paid$money · not confirmed',
+        });
+      case 'member.invited':
+        return plain('${member(payload['memberId'])} was invited');
+      case 'membership.claimed':
+        return plain('${member(payload['memberId'])} joined');
+      case 'membership.requested':
+        return plain('${member(payload['memberId'])} asked to join');
+      case 'membership.left':
+        return plain('${member(payload['memberId'])} left');
+      case 'member.removed':
+        return plain('${member(payload['memberId'])} was removed');
+      case 'context.created':
+        return plain(
+          look.direct ? '$actor started splitting' : '$actor created the group',
+        );
+    }
+    return plain();
+  }
+
   static String _activityCopy(Object? kind) => switch (kind) {
     'context.created' => 'Group created',
     'membership.invited' => 'Member invited',
@@ -2080,3 +2206,92 @@ class SharedExpensesRuntime extends ChangeNotifier {
     );
   }
 }
+
+/// What one context's Activity rows need from this phone's copy: member names
+/// and each expense's accepted version, read once per context per page.
+class _ActivityLookup {
+  _ActivityLookup._(this.direct, this._names, this._profiles, this.expenses);
+  final bool direct;
+  final Map<String, String> _names;
+  final Map<String, String> _profiles;
+  final Map<Object?, _ActivityExpense> expenses;
+
+  String? nameOfMember(Object? id) => _names[id];
+  String? nameOfProfile(Object? id) => _profiles[id];
+
+  static _ActivityLookup read(
+    SharedExpensesStore store,
+    SharedLocalReads reads,
+    String contextId,
+    String accountId,
+  ) {
+    final members = reads.memberRows(contextId);
+    final names = <String, String>{}, profiles = <String, String>{};
+    String? own;
+    for (final m in members) {
+      final id = m['memberId'], profile = m['profileId'];
+      if (id is! String) continue;
+      final mine = profile == accountId;
+      if (mine) own = id;
+      final name = mine
+          ? 'You'
+          : ('${m['displayName'] ?? ''}'.trim().isEmpty
+                ? 'Someone'
+                : '${m['displayName']}'.trim());
+      names[id] = name;
+      if (profile is String) profiles[profile] = name;
+    }
+    final expenses = <Object?, _ActivityExpense>{};
+    for (final row in store
+        .readPage(entity: 'expenses', contextId: contextId, limit: 100)
+        .items) {
+      final p = row.payload;
+      if (p is! Map || p['recordType'] != 'head') continue;
+      final accepted = p['accepted'];
+      if (accepted is! Map) continue;
+      final snapshot = accepted['snapshot'];
+      int sum(Object? list) {
+        var total = 0;
+        if (list is List) {
+          for (final x in list) {
+            if (x is Map && x['memberId'] == own) {
+              total += int.tryParse('${x['amountMinor']}') ?? 0;
+            }
+          }
+        }
+        return total;
+      }
+
+      expenses[p['expenseId']] = _ActivityExpense(
+        title: '${accepted['title'] ?? 'an expense'}',
+        acceptedRevisionId: accepted['revisionId'] as String?,
+        isVoid: accepted['void'] == true,
+        yourPaidMinor: snapshot is Map ? sum(snapshot['contributions']) : 0,
+        yourShareMinor: snapshot is Map ? sum(snapshot['shares']) : 0,
+      );
+    }
+    final context = store
+        .readContexts(limit: 100)
+        .items
+        .where((c) => c.id == contextId)
+        .firstOrNull;
+    final kind = context?.payload is Map ? (context!.payload as Map)['kind'] : null;
+    return _ActivityLookup._(kind == 'direct', names, profiles, expenses);
+  }
+}
+
+class _ActivityExpense {
+  const _ActivityExpense({
+    required this.title,
+    required this.acceptedRevisionId,
+    required this.isVoid,
+    required this.yourPaidMinor,
+    required this.yourShareMinor,
+  });
+  final String title;
+  final String? acceptedRevisionId;
+  final bool isVoid;
+  final int yourPaidMinor;
+  final int yourShareMinor;
+}
+

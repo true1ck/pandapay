@@ -275,6 +275,15 @@ class SharedPanel extends StatelessWidget {
   );
 }
 
+/// The white rounded box every Splits row and header sits in, the same look as
+/// the Activity rows: one thing per box, so lists read as separate, tappable
+/// items on the page background.
+BoxDecoration sharedCardDecoration() => BoxDecoration(
+  color: BambooInk.glassFillOnPaper,
+  borderRadius: BorderRadius.circular(AppRadius.lg),
+  border: Border.all(color: BambooInk.hairlineOnPaper),
+);
+
 /// Where the person stands, in one line, the Splitwise way: "Overall, you owe
 /// ₹500.00", or on a friend's page "You owe Ravi ₹500.00". The two gross
 /// figures appear only when both are real (somebody owes you and you owe
@@ -306,8 +315,10 @@ class SharedSummaryCard extends StatelessWidget {
         : net < 0
         ? 'You owe $who'
         : '$who owes you';
-    return Padding(
-      padding: const EdgeInsets.only(top: AppSpace.xs, bottom: AppSpace.md),
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpace.md),
+      padding: const EdgeInsets.all(AppSpace.lg),
+      decoration: sharedCardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -553,8 +564,10 @@ class SharedContextTile extends StatelessWidget {
     ];
     return Pressable(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: AppSpace.sm),
+        padding: const EdgeInsets.all(AppSpace.md),
+        decoration: sharedCardDecoration(),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

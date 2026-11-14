@@ -97,7 +97,7 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
     final seq = ++_seq;
     if (cacheFirst && _data == null) {
       try {
-        final saved = await runtime.runCacheOnly(_load);
+        final saved = await runtime.runCacheOnly(_load, allowLocal: true);
         if (mounted && seq == _seq && _data == null) {
           setState(() => _data = saved);
         }
@@ -350,7 +350,7 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
     Future<void> Function() open,
   ) async {
     try {
-      final roster = await runtime.contextRoster(widget.contextId);
+      final roster = await runtime.quickRoster(widget.contextId);
       if (roster.members.where((m) => m.canSettle).length < 2) {
         final waiting = roster.members
             .where((m) => m.state == 'invited' && m.profileId == null)
@@ -430,7 +430,7 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
     final seq = ++_seq;
     if (cacheFirst && _data == null) {
       try {
-        final saved = await runtime.runCacheOnly(_load);
+        final saved = await runtime.runCacheOnly(_load, allowLocal: true);
         if (mounted && seq == _seq && _data == null) {
           setState(() => _data = saved);
         }

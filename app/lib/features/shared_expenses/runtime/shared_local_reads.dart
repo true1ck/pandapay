@@ -43,6 +43,8 @@ class SharedLocalReads {
       final match = RegExp(r'^context:([0-9a-f-]{36}):(.+)$').firstMatch(key);
       if (match == null) return null;
       final id = match.group(1)!, section = match.group(2)!;
+      final revision = RegExp(r'^revision:(.+):first$').firstMatch(section);
+      if (revision != null) return _revisions(id, revision.group(1)!);
       return switch (section) {
         'detail' => detail(id),
         'members:first' => _members(id),
@@ -251,6 +253,45 @@ class SharedLocalReads {
         '${e['occurredOn'] ?? (e['pendingRevision'] as Map?)?['occurredOn']}';
     items.sort((a, b) => day(b).compareTo(day(a)));
     return items;
+  }
+
+  /// An expense's accepted version, in the shape of the server's revision list,
+  /// so its details open at once from this phone. Whether you may approve or
+  /// reject is the server's to say, so it is never offered from here; the live
+  /// list replaces this page when it arrives.
+  Map<String, Object?>? _revisions(String id, String expenseId) {
+    final own = ownMemberId(id);
+    if (own == null || detail(id) == null) return null;
+    for (final row
+        in store
+            .readPage(entity: 'expenses', contextId: id, limit: 100)
+            .items) {
+      final p = row.payload;
+      if (p['recordType'] != 'head' || p['expenseId'] != expenseId) continue;
+      final accepted = p['accepted'];
+      if (accepted is! Map) return null;
+      final snapshot = (accepted['snapshot'] as Map?) ?? const {};
+      return _page([
+        {
+          'contextId': id,
+          'expenseId': expenseId,
+          'revisionId': accepted['revisionId'],
+          'title': accepted['title'],
+          'occurredOn': accepted['occurredOn'],
+          'totalMinor': accepted['totalMinor'],
+          'void': accepted['void'] == true,
+          'bill': accepted['bill'],
+          'snapshot': accepted['snapshot'],
+          'reviewState': 'accepted',
+          'canRespond': false,
+          'yourDecision': null,
+          'ownMemberId': own,
+          'yourPaidMinor': _sumFor(snapshot['contributions'], own),
+          'yourShareMinor': _sumFor(snapshot['shares'], own),
+        },
+      ]);
+    }
+    return null;
   }
 
   Map<String, Object?>? _expenses(String id) {
