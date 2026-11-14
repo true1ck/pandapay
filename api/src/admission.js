@@ -103,10 +103,22 @@ class Gate {
 // Routes measured at 100 ms - 1 s+ per call on a 40k-transaction account (see scripts/bench_http.js).
 const HEAVY_GET = new Set(['/account-summaries', '/spend-report', '/monthly-reports', '/recurring', '/user-cards']);
 
+// Long-running requests (imports, exports, backups, bulk uploads) hold their admission slot for their whole duration; they get
+// their own small cap so a handful of them cannot take every slot from the ordinary traffic.
+const BULK_POST = new Set(['/user-cards/import', '/statement-imports', '/sms-import-batches', '/transactions/category-bulk-apply']);
+const BULK_GET = new Set(['/export', '/export/transactions.csv']);
+function isBulk(req) {
+  const path = req.path;
+  if (path.startsWith('/portable-backups') || path.startsWith('/restore-sessions')) return true;
+  if (req.method === 'POST' && (BULK_POST.has(path) || (path.startsWith('/sms/v2/') && path.endsWith(':batch')))) return true;
+  return req.method === 'GET' && BULK_GET.has(path);
+}
+
 function classify(req) {
   const path = req.path;
   if (path === '/health' || path === '/ready') return null; // liveness probes never queue
   if (req.method === 'POST' && path === '/sync/push') return 'push';
+  if (isBulk(req)) return 'bulk';
   if (req.method === 'GET' && HEAVY_GET.has(path)) return 'heavy';
   return 'default';
 }
@@ -115,6 +127,7 @@ function createAdmission({
   maxConcurrent = 20,
   heavyMax = 3,
   pushMax = 3,
+  bulkMax = 2,
   maxQueue = 200,
   maxWaitMs = 8000,
 } = {}) {
@@ -122,6 +135,7 @@ function createAdmission({
   const classes = {
     push: new Gate(pushMax, maxQueue),
     heavy: new Gate(heavyMax, maxQueue),
+    bulk: new Gate(bulkMax, maxQueue),
   };
   const userLanes = new Map(); // userId -> Gate(1); removed when idle
 
@@ -218,6 +232,8 @@ function createAdmission({
     pushQueued: classes.push.queue.length,
     heavyActive: classes.heavy.active,
     heavyQueued: classes.heavy.queue.length,
+    bulkActive: classes.bulk.active,
+    bulkQueued: classes.bulk.queue.length,
     pushLanes: userLanes.size,
     admitted: stats.admitted,
     refused: stats.refused,

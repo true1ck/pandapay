@@ -258,3 +258,22 @@ test('unmapped errors keep their 500, and a route that answers something else is
   assert.equal(b.res.statusCode, 409);
   assert.deepEqual(b.res.body, { error: 'A tag with that name already exists.' });
 });
+
+test('long-running bulk routes get their own small cap and cannot take every slot', async () => {
+  assert.equal(classify({ method: 'POST', path: '/statement-imports' }), 'bulk');
+  assert.equal(classify({ method: 'GET', path: '/statement-imports' }), 'default'); // listing is ordinary
+  assert.equal(classify({ method: 'GET', path: '/export' }), 'bulk');
+  assert.equal(classify({ method: 'POST', path: '/sms/v2/facts:batch' }), 'bulk');
+  assert.equal(classify({ method: 'GET', path: '/portable-backups/export-v1' }), 'bulk');
+  assert.equal(classify({ method: 'POST', path: '/user-cards/import' }), 'bulk');
+  const mw = createAdmission({ maxConcurrent: 10, bulkMax: 2, maxWaitMs: 1000 });
+  const bulk = [1, 2, 3, 4].map(() => send(mw, { method: 'POST', path: '/statement-imports' }));
+  const light = send(mw, { path: '/categories' });
+  await tick();
+  assert.deepEqual(bulk.map((x) => x.started), [true, true, false, false], 'only two bulk requests run at once');
+  assert.equal(light.started, true, 'ordinary traffic is not blocked behind the bulk line');
+  assert.equal(mw.snapshot().bulkActive, 2);
+  finish(bulk[0].res); await tick();
+  assert.equal(bulk[2].started, true);
+  [bulk[1], bulk[2], bulk[3], light].forEach((x) => finish(x.res));
+});

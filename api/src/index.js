@@ -172,6 +172,7 @@ if (process.env.ADMISSION_ENABLED !== 'false') {
     maxConcurrent: Number(process.env.ADMISSION_MAX_CONCURRENT) || config.dbPoolMax,
     heavyMax: Number(process.env.ADMISSION_HEAVY_MAX) || Math.max(2, Math.round(config.dbPoolMax * 0.6)),
     pushMax: Number(process.env.ADMISSION_PUSH_MAX) || Math.max(2, Math.round(config.dbPoolMax * 0.6)),
+    bulkMax: Number(process.env.ADMISSION_BULK_MAX) || Math.max(1, Math.round(config.dbPoolMax * 0.3)),
     maxWaitMs: Number(process.env.ADMISSION_MAX_WAIT_MS) || 13000,
   });
   app.use(line);
