@@ -57,21 +57,23 @@ async function withUserClient(userId, fn) {
   }
   let discardConnection;
   try {
-    await client.query('BEGIN');
-    // Keep every request bounded at the database too. Without a statement
-    // deadline a stalled report query can keep the HTTP request, transaction,
-    // and pool connection alive indefinitely, which is exactly the failure
+    // One round trip for the whole transaction preamble (it used to be BEGIN, then one set_config call per
+    // setting). Simple-protocol multi-statement query; values go through escapeLiteral, never string-built.
+    // Keep every request bounded at the database too. Without a statement deadline a stalled report query can
+    // keep the HTTP request, transaction, and pool connection alive indefinitely, which is exactly the failure
     // mode that presents as an endless skeleton on mobile.
-    await client.query(
-      "SELECT set_config('statement_timeout', $1, true)",
-      [`${config.dbStatementTimeoutMs}ms`],
-    );
-    if (userId) {
-      await client.query("SELECT set_config('app.user_id', $1, true)", [userId]);
-      if(config.accountLifecycleEnabled){await client.query(ASSERT_ACCESS_SQL,[userId]);await lifecycleJournalRuntime.readiness();}
-    }
+    const preamble = [
+      'BEGIN',
+      `SELECT set_config('statement_timeout', ${client.escapeLiteral(`${config.dbStatementTimeoutMs}ms`)}, true)`,
+    ];
+    if (userId) preamble.push(`SELECT set_config('app.user_id', ${client.escapeLiteral(String(userId))}, true)`);
     if (process.env.SMS_LEARNING_HMAC_KEY?.length >= 32) {
-      await client.query("SELECT set_config('app.sms_learning_hmac_key', $1, true)", [process.env.SMS_LEARNING_HMAC_KEY]);
+      preamble.push(`SELECT set_config('app.sms_learning_hmac_key', ${client.escapeLiteral(process.env.SMS_LEARNING_HMAC_KEY)}, true)`);
+    }
+    await client.query(preamble.join('; '));
+    if (userId && config.accountLifecycleEnabled) {
+      await client.query(ASSERT_ACCESS_SQL, [userId]);
+      await lifecycleJournalRuntime.readiness();
     }
     const result = await fn(client);
     await client.query('COMMIT');

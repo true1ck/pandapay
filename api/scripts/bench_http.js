@@ -127,6 +127,37 @@ ${stderr.slice(-800)}`);
         await new Promise((r) => setTimeout(r, 200));
       }
     }
+    if (flag('snapshot')) {
+      // Equivalence proof: record every GET route's response (volatile fields blanked) for the first --snapusers
+      // seeded users into DIR. Run before and after a change, then: node scripts/snapshot_diff.js DIR_A DIR_B
+      const dir = flag('snapshot'); const K = Number(flag('snapusers', '4'));
+      fs.mkdirSync(dir, { recursive: true });
+      const SNAP = [...ROUTES.filter((r) => r !== '/health'), '/spend-report?period=week', '/spend-report?period=quarter',
+        '/transactions?pageSize=50&status=deleted', '/transactions?q=SWIGGY&pageSize=50', '/transactions?pageSize=200',
+        '/consents', '/user-settings', '/notifications', '/referrals', '/lounge-usage', '/notification-preferences', '/profile', '/home-summary?tz=America/New_York'];
+      const strip = (a, b) => {
+        if (JSON.stringify(a) === JSON.stringify(b)) return a;
+        if (a && b && typeof a === 'object' && typeof b === 'object' && Array.isArray(a) === Array.isArray(b)) {
+          if (Array.isArray(a)) return a.length === b.length ? a.map((x, i) => strip(x, b[i])) : '<volatile>';
+          const out = {}; for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) out[k] = strip(a[k], b[k]); return out;
+        }
+        return '<volatile>';
+      };
+      const fetchBody = (path, tok) => new Promise((resolve, reject) => http.get({ host: '127.0.0.1', port: PORT, path, headers: { authorization: `Bearer ${tok}`, 'x-sms-pipeline': 'v2' } }, (r) => { let b = ''; r.on('data', (c) => { b += c; }); r.on('end', () => resolve({ status: r.statusCode, body: b })); }).on('error', reject));
+      let files = 0;
+      for (let v = 0; v < K; v += 1) {
+        const tok = tokenFor(v);
+        for (const path of SNAP) {
+          await fetchBody(path, tok); // warm: GET /user-cards repairs state on its first call
+          const a = await fetchBody(path, tok); const b = await fetchBody(path, tok);
+          const parse = (x) => { try { return JSON.parse(x.body); } catch (_) { return x.body; } };
+          const doc = { status: a.status, body: strip(parse(a), parse(b)) };
+          fs.writeFileSync(`${dir}/u${v}__${path.replace(/[^a-z0-9]+/gi, '_')}.json`, JSON.stringify(doc, null, 1)); files += 1;
+        }
+      }
+      console.log(`snapshot: ${files} responses (${K} users x ${SNAP.length} routes) written to ${dir}`);
+      return;
+    }
     if (flag('push')) {
       // Write path: push N transaction `note` edits per request as one device (see sync_push_handlers.js), R requests.
       const N = Number(flag('push')); const R = Number(flag('reps', '10')); const tok = tokenFor(0);
