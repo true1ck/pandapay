@@ -38,18 +38,29 @@ function addDays(d, n) {
 // boundaries in that zone, then hand Postgres UTC instants for its half-open
 // timestamp filters. This matters in India too: a transaction at 00:15 IST is
 // still in the previous UTC day.
+const zonedFormatters = new Map();
+function zonedFormatter(timeZone) {
+  let formatter = zonedFormatters.get(timeZone);
+  if (!formatter) {
+    // Building an Intl.DateTimeFormat costs far more than formatting with one, so keep one per zone.
+    formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      calendar: 'gregory',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    });
+    if (zonedFormatters.size < 200) zonedFormatters.set(timeZone, formatter);
+  }
+  return formatter;
+}
+
 function zonedParts(date, timeZone) {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    calendar: 'gregory',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(date);
+  const parts = zonedFormatter(timeZone).formatToParts(date);
   const values = Object.fromEntries(parts
     .filter((part) => part.type !== 'literal')
     .map((part) => [part.type, Number(part.value)]));
@@ -725,7 +736,20 @@ function periodElapsedFraction({ start, end }, now = new Date()) {
   return done / total;
 }
 
+// The server's time-zone catalogue does not change while it runs, but pg_timezone_names re-reads the zoneinfo
+// directory on every query (~15 ms of database CPU per call). Remember each answer, valid or not.
+const timeZoneAnswers = new Map();
+async function resolveTimeZone(client, requested, fallback = 'Asia/Kolkata') {
+  let known = timeZoneAnswers.get(requested);
+  if (known === undefined) {
+    known = (await client.query('SELECT 1 FROM pg_timezone_names WHERE name = $1', [requested])).rowCount > 0;
+    if (timeZoneAnswers.size < 1000) timeZoneAnswers.set(requested, known);
+  }
+  return known ? requested : fallback;
+}
+
 module.exports = {
+  resolveTimeZone,
   PERIODS,
   customPeriodBounds,
   previousCustomPeriodBounds,

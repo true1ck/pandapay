@@ -6763,8 +6763,7 @@ app.get('/spend-report', requireAuth, async (req, res) => {
       // Validate against Postgres' timezone catalogue before using the zone
       // for calendar boundaries. An invalid device setting should degrade to
       // the product default, not turn the whole Insights screen into a 500.
-      const tzOk = await client.query(`SELECT 1 FROM pg_timezone_names WHERE name = $1`, [requestedTimeZone]);
-      const timeZone = tzOk.rowCount > 0 ? requestedTimeZone : 'Asia/Kolkata';
+      const timeZone = await spendReports.resolveTimeZone(client, requestedTimeZone);
       const calendarOptions = { timeZone };
       const current = period === 'custom'
         ? spendReports.customPeriodBounds(req.query.from, req.query.to, calendarOptions)
@@ -6840,11 +6839,7 @@ app.get('/assistant/spending-summary', requireAuth, async (req, res) => {
   try {
     const summary = await withUserClient(req.userId, async (rawClient) => {
       const client = transactionTags.tagQueryClient(rawClient, req.userId, tagFilter);
-      const tzOk = await client.query(
-        `SELECT 1 FROM pg_timezone_names WHERE name = $1`,
-        [requestedTimeZone]
-      );
-      const timeZone = tzOk.rowCount > 0 ? requestedTimeZone : 'Asia/Kolkata';
+      const timeZone = await spendReports.resolveTimeZone(client, requestedTimeZone);
       const bounds = spendReports.periodBounds(period, anchor, { timeZone });
       const totals = await spendReports.periodTotals(client, req.userId, bounds);
       const latestSms = await client.query(
@@ -7686,8 +7681,7 @@ app.get('/home-summary', requireAuth, async (req, res) => {
       // Validate the timezone against Postgres' own catalogue before
       // interpolating it — AT TIME ZONE takes a string, and an unknown name
       // raises rather than falling back, which would 500 the whole header.
-      const tzOk = await client.query(`SELECT 1 FROM pg_timezone_names WHERE name = $1`, [tz]);
-      const zone = tzOk.rowCount > 0 ? tz : 'Asia/Kolkata';
+      const zone = await spendReports.resolveTimeZone(client, tz);
 
       const totals = await client.query(
         `SELECT
