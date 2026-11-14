@@ -62,6 +62,17 @@ void main() {
     );
   });
 
+  test('the rows a local report is built from carry the queued amount (F2)', () {
+    seed(777);
+    commands.enqueue(
+      kind: 'transaction_typed_fields',
+      target: 't1',
+      payload: {'id': 't1', 'amountInr': 888},
+    );
+    final rows = store.transactions('a', const TransactionQuery())!.rows;
+    expect(rows.single.amount.paise, 88800);
+  });
+
   test('clearing the category is shown too, and a payment method edit', () {
     seed(100);
     commands.enqueue(
