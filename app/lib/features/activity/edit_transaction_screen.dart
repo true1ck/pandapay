@@ -499,6 +499,33 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     // decision needs the server's own checks, and a row that exists only as a
     // queued quick-add has no server id yet, so those keep the direct call
     // below.
+    // A row that is only a queued quick-add has no server id: rewrite the
+    // queued entry itself, so the edit works offline and is sent with it.
+    const queuedPrefix = 'local-outbox:';
+    if (_selfTransfer == null &&
+        _clearedSelfTransfer == null &&
+        widget.transactionId.startsWith(queuedPrefix)) {
+      final fields = _changedServerFields(original, amount);
+      final columns = <String, Object?>{
+        for (final e in fields.entries)
+          if (e.key == 'amount_inr')
+            'amount_paise': Money.fromRupees(amount).paise
+          else if (e.key == 'occurred_at')
+            'occurred_at': _occurredAt?.millisecondsSinceEpoch
+          else
+            e.key: e.value,
+        if (_methodChanged) 'payment_method': _methodToSend,
+      };
+      final outbox = await ref.read(outboxRepositoryProvider.future);
+      if (await outbox.updateQueued(
+        widget.transactionId.substring(queuedPrefix.length),
+        columns,
+      )) {
+        ref.invalidate(pendingOutboxCountProvider);
+        return;
+      }
+      // Already delivered: fall through to the server row's edit below.
+    }
     if (_selfTransfer == null &&
         _clearedSelfTransfer == null &&
         !widget.transactionId.startsWith('local')) {

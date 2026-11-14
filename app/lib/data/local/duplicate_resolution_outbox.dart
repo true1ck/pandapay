@@ -1,6 +1,7 @@
 import '../api_exception.dart';
 import '../user_cards_repository.dart';
 import 'app_database.dart';
+import '../connectivity/server_backoff.dart';
 import 'queue_retry_policy.dart';
 
 /// Returns true when retrying cannot change the outcome because the candidate
@@ -198,6 +199,7 @@ class DuplicateResolutionOutboxRepository {
   }) async {
     var sent = 0;
     for (final entry in pending(includeBlocked: false, limit: maxEntries)) {
+      if (ServerBackoff.process.isPaused) break; // the server asked us to wait
       try {
         await repository.resolveDuplicateCandidate(
           entry.candidateId,

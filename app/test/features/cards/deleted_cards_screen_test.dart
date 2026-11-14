@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/data/api_exception.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local_first/command_outbox.dart';
-import 'package:pandapay/features/cards/add_card_local_first.dart' show CardCommand;
+import 'package:pandapay/features/cards/add_card_local_first.dart' show CardCommand, CardCommandContext, cardCommandHandlers;
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/cards/deleted_cards_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -83,6 +84,39 @@ Future<CommandOutbox> _pump(
 }
 
 void main() {
+  test('a restore the server refuses (409 card_already_added) parks and the '
+      'phone goes back to the server state', () async {
+    final db = openInMemoryForTesting();
+    addTearDown(db.close);
+    final commands = CommandOutbox(db, namespace: 'test');
+    commands.enqueue(
+      kind: CardCommand.unarchiveCard,
+      target: 'uc1',
+      payload: {'cardId': 'uc1'},
+    );
+    final repo = _FakeArchivedRepository()
+      ..failure = ApiException(
+        'unarchive failed: 409 {"error":"card_already_added"}',
+      );
+    var undone = 0;
+    final delivered = await commands.flush(
+      cardCommandHandlers(
+        CardCommandContext(
+          userCards: repo,
+          overrides: null,
+          commands: commands,
+          db: db.db,
+          namespace: 'test',
+          onChanged: () => undone++,
+        ),
+      ),
+    );
+    expect(delivered, 0);
+    expect(commands.parkedCount, 1);
+    expect(commands.pendingCount, 0);
+    expect(undone, 1, reason: 'the local un-archive was undone');
+  });
+
   testWidgets('lists archived cards with a restore action', (tester) async {
     await _pump(
       tester,

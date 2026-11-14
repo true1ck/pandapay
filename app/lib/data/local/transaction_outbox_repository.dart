@@ -7,6 +7,7 @@ import 'package:crypto/crypto.dart';
 import '../user_cards_repository.dart';
 import 'app_database.dart';
 import 'financial_store.dart';
+import '../connectivity/server_backoff.dart';
 import 'queue_retry_policy.dart';
 import '../local_first/provisional_cards.dart';
 
@@ -131,6 +132,44 @@ class TransactionOutboxRepository {
     for (final entry in await all()) {
       financialStore?.saveProvisional(namespace, _provisional(entry));
     }
+  }
+
+  static const _editableColumns = {
+    'amount_paise',
+    'occurred_at',
+    'category_id',
+    'user_category_id',
+    'merchant_name',
+    'user_card_id',
+    'instrument',
+    'entry_kind',
+    'payment_method',
+    'rail',
+  };
+
+  /// Rewrites fields of an entry that has not been sent yet (the person edited
+  /// a transaction they just quick-added, offline). [columns] maps outbox
+  /// column names to new values (null clears). The list row is rewritten too.
+  /// Returns false when the entry is no longer queued (it was delivered).
+  Future<bool> updateQueued(
+    String clientMutationId,
+    Map<String, Object?> columns,
+  ) async {
+    if (columns.isEmpty) return true;
+    assert(columns.keys.every(_editableColumns.contains));
+    _appDb.db.execute(
+      'UPDATE transaction_outbox_entries SET '
+      '${columns.keys.map((c) => '$c=?').join(', ')} '
+      'WHERE namespace=? AND client_mutation_id=?',
+      [...columns.values, namespace, clientMutationId],
+    );
+    if (_appDb.db.updatedRows == 0) return false;
+    for (final entry in await all()) {
+      if (entry.clientMutationId == clientMutationId) {
+        financialStore?.saveProvisional(namespace, _provisional(entry));
+      }
+    }
+    return true;
   }
 
   /// Changes the category and/or card of an entry that has not been sent yet
@@ -399,6 +438,7 @@ class TransactionOutboxRepository {
     // H3-2: a card that is only on the phone is not on the server yet.
     final provisional = provisionalCardIds(_appDb.db, namespace);
     for (final entry in due) {
+      if (ServerBackoff.process.isPaused) break; // the server asked us to wait
       final card = entry.userCardId;
       if (card != null && provisional.contains(card)) {
         if (cardAddParked(_appDb.db, namespace, card)) {

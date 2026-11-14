@@ -104,4 +104,25 @@ void main() {
     expect(limit.payload['creditLimitInr'], 100);
     expect(commands.pendingOf({'points_adjust'}).single.payload['newBalance'], 100);
   });
+
+  test('a learned limit keeps the field edit already queued for the card', () async {
+    final db = openInMemoryForTesting();
+    final commands = CommandOutbox(db, namespace: 'ns');
+    // The person renamed the card offline; the SMS then teaches a limit.
+    commands.enqueue(
+      kind: 'card_fields_patch',
+      target: 'card',
+      payload: {'cardId': 'card', 'nickname': 'Travel'},
+    );
+    final state = CardStateAdapter(
+      Repository(),
+      commands: commands,
+      store: FinancialStore(db),
+      namespace: 'ns',
+    );
+    expect(await state.apply(instrument(10000, 100), card()), isTrue);
+    final patch = commands.pendingOf({'card_fields_patch'}).single;
+    expect(patch.payload['nickname'], 'Travel');
+    expect(patch.payload['creditLimitInr'], 100);
+  });
 }

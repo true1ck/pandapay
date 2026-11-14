@@ -75,6 +75,9 @@ class FakeServer {
   /// Path prefix -> status. Lets a test make one route fail (poison row).
   final Map<String, int> failPrefix = {};
 
+  /// Sent as `Retry-After` with a forced 429/503 answer.
+  int? retryAfterSeconds;
+
   /// A predicate over (method, path, body) -> status; first non-null wins.
   int? Function(String method, String path, Map<String, dynamic>? body)?
   failWhen;
@@ -293,7 +296,13 @@ class FakeServer {
     // Health probe and public reads are never forced to fail.
     final forced = _forcedFailure(rec);
     if (forced != null) {
-      return _json(forced, {'error': forced == 403 ? 'phone_required' : 'x'});
+      return _json(
+        forced,
+        {'error': forced == 403 ? 'phone_required' : 'x'},
+        headers: retryAfterSeconds == null || (forced != 429 && forced != 503)
+            ? null
+            : {'retry-after': '$retryAfterSeconds'},
+      );
     }
     final mutating = request.method != 'GET';
     final response = await _route(rec, request);
@@ -601,7 +610,9 @@ class FakeServer {
         return _json(200, {'transaction': t});
       }
     }
-    if (segs.length == 3 && r.method == 'POST') {
+    if (segs.length == 3 &&
+        (r.method == 'POST' ||
+            (r.method == 'PUT' && segs[2] == 'spend-exclusion'))) {
       final t = transactions[segs[1]];
       if (t == null) return _json(404, {'error': 'not found'});
       switch (segs[2]) {
@@ -642,6 +653,7 @@ class FakeServer {
       'merchant_name': 'merchant_name',
       'amountInr': 'amount_inr',
       'amount_inr': 'amount_inr',
+      'occurredAt': 'occurred_at',
       'instrument': 'instrument',
       'entryKind': 'entry_kind',
       'entry_kind': 'entry_kind',

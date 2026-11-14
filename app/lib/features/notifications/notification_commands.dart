@@ -37,7 +37,13 @@ Map<String, CommandHandler> notificationCommandHandlers({
   required UserCardsRepository userCards,
   NotificationPreferencesRepository? prefs,
   void Function()? onInboxSynced,
+  // Called when the server refused a settings command for good: the phone's
+  // copy is read again, and the server's value wins (a parked command no
+  // longer holds the stored value back).
+  void Function()? onRefused,
 }) {
+  Future<void> guarded(Future<void> Function() call) =>
+      undoIfRefused(call, () => onRefused?.call());
   NotificationPreferencesRepository need() =>
       prefs ?? (throw StateError('Notification settings are not available yet'));
   return {
@@ -54,13 +60,13 @@ Map<String, CommandHandler> notificationCommandHandlers({
       );
       onInboxSynced?.call();
     },
-    NotificationCommand.updatePreferences: (p) async {
+    NotificationCommand.updatePreferences: (p) => guarded(() async {
       await need().update(Map<String, dynamic>.from(p['changes'] as Map));
-    },
+    }),
     NotificationCommand.muteMerchant: (p) =>
-        need().muteMerchant(p['merchantId'] as String),
+        guarded(() => need().muteMerchant(p['merchantId'] as String)),
     NotificationCommand.unmuteMerchant: (p) =>
-        need().unmuteMerchant(p['merchantId'] as String),
+        guarded(() => need().unmuteMerchant(p['merchantId'] as String)),
   };
 }
 

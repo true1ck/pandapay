@@ -49,6 +49,22 @@ Map<String, ParkedRetry> buildSyncRetryActions(Ref ref) => {
   },
 };
 
+/// Gives up on one queue's parked rows (the "Discard" next to Retry): the
+/// server's own copy then shows. Only for queues where dropping is safe.
+final syncDiscardActionsProvider = Provider<Map<String, ParkedRetry>>(
+  (ref) => {
+    'command_outbox': () async {
+      final commands = await ref.read(commandOutboxProvider.future);
+      for (final parked in commands.parked()) {
+        commands.discardParked(parked.id);
+      }
+      ref.read(commandOutboxRevisionProvider.notifier).state++;
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(userCardsProvider);
+    },
+  },
+);
+
 /// Asks the normal machinery to send what was just put back: the outbox flush
 /// (transactions, commands, duplicates), the sync engine (edits, tags,
 /// foreign payments, Split documents) and a recount for the strip. Override in
