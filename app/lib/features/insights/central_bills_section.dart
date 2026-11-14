@@ -93,9 +93,12 @@ final centralBillsProjectionProvider =
   if (!kInsightsLocalFirst) return api.fetch();
   // WP-C7: keep the last good response so the section does not vanish offline
   // (stale-ok: any failure except a rejected session serves the saved copy).
-  final cache = await ref.watch(responseCacheProvider.future).catchError(
-    (_) => null,
-  );
+  ResponseCache? cache;
+  try {
+    cache = await ref.watch(responseCacheProvider.future);
+  } catch (_) {
+    cache = null;
+  }
   final key = '${ref.watch(cacheNamespaceProvider)}:bills_projections';
   try {
     String? body;

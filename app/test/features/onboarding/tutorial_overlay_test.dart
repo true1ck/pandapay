@@ -5,6 +5,7 @@ import 'package:pandapay/app/design/app_theme.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/app/router.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
+import 'package:pandapay/data/notification_preferences_repository.dart';
 import 'package:pandapay/features/cards/my_cards_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -47,6 +48,10 @@ Future<void> _pumpApp(WidgetTester tester, {required bool tutorialSeen}) async {
         ),
         foreignPaymentsProvider.overrideWith((ref) async => const []),
         homeSummaryProvider.overrideWith((ref) async => null),
+        // The real loader keeps an 8 s fetch timeout pending in fake time.
+        notificationPreferencesProvider.overrideWith(
+          (ref) async => NotificationPreferences.defaults,
+        ),
         bankAccountSummariesProvider.overrideWith((ref) async => const []),
         cardOverridesProvider.overrideWith((ref) async => const []),
         homeEngagementCheckInProvider.overrideWith((ref, day) async {}),

@@ -137,9 +137,10 @@ void main() {
           'amountInr': Money.fromPaise(99900).rupees,
           'categoryId': 'dining',
           'merchantName': 'Cafe',
+          // The repository sends UTC (WP-C5), whatever the machine's zone.
           'occurredAt': DateTime.fromMillisecondsSinceEpoch(
             1700000000000,
-          ).toIso8601String(),
+          ).toUtc().toIso8601String(),
           'note': 'lunch',
           'instrument': 'cash',
           'entryKind': 'spend',
