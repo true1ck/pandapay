@@ -73,6 +73,48 @@ void main() {
     });
   });
 
+  group('notMineSuggestions', () {
+    MovementFact pay(String who, String at) => move(
+      'debit', 'p2p', 10000, at: at, counterparty: party(name: who, kind: 'person'),
+    );
+
+    test('suggests only a detected account whose money never names the owner or an own account', () {
+      final stranger = acct(uuid(20), 'alphabank', '1111', status: InstrumentStatus.detected);
+      final mine = acct(uuid(21), 'alphabank', '2222', status: InstrumentStatus.detected);
+      final moved = acct(uuid(22), 'alphabank', '3333', status: InstrumentStatus.detected);
+      final confirmed = acct(uuid(23), 'alphabank', '4444');
+      final f1 = pay('ASHA RAO', '2026-11-01T10:00:00Z');
+      final f2 = pay('RAVI MOHAN PATIL', '2026-11-02T10:00:00Z');
+      final f3 = pay('ASHA RAO', '2026-11-03T10:00:00Z');
+      final f4 = pay('ASHA RAO', '2026-11-04T10:00:00Z');
+      final byFact = {
+        f1.factId: stranger.instrumentId,
+        f2.factId: mine.instrumentId,
+        f3.factId: moved.instrumentId,
+        f4.factId: confirmed.instrumentId,
+      };
+      final transfer = Event(
+        eventId: 'e1',
+        type: EventType.ownTransfer,
+        status: EventStatus.complete,
+        legs: [EventLeg(factId: f3.factId, role: LegRole.debitLeg)],
+        confidence: 1,
+        occurredAt: DateTime.utc(2026, 11, 3),
+        amountMinor: 10000,
+      );
+      Set<String> ask(OwnerIdentity who) => notMineSuggestions(
+        instruments: [stranger, mine, moved, confirmed],
+        facts: [f1, f2, f3, f4],
+        instrumentIdByFactId: byFact,
+        events: [transfer],
+        identity: who,
+      );
+      final owner = OwnerIdentity.fromEntries(['Ravi Mohan Patil']);
+      expect(ask(owner), {stranger.instrumentId});
+      expect(ask(OwnerIdentity()), isEmpty); // no owner name known: no hint
+    });
+  });
+
   group('a card payment notice and a new number', () {
     final cardA = card(uuid(10), 'alphabank', '9008');
     final bankAcct = acct(uuid(12), 'alphabank', '7788');

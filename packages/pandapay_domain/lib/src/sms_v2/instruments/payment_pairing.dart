@@ -1,4 +1,6 @@
 import '../contract/enums.dart';
+import '../contract/event.dart';
+import '../linker/owner_identity.dart';
 import '../contract/fact.dart';
 import '../contract/instrument.dart';
 
@@ -38,4 +40,46 @@ bool cardPaymentMayCreateCard(Fact fact, Iterable<Instrument> known) {
         i.issuerSlug == mention.issuerSlug &&
         i.status != InstrumentStatus.rejected,
   );
+}
+
+/// Detected bank accounts that look like someone else's: money moved on them,
+/// none of their messages names the owner (as a payer or payee), and none of
+/// their money moved to or from another of the owner's accounts. A hint for the
+/// "Not mine" button only; nothing is rejected or hidden because of it. With no
+/// owner name known there is nothing to compare, so nothing is suggested.
+Set<String> notMineSuggestions({
+  required Iterable<Instrument> instruments,
+  required Iterable<Fact> facts,
+  required Map<String, String> instrumentIdByFactId,
+  required Iterable<Event> events,
+  required OwnerIdentity identity,
+}) {
+  if (identity.names.isEmpty) return const {};
+  final seen = <String>{};
+  final named = <String>{};
+  for (final f in facts) {
+    final id = instrumentIdByFactId[f.factId];
+    if (id == null || f is! MovementFact) continue;
+    seen.add(id);
+    final cp = f.counterparty;
+    if (cp != null &&
+        (cp.kind == CounterpartyKind.own || identity.matchesName(cp.name))) {
+      named.add(id);
+    }
+  }
+  final transfers = <String>{
+    for (final e in events)
+      if (e.type == EventType.ownTransfer)
+        for (final l in e.legs)
+          ?instrumentIdByFactId[l.factId],
+  };
+  return {
+    for (final i in instruments)
+      if (i.kind == InstrumentKind.bankAccount &&
+          i.status == InstrumentStatus.detected &&
+          seen.contains(i.instrumentId) &&
+          !named.contains(i.instrumentId) &&
+          !transfers.contains(i.instrumentId))
+        i.instrumentId,
+  };
 }
