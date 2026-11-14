@@ -728,6 +728,11 @@ class _Run {
     final ft = other.match.factType;
     if (ft != null && ft != FactType.movement) return [range(byType[ft])];
     final tol = rule.join.amountTolerancePct ?? 0;
+    if (kind == LinkRuleKind.cardBill && tol == 0 && a != null) {
+      // Exact amount first (as always), then a bill app that rounds or adds a
+      // small fee: the amount test in _amountOk allows the small gap.
+      return [byAmount[a] ?? const [], range(byType[FactType.movement])];
+    }
     if (tol == 0 && a != null) return [byAmount[a] ?? const []];
     if (kind == LinkRuleKind.refund) {
       if (i == null) return const []; // a refund needs its card or account
@@ -786,9 +791,16 @@ class _Run {
       if (_isReference(role)) return a >= b;
       return true;
     }
-    if (tol == 0) return a == b;
+    if (tol == 0) {
+      return a == b || (kinds[rule] == LinkRuleKind.cardBill && _nearBill(a, b));
+    }
     return (a - b).abs() * 100 <= (a > b ? a : b) * tol;
   }
+
+  /// A card bill paid through an app: at most 25 rupees apart.
+  /// ponytail: no percentage; 0.5% of a large bill is 100+ rupees and made
+  /// look-alike bills pair in an order-dependent way.
+  static bool _nearBill(int a, int b) => (a - b).abs() <= 2500;
 
   static bool _isReference(LegRole r) =>
       r == LegRole.holdPlaced || r == LegRole.original;
@@ -957,6 +969,13 @@ class _Run {
       final fi = _instId(f);
       final gi = _instId(g);
       if (fi != null && gi != null && fi != gi) continue;
+      // Days apart (LINK-DUP-CARD-PAYMENT-3D): only on the same known card.
+      if (rule.join.windowHours > 24 &&
+          moneyLeg.match.instrumentKind?.contains(InstrumentKind.creditCard) ==
+              true &&
+          (fi == null || fi != gi)) {
+        continue;
+      }
       final shared = _sharesRef(f, g);
       if (!shared && _conflictingRefs(f, g)) continue;
       // The same template on the same account twice is two real payments.
