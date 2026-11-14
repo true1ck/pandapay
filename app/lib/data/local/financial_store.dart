@@ -562,7 +562,10 @@ class FinancialStore {
         .map((r) => jsonDecode(r['payload'] as String) as Map<String, dynamic>)
         .toList();
     final edits = database.db.select(
-      'SELECT entity_id, op, payload_json FROM sync_pending_changes WHERE namespace=? AND entity=?${id == null ? '' : ' AND entity_id=?'} ORDER BY client_seq',
+      // A refused edit (attempts >= SyncQueue.maxAttempts, not yet applied by
+      // the server) is not laid over the row: the server's value wins, the
+      // same as for a parked command. Applied-but-not-yet-fetched stay.
+      'SELECT entity_id, op, payload_json FROM sync_pending_changes WHERE namespace=? AND entity=? AND NOT (attempts>=5 AND in_flight!=2)${id == null ? '' : ' AND entity_id=?'} ORDER BY client_seq',
       [ns, entity == 'cards' ? 'user_cards' : entity, ?id],
     );
     final indexes = <Object?, int>{

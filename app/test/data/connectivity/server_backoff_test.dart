@@ -102,4 +102,19 @@ void main() {
       );
     }
   });
+
+  test('a push-provider 503 and a read 429 never pause the write queues', () {
+    final b = ServerBackoff.test(now: () => t0, random: Random(1));
+    b.noteResponse(503, null, path: '/notification-devices', method: 'POST');
+    expect(b.isPaused, isFalse);
+    b.noteResponse(429, '1909', path: '/sms/v2/rules', method: 'GET');
+    expect(b.isPaused, isFalse);
+    // A 503 on a read, and a 429 on a write, are the server asking for room.
+    b.noteResponse(503, '5', path: '/sms/v2/rules', method: 'GET');
+    expect(b.isPaused, isTrue);
+    b.resetForTest();
+    b.noteResponse(429, '5', path: '/transactions/x', method: 'PATCH');
+    expect(b.isPaused, isTrue);
+    b.resetForTest();
+  });
 }

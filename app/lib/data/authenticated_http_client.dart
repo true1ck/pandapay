@@ -109,6 +109,7 @@ class AuthenticatedHttpClient extends http.BaseClient {
         response.statusCode,
         response.headers['retry-after'],
         path: request.url.path,
+        method: request.method,
       );
       // Header arrival does not mean an outbox operation finished. Retain
       // admission through response consumption, cancellation or stream error.

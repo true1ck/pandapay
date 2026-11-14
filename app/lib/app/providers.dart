@@ -3357,6 +3357,7 @@ final outboxFlushProvider = Provider<void>((ref) {
           return tags.allTags.any((t) => t.id == tagId && !t.isArchived);
         },
       );
+      final parkedBefore = commands.parkedCount;
       // WP-C6: a card added offline must exist on the server (and its id be
       // remapped) before queued transactions that name it are sent.
       final addedCards = await commands.flush(
@@ -3390,6 +3391,14 @@ final outboxFlushProvider = Provider<void>((ref) {
         ref.read(commandOutboxRevisionProvider.notifier).state++;
         ref.invalidate(budgetsServerProvider);
         ref.invalidate(recurringReportServerProvider);
+      }
+      // A command the server refused is parked and no longer overlays the row:
+      // every screen holding the refused value (list, totals, an open detail)
+      // must read the server's value again (F-6).
+      if (!disposed && commands.parkedCount != parkedBefore) {
+        ref.read(commandOutboxRevisionProvider.notifier).state++;
+        ref.invalidate(transactionsProvider);
+        ref.invalidate(homeSummaryProvider);
       }
       final duplicateOutbox = await ref.read(
         duplicateResolutionOutboxRepositoryProvider.future,

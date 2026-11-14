@@ -55,12 +55,26 @@ class ServerBackoff {
   /// pause. [path] is the request path: `/auth/*` limiters (OTP, login) are
   /// per person and per endpoint and say nothing about sync, so they are
   /// ignored.
-  void noteResponse(int status, String? retryAfterHeader, {String? path}) {
+  void noteResponse(
+    int status,
+    String? retryAfterHeader, {
+    String? path,
+    String? method,
+  }) {
     if (status != 429 && status != 503) return;
     if (path != null &&
         (path.contains('/auth/') || path.contains('/users/me/phone'))) {
       return; // per-person limiters (OTP, phone), not server load
     }
+    // The push provider failing (misconfigured key, outage) says nothing about
+    // the API's load, and its own registration retry backs off by itself. It
+    // used to restart this pause every few seconds and starve every queue.
+    if (path != null && path.contains('/notification-devices')) return;
+    // A read limit (429 on a GET) is per endpoint: that reader keeps its own
+    // cooldown. Freezing every write queue for minutes because of it left
+    // queued edits unsent. A 503 on any method, and a 429 on a write, still
+    // pause everything.
+    if (status == 429 && (method == 'GET' || method == 'HEAD')) return;
     var base = parseRetryAfter(retryAfterHeader, _now()) ?? defaultDelay;
     if (base < minDelay) base = minDelay;
     // Cap first, then jitter: phones told the same capped delay still spread.
