@@ -6,8 +6,9 @@ import '../storage/event_store.dart';
 import '../storage/fact_store.dart';
 import 'ai_withdrawal.dart';
 
-/// Which earlier salary credits should be read again because they were read
-/// without saying who paid.
+/// Which earlier movements should be read again because they were read without
+/// saying who was paid or who paid: salary credits (the default), or, through
+/// [SalaryRecheck.payeeless], spends read by a fallback rule.
 ///
 /// Money already read is frozen: a better rule (one that now finds the employer
 /// in the narration) does not touch the events an older rule made. The salary
@@ -33,7 +34,35 @@ class SalaryRecheck {
     required this.namespace,
     required this.bundle,
     this.categoryIdBySlug = const {},
-  });
+  }) : _where = _salaryWhere,
+       _types = const {EventType.income};
+
+  /// Spends and transfers that a fallback reading left without a payee (the
+  /// "Unknown merchant" rows). Only readings made by a generic or solver rule
+  /// qualify: a bank's own rule that prints no payee (an ATM withdrawal) can
+  /// never gain one, so those are left alone. Picked by SQL on purpose; reading
+  /// each message again to see whether it would improve is engine work on the
+  /// UI isolate for every row. The re-read itself runs in the capture isolate.
+  SalaryRecheck.payeeless({
+    required this.financial,
+    required this.namespace,
+    required this.bundle,
+    this.categoryIdBySlug = const {},
+  }) : _where = _payeelessWhere,
+       _types = const {EventType.purchase, EventType.p2pOut, EventType.p2pIn};
+
+  static const _salaryWhere =
+      "AND json_extract(payload, '\$.attrs.purpose') = 'salary' "
+      "AND json_extract(payload, '\$.attrs.direction') = 'credit' ";
+
+  static const _payeelessWhere =
+      "AND json_extract(payload, '\$.attrs.purpose') IS NOT 'salary' "
+      "AND json_extract(payload, '\$.attrs.evidenceOnly') IS NULL "
+      "AND (json_extract(payload, '\$.provenance.ruleId') LIKE 'GEN%' "
+      "OR json_extract(payload, '\$.provenance.ruleId') LIKE 'SOLVER%') ";
+
+  final String _where;
+  final Set<EventType> _types;
 
   final FinancialStore financial;
   final String namespace;
@@ -46,12 +75,11 @@ class SalaryRecheck {
     final facts = FactStore(db, namespace: namespace);
     final events = EventStore(db, namespace: namespace);
 
-    // One scan, filtered in SQL. Only salary credits that name nobody come back.
+    // One scan, filtered in SQL. Only movements that name nobody come back.
     final candidates = db.select(
       "SELECT fact_id, source_key FROM v2_facts "
       "WHERE namespace = ? AND fact_type = 'movement' "
-      "AND json_extract(payload, '\$.attrs.purpose') = 'salary' "
-      "AND json_extract(payload, '\$.attrs.direction') = 'credit' "
+      "$_where"
       "AND json_extract(payload, '\$.counterparty.name') IS NULL "
       "AND json_extract(payload, '\$.counterparty.vpa') IS NULL",
       [namespace],
@@ -93,9 +121,10 @@ class SalaryRecheck {
     for (final r in candidates) {
       final id = r['fact_id'] as String;
       for (final e in eventsByFact[id] ?? const <Event>[]) {
-        // Salary counted as income. Anything else (a transfer between own
-        // accounts, say) is left to its own rules.
-        if (e.type == EventType.income) seeds.add(e);
+        // Only the event types this recheck is about (salary counted as income;
+        // spends and transfers). Anything else, a transfer between own
+        // accounts say, is left to its own rules.
+        if (_types.contains(e.type)) seeds.add(e);
       }
     }
     if (seeds.isEmpty) return const [];

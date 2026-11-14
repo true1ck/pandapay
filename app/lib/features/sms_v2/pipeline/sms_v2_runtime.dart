@@ -678,6 +678,15 @@ class SmsV2Runtime {
         _state.put('salary:payer-recheck', salaryMarker);
       });
     }
+    // The same for a spend read by a fallback rule that a newer rule can now
+    // name ("Unknown merchant"). Its own marker, for the same reason.
+    final payeeMarker = '${_revision(active.revision)}:payee-1';
+    if (_state.get('payee:recheck') != payeeMarker) {
+      await guarded(() async {
+        await _rereadPayerless(payeeless: true);
+        _state.put('payee:recheck', payeeMarker);
+      });
+    }
     // A person asked to see what a re-sort would move before it moves
     // anything, so ordinary sync leaves categories alone. The refresh sheet
     // shows the preview and applies it on a tap. [autoApplyResort] set to true
@@ -719,15 +728,27 @@ class SmsV2Runtime {
     return read;
   }
 
-  Future<int> _rereadPayerlessSalary() async {
+  Future<int> _rereadPayerlessSalary() => _rereadPayerless(payeeless: false);
+
+  /// [payeeless] reads again spends and transfers that a fallback rule read
+  /// without a payee; otherwise the salary credits without an employer.
+  Future<int> _rereadPayerless({required bool payeeless}) async {
     _checkAccount();
     final active = await activeBundle();
-    final sources = SalaryRecheck(
-      financial: financial,
-      namespace: namespace,
-      bundle: active,
-      categoryIdBySlug: categoryIdBySlug,
-    ).sourcesToRecheck();
+    final recheck = payeeless
+        ? SalaryRecheck.payeeless(
+            financial: financial,
+            namespace: namespace,
+            bundle: active,
+            categoryIdBySlug: categoryIdBySlug,
+          )
+        : SalaryRecheck(
+            financial: financial,
+            namespace: namespace,
+            bundle: active,
+            categoryIdBySlug: categoryIdBySlug,
+          );
+    final sources = recheck.sourcesToRecheck();
     if (sources.isEmpty) return 0;
     final intake = SmsIntakeRepository(financial.database);
     final taken = AiWithdrawal(

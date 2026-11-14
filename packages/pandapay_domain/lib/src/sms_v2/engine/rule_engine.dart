@@ -375,6 +375,7 @@ class RuleEngine implements SmsInterpreter {
           facts = second.facts;
           stats.solverCorroborated++;
         }
+        facts = _withPayee(cb, facts, message, id, brand);
         facts = _withSalaryPayer(cb, facts, message);
         stats.matched++;
         stats.ruleHits[id] = (stats.ruleHits[id] ?? 0) + 1;
@@ -516,6 +517,72 @@ class RuleEngine implements SmsInterpreter {
   /// or one ends with the other ("1234" and "234").
   static bool _masksAgree(String? a, String? b) =>
       a == null || b == null || a.endsWith(b) || b.endsWith(a);
+
+  /// A generic rule (id "GEN...") that typed a debit (amount, account, date, rail)
+  /// but printed no payee leaves the row as "Unknown merchant". The evidence reader
+  /// finds the payee by where a name sits next to a payee cue word (the pack's
+  /// `payeeDebit` list: to, at, towards, fvg, favouring ...), in any layout, so a
+  /// reworded alert needs no new rule. It does one thing and nothing else: it fills
+  /// a MISSING payee, and only when the evidence reader independently accepts the
+  /// same debit for the same amount. A bank's own rule that prints no payee on
+  /// purpose (an ATM withdrawal, a fee) is never second-guessed, and neither is a
+  /// debit whose purpose says it has no payee (salary, card bill, ...).
+  List<Fact> _withPayee(
+    CompiledBundle cb,
+    List<Fact> facts,
+    SmsMessage msg,
+    String ruleId,
+    String brand,
+  ) {
+    final solver = cb.solver;
+    if (solver == null || !ruleId.startsWith('GEN')) return facts;
+    final movements = facts.whereType<MovementFact>().toList();
+    if (movements.length != 1) return facts;
+    final m = movements.single;
+    if (m.direction != Direction.debit || m.evidenceOnly == true) return facts;
+    const payable = {
+      MovementPurpose.purchase,
+      MovementPurpose.p2p,
+      MovementPurpose.transfer,
+    };
+    if (!payable.contains(m.purpose)) return facts;
+    final c = m.counterparty;
+    if ((c?.name ?? '').trim().isNotEmpty || (c?.vpa ?? '').trim().isNotEmpty) {
+      return facts;
+    }
+    final posted = m.amounts.where((a) => a.role == AmountRole.posted);
+    if (posted.isEmpty) return facts;
+    try {
+      final d = solver.solve(
+        msg.body,
+        observedAt: msg.observedAt,
+        senderBrand: brand,
+        senderKind: cb.sendersByBrand[brand]?.issuerKind.wire,
+      );
+      final party = d.party;
+      if (!d.accepted ||
+          d.read != SolverRead.debit ||
+          d.evidenceOnly ||
+          d.unit != 'INR' ||
+          d.minor != posted.first.minor ||
+          party == null ||
+          party.trim().isEmpty) {
+        return facts;
+      }
+      final json = m.toJson();
+      json['counterparty'] = {
+        'name': d.partyIsVpa ? null : party,
+        'vpa': d.partyIsVpa ? party : null,
+        'kind': c?.kind?.wire,
+        'accountMask': c?.accountMask,
+      };
+      final out = Fact.fromJson(json);
+      if (!out.validate().ok) return facts;
+      return [for (final f in facts) identical(f, m) ? out : f];
+    } on Object {
+      return facts;
+    }
+  }
 
   /// A rule that reads a salary credit but prints no payer ("SALARY CREDIT ACME
   /// TECHNOLOGIES", "has credit for SALARY ACME") leaves the row as "Unknown

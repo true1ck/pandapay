@@ -27,7 +27,12 @@ const _narration =
 const _noEmployer =
     'Rs 85000.00 credited to A/c XX1234 on 01-11-26. SALARY CREDIT. Avl Bal Rs 120000.00';
 
-RuleBundle _withSolver(RuleBundle b, {bool Function(String id)? drop, bool solver = true}) {
+RuleBundle _withSolver(
+  RuleBundle b, {
+  bool Function(String id)? drop,
+  bool solver = true,
+  bool oldPayeeWords = false,
+}) {
   final json = (jsonDecode(jsonEncode(b.toJson())) as Map).cast<String, Object?>();
   if (drop != null) {
     json['rules'] = [
@@ -36,9 +41,15 @@ RuleBundle _withSolver(RuleBundle b, {bool Function(String id)? drop, bool solve
     ];
   }
   if (solver) {
-    json['solverPack'] =
+    final pack =
         (jsonDecode(File('../rules/sms/solver/pack.json').readAsStringSync()) as Map)
             .cast<String, Object?>();
+    if (oldPayeeWords) {
+      // What a phone ran before the payee cue words "fvg" and "favouring" were added.
+      final lex = (pack['lexicons'] as Map)['payeeDebit'] as List;
+      lex.removeWhere((w) => w == 'fvg' || w == 'favouring' || w == 'favoring');
+    }
+    json['solverPack'] = pack;
   }
   return RuleBundle.fromJson(json);
 }
@@ -106,12 +117,11 @@ void main() {
         ..sort();
 
   /// What the sync does after a rules update.
-  int recheck(RuleBundle b) {
-    final sources = SalaryRecheck(
-      financial: financial,
-      namespace: _ns,
-      bundle: b,
-    ).sourcesToRecheck();
+  int recheck(RuleBundle b, {bool payeeless = false}) {
+    final sources = (payeeless
+            ? SalaryRecheck.payeeless(financial: financial, namespace: _ns, bundle: b)
+            : SalaryRecheck(financial: financial, namespace: _ns, bundle: b))
+        .sourcesToRecheck();
     final taken = AiWithdrawal(
       financial: financial,
       namespace: _ns,
@@ -176,5 +186,32 @@ void main() {
       '2026-11-02',
     );
     expect(recheck(current), 0);
+  });
+
+  // A debit alert that prints its payee after "Fvg:" (the evidence reader finds
+  // it next to the cue word). A phone that read it before kept "Unknown merchant".
+  const fvg =
+      'NewBank A/c *1234 Debited Rs:2500.00 on 21-10-2026 19:28:42 by Mob Bk ref no 612345678901, Fvg: Asha Rao Avl Bal Rs:594.92. Not you?Call 1800000000';
+
+  test('a spend read by a fallback rule gets its payee once a rule can name it', () {
+    // A phone whose rules had no evidence reader read the alert with a generic
+    // rule that prints no payee.
+    final before = _withSolver(testRuleBundle(), oldPayeeWords: true);
+    receive(before, 'VM-NEWBNK-S', fvg, '2026-10-21');
+    expect(rows().single, endsWith(':250000:UNKNOWN'));
+
+    expect(recheck(current, payeeless: true), 1);
+    expect(rows().single, endsWith(':250000:Asha Rao'), reason: 'one row, not two');
+    expect(recheck(current, payeeless: true), 0, reason: 'nothing is left to read again');
+  });
+
+  test('a spend that no rule can name is left alone; so is one not on the phone', () {
+    receive(current, 'VM-NEWBNK-S', 'NewBank A/c *1234 Debited Rs:99.00 on 21-10-2026 by Mob Bk ref no 612345678901 Avl Bal Rs:500.00', '2026-10-21');
+    final before = rows();
+    expect(recheck(current, payeeless: true), 1, reason: 'a fallback read is tried once');
+    expect(rows(), before);
+
+    receive(_withSolver(testRuleBundle(), oldPayeeWords: true), 'VM-NEWBNK-S', fvg, '2026-10-22', keep: false);
+    expect(recheck(current, payeeless: true), 1, reason: 'only the first, whose message is kept');
   });
 }
