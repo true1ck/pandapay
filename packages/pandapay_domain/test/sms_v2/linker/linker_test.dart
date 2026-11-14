@@ -73,6 +73,55 @@ void main() {
           ['card_bill_payment[credit_leg,duplicate_notice]']);
     });
 
+    group('a bill app with coins or discounts (D1)', () {
+      MovementFact appDebit(int minor, {String? name = 'CHEQ'}) => debit(
+        'card_payment',
+        minor,
+        at: '2026-11-10T09:00:00Z',
+        inst: hdfcAcct,
+        counterparty: party(name: name, vpa: 'cheq.x@icici', kind: 'own'),
+      );
+      MovementFact cardCredit(int minor, String at) =>
+          credit('card_payment', minor, at: at, inst: hdfcCard);
+
+      test('a debit well below the credit joins', () {
+        final r = linkAll([appDebit(820000), cardCredit(1000000, '2026-11-10T09:02:00Z')]);
+        expect(shape(_only(r)), 'card_bill_payment[credit_leg,debit_leg]');
+      });
+
+      test('a debit above the credit does not', () {
+        final r = linkAll([appDebit(1200000), cardCredit(1000000, '2026-11-10T09:02:00Z')]);
+        expect(eventsOf(r), hasLength(2));
+      });
+
+      test('two equally close credits link neither', () {
+        // both credits arrive first, at the same time
+        final r = linkAll([
+          cardCredit(1000000, '2026-11-10T08:00:00Z'),
+          cardCredit(1100000, '2026-11-10T08:00:00Z'),
+          appDebit(820000),
+        ]);
+        expect(eventsOf(r).every((e) => e.legs.length == 1), isTrue);
+      });
+
+      test('the closer of two credits wins', () {
+        final r = linkAll([
+          appDebit(820000),
+          cardCredit(1000000, '2026-11-10T09:02:00Z'),
+          cardCredit(1100000, '2026-11-11T09:00:00Z'),
+        ]);
+        expect(eventsOf(r).where((e) => e.legs.length == 2), hasLength(1));
+      });
+
+      test('no bill-app payee: a 500 rupee gap does not join', () {
+        final plain = debit('card_payment', 1050000,
+            at: '2026-11-10T09:00:00Z', inst: hdfcAcct,
+            counterparty: party(kind: 'own', mask: '5678'));
+        final r = linkAll([plain, cardCredit(1000000, '2026-11-10T09:02:00Z')]);
+        expect(eventsOf(r), hasLength(2));
+      });
+    });
+
     test('a different amount does not join', () {
       final other = credit(
         'card_payment',
