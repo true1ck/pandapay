@@ -201,6 +201,7 @@ test('isDbUnavailable: restarts, failovers and lost connections are 503 material
     new Error('Connection terminated unexpectedly'),
     new Error('timeout exceeded when trying to connect'),
     new Error('Connection terminated due to connection timeout'),
+    new Error('Query read timeout'),
   ];
   const no = [
     Object.assign(new Error('duplicate key'), { code: '23505' }),

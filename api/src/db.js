@@ -24,6 +24,9 @@ const pool = new Pool({
   max: config.dbPoolMax,
   idleTimeoutMillis: config.dbIdleTimeoutMs,
   connectionTimeoutMillis: config.dbConnectionTimeoutMs,
+  // Detect a dead peer (network partition, frozen database host) instead of waiting for the OS default of hours.
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10_000,
 });
 
 pool.on('error', (err) => {
@@ -45,6 +48,12 @@ pool.on('error', (err) => {
  * `userId` may be null (unauthenticated request) — pandapay.uid() then
  * returns null and every owner-scoped RLS policy denies by construction.
  */
+// Client-side bound for one query of an interactive request: the statement timeout the database enforces, plus a margin.
+// The database cannot enforce its own timeout when it is frozen or unreachable mid-query, and without this a hung query
+// holds the request, the connection and an admission slot until the database comes back (or for ever).
+const REQUEST_QUERY_TIMEOUT_MS = config.dbStatementTimeoutMs + 3000;
+const isQueryReadTimeout = (err) => err?.message === 'Query read timeout';
+
 async function withUserClient(userId, fn) {
   let client;
   try {
@@ -56,6 +65,10 @@ async function withUserClient(userId, fn) {
     throw err;
   }
   let discardConnection;
+  // pg applies connectionParameters.query_timeout to every query on this client; set it only while this request owns the
+  // client (other users of the pool, such as the 120 s backup export, are not affected) and restore it on release.
+  const previousQueryTimeout = client.connectionParameters?.query_timeout;
+  if (client.connectionParameters) client.connectionParameters.query_timeout = REQUEST_QUERY_TIMEOUT_MS;
   try {
     // One round trip for the whole transaction preamble (it used to be BEGIN, then one set_config call per
     // setting). Simple-protocol multi-statement query; values go through escapeLiteral, never string-built.
@@ -81,9 +94,14 @@ async function withUserClient(userId, fn) {
   } catch (err) {
     // Remember what this database error means (busy/away -> 503, bad id -> 400, ...) for the response; see admission.js.
     noteDbError(err);
-    try { await client.query('ROLLBACK'); } catch(error) { discardConnection=error; }
+    if (isQueryReadTimeout(err)) {
+      discardConnection = err; // the connection is stuck mid-query: destroy it, and do not wait on a ROLLBACK over it
+    } else {
+      try { await client.query('ROLLBACK'); } catch(error) { discardConnection=error; }
+    }
     throw err;
   } finally {
+    if (client.connectionParameters) client.connectionParameters.query_timeout = previousQueryTimeout;
     client.release(discardConnection);
   }
 }

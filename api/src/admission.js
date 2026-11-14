@@ -29,7 +29,7 @@ const isPoolTimeout = (err) => err?.message === POOL_TIMEOUT_MESSAGE;
 // The database is busy or briefly away (restart, failover, network blip): the same request can succeed shortly, so
 // it is answered 503 + Retry-After, never a 500 (the app parks a change for an hour after repeated 500s on one row).
 const UNAVAILABLE_NET_CODES = new Set(['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EPIPE', 'ENOTFOUND', 'EAI_AGAIN', 'ECONNABORTED']);
-const UNAVAILABLE_MESSAGE = /connection terminated|connection timeout|timeout exceeded when trying to connect|database system is (starting up|shutting down|in recovery)|client has encountered a connection error|cannot use a pool after calling end/i;
+const UNAVAILABLE_MESSAGE = /connection terminated|connection timeout|timeout exceeded when trying to connect|database system is (starting up|shutting down|in recovery)|client has encountered a connection error|cannot use a pool after calling end|query read timeout/i;
 function isDbUnavailable(err) {
   const code = typeof err?.code === 'string' ? err.code : '';
   return UNAVAILABLE_NET_CODES.has(code)

@@ -152,6 +152,12 @@ let notificationOutboxStartupFailed = false;
 // defaults to no forwarded-header trust; staging/production set one hop for
 // their loopback-bound Nginx ingress.
 app.set('trust proxy', resolveTrustProxyHops());
+// While draining (SIGTERM received) tell keep-alive clients to close their connection after this response, so the
+// server can finish in-flight work and exit promptly instead of serving one connection until the force-exit timer.
+app.use((req, res, next) => {
+  if (shuttingDown) res.set('Connection', 'close');
+  next();
+});
 // Resolve optional identity before routing. Ordinary request logs use request
 // IDs and route templates without persistent account identifiers.
 app.use(optionalAuth);
@@ -9356,8 +9362,13 @@ async function shutdown(signal) {
   forceExit.unref();
   try {
     if (notificationOutboxWorker) await notificationOutboxWorker.stop();
+    // server.close() only stops NEW connections; keep-alive connections that go idle between requests are closed here
+    // (a connection with a request in flight is left to finish, and its response carries Connection: close).
+    const closeIdle = setInterval(() => server.closeIdleConnections?.(), 100);
+    closeIdle.unref();
     await new Promise((resolve, reject) => {
-      server.close((err) => (err ? reject(err) : resolve()));
+      server.close((err) => { clearInterval(closeIdle); return err ? reject(err) : resolve(); });
+      server.closeIdleConnections?.();
     });
     await pool.end();
     if (partnerWebhookPool) await partnerWebhookPool.end();

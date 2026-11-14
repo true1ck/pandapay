@@ -135,11 +135,12 @@ async function s5DbOutage() {
   if (!CONTAINER) { console.log('SKIP  [S5 database outage] set SCEN_DOCKER_CONTAINER to enable'); return; }
   const api = await startApi();
   try {
-    check('S5 database outage', 'baseline request OK', (await request(api.port, { pathname: '/home-summary', token: tok(6) })).status === 200);
+    const base5 = await request(api.port, { pathname: '/home-summary', token: tok(6) });
+    check('S5 database outage', 'baseline request OK', base5.status === 200, `status=${base5.status} ${base5.body.slice(0, 120)} ${base5.error || ''} stderr=${api.stderr().slice(-300)}`);
     execSync(`docker stop ${CONTAINER}`, { stdio: 'ignore' });
     const rs = await Promise.all([6, 7, 8, 9, 10, 11, 12, 13].map((n) => request(api.port, { pathname: n % 2 ? '/home-summary' : '/user-cards', token: tok(n) })));
     const codes = {}; rs.forEach((r) => { codes[r.status] = (codes[r.status] || 0) + 1; });
-    check('S5 database outage', 'requests during the outage answer 503, never 500', rs.every((r) => r.status === 503), JSON.stringify(codes));
+    check('S5 database outage', 'requests during the outage answer 503, never 500', rs.every((r) => r.status === 503), JSON.stringify(codes) + ' ' + rs.filter((r) => r.status !== 503).map((r) => `${r.status}:${r.error || r.body.slice(0, 80)}`).join(' | '));
     check('S5 database outage', '...each with Retry-After', rs.every(retryAfterOk), JSON.stringify(rs[0].headers['retry-after']));
     check('S5 database outage', 'liveness stays up and the process did not crash', (await request(api.port, { pathname: '/health' })).status === 200 && api.isAlive());
     execSync(`docker start ${CONTAINER}`, { stdio: 'ignore' });
