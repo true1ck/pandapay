@@ -29,7 +29,7 @@ function fixtureUrl() {
 }
 
 function extractTransactionStateFunctions() {
-  const source = fs.readFileSync(require.resolve('../src/index'), 'utf8');
+  const source = fs.readFileSync(require.resolve('../src/index'), 'utf8').replace(/\r\n/g, '\n'); // markers contain a newline; a Windows checkout has CRLF
   const start = source.indexOf('async function loadUserCardForState(client');
   const end = source.indexOf('/** Mirrors the txn_instrument / txn_entry_kind enums', start);
   assert.ok(start >= 0 && end > start, 'actual transaction state functions must be present');
