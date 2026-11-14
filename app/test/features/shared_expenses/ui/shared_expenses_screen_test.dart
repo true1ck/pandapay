@@ -267,9 +267,14 @@ void main() {
           onAddExpense: () => added++,
         ),
       );
-      for (final tab in ['Expenses', 'Balances', 'Totals']) {
-        await tester.tap(find.text(tab));
-        await tester.pumpAndSettle();
+      // No tabs any more: Balances and Totals open in place, and the plus
+      // stays reachable whatever is open.
+      expect(find.byType(TabBar), findsNothing);
+      for (final section in [null, 'Balances', 'Totals']) {
+        if (section != null) {
+          await tester.tap(find.text(section));
+          await tester.pumpAndSettle();
+        }
         await tester.tap(find.byTooltip('Add expense'));
         await tester.pumpAndSettle();
       }
@@ -502,7 +507,7 @@ void main() {
   });
 
   testWidgets(
-    'group has one tab level and shows exact bill paid and share separately',
+    'group page is one scroll; rows say who paid and what it means for you',
     (tester) async {
       final data = SharedGroupPresentation(
         id: 'g',
@@ -528,8 +533,10 @@ void main() {
         ),
       );
       await pump(tester, SharedGroupScreen(data: data));
-      expect(find.byType(TabBar), findsOneWidget);
-      for (final label in ['Expenses', 'Balances', 'Totals']) {
+      // One scroll: no tab bar; Balances and Totals are actions under the
+      // balance and open in place.
+      expect(find.byType(TabBar), findsNothing);
+      for (final label in ['Balances', 'Totals']) {
         expect(find.text(label), findsOneWidget);
       }
       expect(find.text('Friends'), findsNothing);
@@ -882,5 +889,104 @@ void main() {
       ),
     );
     expect(find.byKey(const Key('expenses-settle-up')), findsNothing);
+  });
+
+  testWidgets('a friend page reads like Splitwise: who owes whom, no tabs', (
+    tester,
+  ) async {
+    var history = 0;
+    await pump(
+      tester,
+      SharedGroupScreen(
+        onSettleUp: () {},
+        onViewSettlements: () => history++,
+        data: SharedGroupPresentation(
+          id: 'f',
+          title: 'Sujay',
+          direct: true,
+          summary: SharedBalanceSummary(
+            owedToYou: Money.zero(),
+            youOwe: const Money.fromPaise(50000),
+            netBalance: const Money.fromPaise(-50000),
+          ),
+          expenses: SharedPage(
+            items: const [
+              SharedExpenseRow(
+                id: 'e',
+                title: 'test payment',
+                paidBy: 'Other members',
+                billTotal: Money.fromPaise(100000),
+                yourPaid: zero,
+                yourShare: Money.fromPaise(50000),
+                occurredAtLabel: '2026-11-14',
+              ),
+            ],
+          ),
+          balances: SharedPage(),
+          totals: const SharedExpenseTotals(
+            billTotal: Money.fromPaise(100000),
+            yourPaid: zero,
+            yourShare: Money.fromPaise(50000),
+          ),
+        ),
+      ),
+    );
+    expect(find.byType(TabBar), findsNothing);
+    expect(find.text('You owe Sujay'), findsOneWidget);
+    expect(find.text('Sujay paid ₹1,000.00'), findsOneWidget);
+    expect(find.text('Balances'), findsNothing, reason: 'the line above says it');
+    expect(find.text('Settle up'), findsOneWidget);
+    // Totals open in place, and close again.
+    expect(find.text('Total bills'), findsNothing);
+    await tester.tap(find.text('Totals'));
+    await tester.pumpAndSettle();
+    expect(find.text('Total bills'), findsOneWidget);
+    await tester.tap(find.text('Totals').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Total bills'), findsNothing);
+    await tester.tap(find.text('Payment history'));
+    expect(history, 1);
+  });
+
+  testWidgets('a group keeps its balances: open in place, tap one to settle', (
+    tester,
+  ) async {
+    String? opened;
+    await pump(
+      tester,
+      SharedGroupScreen(
+        onOpenBalance: (id) => opened = id,
+        data: SharedGroupPresentation(
+          id: 'g',
+          title: 'Flatmates',
+          summary: balances,
+          expenses: SharedPage(),
+          balances: SharedPage(items: const [rahul]),
+        ),
+      ),
+    );
+    expect(find.text('Rahul'), findsNothing);
+    await tester.tap(find.text('Balances'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rahul'));
+    expect(opened, 'rahul');
+  });
+
+  testWidgets('opening on Balances or Totals still works for old links', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      SharedGroupScreen(
+        initialIndex: 1,
+        data: SharedGroupPresentation(
+          id: 'g',
+          title: 'Flatmates',
+          expenses: SharedPage(),
+          balances: SharedPage(items: const [rahul]),
+        ),
+      ),
+    );
+    expect(find.text('Rahul'), findsOneWidget);
   });
 }

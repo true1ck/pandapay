@@ -7,10 +7,15 @@ import '../../../app/design/widgets.dart';
 import 'shared_components.dart';
 import 'shared_presentation.dart';
 
-/// The selected group's deeper route replaces the hub's tab context; it does
-/// not nest a second tab bar, recreate an expense editor or synthesize payments.
-class SharedGroupScreen extends StatelessWidget {
+/// A friend's or a group's page, the Splitwise way: one scroll. The balance in
+/// words at the top, a row of actions (Settle up, Balances, Totals, Payment
+/// history), then every expense under its month. Balances and Totals open in
+/// place under the actions instead of being tabs of their own, so nothing the
+/// tabs held is lost and nothing needs a second tap level.
+class SharedGroupScreen extends StatefulWidget {
   final SharedGroupPresentation data;
+
+  /// 0 opens on the expenses; 1 opens with Balances shown, 2 with Totals.
   final int initialIndex;
   final VoidCallback? onAddExpense;
   final VoidCallback? onSettings;
@@ -38,11 +43,231 @@ class SharedGroupScreen extends StatelessWidget {
     this.onPreviousPage,
   });
 
-  List<Widget> _header({bool incomplete = false}) => [
-    if (data.summary case final summary?)
-      SharedSummaryCard(summary: summary, hideAmounts: data.hideAmounts),
-    if (incomplete) const SharedNotice(sharedCatchingUpCopy),
-  ];
+  @override
+  State<SharedGroupScreen> createState() => _SharedGroupScreenState();
+}
+
+class _SharedGroupScreenState extends State<SharedGroupScreen> {
+  late SharedGroupTab? _open = switch (widget.initialIndex) {
+    1 => SharedGroupTab.balances,
+    2 => SharedGroupTab.totals,
+    _ => null,
+  };
+
+  SharedGroupPresentation get data => widget.data;
+
+  void _toggle(SharedGroupTab section) =>
+      setState(() => _open = _open == section ? null : section);
+
+  bool get _hasBalance {
+    final summary = data.summary;
+    return summary == null ||
+        !summary.youOwe.isZero ||
+        !summary.owedToYou.isZero;
+  }
+
+  Widget _chip({
+    required String label,
+    required IconData icon,
+    required VoidCallback onTap,
+    bool selected = false,
+    Key? key,
+  }) => Pressable(
+    key: key,
+    onTap: onTap,
+    semanticLabel: label,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      decoration: BoxDecoration(
+        color: selected ? BambooInk.slate : BambooInk.glassFillOnPaper,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: selected ? BambooInk.slate : BambooInk.hairlineOnPaper,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 18,
+            color: selected ? BambooInk.lime : BambooInk.ink900,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: BambooFonts.ui(
+              13.5,
+              weight: FontWeight.w700,
+              color: selected ? BambooInk.lime : BambooInk.ink900,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _actions() => Padding(
+    padding: const EdgeInsets.only(bottom: AppSpace.sm),
+    child: Wrap(
+      spacing: AppSpace.sm,
+      runSpacing: AppSpace.sm,
+      children: [
+        if (widget.onSettleUp != null && _hasBalance)
+          _chip(
+            key: const Key('expenses-settle-up'),
+            label: 'Settle up',
+            icon: Icons.payments_outlined,
+            onTap: widget.onSettleUp!,
+          ),
+        // A friend's page already says what is owed both ways at the top.
+        if (!data.direct)
+          _chip(
+            label: 'Balances',
+            icon: Icons.account_balance_wallet_outlined,
+            selected: _open == SharedGroupTab.balances,
+            onTap: () => _toggle(SharedGroupTab.balances),
+          ),
+        _chip(
+          label: 'Totals',
+          icon: Icons.bar_chart_rounded,
+          selected: _open == SharedGroupTab.totals,
+          onTap: () => _toggle(SharedGroupTab.totals),
+        ),
+        if (widget.onViewSettlements != null)
+          _chip(
+            label: 'Payment history',
+            icon: Icons.receipt_long_outlined,
+            onTap: widget.onViewSettlements!,
+          ),
+      ],
+    ),
+  );
+
+  Widget _sectionTitle(String text) => Padding(
+    padding: const EdgeInsets.only(top: AppSpace.xs, bottom: AppSpace.sm),
+    child: Text(
+      text,
+      style: BambooFonts.ui(
+        13,
+        weight: FontWeight.w700,
+        color: BambooInk.ink700,
+      ),
+    ),
+  );
+
+  List<Widget> _balances() {
+    final page = data.balances;
+    return [
+      _sectionTitle('Balances'),
+      if (page.hasPrevious && widget.onPreviousPage != null)
+        SharedTextAction(
+          label: 'Previous page',
+          onTap: () => widget.onPreviousPage!(SharedGroupTab.balances),
+        ),
+      if (page.incomplete) const SharedNotice(sharedCatchingUpCopy),
+      if (page.items.isEmpty)
+        switch (page.state) {
+          SharedLoadState.loading => const Padding(
+            padding: EdgeInsets.all(AppSpace.md),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          SharedLoadState.error => Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SharedNotice('Could not refresh balances'),
+              if (widget.onRetry != null)
+                SharedTextAction(
+                  label: 'Try again',
+                  onTap: () => widget.onRetry!(SharedGroupTab.balances),
+                ),
+            ],
+          ),
+          _ => const SharedNotice(
+            'No balances yet. Reviewed shared expenses will appear here.',
+          ),
+        },
+      for (final row in page.items)
+        SharedContextTile(
+          row: row,
+          hideAmounts: data.hideAmounts,
+          onTap: widget.onOpenBalance == null
+              ? null
+              : () => widget.onOpenBalance!(row.id),
+        ),
+      if (page.hasMore && widget.onLoadMore != null)
+        SharedTextAction(
+          label: page.loadingMore ? 'Loading…' : page.nextLabel,
+          onTap: () => widget.onLoadMore!(SharedGroupTab.balances),
+        ),
+      const SizedBox(height: AppSpace.sm),
+    ];
+  }
+
+  List<Widget> _totals() {
+    final totals = data.totals;
+    return [
+      _sectionTitle('Totals'),
+      if (totals == null)
+        switch (data.totalsState) {
+          SharedLoadState.loading => const Padding(
+            padding: EdgeInsets.all(AppSpace.md),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          SharedLoadState.error => Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SharedNotice('Could not refresh totals'),
+              if (widget.onRetry != null)
+                SharedTextAction(
+                  label: 'Try again',
+                  onTap: () => widget.onRetry!(SharedGroupTab.totals),
+                ),
+            ],
+          ),
+          _ => const SharedNotice(
+            'Expense totals will appear after shared expenses are reviewed.',
+          ),
+        }
+      else
+        SharedPanel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (totals.periodLabel != null)
+                Text(
+                  totals.periodLabel!,
+                  style: BambooFonts.ui(13, color: BambooInk.ink700),
+                ),
+              SharedMoneyLine(
+                totals.totalLabel,
+                totals.billTotal,
+                confidence: totals.confidence,
+                hidden: data.hideAmounts,
+              ),
+              SharedMoneyLine(
+                totals.paidLabel,
+                totals.yourPaid,
+                confidence: totals.confidence,
+                hidden: data.hideAmounts,
+              ),
+              SharedMoneyLine(
+                'Your share',
+                totals.yourShare,
+                confidence: totals.confidence,
+                hidden: data.hideAmounts,
+              ),
+              const SharedNotice(
+                'Payments settle balances; they are separate from expense totals.',
+              ),
+              if (totals.incomplete)
+                const SharedNotice('Some totals may be missing'),
+            ],
+          ),
+        ),
+      const SizedBox(height: AppSpace.sm),
+    ];
+  }
 
   Widget _expenses() => SharedPageBody(
     key: ValueKey('${data.id}:expenses'),
@@ -50,24 +275,20 @@ class SharedGroupScreen extends StatelessWidget {
     hasItems: data.expenses.items.isNotEmpty,
     nextLabel: data.expenses.nextLabel,
     header: [
-      if (data.expenses.hasPrevious && onPreviousPage != null)
+      if (data.summary case final summary?)
+        SharedSummaryCard(
+          summary: summary,
+          hideAmounts: data.hideAmounts,
+          name: data.direct ? data.title : null,
+        ),
+      if (data.expenses.incomplete) const SharedNotice(sharedCatchingUpCopy),
+      _actions(),
+      if (_open == SharedGroupTab.balances) ..._balances(),
+      if (_open == SharedGroupTab.totals) ..._totals(),
+      if (data.expenses.hasPrevious && widget.onPreviousPage != null)
         SharedAction(
           label: 'Previous page',
-          onTap: () => onPreviousPage!(SharedGroupTab.expenses),
-        ),
-      ..._header(incomplete: data.expenses.incomplete),
-      // The one thing to do about a balance sits right under it.
-      if (onSettleUp != null &&
-          data.summary != null &&
-          (!data.summary!.youOwe.isZero || !data.summary!.owedToYou.isZero))
-        Padding(
-          padding: const EdgeInsets.only(bottom: AppSpace.sm),
-          child: SharedAction(
-            key: const Key('expenses-settle-up'),
-            label: 'Settle up',
-            icon: Icons.payments_outlined,
-            onTap: onSettleUp!,
-          ),
+          onTap: () => widget.onPreviousPage!(SharedGroupTab.expenses),
         ),
     ],
     itemCount: data.expenses.items.length,
@@ -96,7 +317,9 @@ class SharedGroupScreen extends StatelessWidget {
             row: row,
             hideAmounts: data.hideAmounts,
             otherName: data.direct ? data.title : null,
-            onTap: onOpenExpense == null ? null : () => onOpenExpense!(row.id),
+            onTap: widget.onOpenExpense == null
+                ? null
+                : () => widget.onOpenExpense!(row.id),
           ),
         ],
       );
@@ -107,132 +330,45 @@ class SharedGroupScreen extends StatelessWidget {
         : 'Add the first shared expense for this group.',
     hasMore: data.expenses.hasMore,
     loadingMore: data.expenses.loadingMore,
-    onRetry: onRetry == null ? null : () => onRetry!(SharedGroupTab.expenses),
-    onLoadMore: onLoadMore == null
+    onRetry: widget.onRetry == null
         ? null
-        : () => onLoadMore!(SharedGroupTab.expenses),
-  );
-
-  Widget _balances() => SharedPageBody(
-    key: ValueKey('${data.id}:balances'),
-    state: data.balances.state,
-    hasItems: data.balances.items.isNotEmpty,
-    nextLabel: data.balances.nextLabel,
-    header: [
-      if (data.balances.hasPrevious && onPreviousPage != null)
-        SharedAction(
-          label: 'Previous page',
-          onTap: () => onPreviousPage!(SharedGroupTab.balances),
-        ),
-      ..._header(incomplete: data.balances.incomplete),
-      if (onSettleUp != null)
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
-          child: SharedAction(
-            label: 'Settle up',
-            icon: Icons.payments_outlined,
-            onTap: onSettleUp!,
-          ),
-        ),
-      if (onViewSettlements != null)
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
-          child: SharedAction(
-            label: 'Payment history',
-            icon: Icons.receipt_long_outlined,
-            onTap: onViewSettlements!,
-          ),
-        ),
-    ],
-    itemCount: data.balances.items.length,
-    itemBuilder: (_, index) => SharedContextTile(
-      row: data.balances.items[index],
-      hideAmounts: data.hideAmounts,
-      onTap: onOpenBalance == null
-          ? null
-          : () => onOpenBalance!(data.balances.items[index].id),
-    ),
-    emptyTitle: 'No balances to show',
-    emptyMessage: 'Reviewed shared expenses will appear here.',
-    hasMore: data.balances.hasMore,
-    loadingMore: data.balances.loadingMore,
-    onRetry: onRetry == null ? null : () => onRetry!(SharedGroupTab.balances),
-    onLoadMore: onLoadMore == null
+        : () => widget.onRetry!(SharedGroupTab.expenses),
+    onLoadMore: widget.onLoadMore == null
         ? null
-        : () => onLoadMore!(SharedGroupTab.balances),
-  );
-
-  Widget _totals() => SharedPageBody(
-    key: ValueKey('${data.id}:totals'),
-    state: data.totalsState,
-    hasItems: data.totals != null,
-    header: const [],
-    itemCount: data.totals == null ? 0 : 1,
-    itemBuilder: (_, _) {
-      final totals = data.totals!;
-      return SharedPanel(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (totals.periodLabel != null)
-              Text(
-                totals.periodLabel!,
-                style: BambooFonts.ui(13, color: BambooInk.ink700),
-              ),
-            SharedMoneyLine(
-              totals.totalLabel,
-              totals.billTotal,
-              confidence: totals.confidence,
-              hidden: data.hideAmounts,
-            ),
-            SharedMoneyLine(
-              totals.paidLabel,
-              totals.yourPaid,
-              confidence: totals.confidence,
-              hidden: data.hideAmounts,
-            ),
-            SharedMoneyLine(
-              'Your share',
-              totals.yourShare,
-              confidence: totals.confidence,
-              hidden: data.hideAmounts,
-            ),
-            const SharedNotice(
-              'Payments settle balances; they are separate from expense totals.',
-            ),
-            if (totals.incomplete)
-              const SharedNotice('Some totals may be missing'),
-          ],
-        ),
-      );
-    },
-    emptyTitle: 'No expense totals yet',
-    emptyMessage:
-        'Expense totals will appear after shared expenses are reviewed.',
-    onRetry: onRetry == null ? null : () => onRetry!(SharedGroupTab.totals),
+        : () => widget.onLoadMore!(SharedGroupTab.expenses),
   );
 
   @override
-  Widget build(BuildContext context) => SharedTabbedFrame(
-    title: data.title,
-    tabs: const ['Expenses', 'Balances', 'Totals'],
-    initialIndex: initialIndex,
-    onAddExpense: onAddExpense,
-    actions: [
-      if (onMembers != null)
-        IconButton(
-          tooltip: data.direct ? 'Invite or view person' : 'Group members',
-          onPressed: onMembers,
-          icon: const Icon(Icons.people_outline_rounded),
-        ),
-      if (onSettings != null)
-        IconButton(
-          tooltip: data.direct ? 'Friend settings' : 'Group settings',
-          onPressed: onSettings,
-          icon: const Icon(Icons.settings_outlined),
-        ),
-    ],
-    children: [_expenses(), _balances(), _totals()],
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: BambooInk.paper,
+    appBar: AppBar(
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      title: Text(
+        data.title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: BambooFonts.heading(17),
+      ),
+      actions: [
+        if (widget.onMembers != null)
+          IconButton(
+            tooltip: data.direct ? 'Invite or view person' : 'Group members',
+            onPressed: widget.onMembers,
+            icon: const Icon(Icons.people_outline_rounded),
+          ),
+        if (widget.onSettings != null)
+          IconButton(
+            tooltip: data.direct ? 'Friend settings' : 'Group settings',
+            onPressed: widget.onSettings,
+            icon: const Icon(Icons.settings_outlined),
+          ),
+      ],
+    ),
+    floatingActionButton: widget.onAddExpense == null
+        ? null
+        : AppAddButton(tooltip: 'Add expense', onPressed: widget.onAddExpense!),
+    body: AppBackground(child: _expenses()),
   );
 }
 

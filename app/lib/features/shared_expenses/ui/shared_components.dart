@@ -275,16 +275,21 @@ class SharedPanel extends StatelessWidget {
   );
 }
 
-/// Where the person stands overall, in one line: "Overall, you owe" and the
-/// amount. The two gross figures appear only when both are real (somebody owes
-/// you and you owe somebody), because otherwise they repeat the headline.
+/// Where the person stands, in one line, the Splitwise way: "Overall, you owe
+/// ₹500.00", or on a friend's page "You owe Ravi ₹500.00". The two gross
+/// figures appear only when both are real (somebody owes you and you owe
+/// somebody), because otherwise they only repeat the line.
 class SharedSummaryCard extends StatelessWidget {
   final SharedBalanceSummary summary;
   final bool hideAmounts;
+
+  /// The friend, on a friend's page; null for a group or the hub.
+  final String? name;
   const SharedSummaryCard({
     super.key,
     required this.summary,
     this.hideAmounts = false,
+    this.name,
   });
   @override
   Widget build(BuildContext context) {
@@ -295,52 +300,49 @@ class SharedSummaryCard extends StatelessWidget {
         : net < 0
         ? BambooInk.clayInk
         : BambooInk.ink900;
-    return Container(
-      padding: const EdgeInsets.all(AppSpace.lg),
-      margin: const EdgeInsets.only(bottom: AppSpace.sm),
-      decoration: BoxDecoration(
-        color: BambooInk.glassFillOnPaper,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: BambooInk.hairlineOnPaper),
-      ),
+    final who = name;
+    final label = who == null || (net == 0)
+        ? sharedOverallLabel(summary)
+        : net < 0
+        ? 'You owe $who'
+        : '$who owes you';
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpace.xs, bottom: AppSpace.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            sharedOverallLabel(summary),
-            style: BambooFonts.ui(
-              13,
-              color: BambooInk.ink700,
-              weight: FontWeight.w600,
-            ),
-          ),
-          if (net != 0 || both) ...[
-            const SizedBox(height: AppSpace.xs),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: SharedAmount(
-                sharedNetMagnitude(summary),
-                confidence: summary.confidence,
-                hidden: hideAmounts,
-                color: color,
-                size: 30,
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 6,
+            runSpacing: 2,
+            children: [
+              Text(
+                label,
+                style: BambooFonts.ui(
+                  16,
+                  weight: FontWeight.w700,
+                  color: net == 0 ? BambooInk.ink900 : color,
+                ),
               ),
-            ),
-          ],
+              if (net != 0 || both)
+                SharedAmount(
+                  sharedNetMagnitude(summary),
+                  confidence: summary.confidence,
+                  hidden: hideAmounts,
+                  color: color,
+                  size: 18,
+                ),
+            ],
+          ),
           if (both) ...[
-            const SizedBox(height: AppSpace.sm),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _line('You are owed', summary.owedToYou, BambooInk.jade),
-                const SizedBox(height: 2),
-                _line('You owe', summary.youOwe, BambooInk.clayInk),
-              ],
-            ),
+            const SizedBox(height: AppSpace.xs),
+            _line('You are owed', summary.owedToYou, BambooInk.jade),
+            const SizedBox(height: 2),
+            _line('You owe', summary.youOwe, BambooInk.clayInk),
           ],
           if (summary.incomplete)
             Padding(
-              padding: const EdgeInsets.only(top: AppSpace.sm),
+              padding: const EdgeInsets.only(top: AppSpace.xs),
               child: Text(
                 'Some balances may be missing',
                 style: BambooFonts.ui(12, color: BambooInk.ink700),
@@ -348,7 +350,7 @@ class SharedSummaryCard extends StatelessWidget {
             ),
           if (!summary.confidence.isConfirmed)
             Padding(
-              padding: const EdgeInsets.only(top: AppSpace.sm),
+              padding: const EdgeInsets.only(top: AppSpace.xs),
               child: Text(
                 'Estimated amounts',
                 style: BambooFonts.ui(12, color: BambooInk.ink700),
