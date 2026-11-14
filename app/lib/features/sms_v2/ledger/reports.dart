@@ -559,6 +559,7 @@ class LedgerReadModel {
           ),
       ],
       series: points,
+      totals: totals,
     );
   }
 

@@ -472,7 +472,9 @@ class _CardUtilizationHeaderBar extends StatelessWidget {
     if (hasLimit) {
       final available = limit - tracked.currentBalance;
       final headroom = available.isNegative ? const Money.zero() : available;
-      trailing = '${headroom.format(hidePaise: true)} headroom';
+      trailing = available.paise > limit.paise
+          ? '${(available - limit).format(hidePaise: true)} credit balance on this card'
+          : '${headroom.format(hidePaise: true)} headroom';
     } else {
       trailing = 'Add limit';
     }

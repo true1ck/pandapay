@@ -28,6 +28,7 @@ import '../insights/payments_due_screen.dart'
 import '../../data/card_bill_ledger.dart' show CardBill;
 import '../insights/spend_trends_screen.dart' show SpendingDonut;
 import '../import/import_hub_screen.dart';
+import 'money_went_screen.dart';
 import '../activity/foreign_payments_screen.dart';
 import '../overrides/manual_overrides_screen.dart';
 import '../quickadd/quick_add_screen.dart';
@@ -717,6 +718,28 @@ class _HomeSpendHeadlineState extends ConsumerState<_HomeSpendHeadline> {
                     ),
                   ],
                 ),
+                if (report.totals != null) ...[
+                  MoneyFlowLines(totals: report.totals!),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: GestureDetector(
+                      key: const Key('home_money_went_link'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => context.push(AppRoute.moneyWent),
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          'Where your money went',
+                          style: BambooFonts.ui(
+                            10.5,
+                            weight: FontWeight.w700,
+                            color: BambooInk.jade,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

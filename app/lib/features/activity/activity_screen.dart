@@ -1841,6 +1841,7 @@ enum _ActivityTypeFilter {
   moneyIn,
   moneyOut,
   transfers,
+  cardBills,
   investments,
 }
 
@@ -1909,6 +1910,7 @@ extension on _ActivityTypeFilter {
     _ActivityTypeFilter.moneyIn => 'Money in',
     _ActivityTypeFilter.moneyOut => 'Money out',
     _ActivityTypeFilter.transfers => 'Transfers',
+    _ActivityTypeFilter.cardBills => 'Card bills',
     _ActivityTypeFilter.investments => 'Investments',
   };
 
@@ -1918,10 +1920,11 @@ extension on _ActivityTypeFilter {
     _ActivityTypeFilter.moneyIn =>
       entry.entryKind == TxnEntryKind.income ||
           entry.entryKind == TxnEntryKind.investmentReturn,
-    _ActivityTypeFilter.moneyOut =>
-      entry.entryKind == TxnEntryKind.spend ||
-          entry.entryKind == TxnEntryKind.investment,
+    _ActivityTypeFilter.moneyOut => entry.countsAsMoneyOut,
     _ActivityTypeFilter.transfers => entry.entryKind == TxnEntryKind.transfer,
+    _ActivityTypeFilter.cardBills =>
+      entry.entryKind == TxnEntryKind.transfer &&
+          entry.transferType == 'card_bill',
     _ActivityTypeFilter.investments =>
       entry.entryKind == TxnEntryKind.investment ||
           entry.entryKind == TxnEntryKind.investmentReturn ||
@@ -1936,6 +1939,7 @@ IconData _typeIcon(_ActivityTypeFilter type) => switch (type) {
   _ActivityTypeFilter.moneyIn => Icons.arrow_downward_rounded,
   _ActivityTypeFilter.moneyOut => Icons.arrow_upward_rounded,
   _ActivityTypeFilter.transfers => Icons.swap_horiz_rounded,
+  _ActivityTypeFilter.cardBills => Icons.credit_card_outlined,
   _ActivityTypeFilter.investments => Icons.trending_up_rounded,
 };
 
@@ -3822,16 +3826,16 @@ class _TransactionTile extends StatelessWidget {
             : 'Credit card ending ${entry.cardLast4}',
       if (entry.cardDisplayName == null &&
           entry.instrument == TxnInstrument.upiBank)
-        entry.accountLast4 == null
+        (entry.accountLast4 ?? entry.cardLast4) == null
             ? 'Bank account · unmatched'
-            : 'Bank account ending ${entry.accountLast4}',
+            : 'Bank account ending ${entry.accountLast4 ?? entry.cardLast4}',
       if (entry.cardDisplayName == null &&
           entry.instrument == TxnInstrument.other &&
           (entry.accountLast4 == 'Amazon Pay Later' ||
               entry.merchantName == 'Amazon Pay Later'))
         'Amazon Pay Later',
       if (isIgnored) 'Excluded from spend',
-      if (!isIgnored && entry.excludeFromSpend) 'Not counted in spending',
+      if (!isIgnored && entry.excludeFromSpend) leftOutLabel(entry),
       // The reward this card spend earned (priced by the server). Nothing for a
       // payment that cannot earn one, and nothing until it has been priced.
       if (activityRewardChip(entry) case final chip?) chip,

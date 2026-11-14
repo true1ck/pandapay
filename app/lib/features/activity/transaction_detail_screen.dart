@@ -870,6 +870,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     return 'Restore transaction';
   }
 
+  String? _excludeReason;
+
   /// Counts this transaction in, or leaves it out of, the person's spending.
   Future<void> _setSpendExclusion(bool excluded) async {
     final previous = _entry;
@@ -992,6 +994,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     }
 
     final action = TxnAction.values.firstWhere((a) => a.name == choice);
+    if (action == TxnAction.excludeSpend) {
+      _excludeReason = await askExcludeReason(context);
+      if (_excludeReason == null || !mounted) return;
+    }
     final candidates = actionCandidates(_entry, action, all);
     // Transfers always ask (a tap must never silently rewrite a payee's whole
     // history); the rest ask only when there is something else to include.
@@ -1034,7 +1040,13 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     setState(() => _ignoring = true);
     final before = _entry;
     try {
-      final record = await applyTxnAction(ref, before, action, scope);
+      final record = await applyTxnAction(
+        ref,
+        before,
+        action,
+        scope,
+        excludeReason: _excludeReason,
+      );
       if (!mounted) return;
       final reason = action.ignoreReason;
       if (reason != null) {
@@ -1046,7 +1058,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           _note = note;
         });
       } else if (action == TxnAction.excludeSpend) {
-        setState(() => _entry = _entry.copyWith(excludeFromSpend: true));
+        setState(() => _entry = _entry.copyWith(
+          excludeFromSpend: true,
+          excludeReason: _excludeReason,
+        ));
       } else {
         ref.invalidate(transactionDetailProvider(widget.entry.id));
       }
@@ -1593,9 +1608,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                                     entry.status.substring(1)),
                   ),
                   if (entry.excludeFromSpend)
-                    const _DetailRow(
+                    _DetailRow(
                       label: 'Spending',
-                      value: 'Not counted in your spending',
+                      value: entry.excludeReason == null
+                          ? 'Not counted in your spending'
+                          : leftOutLabel(entry),
                     ),
                   if (_note != null && _note!.isNotEmpty)
                     _DetailRow(label: 'Note', value: _note!),
