@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:pandapay_domain/pandapay_domain.dart' show Money;
 
 import '../../../app/design/app_theme.dart';
 import '../../../app/design/widgets.dart';
@@ -55,15 +56,51 @@ class SharedGroupScreen extends StatelessWidget {
           onTap: () => onPreviousPage!(SharedGroupTab.expenses),
         ),
       ..._header(incomplete: data.expenses.incomplete),
+      // The one thing to do about a balance sits right under it.
+      if (onSettleUp != null &&
+          data.summary != null &&
+          (!data.summary!.youOwe.isZero || !data.summary!.owedToYou.isZero))
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppSpace.sm),
+          child: SharedAction(
+            key: const Key('expenses-settle-up'),
+            label: 'Settle up',
+            icon: Icons.payments_outlined,
+            onTap: onSettleUp!,
+          ),
+        ),
     ],
     itemCount: data.expenses.items.length,
-    itemBuilder: (_, index) => SharedExpenseTile(
-      row: data.expenses.items[index],
-      hideAmounts: data.hideAmounts,
-      onTap: onOpenExpense == null
+    itemBuilder: (_, index) {
+      final row = data.expenses.items[index];
+      final month = _monthLabel(row.occurredAtLabel);
+      final previous = index == 0
           ? null
-          : () => onOpenExpense!(data.expenses.items[index].id),
-    ),
+          : _monthLabel(data.expenses.items[index - 1].occurredAtLabel);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (month != null && month != previous)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpace.sm, bottom: 6),
+              child: Text(
+                month,
+                style: BambooFonts.ui(
+                  12,
+                  weight: FontWeight.w700,
+                  color: BambooInk.ink500,
+                ),
+              ),
+            ),
+          SharedExpenseTile(
+            row: row,
+            hideAmounts: data.hideAmounts,
+            otherName: data.direct ? data.title : null,
+            onTap: onOpenExpense == null ? null : () => onOpenExpense!(row.id),
+          ),
+        ],
+      );
+    },
     emptyTitle: 'No expenses yet',
     emptyMessage: data.direct
         ? 'Add the first expense you share with ${data.title}.'
@@ -199,143 +236,152 @@ class SharedGroupScreen extends StatelessWidget {
   );
 }
 
+/// One expense in a friend's or group's list, in the order a person reads it:
+/// when, what, who paid, and what it means for them. The accounting (bill total,
+/// shares) lives in the expense itself.
 class SharedExpenseTile extends StatelessWidget {
   final SharedExpenseRow row;
   final bool hideAmounts;
+
+  /// The other person in a friend's list, for "Ravi paid"; null in a group.
+  final String? otherName;
   final VoidCallback? onTap;
   const SharedExpenseTile({
     super.key,
     required this.row,
     this.hideAmounts = false,
+    this.otherName,
     this.onTap,
   });
+
+  String get _paidBy => switch (row.paidBy) {
+    'You' => 'You paid',
+    'You and others' => 'You and others paid',
+    'Other members' => '${otherName ?? 'Someone else'} paid',
+    final name => '$name paid',
+  };
+
   @override
-  Widget build(BuildContext context) => Pressable(
-    onTap: onTap,
-    child: SharedPanel(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: BambooInk.slate,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
+  Widget build(BuildContext context) {
+    final date = DateTime.tryParse(row.occurredAtLabel ?? '');
+    final net = row.yourPaid.paise - row.yourShare.paise;
+    final involved = row.participation != SharedParticipation.notIncluded;
+    final caption = !involved
+        ? 'not involved'
+        : row.proposed
+        ? 'pending'
+        : net < 0
+        ? 'you owe'
+        : net > 0
+        ? 'you lent'
+        : 'settled';
+    final color = !involved || row.proposed || net == 0
+        ? BambooInk.ink500
+        : net < 0
+        ? BambooInk.clayInk
+        : BambooInk.jade;
+    final amount = Money.fromPaise(net.abs());
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: AppSpace.sm),
+        padding: const EdgeInsets.all(AppSpace.md),
+        decoration: BoxDecoration(
+          color: BambooInk.glassFillOnPaper,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: BambooInk.hairlineOnPaper),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 34),
+              child: date == null
+                  ? const SizedBox.shrink()
+                  : Column(
+                      children: [
+                        Text('${date.day}', style: BambooFonts.heading(17)),
+                        Text(
+                          DateFormat.MMM().format(date),
+                          style: BambooFonts.ui(11, color: BambooInk.ink500),
+                        ),
+                      ],
+                    ),
             ),
-            child: const ExcludeSemantics(
-              child: Icon(
-                Icons.receipt_long_outlined,
-                color: BambooInk.lime,
-                size: 22,
+            const SizedBox(width: AppSpace.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    row.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: BambooFonts.heading(15),
+                  ),
+                  Text(
+                    // A shared amount without its full bill is not called the bill.
+                    '$_paidBy ${row.billTotal.format()}'
+                    '${row.totalLabel == 'Bill total' ? '' : ' (shared amount)'}',
+                    style: BambooFonts.ui(12, color: BambooInk.ink700),
+                  ),
+                  if (row.proposed && row.reviewLabel != null)
+                    Text(
+                      'Waiting for approval',
+                      style: BambooFonts.ui(12, color: BambooInk.amber),
+                    )
+                  else if (row.reviewLabel != null)
+                    Text(
+                      'Change waiting for approval',
+                      style: BambooFonts.ui(12, color: BambooInk.amber),
+                    ),
+                  if (sharedStateLabel(row.state) case final label?)
+                    Text(
+                      label,
+                      style: BambooFonts.ui(12, color: BambooInk.ink700),
+                    ),
+                  if (!row.confidence.isConfirmed)
+                    Text(
+                      'Estimated amounts',
+                      style: BambooFonts.ui(12, color: BambooInk.ink700),
+                    ),
+                ],
               ),
             ),
-          ),
-          const SizedBox(width: AppSpace.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  row.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: BambooFonts.heading(15),
-                ),
-                Text(
-                  '${row.payerLabel} ${row.paidBy}',
-                  style: BambooFonts.ui(12, color: BambooInk.ink700),
-                ),
-                if (sharedStateLabel(row.state) case final label?)
+            const SizedBox(width: AppSpace.sm),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
                   Text(
-                    label,
-                    style: BambooFonts.ui(12, color: BambooInk.ink700),
+                    caption,
+                    textAlign: TextAlign.end,
+                    style: BambooFonts.ui(12, color: color),
                   ),
-                if (row.reviewLabel != null)
-                  Text(
-                    row.reviewLabel!,
-                    style: BambooFonts.ui(12, color: BambooInk.clayInk),
-                  ),
-                if (row.participation == SharedParticipation.paidForOthers)
-                  Text(
-                    'You paid for others',
-                    style: BambooFonts.ui(12, color: BambooInk.jade),
-                  ),
-                if (row.participation == SharedParticipation.notIncluded)
-                  Text(
-                    'Not included in this split',
-                    style: BambooFonts.ui(12, color: BambooInk.ink700),
-                  ),
-                if (!row.confidence.isConfirmed)
-                  Text(
-                    'Estimated amounts',
-                    style: BambooFonts.ui(12, color: BambooInk.ink700),
-                  ),
-                const SizedBox(height: AppSpace.xs),
-                LayoutBuilder(
-                  builder: (context, constraints) => Wrap(
-                    spacing: AppSpace.md,
-                    runSpacing: AppSpace.xs,
-                    children: [
-                      for (final metric in [
-                        (row.totalLabel, row.billTotal),
-                        ('Your share', row.yourShare),
-                        (row.paidLabel, row.yourPaid),
-                      ])
-                        ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxWidth: constraints.maxWidth,
-                          ),
-                          child: Wrap(
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            spacing: AppSpace.xs,
-                            runSpacing: AppSpace.xs,
-                            children: [
-                              Text(
-                                metric.$1,
-                                style: BambooFonts.ui(
-                                  12,
-                                  color: BambooInk.ink700,
-                                ),
-                              ),
-                              SharedAmount(
-                                metric.$2,
-                                confidence: row.confidence,
-                                hidden: hideAmounts,
-                                size: 14,
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                if (row.occurredAtLabel != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: AppSpace.xs),
-                    child: Text(
-                      _expenseDate(row.occurredAtLabel!),
-                      style: BambooFonts.ui(11, color: BambooInk.ink700),
+                  if (involved && !row.proposed && net != 0)
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: SharedAmount(
+                        amount,
+                        confidence: row.confidence,
+                        hidden: hideAmounts,
+                        color: color,
+                        size: 15,
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
-          if (onTap != null)
-            const Icon(
-              Icons.chevron_right_rounded,
-              color: BambooInk.ink700,
-              size: 18,
-            ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
-String _expenseDate(String value) {
-  final date = DateTime.tryParse(value);
-  // Expense dates are calendar dates; do not shift them across time zones.
-  return date == null ? value : DateFormat.yMMMd().format(date);
+/// `November 2026` for a calendar date, null when there is none.
+String? _monthLabel(String? value) {
+  final date = DateTime.tryParse(value ?? '');
+  return date == null ? null : DateFormat.yMMMM().format(date);
 }
