@@ -180,8 +180,11 @@ void main() {
         tester,
         SharedContextRoute(contextId: group, onAddExpense: () {}),
       );
-      await tap(tester, 'Balances');
-      await tap(tester, 'Friend User');
+      // Who owes whom is at the top of the group now; a tap settles with them.
+      await tester.tap(
+        find.textContaining('Friend User', findRichText: true).first,
+      );
+      await tester.pumpAndSettle();
       expect(find.textContaining('could not be loaded'), findsNothing);
       expect(find.text('Record payment'), findsOneWidget);
       expect(
@@ -199,6 +202,34 @@ void main() {
       expect(people[0].initialValue, me);
       expect(people[1].initialValue, friend);
       expect(runtime.store.pendingCount, 0);
+    },
+  );
+
+  testWidgets(
+    'Settle up opens already filled in when there is one person to settle with',
+    (tester) async {
+      await show(
+        tester,
+        SharedContextRoute(contextId: group, onAddExpense: () {}),
+      );
+      await tester.tap(find.byKey(const Key('expenses-settle-up')));
+      await tester.pumpAndSettle();
+      expect(find.text('Record payment'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('settlement-amount')))
+            .controller!
+            .text,
+        '1000.00',
+      );
+      final people = tester
+          .widgetList<DropdownButtonFormField<String>>(
+            find.byType(DropdownButtonFormField<String>),
+          )
+          .toList();
+      expect(people[0].initialValue, me, reason: 'you pay');
+      expect(people[1].initialValue, friend, reason: 'the one you owe');
+      expect(runtime.store.pendingCount, 0, reason: 'nothing until you confirm');
     },
   );
 

@@ -362,8 +362,6 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Balances'));
-    await tester.pumpAndSettle();
     final settle = find.text('Settle up');
     expect(settle, findsOneWidget);
     // The roster is slow: nothing opens yet, and the person keeps tapping.

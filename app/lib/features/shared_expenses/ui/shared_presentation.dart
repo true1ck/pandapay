@@ -67,18 +67,54 @@ class SharedBalanceSummary {
   });
 }
 
+/// One part of what is owed between you and one person: in a named group, or in
+/// expenses you share outside any group. Shown under a friend the way
+/// Splitwise does ("Sujay owes you ₹2,000.00 in non-group expenses").
+class SharedBreakdownLine {
+  final String contextId;
+
+  /// The group's name; null for expenses outside any group.
+  final String? groupName;
+
+  /// Always positive; [owedToYou] says which way it goes.
+  final Money amount;
+  final bool owedToYou;
+  const SharedBreakdownLine({
+    required this.contextId,
+    required this.amount,
+    required this.owedToYou,
+    this.groupName,
+  });
+
+  /// "Sujay owes you ₹2,000.00 in non-group expenses" or
+  /// "You owe Sujay ₹500.00 in “Goa trip”".
+  String sentence(String person) {
+    final where = groupName == null
+        ? 'in non-group expenses'
+        : 'in “$groupName”';
+    return owedToYou
+        ? '$person owes you ${amount.format()} $where'
+        : 'You owe $person ${amount.format()} $where';
+  }
+}
+
 class SharedContextRow {
   final String id;
   final String title;
   final String? subtitle;
   final SharedBalanceSummary balance;
   final SharedContextState state;
+
+  /// For a friend: what is owed between you in each group and outside groups,
+  /// when it is more than one place. [balance] is then the total of these.
+  final List<SharedBreakdownLine> breakdown;
   const SharedContextRow({
     required this.id,
     required this.title,
     required this.balance,
     this.subtitle,
     this.state = SharedContextState.active,
+    this.breakdown = const [],
   });
 
   /// Never hide known obligations behind stale settled-state metadata.
@@ -199,6 +235,10 @@ class SharedGroupPresentation {
 
   /// A private one-to-one split with a friend rather than a named group.
   final bool direct;
+
+  /// On a friend's page: what is owed between you in each group and outside
+  /// groups, when it is more than one place (see [SharedBreakdownLine]).
+  final List<SharedBreakdownLine> breakdown;
   const SharedGroupPresentation({
     required this.id,
     required this.title,
@@ -210,5 +250,6 @@ class SharedGroupPresentation {
     this.offline = false,
     this.hideAmounts = false,
     this.direct = false,
+    this.breakdown = const [],
   });
 }

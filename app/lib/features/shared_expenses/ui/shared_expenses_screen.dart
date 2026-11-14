@@ -231,18 +231,22 @@ class _SharedExpensesScreenState extends State<SharedExpensesScreen>
         hideAmounts: widget.data.hideAmounts,
         onTap: open == null ? null : () => open(visible[index].id),
       ),
-      footer: permitted
+      // Splitwise's way: settled people are tucked away behind one quiet line
+      // that says how many there are, and the line is not there when none are.
+      footer: permitted && settled.isNotEmpty
           ? [
               SharedTextAction(
-                label:
-                    '${_showSettled[tab]! ? 'Hide' : 'Show'} settled ${tab.name}',
+                label: _showSettled[tab]!
+                    ? 'Hide settled-up ${tab.name}'
+                    : 'Show ${settled.length} settled-up '
+                          '${settled.length == 1 ? tab.name.substring(0, tab.name.length - 1) : tab.name}',
                 icon: _showSettled[tab]!
                     ? Icons.expand_less_rounded
                     : Icons.expand_more_rounded,
                 onTap: () =>
                     setState(() => _showSettled[tab] = !_showSettled[tab]!),
               ),
-              if (_showSettled[tab]!) ...[
+              if (_showSettled[tab]!)
                 for (final row in settled)
                   SharedContextTile(
                     row: row,
@@ -250,9 +254,6 @@ class _SharedExpensesScreenState extends State<SharedExpensesScreen>
                     hideAmounts: widget.data.hideAmounts,
                     onTap: open == null ? null : () => open(row.id),
                   ),
-                if (settled.isEmpty)
-                  const SharedNotice('No settled splits on this page'),
-              ],
             ]
           : const [],
       emptyTitle: tab == SharedHubTab.friends

@@ -558,19 +558,44 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
                       },
                 onSettleUp: !runtime.settlementsEnabled
                     ? null
-                    : () => unawaited(
-                        _gate.run(
-                          () => _settleIfPossible(
-                            runtime,
-                            () => SharedSettleSheet.show(
-                              context,
-                              runtime: runtime,
-                              contextId: widget.contextId,
-                              upi: ref.read(upiPaymentServiceProvider),
+                    : () {
+                        // Like Splitwise: when there is one person to settle
+                        // with, the form opens already filled in (who pays
+                        // whom, and how much). With several it asks who.
+                        final open = [
+                          for (final row in data.balances.items)
+                            if (!row.balance.owedToYou.isZero ||
+                                !row.balance.youOwe.isZero)
+                              row,
+                        ];
+                        final only = open.length == 1 ? open.single : null;
+                        final paying =
+                            only != null && !only.balance.youOwe.isZero;
+                        unawaited(
+                          _gate.run(
+                            () => _settleIfPossible(
+                              runtime,
+                              () => SharedSettleSheet.show(
+                                context,
+                                runtime: runtime,
+                                contextId: widget.contextId,
+                                upi: ref.read(upiPaymentServiceProvider),
+                                initialPayerId: only == null || paying
+                                    ? null
+                                    : only.id,
+                                initialReceiverId: only != null && paying
+                                    ? only.id
+                                    : null,
+                                initialAmount: only == null
+                                    ? null
+                                    : paying
+                                    ? only.balance.youOwe
+                                    : only.balance.owedToYou,
+                              ),
                             ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                 onViewSettlements: () => unawaited(
                   _gate.run(
                     () => SharedSettlementsSheet.show(

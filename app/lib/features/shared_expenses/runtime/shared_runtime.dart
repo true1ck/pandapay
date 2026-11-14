@@ -18,6 +18,7 @@ import '../ui/shared_presentation.dart';
 import '../composer/shared_editor.dart';
 import '../data/shared_pending_phones.dart';
 import 'shared_expense_mapping.dart';
+import 'shared_pair_index.dart';
 import 'shared_local_reads.dart';
 
 class SharedRuntimeUnavailable implements Exception {
@@ -1483,9 +1484,12 @@ class SharedExpensesRuntime extends ChangeNotifier {
         balancePage = results[3],
         total = results[4];
     final own = total['memberId'] as String;
+    final direct = details['kind'] == 'direct';
+    final title = _directTitles[id] ?? details['name'] as String;
     final names = {
       for (final raw in roster['items'] as List)
-        (raw as Map)['memberId']: raw['displayName'] ?? 'Member',
+        (raw as Map)['memberId']:
+            raw['displayName'] ?? (direct ? title : 'Member'),
     };
     final expenseRows = <SharedExpenseRow>[];
     for (final raw in expensePage['items'] as List) {
@@ -1525,10 +1529,20 @@ class SharedExpensesRuntime extends ChangeNotifier {
               if (shown.add(row.id)) row,
     ];
     expenseRows.insertAll(0, waitingRows);
+    var breakdown = const <SharedBreakdownLine>[];
+    if (direct) {
+      try {
+        breakdown = SharedPairIndex.read(store, accountId).linesFor(
+          id,
+          balanceRows.firstOrNull?.balance.netBalance.paise ?? 0,
+        );
+      } catch (_) {}
+    }
     return SharedGroupPresentation(
       id: id,
-      direct: details['kind'] == 'direct',
-      title: _directTitles[id] ?? details['name'] as String,
+      direct: direct,
+      title: title,
+      breakdown: breakdown,
       expenses: SharedPage(
         items: expenseRows,
         hasMore: expensePage['hasMore'] == true,
@@ -1844,6 +1858,30 @@ class SharedExpensesRuntime extends ChangeNotifier {
           op.command.contextId:
               (op.command.toJson()['payload'] as Map)['name'] as String,
     };
+    // What each friend and you owe each other in every group, from this
+    // phone's copy, so a friend shows one total and a line per group.
+    SharedPairIndex? pairs;
+    try {
+      pairs = SharedPairIndex.read(store, accountId);
+    } catch (_) {}
+    SharedContextRow withGroups(SharedContextRow row) {
+      final lines =
+          pairs?.linesFor(row.id, row.balance.netBalance.paise) ?? const [];
+      if (lines.isEmpty) return row;
+      final total = sharedSummaryOfLines(lines, row.balance);
+      return SharedContextRow(
+        id: row.id,
+        title: row.title,
+        subtitle: row.subtitle,
+        balance: total,
+        breakdown: lines,
+        state:
+            total.owedToYou.isZero && total.youOwe.isZero
+                ? row.state
+                : SharedContextState.active,
+      );
+    }
+
     SharedPage<SharedContextRow> contextPage(
       Map<String, Object?> data,
       SharedHubTab tab,
@@ -1865,7 +1903,8 @@ class SharedExpensesRuntime extends ChangeNotifier {
                   'contextId': op.command.contextId,
                   'waiting': true,
                 }),
-          ...contextRows(data['items'] as List),
+          for (final row in contextRows(data['items'] as List))
+            tab == SharedHubTab.friends ? withGroups(row) : row,
         ],
         hasMore: data['hasMore'] == true,
         incomplete: syncLag,
@@ -1953,6 +1992,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
                 balance: r.balance,
                 state: r.state,
                 subtitle: hints[r.id],
+                breakdown: r.breakdown,
               ),
     ];
   }
