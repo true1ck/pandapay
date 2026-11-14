@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/saved_offline.dart';
+import '../../app/design/refresh_views.dart';
+import '../../data/local/card_field_patch.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
@@ -61,7 +63,6 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
   }
 
   double? _originalPointsBalance;
-  String _originalLast4 = '';
 
   void _initFrom(UserCard card) {
     if (_initialized) return;
@@ -78,7 +79,6 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
     _statementDay = card.statementDay;
     _dueDay = card.dueDay;
     _last4Controller.text = card.last4 ?? '';
-    _originalLast4 = card.last4 ?? '';
     _autopayMode = card.autopayMode;
     _feeOverrideEnabled = card.annualFeeOverride != null;
     _lifetimeFree = card.annualFeeOverride?.isZero ?? false;
@@ -106,13 +106,27 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
           ? null
           : _nicknameController.text.trim();
       final repo = ref.read(userCardsRepositoryProvider);
-      if (repo != null &&
-          kCardsLocalFirst &&
-          (serverKnownUnreachable(ref) ||
-              await isProvisionalCard(ref, widget.userCardId))) {
-        // WP-C6: the server is not there (or does not know this card yet):
-        // go straight to saving on the phone instead of waiting for a timeout.
-        throw TimeoutException('server not reachable');
+      if (repo != null && kCardsLocalFirst) {
+        // Local first: the edit is stored on the phone and queued, so the
+        // screen never waits on the network. The server gets it in the
+        // background (the card's own PATCH route, retried until it answers).
+        await _saveOnPhone(
+          nickname: nickname,
+          editedAnnualFeeOverride: editedAnnualFeeOverride,
+          annualFeeOverrideChanged: annualFeeOverrideChanged,
+        );
+        // Hold the spinner until the wallet and Home show the edit.
+        await refreshViews(
+          ref,
+          views: [...editedMoneyViews, recurringReportProvider],
+        );
+        if (mounted) {
+          if (ref.read(isOnlineProvider).valueOrNull == false) {
+            showSavedOfflineSnack(context);
+          }
+          context.pop();
+        }
+        return;
       }
       if (repo == null) {
         // Guest mode has the same privacy-safe last-four backing column as
@@ -150,111 +164,61 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
         }
       }
       await clearUserCardsCache(ref);
-      ref.invalidate(myCardsProvider);
-      ref.invalidate(userCardsProvider);
-      ref.invalidate(transactionsProvider);
-      ref.invalidate(utilizationTransactionsProvider);
-      ref.invalidate(homeSummaryProvider);
-      ref.invalidate(spendReportProvider);
-      ref.invalidate(budgetsProvider);
-      ref.invalidate(recurringReportProvider);
+      await refreshViews(
+        ref,
+        views: [...editedMoneyViews, recurringReportProvider],
+      );
       if (mounted) context.pop();
     } catch (e) {
-      // Same offline-queue pattern as edit_transaction_screen.dart's _save —
-      // an edit to a row that already exists, which the sync queue can
-      // represent. WP-C6 additions: last4 and the fee override also go to the
-      // card's own PATCH (an older server drops them from /sync/push), a
-      // points balance is queued as a points adjustment, and a card that is
-      // still only on this phone gets its edits folded into its queued add.
-      final repo = ref.read(userCardsRepositoryProvider);
-      if (repo != null && kCardsLocalFirst && offlineLike(ref, e)) {
-        final newPointsBalance = _pointsBalanceController.text.trim().isEmpty
-            ? null
-            : double.tryParse(_pointsBalanceController.text.trim());
-        final pointsBalanceChanged =
-            newPointsBalance != null &&
-            newPointsBalance != _originalPointsBalance;
-        final nickname = _nicknameController.text.trim().isEmpty
-            ? null
-            : _nicknameController.text.trim();
-        final creditLimit = _creditLimitController.text.trim().isEmpty
-            ? null
-            : double.tryParse(_creditLimitController.text.trim());
-        final last4 = _last4Controller.text.trim();
-        final provisional = await isProvisionalCard(ref, widget.userCardId);
-        if (provisional) {
-          await queueCardFieldPatch(ref, widget.userCardId, {
-            'nickname': nickname,
-            'creditLimitInr': creditLimit,
-            'statementDay': _statementDay,
-            'dueDay': _dueDay,
-            'autopayMode': _autopayMode.wireValue,
-            'last4': last4,
-            if (annualFeeOverrideChanged)
-              if (editedAnnualFeeOverride == null)
-                'clearAnnualFeeOverride': true
-              else
-                'annualFeeOverrideInr': editedAnnualFeeOverride,
-          });
-          try {
-            final cache = await ref.read(responseCacheProvider.future);
-            cache.financialStore.patchCard(
-              ref.read(cacheNamespaceProvider),
-              widget.userCardId,
-              {
-                'nickname': nickname,
-                'credit_limit_inr': creditLimit,
-                'statement_day': _statementDay,
-                'due_day': _dueDay,
-                'autopay_mode': _autopayMode.wireValue,
-                'last4': last4.isEmpty ? null : last4,
-                if (annualFeeOverrideChanged)
-                  'annual_fee_override_inr': editedAnnualFeeOverride,
-              },
-            );
-          } catch (_) {}
-        } else {
-          final queue = await ref.read(syncQueueProvider.future);
-          queue.enqueueUpdate(
-            entity: 'user_cards',
-            entityId: widget.userCardId,
-            fields: {
-              'nickname': nickname,
-              'credit_limit_inr': creditLimit,
-              'statement_day': _statementDay,
-              'due_day': _dueDay,
-              'autopay_mode': _autopayMode.wireValue,
-              'last4': last4.isEmpty ? null : last4,
-              if (annualFeeOverrideChanged)
-                'annual_fee_override_inr': editedAnnualFeeOverride,
-            },
-          );
-          final patch = <String, Object?>{
-            if (last4 != _originalLast4) 'last4': last4,
-            if (annualFeeOverrideChanged)
-              if (editedAnnualFeeOverride == null)
-                'clearAnnualFeeOverride': true
-              else
-                'annualFeeOverrideInr': editedAnnualFeeOverride,
-          };
-          if (patch.isNotEmpty) {
-            await queueCardFieldPatch(ref, widget.userCardId, patch);
-          }
-          ref.invalidate(pendingSyncCountProvider);
-        }
-        if (pointsBalanceChanged) {
-          await queuePointsBalance(ref, widget.userCardId, newPointsBalance);
-        }
-        refreshCardProviders(ref);
-        if (mounted) {
-          showSavedOfflineSnack(context);
-          context.pop();
-        }
-        return;
-      }
       setState(() => _error = userFacingErrorMessage(e));
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  /// Saves the edit on this phone and queues it for the server.
+  ///
+  /// The stored card changes at once (every list reads it), and the same fields
+  /// wait in the command outbox for the card's own PATCH route, which accepts
+  /// every field this form has. A card that exists only on the phone gets the
+  /// edit folded into its queued add. The points balance is its own command
+  /// (it carries a mutation id, so a lost reply cannot count twice).
+  Future<void> _saveOnPhone({
+    required String? nickname,
+    required double? editedAnnualFeeOverride,
+    required bool annualFeeOverrideChanged,
+  }) async {
+    final creditLimit = _creditLimitController.text.trim().isEmpty
+        ? null
+        : double.tryParse(_creditLimitController.text.trim());
+    final newPointsBalance = _pointsBalanceController.text.trim().isEmpty
+        ? null
+        : double.tryParse(_pointsBalanceController.text.trim());
+    final fields = <String, Object?>{
+      'nickname': nickname,
+      'creditLimitInr': creditLimit,
+      'statementDay': _statementDay,
+      'dueDay': _dueDay,
+      'autopayMode': _autopayMode.wireValue,
+      // '' really clears the digits (see UserCardsRepository.updateCard).
+      'last4': _last4Controller.text.trim(),
+      if (annualFeeOverrideChanged)
+        if (editedAnnualFeeOverride == null)
+          'clearAnnualFeeOverride': true
+        else
+          'annualFeeOverrideInr': editedAnnualFeeOverride,
+    };
+    final cache = await ref.read(responseCacheProvider.future);
+    final namespace = ref.read(cacheNamespaceProvider);
+    await queueCardFieldPatch(ref, widget.userCardId, fields);
+    cache.financialStore.patchCard(
+      namespace,
+      widget.userCardId,
+      cardStorePatchFromCommand(fields),
+    );
+    if (newPointsBalance != null &&
+        newPointsBalance != _originalPointsBalance) {
+      await queuePointsBalance(ref, widget.userCardId, newPointsBalance);
     }
   }
 
@@ -316,8 +280,8 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
 
     setState(() => _archiving = true);
     try {
-      // One shared path (WP-C6, see card_state_local_first.dart): the server
-      // first when it is reachable, otherwise saved on the phone and queued.
+      // One shared path (WP-C6, see card_state_local_first.dart): saved on the
+      // phone first, sent in the background.
       final change = await setCardArchived(
         ref,
         widget.userCardId,
@@ -329,7 +293,8 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
       // never render CardDetailScreen's "card could not be found" state after
       // a successful removal.
       if (mounted) {
-        if (change == CardChange.queued) {
+        if (change == CardChange.queued &&
+            ref.read(isOnlineProvider).valueOrNull == false) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
@@ -357,9 +322,8 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
   Future<void> _setDefault() async {
     setState(() => _settingDefault = true);
     try {
-      // Same shared path as Card actions (WP-C6): the server first when
-      // reachable, otherwise saved on the phone (LocalFirstCards clears the
-      // old default in the same step) and queued.
+      // Same shared path as Card actions (WP-C6): saved on the phone (the old
+      // default is cleared in the same step) and sent in the background.
       await setCardDefault(ref, widget.userCardId);
       await clearUserCardsCache(ref);
       ref.invalidate(myCardsProvider);

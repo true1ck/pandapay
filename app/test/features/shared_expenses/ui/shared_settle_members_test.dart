@@ -224,7 +224,7 @@ void main() {
       await tap(tester, 'Check status');
       expect(runtime.store.pendingCount, 1);
       expect(
-        find.text("Saved on this phone. It will sync when you're online."),
+        find.text("Saved. It will sync in the background."),
         findsOneWidget,
       );
       expect(
@@ -349,7 +349,7 @@ void main() {
       expect(runtime.store.pendingCount, 1);
       expect(find.text('Payment confirmed'), findsNothing);
       expect(find.text('Confirm received'), findsNothing);
-      expect(find.text("Saved on this phone. It will sync when you're online."), findsWidgets);
+      expect(find.text("Saved. It will sync in the background."), findsWidgets);
       await expectLater(
         runtime.respondToSettlement(group, report, 'reject'),
         throwsA(isA<SharedLocalException>()),

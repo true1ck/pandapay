@@ -50,6 +50,18 @@ Future<Finder> _saveButton(WidgetTester tester) async {
   );
 }
 
+/// Consent is local first: the choice is saved and queued at once, and the
+/// outbox posts it in the background. This is what is waiting to be posted.
+Future<List<Map<String, Object?>>> queuedConsents(WidgetTester tester) async {
+  final container = ProviderScope.containerOf(
+    tester.element(find.byType(MaterialApp)),
+  );
+  return (await tester.runAsync(() async {
+    final commands = await container.read(commandOutboxProvider.future);
+    return [for (final c in commands.pendingOf({'consent_submit'})) c.payload];
+  }))!;
+}
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
@@ -118,7 +130,7 @@ void main() {
       await tester.tap(await _saveButton(tester));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining("Saved on this phone"), findsOneWidget);
+      expect(find.textContaining('Saved. It will sync in the background.'), findsOneWidget);
 
       final outbox = await container.read(outboxRepositoryProvider.future);
       final pending = await outbox.pending();

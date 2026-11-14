@@ -75,6 +75,8 @@ TransactionEntry _entry({
 );
 
 late AppDatabase _db;
+_Repo? _repoUnderTest;
+bool _onlineUnderTest = true;
 
 Future<void> _pump(
   WidgetTester tester,
@@ -86,6 +88,8 @@ Future<void> _pump(
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   _db = openInMemoryForTesting();
+  _repoUnderTest = repo;
+  _onlineUnderTest = online;
   addTearDown(_db.close);
   final editor = EditTransactionScreen(
     transactionId: 't1',
@@ -127,8 +131,33 @@ Future<void> _pump(
 
 Map<String, Object?>? _queued() {
   final pending = SyncQueue(_db, namespace: 'user:test').pending();
-  return pending.isEmpty ? null : pending.single.payload;
+  return _mergeTyped(_db.db, pending.isEmpty ? null : pending.single.payload);
 }
+
+/// Sync-queue fields plus the typed fields that travel as their own command
+/// (amount, category, card, rail, instrument...), keyed like the wire fields.
+Map<String, Object?>? _mergeTyped(dynamic db, Map<String, Object?>? queued) {
+  const snake = {
+    'amountInr': 'amount_inr',
+    'occurredAt': 'occurred_at',
+    'categoryId': 'category_id',
+    'userCategoryId': 'user_category_id',
+    'userCardId': 'user_card_id',
+    'entryKind': 'entry_kind',
+  };
+  final rows = db.select(
+    "SELECT payload_json FROM command_outbox WHERE kind = 'transaction_typed_fields'",
+  );
+  if (rows.isEmpty) return queued;
+  final merged = <String, Object?>{...?queued};
+  for (final r in rows) {
+    final p = jsonDecode(r['payload_json'] as String) as Map<String, dynamic>;
+    p.remove('id');
+    p.forEach((k, v) => merged[snake[k] ?? k] = v);
+  }
+  return merged;
+}
+
 
 bool _selected(WidgetTester tester, String key) {
   final chip = find.byKey(ValueKey(key));
@@ -145,9 +174,37 @@ Future<void> _tapKey(WidgetTester tester, String key) async {
   await tester.pumpAndSettle();
 }
 
+/// The save is local first: it queues commands and the outbox delivers them
+/// when online. Online, deliver them now and fold the PATCH calls into one
+/// logical call so the assertions read the same as before.
 Future<void> _save(WidgetTester tester) async {
   await tester.tap(find.text('Save'));
   await tester.pumpAndSettle();
+  final repo = _repoUnderTest;
+  if (!_onlineUnderTest || repo == null) return;
+  final rows = _db.db.select(
+    "SELECT kind, payload_json FROM command_outbox ORDER BY rowid",
+  );
+  if (rows.isEmpty) return;
+  final handlers = paymentMethodCommandHandlers(repo);
+  Object? instrument;
+  Object? method;
+  var clear = false;
+  for (final r in rows) {
+    await handlers[r['kind'] as String]!(
+      jsonDecode(r['payload_json'] as String) as Map<String, dynamic>,
+    );
+    instrument ??= repo.last!['instrument'];
+    method ??= repo.last!['paymentMethod'];
+    clear = clear || repo.last!['clearPaymentMethod'] == true;
+  }
+  _db.db.execute('DELETE FROM command_outbox');
+  repo.editCalls = 1;
+  repo.last = {
+    'instrument': instrument,
+    'paymentMethod': method,
+    'clearPaymentMethod': clear,
+  };
 }
 
 void main() {
@@ -202,7 +259,8 @@ void main() {
     expect(repo.editCalls, 1);
     expect(repo.last!['paymentMethod'], 'neft');
     expect(repo.last!['clearPaymentMethod'], isFalse);
-    expect(repo.last!['instrument'], TxnInstrument.upiBank);
+    // Only what changed travels; the unchanged instrument is not re-sent.
+    expect(repo.last!['instrument'], isNull);
     expect(_queued(), isNull);
   });
 

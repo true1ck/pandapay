@@ -11,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../app/design/saved_offline.dart';
+import '../../app/design/refresh_views.dart';
 import '../shared_expenses/ui/shared_name_sheet.dart';
 import '../shared_expenses/ui/shared_add_friend_sheet.dart';
 import 'package:uuid/uuid.dart';
@@ -1389,10 +1390,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       // recompute server-side inside logTransaction above — invalidating
       // them here just pulls that already-updated state back down so Home
       // and Activity reflect it without a manual pull-to-refresh.
-      ref.invalidate(userCardsProvider);
-      ref.invalidate(transactionsProvider);
-      ref.invalidate(utilizationTransactionsProvider);
-      ref.invalidate(homeSummaryProvider);
+      await refreshViews(ref);
       if (mounted) {
         // Captured BEFORE pop() — by the time a user actually taps "Undo"
         // (the snackbar lives ~4s, the pop animation completes in ~300ms),
@@ -1498,6 +1496,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
             // The spend is queued; the receipt can be added again from its
             // detail screen.
           }
+          await refreshViews(ref);
           if (mounted) {
             // Same "capture before pop" reasoning as the success path above —
             // ScaffoldMessenger.of(context) after pop() would attach to a
@@ -1608,11 +1607,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     }
     if (merchantName != null) await _rememberMerchant(merchantName);
     ref.invalidate(pendingOutboxCountProvider);
-    ref.invalidate(transactionsProvider);
-    ref.invalidate(utilizationTransactionsProvider);
-    ref.invalidate(homeSummaryProvider);
     // Deliver in the background. This returns at once.
     ref.read(outboxFlushRequestProvider.notifier).state++;
+    // The spinner stays up until Activity, Home and the totals show the row.
+    await refreshViews(ref);
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     final container = ProviderScope.containerOf(context, listen: false);

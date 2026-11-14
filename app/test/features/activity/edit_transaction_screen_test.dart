@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -89,8 +90,33 @@ AppDatabase? _lastDb;
 /// The one queued change for [namespace], i.e. what the save will send.
 Map<String, Object?>? _queued(AppDatabase db, String namespace) {
   final pending = SyncQueue(db, namespace: namespace).pending();
-  return pending.isEmpty ? null : pending.single.payload;
+  return _mergeTyped(db.db, pending.isEmpty ? null : pending.single.payload);
 }
+
+/// Sync-queue fields plus the typed fields that travel as their own command
+/// (amount, category, card, rail, instrument...), keyed like the wire fields.
+Map<String, Object?>? _mergeTyped(dynamic db, Map<String, Object?>? queued) {
+  const snake = {
+    'amountInr': 'amount_inr',
+    'occurredAt': 'occurred_at',
+    'categoryId': 'category_id',
+    'userCategoryId': 'user_category_id',
+    'userCardId': 'user_card_id',
+    'entryKind': 'entry_kind',
+  };
+  final rows = db.select(
+    "SELECT payload_json FROM command_outbox WHERE kind = 'transaction_typed_fields'",
+  );
+  if (rows.isEmpty) return queued;
+  final merged = <String, Object?>{...?queued};
+  for (final r in rows) {
+    final p = jsonDecode(r['payload_json'] as String) as Map<String, dynamic>;
+    p.remove('id');
+    p.forEach((k, v) => merged[snake[k] ?? k] = v);
+  }
+  return merged;
+}
+
 
 Future<void> _pump(
   WidgetTester tester, {

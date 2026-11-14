@@ -5,18 +5,15 @@ import 'package:uuid/uuid.dart';
 
 import '../../app/providers.dart';
 import '../../data/local_first/pending_overlays.dart';
-import '../sync/sync_engine.dart';
 import 'add_card_local_first.dart';
 
 /// WP-C6 (W-07): the one code path for archive / pause / un-archive / set
 /// default / points balance, replacing the copies in `card_actions_screen.dart`
 /// and `edit_card_screen.dart`.
 ///
-/// Rule, same as every local-first write here: a reachable server is asked
-/// first (an online healthy user sees exactly what they saw before); when the
-/// server is not there (offline, dead Wi-Fi, timeout, 5xx) or already known to
-/// be unreachable, the change is applied on the phone and queued, and the
-/// screen returns at once.
+/// Rule, same as every local-first write here: the change is applied on the
+/// phone and queued, the screen returns at once, and the outbox tells the
+/// server in the background (retried until it answers), online or not.
 enum CardChange {
   /// The server has it.
   saved,
@@ -83,24 +80,22 @@ Future<CardChange> setCardArchived(
     await _discardProvisional(ref, cardId);
     return CardChange.queued;
   }
-  if (!(kCardsLocalFirst && serverKnownUnreachable(ref))) {
-    try {
-      archived ? await repo.archiveCard(cardId) : await repo.unarchiveCard(cardId);
-      await applyUserCardArchiveToCache(ref, userCardId: cardId, archived: archived);
-      return CardChange.saved;
-    } catch (error) {
-      if (!kCardsLocalFirst || !offlineLike(ref, error)) rethrow;
-    }
+  if (!kCardsLocalFirst) {
+    archived ? await repo.archiveCard(cardId) : await repo.unarchiveCard(cardId);
+    await applyUserCardArchiveToCache(ref, userCardId: cardId, archived: archived);
+    return CardChange.saved;
   }
-  final queue = await ref.read(syncQueueProvider.future);
-  queue.enqueueUpdate(
-    entity: 'user_cards',
-    entityId: cardId,
-    fields: {'is_archived': archived},
+  // Local first: the stored card changes now (every list reads it) and the
+  // card's own archive route is called from the outbox. A queued opposite
+  // command is cancelled instead (nothing left to send).
+  await queueCommand(
+    ref,
+    kind: archived ? CardCommand.archiveCard : CardCommand.unarchiveCard,
+    target: cardId,
+    payload: {'cardId': cardId},
+    cancels: [archived ? CardCommand.unarchiveCard : CardCommand.archiveCard],
   );
   await applyUserCardArchiveToCache(ref, userCardId: cardId, archived: archived);
-  ref.invalidate(pendingSyncCountProvider);
-  unawaited(ref.read(syncEngineProvider).sync());
   return CardChange.queued;
 }
 
@@ -125,20 +120,25 @@ Future<CardChange> setCardDefault(WidgetRef ref, String cardId) async {
     cache.financialStore.patchCard(ns, cardId, {'is_default': true});
     return CardChange.queued;
   }
-  if (!(kCardsLocalFirst && serverKnownUnreachable(ref))) {
-    try {
-      await repo.setDefaultCard(cardId);
-      return CardChange.saved;
-    } catch (error) {
-      if (!kCardsLocalFirst || !offlineLike(ref, error)) rethrow;
+  if (!kCardsLocalFirst) {
+    await repo.setDefaultCard(cardId);
+    return CardChange.saved;
+  }
+  // Local first, same as archive: stored now, the outbox calls the route.
+  await queueCommand(
+    ref,
+    kind: CardCommand.setDefault,
+    target: cardId,
+    payload: {'cardId': cardId},
+  );
+  final cache = await ref.read(responseCacheProvider.future);
+  final ns = ref.read(cacheNamespaceProvider);
+  for (final c in cache.financialStore.entities(ns, 'cards')) {
+    if (c['is_default'] == true && c['id'] != cardId) {
+      cache.financialStore.patchCard(ns, c['id'] as String, {'is_default': false});
     }
   }
-  // Signed in: save on the phone, the sync queue carries it. LocalFirstCards
-  // clears the previous default in the same step.
-  final localFirst = await ref.read(localFirstCardsProvider.future);
-  localFirst.setDefault(cardId);
-  ref.invalidate(pendingSyncCountProvider);
-  unawaited(ref.read(syncEngineProvider).sync());
+  cache.financialStore.patchCard(ns, cardId, {'is_default': true});
   return CardChange.queued;
 }
 

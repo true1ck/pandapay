@@ -4,6 +4,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../user_cards_repository.dart';
 import 'app_database.dart';
+import 'card_field_patch.dart';
 
 /// DLT SMS sender IDs split one bank's alerts across channel variants
 /// ("AD-" advertising, "AX-" activity, "VM-"/"PD-" operator packs, "-S"/"-T"
@@ -499,10 +500,60 @@ class FinancialStore {
         };
       }
     }
+    if (entity == 'cards') _overlayQueuedCardFields(ns, rows, id);
     if (entity == 'transactions') {
       _enrichSmsPaymentMethod(ns, rows);
     }
     return rows;
+  }
+
+  /// A card edit saved on the phone travels as a `card_fields_patch` command
+  /// (the card's own PATCH route). Until it is delivered it is laid over the
+  /// stored row, so a refresh that returns the server's older copy never makes
+  /// the edit flicker back. One read of the (tiny) outbox, never per row.
+  void _overlayQueuedCardFields(
+    String ns,
+    List<Map<String, dynamic>> rows,
+    String? id,
+  ) {
+    if (rows.isEmpty) return;
+    final commands = database.db.select(
+      "SELECT kind, target, payload_json FROM command_outbox WHERE namespace=? AND kind IN ('card_fields_patch','archive_card','unarchive_card','set_default') ORDER BY id",
+      [ns],
+    );
+    if (commands.isEmpty) return;
+    final indexes = <Object?, int>{
+      for (var index = 0; index < rows.length; index++) rows[index]['id']: index,
+    };
+    for (final command in commands) {
+      final index = indexes[command['target']];
+      if (index == null) {
+        // Another card became the default: this (single) row is no longer it.
+        if (command['kind'] == 'set_default') {
+          for (var i = 0; i < rows.length; i++) {
+            rows[i] = {...rows[i], 'is_default': false};
+          }
+        }
+        continue;
+      }
+      switch (command['kind']) {
+        case 'archive_card':
+          rows[index] = {...rows[index], 'is_archived': true};
+        case 'unarchive_card':
+          rows[index] = {...rows[index], 'is_archived': false};
+        case 'set_default':
+          for (var i = 0; i < rows.length; i++) {
+            rows[i] = {...rows[i], 'is_default': i == index};
+          }
+        default:
+          final payload = jsonDecode(command['payload_json'] as String);
+          if (payload is! Map) continue;
+          rows[index] = {
+            ...rows[index],
+            ...cardStorePatchFromCommand(Map<String, Object?>.from(payload)),
+          };
+      }
+    }
   }
 
   // Keep explicit source evidence after a provisional row is reconciled to a

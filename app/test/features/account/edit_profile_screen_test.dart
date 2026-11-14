@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/account_name_api.dart';
+import 'package:pandapay/data/local_first/command_outbox.dart';
 import 'package:pandapay/data/phone_api.dart';
 import 'package:pandapay/features/account/edit_profile_screen.dart';
 
@@ -24,6 +25,23 @@ PhoneStatus typed(String hint) => PhoneStatus(
   phoneHint: hint,
 );
 
+/// Profile snapshots the screen wrote to the phone (what the lists read).
+List<Map<String, dynamic>> savedProfiles = [];
+
+/// The name saves waiting in the outbox. The name is local first: it shows at
+/// once and the outbox sends it in the background.
+Future<List<Map<String, Object?>>> queuedNames(WidgetTester tester) async {
+  final container = ProviderScope.containerOf(
+    tester.element(find.byType(MaterialApp)),
+  );
+  return (await tester.runAsync(() async {
+    final commands = await container.read(commandOutboxProvider.future);
+    return [
+      for (final c in commands.pendingOf({'profile_name_save'})) c.payload,
+    ];
+  }))!;
+}
+
 Future<List<http.Request>> mount(
   WidgetTester tester, {
   Map<String, dynamic>? profile,
@@ -33,7 +51,7 @@ Future<List<http.Request>> mount(
   await tester.binding.setSurfaceSize(const Size(800, 2000));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   final requests = <http.Request>[];
-  final saved = <Map<String, dynamic>>[];
+  final saved = savedProfiles = <Map<String, dynamic>>[];
   final api = AccountNameApi(
     apiBaseUrl: 'https://api.test',
     authBaseUrl: 'https://auth.test',
@@ -100,12 +118,11 @@ void main() {
     await tester.tap(find.byKey(const Key('edit-name-save')));
     await tester.pumpAndSettle();
 
-    expect(requests.first.method, 'PATCH');
-    expect(requests.first.url.path, '/profile');
-    expect(jsonDecode(requests.first.body), {'display_name': 'Meera Rao'});
-    expect(requests.last.method, 'PUT');
-    expect(requests.last.url.path, '/users/me/name');
-    expect(find.text('Name updated'), findsOneWidget);
+    // Saved on the phone first: shown at once, nothing sent during the tap.
+    expect(requests, isEmpty);
+    expect(savedProfiles.single['display_name'], 'Meera Rao');
+    expect((await queuedNames(tester)).single, {'name': 'Meera Rao'});
+    expect(find.text('Saved. We’ll sync it in the background.'), findsOneWidget);
   });
 
   testWidgets('a saved full name splits into first and last, and saves joined', (tester) async {
@@ -120,7 +137,8 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const Key('edit-name-save')));
     await tester.pumpAndSettle();
-    expect(jsonDecode(requests.first.body), {'display_name': 'Asha Rao'});
+    expect(requests, isEmpty);
+    expect((await queuedNames(tester)).single, {'name': 'Asha Rao'});
   });
 
   testWidgets('an empty name is refused without a request', (tester) async {
@@ -152,8 +170,8 @@ void main() {
     expect(find.text('Required'), findsNothing);
   });
 
-  testWidgets('a failed save keeps the form and shows an error', (tester) async {
-    await mount(
+  testWidgets('a name the server would refuse later is still saved on the phone first', (tester) async {
+    final requests = await mount(
       tester,
       profile: {'id': 'p1', 'display_name': 'Asha Rao', 'email': 'asha@example.com'},
       phone: typed('+91 •••• 3210'),
@@ -163,8 +181,11 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const Key('edit-name-save')));
     await tester.pumpAndSettle();
-    expect(find.textContaining('can’t be saved'), findsOneWidget);
-    expect(find.text('Name updated'), findsNothing);
+    // The screen never waits for the server's verdict (the client already
+    // checks the same name rules); a later refusal is kept for review.
+    expect(requests, isEmpty);
+    expect(savedProfiles.single['display_name'], 'Someone Rao');
+    expect(find.textContaining('can’t be saved'), findsNothing);
   });
 
   test('name rules match the server', () {

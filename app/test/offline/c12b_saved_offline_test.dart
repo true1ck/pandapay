@@ -11,12 +11,12 @@ void main() {
     showSavedOfflineSnack(ctx);
     await t.pump();
     expect(find.text(savedOfflineCopy), findsOneWidget);
-    expect(savedOfflineCopy, "Saved on this phone. It will sync when you're online.");
+    expect(savedOfflineCopy, "Saved. It will sync in the background.");
     ScaffoldMessenger.of(ctx).clearSnackBars();
     await t.pump();
     showSavedOfflineSnack(ctx, what: 'Note');
     await t.pump();
-    expect(find.text("Note saved on this phone. It will sync when you're online."), findsOneWidget);
+    expect(find.text("Note saved. It will sync in the background."), findsOneWidget);
     ScaffoldMessenger.of(ctx).clearSnackBars();
     await t.pumpAndSettle();
   });

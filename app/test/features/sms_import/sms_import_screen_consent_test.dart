@@ -15,6 +15,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 const _channel = MethodChannel('flutter.baseflow.com/permissions/methods');
 
+/// Consent is local first: the choice is saved and queued at once, and the
+/// outbox posts it in the background. This is what is waiting to be posted.
+Future<List<Map<String, Object?>>> queuedConsents(WidgetTester tester) async {
+  final container = ProviderScope.containerOf(
+    tester.element(find.byType(MaterialApp)),
+  );
+  return (await tester.runAsync(() async {
+    final commands = await container.read(commandOutboxProvider.future);
+    return [for (final c in commands.pendingOf({'consent_submit'})) c.payload];
+  }))!;
+}
+
 void main() {
   late List<int> requests;
   late Map<int, int> statuses;
@@ -98,8 +110,10 @@ void main() {
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
 
-    expect(posted.single['purpose'], 'sms_reading');
-    expect(posted.single['sourceScreen'], 'sms_import');
+    final queued = await queuedConsents(tester);
+    expect(queued.single['purpose'], 'sms_reading');
+    expect(queued.single['sourceScreen'], 'sms_import');
+    expect(posted, isEmpty, reason: 'saved first, posted in the background');
     expect(requests, [Permission.sms.value]);
   });
 

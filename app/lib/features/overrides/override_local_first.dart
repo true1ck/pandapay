@@ -3,17 +3,15 @@ import 'package:uuid/uuid.dart';
 
 import '../../app/providers.dart';
 import '../../data/card_overrides_repository.dart';
-import '../../data/local_first/command_outcomes.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
 import '../cards/add_card_local_first.dart';
-import '../cards/card_state_local_first.dart' show isProvisionalCard;
 
 /// WP-C6 (W-08): card overrides that work without a network.
 ///
-/// Same rule as the card helpers: a reachable server is asked first (an online
-/// user sees what they saw before); when it is not there the change is saved
-/// on the phone and queued, and `cardOverridesProvider` shows it at once
-/// (provisional row, hidden row, toggled row) through the queued-work overlay.
+/// Same rule as the card helpers: the change is saved on the phone and queued
+/// (online or not), `cardOverridesProvider` shows it at once (provisional row,
+/// hidden row, toggled row) through the queued-work overlay, and the outbox
+/// tells the server in the background.
 
 /// Drops the saved override list and rebuilds, so the next read is the
 /// server's answer (used after a write the server accepted).
@@ -59,25 +57,6 @@ Future<bool> createOverrideLocalFirst(
     await refreshCardOverrides(ref);
     return true;
   }
-  if (!serverKnownUnreachable(ref) && !await isProvisionalCard(ref, card.id)) {
-    try {
-      await repo
-          .createOverride(
-            id: id,
-            userCardId: card.id,
-            scope: scope,
-            vpa: vpa,
-            merchantName: merchantName,
-            categoryId: categoryId,
-            reasonNote: reasonNote,
-          )
-          .timeout(attempt);
-      await refreshCardOverrides(ref);
-      return true;
-    } catch (error) {
-      if (!offlineLike(ref, error)) rethrow;
-    }
-  }
   await queueCommand(
     ref,
     kind: CardCommand.createOverride,
@@ -120,20 +99,12 @@ Future<bool> deleteOverrideLocalFirst(WidgetRef ref, String id) async {
     _showQueued(ref);
     return false;
   }
-  if (!serverKnownUnreachable(ref)) {
-    try {
-      await goneIsDone(() => repo.delete(id));
-      await refreshCardOverrides(ref);
-      return true;
-    } catch (error) {
-      if (!offlineLike(ref, error)) rethrow;
-    }
-  }
   await queueCommand(
     ref,
     kind: CardCommand.deleteOverride,
     target: id,
     payload: {'id': id},
+    cancels: const [CardCommand.updateOverride],
   );
   // An edit still waiting for the server would only fail against a row that
   // is about to be deleted.
@@ -158,11 +129,6 @@ Future<bool> updateOverrideLocalFirst(
   String? reasonNote,
 }) async {
   final repo = ref.read(cardOverridesRepositoryProvider)!;
-  final fields = <String, Object?>{
-    'is_enabled': ?isEnabled,
-    'user_card_id': ?userCardId,
-    'reason_note': ?reasonNote,
-  };
   if (kCardsLocalFirst) {
     final create = await _queuedCreate(ref, rule.id);
     if (create != null) {
@@ -183,27 +149,34 @@ Future<bool> updateOverrideLocalFirst(
       return false;
     }
   }
-  if (!(kCardsLocalFirst && serverKnownUnreachable(ref))) {
-    try {
-      await repo.updateOverride(
-        rule.id,
-        isEnabled: isEnabled,
-        reasonNote: reasonNote,
-        userCardId: userCardId,
-      );
-      await refreshCardOverrides(ref);
-      return true;
-    } catch (error) {
-      if (!kCardsLocalFirst || !offlineLike(ref, error)) rethrow;
-    }
+  if (!kCardsLocalFirst) {
+    await repo.updateOverride(
+      rule.id,
+      isEnabled: isEnabled,
+      reasonNote: reasonNote,
+      userCardId: userCardId,
+    );
+    await refreshCardOverrides(ref);
+    return true;
   }
-  final queue = await ref.read(syncQueueProvider.future);
-  queue.enqueueUpdate(
-    entity: 'card_overrides',
-    entityId: rule.id,
-    fields: fields,
+  // Local first: shown at once (queued-work overlay) and sent by the outbox
+  // through the rule's own PATCH route. An earlier unsent edit is merged.
+  final earlier = (await ref.read(commandOutboxProvider.future))
+      .pendingOf({CardCommand.updateOverride})
+      .where((c) => c.target == rule.id)
+      .firstOrNull;
+  await queueCommand(
+    ref,
+    kind: CardCommand.updateOverride,
+    target: rule.id,
+    payload: {
+      ...?earlier?.payload,
+      'id': rule.id,
+      'isEnabled': ?isEnabled,
+      'userCardId': ?userCardId,
+      'reasonNote': ?reasonNote,
+    },
   );
-  ref.invalidate(pendingSyncCountProvider);
   _showQueued(ref);
   return false;
 }

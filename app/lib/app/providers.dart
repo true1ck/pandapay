@@ -1,3 +1,4 @@
+import 'async_first_load.dart';
 import '../features/sms_v2/providers/data_providers.dart' as sms_v2_data;
 import '../features/sms_v2/instruments/bank_summary_adapter.dart';
 import '../features/sms_v2/providers/runtime_provider.dart';
@@ -571,10 +572,10 @@ final acquisitionCandidatesProvider =
       final recommender = ref.watch(acquisitionRecommenderProvider);
       final categories = ref.watch(categoriesProvider);
 
-      if (catalogue.isLoading ||
-          userCards.isLoading ||
-          categorySpend.isLoading ||
-          categories.isLoading) {
+      if (catalogue.isFirstLoad ||
+          userCards.isFirstLoad ||
+          categorySpend.isFirstLoad ||
+          categories.isFirstLoad) {
         return const AsyncValue.loading();
       }
       final combinedError =
@@ -2679,7 +2680,11 @@ final cardOverridesProvider = FutureProvider<List<CardOverride>>((ref) async {
       };
       return overlayCardOverrides(
         base,
-        commands.pendingOf({CardCommand.createOverride, CardCommand.deleteOverride}),
+        commands.pendingOf({
+          CardCommand.createOverride,
+          CardCommand.deleteOverride,
+          CardCommand.updateOverride,
+        }),
         pendingOverrideEdits(db, ref.read(cacheNamespaceProvider)),
         cardLabels: labels,
       );
@@ -7919,7 +7924,9 @@ final bestCardForMerchantProvider =
       final overrides = ref.watch(cardOverridesProvider);
       final picker = ref.watch(_bestCardForWidgetProvider);
 
-      if (catalogue.isLoading || userCards.isLoading || overrides.isLoading) {
+      if (catalogue.isFirstLoad ||
+          userCards.isFirstLoad ||
+          overrides.isFirstLoad) {
         return const AsyncValue.loading();
       }
       final combinedError =

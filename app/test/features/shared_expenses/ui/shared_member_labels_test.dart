@@ -211,7 +211,7 @@ void main() {
     expect(find.text('Rahul Kumar'), findsOneWidget);
     expect(find.text('Rahul'), findsNothing);
     // Success feedback: saved on the phone, waiting for the server.
-    expect(find.text("Saved on this phone. It will sync when you're online."), findsOneWidget);
+    expect(find.text("Saved. It will sync in the background."), findsOneWidget);
     final queued = runtime.store
         .readPendingOperations(contextId: group)
         .items

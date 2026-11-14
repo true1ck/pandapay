@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
+import 'package:pandapay/data/local_first/command_outbox.dart';
 import 'package:pandapay/data/spend_reports_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/insights/budgets_screen.dart';
@@ -129,7 +130,16 @@ Future<List<Map<String, dynamic>>> _createBudget(
   await tester.enterText(find.byType(TextField), '1200');
   await tester.tap(find.text('Save budget'));
   await tester.pumpAndSettle();
-  return requests;
+  // Local first: nothing was posted during the tap; the budget is saved on the
+  // phone and the command outbox sends it later.
+  expect(requests, isEmpty);
+  final container = ProviderScope.containerOf(
+    tester.element(find.byType(MaterialApp)),
+  );
+  return (await tester.runAsync(() async {
+    final commands = await container.read(commandOutboxProvider.future);
+    return [for (final c in commands.pendingOf({'budget_save'})) c.payload];
+  }))!.map((p) => Map<String, dynamic>.of(p)).toList();
 }
 
 void main() {
@@ -207,21 +217,28 @@ void main() {
     tester,
   ) async {
     final overall = await _createBudget(tester, scope: BudgetScope.overall);
-    expect(overall.single, {
-      'scope': 'overall',
-      'period': 'monthly',
-      'amountInr': 1200.0,
-      'rollover': false,
-    });
+    expect(overall.single['scope'], 'overall');
+    expect(overall.single['period'], 'monthly');
+    expect(overall.single['amountInr'], 1200.0);
+    expect(overall.single['rollover'], false);
+    expect(overall.single['id'], isNotEmpty, reason: 'client id: a retry cannot duplicate');
 
-    final category = await _createBudget(tester, scope: BudgetScope.category);
-    expect(category.single['scope'], 'category');
-    expect(category.single['scopeRefId'], 'cat-dining');
-    expect(category.single['amountInr'], 1200.0);
+    // The phone's outbox keeps the earlier budgets, so pick this one by scope.
+    Map<String, dynamic> saved(List<Map<String, dynamic>> all, String scope) =>
+        all.firstWhere((p) => p['scope'] == scope);
 
-    final card = await _createBudget(tester, scope: BudgetScope.card);
-    expect(card.single['scope'], 'card');
-    expect(card.single['scopeRefId'], 'uc-1');
-    expect(card.single['amountInr'], 1200.0);
+    final category = saved(
+      await _createBudget(tester, scope: BudgetScope.category),
+      'category',
+    );
+    expect(category['scopeRefId'], 'cat-dining');
+    expect(category['amountInr'], 1200.0);
+
+    final card = saved(
+      await _createBudget(tester, scope: BudgetScope.card),
+      'card',
+    );
+    expect(card['scopeRefId'], 'uc-1');
+    expect(card['amountInr'], 1200.0);
   });
 }

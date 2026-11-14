@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/consents_api.dart';
+import 'package:pandapay/features/account/account_commands.dart';
 import 'package:pandapay/features/consent/template_sharing_disclosure.dart';
 import 'package:pandapay/features/settings/privacy_permissions_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -73,6 +74,21 @@ Future<void> _pump(WidgetTester tester, _Server server) async {
   await tester.pumpAndSettle();
 }
 
+final _refProvider = Provider<Ref>((ref) => ref);
+
+/// The background sender. Consent is saved on the phone first and queued; in
+/// the app the command outbox posts it, here the test runs that step.
+Future<void> _deliver(WidgetTester tester) async {
+  final container = ProviderScope.containerOf(
+    tester.element(find.byType(MaterialApp)),
+  );
+  await tester.runAsync(() async {
+    final commands = await container.read(commandOutboxProvider.future);
+    await commands.flush(accountCommandHandlers(container.read(_refProvider)));
+  });
+  await tester.pumpAndSettle();
+}
+
 Finder _switchFor(String title) =>
     find.ancestor(of: find.text(title), matching: find.byType(SwitchListTile));
 
@@ -111,6 +127,7 @@ void main() {
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
 
+      await _deliver(tester);
       expect(server.posted, [
         {
           'purpose': 'sms_reading',
@@ -165,6 +182,7 @@ void main() {
     await tester.tap(_switchFor('Read my bank SMS'));
     await tester.pumpAndSettle();
 
+    await _deliver(tester);
     expect(server.posted, [
       {
         'purpose': 'sms_reading',
@@ -235,6 +253,7 @@ void main() {
       await tester.tap(find.text('Turn on'));
       await tester.pumpAndSettle();
 
+      await _deliver(tester);
       expect(server.posted, [
         {
           'purpose': 'sms_shared_learning',

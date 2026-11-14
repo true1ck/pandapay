@@ -609,11 +609,9 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
         scopeRefId: _scopeRefId,
         period: _period,
       );
-      // WP-C7: an existing budget is edited local first (as before). A new one
-      // is sent straight away while the server answers (unchanged for an online
-      // user); when it cannot be reached the budget is kept on the phone with
-      // an estimate of what is spent, and the command outbox delivers it with
-      // a client id so a retry cannot duplicate it.
+      // Local first, new or edited: the budget is kept on the phone with an
+      // estimate of what is spent, and the command outbox delivers it with a
+      // client id so a retry cannot duplicate it.
       Future<void> saveLocally() async {
         final id = localId ?? const Uuid().v4();
         if (existing == null) {
@@ -644,20 +642,15 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
         ref.invalidate(budgetsProvider);
       }
 
-      if (existing != null || localId != null) {
+      if (kInsightsLocalFirst) {
         await saveLocally();
       } else {
-        try {
-          await repo.saveBudget(
-            scope: _scope,
-            scopeRefId: _scopeRefId,
-            period: _period,
-            amount: Money.fromRupees(amount),
-          );
-        } catch (e) {
-          if (!kInsightsLocalFirst || !isOfflineLike(e)) rethrow;
-          await saveLocally();
-        }
+        await repo.saveBudget(
+          scope: _scope,
+          scopeRefId: _scopeRefId,
+          period: _period,
+          amount: Money.fromRupees(amount),
+        );
       }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {

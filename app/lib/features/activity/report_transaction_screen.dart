@@ -9,6 +9,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../app/required_field.dart';
 import '../../data/api_exception.dart';
+import '../../data/connectivity/known_connectivity.dart';
 import '../../data/support_api.dart';
 import '../../data/merchant_issue_rules_repository.dart';
 import '../../data/user_cards_repository.dart';
@@ -109,7 +110,7 @@ class _ReportTransactionScreenState extends ConsumerState<ReportTransactionScree
       // select a subset of the same merchant's payments, and then separately
       // opt into applying this issue flag to future imports.
       // Offline there is no preview to wait for: skip the offer (WP-C11).
-      if (result == AccountWrite.sent) await _offerMerchantPropagation(kind);
+      if (!KnownConnectivity.knownOffline) await _offerMerchantPropagation(kind);
       if (!mounted) return;
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(

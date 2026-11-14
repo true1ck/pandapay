@@ -434,12 +434,11 @@ class SubscriptionsScreen extends ConsumerWidget {
     }
 
     try {
-      // H3: a client uuid + clock make a retry safe. Online it is sent now,
-      // exactly as before; when the server cannot be reached the add is queued
-      // and shows on the list at once.
+      // H3: a client uuid + clock make a retry safe. The add is queued and
+      // shows on the list at once; the outbox sends it in the background.
       final id = Uuid().v4();
       final editedAt = DateTime.now().toUtc();
-      try {
+      if (!kInsightsLocalFirst) {
         await repository.createRecurring(
           displayName: draft.displayName,
           amountInr: draft.amountInr,
@@ -449,8 +448,7 @@ class SubscriptionsScreen extends ConsumerWidget {
           id: id,
           clientEditedAt: editedAt,
         );
-      } catch (e) {
-        if (!kInsightsLocalFirst || !isOfflineLike(e)) rethrow;
+      } else {
         final n = draft.nextExpectedOn;
         await queueCommand(
           ref,

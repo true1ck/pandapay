@@ -162,6 +162,18 @@ Future<void> _settle(WidgetTester tester) async {
   }
 }
 
+/// Consent is local first: the choice is saved and queued at once, and the
+/// outbox posts it in the background. This is what is waiting to be posted.
+Future<List<Map<String, Object?>>> queuedConsents(WidgetTester tester) async {
+  final container = ProviderScope.containerOf(
+    tester.element(find.byType(MaterialApp)),
+  );
+  return (await tester.runAsync(() async {
+    final commands = await container.read(commandOutboxProvider.future);
+    return [for (final c in commands.pendingOf({'consent_submit'})) c.payload];
+  }))!;
+}
+
 void main() {
   late GeolocatorPlatform original;
   late Map<int, int> statuses;
@@ -490,8 +502,10 @@ void main() {
         await _settle(tester);
         await tester.tap(find.text('Continue'));
         await _settle(tester);
-        expect(posted.single['purpose'], 'sms_reading');
-        expect(posted.single['sourceScreen'], 'onboarding_permissions');
+        final queued = await queuedConsents(tester);
+        expect(queued.single['purpose'], 'sms_reading');
+        expect(queued.single['sourceScreen'], 'onboarding_permissions');
+        expect(posted, isEmpty, reason: 'saved first, posted in the background');
         expect(requests, contains(Permission.sms.value));
       },
       variant: TargetPlatformVariant.only(TargetPlatform.android),

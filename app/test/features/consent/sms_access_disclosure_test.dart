@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/consents_api.dart';
+import 'package:pandapay/data/local_first/command_outbox.dart';
 import 'package:pandapay/features/consent/sms_access_disclosure.dart';
 import 'package:pandapay/features/consent/sms_reading_consent.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -84,6 +85,18 @@ void _bigScreen(WidgetTester tester) {
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
+}
+
+/// What the app saved for the server. Consent is local first: the choice is
+/// stored and queued at once, and the outbox posts it in the background.
+Future<List<Map<String, Object?>>> _queuedConsents(WidgetTester tester) async {
+  final container = ProviderScope.containerOf(
+    tester.element(find.byType(MaterialApp)),
+  );
+  return (await tester.runAsync(() async {
+    final commands = await container.read(commandOutboxProvider.future);
+    return [for (final c in commands.pendingOf({'consent_submit'})) c.payload];
+  }))!;
 }
 
 Future<void> _openSheet(
@@ -243,18 +256,22 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(h.result, isTrue);
-      expect(h.posted, hasLength(1));
-      expect(h.posted.single, containsPair('purpose', 'sms_reading'));
-      expect(h.posted.single, containsPair('granted', true));
-      expect(h.posted.single, containsPair('policyVersion', '2026-11-15'));
-      expect(h.posted.single, containsPair('sourceScreen', 'auto_sms_sync'));
-      expect(h.posted.single['clientMutationId'], isNotEmpty);
+      expect(h.posted, isEmpty, reason: 'saved first, posted later');
+      final queued = await _queuedConsents(tester);
+      expect(queued, hasLength(1));
+      expect(queued.single, containsPair('purpose', 'sms_reading'));
+      expect(queued.single, containsPair('granted', true));
+      expect(queued.single, containsPair('policyVersion', '2026-11-15'));
+      expect(queued.single, containsPair('sourceScreen', 'auto_sms_sync'));
+      expect(queued.single['clientMutationId'], isNotEmpty);
     },
   );
 
-  testWidgets('a refused post (400) keeps the sheet open and returns nothing', (
+  testWidgets('the choice is saved and the sheet closes without waiting for the server', (
     tester,
   ) async {
+    // Even a server that would refuse the post later does not hold the user
+    // on the sheet: the choice is kept (and parked for review if refused).
     final h = _Harness(postStatus: 400);
     await _openSheet(tester, h);
     await tester.tap(find.byType(Checkbox));
@@ -262,11 +279,9 @@ void main() {
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
 
-    expect(h.result, isNull);
-    expect(
-      find.text('PandaPay reads your bank SMS on this phone'),
-      findsOneWidget,
-    );
+    expect(h.result, isTrue);
+    expect(h.posted, isEmpty);
+    expect(await _queuedConsents(tester), hasLength(1));
   });
 
   testWidgets('ensureSmsReadingConsent skips the sheet when already granted', (
@@ -384,7 +399,7 @@ void main() {
     await _settle(tester);
 
     expect(find.text('shortcut setup'), findsOneWidget);
-    expect(h.posted.single['sourceScreen'], 'ios_sms_import');
+    expect((await _queuedConsents(tester)).single['sourceScreen'], 'ios_sms_import');
   });
 
   test('maskedAccountLabel hides most of an email or phone number', () {

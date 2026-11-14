@@ -84,15 +84,16 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
     setState(() => _busy = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
-      // One shared path (WP-C6): the server first when it is reachable,
-      // otherwise saved on the phone and queued.
+      // One shared path (WP-C6): saved on the phone first, sent in the
+      // background.
       final change = await setCardArchived(
         ref,
         widget.card.id,
         archived: paused,
       );
       await refreshAfterCardChange(ref);
-      final queued = change == CardChange.queued;
+      final queued = change == CardChange.queued &&
+          ref.read(isOnlineProvider).valueOrNull == false;
       messenger.showSnackBar(
         SnackBar(
           content: Text(

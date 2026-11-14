@@ -53,6 +53,17 @@ List<CardOverride> overlayCardOverrides(
         ];
     }
   }
+  // Queued edits sent through the rule's own PATCH route.
+  final routeEdits = [
+    for (final c in commands)
+      if (c.kind == 'update_override')
+        OverrideEdit(c.payload['id'] as String, {
+          if (c.payload['isEnabled'] != null) 'is_enabled': c.payload['isEnabled'],
+          if (c.payload['userCardId'] != null) 'user_card_id': c.payload['userCardId'],
+          if (c.payload.containsKey('reasonNote')) 'reason_note': c.payload['reasonNote'],
+        }),
+  ];
+  edits = [...edits, ...routeEdits];
   for (final e in edits) {
     rows = [
       for (final o in rows)

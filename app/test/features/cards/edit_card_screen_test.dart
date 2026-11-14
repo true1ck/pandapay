@@ -6,6 +6,7 @@ import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/financial_store.dart';
+import 'package:pandapay/data/local/response_cache.dart';
 import 'package:pandapay/data/local/sync_queue.dart';
 import 'package:pandapay/data/local_first/local_first_cards.dart';
 import 'package:pandapay/data/local_first/command_outbox.dart';
@@ -117,6 +118,12 @@ Future<GoRouter> _pump(
       ),
     ],
   );
+  final testDb = openInMemoryForTesting();
+  final cache = ResponseCache(testDb);
+  final store = cache.financialStore..replaceCards('legacy', owned);
+  addTearDown(store.dispose);
+  _lastStore = store;
+  _lastCommands = CommandOutbox(testDb, namespace: 'legacy');
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -126,6 +133,10 @@ Future<GoRouter> _pump(
         userCardsProvider.overrideWith((ref) async => owned),
         myCardsProvider.overrideWith((ref) async => owned),
         userCardsRepositoryProvider.overrideWithValue(repo),
+        // Saves go to the phone first: this is where they are kept.
+        responseCacheProvider.overrideWith((ref) async => cache),
+        commandOutboxProvider.overrideWith((ref) async => _lastCommands!),
+        syncQueueProvider.overrideWith((ref) async => SyncQueue(testDb)),
       ],
       child: MaterialApp.router(routerConfig: router),
     ),
@@ -160,11 +171,16 @@ class _WarmIsOnline extends ConsumerWidget {
 /// a genuine prior route on the stack for these offline tests to pop back
 /// to, matching the app's actual navigation shape.
 CommandOutbox? _lastCommands;
+FinancialStore? _lastStore;
+_RecordingUserCardsRepository? _lastOnlineRepo;
 
+/// [online] true: the server answers (the recording repository). The screen
+/// must still save on the phone first and never call it.
 Future<(GoRouter, SyncQueue)> _pumpOffline(
   WidgetTester tester, {
   required List<CardProduct> catalogue,
   required List<UserCard> owned,
+  bool online = false,
 }) async {
   final router = GoRouter(
     initialLocation: '/home',
@@ -184,7 +200,10 @@ Future<(GoRouter, SyncQueue)> _pumpOffline(
   final queue = SyncQueue(testDb);
   final commands = CommandOutbox(testDb, namespace: 'legacy');
   _lastCommands = commands;
-  final store = FinancialStore(testDb)..replaceCards('legacy', owned);
+  final cache = ResponseCache(testDb);
+  final store = cache.financialStore..replaceCards('legacy', owned);
+  _lastStore = store;
+  _lastOnlineRepo = online ? _RecordingUserCardsRepository() : null;
   addTearDown(store.dispose);
   await tester.pumpWidget(
     ProviderScope(
@@ -195,9 +214,10 @@ Future<(GoRouter, SyncQueue)> _pumpOffline(
         userCardsProvider.overrideWith((ref) async => owned),
         myCardsProvider.overrideWith((ref) async => owned),
         userCardsRepositoryProvider.overrideWithValue(
-          _OfflineUserCardsRepository(),
+          online ? _lastOnlineRepo! : _OfflineUserCardsRepository(),
         ),
-        isOnlineProvider.overrideWith((ref) => Stream.value(false)),
+        responseCacheProvider.overrideWith((ref) async => cache),
+        isOnlineProvider.overrideWith((ref) => Stream.value(online)),
         syncQueueProvider.overrideWith((ref) async => queue),
         commandOutboxProvider.overrideWith((ref) async => commands),
         localFirstCardsProvider.overrideWith(
@@ -364,43 +384,67 @@ void main() {
     expect(pointsField.controller!.text, '2122');
   });
 
-  testWidgets('Save sends the edited nickname to the repository and pops', (
-    tester,
-  ) async {
-    final product = CardProduct(
-      id: 'p1',
-      name: 'Test Card',
-      network: CardNetwork.rupay,
-    );
-    final owned = [
-      const UserCard(
-        id: 'uc1',
-        cardProductId: 'p1',
-        nickname: 'Old',
-        cardName: 'Test Card',
-        isDefault: false,
-      ),
-    ];
-    final repo = _RecordingUserCardsRepository();
-    await _pump(tester, catalogue: [product], owned: owned, repo: repo);
+  testWidgets(
+    'Save is local first: stored and queued at once, the server is not called',
+    (tester) async {
+      final product = CardProduct(
+        id: 'p1',
+        name: 'Test Card',
+        network: CardNetwork.rupay,
+      );
+      final owned = [
+        const UserCard(
+          id: 'uc1',
+          cardProductId: 'p1',
+          nickname: 'Old',
+          cardName: 'Test Card',
+          isDefault: false,
+        ),
+      ];
+      final (router, queue) = await _pumpOffline(
+        tester,
+        catalogue: [product],
+        owned: owned,
+        online: true,
+      );
 
-    await tester.enterText(
-      find.widgetWithText(TextField, 'Nickname'),
-      'Renamed',
-    );
-    await tester.scrollUntilVisible(
-      find.text('Save'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.tap(find.text('Save'));
-    await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Nickname'),
+        'Renamed',
+      );
+      await tester.scrollUntilVisible(
+        find.text('Save'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
 
-    expect(repo.lastUpdateArgs?['userCardId'], 'uc1');
-    expect(repo.lastUpdateArgs?['nickname'], 'Renamed');
-  });
+      // Closed, with no "offline" message because the phone is online.
+      expect(
+        router.routerDelegate.currentConfiguration.uri.path,
+        '/home',
+      );
+      expect(find.textContaining('Saved on this phone'), findsNothing);
+      // Never waited on, never called: delivery is the outbox's job.
+      expect(_lastOnlineRepo!.lastUpdateArgs, isNull);
+      final patch = _lastCommands!.pendingOf({'card_fields_patch'}).single;
+      expect(patch.target, 'uc1');
+      expect(patch.payload['nickname'], 'Renamed');
+      expect(queue.pending(), isEmpty, reason: 'the card PATCH route carries it');
 
-  testWidgets('Remove card confirms in a sheet before calling archiveCard', (
+      // The stored card already shows it, and an older server copy arriving
+      // before delivery cannot flip it back.
+      String? nickname() => _lastStore!
+          .entities('legacy', 'cards')
+          .singleWhere((c) => c['id'] == 'uc1')['nickname'] as String?;
+      expect(nickname(), 'Renamed');
+      _lastStore!.replaceCards('legacy', owned);
+      expect(nickname(), 'Renamed');
+    },
+  );
+
+  testWidgets('Remove card confirms in a sheet, then removes it at once and queues the archive', (
     tester,
   ) async {
     final product = CardProduct(
@@ -438,7 +482,9 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Remove card'));
     await tester.pumpAndSettle();
 
-    expect(repo.archived, isTrue);
+    // Local first: the server is not called during the tap; the outbox sends it.
+    expect(repo.archived, isFalse);
+    expect(_lastCommands!.pendingOf({'archive_card'}).single.target, 'uc1');
     expect(find.text('Wallet'), findsOneWidget);
     expect(find.textContaining('could not be found'), findsNothing);
   });
@@ -477,7 +523,7 @@ void main() {
     expect(repo.archived, isFalse);
   });
 
-  testWidgets('Set as default card calls setDefaultCard', (tester) async {
+  testWidgets('Set as default card is saved first and queued for the server', (tester) async {
     final product = CardProduct(
       id: 'p1',
       name: 'Test Card',
@@ -506,7 +552,8 @@ void main() {
     await tester.tap(find.text('Set as default card'));
     await tester.pumpAndSettle();
 
-    expect(repo.defaultedId, 'uc1');
+    expect(repo.defaultedId, isNull, reason: 'the outbox sends it, not the tap');
+    expect(_lastCommands!.pendingOf({'set_default'}).single.target, 'uc1');
   });
 
   testWidgets(
@@ -576,18 +623,15 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text("Saved on this phone. It will sync when you're online."),
+        find.text('Saved. It will sync in the background.'),
         findsOneWidget,
       );
-      final pending = queue.pending();
-      expect(pending, hasLength(1));
-      expect(pending.single.entity, 'user_cards');
-      expect(pending.single.entityId, 'uc1');
-      expect(pending.single.payload['nickname'], 'Renamed');
-      // Points balance was never in this test's payload since it wasn't
-      // touched, and must never appear even as a null placeholder — the
-      // server-side allowlist doesn't recognize it at all for this entity.
-      expect(pending.single.payload.containsKey('pointsBalance'), isFalse);
+      final patch = _lastCommands!.pendingOf({'card_fields_patch'}).single;
+      expect(patch.target, 'uc1');
+      expect(patch.payload['nickname'], 'Renamed');
+      expect(queue.pending(), isEmpty);
+      // An untouched points balance is never part of the card PATCH.
+      expect(patch.payload.containsKey('pointsBalance'), isFalse);
     },
   );
 
@@ -638,14 +682,14 @@ void main() {
         findsNothing,
       );
       expect(
-        find.text("Saved on this phone. It will sync when you're online."),
+        find.text('Saved. It will sync in the background.'),
         findsOneWidget,
       );
       final adjust = _lastCommands!.pendingOf({'points_adjust'}).single;
       expect(adjust.target, 'uc1');
       expect(adjust.payload['newBalance'], 500);
       expect(adjust.payload['clientMutationId'], isA<String>());
-      expect(queue.pending(), hasLength(1));
+      expect(queue.pending(), isEmpty);
     },
   );
 
@@ -679,15 +723,16 @@ void main() {
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
-      expect(queue.pending().single.payload['last4'], '4321');
+      expect(queue.pending(), isEmpty);
       final patch = _lastCommands!.pendingOf({'card_fields_patch'}).single;
       expect(patch.target, 'uc1');
-      expect(patch.payload, {'cardId': 'uc1', 'last4': '4321'});
+      expect(patch.payload['cardId'], 'uc1');
+      expect(patch.payload['last4'], '4321');
     },
   );
 
   testWidgets(
-    'Remove card while offline queues is_archived instead of failing outright',
+    'Remove card while offline is saved on the phone and queued',
     (tester) async {
       final product = CardProduct(
         id: 'p1',
@@ -725,11 +770,10 @@ void main() {
         ),
         findsOneWidget,
       );
-      final pending = queue.pending();
-      expect(pending, hasLength(1));
-      expect(pending.single.entity, 'user_cards');
-      expect(pending.single.entityId, 'uc1');
-      expect(pending.single.payload, {'is_archived': true});
+      // The card's own archive route carries it (a boolean the sync push may
+      // refuse), so it is a command, not a sync-queue row.
+      expect(queue.pending(), isEmpty);
+      expect(_lastCommands!.pendingOf({'archive_card'}).single.target, 'uc1');
     },
   );
 
@@ -766,9 +810,10 @@ void main() {
       expect(find.text('Set as your default card.'), findsOneWidget);
       // LocalFirstCards clears any other default in the same step, so two
       // cards can never end up flagged default.
-      final pending = queue.pending();
-      expect(pending.single.entityId, 'uc1');
-      expect(pending.single.payload, {'is_default': true});
+      expect(queue.pending(), isEmpty);
+      expect(_lastCommands!.pendingOf({'set_default'}).single.target, 'uc1');
+      final cards = _lastStore!.entities('legacy', 'cards');
+      expect(cards.single['is_default'], isTrue);
     },
   );
 }

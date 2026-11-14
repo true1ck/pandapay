@@ -8,8 +8,6 @@ import '../../app/providers.dart'
         commandOutboxRevisionProvider,
         outboxFlushRequestProvider,
         pendingOutboxCountProvider;
-import '../../data/api_exception.dart';
-import '../../data/connectivity/known_connectivity.dart';
 import '../../data/local_first/command_outbox.dart';
 
 /// WP-C11 kill switch. False restores the old "call the server and fail"
@@ -73,9 +71,10 @@ Future<void> queueAccountCommand(
   } catch (_) {}
 }
 
-/// One live attempt (bounded by [timeout]); when the server cannot be reached
-/// (offline, timeout, 5xx) the write is queued instead. A real refusal (4xx)
-/// is rethrown, as before. [knownOffline] skips the live attempt.
+/// Local first, always: the write is saved on the phone and queued, and the
+/// outbox sends it in the background (retried until the server answers), so a
+/// save never waits on the network. [live], [timeout] and [knownOffline] only
+/// matter when [kAccountLocalFirst] is switched off.
 Future<AccountWrite> sendOrQueue(
   dynamic ref, {
   required String kind,
@@ -90,19 +89,6 @@ Future<AccountWrite> sendOrQueue(
     await live();
     return AccountWrite.sent;
   }
-  if (!(knownOffline ?? KnownConnectivity.knownOffline)) {
-    try {
-      await live().timeout(timeout);
-      return AccountWrite.sent;
-    } catch (error) {
-      // A 401 (stale token) is queued too: the outbox holds it until the
-      // session refreshes, so a withdrawal or ticket is never lost.
-      if (!isOfflineLike(error, knownOffline: false) &&
-          !isAuthenticationFailure(error)) {
-        rethrow;
-      }
-    }
-  }
   await queueAccountCommand(
     ref,
     kind: kind,
@@ -114,4 +100,4 @@ Future<AccountWrite> sendOrQueue(
 }
 
 /// Copy for a write that was queued.
-const savedOfflineMessage = 'Saved — we’ll send it when you’re online.';
+const savedOfflineMessage = 'Saved. We’ll sync it in the background.';

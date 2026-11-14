@@ -118,16 +118,20 @@ void main() {
     expect(await pending(), 0);
   });
 
-  test('revoke while online sends at once and still clears the mirror', () async {
+  test('revoke while online is saved first, clears the mirror, sends in the background', () async {
     await SmsReadingConsentMirror.set(_ns, true);
     final r = await submitConsentLocalFirst(
       ref,
       purpose: smsReadingConsentPurpose,
       granted: false,
     );
-    expect(r, AccountWrite.sent);
-    expect(posted.single['granted'], false);
+    // Local first, always: nothing waited on the server.
+    expect(r, AccountWrite.queued);
+    expect(posted, isEmpty);
     expect(await SmsReadingConsentMirror.isGranted(_ns), isFalse);
+    expect(await pending(), 1);
+    expect(await flush(), 1);
+    expect(posted.single['granted'], false);
     expect(await pending(), 0);
   });
 
@@ -168,7 +172,7 @@ void main() {
     expect(await SmsReadingConsentMirror.isGrantedOrCarriedOver(_ns), isFalse);
   });
 
-  test('a refusal (4xx) is rethrown, not queued', () async {
+  test('a refusal (4xx) is kept for review, never retried, never lost silently', () async {
     final refused = ProviderContainer(
       overrides: [
         cacheNamespaceProvider.overrideWithValue(_ns),
@@ -184,11 +188,19 @@ void main() {
     addTearDown(refused.dispose);
     late Ref r;
     refused.read(Provider<void>((x) => r = x));
-    await expectLater(
-      submitConsentLocalFirst(r, purpose: 'aggregate_insights', granted: true),
-      throwsA(anything),
+    // Saved at once (the screen does not wait for the server's verdict).
+    final result = await submitConsentLocalFirst(
+      r,
+      purpose: 'aggregate_insights',
+      granted: true,
     );
-    expect((await refused.read(commandOutboxProvider.future)).pendingCount, 0);
+    expect(result, AccountWrite.queued);
+    final commands = await refused.read(commandOutboxProvider.future);
+    expect(commands.pendingCount, 1);
+    // The server refuses it later: parked for review, not retried for ever.
+    await commands.flush(accountCommandHandlers(r));
+    expect(commands.pendingCount, 0);
+    expect(commands.parked(), hasLength(1));
   });
 
   group('previous policy version carries over (D8)', () {

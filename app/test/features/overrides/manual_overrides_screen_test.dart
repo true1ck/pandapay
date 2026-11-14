@@ -7,6 +7,7 @@ import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/card_overrides_repository.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/sync_queue.dart';
+import 'package:pandapay/data/local_first/command_outbox.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/overrides/manual_overrides_screen.dart';
 
@@ -66,6 +67,21 @@ class _FakeCardOverridesRepository extends CardOverridesRepository {
       );
     }).toList();
   }
+}
+
+/// The commands waiting in the outbox for the server. Overrides are local
+/// first: the screen shows the change at once and the outbox sends it later.
+Future<List<PendingCommand>> _queued(
+  WidgetTester tester,
+  Set<String> kinds,
+) async {
+  final container = ProviderScope.containerOf(
+    tester.element(find.byType(MaterialApp)),
+  );
+  return (await tester.runAsync(() async {
+    final commands = await container.read(commandOutboxProvider.future);
+    return commands.pendingOf(kinds);
+  }))!;
 }
 
 void main() {
@@ -180,7 +196,7 @@ void main() {
     expect(find.text('VPA: shop@upi'), findsOneWidget);
   });
 
-  testWidgets('confirming Delete actually calls the repository and removes the tile', (tester) async {
+  testWidgets('confirming Delete removes the tile at once and queues the delete', (tester) async {
     final override = CardOverride(
       id: 'o4',
       userCardId: 'uc1',
@@ -208,12 +224,16 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(fakeRepo.calls, ['delete:o4']);
+    // Local first: gone from the screen at once, the server is told by the
+    // outbox (not during the tap).
+    expect(fakeRepo.calls, isEmpty);
+    final queued = await _queued(tester, {'delete_override'});
+    expect(queued.single.target, 'o4');
     expect(find.text('VPA: shop@upi'), findsNothing);
     expect(find.text('No overrides yet'), findsOneWidget);
   });
 
-  testWidgets('editing an override reassigns the card and note via updateOverride, not delete+recreate', (tester) async {
+  testWidgets('editing an override reassigns the card and note at once and queues an update, not delete+recreate', (tester) async {
     final override = CardOverride(
       id: 'o5',
       userCardId: 'uc1',
@@ -253,7 +273,12 @@ void main() {
     await tester.tap(find.text('Save changes'));
     await tester.pumpAndSettle();
 
-    expect(fakeRepo.calls, ['update:o5:isEnabled=null:reasonNote=new note:userCardId=uc1']);
+    // Saved on the phone and shown at once; the outbox sends the rule's own
+    // PATCH later (an update, not delete+recreate).
+    expect(fakeRepo.calls, isEmpty);
+    final queued = await _queued(tester, {'update_override'});
+    expect(queued.single.target, 'o5');
+    expect(queued.single.payload, {'id': 'o5', 'userCardId': 'uc1', 'reasonNote': 'new note'});
     expect(find.textContaining('new note'), findsOneWidget);
     expect(find.text('Edit override'), findsNothing); // sheet closed
   });
@@ -309,7 +334,7 @@ void main() {
     expect(find.text('Edit override'), findsOneWidget);
   });
 
-  testWidgets('toggling enabled while offline queues the change instead of failing outright', (tester) async {
+  testWidgets('toggling enabled is saved first and queued for the server', (tester) async {
     final override = CardOverride(
       id: 'o7',
       userCardId: 'uc1',
@@ -354,15 +379,17 @@ void main() {
     await tester.tap(find.text('Disable')); // currently enabled, so the action label is "Disable"
     await tester.pumpAndSettle();
 
-    expect(find.text("Saved on this phone. It will sync when you're online."), findsOneWidget);
-    final pending = queue.pending();
-    expect(pending, hasLength(1));
-    expect(pending.single.entity, 'card_overrides');
-    expect(pending.single.entityId, 'o7');
-    expect(pending.single.payload, {'is_enabled': false});
+    expect(find.text("Saved. It will sync in the background."), findsOneWidget);
+    // Sent through the rule's own PATCH route, never the sync push (which
+    // refuses non-text fields while typed writes are off).
+    expect(queue.pending(), isEmpty);
+    final queued = await container.read(commandOutboxProvider.future);
+    final update = queued.pendingOf({'update_override'}).single;
+    expect(update.target, 'o7');
+    expect(update.payload, {'id': 'o7', 'isEnabled': false});
   });
 
-  testWidgets('editing an override while offline queues the change instead of failing outright', (tester) async {
+  testWidgets('editing an override is saved first and queued for the server', (tester) async {
     final override = CardOverride(
       id: 'o8',
       userCardId: 'uc1',
@@ -410,12 +437,12 @@ void main() {
     await tester.tap(find.text('Save changes'));
     await tester.pumpAndSettle();
 
-    expect(find.text("Saved on this phone. It will sync when you're online."), findsOneWidget);
+    expect(find.text("Saved. It will sync in the background."), findsOneWidget);
     expect(find.text('Edit override'), findsNothing); // sheet closed, same as the online-success case
-    final pending = queue.pending();
-    expect(pending, hasLength(1));
-    expect(pending.single.entity, 'card_overrides');
-    expect(pending.single.entityId, 'o8');
-    expect(pending.single.payload, {'user_card_id': 'uc1', 'reason_note': 'new note'});
+    expect(queue.pending(), isEmpty);
+    final queued = await container.read(commandOutboxProvider.future);
+    final update = queued.pendingOf({'update_override'}).single;
+    expect(update.target, 'o8');
+    expect(update.payload, {'id': 'o8', 'userCardId': 'uc1', 'reasonNote': 'new note'});
   });
 }

@@ -517,7 +517,7 @@ void main() {
     await tester.tap(find.text('Save split'));
     await tester.pumpAndSettle();
     expect(
-      find.text("Saved on this phone. It will sync when you're online."),
+      find.text("Saved. It will sync in the background."),
       findsOneWidget,
     );
     expect(repo.splits, isEmpty);

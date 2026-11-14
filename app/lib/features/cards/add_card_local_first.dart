@@ -11,6 +11,7 @@ import '../../data/api_exception.dart';
 import '../../data/card_overrides_repository.dart';
 import '../../data/connectivity/known_connectivity.dart';
 import '../../data/connectivity/reachability.dart';
+import '../../data/local/card_field_patch.dart';
 import '../../data/local/financial_store.dart';
 import '../../data/local_first/command_outbox.dart';
 import '../../data/local_first/command_outcomes.dart';
@@ -33,8 +34,16 @@ abstract final class CardCommand {
   /// for edits made to a card that is still only on the phone.
   static const patchCardFields = 'card_fields_patch';
 
+  /// Archive / restore / make default through the card's own routes. A card
+  /// that is only on the phone never gets these (it is discarded or folded
+  /// into its queued add instead).
+  static const archiveCard = 'archive_card';
+  static const unarchiveCard = 'unarchive_card';
+  static const setDefault = 'set_default';
+
   static const createOverride = 'create_override';
   static const deleteOverride = 'delete_override';
+  static const updateOverride = 'update_override';
 
   /// Sent before transactions and overrides, which may name a queued card.
   static const addFirst = {addCard};
@@ -461,7 +470,12 @@ class CardCommandContext {
     required this.db,
     required this.namespace,
     this.onChanged,
+    this.store,
   });
+
+  /// Where a delivered edit is also written, so the stored card keeps it once
+  /// the command is gone (null in tests that have no store).
+  final FinancialStore? store;
   final UserCardsRepository userCards;
   final CardOverridesRepository? overrides;
   final CommandOutbox commands;
@@ -486,6 +500,7 @@ Future<CardCommandContext?> cardCommandContext(dynamic ref) async {
       overrides: ref.read(cardOverridesRepositoryProvider) as CardOverridesRepository?,
       commands: commands,
       db: (cache.financialStore as FinancialStore).database.db,
+      store: cache.financialStore as FinancialStore,
       namespace: ns,
       onChanged: () {
         try {
@@ -524,7 +539,40 @@ Map<String, CommandHandler> cardCommandHandlers(CardCommandContext c) => {
     }
     c.onChanged?.call();
   },
-  CardCommand.patchCardFields: (p) => _patchFields(c.userCards, p),
+  CardCommand.archiveCard: (p) async {
+    final id = p['cardId'] as String;
+    await goneIsDone(() => c.userCards.archiveCard(id));
+    c.store?.patchCard(c.namespace, id, {'is_archived': true});
+  },
+  CardCommand.unarchiveCard: (p) async {
+    final id = p['cardId'] as String;
+    await goneIsDone(() => c.userCards.unarchiveCard(id));
+    c.store?.patchCard(c.namespace, id, {'is_archived': false});
+  },
+  CardCommand.setDefault: (p) async {
+    final id = p['cardId'] as String;
+    await goneIsDone(() => c.userCards.setDefaultCard(id));
+    final store = c.store;
+    if (store != null) {
+      for (final card in store.entities(c.namespace, 'cards')) {
+        final other = card['id'] as String;
+        if (other != id && card['is_default'] == true) {
+          store.patchCard(c.namespace, other, {'is_default': false});
+        }
+      }
+      store.patchCard(c.namespace, id, {'is_default': true});
+    }
+  },
+  CardCommand.patchCardFields: (p) async {
+    await _patchFields(c.userCards, p);
+    // Delivered: keep the stored copy equal to the server's, so the card does
+    // not show the older value in the moment between delivery and the next
+    // wallet refresh.
+    final patch = cardStorePatchFromCommand(p);
+    if (patch.isNotEmpty) {
+      c.store?.patchCard(c.namespace, p['cardId'] as String, patch);
+    }
+  },
   if (c.overrides != null) ...{
     CardCommand.createOverride: (p) async {
       final cardId = p['userCardId'] as String;
@@ -551,6 +599,14 @@ Map<String, CommandHandler> cardCommandHandlers(CardCommandContext c) => {
     },
     CardCommand.deleteOverride: (p) =>
         goneIsDone(() => c.overrides!.delete(p['id'] as String)),
+    CardCommand.updateOverride: (p) => goneIsDone(
+      () => c.overrides!.updateOverride(
+        p['id'] as String,
+        isEnabled: p['isEnabled'] as bool?,
+        reasonNote: p['reasonNote'] as String?,
+        userCardId: p['userCardId'] as String?,
+      ),
+    ),
   },
 };
 

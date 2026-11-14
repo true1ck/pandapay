@@ -1,5 +1,6 @@
 import 'dart:async';
 import '../../app/design/saved_offline.dart';
+import '../../app/design/refresh_views.dart';
 import '../sms_v2/similar/similar_changes.dart';
 import '../sync/sync_engine.dart';
 import '../sms_v2/similar/similar_offer_sheet.dart';
@@ -250,14 +251,9 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         await _submitEdit(amount);
         await _rememberSelfTransfer();
       }
-      ref.invalidate(userCardsProvider);
-      ref.invalidate(myCardsProvider);
-      ref.invalidate(transactionsProvider);
-      ref.invalidate(utilizationTransactionsProvider);
-      ref.invalidate(homeSummaryProvider);
-      ref.invalidate(spendReportProvider);
-      ref.invalidate(categorySpendProvider);
-      ref.invalidate(budgetsProvider);
+      // Hold the spinner until every list and total shows the edit.
+      await refreshViews(ref);
+      if (!mounted) return; // left the screen while waiting; the edit is saved
       _confirmSaved(original);
 
       // The original row is saved before the optional online offers (bulk
@@ -324,6 +320,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           },
         );
         ref.invalidate(pendingSyncCountProvider);
+        await refreshViews(ref);
         if (mounted) {
           showSavedOfflineSnack(context);
           context.pop(true);
@@ -338,14 +335,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           if (refreshed != null && refreshed.isNotEmpty) {
             await _submitEdit(amount);
             await _rememberSelfTransfer();
-            ref.invalidate(userCardsProvider);
-            ref.invalidate(myCardsProvider);
-            ref.invalidate(transactionsProvider);
-            ref.invalidate(utilizationTransactionsProvider);
-            ref.invalidate(homeSummaryProvider);
-            ref.invalidate(spendReportProvider);
-            ref.invalidate(categorySpendProvider);
-            ref.invalidate(budgetsProvider);
+            await refreshViews(ref);
             if (mounted) context.pop(true);
             return;
           }
@@ -503,46 +493,33 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       return;
     }
 
-    // Local first: a plain edit is saved on the phone and sent by the sync
-    // queue. The save never waits on the network, and the list already shows
-    // the change because the entity reader overlays queued edits. A
-    // self-transfer decision needs the server's own checks, and a row that
-    // only exists as a queued quick-add has no server id yet, so those keep
-    // the direct call below. A payment-method change is sent directly while
-    // online (as before) and queued as a command while offline.
-    final methodOffline = _methodChanged && _offlineNow();
+    // Local first, always: the edit is saved on the phone and sent in the
+    // background, so the save never waits on the network and the lists already
+    // show it (the entity reader overlays queued edits). Only a self-transfer
+    // decision needs the server's own checks, and a row that exists only as a
+    // queued quick-add has no server id yet, so those keep the direct call
+    // below.
     if (_selfTransfer == null &&
         _clearedSelfTransfer == null &&
-        (!_methodChanged || methodOffline) &&
         !widget.transactionId.startsWith('local')) {
       final fields = _changedServerFields(original, amount);
-      // WP-C5: `instrument` / `entry_kind` are typed columns that the legacy
-      // sync writer may refuse. While online they go through the domain PATCH
-      // route (the same one the screen used before local-first saves), so the
-      // edit is never lost; offline they are queued and, if the server later
-      // refuses them, the row is parked and counted as "needs attention" by
-      // the sync status strip instead of silently reverting.
+      // WP-C5: `instrument` / `entry_kind` are typed columns the legacy sync
+      // writer refuses, so they travel as their own command to the domain PATCH
+      // route (never lost, never parked by the sync push) and are written to
+      // the stored row now so the lists show them at once.
       final typed = <String, Object?>{
-        for (final key in const ['instrument', 'entry_kind'])
+        for (final key in const [
+          'instrument',
+          'entry_kind',
+          'amount_inr',
+          'occurred_at',
+          'category_id',
+          'user_category_id',
+          'user_card_id',
+          'rail',
+        ])
           if (fields.containsKey(key)) key: fields.remove(key),
       };
-      var patchedDirectly = false;
-      if (typed.isNotEmpty && !_offlineNow()) {
-        final direct = ref.read(userCardsRepositoryProvider);
-        if (direct != null) {
-          try {
-            await direct.editTransaction(
-              widget.transactionId,
-              instrument: typed.containsKey('instrument') ? _instrument : null,
-              entryKind: typed.containsKey('entry_kind') ? _entryKind : null,
-            );
-            patchedDirectly = true;
-          } catch (error) {
-            if (!isOfflineLike(error)) rethrow;
-          }
-        }
-      }
-      if (typed.isNotEmpty && !patchedDirectly) fields.addAll(typed);
       if (fields.isNotEmpty) {
         final queue = await ref.read(syncQueueProvider.future);
         queue.enqueueUpdate(
@@ -552,7 +529,21 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         );
         ref.invalidate(pendingSyncCountProvider);
       }
-      if (methodOffline) {
+      final store = (await ref.read(responseCacheProvider.future)).financialStore;
+      final namespace = ref.read(cacheNamespaceProvider);
+      if (typed.isNotEmpty) {
+        await queueCommand(
+          ref,
+          kind: PaymentMethodCommand.setTyped,
+          target: widget.transactionId,
+          payload: {
+            'id': widget.transactionId,
+            ...typed.map((k, v) => MapEntry(_typedWireKey(k), v)),
+          },
+        );
+        store.patchTransaction(namespace, widget.transactionId, typed);
+      }
+      if (_methodChanged) {
         final method = _methodToSend;
         await queueCommand(
           ref,
@@ -560,16 +551,11 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           target: widget.transactionId,
           payload: {'id': widget.transactionId, 'paymentMethod': method},
         );
-        (await ref.read(responseCacheProvider.future)).financialStore
-            .patchTransaction(
-              ref.read(cacheNamespaceProvider),
-              widget.transactionId,
-              {'payment_method': method},
-            );
+        store.patchTransaction(namespace, widget.transactionId, {
+          'payment_method': method,
+        });
       }
-      if (fields.isNotEmpty || patchedDirectly) {
-        unawaited(ref.read(syncEngineProvider).sync());
-      }
+      if (fields.isNotEmpty) unawaited(ref.read(syncEngineProvider).sync());
       return;
     }
 
@@ -1397,6 +1383,16 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     TxnRail.atm => 'ATM',
     TxnRail.emi => 'EMI',
     TxnRail.unknown => 'Unknown',
+  };
+
+  static String _typedWireKey(String k) => switch (k) {
+    'entry_kind' => 'entryKind',
+    'amount_inr' => 'amountInr',
+    'occurred_at' => 'occurredAt',
+    'category_id' => 'categoryId',
+    'user_category_id' => 'userCategoryId',
+    'user_card_id' => 'userCardId',
+    _ => k,
   };
 
   static String _railWireValue(TxnRail rail) => switch (rail) {
