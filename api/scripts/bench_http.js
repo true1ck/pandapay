@@ -5,6 +5,9 @@
 //   BENCH_DATABASE_URL=postgres://app_user:app_user_dev_pw@127.0.0.1:5434/pandapay_bench \
 //     node scripts/bench_http.js [--out run.json] [--compare base.json] [--n 40]
 //
+// WRITE benchmarks (--push N): on Docker Desktop (Windows/macOS) a committed write waits 250-400 ms for the disk flush, which
+// swamps everything else. For a scratch bench database only: ALTER DATABASE pandapay_bench SET synchronous_commit = off;
+// Real SSD-backed Postgres commits in a few ms, so read this as the application's cost, not the production latency.
 // Starts a stub auth service and the real API (src/index.js) on loopback, then times each
 // GET route sequentially (p50/p95) as the seeded bench user. Refuses non-local, non-bench DBs.
 
@@ -80,6 +83,17 @@ function cpuSeconds(pid) {
   return { api, db };
 }
 
+function post(port, path, body, tok = token) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(body); const t = process.hrtime.bigint();
+    const req = http.request({ host: '127.0.0.1', port, path, method: 'POST', headers: { authorization: `Bearer ${tok}`, 'content-type': 'application/json', 'content-length': Buffer.byteLength(data), 'x-sms-pipeline': 'v2' } }, (res) => {
+      let b = ''; res.on('data', (c) => { b += c; });
+      res.on('end', () => resolve({ status: res.statusCode, ms: Number(process.hrtime.bigint() - t) / 1e6, json: (() => { try { return JSON.parse(b); } catch (_) { return null; } })(), body: b }));
+    });
+    req.on('error', reject); req.end(data);
+  });
+}
+
 (async () => {
   await new Promise((r) => auth.listen(0, '127.0.0.1', r));
   const authPort = auth.address().port;
@@ -94,7 +108,7 @@ function cpuSeconds(pid) {
       env: { ...process.env, NODE_ENV: 'development', PORT: String(BASE + i), DATABASE_URL: dbUrl, DB_SSL: 'false', JWT_ACCESS_SECRET: SECRET,
         AUTH_INTERNAL_BASE_URL: `http://127.0.0.1:${authPort}`, AUTH_INTERNAL_SERVICE_SECRET: 'bench_internal_secret_32_bytes_long_xx', TRUST_PROXY_HOPS: '0',
         BENCH_PROFILE_OUT: process.env.BENCH_PROFILE_OUT ? `${process.env.BENCH_PROFILE_OUT}.${i}` : '' },
-      stdio: ['ignore', 'ignore', 'pipe'],
+      stdio: ['ignore', process.env.BENCH_STDOUT ? 'inherit' : 'ignore', 'pipe'],
     });
     proc.stderr.on('data', (d) => { stderr += d; });
     return { proc, port: BASE + i };
@@ -112,6 +126,31 @@ function cpuSeconds(pid) {
 ${stderr.slice(-800)}`);
         await new Promise((r) => setTimeout(r, 200));
       }
+    }
+    if (flag('push')) {
+      // Write path: push N transaction `note` edits per request as one device (see sync_push_handlers.js), R requests.
+      const N = Number(flag('push')); const R = Number(flag('reps', '10')); const tok = tokenFor(0);
+      const reg = await post(PORT, '/sync/register-device', { platform: 'android', appVersion: 'bench' }, tok);
+      const deviceId = reg.json && (reg.json.deviceId || reg.json.id);
+      if (!deviceId) throw new Error(`register-device failed ${reg.status} ${reg.body.slice(0, 120)}`);
+      const list = await get(PORT, `/transactions?pageSize=${Math.min(200, Math.max(N, 1))}`, tok);
+      const ids = JSON.parse((await new Promise((res) => { let b = ''; http.get({ host: '127.0.0.1', port: PORT, path: `/transactions?pageSize=${Math.min(200, Math.max(N, 1))}`, headers: { authorization: `Bearer ${tok}`, 'x-sms-pipeline': 'v2' } }, (r) => { r.on('data', (c) => { b += c; }); r.on('end', () => res(b)); }); }))).transactions.map((t) => t.id);
+      const lat = []; let applied = 0; let seq = 1;
+      const count = async (p) => new Promise((res) => http.get({ host: '127.0.0.1', port: PORT, path: p }, (r) => { let b = ''; r.on('data', (c) => { b += c; }); r.on('end', () => res(b)); }));
+      await count('/__bench_count_reset');
+      const cpu0 = cpuAll();
+      for (let r = 0; r < R; r += 1) {
+        const changes = ids.slice(0, N).map((entityId, i) => ({ entity: 'transactions', entityId, op: 'update', clientSeq: seq += 1, payload: { note: `bench ${r}-${i}` }, fieldClocks: { note: Date.now() + seq } }));
+        const res = await post(PORT, '/sync/push', { deviceId, strict: true, changes }, tok);
+        if (res.status !== 200) throw new Error(`push failed ${res.status} ${res.body.slice(0, 200)}`);
+        lat.push(res.ms); applied += res.json.results.filter((x) => x.applied).length;
+      }
+      const cpu1 = cpuAll();
+      const sql = Number(await count('/__bench_count'));
+      lat.sort((a, b) => a - b);
+      console.log(`push N=${N} changes x ${R} requests: p50 ${lat[Math.floor(lat.length / 2)].toFixed(1)}ms (${(lat[Math.floor(lat.length / 2)] / N).toFixed(2)}ms/change)  applied ${applied}/${N * R}  SQL statements/change ${(sql / (N * R)).toFixed(1)}  Postgres CPU/change ${(((cpu1.db - cpu0.db) * 1000) / (N * R)).toFixed(2)}ms`);
+      if (args.includes('--stderr')) console.log(stderr.slice(-12000));
+      return;
     }
     if (flag('conc')) {
       // Concurrency mode: C virtual users each open the app (the routes below, in order) at the same moment.
