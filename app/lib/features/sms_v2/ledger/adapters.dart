@@ -999,9 +999,9 @@ Commitment _commitment(
         : transactionIdByEvent[record.lastPayment!.eventId] ??
               'v2:${record.lastPayment!.eventId}',
     confidence: bill.confidence,
+    sourceKey: bill.sourceKey,
   );
 }
-    sourceKey: bill.sourceKey,
 
 class MoneyInItem {
   const MoneyInItem({
