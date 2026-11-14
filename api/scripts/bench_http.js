@@ -83,10 +83,10 @@ function cpuSeconds(pid) {
   return { api, db };
 }
 
-function post(port, path, body, tok = token) {
+function post(port, path, body, tok = token, method = 'POST') {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify(body); const t = process.hrtime.bigint();
-    const req = http.request({ host: '127.0.0.1', port, path, method: 'POST', headers: { authorization: `Bearer ${tok}`, 'content-type': 'application/json', 'content-length': Buffer.byteLength(data), 'x-sms-pipeline': 'v2' } }, (res) => {
+    const req = http.request({ host: '127.0.0.1', port, path, method, headers: { authorization: `Bearer ${tok}`, 'content-type': 'application/json', 'content-length': Buffer.byteLength(data), 'x-sms-pipeline': 'v2' } }, (res) => {
       let b = ''; res.on('data', (c) => { b += c; });
       res.on('end', () => resolve({ status: res.statusCode, ms: Number(process.hrtime.bigint() - t) / 1e6, json: (() => { try { return JSON.parse(b); } catch (_) { return null; } })(), body: b }));
     });
@@ -156,6 +156,29 @@ ${stderr.slice(-800)}`);
         }
       }
       console.log(`snapshot: ${files} responses (${K} users x ${SNAP.length} routes) written to ${dir}`);
+      return;
+    }
+    if (flag('writes')) {
+      // Common write endpoints, one user, R repetitions each: latency and SQL statements per call (use with
+      // BENCH_NODE_ARGS="--require <count preload>" for the statement count; see scripts/bench_http.js header).
+      const R = Number(flag('writes')); const tk = tokenFor(0); const stamp = Date.now();
+      const J = async (p) => JSON.parse((await new Promise((res) => { let b = ''; http.get({ host: '127.0.0.1', port: PORT, path: p, headers: { authorization: `Bearer ${tk}`, 'x-sms-pipeline': 'v2' } }, (r) => { r.on('data', (c) => { b += c; }); r.on('end', () => res(b)); }); })));
+      const cardId = (await J('/user-cards')).userCards[0].id;
+      const count = (p) => new Promise((res) => http.get({ host: '127.0.0.1', port: PORT, path: p }, (r) => { let b = ''; r.on('data', (c) => { b += c; }); r.on('end', () => res(b)); }));
+      const created = [];
+      const ops = [
+        ['POST /transactions', async (i) => { const r = await post(PORT, '/transactions', { userCardId: cardId, amountInr: 100 + i, merchantName: `BENCH WRITE ${i}`, occurredAt: new Date().toISOString(), clientMutationId: `bw-${stamp}-${i}` }, tk); if (r.json && r.json.transaction) created.push(r.json.transaction.id); else if (r.json && r.json.id) created.push(r.json.id); return r; }],
+        ['POST /transactions/:id/ignore', async (i) => post(PORT, `/transactions/${created[i]}/ignore`, { reason: 'wrong_transaction' }, tk)],
+        ['POST /transactions/:id/restore', async (i) => post(PORT, `/transactions/${created[i]}/restore`, {}, tk)],
+        ['PATCH /transactions/:id/note', async (i) => post(PORT, `/transactions/${created[i]}/note`, { note: `n${i}` }, tk, 'PATCH')],
+      ];
+      for (const [name, fn] of ops) {
+        const lat = []; let bad = 0; await count('/__bench_count_reset');
+        for (let i = 0; i < R; i += 1) { const r = await fn(i); lat.push(r.ms); if (r.status >= 300) { bad += 1; if (bad === 1) console.log(`   first non-2xx: ${r.status} ${r.body.slice(0, 120)}`); } }
+        lat.sort((a, b) => a - b); const sql = Number(await count('/__bench_count'));
+        console.log(`${name.padEnd(34)} p50 ${lat[Math.floor(lat.length / 2)].toFixed(1).padStart(7)}ms  p95 ${lat[Math.floor(lat.length * 0.95)].toFixed(1).padStart(7)}ms  SQL/call ${(sql / R).toFixed(1)}  non-2xx ${bad}/${R}`);
+      }
+      if (args.includes('--stderr')) console.log(stderr.slice(-14000));
       return;
     }
     if (flag('push')) {
