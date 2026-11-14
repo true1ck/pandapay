@@ -113,12 +113,9 @@ void main() {
       expect(find.text('Bill total'), findsNothing);
       expect(find.text('You paid'), findsNothing);
       // Totals sit in the header with their own honest labels.
-      expect(
-        find.textContaining(
-          'Shared expense total ₹1,200.00 · your shared contributions ₹1,200.00',
-        ),
-        findsOneWidget,
-      );
+      expect(find.text('Shared total'), findsOneWidget);
+      expect(find.text('Your part paid'), findsOneWidget);
+      expect(find.text('Total bills'), findsNothing);
       expect(find.text('You paid'), findsNothing);
     },
   );
@@ -550,18 +547,28 @@ void main() {
       // One scroll, nothing to open: no tab bar, the totals in the header.
       expect(find.byType(TabBar), findsNothing);
       expect(find.text('Balances'), findsNothing);
-      expect(
-        find.textContaining('Total bills ₹1,200.00 · you paid ₹0.00 · your share ₹400.00'),
-        findsOneWidget,
-      );
+      for (final label in ['Total bills', 'You paid', 'Your share']) {
+        expect(find.text(label), findsOneWidget, reason: 'a stat tile');
+      }
       expect(find.text('Friends'), findsNothing);
       // One plain line per expense: who paid, and what it means for you.
       expect(find.text('Rahul paid ₹1,200.00'), findsOneWidget);
       expect(find.text('you borrowed'), findsOneWidget);
-      expect(find.text(const Money.fromPaise(40000).format()), findsOneWidget);
-      for (final label in ['Bill total', 'You paid', 'Your share']) {
-        expect(find.text(label), findsNothing, reason: 'the numbers live in the expense');
-      }
+      expect(
+        find.descendant(
+          of: find.byType(SharedExpenseTile),
+          matching: find.text(const Money.fromPaise(40000).format()),
+        ),
+        findsOneWidget,
+      );
+      // The rows carry no accounting labels; the totals are the header's tiles.
+      expect(
+        find.descendant(
+          of: find.byType(SharedExpenseTile),
+          matching: find.text('Your share'),
+        ),
+        findsNothing,
+      );
     },
   );
 
@@ -672,11 +679,14 @@ void main() {
           scale: 2,
         );
         expect(tester.takeException(), isNull);
-        final line = find.textContaining(maximum.format());
-        expect(line, findsOneWidget);
-        // All three full values survive in what a screen reader is told.
-        final label = tester.getSemantics(line).label;
-        expect(maximum.format().allMatches(label).length, 3);
+        expect(find.text(maximum.format()), findsNWidgets(3));
+        // Each full value survives in what a screen reader is told.
+        for (var index = 0; index < 3; index++) {
+          expect(
+            tester.getSemantics(find.text(maximum.format()).at(index)).label,
+            contains(maximum.format()),
+          );
+        }
       } finally {
         semantics.dispose();
       }
@@ -936,13 +946,13 @@ void main() {
     Finder rich(String text) => find.textContaining(text, findRichText: true);
     expect(find.byType(TabBar), findsNothing);
     // The total over every place, then where it sits, all without a tap.
-    expect(rich('Sujay owes you ₹1,500.00 overall'), findsOneWidget);
+    expect(find.text('Sujay owes you overall'), findsOneWidget);
+    expect(find.text('₹1,500.00'), findsOneWidget);
+    expect(find.text('Friend · 1 expense'), findsOneWidget);
     expect(rich('Sujay owes you ₹2,000.00 in non-group expenses'), findsOneWidget);
     expect(rich('You owe Sujay ₹500.00 in “Goa trip”'), findsOneWidget);
-    expect(
-      find.textContaining('Total bills ₹1,000.00 · you paid ₹0.00 · your share ₹500.00'),
-      findsOneWidget,
-    );
+    expect(find.text('Total bills'), findsOneWidget);
+    expect(find.text('Your share'), findsOneWidget);
     expect(find.text('Sujay paid ₹1,000.00'), findsOneWidget);
     expect(find.text('Settle up'), findsOneWidget);
     expect(find.text('Remind'), findsOneWidget, reason: 'they owe you');

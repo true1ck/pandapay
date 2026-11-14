@@ -1549,6 +1549,19 @@ class SharedExpensesRuntime extends ChangeNotifier {
               if (shown.add(row.id)) row,
     ];
     expenseRows.insertAll(0, waitingRows);
+    // What you and the others owe each other here, from the balances just
+    // loaded (the page had no balance of its own, so its top line was empty).
+    var owedHere = 0, owingHere = 0;
+    for (final row in balanceRows) {
+      owedHere += row.balance.owedToYou.paise;
+      owingHere += row.balance.youOwe.paise;
+    }
+    final pageSummary = SharedBalanceSummary(
+      owedToYou: Money.fromPaise(owedHere),
+      youOwe: Money.fromPaise(owingHere),
+      netBalance: Money.fromPaise(owedHere - owingHere),
+      incomplete: balancePage['hasMore'] == true,
+    );
     var breakdown = const <SharedBreakdownLine>[];
     if (direct) {
       try {
@@ -1562,6 +1575,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
       id: id,
       direct: direct,
       title: title,
+      summary: pageSummary,
       breakdown: breakdown,
       expenses: SharedPage(
         items: expenseRows,

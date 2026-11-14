@@ -109,6 +109,13 @@ void main() {
               },
             },
           }),
+          // Priya paid ₹600 split equally: you owe her ₹300.
+          _p('balances', '$_own:$_priya', {
+            'contextId': _ctx,
+            'lowMemberId': _own,
+            'highMemberId': _priya,
+            'balanceMinor': '-30000',
+          }),
         ],
         nextCursor: null,
       ),
@@ -192,5 +199,13 @@ void main() {
       'payload': {'memberId': _priya},
     });
     expect(joined.description, 'Priya joined');
+  });
+
+  test('a group page knows its own balance, so its top line is never empty', () async {
+    final group = await runtime.loadGroup(_ctx);
+    expect(group.summary, isNotNull);
+    expect(group.summary!.youOwe.paise, 30000);
+    expect(group.summary!.owedToYou.paise, 0);
+    expect(group.summary!.netBalance.paise, -30000);
   });
 }

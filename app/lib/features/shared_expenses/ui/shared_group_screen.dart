@@ -4,6 +4,10 @@ import 'package:pandapay_domain/pandapay_domain.dart' show Confidence, Money;
 import 'package:share_plus/share_plus.dart';
 
 import '../../../app/design/app_theme.dart';
+import '../../../app/design/app_icons.dart';
+import '../../../app/design/merchant_brand.dart';
+import '../../../app/design/merchant_brand_tile.dart';
+import '../../../app/design/party_avatar.dart';
 import '../../../app/design/widgets.dart';
 import 'shared_components.dart';
 import 'shared_presentation.dart';
@@ -78,51 +82,194 @@ class _SharedGroupScreenState extends State<SharedGroupScreen> {
 
   String _money(Money money) => data.hideAmounts ? '••••' : money.format();
 
-  /// "Sujay owes you ₹1,500.00 overall" with the amount in colour.
-  Widget _headline() {
-    final summary = _summary;
-    if (summary == null) return const SizedBox.shrink();
-    final net = summary.netBalance.paise;
-    final amount = Money.fromPaise(net.abs());
-    final overall = !data.direct || data.breakdown.isNotEmpty ? ' overall' : '';
-    final color = net > 0 ? BambooInk.jade : BambooInk.clayInk;
-    final style = BambooFonts.ui(16, weight: FontWeight.w700);
-    final List<InlineSpan> spans;
-    if (net == 0) {
-      final settled = summary.owedToYou.isZero && summary.youOwe.isZero;
-      spans = [
-        TextSpan(
-          text: settled
-              ? 'All settled up'
-              : data.direct
-              ? 'You and ${data.title} are even$overall'
-              : 'You are even$overall',
-        ),
-      ];
-    } else if (net > 0) {
-      spans = [
-        TextSpan(
-          text: data.direct ? '${data.title} owes you ' : 'You are owed ',
-        ),
-        TextSpan(
-          text: _money(amount),
-          style: TextStyle(color: color),
-        ),
-        TextSpan(text: overall),
-      ];
-    } else {
-      spans = [
-        TextSpan(text: data.direct ? 'You owe ${data.title} ' : 'You owe '),
-        TextSpan(
-          text: _money(amount),
-          style: TextStyle(color: color),
-        ),
-        TextSpan(text: overall),
-      ];
+  /// The balance, the first thing to read: who owes whom, the amount large,
+  /// then where it sits, on a soft tint of its direction.
+  Widget _balanceBlock(SharedBalanceSummary? summary, List<Widget> where) {
+    if (summary == null) {
+      // No total to show yet; who owes whom still is.
+      return where.isEmpty
+          ? const SizedBox.shrink()
+          : Container(
+              key: const Key('group-headline'),
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: BambooInk.paperCool,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: where,
+              ),
+            );
     }
-    return Text.rich(
-      TextSpan(style: style, children: spans),
+    final net = summary.netBalance.paise;
+    final settled = summary.owedToYou.isZero && summary.youOwe.isZero;
+    final tone = net > 0
+        ? BambooInk.jade
+        : net < 0
+        ? BambooInk.clayInk
+        : BambooInk.ink700;
+    final overall = net != 0 && (!data.direct || data.breakdown.isNotEmpty);
+    final label = net > 0
+        ? (data.direct ? '${data.title} owes you' : 'You are owed')
+        : net < 0
+        ? (data.direct ? 'You owe ${data.title}' : 'You owe')
+        : settled
+        ? 'All settled up'
+        : data.direct
+        ? 'You and ${data.title} are even'
+        : 'You are even';
+    return Container(
       key: const Key('group-headline'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: net > 0
+            ? BambooInk.jade.withValues(alpha: .09)
+            : net < 0
+            ? BambooInk.clay.withValues(alpha: .09)
+            : BambooInk.paperCool,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                net > 0
+                    ? AppIcons.moneyIn
+                    : net < 0
+                    ? AppIcons.moneyOut
+                    : Icons.check_circle_outline_rounded,
+                size: 16,
+                color: tone,
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  overall ? '$label overall' : label,
+                  style: BambooFonts.ui(
+                    13.5,
+                    weight: FontWeight.w700,
+                    color: tone,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (net != 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: SharedAmount(
+                  Money.fromPaise(net.abs()),
+                  confidence: summary.confidence,
+                  hidden: data.hideAmounts,
+                  color: tone,
+                  size: 30,
+                ),
+              ),
+            ),
+          if (where.isNotEmpty) ...[
+            const SizedBox(height: AppSpace.sm),
+            Container(
+              padding: const EdgeInsets.only(left: AppSpace.md),
+              decoration: BoxDecoration(
+                border: Border(
+                  left: BorderSide(
+                    color: tone.withValues(alpha: .35),
+                    width: 2,
+                  ),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: where,
+              ),
+            ),
+          ],
+          if (summary.incomplete)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpace.xs),
+              child: Text(
+                'Some balances may be missing',
+                style: BambooFonts.ui(12, color: BambooInk.ink500),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// What was shared, at a glance: three small tiles with the app's icons. The
+  /// labels come with the totals, so a shared amount whose full bill is
+  /// unknown is never called the bill.
+  Widget _stats(SharedExpenseTotals totals) {
+    String short(String label) => switch (label) {
+      'Shared expense total' => 'Shared total',
+      'Your shared contributions' => 'Your part paid',
+      _ => label,
+    };
+    Widget tile(IconData icon, Color tone, String label, Money money) =>
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: BambooInk.paper,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: BambooInk.hairlineOnPaper),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TintedIconTile(icon, tone, size: 28),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                ),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: SharedAmount(
+                    money,
+                    confidence: totals.confidence,
+                    hidden: data.hideAmounts,
+                    size: 14.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        tile(
+          AppIcons.bill,
+          BambooChartColors.pink,
+          short(totals.totalLabel),
+          totals.billTotal,
+        ),
+        const SizedBox(width: AppSpace.sm),
+        tile(
+          AppIcons.wallet,
+          BambooChartColors.teal,
+          short(totals.paidLabel),
+          totals.yourPaid,
+        ),
+        const SizedBox(width: AppSpace.sm),
+        tile(
+          AppIcons.share,
+          BambooChartColors.violet,
+          'Your share',
+          totals.yourShare,
+        ),
+      ],
     );
   }
 
@@ -338,57 +485,40 @@ class _SharedGroupScreenState extends State<SharedGroupScreen> {
     List<Widget> where,
     bool owedToYou,
   ) {
+    final count = data.expenses.items.length;
+    final countText =
+        '$count${data.expenses.hasMore ? '+' : ''} '
+        'expense${count == 1 && !data.expenses.hasMore ? '' : 's'}';
     return [
       Row(
         children: [
-          SharedAvatar(name: data.title, group: !data.direct),
+          SharedAvatar(name: data.title, group: !data.direct, size: 52),
           const SizedBox(width: AppSpace.md),
           Expanded(
-            child: Text(
-              data.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: BambooFonts.heading(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  data.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: BambooFonts.heading(22),
+                ),
+                Text(
+                  '${data.direct ? 'Friend' : 'Group'} · $countText',
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
+              ],
             ),
           ),
         ],
       ),
       const SizedBox(height: AppSpace.md),
-      _headline(),
-      if (where.isNotEmpty)
-        Container(
-          margin: const EdgeInsets.only(top: AppSpace.xs),
-          padding: const EdgeInsets.only(left: AppSpace.md),
-          decoration: const BoxDecoration(
-            border: Border(
-              left: BorderSide(color: BambooInk.hairlineOnPaper, width: 2),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: where,
-          ),
-        ),
-      if (summary?.incomplete == true)
-        Padding(
-          padding: const EdgeInsets.only(top: AppSpace.xs),
-          child: Text(
-            'Some balances may be missing',
-            style: BambooFonts.ui(12, color: BambooInk.ink500),
-          ),
-        ),
-      if (totals != null && !totals.billTotal.isZero)
-        Padding(
-          padding: const EdgeInsets.only(top: AppSpace.sm),
-          child: Text(
-            // The labels come with the totals, so a shared amount whose full
-            // bill is unknown is never called the bill.
-            '${totals.totalLabel} ${_money(totals.billTotal)} · '
-            '${totals.paidLabel.toLowerCase()} ${_money(totals.yourPaid)} · '
-            'your share ${_money(totals.yourShare)}',
-            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-          ),
-        ),
+      _balanceBlock(summary, where),
+      if (totals != null && !totals.billTotal.isZero) ...[
+        const SizedBox(height: AppSpace.md),
+        _stats(totals),
+      ],
       if (data.expenses.incomplete)
         const Padding(
           padding: EdgeInsets.only(top: AppSpace.sm),
@@ -402,19 +532,15 @@ class _SharedGroupScreenState extends State<SharedGroupScreen> {
           if (widget.onSettleUp != null)
             _button(
               'Settle up',
-              Icons.payments_outlined,
+              AppIcons.settleUp,
               widget.onSettleUp!,
               primary: true,
               key: const Key('expenses-settle-up'),
             ),
           if (data.direct && owedToYou)
-            _button('Remind', Icons.notifications_none_rounded, _remind),
+            _button('Remind', AppIcons.remind, _remind),
           if (widget.onViewSettlements != null)
-            _button(
-              'History',
-              Icons.receipt_long_outlined,
-              widget.onViewSettlements!,
-            ),
+            _button('History', AppIcons.history, widget.onViewSettlements!),
         ],
       ),
     ];
@@ -576,6 +702,13 @@ class SharedExpenseTile extends StatelessWidget {
                           Text('${date.day}', style: BambooFonts.heading(17)),
                         ],
                       ),
+              ),
+              const SizedBox(width: AppSpace.sm),
+              // The merchant's logo when it is a known brand, else the bill
+              // tile: the same marks the expense has everywhere else.
+              MerchantBrandTile(
+                brand: MerchantBrand.forName(row.title),
+                fallback: const PartyAvatar(AvatarKind.bill),
               ),
               const SizedBox(width: AppSpace.md),
               Expanded(

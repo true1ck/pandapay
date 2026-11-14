@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../../app/design/app_theme.dart';
+import '../../../app/design/party_avatar.dart';
+import '../../../app/design/app_icons.dart';
 import '../../../app/design/widgets.dart';
 import '../../../main.dart' show MoneyText;
 import 'shared_presentation.dart';
@@ -452,39 +454,22 @@ class SharedTextAction extends StatelessWidget {
   );
 }
 
+/// A person or a group, drawn with the same tiles the rest of the app uses for
+/// people (the violet person tile of a transfer in Activity) and for groups.
 class SharedAvatar extends StatelessWidget {
   final String name;
   final bool group;
-  const SharedAvatar({super.key, required this.name, this.group = false});
+  final double size;
+  const SharedAvatar({
+    super.key,
+    required this.name,
+    this.group = false,
+    this.size = 40,
+  });
   @override
-  Widget build(BuildContext context) => ExcludeSemantics(
-    child: Container(
-      width: 40,
-      height: 40,
-      alignment: Alignment.center,
-      decoration: const BoxDecoration(
-        color: BambooInk.rankBadgeBg,
-        shape: BoxShape.circle,
-      ),
-      child: group
-          ? const Icon(
-              Icons.people_outline_rounded,
-              color: BambooInk.jade,
-              size: 22,
-            )
-          : Text(
-              name.trim().isEmpty
-                  ? '·'
-                  : name.trim().characters.first.toUpperCase(),
-              textScaler: TextScaler.noScaling,
-              style: BambooFonts.ui(
-                17,
-                weight: FontWeight.w600,
-                color: BambooInk.jade,
-              ),
-            ),
-    ),
-  );
+  Widget build(BuildContext context) => group
+      ? TintedIconTile(AppIcons.group, BambooChartColors.violet, size: size)
+      : PartyAvatar(AvatarKind.person, size: size);
 }
 
 String? sharedStateLabel(SharedContextState state) => switch (state) {
