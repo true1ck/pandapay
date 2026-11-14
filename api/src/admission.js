@@ -106,9 +106,11 @@ function createAdmission({
   const stats = { admitted: 0, refused: 0, cancelled: 0 };
 
   function retryAfterSeconds() {
-    // Rough drain time of the overall line, clamped to what the app handles well (5-60 s is ideal for it).
+    // Rough drain time of the overall line, clamped to what the app handles well (5-60 s is ideal for it), plus up
+    // to 50% random jitter: clients refused in the same second must not all come back in the same second.
     const queued = overall.queue.length;
-    return Math.min(30, Math.max(5, 5 + Math.ceil(queued / Math.max(1, maxConcurrent))));
+    const base = Math.min(30, Math.max(5, 5 + Math.ceil(queued / Math.max(1, maxConcurrent))));
+    return Math.min(60, Math.round(base * (1 + Math.random() * 0.5)));
   }
 
   function refuse(res) {
@@ -184,9 +186,51 @@ function createAdmission({
     })().catch(next);
   }
 
+  // Point-in-time view for logs/metrics: how full the line is and how much has been refused so far.
+  middleware.snapshot = () => ({
+    active: overall.active,
+    queued: overall.queue.length,
+    pushActive: classes.push.active,
+    pushQueued: classes.push.queue.length,
+    heavyActive: classes.heavy.active,
+    heavyQueued: classes.heavy.queue.length,
+    pushLanes: userLanes.size,
+    admitted: stats.admitted,
+    refused: stats.refused,
+    cancelled: stats.cancelled,
+  });
   middleware.stats = stats;
   middleware._gates = { overall, classes, userLanes };
   return middleware;
 }
 
-module.exports = { createAdmission, notePoolBusy, isPoolTimeout, classify, Gate, _als: als };
+/**
+ * One structured log line per interval while the line is in use (or refusing), so an operator can see queue depth,
+ * wait pressure on the pool and the 503 rate without a metrics stack. Silent when idle. The timer never keeps the
+ * process alive.
+ */
+function startAdmissionReporter(admission, { log, pool, intervalMs = 30_000 }) {
+  let last = admission.snapshot();
+  const timer = setInterval(() => {
+    const now = admission.snapshot();
+    const moved = now.admitted !== last.admitted || now.refused !== last.refused || now.cancelled !== last.cancelled;
+    if (moved || now.queued > 0) {
+      log('info', {
+        msg: 'admission',
+        intervalSeconds: intervalMs / 1000,
+        ...now,
+        admittedInInterval: now.admitted - last.admitted,
+        refusedInInterval: now.refused - last.refused,
+        cancelledInInterval: now.cancelled - last.cancelled,
+        poolTotal: pool?.totalCount,
+        poolIdle: pool?.idleCount,
+        poolWaiting: pool?.waitingCount,
+      });
+    }
+    last = now;
+  }, intervalMs);
+  timer.unref?.();
+  return timer;
+}
+
+module.exports = { startAdmissionReporter, createAdmission, notePoolBusy, isPoolTimeout, classify, Gate, _als: als };

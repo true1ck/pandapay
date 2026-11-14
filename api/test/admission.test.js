@@ -148,3 +148,44 @@ test('a route 500 caused by pool starvation is answered 503 + Retry-After', asyn
   b.res.status(500).json({ error: 'internal_error' });
   assert.equal(b.res.statusCode, 500);
 });
+
+test('Retry-After is jittered so refused clients do not all return in the same second', async () => {
+  const seen = new Set();
+  for (let i = 0; i < 40; i += 1) {
+    const mw = createAdmission({ maxConcurrent: 1, maxQueue: 0, maxWaitMs: 1000 });
+    const a = send(mw);
+    const b = send(mw); // the line holds nobody, so it is refused at once
+    await tick();
+    assert.equal(b.res.statusCode, 503);
+    const secs = Number(b.res.headers['Retry-After']);
+    assert.ok(Number.isInteger(secs) && secs >= 5 && secs <= 60, `whole seconds in range, got ${secs}`);
+    seen.add(secs);
+    finish(a.res);
+  }
+  assert.ok(seen.size >= 2, `expected spread, got ${[...seen]}`);
+});
+
+test('snapshot reports how full the line is and how much was refused', async () => {
+  const mw = createAdmission({ maxConcurrent: 1, maxQueue: 1, maxWaitMs: 1000 });
+  const a = send(mw), b = send(mw), c = send(mw);
+  await tick();
+  const snap = mw.snapshot();
+  assert.deepEqual([snap.active, snap.queued, snap.admitted, snap.refused], [1, 1, 1, 1]);
+  finish(a.res); await tick(); finish(b.res); finish(c.res);
+});
+
+test('the reporter logs while the line is busy and stays silent when idle', async () => {
+  const { startAdmissionReporter } = require('../src/admission');
+  const mw = createAdmission({ maxConcurrent: 1, maxWaitMs: 1000 });
+  const lines = [];
+  const timer = startAdmissionReporter(mw, { log: (level, f) => lines.push(f), pool: { totalCount: 10, idleCount: 2, waitingCount: 3 }, intervalMs: 20 });
+  await new Promise((r) => setTimeout(r, 60));
+  assert.equal(lines.length, 0, 'silent when nothing happens');
+  const a = send(mw); await tick(); finish(a.res);
+  await new Promise((r) => setTimeout(r, 60));
+  clearInterval(timer);
+  assert.equal(lines.length, 1);
+  assert.equal(lines[0].msg, 'admission');
+  assert.equal(lines[0].admittedInInterval, 1);
+  assert.equal(lines[0].poolWaiting, 3);
+});

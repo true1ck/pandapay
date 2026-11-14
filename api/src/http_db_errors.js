@@ -55,7 +55,7 @@ function classifyDbError(err) {
 function respondDbError(res, err) {
   const mapped = classifyDbError(err);
   if (!mapped) return false;
-  if (mapped.body.retryable && typeof res.set === 'function') res.set('Retry-After', mapped.body.error === 'server_busy' ? '5' : '1');
+  if (mapped.body.retryable && typeof res.set === 'function') res.set('Retry-After', mapped.body.error === 'server_busy' ? String(5 + Math.floor(Math.random() * 4)) : '1');
   res.status(mapped.status).json(mapped.body);
   return true;
 }

@@ -161,12 +161,15 @@ app.use(requestLogger);
 if (process.env.ADMISSION_ENABLED !== 'false') {
   // Defaults measured with scripts/bench_http.js --conc 100 --retries 6: overall cap = pool size (no waiting on the
   // pool), 13 s max wait (the app gives up on a response at 15 s), heavy/push classes ~60% of the pool.
-  app.use(require('./admission').createAdmission({
+  const admission = require('./admission');
+  const line = admission.createAdmission({
     maxConcurrent: Number(process.env.ADMISSION_MAX_CONCURRENT) || config.dbPoolMax,
     heavyMax: Number(process.env.ADMISSION_HEAVY_MAX) || Math.max(2, Math.round(config.dbPoolMax * 0.6)),
     pushMax: Number(process.env.ADMISSION_PUSH_MAX) || Math.max(2, Math.round(config.dbPoolMax * 0.6)),
     maxWaitMs: Number(process.env.ADMISSION_MAX_WAIT_MS) || 13000,
-  }));
+  });
+  app.use(line);
+  admission.startAdmissionReporter(line, { log: require('./observability').log, pool: require('./db').pool });
 }
 app.use(rejectMalformedClientIp);
 app.use(...createCorsPolicy());
