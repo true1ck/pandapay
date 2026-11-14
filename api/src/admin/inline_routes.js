@@ -884,20 +884,18 @@ app.get('/admin/merchants/:id', requireAdmin, async (req, res) => {
       );
       if (merchant.rows.length === 0) return null;
 
-      const [locations, contributions, conflicts] = await Promise.all([
-        client.query(
+      const locations = await client.query(
           'SELECT * FROM merchant_locations WHERE merchant_id = $1 ORDER BY confirmation_count DESC',
           [req.params.id]
-        ),
-        client.query(
+        );
+      const contributions = await client.query(
           'SELECT * FROM merchant_contributions WHERE merchant_id = $1 ORDER BY submitted_on DESC LIMIT 100',
           [req.params.id]
-        ),
-        client.query(
+        );
+      const conflicts = await client.query(
           'SELECT * FROM merchant_conflicts WHERE merchant_id = $1 ORDER BY detected_at DESC',
           [req.params.id]
-        ),
-      ]);
+        );
 
       return {
         merchant: merchant.rows[0],

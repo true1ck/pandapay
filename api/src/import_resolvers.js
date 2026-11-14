@@ -518,22 +518,20 @@ function resolveUserMerchantRule(rules, transaction = {}) {
 }
 
 async function loadActiveUserMerchantRules(client, userId) {
-  const [rulesResult, categoriesResult] = await Promise.all([
-    client.query(
+  const rulesResult = await client.query(
       `SELECT umr.id, umr.match_basis, umr.match_value, umr.category_id,
               umr.user_category_id, umr.is_active, umr.version, umr.updated_at
          FROM user_merchant_category_rules umr
         WHERE umr.profile_id = $1 AND umr.is_active = true
         ORDER BY umr.version DESC, umr.updated_at DESC, umr.id`,
       [userId],
-    ),
-    client.query(
+    );
+  const categoriesResult = await client.query(
       `SELECT id, parent_category_id, parent_user_category_id
          FROM user_categories
         WHERE profile_id = $1`,
       [userId],
-    ),
-  ]);
+    );
 
   // A custom child can itself belong to another private category. Resolve
   // the complete chain here so import classification agrees with the API's
