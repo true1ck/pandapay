@@ -1,13 +1,16 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/env.dart';
 import '../../../app/providers.dart';
+import '../../../data/user_cards_repository.dart' show TransactionEntry;
 import '../data/shared_commands.dart';
 import '../data/shared_http_transport.dart';
 import '../storage/shared_store.dart';
 import 'shared_runtime.dart';
+import 'split_share_entries.dart';
 
 /// Independent rollout gate: never enables or changes the SMS v2 cutover.
 final sharedExpensesEnabledProvider = Provider<bool>(
@@ -74,6 +77,14 @@ class _SharedResumeObserver extends WidgetsBindingObserver {
   }
 }
 
+/// The Split runtime once the app shell has started it, else null. Readers that
+/// only want to look (the share rows in Activity and spending) watch this
+/// instead of [sharedExpensesRuntimeProvider], which would create the runtime
+/// and start its network refresh earlier than the shell does.
+final sharedRuntimeLiveProvider = StateProvider<SharedExpensesRuntime?>(
+  (ref) => null,
+);
+
 /// Keeps the immutable queue scheduled during normal signed-in app use. No
 /// whole-history traversal, extra database or unbounded background retry loop.
 final sharedExpensesLifecycleProvider = Provider.autoDispose<void>((ref) {
@@ -81,6 +92,14 @@ final sharedExpensesLifecycleProvider = Provider.autoDispose<void>((ref) {
   final value = ref.watch(sharedExpensesRuntimeProvider);
   final runtime = value.valueOrNull;
   if (runtime == null) return;
+  final live = ref.read(sharedRuntimeLiveProvider.notifier);
+  void publish(SharedExpensesRuntime? next) => Future.microtask(() {
+    try {
+      if (next != null || identical(live.state, runtime)) live.state = next;
+    } catch (_) {}
+  });
+  publish(runtime);
+  ref.onDispose(() => publish(null));
   void refresh() => unawaited(runtime.refresh());
   // Coming back to the app or the network must not wait out a backoff earned
   // while it was away; `reconnect` never throws. The timer below does not do
@@ -142,4 +161,66 @@ final sharedWaitingCountProvider = FutureProvider.autoDispose<int>((ref) async {
   } catch (_) {
     return 0;
   }
+});
+
+/// The person's share of splits somebody else paid, as Activity rows. Empty
+/// when Splits is off, signed out or not ready. Re-read (at most every 1.5 s)
+/// when the phone's copy of Splits changes; rows whose content did not change
+/// keep their instance, so consumers that compare by identity (the ledger
+/// model) rebuild only when a share really changed.
+final splitShareEntriesProvider = StreamProvider<List<TransactionEntry>>((ref) {
+  if (!ref.watch(sharedExpensesEnabledProvider)) return Stream.value(const []);
+  final runtime = ref.watch(sharedRuntimeLiveProvider);
+  if (runtime == null) return Stream.value(const []);
+  final controller = StreamController<List<TransactionEntry>>();
+  final previous = <String, (String, TransactionEntry)>{};
+  List<TransactionEntry>? last;
+  Timer? timer;
+  final reader = SplitShareReader(runtime.store, runtime.accountId);
+  void compute() {
+    if (controller.isClosed) return;
+    try {
+      final next = splitShareEntries(reader.read());
+      final kept = <String, (String, TransactionEntry)>{};
+      final rows = <TransactionEntry>[
+        for (final entry in next)
+          () {
+            final key = jsonEncode(entry.toJson());
+            final old = previous[entry.id];
+            final row = old != null && old.$1 == key ? old.$2 : entry;
+            kept[entry.id] = (key, row);
+            return row;
+          }(),
+      ];
+      previous
+        ..clear()
+        ..addAll(kept);
+      final unchanged =
+          last != null &&
+          last!.length == rows.length &&
+          [
+            for (var i = 0; i < rows.length; i++) identical(last![i], rows[i]),
+          ].every((same) => same);
+      if (!unchanged) {
+        last = rows;
+        controller.add(rows);
+      }
+    } catch (_) {
+      if (last == null) controller.add(const []);
+    }
+  }
+
+  void changed() {
+    timer?.cancel();
+    timer = Timer(const Duration(milliseconds: 1500), compute);
+  }
+
+  runtime.addListener(changed);
+  compute();
+  ref.onDispose(() {
+    timer?.cancel();
+    runtime.removeListener(changed);
+    unawaited(controller.close());
+  });
+  return controller.stream;
 });

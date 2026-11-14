@@ -7,6 +7,8 @@ import 'package:sqlite3/sqlite3.dart';
 import '../../../app/providers.dart' as app;
 import '../../../data/local/financial_store.dart';
 import '../../../data/user_cards_repository.dart';
+import '../../shared_expenses/runtime/shared_providers.dart'
+    show splitShareEntriesProvider;
 import '../storage/schema.dart';
 import '../storage/event_store.dart';
 import '../storage/fact_store.dart';
@@ -28,6 +30,7 @@ LedgerReadModel loadLedgerReadModel({
   required Database db,
   required FinancialStore financialStore,
   required String namespace,
+  Iterable<TransactionEntry> extraTransactions = const [],
 }) {
   SmsV2Schema.ensure(db);
   final (entries, categoryByEvent) = LedgerStore(
@@ -52,7 +55,12 @@ LedgerReadModel loadLedgerReadModel({
     ),
     facts: FactStore(db, namespace: namespace).all(),
     instruments: InstrumentStore(db, namespace: namespace).list(),
-    transactions: _readTransactions(db, financialStore, namespace),
+    transactions: [
+      ..._readTransactions(db, financialStore, namespace),
+      // The person's share of splits somebody else paid: local-only rows that
+      // count in spending like a manual entry (see split_share_entries.dart).
+      ...extraTransactions,
+    ],
   );
 }
 
@@ -185,8 +193,13 @@ final _ledgerModelSourceProvider = FutureProvider<LedgerModelSource>((
       db: db,
       financialStore: cache.financialStore,
       namespace: namespace,
+      extraTransactions:
+          ref.read(splitShareEntriesProvider).valueOrNull ?? const [],
     ),
   );
+  // A changed share re-reads the model once; unchanged shares keep their
+  // instances, so the model compares equal and nothing downstream rebuilds.
+  ref.listen(splitShareEntriesProvider, (_, _) => source.markStale());
   ref.onDispose(source.dispose);
   // The same three revisions the provider used to watch directly. Several
   // bumping in the same turn cost one re-read (see LedgerModelSource.markStale).

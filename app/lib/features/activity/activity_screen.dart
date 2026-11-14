@@ -3,7 +3,8 @@ import '../sms_v2/ledger/providers.dart';
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show defaultTargetPlatform;
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemChannels;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +17,7 @@ import '../../app/category_picker.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../app/router.dart' show AppRoute;
 import '../../app/transaction_tag_picker.dart';
 import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart' show SpendCategory;
@@ -37,6 +39,10 @@ import '../../data/local/sms_intake_repository.dart';
 import 'transaction_avatar.dart';
 import 'transaction_badge.dart';
 import '../sms_v2/storage/outbox_store.dart';
+import '../shared_expenses/runtime/shared_providers.dart'
+    show splitShareEntriesProvider;
+import '../shared_expenses/runtime/split_share_entries.dart'
+    show isSplitShareEntry;
 import '../sms_v2/sync/learning_signals.dart';
 import '../sms_v2/ui/review_controller.dart'
     show readSharingConsent, smsReviewController;
@@ -1136,6 +1142,11 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                       final visibleSelected = projection.visibleSelectedCount(
                         _selectedIds,
                       );
+                      // Shares of a split are not transactions: bulk actions skip them.
+                      final selectable = [
+                        for (final e in entries)
+                          if (!isSplitShareEntry(e)) e,
+                      ];
                       final selectionOffset = _selecting ? 1 : 0;
 
                       return Column(
@@ -1230,11 +1241,11 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                                   ? null
                                                   : () => setState(() {
                                                       if (visibleSelected ==
-                                                          entries.length) {
+                                                          selectable.length) {
                                                         _selectedIds.clear();
                                                       } else {
                                                         _selectedIds.addAll(
-                                                          entries.map(
+                                                          selectable.map(
                                                             (e) => e.id,
                                                           ),
                                                         );
@@ -1242,7 +1253,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                                     }),
                                               child: Text(
                                                 visibleSelected ==
-                                                        entries.length
+                                                        selectable.length
                                                     ? 'Deselect all'
                                                     : 'Select all',
                                               ),
@@ -1300,6 +1311,16 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                                   .map((tag) => tag.name)
                                                   .toList(),
                                           onTap: () {
+                                            // A share of a split has no
+                                            // transaction page of its own: it
+                                            // lives in Splits, and bulk
+                                            // actions never apply to it.
+                                            if (isSplitShareEntry(entry)) {
+                                              if (!_selecting) {
+                                                context.push(AppRoute.splits);
+                                              }
+                                              return;
+                                            }
                                             if (_selecting) {
                                               if (!_isBulkOperating) {
                                                 setState(() {
@@ -1320,7 +1341,9 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                             }
                                           },
                                           onLongPress:
-                                              _selecting || _isBulkOperating
+                                              _selecting ||
+                                                  _isBulkOperating ||
+                                                  isSplitShareEntry(entry)
                                               ? null
                                               : () => setState(() {
                                                   _selecting = true;
@@ -1849,7 +1872,17 @@ final activityTransactionsProvider = FutureProvider<List<TransactionEntry>>((
     tagIds: filter.tagIds,
     untagged: filter.untagged,
   );
-  final unique = {for (final entry in entries) entry.id: entry};
+  // The person's share of splits somebody else paid sits among the rest, so
+  // what they owe shows up where they look for what they spent.
+  final shares = activityShareRows(
+    ref.watch(splitShareEntriesProvider).valueOrNull ?? const [],
+    from: filter.from,
+    to: filter.to,
+    query: filter.query,
+  );
+  final unique = {
+    for (final entry in [...entries, ...shares]) entry.id: entry,
+  };
   return unique.values
       .where(
         (entry) =>
@@ -1864,6 +1897,28 @@ final activityTransactionsProvider = FutureProvider<List<TransactionEntry>>((
       )
       .toList();
 });
+
+/// The share rows a date range and a text search leave in. Those two filters
+/// are applied by the server for real transactions, so a share row, which only
+/// exists on the phone, has to answer them here.
+@visibleForTesting
+List<TransactionEntry> activityShareRows(
+  List<TransactionEntry> shares, {
+  DateTime? from,
+  DateTime? to,
+  String? query,
+}) {
+  final text = query?.trim().toLowerCase() ?? '';
+  DateTime day(DateTime t) => DateTime(t.year, t.month, t.day);
+  return [
+    for (final e in shares)
+      if ((from == null || !day(e.occurredAt).isBefore(day(from.toLocal()))) &&
+          (to == null || !day(e.occurredAt).isAfter(day(to.toLocal()))) &&
+          (text.isEmpty ||
+              '${e.merchantName} ${e.note}'.toLowerCase().contains(text)))
+        e,
+  ];
+}
 
 enum _ActivityTypeFilter {
   all,
@@ -3843,7 +3898,19 @@ class _TransactionTile extends StatelessWidget {
     final subtitleParts = <String>[
       if (foreignPayment != null)
         '${foreignPayment!.originalLabel} · Foreign currency',
-      isSmsImported ? '$timeLabel · SMS' : timeLabel,
+      // A share of a split has no time of day: say whose split it is instead.
+      if (isSplitShareEntry(entry)) ...[
+        if (showDate)
+          _ActivityScreenState._dayLabel(
+            DateTime(
+              entry.occurredAt.toLocal().year,
+              entry.occurredAt.toLocal().month,
+              entry.occurredAt.toLocal().day,
+            ),
+          ),
+        entry.note ?? 'Split',
+      ] else
+        isSmsImported ? '$timeLabel · SMS' : timeLabel,
       if ((entry.entryKind != TxnEntryKind.spend || isInvestmentCategory) &&
           !showInvestmentChip &&
           !showSelfChip)
