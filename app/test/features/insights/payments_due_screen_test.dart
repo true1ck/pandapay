@@ -1099,7 +1099,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Modal bottom sheet should be open with prefilled values
-      expect(find.text('Total amount due'), findsOneWidget);
+      expect(find.text('Total amount due *', findRichText: true), findsOneWidget);
       expect(find.text('8331'), findsOneWidget);
       expect(find.text('Minimum amount due (optional)'), findsOneWidget);
       expect(find.text('500'), findsOneWidget);
@@ -1178,7 +1178,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Sheet should be dismissed
-      expect(find.text('Total amount due'), findsNothing);
+      expect(find.text('Total amount due *', findRichText: true), findsNothing);
 
       // Verify the assignment was recorded in store
       final assignments = cache.financialStore.cardBillAssignments('user:test');
