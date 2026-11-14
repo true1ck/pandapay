@@ -286,7 +286,10 @@ void main() {
       await launch(tester);
       await fillFriendPaid(tester);
       expect(find.text('Paid with'), findsNothing);
-      expect(find.text('Your share'), findsOneWidget);
+      // A friend paid: the answer is what you owe, said once, with no row for a
+      // "share" that only repeats your line in the split.
+      expect(find.text('You will owe'), findsOneWidget);
+      expect(find.text('Your share'), findsNothing);
       await tester.tap(find.text('Submit shared expense'));
       await tester.pumpAndSettle();
       expect(find.text('Open'), findsOneWidget);
@@ -352,8 +355,65 @@ void main() {
       '100',
     );
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Shared with \u00b7 2/50 *', findRichText: true));
+    await tester.ensureVisible(
+      find.text('Shared with \u00b7 2 people *', findRichText: true),
+    );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the summary answers first and says each figure once', (
+    tester,
+  ) async {
+    await launch(tester);
+    await tester.enterText(
+      find.byKey(const ValueKey('quick-add-amount-field')),
+      '1000',
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('You get back'));
+
+    // Paid by you, split equally with Rahul: one result, then who pays what.
+    expect(find.text('You get back'), findsOneWidget);
+    expect(find.text('Split'), findsOneWidget);
+    expect(find.text('Your share counts as your spending.'), findsOneWidget);
+    // The rows that repeated one figure under three names are gone, and so are
+    // the bill's own figures, which only repeat the amount and "Paid by".
+    for (final gone in [
+      'Your share',
+      'Your spending',
+      'Bill total',
+      'You paid',
+    ]) {
+      expect(find.text(gone), findsNothing, reason: gone);
+    }
+    // Banner, your part and Rahul's part: three figures, each labelled once.
+    expect(find.text('\u20b9500.00'), findsNWidgets(3));
+  });
+
+  testWidgets('multiple payers and part-of-bill sit behind More options', (
+    tester,
+  ) async {
+    await launch(tester);
+    await tester.enterText(
+      find.byKey(const ValueKey('quick-add-amount-field')),
+      '1000',
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('More options'));
+    expect(find.text('Multiple payers'), findsNothing);
+    expect(find.text('Share only part of this bill'), findsNothing);
+
+    await tester.tap(find.text('More options'));
+    await tester.pumpAndSettle();
+    expect(find.text('Multiple payers'), findsOneWidget);
+    expect(find.text('Share only part of this bill'), findsOneWidget);
+
+    // Turning one on is remembered by the row, so it is never hidden unseen.
+    await tester.tap(find.text('Share only part of this bill'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('More options'));
+    await tester.pumpAndSettle();
+    expect(find.text('Part of the bill'), findsOneWidget);
   });
 }

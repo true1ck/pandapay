@@ -124,88 +124,96 @@ class SharedEditorFields extends StatelessWidget {
                   onTap: editor.removeUnavailableMembers,
                 ),
               ],
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text('Multiple payers', style: BambooFonts.ui(13)),
-                value: editor.multiplePayers,
-                onChanged: editor.sealed
-                    ? null
-                    : (value) => editor.setMultiplePayers(value ?? false),
-              ),
-              if (editor.multiplePayers) ...[
-                for (final member in editor.members)
-                  if (editor.payerInputs.containsKey(member.id)) ...[
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            member.label,
-                            style: BambooFonts.ui(14, weight: FontWeight.w600),
+              _MoreOptions(
+                editor: editor,
+                children: [
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('Multiple payers', style: BambooFonts.ui(13)),
+                    value: editor.multiplePayers,
+                    onChanged: editor.sealed
+                        ? null
+                        : (value) => editor.setMultiplePayers(value ?? false),
+                  ),
+                  if (editor.multiplePayers) ...[
+                    for (final member in editor.members)
+                      if (editor.payerInputs.containsKey(member.id)) ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                member.label,
+                                style: BambooFonts.ui(
+                                  14,
+                                  weight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Remove ${member.name} as payer',
+                              onPressed: () => editor.removePayer(member.id),
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                          ],
+                        ),
+                        _field(
+                          '${member.name} paid',
+                          editor.payerInputs[member.id]!.fullText,
+                          (text) => editor.setPayer(
+                            member.id,
+                            text,
+                            editor.partial
+                                ? editor.payerInputs[member.id]!.sharedText
+                                : text,
                           ),
+                          errorKey: 'paid:${member.id}',
                         ),
-                        IconButton(
-                          tooltip: 'Remove ${member.name} as payer',
-                          onPressed: () => editor.removePayer(member.id),
-                          icon: const Icon(Icons.close_rounded),
-                        ),
+                        if (editor.partial)
+                          _field(
+                            '${member.name} shared contribution',
+                            editor.payerInputs[member.id]!.sharedText,
+                            (text) => editor.setPayer(
+                              member.id,
+                              editor.payerInputs[member.id]!.fullText,
+                              text,
+                            ),
+                          ),
+                      ],
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        for (final member in editor.members)
+                          if (!editor.payerInputs.containsKey(member.id))
+                            SharedTextAction(
+                              label: 'Add ${member.name} as payer',
+                              onTap: () => editor.setPayer(member.id, '', ''),
+                            ),
                       ],
                     ),
-                    _field(
-                      '${member.name} paid',
-                      editor.payerInputs[member.id]!.fullText,
-                      (text) => editor.setPayer(
-                        member.id,
-                        text,
-                        editor.partial
-                            ? editor.payerInputs[member.id]!.sharedText
-                            : text,
-                      ),
-                      errorKey: 'paid:${member.id}',
+                  ],
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      'Share only part of this bill',
+                      style: BambooFonts.ui(13),
                     ),
-                    if (editor.partial)
-                      _field(
-                        '${member.name} shared contribution',
-                        editor.payerInputs[member.id]!.sharedText,
-                        (text) => editor.setPayer(
-                          member.id,
-                          editor.payerInputs[member.id]!.fullText,
-                          text,
-                        ),
-                      ),
-                  ],
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    for (final member in editor.members)
-                      if (!editor.payerInputs.containsKey(member.id))
-                        SharedTextAction(
-                          label: 'Add ${member.name} as payer',
-                          onTap: () => editor.setPayer(member.id, '', ''),
-                        ),
-                  ],
-                ),
-              ],
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(
-                  'Share only part of this bill',
-                  style: BambooFonts.ui(13),
-                ),
-                value: editor.partial,
-                onChanged: editor.sealed
-                    ? null
-                    : (value) => editor.setPartial(value ?? false),
+                    value: editor.partial,
+                    onChanged: editor.sealed
+                        ? null
+                        : (value) => editor.setPartial(value ?? false),
+                  ),
+                  if (editor.partial)
+                    _field(
+                      'Shared amount',
+                      editor.sharedText,
+                      editor.setShared,
+                      errorKey: 'shared',
+                    ),
+                ],
               ),
-              if (editor.partial)
-                _field(
-                  'Shared amount',
-                  editor.sharedText,
-                  editor.setShared,
-                  errorKey: 'shared',
-                ),
               const SizedBox(height: AppSpace.md),
               requiredLabel(
-                'Shared with · ${editor.participants.length}/50',
+                'Shared with · ${_peopleCount(editor.participants.length)}',
                 style: BambooFonts.ui(13, weight: FontWeight.w600),
               ),
               RequiredBox(
@@ -296,38 +304,28 @@ class SharedEditorFields extends StatelessWidget {
                     ),
               if (preview != null) ...[
                 const Divider(color: BambooInk.hairlineOnPaper),
-                SharedMoneyLine(
-                  'Bill total',
-                  preview.billTotal,
-                  confidence: Confidence.confirmed,
-                ),
-                if (editor.partial)
-                  SharedMoneyLine(
-                    'Shared amount',
-                    preview.sharedTotal,
-                    confidence: Confidence.confirmed,
+                // The answer first: who ends up paying whom.
+                if (preview.yourFullPaid.isZero)
+                  const SharedNotice(
+                    'Someone else paid · no debit is created on your account.',
                   ),
-                SharedMoneyLine(
-                  'You paid',
-                  preview.yourFullPaid,
-                  confidence: Confidence.confirmed,
-                ),
-                SharedMoneyLine(
-                  'Your share',
-                  preview.yourShare,
-                  confidence: Confidence.confirmed,
-                ),
-                if (!preview.yourResidual.isZero)
-                  SharedMoneyLine(
-                    'Your unshared amount',
-                    preview.yourResidual,
-                    confidence: Confidence.confirmed,
+                if (preview.yourBalance.paise != 0)
+                  _ResultBanner(
+                    getsBack: preview.yourBalance.paise > 0,
+                    amount: Money.fromPaise(preview.yourBalance.paise.abs()),
                   ),
-                SharedMoneyLine(
-                  'Your spending',
-                  preview.yourPersonalCost,
-                  confidence: Confidence.confirmed,
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSpace.xs),
+                  child: Text(
+                    'Split',
+                    style: BambooFonts.ui(
+                      12,
+                      weight: FontWeight.w700,
+                      color: BambooInk.ink500,
+                    ),
+                  ),
                 ),
+                // Everyone's part, yours included: the one place a share shows.
                 for (final m in editor.members)
                   if (preview.shares.containsKey(m.id))
                     SharedMoneyLine(
@@ -335,17 +333,50 @@ class SharedEditorFields extends StatelessWidget {
                       preview.shares[m.id]!,
                       confidence: Confidence.confirmed,
                     ),
-                if (preview.yourFullPaid.isZero)
-                  const SharedNotice(
-                    'Someone else paid · no debit is created on your account.',
-                  ),
-                if (preview.yourBalance.paise != 0)
+                // The bill's own figures only when they add something: with one
+                // payer and the whole bill shared they just repeat the amount
+                // typed above and the person chosen in "Paid by".
+                if (editor.partial || editor.multiplePayers) ...[
+                  const Divider(color: BambooInk.hairlineOnPaper),
                   SharedMoneyLine(
-                    preview.yourBalance.paise > 0
-                        ? 'You get back'
-                        : 'You will owe',
-                    Money.fromPaise(preview.yourBalance.paise.abs()),
+                    'Bill total',
+                    preview.billTotal,
                     confidence: Confidence.confirmed,
+                  ),
+                  if (editor.partial)
+                    SharedMoneyLine(
+                      'Shared amount',
+                      preview.sharedTotal,
+                      confidence: Confidence.confirmed,
+                    ),
+                  SharedMoneyLine(
+                    'You paid',
+                    preview.yourFullPaid,
+                    confidence: Confidence.confirmed,
+                  ),
+                  if (!preview.yourResidual.isZero)
+                    SharedMoneyLine(
+                      'Your unshared amount',
+                      preview.yourResidual,
+                      confidence: Confidence.confirmed,
+                    ),
+                ],
+                // What counts as spending: your share, said once in words. Only
+                // when it differs (part of the bill kept for yourself) does it
+                // need a figure of its own.
+                if (preview.yourPersonalCost.paise != preview.yourShare.paise)
+                  SharedMoneyLine(
+                    'Counts as your spending',
+                    preview.yourPersonalCost,
+                    confidence: Confidence.confirmed,
+                  )
+                else if (!preview.yourShare.isZero)
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpace.xs),
+                    child: Text(
+                      'Your share counts as your spending.',
+                      style: BambooFonts.ui(12, color: BambooInk.ink500),
+                    ),
                   ),
               ] else if (editor.billText.isNotEmpty)
                 for (final message in calculation.errors.values.toSet())
@@ -367,6 +398,88 @@ class SharedEditorFields extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// "2 people", "1 person"; the 50-person cap only shows once it is close.
+String _peopleCount(int count) =>
+    count >= 40 ? '$count/50' : '$count ${count == 1 ? 'person' : 'people'}';
+
+/// The rarely needed options (several payers, sharing only part of a bill) sit
+/// behind one quiet row, so the common case is just: who paid, who shares, how.
+/// Open already when either is on; the row says which are on when it is closed.
+class _MoreOptions extends StatelessWidget {
+  const _MoreOptions({required this.editor, required this.children});
+
+  final SharedEditor editor;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = [
+      if (editor.multiplePayers) 'Multiple payers',
+      if (editor.partial) 'Part of the bill',
+    ];
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        key: ValueKey('shared-more-options:${editor.contextId}'),
+        initiallyExpanded: active.isNotEmpty,
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: EdgeInsets.zero,
+        title: Text(
+          'More options',
+          style: BambooFonts.ui(13, weight: FontWeight.w600),
+        ),
+        subtitle: active.isEmpty
+            ? null
+            : Text(
+                active.join(' · '),
+                style: BambooFonts.ui(12, color: BambooInk.ink500),
+              ),
+        children: children,
+      ),
+    );
+  }
+}
+
+/// Who ends up paying whom, as the first thing under the split: green when
+/// money comes back to you, clay when you owe.
+class _ResultBanner extends StatelessWidget {
+  const _ResultBanner({required this.getsBack, required this.amount});
+
+  final bool getsBack;
+  final Money amount;
+
+  @override
+  Widget build(BuildContext context) {
+    final tone = getsBack ? BambooInk.jade : BambooInk.clayInk;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: AppSpace.xs),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpace.md,
+        vertical: AppSpace.sm,
+      ),
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: tone.withValues(alpha: 0.22)),
+      ),
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: AppSpace.lg,
+        runSpacing: AppSpace.xs,
+        children: [
+          Text(
+            getsBack ? 'You get back' : 'You will owe',
+            style: BambooFonts.ui(14, weight: FontWeight.w700, color: tone),
+          ),
+          SharedAmount(amount, confidence: Confidence.confirmed, color: tone),
+        ],
       ),
     );
   }
