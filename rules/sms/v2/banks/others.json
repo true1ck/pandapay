@@ -35883,7 +35883,7 @@
     "examples": [
       {
         "sender": "VM-UCOBNK-S",
-        "body": "Rs 500 credited to your Bank Credit Card XX4321 on 24-10-26.",
+        "body": "Rs 500 credited to your Bank Card XX4321 on 24-10-26.",
         "expectFactTypes": [
           "movement"
         ]

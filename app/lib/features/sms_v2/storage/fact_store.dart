@@ -91,6 +91,27 @@ ON CONFLICT(namespace, fact_id) DO NOTHING
       if (f is MovementFact) f,
   ];
 
+  /// Money movements seen since [from] that no instrument was linked to (none
+  /// fitted, or several did). Pinned to the observed-time index and capped, so
+  /// the read stays bounded by the window.
+  List<MovementFact> unlinkedMovementsSince(DateTime from, {int limit = 2000}) => [
+    for (final f in _read(
+      "fact_type = 'movement' AND instrument_id IS NULL AND observed_at >= ?",
+      [_timestamp(from)],
+      indexedBy: 'idx_v2_facts_observed',
+      limit: limit,
+    ))
+      if (f is MovementFact) f,
+  ];
+
+  /// Links a fact that has no instrument yet. A fact already linked is left as
+  /// it is (the link is the resolver's decision, never overwritten here).
+  void linkInstrument(String factId, String instrumentId) => _db.execute(
+    'UPDATE v2_facts SET instrument_id = ? '
+    'WHERE namespace = ? AND fact_id = ? AND instrument_id IS NULL',
+    [instrumentId, namespace, factId],
+  );
+
   Fact? get(String factId) => _read('fact_id = ?', [factId]).firstOrNull;
 
   Map<String, String> instrumentIdsSince(DateTime from) => {

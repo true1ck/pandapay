@@ -32,7 +32,16 @@ TransactionEntry? transactionForEvent(
     instruments,
     instrumentIdByFactId: instrumentIdByFactId,
   );
-  final method = switch (instrument?.kind) {
+  // No stored instrument could be named (none, or several, fit), but the message
+  // itself said "credit card" or "debit card": show that, with its last digits,
+  // instead of "Payment method not matched". It carries no wallet card id.
+  final said = instrument == null ? fact.instrument : null;
+  final saidCard =
+      said?.kind == v2.InstrumentKind.creditCard ||
+          said?.kind == v2.InstrumentKind.debitCard
+      ? said
+      : null;
+  final method = switch (instrument?.kind ?? saidCard?.kind) {
     v2.InstrumentKind.creditCard => TxnInstrument.creditCard,
     v2.InstrumentKind.debitCard => TxnInstrument.debitCard,
     v2.InstrumentKind.bankAccount => TxnInstrument.upiBank,
@@ -85,7 +94,7 @@ TransactionEntry? transactionForEvent(
             event.type == v2.EventType.purchase
       ? external?.counterpartyKey
       : printed ?? external?.counterpartyKey;
-  final mask = instrument?.maskDigits;
+  final mask = instrument?.maskDigits ?? saidCard?.maskDigits;
   final last4 = mask == null
       ? null
       : mask.length > 4

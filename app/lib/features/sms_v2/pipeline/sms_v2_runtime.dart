@@ -22,6 +22,7 @@ import 'ai_withdrawal.dart';
 import '../storage/event_store.dart';
 import '../storage/fact_store.dart';
 import '../storage/instrument_store.dart';
+import '../ui/instrument_actions.dart';
 import '../ledger/card_state_adapter.dart';
 import '../../../data/local/sms_intake_repository.dart';
 import '../../sms_import/sms_background_queue.dart';
@@ -661,6 +662,39 @@ class SmsV2Runtime {
       await guarded(() async {
         await _rereadPayerlessSalary();
         _state.put('salary:payer-recheck', salaryMarker);
+      });
+    }
+    // A card spend or refund saved with no card (none fitted, or two did) stays
+    // "not matched" for good, because later linking only touches rows that
+    // already have a card. When the wallet card set changes (a card added,
+    // removed or given another number), link such rows to the one wallet card
+    // they name, once. The marker is the card ids and numbers, read from the
+    // cards alone, so an ordinary sync does no seeding and no scan. It is saved
+    // only after a successful run, so a failure is retried on the next sync.
+    final cards = financial
+        .entities(namespace, 'cards')
+        .map(UserCard.fromJson)
+        .toList();
+    final healMarker =
+        'card-heal-1:${([for (final c in cards) '${c.id}:${c.last4}']..sort()).join(',')}';
+    if (cards.isNotEmpty && _state.get('card:heal') != healMarker) {
+      await guarded(() async {
+        // The wallet card has no instrument until it is seeded, and capture
+        // (which seeds) only runs when messages arrive. Seeding is idempotent.
+        InstrumentSeeder(
+          InstrumentStore(financial.database.db, namespace: namespace),
+        ).seed(
+          cards: cards,
+          issuerSlugOf: cardIssuerSlugFromCatalogue(catalogue),
+          bankAccounts: const [],
+        );
+        InstrumentActions(
+          financial: financial,
+          namespace: namespace,
+          bundle: active.bundle,
+          catalogue: catalogue,
+        ).healUnlinkedCards();
+        _state.put('card:heal', healMarker);
       });
     }
     // A person asked to see what a re-sort would move before it moves

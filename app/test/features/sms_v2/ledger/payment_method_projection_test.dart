@@ -38,6 +38,23 @@ void main() {
     return transactionForEvent(e, rows, {f.factId: f}, const {});
   }
 
+  test('a card the message names stays a card when no stored instrument fits', () {
+    final row = project('card')!;
+    final said = Fact.fromJson(
+      (jsonDecode(
+                File(
+                  '../contracts/sms/v2/fixtures/valid/fact/movement.card_spend.json',
+                ).readAsStringSync(),
+              )
+              as Map)
+          .cast<String, Object?>(),
+    ).instrument!;
+    expect(said.kind, InstrumentKind.creditCard);
+    expect(row.instrument, TxnInstrument.creditCard);
+    expect(row.cardLast4, said.maskDigits);
+    expect(row.userCardId, isNull);
+  });
+
   for (final (rail, method) in [
     ('upi', 'upi'),
     ('neft', 'neft'),
