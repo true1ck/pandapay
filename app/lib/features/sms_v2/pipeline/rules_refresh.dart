@@ -25,6 +25,7 @@ class RulesRefreshReport {
     this.refusedWhy = const {},
     this.resortProblem,
     this.applied = false,
+    this.upToDate = false,
     this.finishedAt,
   });
 
@@ -55,6 +56,10 @@ class RulesRefreshReport {
 
   /// True for the report of a tap on Apply, false for the preview.
   final bool applied;
+
+  /// These rules were already downloaded and applied, so nothing was looked at
+  /// again: no new rules, no unknown messages to re-read, no re-sort.
+  final bool upToDate;
   final DateTime? finishedAt;
 
   bool get gotNewRules => versionAfter != versionBefore;
@@ -71,7 +76,22 @@ class RulesRefreshReport {
       'Some of your spends could not be sent to your account just now. They are kept on this phone and sent later.';
 
   /// One line for each thing that happened, plain words.
-  List<String> get lines => [
+  List<String> get lines => upToDate
+      ? [
+          'You are on the latest rule set (version $versionAfter, $ruleCount rules).',
+          'It has already been applied to your spends, so there is nothing to update.',
+          ?sendProblem,
+          ?_refusedLine,
+        ]
+      : _fullLines;
+
+  String? get _refusedLine => refusedForGood > 0
+      ? 'The server would not take $refusedForGood ${refusedForGood == 1 ? 'record' : 'records'}'
+            '${refusedWhy.isEmpty ? '' : ' (${_words(refusedWhy, _refusedWords)})'}. '
+            '${refusedForGood == 1 ? 'It stays' : 'They stay'} as it is on this phone and is no longer sent.'
+      : null;
+
+  List<String> get _fullLines => [
     if (rulesProblem != null)
       rulesProblem!
     else if (applied)
@@ -101,10 +121,7 @@ class RulesRefreshReport {
           '${resortSkipped == 1 ? 'It is' : 'They are'} unchanged.',
     if (keptYours > 0)
       '$keptYours you set yourself ${applied ? (keptYours == 1 ? 'was' : 'were') : (keptYours == 1 ? 'stays' : 'stay')} as you chose.',
-    if (refusedForGood > 0)
-      'The server would not take $refusedForGood ${refusedForGood == 1 ? 'record' : 'records'}'
-          '${refusedWhy.isEmpty ? '' : ' (${_words(refusedWhy, _refusedWords)})'}. '
-          '${refusedForGood == 1 ? 'It stays' : 'They stay'} as it is on this phone and is no longer sent.',
+    ?_refusedLine,
     if (waitingToSend > 0)
       '$waitingToSend ${waitingToSend == 1 ? 'spend is' : 'spends are'} still waiting to be sent to your account, so '
           '${waitingToSend == 1 ? 'it was' : 'they were'} skipped. Try again with a connection.',

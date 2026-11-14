@@ -119,6 +119,13 @@ void main() {
       expect(report.gotNewRules, isFalse);
       expect(report.hasProblem, isFalse);
       expect(report.lines.first, contains('already the latest'));
+
+      // Tapping again with nothing new: the check is skipped and it says so.
+      final again = await r.refreshRulesAndReanalyze();
+      expect(again.upToDate, isTrue);
+      expect(again.canApply, isFalse);
+      expect(again.lines.first, contains('latest rule set'));
+      expect(again.lines[1], contains('already been applied'));
     },
   );
 

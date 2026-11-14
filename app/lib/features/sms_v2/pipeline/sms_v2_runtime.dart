@@ -1068,10 +1068,16 @@ class SmsV2Runtime {
 
     // 3. Messages that were not recognised, with the rules now in force.
     var reread = 0;
+    var rereadSkipped = false;
     try {
       final active = ProvisionalStore(_state).overlay(_bundle!);
-      reread = await _rereadUnknown();
-      _state.put('pipeline:revision', _revision(active.revision));
+      if (_state.get('pipeline:revision') == _revision(active.revision)) {
+        // Same rules as the last read: reading again would find nothing new.
+        rereadSkipped = true;
+      } else {
+        reread = await _rereadUnknown();
+        _state.put('pipeline:revision', _revision(active.revision));
+      }
     } catch (_) {
       _checkAccount();
       rereadProblem =
@@ -1094,11 +1100,23 @@ class SmsV2Runtime {
       'processed': 0,
       'total': 0,
     });
+    // This rule set was already applied (or had nothing to move): skip the look.
+    final categoryRevision = _categoryRevision(_bundle!);
+    final alreadySorted =
+        _state.get('pipeline:category-revision') == categoryRevision;
     try {
-      report = await _previewAutomaticCategories();
-      if (report.awaitingSync > 0) {
-        await send();
+      if (!alreadySorted) {
         report = await _previewAutomaticCategories();
+        if (report.awaitingSync > 0) {
+          await send();
+          report = await _previewAutomaticCategories();
+        }
+        if (report.complete &&
+            report.changed == 0 &&
+            report.awaitingSync == 0 &&
+            report.failed == 0) {
+          _state.put('pipeline:category-revision', categoryRevision);
+        }
       }
     } catch (error) {
       _checkAccount();
@@ -1128,6 +1146,12 @@ class SmsV2Runtime {
           int.tryParse(_state.get(FactsUpload.refusedKey) ?? '') ?? 0,
       refusedWhy: _refusedWhy(),
       resortProblem: resortProblem,
+      upToDate:
+          alreadySorted &&
+          rereadSkipped &&
+          before == _bundle!.bundleVersion &&
+          rulesProblem == null &&
+          resortProblem == null,
       finishedAt: clock(),
     );
   }

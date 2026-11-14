@@ -107,6 +107,8 @@ class _RulesRefreshSheetState extends ConsumerState<RulesRefreshSheet> {
                 ? (_applying ? 'Sorting your spends…' : 'Refreshing your rules…')
                 : (report?.hasProblem ?? true)
                 ? 'Refreshed, with a problem'
+                : (report?.upToDate ?? false)
+                ? 'Rules up to date'
                 : 'Refreshed',
             style: BambooFonts.heading(19, color: BambooInk.ink900),
           ),
