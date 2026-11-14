@@ -205,11 +205,11 @@ void main() {
     await _pump(tester, repo: repo);
 
     final amountField = tester.widget<TextField>(
-      find.widgetWithText(TextField, 'Amount (₹)'),
+      find.byType(TextField).at(0),
     );
     expect(amountField.controller!.text, '1250.00');
     final merchantField = tester.widget<TextField>(
-      find.widgetWithText(TextField, 'Merchant'),
+      find.byType(TextField).at(1),
     );
     expect(merchantField.controller!.text, 'Old Merchant');
   });
@@ -232,7 +232,7 @@ void main() {
 
     expect(find.text('Unknown — choose a method'), findsOneWidget);
     await tester.enterText(
-      find.widgetWithText(TextField, 'Merchant'),
+      find.byType(TextField).at(1),
       'Renamed merchant',
     );
     await tester.tap(find.text('Save'));
@@ -256,7 +256,7 @@ void main() {
       ),
     );
     await _pump(tester, repo: repo);
-    await tester.enterText(find.widgetWithText(TextField, 'Amount (₹)'), 'NaN');
+    await tester.enterText(find.byType(TextField).at(0), 'NaN');
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     expect(
@@ -293,7 +293,7 @@ void main() {
     // refresh race cannot turn the form into a blank error state.
     expect(
       tester
-          .widget<TextField>(find.widgetWithText(TextField, 'Merchant'))
+          .widget<TextField>(find.byType(TextField).at(1))
           .controller!
           .text,
       'Offline Merchant',
@@ -315,7 +315,7 @@ void main() {
     );
     await _pump(tester, repo: repo);
 
-    await tester.enterText(find.widgetWithText(TextField, 'Amount (₹)'), '0');
+    await tester.enterText(find.byType(TextField).at(0), '0');
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
@@ -340,11 +340,11 @@ void main() {
     await _pump(tester, repo: repo);
 
     await tester.enterText(
-      find.widgetWithText(TextField, 'Amount (₹)'),
+      find.byType(TextField).at(0),
       '2000',
     );
     await tester.enterText(
-      find.widgetWithText(TextField, 'Merchant'),
+      find.byType(TextField).at(1),
       'New Merchant',
     );
     await tester.tap(find.text('Save'));
@@ -399,7 +399,7 @@ void main() {
     );
 
     await tester.enterText(
-      find.widgetWithText(TextField, 'Merchant'),
+      find.byType(TextField).at(1),
       'Correct Store',
     );
     await tester.tap(find.text('Save'));
@@ -447,7 +447,7 @@ void main() {
         isOnlineProvider.overrideWith((ref) => Stream.value(false)),
       ],
     );
-    await tester.enterText(find.widgetWithText(TextField, 'Amount (₹)'), '555');
+    await tester.enterText(find.byType(TextField).at(0), '555');
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 

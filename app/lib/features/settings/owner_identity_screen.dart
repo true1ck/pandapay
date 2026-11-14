@@ -4,6 +4,7 @@ import 'package:pandapay_domain/sms_v2.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
+import '../../app/required_field.dart';
 import '../sms_v2/personal/owner_identity_store.dart';
 import '../sms_v2/ui/owner_identity_actions.dart';
 
@@ -26,6 +27,7 @@ class _OwnerIdentityScreenState extends ConsumerState<OwnerIdentityScreen> {
   String? _profileName;
   bool _loading = true;
   bool _busy = false;
+  bool _submitted = false;
   String? _error;
 
   OwnerIdentityActions get _actions => OwnerIdentityActions(ref);
@@ -104,7 +106,14 @@ class _OwnerIdentityScreenState extends ConsumerState<OwnerIdentityScreen> {
     }
   }
 
-  Future<void> _add() => _run(() async {
+  Future<void> _add() async {
+    setState(() => _submitted = true);
+    if (_first.text.trim().isEmpty || _last.text.trim().isEmpty) return;
+    await _addName();
+    if (mounted) setState(() => _submitted = false);
+  }
+
+  Future<void> _addName() => _run(() async {
     final n = await _actions.addName(
       first: _first.text,
       middle: _middle.text.trim().isEmpty ? null : _middle.text,
@@ -273,7 +282,13 @@ class _OwnerIdentityScreenState extends ConsumerState<OwnerIdentityScreen> {
                     TextField(
                       controller: _first,
                       textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(labelText: 'First name'),
+                      onChanged: (_) {
+                        if (_submitted) setState(() {});
+                      },
+                      decoration: InputDecoration(
+                        label: requiredLabel('First name'),
+                        errorText: requiredError(_submitted, _first.text),
+                      ),
                     ),
                     const SizedBox(height: AppSpace.sm),
                     TextField(
@@ -285,7 +300,13 @@ class _OwnerIdentityScreenState extends ConsumerState<OwnerIdentityScreen> {
                     TextField(
                       controller: _last,
                       textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(labelText: 'Last name'),
+                      onChanged: (_) {
+                        if (_submitted) setState(() {});
+                      },
+                      decoration: InputDecoration(
+                        label: requiredLabel('Last name'),
+                        errorText: requiredError(_submitted, _last.text),
+                      ),
                     ),
                     if (_error != null) ...[
                       const SizedBox(height: AppSpace.sm),

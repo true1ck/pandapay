@@ -117,7 +117,7 @@ void main() {
     expect(find.textContaining('two fifty'), findsWidgets);
     expect(find.text('₹2.50?'), findsOneWidget);
     expect(find.text('Yesterday'), findsWidgets);
-    expect(find.text('Amount (₹)'), findsOneWidget);
+    expect(find.text('Amount (₹) *', findRichText: true), findsOneWidget);
     expect(find.text('Choose the wallet card for this entry.'), findsOneWidget);
   });
 
@@ -153,7 +153,10 @@ void main() {
     await show(tester, h);
     expect(find.text('Money in details'), findsOneWidget);
     expect(find.text('What was it?'), findsOneWidget);
-    expect(find.text('Amount received (₹)'), findsOneWidget);
+    expect(
+      find.text('Amount received (₹) *', findRichText: true),
+      findsOneWidget,
+    );
     expect(find.text('Who or what it was from'), findsOneWidget);
     expect(find.text('How it reached you'), findsOneWidget);
     // No wallet card for money in.
@@ -178,7 +181,7 @@ void main() {
     await tester.pump();
     expect(h.editor.type, VoiceActionType.refund);
     expect(find.text('Refund details'), findsOneWidget);
-    expect(find.text('Refund amount (₹)'), findsOneWidget);
+    expect(find.text('Refund amount (₹) *', findRichText: true), findsOneWidget);
   });
 
   testWidgets('a future date blocks saving until the day is picked', (
@@ -223,6 +226,6 @@ void main() {
     final h = _Harness(draftOf('redeemed 5000 points on my axis atlas card'));
     await show(tester, h);
     expect(find.text('Points redemption details'), findsOneWidget);
-    expect(find.text('Points'), findsOneWidget);
+    expect(find.text('Points *', findRichText: true), findsOneWidget);
   });
 }

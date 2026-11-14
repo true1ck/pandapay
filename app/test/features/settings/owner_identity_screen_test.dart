@@ -12,6 +12,12 @@ import '../../support/owner_vocabulary_support.dart';
 
 const _ns = 'user:owner-screen';
 
+
+Finder _field(String label) => find.ancestor(
+  of: find.text('$label *', findRichText: true),
+  matching: find.byType(TextField),
+);
+
 void main() {
   setUpAll(installRepoOwnerVocabulary);
 
@@ -53,24 +59,24 @@ void main() {
     await pump(tester);
     expect(find.text('Your names & accounts'), findsOneWidget);
     expect(find.textContaining('None yet'), findsOneWidget);
-    expect(find.text('First name'), findsOneWidget);
-    expect(find.text('Last name'), findsOneWidget);
+    expect(find.text('First name *', findRichText: true), findsOneWidget);
+    expect(find.text('Last name *', findRichText: true), findsOneWidget);
     expect(find.text('Add name'), findsOneWidget);
   });
 
   testWidgets('a first and a last name are both required', (tester) async {
     await pump(tester);
-    await tester.enterText(find.widgetWithText(TextField, 'First name'), 'Asha');
+    await tester.enterText(_field('First name'), 'Asha');
     await tester.tap(find.text('Add name'));
     await tester.pumpAndSettle();
-    expect(find.text('Enter a first name and a last name'), findsOneWidget);
+    expect(find.text('Required'), findsOneWidget);
     expect(store.entries(), isEmpty);
   });
 
   testWidgets('adding a name lists it and clears the form', (tester) async {
     await pump(tester);
-    await tester.enterText(find.widgetWithText(TextField, 'First name'), 'Asha');
-    await tester.enterText(find.widgetWithText(TextField, 'Last name'), 'Rao');
+    await tester.enterText(_field('First name'), 'Asha');
+    await tester.enterText(_field('Last name'), 'Rao');
     await tester.tap(find.text('Add name'));
     await tester.pumpAndSettle();
 
@@ -78,7 +84,7 @@ void main() {
     expect(find.text('ASHA RAO'), findsOneWidget);
     expect(find.text('You added this'), findsOneWidget);
     expect(find.textContaining('None yet'), findsNothing);
-    final first = tester.widget<TextField>(find.widgetWithText(TextField, 'First name'));
+    final first = tester.widget<TextField>(_field('First name'));
     expect(first.controller!.text, isEmpty);
   });
 

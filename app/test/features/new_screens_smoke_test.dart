@@ -355,14 +355,16 @@ void main() {
       }
     });
 
-    testWidgets('submit is disabled until a reason is chosen', (tester) async {
+    testWidgets('submit without a reason shows what is missing and sends nothing', (tester) async {
       await _pump(tester, ReportTransactionScreen(entry: _txn()));
-      final button = tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, 'Submit report'),
-      );
+      final submit = find.widgetWithText(FilledButton, 'Submit report');
+      expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
+      await tester.ensureVisible(submit);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
       expect(
-        button.onPressed,
-        isNull,
+        find.text('Pick what went wrong'),
+        findsOneWidget,
         reason: 'an uncategorised report is how inboxes rot',
       );
 
@@ -388,7 +390,7 @@ void main() {
         ReportTransactionScreen(entry: _txn()),
         size: const Size(320, 640),
       );
-      expect(find.text('What went wrong'), findsOneWidget);
+      expect(find.text('What went wrong *', findRichText: true), findsOneWidget);
     });
   });
 

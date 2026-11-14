@@ -373,8 +373,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // Save stays tappable so a missing amount/card gets flagged.
     final saveButton = tester.widget<FilledButton>(await _saveButton(tester));
-    expect(saveButton.onPressed, isNull);
+    expect(saveButton.onPressed, isNotNull);
   });
 
   testWidgets(
@@ -912,9 +913,9 @@ void main() {
 
       expect(tester.takeException(), isNull);
       // Falls back to no selection rather than the stale id — Save stays
-      // disabled until the user actually picks a card from the current wallet.
+      // rejected (card flagged) until the user picks a card from the wallet.
       final saveButton = tester.widget<FilledButton>(await _saveButton(tester));
-      expect(saveButton.onPressed, isNull);
+      expect(saveButton.onPressed, isNotNull);
     },
   );
 

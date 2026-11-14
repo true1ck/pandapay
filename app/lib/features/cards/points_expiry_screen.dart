@@ -6,6 +6,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../app/required_field.dart';
 import '../../data/local_first/pending_overlays.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
@@ -204,6 +205,7 @@ class _ProgramCard extends ConsumerWidget {
     final controller = TextEditingController(
       text: userCard.totalPointsEarned.toStringAsFixed(0),
     );
+    var tried = false;
     final result = await showModalBottomSheet<double>(
       context: context,
       isScrollControlled: true,
@@ -211,7 +213,7 @@ class _ProgramCard extends ConsumerWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
       ),
-      builder: (context) => Padding(
+      builder: (context) => StatefulBuilder(builder: (context, setSheetState) => Padding(
         padding: EdgeInsets.only(
           left: AppSpace.lg,
           right: AppSpace.lg,
@@ -237,7 +239,11 @@ class _ProgramCard extends ConsumerWidget {
               keyboardType: TextInputType.number,
               style: BambooFonts.ui(14.5, color: BambooInk.ink900),
               decoration: InputDecoration(
-                labelText: 'Actual points balance',
+                label: requiredLabel('Actual points balance'),
+                errorText: requiredError(tried, controller.text) ??
+                    (tried && double.tryParse(controller.text.trim()) == null
+                        ? 'Enter a number'
+                        : null),
                 labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
                 filled: true,
                 fillColor: BambooInk.glassFillOnPaper,
@@ -259,6 +265,7 @@ class _ProgramCard extends ConsumerWidget {
                   ),
                 ),
               ),
+              onChanged: (_) => tried ? setSheetState(() {}) : null,
               autofocus: true,
             ),
             const SizedBox(height: AppSpace.lg),
@@ -273,14 +280,16 @@ class _ProgramCard extends ConsumerWidget {
                 textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
               ),
               onPressed: () {
+                setSheetState(() => tried = true);
                 final value = double.tryParse(controller.text.trim());
+                if (value == null) return;
                 Navigator.of(context).pop(value);
               },
               child: const Text('Save'),
             ),
           ],
         ),
-      ),
+      )),
     );
     if (result == null) return;
     try {

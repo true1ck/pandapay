@@ -17,6 +17,7 @@ import 'package:uuid/uuid.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/category_picker.dart';
+import '../../app/required_field.dart';
 import '../../app/providers.dart';
 import '../../app/transaction_tag_picker.dart';
 import '../../data/api_exception.dart';
@@ -269,6 +270,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   bool _saving = false;
   bool _recommendationsExpanded = false;
   String? _amountError;
+  bool _submitted = false;
   String? _pendingClientMutationId;
   String? _pendingPayloadFingerprint;
   DateTime? _pendingOccurredAt;
@@ -707,15 +709,21 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     _sharedPrivateFields();
   }
 
-  Future<void> _leaveShared() async {
-    if (_saving || !mounted) return;
-    setState(() => _allowSharedPop = true);
-    Navigator.of(context).pop();
-  }
-
   Future<void> _saveShared() async {
     final editor = _sharedEditor, runtime = _sharedRuntime;
     if (editor == null || runtime == null || !runtime.isCurrent() || _saving) {
+      return;
+    }
+    // Incomplete form: flag every missing field instead of silently ignoring
+    // the tap. Nothing here needs the network; sync happens after the local save.
+    if (!editor.sealed && !editor.canSubmit) {
+      _sharedPrivateFields();
+      setState(() {
+        _submitted = true;
+        if (editor.evaluation.errors.containsKey('bill')) {
+          _amountError = 'Enter an amount greater than ₹0';
+        }
+      });
       return;
     }
     setState(() => _saving = true);
@@ -1231,7 +1239,15 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     }
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) {
-      setState(() => _amountError = 'Enter an amount greater than ₹0');
+      setState(() {
+        _submitted = true;
+        _amountError = 'Enter an amount greater than ₹0';
+      });
+      return;
+    }
+    if (_instrument == TxnInstrument.creditCard &&
+        _selectedUserCardId == null) {
+      setState(() => _submitted = true);
       return;
     }
     // ui-spec B6 validation: future dates warn, not block.
@@ -1667,10 +1683,11 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       );
     }
     return PopScope(
-      canPop: !_sharing || _allowSharedPop,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) unawaited(_leaveShared());
-      },
+      // canPop must stay true so the iOS edge-swipe back works: Flutter
+      // disables that gesture whenever a route reports it cannot pop. The
+      // shared draft is kept by the editor, so leaving needs no interception;
+      // only block while a submit is in flight.
+      canPop: !_sharing || !_saving || _allowSharedPop,
       child: Scaffold(
         backgroundColor: BambooInk.paper,
         appBar: AppBar(
@@ -1740,6 +1757,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                                       : () => unawaited(_addSharedMember()),
                                   loading: _sharingLoading,
                                   error: _sharingError,
+                                  submitted: _submitted,
                                 ),
                               if (_sharing && _sharedEditor == null)
                                 Padding(
@@ -2387,6 +2405,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   Widget _buildMerchantField(List<String> merchants) {
     final shortcuts = merchants.take(4).toList();
     return _FieldGroup(
+      // The shared (split) flow needs a merchant; solo entry falls back to a default name.
+      required: _sharing,
       title: _entryKind == TxnEntryKind.income
           ? 'Source or payee'
           : 'Merchant or payee',
@@ -2407,6 +2427,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                       : 'Search or enter a merchant',
                   icon: Icons.storefront_outlined,
                 ).copyWith(
+                  errorText: _sharing
+                      ? requiredError(_submitted, _merchantController.text)
+                      : null,
                   suffixIcon: _merchantSearching
                       ? const Padding(
                           padding: EdgeInsets.all(16),
@@ -2659,7 +2682,14 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
               userFacingErrorMessage(err),
               style: BambooFonts.ui(12, color: BambooInk.clayInk),
             ),
-            data: _buildCardSelector,
+            data: (cards) => RequiredBox(
+              invalid:
+                  _submitted &&
+                  _instrument == TxnInstrument.creditCard &&
+                  _selectedUserCardId == null,
+              message: 'Choose a card',
+              child: _buildCardSelector(cards),
+            ),
           ),
         ] else ...[
           const SizedBox(height: 10),
@@ -3040,7 +3070,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                   ),
                   textStyle: BambooFonts.ui(14, weight: FontWeight.w600),
                 ),
-                onPressed: _canSave && !_saving ? _save : null,
+                // Solo entry stays tappable so missing fields get flagged;
+                // shared submit keeps its own block-reason hint.
+                onPressed: _saving ? null : _save,
                 icon: _saving
                     ? const SizedBox(
                         width: 18,
@@ -3257,6 +3289,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                   : () => unawaited(_addSharedMember()),
               loading: _sharingLoading,
               error: _sharingError,
+              submitted: _submitted,
             ),
 
           // --- Merchant & Category card ---
@@ -3367,7 +3400,14 @@ class _FieldGroup extends StatelessWidget {
   final Widget child;
   final Widget? trailing;
 
-  const _FieldGroup({required this.title, required this.child, this.trailing});
+  final bool required;
+
+  const _FieldGroup({
+    required this.title,
+    required this.child,
+    this.trailing,
+    this.required = false,
+  });
 
   @override
   Widget build(BuildContext context) => Column(
@@ -3376,14 +3416,16 @@ class _FieldGroup extends StatelessWidget {
       Row(
         children: [
           Expanded(
-            child: Text(
-              title,
-              style: BambooFonts.ui(
+            child: () {
+              final style = BambooFonts.ui(
                 12,
                 weight: FontWeight.w600,
                 color: BambooInk.ink700,
-              ),
-            ),
+              );
+              return required
+                  ? requiredLabel(title, style: style)
+                  : Text(title, style: style);
+            }(),
           ),
           ?trailing,
         ],

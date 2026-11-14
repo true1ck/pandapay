@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../app/required_field.dart';
 import '../../app/router.dart';
 import '../../data/api_exception.dart';
 import '../../data/product_access_api.dart';
@@ -33,6 +34,7 @@ class _ProductActivationScreenState
   PendingSignupChoices? _signupChoices;
   bool _loading = true;
   bool _working = false;
+  bool _submitted = false;
   bool _productTermsAccepted = false;
   String? _selectedRewardChoice;
   String? _error;
@@ -220,7 +222,14 @@ class _ProductActivationScreenState
   }
 
   Future<void> _activate() async {
-    if (!_canActivate) return;
+    if (_working) return;
+    setState(() => _submitted = true);
+    if (!_canActivate) {
+      if (_preview == null && _codeController.text.trim().isNotEmpty) {
+        setState(() => _error = 'Tap Check invite to continue.');
+      }
+      return;
+    }
     final api = _api;
     if (api == null) {
       setState(() => _error = 'Please sign in to continue.');
@@ -424,9 +433,17 @@ class _ProductActivationScreenState
             textCapitalization: TextCapitalization.characters,
             autocorrect: false,
             enableSuggestions: false,
+            onChanged: (_) {
+              if (_submitted) setState(() {});
+            },
             decoration: InputDecoration(
-              labelText: 'Invite code',
+              label: needsInvite
+                  ? requiredLabel('Invite code')
+                  : const Text('Invite code'),
               hintText: 'ABC123',
+              errorText: needsInvite
+                  ? requiredError(_submitted, _codeController.text)
+                  : null,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
@@ -469,33 +486,45 @@ class _ProductActivationScreenState
             _previewCard(_preview!),
             const SizedBox(height: AppSpace.md),
             if (_preview!.rewardAvailable) ...[
-              Text(
+              requiredLabel(
                 'Choose how to use this invite',
                 style: BambooFonts.ui(14, weight: FontWeight.w700),
               ),
               const SizedBox(height: AppSpace.xs),
-              ChoiceChip(
-                label: Text(
-                  _preview!.requiredConsecutiveDays == null
-                      ? 'Join referral rewards'
-                      : 'Join rewards · ${_preview!.requiredConsecutiveDays}-day Bamboo streak',
+              RequiredBox(
+                invalid: _submitted && _selectedRewardChoice == null,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ChoiceChip(
+                      label: Text(
+                        _preview!.requiredConsecutiveDays == null
+                            ? 'Join referral rewards'
+                            : 'Join rewards · ${_preview!.requiredConsecutiveDays}-day Bamboo streak',
+                      ),
+                      selected: _selectedRewardChoice == 'rewards',
+                      onSelected: _working
+                          ? null
+                          : (selected) => setState(() {
+                              _selectedRewardChoice = selected
+                                  ? 'rewards'
+                                  : null;
+                            }),
+                    ),
+                    const SizedBox(height: AppSpace.xs),
+                    ChoiceChip(
+                      label: const Text('Access only, no referral rewards'),
+                      selected: _selectedRewardChoice == 'access_only',
+                      onSelected: _working
+                          ? null
+                          : (selected) => setState(() {
+                              _selectedRewardChoice = selected
+                                  ? 'access_only'
+                                  : null;
+                            }),
+                    ),
+                  ],
                 ),
-                selected: _selectedRewardChoice == 'rewards',
-                onSelected: _working
-                    ? null
-                    : (selected) => setState(() {
-                        _selectedRewardChoice = selected ? 'rewards' : null;
-                      }),
-              ),
-              const SizedBox(height: AppSpace.xs),
-              ChoiceChip(
-                label: const Text('Access only, no referral rewards'),
-                selected: _selectedRewardChoice == 'access_only',
-                onSelected: _working
-                    ? null
-                    : (selected) => setState(() {
-                        _selectedRewardChoice = selected ? 'access_only' : null;
-                      }),
               ),
               const SizedBox(height: AppSpace.xs),
               Text(
@@ -503,20 +532,23 @@ class _ProductActivationScreenState
                 style: BambooFonts.ui(11.5, color: BambooInk.ink500),
               ),
             ] else ...[
-              CheckboxListTile(
-                key: const Key('activation_access_only_choice'),
-                contentPadding: EdgeInsets.zero,
-                value: _selectedRewardChoice == 'access_only',
-                onChanged: _working
-                    ? null
-                    : (selected) => setState(
-                        () => _selectedRewardChoice = selected == true
-                            ? 'access_only'
-                            : null,
-                      ),
-                title: const Text('Continue with access only'),
-                subtitle: const Text(
-                  'This invite has no referral reward available.',
+              RequiredBox(
+                invalid: _submitted && _selectedRewardChoice == null,
+                child: CheckboxListTile(
+                  key: const Key('activation_access_only_choice'),
+                  contentPadding: EdgeInsets.zero,
+                  value: _selectedRewardChoice == 'access_only',
+                  onChanged: _working
+                      ? null
+                      : (selected) => setState(
+                          () => _selectedRewardChoice = selected == true
+                              ? 'access_only'
+                              : null,
+                        ),
+                  title: const Text('Continue with access only'),
+                  subtitle: const Text(
+                    'This invite has no referral reward available.',
+                  ),
                 ),
               ),
             ],
@@ -536,16 +568,19 @@ class _ProductActivationScreenState
         ],
         if (!_productTermsAccepted) ...[
           const SizedBox(height: AppSpace.md),
-          CheckboxListTile(
-            key: const Key('activation_product_terms'),
-            contentPadding: EdgeInsets.zero,
-            value: _productTermsAccepted,
-            onChanged: _working
-                ? null
-                : (value) =>
-                      setState(() => _productTermsAccepted = value ?? false),
-            title: const Text('I agree to the Terms & Privacy Policy'),
-            subtitle: Text('Required to activate · $appProductTermsVersion'),
+          RequiredBox(
+            invalid: _submitted && !_productTermsAccepted,
+            child: CheckboxListTile(
+              key: const Key('activation_product_terms'),
+              contentPadding: EdgeInsets.zero,
+              value: _productTermsAccepted,
+              onChanged: _working
+                  ? null
+                  : (value) =>
+                        setState(() => _productTermsAccepted = value ?? false),
+              title: requiredLabel('I agree to the Terms & Privacy Policy'),
+              subtitle: Text('Required to activate · $appProductTermsVersion'),
+            ),
           ),
         ] else ...[
           const SizedBox(height: AppSpace.md),
@@ -571,7 +606,7 @@ class _ProductActivationScreenState
         const SizedBox(height: AppSpace.lg),
         FilledButton(
           key: const Key('activate_account'),
-          onPressed: _canActivate ? _activate : null,
+          onPressed: _working ? null : _activate,
           child: Text(_working ? 'Activating…' : 'Activate account'),
         ),
       ],

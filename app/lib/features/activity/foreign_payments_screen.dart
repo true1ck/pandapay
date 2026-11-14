@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../app/required_field.dart';
 import '../../app/design/bamboo_components.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -434,8 +435,8 @@ class _ForeignPaymentDetailScreenState
                   inputFormatters: [
                     FilteringTextInputFormatter.allow(RegExp('[a-zA-Z]')),
                   ],
-                  decoration: const InputDecoration(
-                    labelText: 'Currency code',
+                  decoration: InputDecoration(
+                    label: requiredLabel('Currency code'),
                     hintText: 'USD, EUR, GBP…',
                   ),
                   validator: (value) =>
@@ -452,8 +453,8 @@ class _ForeignPaymentDetailScreenState
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
-                  decoration: const InputDecoration(
-                    labelText: 'Original amount',
+                  decoration: InputDecoration(
+                    label: requiredLabel('Original amount'),
                   ),
                   validator: (value) => _positiveDecimal(value)
                       ? null
@@ -536,8 +537,8 @@ class _ForeignPaymentDetailScreenState
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
-                  decoration: const InputDecoration(
-                    labelText: 'Actual billed INR',
+                  decoration: InputDecoration(
+                    label: requiredLabel('Actual billed INR'),
                     prefixText: '₹',
                   ),
                   validator: (value) => _inrMoney(value) == null

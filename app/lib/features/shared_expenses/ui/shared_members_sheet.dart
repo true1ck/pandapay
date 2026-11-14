@@ -6,6 +6,7 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 import '../../../app/design/app_theme.dart';
+import '../../../app/required_field.dart';
 import '../data/shared_commands.dart';
 import '../composer/shared_editor.dart';
 import '../data/shared_invitations.dart';
@@ -985,7 +986,11 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
         textCapitalization: TextCapitalization.words,
         textInputAction: TextInputAction.next,
         style: BambooFonts.ui(15),
-        decoration: const InputDecoration(labelText: 'Name'),
+        decoration: InputDecoration(
+          label: requiredLabel('Name'),
+          errorText: requiredError(_formError != null, _nameField.text),
+        ),
+        onChanged: (_) => setState(() {}),
       ),
       const SizedBox(height: 12),
       TextField(
@@ -1014,7 +1019,7 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
         'With a number, only that person can join without your approval. Without one, you approve their request. Nothing is shared until you tap Invite.',
         style: BambooFonts.ui(12, color: BambooInk.ink700),
       ),
-      if (_formError != null) ...[
+      if (_formError != null && _nameField.text.trim().isNotEmpty) ...[
         const SizedBox(height: 8),
         Text(_formError!, style: BambooFonts.ui(13, color: BambooInk.clayInk)),
       ],

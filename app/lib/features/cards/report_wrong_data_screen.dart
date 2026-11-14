@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/required_field.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
@@ -67,6 +68,7 @@ class _ReportWrongDataScreenState extends ConsumerState<ReportWrongDataScreen> {
   String? _selectedFieldPath;
   bool _submitting = false;
   bool _submitted = false;
+  bool _tried = false;
   String? _error;
 
   @override
@@ -107,10 +109,8 @@ class _ReportWrongDataScreenState extends ConsumerState<ReportWrongDataScreen> {
 
   Future<void> _submit() async {
     final fieldPath = _fieldPathForSubmission;
-    if (fieldPath == null) {
-      setState(() => _error = 'Tell us which field is wrong.');
-      return;
-    }
+    setState(() => _tried = true);
+    if (fieldPath == null) return;
     setState(() {
       _submitting = true;
       _error = null;
@@ -205,9 +205,12 @@ class _ReportWrongDataScreenState extends ConsumerState<ReportWrongDataScreen> {
   }
 
   Widget _buildForm(BuildContext context, String? cardName) {
-    InputDecoration inputDecoration(String label, {String? hint}) =>
+    InputDecoration inputDecoration(String label,
+            {String? hint, bool required = false, String? errorText}) =>
         InputDecoration(
-          labelText: label,
+          labelText: required ? null : label,
+          label: required ? requiredLabel(label) : null,
+          errorText: errorText,
           hintText: hint,
           labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
           hintStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
@@ -236,7 +239,7 @@ class _ReportWrongDataScreenState extends ConsumerState<ReportWrongDataScreen> {
           ),
           const SizedBox(height: AppSpace.lg),
         ],
-        Text(
+        requiredLabel(
           'Which field is wrong?',
           style: BambooFonts.ui(
             14.5,
@@ -250,7 +253,10 @@ class _ReportWrongDataScreenState extends ConsumerState<ReportWrongDataScreen> {
           style: BambooFonts.ui(12.5, color: BambooInk.ink500),
         ),
         const SizedBox(height: AppSpace.sm),
-        Container(
+        RequiredBox(
+          invalid: _tried && _selectedFieldPath == null,
+          radius: 16,
+          child: Container(
           decoration: BoxDecoration(
             color: BambooInk.glassFillOnPaper,
             borderRadius: BorderRadius.circular(16),
@@ -293,15 +299,18 @@ class _ReportWrongDataScreenState extends ConsumerState<ReportWrongDataScreen> {
               ],
             ),
           ),
-        ),
+        )),
         if (_selectedFieldPath == 'other') ...[
           const SizedBox(height: AppSpace.md),
           TextField(
             controller: _fieldController,
             style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+            onChanged: (_) => _tried ? setState(() {}) : null,
             decoration: inputDecoration(
               'Describe the field',
               hint: 'e.g. 5% cashback on dining',
+              required: true,
+              errorText: requiredError(_tried, _fieldController.text),
             ),
           ),
         ],

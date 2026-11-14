@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../app/required_field.dart';
 import '../../data/api_exception.dart';
 import '../consent/email_import_disclosure.dart';
 
@@ -57,6 +58,7 @@ class _ImapConnectionScreenState extends ConsumerState<ImapConnectionScreen> {
   final _portController = TextEditingController(text: '993');
   final _senderFilterController = TextEditingController();
   bool _saving = false;
+  bool _submitted = false;
 
   @override
   void dispose() {
@@ -69,6 +71,11 @@ class _ImapConnectionScreenState extends ConsumerState<ImapConnectionScreen> {
   }
 
   Future<void> _save() async {
+    setState(() => _submitted = true);
+    if ([_emailController, _passwordController, _hostController, _portController]
+        .any((c) => c.text.trim().isEmpty)) {
+      return;
+    }
     final repo = ref.read(importRepositoryProvider);
     if (repo == null) return;
     setState(() => _saving = true);
@@ -107,9 +114,15 @@ class _ImapConnectionScreenState extends ConsumerState<ImapConnectionScreen> {
   @override
   Widget build(BuildContext context) {
     final connection = ref.watch(imapConnectionProvider);
-    InputDecoration inputDecoration(String label, {String? hint, String? helper, Widget? suffixIcon}) =>
+    InputDecoration inputDecoration(String label,
+            {String? hint,
+            String? helper,
+            Widget? suffixIcon,
+            TextEditingController? required}) =>
         InputDecoration(
-          labelText: label,
+          labelText: required == null ? label : null,
+          label: required == null ? null : requiredLabel(label),
+          errorText: required == null ? null : requiredError(_submitted, required.text),
           hintText: hint,
           helperText: helper,
           suffixIcon: suffixIcon,
@@ -246,15 +259,18 @@ class _ImapConnectionScreenState extends ConsumerState<ImapConnectionScreen> {
             TextField(
               controller: _emailController,
               style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-              decoration: inputDecoration('Email address'),
+              onChanged: (_) => _submitted ? setState(() {}) : null,
+              decoration: inputDecoration('Email address', required: _emailController),
             ),
             const SizedBox(height: AppSpace.md),
             TextField(
               controller: _passwordController,
               obscureText: true,
+              onChanged: (_) => _submitted ? setState(() {}) : null,
               style: BambooFonts.ui(14.5, color: BambooInk.ink900),
               decoration: inputDecoration(
                 'App password',
+                required: _passwordController,
                 helper: 'Not your normal password.',
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.help_outline_rounded, size: 18, color: BambooInk.ink500),
@@ -283,7 +299,8 @@ class _ImapConnectionScreenState extends ConsumerState<ImapConnectionScreen> {
                   child: TextField(
                     controller: _hostController,
                     style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-                    decoration: inputDecoration('IMAP server'),
+                    onChanged: (_) => _submitted ? setState(() {}) : null,
+                    decoration: inputDecoration('IMAP server', required: _hostController),
                   ),
                 ),
                 const SizedBox(width: AppSpace.sm),
@@ -292,7 +309,8 @@ class _ImapConnectionScreenState extends ConsumerState<ImapConnectionScreen> {
                     controller: _portController,
                     keyboardType: TextInputType.number,
                     style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-                    decoration: inputDecoration('Port'),
+                    onChanged: (_) => _submitted ? setState(() {}) : null,
+                    decoration: inputDecoration('Port', required: _portController),
                   ),
                 ),
               ],

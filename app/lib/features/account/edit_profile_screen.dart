@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../app/required_field.dart';
 import '../../data/account_name_api.dart';
 import '../../data/api_exception.dart';
 import '../settings/feedback_support_screen.dart';
@@ -35,6 +36,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _lastController = TextEditingController();
   String get _typedName => '${_nameController.text} ${_lastController.text}';
   bool _seeded = false;
+  bool _submitted = false;
   bool _saving = false;
   bool _avatarBusy = false;
   bool _sharingBusy = false;
@@ -68,6 +70,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       AccountNameApi.clean(_typedName) != AccountNameApi.clean(_savedName);
 
   Future<void> _saveName() async {
+    // First and last name are both required.
+    if (_nameController.text.trim().isEmpty ||
+        _lastController.text.trim().isEmpty) {
+      setState(() => _submitted = true);
+      return;
+    }
     final problem = AccountNameApi.problemWith(_typedName);
     if (problem != null) {
       setState(() => _error = problem);
@@ -321,8 +329,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       onChanged: (_) => setState(() => _error = null), // also clears Required
                       style: BambooFonts.ui(16, color: BambooInk.ink900),
                       decoration: InputDecoration(
-                        labelText: 'First name',
-                        errorText: _error,
+                        label: requiredLabel('First name'),
+                        errorText:
+                            requiredError(_submitted, _nameController.text) ??
+                            _error,
                         errorMaxLines: 3,
                         border: const OutlineInputBorder(),
                       ),
@@ -339,9 +349,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       onChanged: (_) => setState(() => _error = null),
                       onSubmitted: (_) => _saving ? null : _saveName(),
                       style: BambooFonts.ui(16, color: BambooInk.ink900),
-                      decoration: const InputDecoration(
-                        labelText: 'Last name (optional)',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        label: requiredLabel('Last name'),
+                        errorText: requiredError(
+                          _submitted,
+                          _lastController.text,
+                        ),
+                        border: const OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: AppSpace.sm),
@@ -354,7 +368,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       key: const Key('edit-name-save'),
                       label: _saving ? 'Saving…' : 'Save name',
                       filled: true,
-                      onPressed: _saving || !_dirty ? null : _saveName,
+                      // An unchanged, complete name has nothing to save; a
+                      // missing first or last name stays tappable so it is flagged.
+                      onPressed:
+                          _saving ||
+                              (!_dirty &&
+                                  _nameController.text.trim().isNotEmpty &&
+                                  _lastController.text.trim().isNotEmpty)
+                          ? null
+                          : _saveName,
                     ),
                   ],
                 ),

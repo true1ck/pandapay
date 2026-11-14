@@ -14,6 +14,14 @@ import 'package:pandapay/data/user_cards_repository.dart' show TxnInstrument;
 import 'package:pandapay/features/import/import_mapping_dialog.dart';
 import 'package:pandapay/features/import/import_review_panel.dart';
 
+/// Required fields use a rich-text `label` (text + red ' *'), so match on it.
+Finder _field(String label) => find.byWidgetPredicate((w) {
+  if (w is! TextField) return false;
+  final l = w.decoration?.label;
+  return w.decoration?.labelText == label ||
+      (l is Text && (l.textSpan?.toPlainText() ?? l.data ?? '').startsWith(label));
+});
+
 void main() {
   testWidgets('income appears in the preview and can be corrected', (
     tester,
@@ -273,10 +281,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(edit);
       await tester.pumpAndSettle();
-      final dateField = find.widgetWithText(
-        TextField,
-        'Date (YYYY-MM-DD, optional time)',
-      );
+      final dateField = _field('Date (YYYY-MM-DD, optional time)');
       await tester.ensureVisible(dateField);
       await tester.enterText(dateField, '2026-06-11');
       await tester.tap(find.text('Save reviewed row'));
@@ -354,15 +359,15 @@ void main() {
       await tester.tap(find.text('Correct'));
       await tester.pumpAndSettle();
       await tester.enterText(
-        find.widgetWithText(TextField, 'Date (YYYY-MM-DD, optional time)'),
+        _field('Date (YYYY-MM-DD, optional time)'),
         '2026-02-30',
       );
       await tester.enterText(
-        find.widgetWithText(TextField, 'Description'),
+        _field('Description'),
         'Coffee',
       );
       await tester.enterText(
-        find.widgetWithText(TextField, 'Amount (INR)'),
+        _field('Amount (INR)'),
         '100.25',
       );
       await tester.tap(find.text('Save reviewed row'));
@@ -372,7 +377,7 @@ void main() {
         findsNWidgets(2),
       );
       await tester.enterText(
-        find.widgetWithText(TextField, 'Date (YYYY-MM-DD, optional time)'),
+        _field('Date (YYYY-MM-DD, optional time)'),
         '2026-10-02',
       );
       await tester.tap(find.text('Save reviewed row'));
@@ -434,10 +439,7 @@ void main() {
       expect(
         tester
             .widget<TextField>(
-              find.widgetWithText(
-                TextField,
-                'Header row number (0 = no header)',
-              ),
+              _field('Header row number (0 = no header)'),
             )
             .controller!
             .text,

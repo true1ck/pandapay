@@ -92,6 +92,14 @@ List<Override> _deterministicOverrides() => [
   ),
 ];
 
+/// Required fields use a rich-text `label` (text + red ' *'), so match on it.
+Finder _field(String label) => find.byWidgetPredicate((w) {
+  if (w is! TextField) return false;
+  final l = w.decoration?.label;
+  return w.decoration?.labelText == label ||
+      (l is Text && (l.textSpan?.toPlainText() ?? l.data ?? '').startsWith(label));
+});
+
 void main() {
   testWidgets('bill message opens prefilled details and saves the chosen card', (
     tester,
@@ -134,9 +142,9 @@ void main() {
 
     expect(find.text('Review credit-card bill'), findsOneWidget);
     expect(find.textContaining('Your HDFC Credit Card bill'), findsOneWidget);
-    expect(tester.widget<TextField>(find.widgetWithText(TextField, 'Amount due (₹)'))
+    expect(tester.widget<TextField>(_field('Amount due (₹)'))
         .controller!.text, '8331.00');
-    expect(tester.widget<TextField>(find.widgetWithText(TextField, 'Payment due date'))
+    expect(tester.widget<TextField>(_field('Payment due date'))
         .controller!.text, '2026-11-08');
 
     await tester.tap(find.byType(DropdownButtonFormField<String>));
@@ -1099,7 +1107,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Modal bottom sheet should be open with prefilled values
-      expect(find.text('Total amount due'), findsOneWidget);
+      expect(find.text('Total amount due *', findRichText: true), findsOneWidget);
       expect(find.text('8331'), findsOneWidget);
       expect(find.text('Minimum amount due (optional)'), findsOneWidget);
       expect(find.text('500'), findsOneWidget);
@@ -1178,7 +1186,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Sheet should be dismissed
-      expect(find.text('Total amount due'), findsNothing);
+      expect(find.text('Total amount due *', findRichText: true), findsNothing);
 
       // Verify the assignment was recorded in store
       final assignments = cache.financialStore.cardBillAssignments('user:test');

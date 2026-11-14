@@ -5,6 +5,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
+import '../../app/required_field.dart';
 import '../../data/card_bill_ledger.dart';
 import '../../data/user_cards_repository.dart';
 
@@ -119,6 +120,7 @@ class _CardBillReviewSheetState extends ConsumerState<_CardBillReviewSheet> {
   String? _cardId;
   String? _error;
   bool _saving = false;
+  bool _submitted = false;
 
   @override
   void initState() {
@@ -151,10 +153,16 @@ class _CardBillReviewSheetState extends ConsumerState<_CardBillReviewSheet> {
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-    if (picked != null) controller.text = _dateText(picked);
+    if (picked != null) setState(() => controller.text = _dateText(picked));
   }
 
   Future<void> _save() async {
+    setState(() => _submitted = true);
+    if (_cardId == null ||
+        _amount.text.trim().isEmpty ||
+        _due.text.trim().isEmpty) {
+      return;
+    }
     final amount = double.tryParse(_amount.text.trim().replaceAll(',', ''));
     final due = DateTime.tryParse(_due.text.trim());
     final statement = _statement.text.trim().isEmpty
@@ -211,9 +219,11 @@ class _CardBillReviewSheetState extends ConsumerState<_CardBillReviewSheet> {
                     style: BambooFonts.ui(12, color: BambooInk.ink700)),
               ],
               const SizedBox(height: AppSpace.md),
-              DropdownButtonFormField<String>(
+              RequiredBox(
+                invalid: _submitted && _cardId == null,
+                child: DropdownButtonFormField<String>(
                 initialValue: available.any((c) => c.id == _cardId) ? _cardId : null,
-                decoration: const InputDecoration(labelText: 'Card'),
+                decoration: InputDecoration(label: requiredLabel('Card')),
                 items: [
                   for (final card in available)
                     DropdownMenuItem(
@@ -224,10 +234,17 @@ class _CardBillReviewSheetState extends ConsumerState<_CardBillReviewSheet> {
                 ],
                 onChanged: (value) => setState(() => _cardId = value),
               ),
+              ),
               const SizedBox(height: AppSpace.sm),
               TextField(
                 controller: _amount,
-                decoration: const InputDecoration(labelText: 'Amount due (₹)'),
+                onChanged: (_) {
+                  if (_submitted) setState(() {});
+                },
+                decoration: InputDecoration(
+                  label: requiredLabel('Amount due (₹)'),
+                  errorText: requiredError(_submitted, _amount.text),
+                ),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
               ),
               const SizedBox(height: AppSpace.sm),
@@ -235,10 +252,11 @@ class _CardBillReviewSheetState extends ConsumerState<_CardBillReviewSheet> {
                 controller: _due,
                 readOnly: true,
                 onTap: () => _pickDate(_due),
-                decoration: const InputDecoration(
-                  labelText: 'Payment due date',
+                decoration: InputDecoration(
+                  label: requiredLabel('Payment due date'),
+                  errorText: requiredError(_submitted, _due.text),
                   hintText: 'Choose date',
-                  suffixIcon: Icon(Icons.calendar_today_outlined),
+                  suffixIcon: const Icon(Icons.calendar_today_outlined),
                 ),
               ),
               const SizedBox(height: AppSpace.sm),

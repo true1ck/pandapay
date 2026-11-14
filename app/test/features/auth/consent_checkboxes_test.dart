@@ -109,7 +109,7 @@ void main() {
       await tester.tap(find.text('Send code'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Verification code'), findsOneWidget);
+      expect(find.text('Verification code *', findRichText: true), findsOneWidget);
       expect(find.text('Code already sent'), findsOneWidget);
       // Its exact expiry is unknown, so no made-up countdown and resend
       // stays available.
@@ -146,9 +146,9 @@ void main() {
     await tester.pump();
 
     final submit = find.widgetWithText(FilledButton, 'Send verification code');
-    // Email and phone are valid, but the required Terms box is unchecked —
-    // the button must read as inert, not just reject the tap.
-    expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+    // Email and phone are valid, but the required Terms box is unchecked. The
+    // button stays enabled (tapping shows what's missing) yet sends nothing.
+    expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
     await tester.ensureVisible(submit);
     await tester.tap(submit, warnIfMissed: false);
     await tester.pumpAndSettle();
@@ -158,7 +158,10 @@ void main() {
     await tester.tap(find.byType(CheckboxListTile).at(0)); // required Terms
     await tester.pump();
     // Terms alone is not enough: the age confirmation is required too.
-    expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+    await tester.ensureVisible(submit);
+    await tester.tap(submit);
+    await tester.pumpAndSettle();
+    expect(otpRequested, isFalse);
     await tester.ensureVisible(find.byType(CheckboxListTile).at(1));
     await tester.tap(find.byType(CheckboxListTile).at(1)); // required 18+
     await tester.pump();
@@ -187,11 +190,11 @@ void main() {
     await tester.enterText(find.byType(TextField).at(1), '9876543210');
     await tester.pump();
 
-    expect(find.text('I am 18 or older.'), findsOneWidget);
+    expect(find.text('I am 18 or older. *', findRichText: true), findsOneWidget);
     expect(
       find.descendant(
         of: find.byType(CheckboxListTile).at(1),
-        matching: find.text('I am 18 or older.'),
+        matching: find.text('I am 18 or older. *', findRichText: true),
       ),
       findsOneWidget,
       reason: 'directly under the Terms box, before the optional choices',
@@ -208,7 +211,7 @@ void main() {
     await tester.ensureVisible(find.byType(CheckboxListTile).at(0));
     await tester.tap(find.byType(CheckboxListTile).at(0)); // Terms only
     await tester.pump();
-    expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+    expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
     await tester.ensureVisible(submit);
     await tester.tap(submit, warnIfMissed: false);
     await tester.pumpAndSettle();
@@ -223,16 +226,20 @@ void main() {
     expect(otpRequested, isTrue);
   });
 
-  testWidgets('unticking "I am 18 or older." disables sign-up again', (
+  testWidgets('unticking "I am 18 or older." blocks sign-up again', (
     tester,
   ) async {
+    var otpRequested = false;
     await tester.pumpWidget(
       wrap(
         overrides: [
           authApiProvider.overrideWithValue(
             AuthApi(
               authBaseUrl: 'http://auth.test',
-              client: MockClient((_) async => http.Response('{}', 200)),
+              client: MockClient((_) async {
+                otpRequested = true;
+                return http.Response('{}', 200);
+              }),
             ),
           ),
         ],
@@ -250,7 +257,10 @@ void main() {
     expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
     await tester.tap(find.byType(CheckboxListTile).at(1));
     await tester.pump();
-    expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+    await tester.ensureVisible(submit);
+    await tester.tap(submit);
+    await tester.pumpAndSettle();
+    expect(otpRequested, isFalse);
   });
 
   testWidgets('signing in does not ask for the age confirmation', (
@@ -299,12 +309,17 @@ void main() {
       );
 
       final submit = find.widgetWithText(FilledButton, 'Send code');
-      expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+      expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      expect(otpRequested, isFalse, reason: 'empty email sends nothing');
 
       expect(find.byType(TextField), findsOneWidget, reason: 'log-in is email only');
       await tester.enterText(find.byType(TextField).at(0), 'not-an-email');
       await tester.pump();
-      expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      expect(otpRequested, isFalse, reason: 'invalid email sends nothing');
 
       await tester.enterText(find.byType(TextField).at(0), 'sujay@example.com');
       await tester.pump();
@@ -447,7 +462,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // OTP step now showing.
-      expect(find.text('Verification code'), findsOneWidget);
+      expect(find.text('Verification code *', findRichText: true), findsOneWidget);
       await tester.enterText(find.byType(TextField).first, '1234');
       await tester.tap(find.text('Verify & continue'));
       await tester.pumpAndSettle();

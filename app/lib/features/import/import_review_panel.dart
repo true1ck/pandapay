@@ -8,6 +8,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
+import '../../app/required_field.dart';
 import '../../app/env.dart';
 import 'statement_import_continuation_provider.dart';
 import '../../data/api_exception.dart';
@@ -1244,6 +1245,7 @@ class _EditImportRowState extends State<_EditImportRow> {
     String? errorText,
     String? helperText,
     int? helperMaxLines,
+    bool required = false,
   }) {
     final border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(16),
@@ -1253,7 +1255,8 @@ class _EditImportRowState extends State<_EditImportRow> {
       ),
     );
     return InputDecoration(
-      labelText: label,
+      labelText: required ? null : label,
+      label: required ? requiredLabel(label) : null,
       helperText: helperText,
       helperMaxLines: helperMaxLines,
       errorText: errorText,
@@ -1494,6 +1497,7 @@ class _EditImportRowState extends State<_EditImportRow> {
                         }),
                         decoration: _fieldDecoration(
                           'Date (YYYY-MM-DD, optional time)',
+                          required: true,
                           errorText: fieldErrors['date'],
                         ),
                       ),
@@ -1506,6 +1510,7 @@ class _EditImportRowState extends State<_EditImportRow> {
                         }),
                         decoration: _fieldDecoration(
                           'Description',
+                          required: true,
                           errorText: fieldErrors['description'],
                         ),
                       ),
@@ -1521,6 +1526,7 @@ class _EditImportRowState extends State<_EditImportRow> {
                         ),
                         decoration: _fieldDecoration(
                           'Amount (INR)',
+                          required: true,
                           errorText: fieldErrors['amount'],
                         ),
                       ),

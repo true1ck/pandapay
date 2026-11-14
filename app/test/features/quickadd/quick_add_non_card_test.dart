@@ -177,7 +177,7 @@ void main() {
 
   testWidgets('a credit-card entry still requires a card', (tester) async {
     // The default path must be unchanged: with no card chosen and the
-    // instrument left on credit card, Save stays disabled.
+    // instrument left on credit card, Save is rejected and the card is flagged.
     await _pump(tester, _RecordingUserCardsRepository());
     await tester.enterText(
       find.byKey(const ValueKey('quick-add-amount-field')),
@@ -186,6 +186,9 @@ void main() {
     await tester.pumpAndSettle();
 
     final button = tester.widget<FilledButton>(await _saveButton(tester));
-    expect(button.onPressed, isNull);
+    expect(button.onPressed, isNotNull);
+    await tester.tap(await _saveButton(tester));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose a card'), findsOneWidget);
   });
 }

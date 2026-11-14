@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../app/design/app_theme.dart';
+import '../../../app/required_field.dart';
 import 'shared_components.dart';
 
 /// One-field bottom sheet used to name a new friend or group. It replaces the
@@ -90,7 +91,10 @@ class _SharedNameSheetState extends State<SharedNameSheet> {
           textCapitalization: TextCapitalization.words,
           textInputAction: TextInputAction.done,
           style: BambooFonts.ui(15),
-          decoration: InputDecoration(labelText: widget.label),
+          decoration: InputDecoration(
+            label: requiredLabel(widget.label),
+            errorText: _error,
+          ),
           onChanged: (_) {
             if (_error != null) setState(() => _error = null);
           },
@@ -98,10 +102,6 @@ class _SharedNameSheetState extends State<SharedNameSheet> {
         ),
         const SizedBox(height: 8),
         Text(widget.hint, style: BambooFonts.ui(12, color: BambooInk.ink700)),
-        if (_error != null) ...[
-          const SizedBox(height: 8),
-          Text(_error!, style: BambooFonts.ui(13, color: BambooInk.clayInk)),
-        ],
         const SizedBox(height: 16),
         FilledButton(
           style: sharedPrimaryButtonStyle(),

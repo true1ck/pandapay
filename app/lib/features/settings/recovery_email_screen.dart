@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
+import '../../app/required_field.dart';
 import '../../data/api_exception.dart';
 import '../../data/recovery_email_api.dart';
 import '../auth/recovery_email_reminder.dart';
@@ -34,6 +35,7 @@ class _RecoveryEmailScreenState extends ConsumerState<RecoveryEmailScreen> {
   final _recoveryCodeController = TextEditingController();
   _Step _step = _Step.enterEmail;
   bool _busy = false;
+  bool _submitted = false;
   String? _error;
   RecoveryEmailChallenge? _challenge;
   String? _savedHint;
@@ -73,7 +75,13 @@ class _RecoveryEmailScreenState extends ConsumerState<RecoveryEmailScreen> {
     return null;
   }
 
+  void _changed(String _) {
+    if (_submitted) setState(() {});
+  }
+
   Future<void> _sendCodes() async {
+    setState(() => _submitted = true);
+    if (_emailController.text.trim().isEmpty) return;
     final problem = _emailProblem(_emailController.text);
     if (problem != null) {
       setState(() => _error = problem);
@@ -95,6 +103,7 @@ class _RecoveryEmailScreenState extends ConsumerState<RecoveryEmailScreen> {
       setState(() {
         _challenge = challenge;
         _step = _Step.enterCodes;
+        _submitted = false;
         _signInCodeController.clear();
         _recoveryCodeController.clear();
       });
@@ -107,6 +116,11 @@ class _RecoveryEmailScreenState extends ConsumerState<RecoveryEmailScreen> {
   }
 
   Future<void> _save() async {
+    setState(() => _submitted = true);
+    if (_signInCodeController.text.trim().isEmpty ||
+        _recoveryCodeController.text.trim().isEmpty) {
+      return;
+    }
     final signIn = _signInCodeController.text.trim();
     final recovery = _recoveryCodeController.text.trim();
     if (!RegExp(r'^\d{6}$').hasMatch(signIn) || !RegExp(r'^\d{6}$').hasMatch(recovery)) {
@@ -153,6 +167,7 @@ class _RecoveryEmailScreenState extends ConsumerState<RecoveryEmailScreen> {
     _ticker?.cancel();
     setState(() {
       _step = _Step.enterEmail;
+      _submitted = false;
       _challenge = null;
       _error = null;
     });
@@ -201,9 +216,10 @@ class _RecoveryEmailScreenState extends ConsumerState<RecoveryEmailScreen> {
       textInputAction: TextInputAction.done,
       autofillHints: const [AutofillHints.email],
       onSubmitted: (_) => _busy ? null : _sendCodes(),
+      onChanged: _changed,
       decoration: InputDecoration(
-        labelText: 'Recovery email address',
-        errorText: _error,
+        label: requiredLabel('Recovery email address'),
+        errorText: requiredError(_submitted, _emailController.text) ?? _error,
         errorMaxLines: 4,
         border: const OutlineInputBorder(),
       ),
@@ -292,7 +308,12 @@ class _RecoveryEmailScreenState extends ConsumerState<RecoveryEmailScreen> {
         FilteringTextInputFormatter.digitsOnly,
         LengthLimitingTextInputFormatter(6),
       ],
-      decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+      onChanged: _changed,
+      decoration: InputDecoration(
+        label: requiredLabel(label),
+        errorText: requiredError(_submitted, controller.text),
+        border: const OutlineInputBorder(),
+      ),
     );
   }
 

@@ -6,6 +6,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../app/required_field.dart';
 import '../../data/api_exception.dart';
 
 /// ui-spec.md A8 Request Unsupported Card — also reachable from C8, per
@@ -34,6 +35,7 @@ class _RequestUnsupportedCardScreenState extends ConsumerState<RequestUnsupporte
   CardNetwork? _networkGuess;
   XFile? _photo;
   bool _submitting = false;
+  bool _tried = false;
   String? _error;
 
   @override
@@ -58,6 +60,8 @@ class _RequestUnsupportedCardScreenState extends ConsumerState<RequestUnsupporte
       _issuerController.text.trim().isNotEmpty && _productController.text.trim().isNotEmpty;
 
   Future<void> _submit() async {
+    setState(() => _tried = true);
+    if (!_canSubmit) return;
     final api = ref.read(cardRequestsApiProvider);
     if (api == null) {
       setState(() => _error = 'Sign in to request a card.');
@@ -113,13 +117,19 @@ class _RequestUnsupportedCardScreenState extends ConsumerState<RequestUnsupporte
             const SizedBox(height: AppSpace.xl),
             TextField(
               controller: _issuerController,
-              decoration: const InputDecoration(labelText: 'Issuer (e.g. HDFC Bank)'),
+              decoration: InputDecoration(
+                label: requiredLabel('Issuer (e.g. HDFC Bank)'),
+                errorText: requiredError(_tried, _issuerController.text),
+              ),
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: AppSpace.lg),
             TextField(
               controller: _productController,
-              decoration: const InputDecoration(labelText: 'Card name (e.g. Millennia)'),
+              decoration: InputDecoration(
+                label: requiredLabel('Card name (e.g. Millennia)'),
+                errorText: requiredError(_tried, _productController.text),
+              ),
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: AppSpace.lg),
@@ -188,7 +198,7 @@ class _RequestUnsupportedCardScreenState extends ConsumerState<RequestUnsupporte
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
               ),
-              onPressed: !_canSubmit || _submitting ? null : _submit,
+              onPressed: _submitting ? null : _submit,
               child: _submitting
                   ? const SizedBox(
                       width: 18,

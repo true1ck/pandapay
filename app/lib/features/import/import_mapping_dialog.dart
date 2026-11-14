@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../app/design/bamboo_components.dart';
+import '../../app/required_field.dart';
 
 import '../../data/csv_statement_parser.dart';
 import '../../data/import_models.dart';
@@ -27,6 +28,7 @@ class _ImportMappingDialogState extends State<ImportMappingDialog> {
   int _header = -1;
   Map<ImportColumn, int> _columns = {};
   String? _error;
+  bool _submitted = false;
   List<List<String>> get rows => widget.tables[_sheet] ?? [];
   @override
   void initState() {
@@ -192,10 +194,12 @@ class _ImportMappingDialogState extends State<ImportMappingDialog> {
                 TextField(
                   controller: _headerInput,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Header row number (0 = no header)',
+                  decoration: InputDecoration(
+                    label: requiredLabel('Header row number (0 = no header)'),
+                    errorText: requiredError(_submitted, _headerInput.text),
                   ),
                   onChanged: (value) {
+                    if (_submitted) setState(() {});
                     final row = int.tryParse(value);
                     if (row != null && row >= 0 && row <= rows.length) {
                       setState(() {
@@ -259,6 +263,8 @@ class _ImportMappingDialogState extends State<ImportMappingDialog> {
         FilledButton(
           style: BambooButtons.primary,
           onPressed: () {
+            setState(() => _submitted = true);
+            if (rows.isNotEmpty && _headerInput.text.trim().isEmpty) return;
             final headerNumber = int.tryParse(_headerInput.text);
             if (rows.isNotEmpty &&
                 (headerNumber == null ||

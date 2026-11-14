@@ -4,6 +4,7 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../app/design/app_theme.dart';
+import '../../../app/required_field.dart';
 import '../data/shared_directory.dart';
 import '../data/shared_invitations.dart';
 import '../data/shared_transport.dart';
@@ -410,7 +411,11 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
           textCapitalization: TextCapitalization.words,
           textInputAction: TextInputAction.next,
           style: BambooFonts.ui(15),
-          decoration: const InputDecoration(labelText: 'Friend name'),
+          decoration: InputDecoration(
+            label: requiredLabel('Friend name'),
+            errorText: requiredError(_error != null, _name.text),
+          ),
+          onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 12),
         TextField(
@@ -443,7 +448,7 @@ class _AddFriendState extends State<SharedAddFriendSheet> {
           'Add the mobile number they use on PandaPay and the invite reaches them in the app, with a notification. Without a number, nothing is sent until you share a link. You can still add expenses meanwhile.',
           style: BambooFonts.ui(12, color: BambooInk.ink700),
         ),
-        if (_error != null) ...[
+        if (_error != null && _name.text.trim().isNotEmpty) ...[
           const SizedBox(height: 8),
           Text(_error!, style: BambooFonts.ui(13, color: BambooInk.clayInk)),
         ],

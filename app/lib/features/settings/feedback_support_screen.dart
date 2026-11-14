@@ -7,6 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../app/required_field.dart';
 import '../../data/api_exception.dart';
 import '../../data/support_api.dart';
 import '../onboarding/request_unsupported_card_screen.dart';
@@ -75,6 +76,7 @@ class _FeedbackFormState extends ConsumerState<_FeedbackForm> {
   late String _kind;
   late final TextEditingController _messageController;
   bool _submitting = false;
+  bool _submitted = false;
   String? _error;
 
   PackageInfo? _packageInfo;
@@ -115,10 +117,8 @@ class _FeedbackFormState extends ConsumerState<_FeedbackForm> {
 
   Future<void> _submit() async {
     final message = _messageController.text.trim();
-    if (message.isEmpty) {
-      setState(() => _error = 'Please describe the issue before sending.');
-      return;
-    }
+    setState(() => _submitted = true);
+    if (message.isEmpty) return;
     if (_packageInfo == null) {
       // Diagnostics must be real values, not sent ahead of loading them —
       // guard rather than send a partial/placeholder payload.
@@ -207,7 +207,7 @@ class _FeedbackFormState extends ConsumerState<_FeedbackForm> {
           ),
         ],
         const SizedBox(height: AppSpace.xl),
-        Text(
+        requiredLabel(
           'Tell us what happened',
           style: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.ink500),
         ),
@@ -217,8 +217,12 @@ class _FeedbackFormState extends ConsumerState<_FeedbackForm> {
           minLines: 4,
           maxLines: 8,
           maxLength: 4000,
+          onChanged: (_) {
+            if (_submitted) setState(() {});
+          },
           style: BambooFonts.ui(14.5, color: BambooInk.ink900),
           decoration: InputDecoration(
+            errorText: requiredError(_submitted, _messageController.text),
             hintText: 'Describe the issue or request…',
             hintStyle: BambooFonts.ui(14, color: BambooInk.ink500),
             filled: true,

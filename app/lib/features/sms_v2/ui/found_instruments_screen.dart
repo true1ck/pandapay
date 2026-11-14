@@ -7,6 +7,7 @@ import 'package:pandapay_domain/sms_v2.dart';
 import '../../../app/design/app_theme.dart';
 import '../../../app/design/bamboo_components.dart';
 import '../../../app/design/widgets.dart';
+import '../../../app/required_field.dart';
 
 import '../../../app/providers.dart' as app;
 import '../../cards/card_picker_screen.dart';
@@ -563,6 +564,7 @@ class _RenameDialog extends StatefulWidget {
 
 class _RenameDialogState extends State<_RenameDialog> {
   late final _controller = TextEditingController(text: widget.name);
+  bool _submitted = false;
   @override
   void dispose() {
     _controller.dispose();
@@ -576,9 +578,13 @@ class _RenameDialogState extends State<_RenameDialog> {
       controller: _controller,
       autofocus: true,
       maxLength: 80,
-      decoration: const InputDecoration(
-        labelText: 'Name',
-        prefixIcon: Icon(Icons.edit_outlined),
+      onChanged: (_) {
+        if (_submitted) setState(() {});
+      },
+      decoration: InputDecoration(
+        label: requiredLabel('Name'),
+        errorText: requiredError(_submitted, _controller.text),
+        prefixIcon: const Icon(Icons.edit_outlined),
       ),
     ),
     actions: [
@@ -589,7 +595,11 @@ class _RenameDialogState extends State<_RenameDialog> {
       ),
       FilledButton(
         style: BambooButtons.primary,
-        onPressed: () => Navigator.pop(context, _controller.text),
+        onPressed: () {
+          setState(() => _submitted = true);
+          if (_controller.text.trim().isEmpty) return;
+          Navigator.pop(context, _controller.text);
+        },
         child: const Text('Save'),
       ),
     ],

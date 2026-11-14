@@ -1290,6 +1290,14 @@ class _OnCardAmountField extends StatelessWidget {
                     contentPadding: const EdgeInsets.symmetric(vertical: 10),
                     border: InputBorder.none,
                     hintText: 'Amount',
+                    suffix: const Text(
+                      '*',
+                      style: TextStyle(
+                        color: BambooInk.clayInk,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 20,
+                      ),
+                    ),
                     hintStyle: BambooFonts.money(
                       24,
                       color: BambooInk.ink500.withValues(alpha: 0.5),

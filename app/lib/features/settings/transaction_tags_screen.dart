@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../app/required_field.dart';
 import '../../app/transaction_tag_picker.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
@@ -95,6 +96,7 @@ class _TransactionTagsScreenState extends ConsumerState<TransactionTagsScreen> {
         .toList();
     if (targets.isEmpty) return;
     String? targetId;
+    var submitted = false;
     final selected = await showDialog<String>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -108,18 +110,23 @@ class _TransactionTagsScreenState extends ConsumerState<TransactionTagsScreen> {
                 'Move its ${repository.usageCount(source.id)} transactions to another tag, then archive “${source.name}”. Transactions already using both tags are counted once.',
               ),
               const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                isExpanded: true,
-                initialValue: targetId,
-                decoration: const InputDecoration(labelText: 'Merge into'),
-                items: [
-                  for (final tag in targets)
-                    DropdownMenuItem(
-                      value: tag.id,
-                      child: Text(tag.name, overflow: TextOverflow.ellipsis),
-                    ),
-                ],
-                onChanged: (value) => setDialogState(() => targetId = value),
+              RequiredBox(
+                invalid: submitted && targetId == null,
+                child: DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  initialValue: targetId,
+                  decoration: InputDecoration(
+                    label: requiredLabel('Merge into'),
+                  ),
+                  items: [
+                    for (final tag in targets)
+                      DropdownMenuItem(
+                        value: tag.id,
+                        child: Text(tag.name, overflow: TextOverflow.ellipsis),
+                      ),
+                  ],
+                  onChanged: (value) => setDialogState(() => targetId = value),
+                ),
               ),
             ],
           ),
@@ -130,9 +137,13 @@ class _TransactionTagsScreenState extends ConsumerState<TransactionTagsScreen> {
             ),
             FilledButton(
               style: BambooButtons.primary,
-              onPressed: targetId == null
-                  ? null
-                  : () => Navigator.of(context).pop(targetId),
+              onPressed: () {
+                if (targetId == null) {
+                  setDialogState(() => submitted = true);
+                  return;
+                }
+                Navigator.of(context).pop(targetId);
+              },
               child: const Text('Merge tags'),
             ),
           ],
@@ -301,6 +312,7 @@ class _TagEditorDialog extends StatefulWidget {
 class _TagEditorDialogState extends State<_TagEditorDialog> {
   late final _name = TextEditingController(text: widget.tag?.name ?? '');
   late String? _color = widget.tag?.color;
+  bool _submitted = false;
   static const _colors = <String?, String>{
     null: 'Default',
     '#52796F': 'Green',
@@ -330,9 +342,10 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
             autofocus: true,
             maxLength: 60,
             textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(
-              labelText: 'Tag name',
+            decoration: InputDecoration(
+              label: requiredLabel('Tag name'),
               hintText: 'e.g. Thailand trip',
+              errorText: requiredError(_submitted, _name.text),
             ),
             onChanged: (_) => setState(() {}),
           ),
@@ -366,9 +379,11 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
       ),
       FilledButton(
         style: BambooButtons.primary,
-        onPressed: _name.text.trim().isEmpty
-            ? null
-            : () => Navigator.of(context).pop((_name.text.trim(), _color)),
+        onPressed: () {
+          setState(() => _submitted = true);
+          if (_name.text.trim().isEmpty) return;
+          Navigator.of(context).pop((_name.text.trim(), _color));
+        },
         child: const Text('Save'),
       ),
     ],

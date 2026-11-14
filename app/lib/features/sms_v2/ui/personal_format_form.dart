@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../app/design/bamboo_components.dart';
+import '../../../app/required_field.dart';
 import 'package:pandapay_domain/sms_v2.dart';
 import '../personal/personal_format_service.dart';
 
@@ -101,9 +102,9 @@ class _PersonalFormatFormState extends State<PersonalFormatForm> {
         DropdownButtonFormField<int>(
           key: const Key('personal-amount'),
           isExpanded: true,
-          decoration: const InputDecoration(
-            labelText: 'Printed amount',
-            prefixIcon: Icon(Icons.currency_rupee_rounded),
+          decoration: InputDecoration(
+            label: requiredLabel('Printed amount'),
+            prefixIcon: const Icon(Icons.currency_rupee_rounded),
           ),
           items: [
             for (final (index, match) in _amounts.indexed)
@@ -176,9 +177,9 @@ class _PersonalFormatFormState extends State<PersonalFormatForm> {
         DropdownButtonFormField<String>(
           key: const Key('personal-instrument'),
           isExpanded: true,
-          decoration: const InputDecoration(
-            labelText: 'Account or card',
-            prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+          decoration: InputDecoration(
+            label: requiredLabel('Account or card'),
+            prefixIcon: const Icon(Icons.account_balance_wallet_outlined),
           ),
           items: [
             for (final i in widget.instruments.where(

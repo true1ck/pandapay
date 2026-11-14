@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
+import '../../app/required_field.dart';
 import '../../data/api_exception.dart';
 import '../../data/phone_api.dart';
 import '../auth/phone_input.dart';
@@ -33,6 +34,7 @@ class _PhoneChangeScreenState extends ConsumerState<PhoneChangeScreen> {
   final _codeController = TextEditingController();
   _Step _step = _Step.enterPhone;
   bool _busy = false;
+  bool _submitted = false;
   String? _error;
   PhoneChangeChallenge? _challenge;
   String? _savedHint;
@@ -65,7 +67,13 @@ class _PhoneChangeScreenState extends ConsumerState<PhoneChangeScreen> {
   String _clock(int seconds) =>
       '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
 
+  void _changed(String _) {
+    if (_submitted) setState(() {});
+  }
+
   Future<void> _sendCode() async {
+    setState(() => _submitted = true);
+    if (_phoneController.text.trim().isEmpty) return;
     final problem = indianMobileError(_phoneController.text);
     if (problem != null) {
       setState(() => _error = problem);
@@ -87,6 +95,7 @@ class _PhoneChangeScreenState extends ConsumerState<PhoneChangeScreen> {
       setState(() {
         _challenge = challenge;
         _step = _Step.enterCode;
+        _submitted = false;
         _codeController.clear();
       });
       _startCountdown(challenge.expiresAt);
@@ -98,6 +107,8 @@ class _PhoneChangeScreenState extends ConsumerState<PhoneChangeScreen> {
   }
 
   Future<void> _save() async {
+    setState(() => _submitted = true);
+    if (_codeController.text.trim().isEmpty) return;
     final code = _codeController.text.trim();
     if (!RegExp(r'^\d{6}$').hasMatch(code)) {
       setState(() => _error = 'Enter the 6-digit code.');
@@ -141,6 +152,7 @@ class _PhoneChangeScreenState extends ConsumerState<PhoneChangeScreen> {
     _ticker?.cancel();
     setState(() {
       _step = _Step.enterPhone;
+      _submitted = false;
       _challenge = null;
       _error = null;
     });
@@ -196,12 +208,15 @@ class _PhoneChangeScreenState extends ConsumerState<PhoneChangeScreen> {
         FilteringTextInputFormatter.allow(RegExp(r'[0-9 +().-]')),
         LengthLimitingTextInputFormatter(20),
       ],
+      onChanged: _changed,
       onSubmitted: (_) => _busy ? null : _sendCode(),
       style: BambooFonts.ui(16, color: BambooInk.ink900),
       decoration: InputDecoration(
-        labelText: widget.changing ? 'New mobile number' : 'Mobile number',
+        label: requiredLabel(
+          widget.changing ? 'New mobile number' : 'Mobile number',
+        ),
         prefixText: '+91  ',
-        errorText: _error,
+        errorText: requiredError(_submitted, _phoneController.text) ?? _error,
         errorMaxLines: 4,
         border: const OutlineInputBorder(),
       ),
@@ -241,10 +256,12 @@ class _PhoneChangeScreenState extends ConsumerState<PhoneChangeScreen> {
           FilteringTextInputFormatter.digitsOnly,
           LengthLimitingTextInputFormatter(6),
         ],
+        onChanged: _changed,
         onSubmitted: (_) => _busy || _expired ? null : _save(),
-        decoration: const InputDecoration(
-          labelText: 'Code from your email',
-          border: OutlineInputBorder(),
+        decoration: InputDecoration(
+          label: requiredLabel('Code from your email'),
+          errorText: requiredError(_submitted, _codeController.text),
+          border: const OutlineInputBorder(),
         ),
       ),
       if (_error != null) ...[

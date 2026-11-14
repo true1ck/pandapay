@@ -86,7 +86,7 @@ void main() {
   testWidgets('Save is disabled until the name changes, then saves the cleaned name', (tester) async {
     final requests = await mount(
       tester,
-      profile: {'id': 'p1', 'display_name': 'Asha', 'email': 'asha@example.com'},
+      profile: {'id': 'p1', 'display_name': 'Asha Rao', 'email': 'asha@example.com'},
       phone: typed('+91 •••• 3210'),
     );
     FilledButton save() => tester.widget<FilledButton>(
@@ -94,7 +94,7 @@ void main() {
     );
     expect(save().onPressed, isNull);
 
-    await tester.enterText(find.byKey(const Key('edit-name-field')), '  Asha   Rao ');
+    await tester.enterText(find.byKey(const Key('edit-name-field')), '  Meera   ');
     await tester.pump();
     expect(save().onPressed, isNotNull);
     await tester.tap(find.byKey(const Key('edit-name-save')));
@@ -102,7 +102,7 @@ void main() {
 
     expect(requests.first.method, 'PATCH');
     expect(requests.first.url.path, '/profile');
-    expect(jsonDecode(requests.first.body), {'display_name': 'Asha Rao'});
+    expect(jsonDecode(requests.first.body), {'display_name': 'Meera Rao'});
     expect(requests.last.method, 'PUT');
     expect(requests.last.url.path, '/users/me/name');
     expect(find.text('Name updated'), findsOneWidget);
@@ -136,10 +136,26 @@ void main() {
     expect(requests, isEmpty);
   });
 
+  testWidgets('first and last name are both required', (tester) async {
+    final requests = await mount(
+      tester,
+      profile: {'id': 'p1', 'display_name': 'Asha', 'email': 'asha@example.com'},
+      phone: typed('+91 •••• 3210'),
+    );
+    // A single-name account: Save stays tappable and flags the empty last name.
+    await tester.tap(find.byKey(const Key('edit-name-save')));
+    await tester.pumpAndSettle();
+    expect(find.text('Required'), findsOneWidget);
+    expect(requests, isEmpty);
+    await tester.enterText(find.byKey(const Key('edit-last-name-field')), 'Rao');
+    await tester.pump();
+    expect(find.text('Required'), findsNothing);
+  });
+
   testWidgets('a failed save keeps the form and shows an error', (tester) async {
     await mount(
       tester,
-      profile: {'id': 'p1', 'display_name': 'Asha', 'email': 'asha@example.com'},
+      profile: {'id': 'p1', 'display_name': 'Asha Rao', 'email': 'asha@example.com'},
       phone: typed('+91 •••• 3210'),
       reply: (_) => json({'error': 'display_name_invalid'}, 400),
     );

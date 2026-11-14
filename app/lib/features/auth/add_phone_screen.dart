@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
+import '../../app/required_field.dart';
 import '../../data/api_exception.dart';
 import '../settings/feedback_support_screen.dart';
 import 'account_sign_out_dialog.dart';
@@ -24,6 +25,7 @@ class AddPhoneScreen extends ConsumerStatefulWidget {
 class _AddPhoneScreenState extends ConsumerState<AddPhoneScreen> {
   final _controller = TextEditingController();
   bool _saving = false;
+  bool _submitted = false;
   String? _error;
   String? _errorCode;
 
@@ -43,6 +45,8 @@ class _AddPhoneScreenState extends ConsumerState<AddPhoneScreen> {
   }
 
   Future<void> _save() async {
+    setState(() => _submitted = true);
+    if (_controller.text.trim().isEmpty) return;
     final problem = indianMobileError(_controller.text);
     if (problem != null) {
       setState(() {
@@ -123,11 +127,15 @@ class _AddPhoneScreenState extends ConsumerState<AddPhoneScreen> {
                 LengthLimitingTextInputFormatter(20),
               ],
               onSubmitted: (_) => _saving ? null : _save(),
+              onChanged: (_) {
+                if (_submitted) setState(() {});
+              },
               style: BambooFonts.ui(16, color: BambooInk.ink900),
               decoration: InputDecoration(
-                labelText: 'Mobile number',
+                label: requiredLabel('Mobile number'),
                 prefixText: '+91  ',
-                errorText: _error,
+                errorText:
+                    requiredError(_submitted, _controller.text) ?? _error,
                 errorMaxLines: 4,
                 border: const OutlineInputBorder(),
               ),

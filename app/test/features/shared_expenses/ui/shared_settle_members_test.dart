@@ -391,7 +391,7 @@ void main() {
       expect(find.text('Pick from contacts'), findsOneWidget);
       await tester.tap(find.widgetWithText(FilledButton, 'Add person'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Enter the person'), findsOneWidget);
+      expect(find.text('Required'), findsOneWidget);
       expect(runtime.store.pendingCount, 0);
       await tester.enterText(find.byType(TextField).first, 'New Colleague');
       await tester.tap(find.widgetWithText(FilledButton, 'Add person'));
