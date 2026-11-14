@@ -59,7 +59,12 @@ class UserStateItem {
     required this.payload,
     required this.clientEditedAt,
     required this.deleted,
+    this.undecryptable = false,
   });
+
+  /// The server could not decrypt it (key rotated away): never a delete, never
+  /// applied.
+  final bool undecryptable;
   final String kind;
   final String key;
   final Map<String, dynamic>? payload;
@@ -74,11 +79,13 @@ class UserStateItem {
         DateTime.tryParse('${j['clientEditedAt']}')?.toUtc() ??
         DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
     deleted: j['deleted'] == true,
+    undecryptable: j['undecryptable'] == true,
   );
 }
 
 class UserStatePage {
-  UserStatePage(this.items, this.cursor);
+  UserStatePage(this.items, this.cursor, {this.hasMore = false});
+  final bool hasMore;
   final List<UserStateItem> items;
   final String? cursor;
 }
@@ -130,7 +137,7 @@ class UserStateApi {
     return UserStatePage([
       for (final i in (b['items'] as List? ?? const []))
         UserStateItem.fromJson((i as Map).cast<String, dynamic>()),
-    ], b['cursor']?.toString());
+    ], b['cursor']?.toString(), hasMore: b['hasMore'] == true);
   }
 
   /// Returns the server's copy when a newer server edit won, else null.
@@ -238,7 +245,7 @@ class UserStateLocal {
     }
     final paise = (b['balance_paise'] as num?)?.round() ?? 0;
     return (
-      payload: {...b, 'amount': paise / 100, 'label': key},
+      payload: {...b, 'amount': paise / 100, 'accountLabel': key, 'label': key},
       editedAtMs: row.editedAtMs,
     );
   }
@@ -275,6 +282,18 @@ class UserStateLocal {
     }
   }
 
+  /// True when none of the three stores holds a row (a fresh or restored phone).
+  bool get isEmpty =>
+      _db.select(
+        'SELECT 1 FROM subscription_overrides WHERE namespace=? LIMIT 1',
+        [ns],
+      ).isEmpty &&
+      _db.select(
+        "SELECT 1 FROM financial_entities WHERE namespace=? AND entity IN "
+        "('bill_card_assignments','manual_bank_balances') LIMIT 1",
+        [ns],
+      ).isEmpty;
+
   void remove(String kind, String key) {
     if (kind == UserStateKind.subscriptionOverride) {
       _db.execute(
@@ -306,7 +325,9 @@ bool applyUserStateItem(
   UserStateItem item, {
   int? pendingMs,
 }) {
-  if (!UserStateKind.all.contains(item.kind)) return false;
+  if (!UserStateKind.all.contains(item.kind) || item.undecryptable) {
+    return false;
+  }
   final mine = local.read(item.kind, item.key);
   final ms = item.clientEditedAt.millisecondsSinceEpoch;
   if (!serverWins(

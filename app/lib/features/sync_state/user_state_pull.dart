@@ -45,7 +45,8 @@ class UserStatePuller {
       if (at != null) pending[c.target] = at.millisecondsSinceEpoch;
     }
     var applied = 0;
-    var cursor = _cursors[local.ns];
+    // A phone holding none of this state (new, or just restored) starts over.
+    var cursor = local.isEmpty ? null : _cursors[local.ns];
     for (var page = 0; page < maxPages; page++) {
       final result = await api.pull(since: cursor);
       if (stillCurrent?.call() == false) return applied;
@@ -60,7 +61,7 @@ class UserStatePuller {
       }
       final next = result.cursor;
       if (next != null) _cursors[local.ns] = next;
-      if (result.items.length < 500 || next == null || next == cursor) break;
+      if (!result.hasMore || next == null || next == cursor) break;
       cursor = next;
     }
     return applied;
