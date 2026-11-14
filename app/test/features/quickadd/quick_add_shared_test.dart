@@ -182,6 +182,28 @@ void main() {
   }
 
   testWidgets(
+    'iOS back arrow and edge swipe leave the shared expense form',
+    (tester) async {
+      await launch(tester);
+      expect(find.text('Add shared expense'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Add shared expense'),
+        findsNothing,
+        reason: 'arrow tap',
+      );
+
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      expect(find.text('Add shared expense'), findsOneWidget);
+      await tester.dragFrom(const Offset(2, 400), const Offset(300, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('Add shared expense'), findsNothing, reason: 'swipe');
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+  );
+  testWidgets(
     'chooser separates friends from groups, even with the same name, and offers both creations',
     (tester) async {
       await launch(tester);
