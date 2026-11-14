@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/src/google_fonts_base.dart' as google_fonts_base;
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:pandapay/data/connectivity/server_backoff.dart';
 
 /// `google_fonts` downloads Outfit / IBM Plex on first use. Under the widget
 /// test binding every HTTP request is answered with status 400, so the
@@ -121,6 +122,10 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   // global across every test declared in every file, same as this
   // function wrapping every file's main().
   setUp(fakeSecureStorage.clear);
+  // The client-wide 429/503 pause is process state; never let one test's
+  // simulated outage pause the queues of the next.
+  setUp(ServerBackoff.process.resetForTest);
+  tearDown(ServerBackoff.process.resetForTest);
   // ApiRequestHeadersClient reads the app version from PackageInfo before each
   // API request; without a mock that platform call never completes under
   // FakeAsync and leaves the request in flight when a widget test ends.

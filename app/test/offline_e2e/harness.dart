@@ -14,6 +14,7 @@ import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/data/connectivity/server_backoff.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/app_status_repository.dart';
 import 'package:pandapay/data/authenticated_http_client.dart';
@@ -86,7 +87,11 @@ class OfflineApp {
 
   /// The fake clock behind the queues' backoff.
   DateTime clock = DateTime(2026, 11, 14, 9);
-  void advance(Duration d) => clock = clock.add(d);
+  // The 429/503 pause runs on real time; a simulated long wait ends it too.
+  void advance(Duration d) {
+    clock = clock.add(d);
+    ServerBackoff.process.resetForTest();
+  }
 
   String token = '';
   int refreshCalls = 0;
