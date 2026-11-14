@@ -7,7 +7,6 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/consents_api.dart';
-import 'package:pandapay/data/local_first/command_outbox.dart';
 import 'package:pandapay/features/consent/sms_access_disclosure.dart';
 import 'package:pandapay/features/consent/sms_reading_consent.dart';
 import 'package:shared_preferences/shared_preferences.dart';

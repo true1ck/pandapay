@@ -1,7 +1,7 @@
 import '../../../data/cached_regexp.dart';
 import '../../../data/spend_reports_repository.dart' show SpendBreakdownRow;
 import '../../../data/user_cards_repository.dart'
-    show TransactionEntry, TxnEntryKind;
+    show TransactionEntry;
 import '../understanding/date_grammar.dart';
 import '../voice_format.dart';
 import 'period_words.dart';

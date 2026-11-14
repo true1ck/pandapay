@@ -500,6 +500,7 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
     return requests;
   }
 
+  // ignore: unused_element -- the queue-first flow enqueues instead; kept until the batch path is removed
   Future<_DuplicateResolutionBatchResult> _resolveRequests(
     UserCardsRepository repository,
     List<_DuplicateResolutionRequest> requests, {
@@ -713,6 +714,7 @@ class _DuplicateResolutionBatchResult {
   final Object? error;
 }
 
+// ignore: unused_element -- kept for the batch resolve path; see _resolveRequests
 class _DuplicateResolutionBatchException implements Exception {
   const _DuplicateResolutionBatchException(
     this.cause, {

@@ -16,7 +16,6 @@ import 'package:pandapay_domain/pandapay_domain.dart' show CardProduct;
 import '../../../data/local/financial_store.dart';
 import '../../../data/connectivity/server_backoff.dart';
 import '../../../data/local_first/command_outbox.dart';
-import '../../../data/local_first/pending_overlays.dart' show OverlayCommand;
 import '../../../data/user_cards_repository.dart';
 import '../instruments/instrument_seeder.dart';
 import 'ai_withdrawal.dart';

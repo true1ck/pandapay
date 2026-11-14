@@ -1,10 +1,8 @@
-import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
-import 'package:pandapay/features/import/auto_sms_sync_screen.dart';
 import 'package:pandapay/features/onboarding/permission_art.dart';
 import 'package:pandapay/features/sms_import/sms_inbox_scanner.dart';
 

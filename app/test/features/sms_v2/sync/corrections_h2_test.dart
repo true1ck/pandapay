@@ -90,6 +90,7 @@ void main() {
     database.db.dispose();
   });
 
+  // ignore: unused_element -- fixture kept for the HTTP-level corrections tests
   http.Client server() => MockClient((request) async {
     if (!online) throw const SocketException('offline');
     switch (request.url.path) {

@@ -23,7 +23,6 @@ import '../../app/required_field.dart';
 import '../../app/providers.dart';
 import '../../app/transaction_tag_picker.dart';
 import '../../data/api_exception.dart';
-import '../../data/connectivity/reachability.dart' show serverReachabilityProvider;
 import '../../data/catalogue_repository.dart' show SpendCategory;
 import '../../data/receipt_parser.dart' show parseReceiptFields;
 import '../../data/receipt_ocr.dart' show ReceiptOcr;
