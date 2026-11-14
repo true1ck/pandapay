@@ -61,6 +61,27 @@ void main() {
     b.resetForTest();
   });
 
+  test('phone endpoints never pause either', () {
+    final b = ServerBackoff.test(now: () => t0, random: Random(1));
+    b.noteResponse(429, '30', path: '/users/me/phone');
+    b.noteResponse(429, '30', path: '/users/me/phone/change');
+    expect(b.isPaused, isFalse);
+  });
+
+  test('no Timer is armed unless something listens; a listener gets the resume',
+      () async {
+    final b = ServerBackoff.test(random: Random(1));
+    b.noteResponse(503, '1');
+    expect(b.isPaused, isTrue);
+    expect(b.hasPendingTimer, isFalse);
+
+    final resumed = b.resumed.first; // listening arms the timer
+    expect(b.hasPendingTimer, isTrue);
+    await resumed.timeout(const Duration(seconds: 3));
+    expect(b.isPaused, isFalse);
+    expect(b.hasPendingTimer, isFalse);
+  });
+
   test('a shorter later hint never shortens the pause', () {
     final b = ServerBackoff.test(now: () => t0, random: Random(1));
     b.noteResponse(503, '100');

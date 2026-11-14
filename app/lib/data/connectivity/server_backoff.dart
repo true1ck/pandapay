@@ -28,7 +28,9 @@ class ServerBackoff {
 
   DateTime? _until;
   Timer? _timer;
-  final _resumed = StreamController<void>.broadcast();
+  late final _resumed = StreamController<void>.broadcast(
+    onListen: _armIfListened,
+  );
 
   /// Fires once when a pause ends, so queues can retry without waiting for
   /// some other trigger.
@@ -55,7 +57,10 @@ class ServerBackoff {
   /// ignored.
   void noteResponse(int status, String? retryAfterHeader, {String? path}) {
     if (status != 429 && status != 503) return;
-    if (path != null && path.contains('/auth/')) return;
+    if (path != null &&
+        (path.contains('/auth/') || path.contains('/users/me/phone'))) {
+      return; // per-person limiters (OTP, phone), not server load
+    }
     var base = parseRetryAfter(retryAfterHeader, _now()) ?? defaultDelay;
     if (base < minDelay) base = minDelay;
     // Cap first, then jitter: phones told the same capped delay still spread.
@@ -74,7 +79,19 @@ class ServerBackoff {
       return; // keep the longer one
     _until = until;
     _timer?.cancel();
-    _timer = Timer(delay, () {
+    _timer = null;
+    _armIfListened();
+  }
+
+  /// The resume timer only exists while something listens to [resumed]; with
+  /// no queue listening, [isPaused] still follows the clock and no Timer is
+  /// left pending.
+  void _armIfListened() {
+    final until = _until;
+    if (until == null || _timer != null || !_resumed.hasListener) return;
+    final left = until.difference(_now());
+    _timer = Timer(left.isNegative ? Duration.zero : left, () {
+      _timer = null;
       _until = null;
       if (!_resumed.isClosed) _resumed.add(null);
     });
@@ -96,6 +113,10 @@ class ServerBackoff {
       return null;
     }
   }
+
+  /// True while a resume Timer is pending (tests assert there is none when
+  /// nothing listens).
+  bool get hasPendingTimer => _timer != null;
 
   void resetForTest() {
     _timer?.cancel();
