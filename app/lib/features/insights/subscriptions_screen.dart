@@ -11,6 +11,7 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../app/required_field.dart';
+import '../../data/server_clock.dart';
 import '../../data/local_first/pending_overlays.dart';
 import '../../data/api_exception.dart';
 import '../../data/bills_projection_api.dart';
@@ -437,7 +438,7 @@ class SubscriptionsScreen extends ConsumerWidget {
       // H3: a client uuid + clock make a retry safe. The add is queued and
       // shows on the list at once; the outbox sends it in the background.
       final id = Uuid().v4();
-      final editedAt = DateTime.now().toUtc();
+      final editedAt = ServerClock.instance.now().toUtc();
       if (!kInsightsLocalFirst) {
         await repository.createRecurring(
           displayName: draft.displayName,
@@ -1837,7 +1838,7 @@ class _SeriesCard extends ConsumerWidget {
               'nextExpectedOn':
                   '${n.year.toString().padLeft(4, '0')}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}',
               'autopayStatus': autopayStatus,
-              'clientEditedAt': DateTime.now().toUtc().toIso8601String(),
+              'clientEditedAt': ServerClock.instance.now().toUtc().toIso8601String(),
             },
           );
         }
@@ -1903,7 +1904,7 @@ class _SeriesCard extends ConsumerWidget {
           target: series.id,
           payload: {
             'id': series.id,
-            'clientEditedAt': DateTime.now().toUtc().toIso8601String(),
+            'clientEditedAt': ServerClock.instance.now().toUtc().toIso8601String(),
           },
           cancels: const [],
         );

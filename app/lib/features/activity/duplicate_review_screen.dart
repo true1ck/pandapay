@@ -380,31 +380,16 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
           keepTransactionId: request.keepTransactionId,
         );
       }
-      ref.invalidate(pendingOutboxCountProvider);
-      if (ref.read(isOnlineProvider).valueOrNull == false) {
-        if (context.mounted) {
-          await _showQueuedDialog(context, count: requests.length);
-        }
-        return;
-      }
-      final result = await _resolveRequests(
-        repository,
-        requests,
-        outbox: outbox,
-      );
+      // Local first: the pairs are decided (and hidden) on this phone now;
+      // the outbox sends them in the background with retry.
+      ref.read(outboxFlushRequestProvider.notifier).state++;
       _invalidateResolutionProviders(ref);
-      if (result.error != null) {
-        throw _DuplicateResolutionBatchException(
-          result.error!,
-          failedCount: result.failedCount,
-        );
-      }
       if (context.mounted) {
-        await _showResolutionDialog(
-          context,
-          alreadyResolved: result.alreadyResolved > 0,
-          count: result.alreadyResolved,
-        );
+        if (ref.read(isOnlineProvider).valueOrNull == false) {
+          await _showQueuedDialog(context, count: requests.length);
+        } else {
+          await _showResolutionDialog(context, alreadyResolved: false);
+        }
       }
     } catch (error) {
       if (context.mounted) {
@@ -463,31 +448,16 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
           keepTransactionId: request.keepTransactionId,
         );
       }
-      ref.invalidate(pendingOutboxCountProvider);
-      if (ref.read(isOnlineProvider).valueOrNull == false) {
-        if (context.mounted) {
-          await _showQueuedDialog(context, count: requests.length);
-        }
-        return;
-      }
-      final result = await _resolveRequests(
-        repository,
-        requests,
-        outbox: outbox,
-      );
+      // Local first: the pairs are decided (and hidden) on this phone now;
+      // the outbox sends them in the background with retry.
+      ref.read(outboxFlushRequestProvider.notifier).state++;
       _invalidateResolutionProviders(ref);
-      if (result.error != null) {
-        throw _DuplicateResolutionBatchException(
-          result.error!,
-          failedCount: result.failedCount,
-        );
-      }
       if (context.mounted) {
-        await _showResolutionDialog(
-          context,
-          alreadyResolved: result.alreadyResolved > 0,
-          count: result.alreadyResolved,
-        );
+        if (ref.read(isOnlineProvider).valueOrNull == false) {
+          await _showQueuedDialog(context, count: requests.length);
+        } else {
+          await _showResolutionDialog(context, alreadyResolved: false);
+        }
       }
     } catch (error) {
       if (context.mounted) {

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
-import 'package:pandapay/data/api_exception.dart';
+import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay/data/local_first/command_outbox.dart';
+import 'package:pandapay/features/cards/add_card_local_first.dart' show CardCommand;
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/cards/deleted_cards_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -50,15 +52,19 @@ UserCard _archivedCard({String id = 'uc1', String? nickname = 'Old card'}) =>
       last4: '4242',
     );
 
-Future<void> _pump(
+Future<CommandOutbox> _pump(
   WidgetTester tester, {
   required List<UserCard> archived,
   required UserCardsRepository? repo,
   bool online = true,
 }) async {
+  final db = openInMemoryForTesting();
+  addTearDown(db.close);
+  final commands = CommandOutbox(db, namespace: 'test');
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        commandOutboxProvider.overrideWith((ref) async => commands),
         archivedCardsProvider.overrideWith((ref) async => archived),
         catalogueProvider.overrideWith((ref) async => [_product()]),
         userCardsRepositoryProvider.overrideWithValue(repo),
@@ -73,6 +79,7 @@ Future<void> _pump(
     ),
   );
   await tester.pumpAndSettle();
+  return commands;
 }
 
 void main() {
@@ -95,7 +102,7 @@ void main() {
     tester,
   ) async {
     final repo = _FakeArchivedRepository();
-    await _pump(
+    final commands = await _pump(
       tester,
       archived: [_archivedCard()],
       repo: repo,
@@ -104,36 +111,14 @@ void main() {
     await tester.tap(find.widgetWithText(TextButton, 'Restore'));
     await tester.pumpAndSettle();
 
-    expect(repo.unarchived, ['uc1']);
+    // Local first: stored and queued, the screen never called the server.
+    expect(repo.unarchived, isEmpty);
+    expect(
+      commands.pendingOf({CardCommand.unarchiveCard}).single.target,
+      'uc1',
+    );
     expect(find.text('Old card restored to your wallet.'), findsOneWidget);
     expect(find.text('No deleted cards'), findsOneWidget);
-  });
-
-  testWidgets('a duplicate active card explains the conflict and keeps the card', (
-    tester,
-  ) async {
-    final repo = _FakeArchivedRepository()
-      ..failure = ApiException(
-        'unarchive failed: 409 {"error":"card_already_added"}',
-      );
-    await _pump(
-      tester,
-      archived: [_archivedCard()],
-      repo: repo,
-    );
-
-    await tester.tap(find.widgetWithText(TextButton, 'Restore'));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.text(
-        'You already have an active card with the same issuer, type and '
-        'last four. Remove that card first.',
-      ),
-      findsOneWidget,
-    );
-    expect(repo.unarchived, isEmpty);
-    expect(find.text('Old card'), findsOneWidget);
   });
 
   testWidgets('an empty archived list shows the deleted-cards empty state', (
@@ -168,11 +153,11 @@ void main() {
     expect(find.widgetWithText(TextButton, 'Restore'), findsNothing);
   });
 
-  testWidgets('restoring while signed in and offline asks for a connection', (
+  testWidgets('restoring while offline is saved on the phone and queued', (
     tester,
   ) async {
     final repo = _FakeArchivedRepository();
-    await _pump(
+    final commands = await _pump(
       tester,
       archived: [_archivedCard()],
       repo: repo,
@@ -182,12 +167,8 @@ void main() {
     await tester.tap(find.widgetWithText(TextButton, 'Restore'));
     await tester.pumpAndSettle();
 
-    expect(
-      find.text(
-        'Restoring a card needs a connection. Try again when you are online.',
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('Old card restored to your wallet.'), findsOneWidget);
+    expect(commands.pendingOf({CardCommand.unarchiveCard}), hasLength(1));
     expect(repo.unarchived, isEmpty);
   });
 }

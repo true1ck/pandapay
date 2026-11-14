@@ -14,6 +14,8 @@ import 'package:pandapay_domain/sms_v2.dart';
 import 'package:pandapay_domain/pandapay_domain.dart' show CardProduct;
 
 import '../../../data/local/financial_store.dart';
+import '../../../data/local_first/command_outbox.dart';
+import '../../../data/local_first/pending_overlays.dart' show OverlayCommand;
 import '../../../data/user_cards_repository.dart';
 import '../instruments/instrument_seeder.dart';
 import 'ai_withdrawal.dart';
@@ -448,6 +450,9 @@ class SmsV2Runtime {
       try {
         if (await CardStateAdapter(
           repository,
+          commands: CommandOutbox(financial.database, namespace: namespace),
+          store: financial,
+          namespace: namespace,
         ).apply(instrument, current, lastApplied: previous)) {
           _checkAccount();
           _state.put(key, jsonEncode(instrument.toJson()));

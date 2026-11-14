@@ -140,6 +140,7 @@ void main() {
         'contextKind': 'group',
         'name': 'Trip',
       });
+      await runtime.settled(); // the send is background work
       expect(
         runtime.store.operation(id)!.state,
         isNot(SharedCommandState.rejected),
@@ -211,6 +212,7 @@ void main() {
         'memberId': fixtures.op2,
         'displayName': 'Sam',
       });
+      await runtime.settled();
       expect(runtime.store.operation(id)!.state, SharedCommandState.retry);
       commandStatus = 200;
       // An ordinary refresh respects the backoff earned a moment ago...
@@ -267,6 +269,7 @@ void main() {
         'memberId': fixtures.op2,
         'displayName': 'Sam',
       });
+      await runtime.settled();
       nameClash = false;
       return id;
     }

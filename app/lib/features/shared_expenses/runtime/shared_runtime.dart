@@ -377,6 +377,12 @@ class SharedExpensesRuntime extends ChangeNotifier {
     }
   }
 
+  Future<void> _background = Future<void>.value();
+
+  /// Completes when the background send started by the last [submit] is over.
+  /// Screens never wait on it; tests do.
+  Future<void> settled() => _background;
+
   Future<String> submit(
     String kind,
     Map<String, Object?> payload, {
@@ -403,10 +409,14 @@ class SharedExpensesRuntime extends ChangeNotifier {
     _current();
     syncLag = true;
     _notify();
-    await refresh();
-    // The write has reached (or been queued for) the server: screens reload.
+    // Local first: it is stored, so screens show it now. Sending is a
+    // background refresh; the screen never waits on the network.
     dataVersion++;
     _notify();
+    _background = refresh().then((_) {
+      dataVersion++;
+      _notify();
+    }).catchError((Object _) {});
     return command.operationId;
   }
 
