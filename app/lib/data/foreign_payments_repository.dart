@@ -9,6 +9,7 @@ import 'foreign_payment.dart';
 import 'foreign_money.dart';
 import 'local/app_database.dart';
 import 'local/local_first_schema.dart';
+import 'connectivity/server_backoff.dart';
 import 'local/queue_retry_policy.dart';
 
 final _initializedForeignStores = <Object>{};
@@ -663,6 +664,7 @@ class ForeignPaymentsRepository {
     Object? firstError;
     for (final row in pending) {
       if (!accountIsCurrent() ||
+          ServerBackoff.process.isPaused ||
           stopwatch.elapsed > const Duration(seconds: 25)) {
         break;
       }

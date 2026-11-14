@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart' show AppLifecycleListener;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
+import '../../data/connectivity/server_backoff.dart';
 import '../../data/local_first/command_outbox.dart';
 import 'user_state_sync.dart';
 
@@ -79,6 +80,7 @@ final userStatePullProvider = Provider<void>((ref) {
 
   Future<void> run({bool force = false}) async {
     if (running || disposed || userStateUnsupported) return;
+    if (ServerBackoff.process.isPaused) return; // resumed below when it ends
     final namespace = ref.read(cacheNamespaceProvider);
     if (!namespace.startsWith('user:') ||
         ref.read(isOnlineProvider).valueOrNull == false) {
@@ -116,6 +118,10 @@ final userStatePullProvider = Provider<void>((ref) {
     }
   }
 
+  final backoffSub = ServerBackoff.process.resumed.listen(
+    (_) => unawaited(run()),
+  );
+  ref.onDispose(backoffSub.cancel);
   ref.listen(isOnlineProvider, (previous, next) {
     if (previous?.valueOrNull == false && next.valueOrNull == true) {
       unawaited(run(force: true));

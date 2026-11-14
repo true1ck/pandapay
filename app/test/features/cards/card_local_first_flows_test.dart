@@ -164,20 +164,19 @@ void main() {
     expect(commands.pendingCount, 0);
   });
 
-  testWidgets('online add is one server call and nothing is queued', (
+  testWidgets('online add is saved first: no live call, one queued command', (
     tester,
   ) async {
     await pump(tester, offline: false);
     final out = await tester.runAsync(
       () => addCardLocalFirst(ref, cardProductId: 'p1', product: product),
     );
-    expect(out!.queued, isFalse);
-    expect(repo.adds, [out.id]);
+    expect(out!.queued, isTrue);
+    expect(repo.adds, isEmpty, reason: 'the send happens in the background');
     final commands = await tester.runAsync(
       () => ref.read(commandOutboxProvider.future),
     );
-    expect(commands!.pendingCount, 0);
-    expect(cache.financialStore.entities(ns, 'cards'), isEmpty);
+    expect(commands!.pendingOf({CardCommand.addCard}), hasLength(1));
   });
 
   testWidgets('offline: a created override appears, a deleted one disappears', (

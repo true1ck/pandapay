@@ -168,6 +168,14 @@ class SyncEngine {
       }
       // A re-registration during the push may have issued a new device id.
       deviceId = queue.deviceId ?? deviceId;
+      if (ServerBackoff.process.isPaused) {
+        return SyncResult(
+          pushed: pushed,
+          pulled: 0,
+          conflicts: 0,
+          ranToCompletion: false,
+        );
+      }
       final (pulled, conflicts) = await _pullAndApply(api, queue, deviceId);
       await _refreshSelfTransferRules(api, queue);
       await _ref.read(transactionTagsProvider)?.sync();
@@ -243,6 +251,7 @@ class SyncEngine {
     var passes = 0;
     final attempted = <int>{};
     while (passes < maxPushPasses) {
+      if (ServerBackoff.process.isPaused) break; // the server asked us to wait
       final chunk = _nextChunk(queue, attempted);
       if (chunk.isEmpty) break;
       passes++;

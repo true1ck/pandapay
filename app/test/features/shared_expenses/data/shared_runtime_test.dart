@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:pandapay/data/connectivity/server_backoff.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -659,6 +660,7 @@ void main() {
       await runtime.refresh();
       expect(runtime.backingOff, isTrue);
       serverDown = false;
+      ServerBackoff.process.resetForTest(); // a 503 pauses every queue
       await runtime.refresh();
       expect(runtime.backingOff, isFalse);
     },

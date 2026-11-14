@@ -337,15 +337,23 @@ class FinancialStore {
         [ns],
       ).isNotEmpty ||
       database.db.select(
-        "SELECT 1 FROM command_outbox WHERE namespace=? AND kind IN ($_transactionEditKinds) LIMIT 1",
+        "SELECT 1 FROM command_outbox WHERE namespace=? AND parked=0 AND kind IN ($_transactionEditKinds) LIMIT 1",
         [ns],
       ).isNotEmpty;
 
-  /// True while an edit of this one transaction waits to be delivered.
+  /// True while an edit of this one transaction waits to be delivered. A parked
+  /// edit (the server refused it for good) no longer counts: the server's
+  /// copy shows again.
   bool hasQueuedTransactionEdit(String ns, String id) => database.db.select(
-    "SELECT 1 FROM command_outbox WHERE namespace=? AND target=? AND kind IN ($_transactionEditKinds) LIMIT 1",
+    "SELECT 1 FROM command_outbox WHERE namespace=? AND parked=0 AND target=? AND kind IN ($_transactionEditKinds) LIMIT 1",
     [ns, id],
   ).isNotEmpty;
+
+  /// Decoded queued edits per namespace, valid while the database has not been
+  /// written to (see the key in [_overlayQueuedTransactionFields]), so a list
+  /// read does not decode them again.
+  final _queuedEditCache =
+      <String, ({String fingerprint, Map<String, List<Map>> byTarget})>{};
 
   static const _transactionEditKinds =
       "'transaction_typed_fields','transaction_payment_method'";
@@ -359,29 +367,44 @@ class FinancialStore {
     List<Map<String, dynamic>> rows,
   ) {
     if (rows.isEmpty) return;
-    final commands = database.db.select(
-      "SELECT target, payload_json FROM command_outbox WHERE namespace=? AND kind IN ($_transactionEditKinds) ORDER BY id",
-      [ns],
-    );
-    if (commands.isEmpty) return;
-    final indexes = <Object?, int>{
-      for (var index = 0; index < rows.length; index++) rows[index]['id']: index,
-    };
-    for (final command in commands) {
-      final index = indexes[command['target']];
-      if (index == null) continue;
-      final payload = jsonDecode(command['payload_json'] as String);
-      if (payload is! Map) continue;
-      final next = {...rows[index]};
-      payload.forEach((key, value) {
-        if (key == 'id') return;
-        final column = _transactionColumnOfWireKey(key as String);
-        if (value == null) {
-          next.remove(column);
-        } else {
-          next[column] = value;
+    // Parked commands are not overlaid: the server refused them, so its value
+    // wins. Only the target rows of queued commands are touched.
+    // Valid until any write on this connection (total_changes) or another one
+    // (data_version) happens: two scalars, no table scan.
+    final key =
+        '${database.db.select('SELECT total_changes() AS t, (SELECT data_version FROM pragma_data_version) AS d').single.values.join('/')}';
+    var cached = _queuedEditCache[ns];
+    if (cached == null || cached.fingerprint != key) {
+      final byTarget = <String, List<Map>>{};
+      for (final command in database.db.select(
+        "SELECT target, payload_json FROM command_outbox WHERE namespace=? AND parked=0 AND kind IN ($_transactionEditKinds) ORDER BY id",
+        [ns],
+      )) {
+        final payload = jsonDecode(command['payload_json'] as String);
+        if (payload is Map) {
+          (byTarget[command['target'] as String] ??= []).add(payload);
         }
-      });
+      }
+      cached = (fingerprint: key, byTarget: byTarget);
+      _queuedEditCache[ns] = cached;
+    }
+    final byTarget = cached.byTarget;
+    if (byTarget.isEmpty) return;
+    for (var index = 0; index < rows.length; index++) {
+      final edits = byTarget[rows[index]['id']];
+      if (edits == null) continue;
+      final next = {...rows[index]};
+      for (final payload in edits) {
+        payload.forEach((key, value) {
+          if (key == 'id') return;
+          final column = _transactionColumnOfWireKey(key as String);
+          if (value == null) {
+            next.remove(column);
+          } else {
+            next[column] = value;
+          }
+        });
+      }
       rows[index] = next;
     }
   }
@@ -580,7 +603,7 @@ class FinancialStore {
   ) {
     if (rows.isEmpty) return;
     final commands = database.db.select(
-      "SELECT kind, target, payload_json FROM command_outbox WHERE namespace=? AND kind IN ('card_fields_patch','archive_card','unarchive_card','set_default') ORDER BY id",
+      "SELECT kind, target, payload_json FROM command_outbox WHERE namespace=? AND parked=0 AND kind IN ('card_fields_patch','archive_card','unarchive_card','set_default') ORDER BY id",
       [ns],
     );
     if (commands.isEmpty) return;

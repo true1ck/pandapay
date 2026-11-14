@@ -28,7 +28,9 @@ class ServerBackoff {
 
   DateTime? _until;
   Timer? _timer;
-  final _resumed = StreamController<void>.broadcast();
+  late final _resumed = StreamController<void>.broadcast(
+    onListen: _armIfListened,
+  );
 
   /// Fires once when a pause ends, so queues can retry without waiting for
   /// some other trigger.
@@ -42,25 +44,54 @@ class ServerBackoff {
   Duration get remaining =>
       isPaused ? _until!.difference(_now()) : Duration.zero;
 
-  /// Call with every HTTP response; only 429 and 503 start a pause.
-  void noteResponse(int status, String? retryAfterHeader) {
+  /// A 429 is a rate limit, often per endpoint, so it never freezes every
+  /// queue for longer than this.
+  static const maxRateLimitDelay = Duration(seconds: 120);
+
+  /// `Retry-After: 0` means "now": a short pause, not [defaultDelay].
+  static const minDelay = Duration(seconds: 1);
+
+  /// Call with every HTTP response from our API; only 429 and 503 start a
+  /// pause. [path] is the request path: `/auth/*` limiters (OTP, login) are
+  /// per person and per endpoint and say nothing about sync, so they are
+  /// ignored.
+  void noteResponse(int status, String? retryAfterHeader, {String? path}) {
     if (status != 429 && status != 503) return;
-    final base = parseRetryAfter(retryAfterHeader, _now()) ?? defaultDelay;
+    if (path != null &&
+        (path.contains('/auth/') || path.contains('/users/me/phone'))) {
+      return; // per-person limiters (OTP, phone), not server load
+    }
+    var base = parseRetryAfter(retryAfterHeader, _now()) ?? defaultDelay;
+    if (base < minDelay) base = minDelay;
+    // Cap first, then jitter: phones told the same capped delay still spread.
+    final cap = status == 429 ? maxRateLimitDelay : maxDelay;
+    if (base > cap) base = cap;
     // 0-25 % extra so phones that were told the same delay do not return at
     // the same instant.
-    final jittered =
+    final delay =
         base +
         Duration(
           milliseconds: (base.inMilliseconds * 0.25 * _random.nextDouble())
               .round(),
         );
-    final delay = jittered > maxDelay ? maxDelay : jittered;
     final until = _now().add(delay);
     if (_until != null && !until.isAfter(_until!))
       return; // keep the longer one
     _until = until;
     _timer?.cancel();
-    _timer = Timer(delay, () {
+    _timer = null;
+    _armIfListened();
+  }
+
+  /// The resume timer only exists while something listens to [resumed]; with
+  /// no queue listening, [isPaused] still follows the clock and no Timer is
+  /// left pending.
+  void _armIfListened() {
+    final until = _until;
+    if (until == null || _timer != null || !_resumed.hasListener) return;
+    final left = until.difference(_now());
+    _timer = Timer(left.isNegative ? Duration.zero : left, () {
+      _timer = null;
       _until = null;
       if (!_resumed.isClosed) _resumed.add(null);
     });
@@ -72,7 +103,7 @@ class ServerBackoff {
     if (value == null || value.isEmpty) return null;
     final seconds = int.tryParse(value);
     if (seconds != null) {
-      return seconds < 1 ? null : Duration(seconds: seconds);
+      return seconds < 0 ? null : Duration(seconds: seconds);
     }
     try {
       final when = HttpDate.parse(value);
@@ -82,6 +113,10 @@ class ServerBackoff {
       return null;
     }
   }
+
+  /// True while a resume Timer is pending (tests assert there is none when
+  /// nothing listens).
+  bool get hasPendingTimer => _timer != null;
 
   void resetForTest() {
     _timer?.cancel();

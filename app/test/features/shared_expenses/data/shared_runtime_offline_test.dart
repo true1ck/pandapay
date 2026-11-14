@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:pandapay/data/connectivity/server_backoff.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -215,6 +217,8 @@ void main() {
       await runtime.settled();
       expect(runtime.store.operation(id)!.state, SharedCommandState.retry);
       commandStatus = 200;
+      // (the 503 also paused every queue for the server's Retry-After)
+      ServerBackoff.process.resetForTest();
       // An ordinary refresh respects the backoff earned a moment ago...
       await runtime.refresh();
       expect(posted, [id]);

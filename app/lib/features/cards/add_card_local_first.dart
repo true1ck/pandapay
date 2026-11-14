@@ -302,12 +302,10 @@ class AddCardOutcome {
 
 /// Adds a card to the wallet without waiting for the network.
 ///
-/// Reachable server: one bounded attempt with the phone's own client id (so a
-/// lost reply cannot create a second card), exactly what the screens did
-/// before. Anything that means "server not there" (offline, dead Wi-Fi,
-/// timeout, 5xx): the card is stored as a pending row, shown at once, and an
-/// `add_card` command carries it to the server later. A real refusal (4xx) is
-/// rethrown for the screen to show.
+/// The card is stored as a pending row, shown at once, and an `add_card`
+/// command (with the phone's own client id, so a repeat cannot create a second
+/// card) carries it to the server in the background. Nothing waits on the
+/// network. A server refusal parks the command and shows in the Sync details.
 ///
 /// Signed out (no repository): the on-device wallet, as before.
 Future<AddCardOutcome> addCardLocalFirst(
@@ -317,7 +315,6 @@ Future<AddCardOutcome> addCardLocalFirst(
   String? nickname,
   String? last4,
   double? creditLimitInr,
-  Duration attempt = const Duration(seconds: 8),
 }) async {
   final repo = ref.read(userCardsRepositoryProvider);
   if (repo == null) {
@@ -331,30 +328,9 @@ Future<AddCardOutcome> addCardLocalFirst(
     await _patchLimit(repo, serverId, creditLimitInr);
     return AddCardOutcome(id: serverId, queued: false);
   }
-  if (!serverKnownUnreachable(ref)) {
-    try {
-      final result = await repo
-          .addCardWithClientId(
-            id,
-            cardProductId,
-            nickname: nickname,
-            last4: last4,
-            mergeExisting: false,
-          )
-          .timeout(attempt);
-      if (creditLimitInr != null) {
-        try {
-          await repo.updateCard(result.id, creditLimitInr: creditLimitInr);
-        } catch (error) {
-          if (!offlineLike(ref, error)) rethrow;
-          await _queueFields(ref, result.id, {'creditLimitInr': creditLimitInr});
-        }
-      }
-      return AddCardOutcome(id: result.id, queued: false);
-    } catch (error) {
-      if (!offlineLike(ref, error)) rethrow;
-    }
-  }
+  // Local first: no live attempt. The card is stored and shown now and the
+  // `add_card` command below sends it in the background (its client id makes a
+  // repeat harmless).
   final cache = await ref.read(responseCacheProvider.future);
   final ns = ref.read(cacheNamespaceProvider);
   final existing = _pendingAddFor(cache.financialStore.database.db, ns, cardProductId, last4);
@@ -541,12 +517,25 @@ Map<String, CommandHandler> cardCommandHandlers(CardCommandContext c) => {
   },
   CardCommand.archiveCard: (p) async {
     final id = p['cardId'] as String;
-    await goneIsDone(() => c.userCards.archiveCard(id));
+    await undoIfRefused(
+      () => goneIsDone(() => c.userCards.archiveCard(id)),
+      () {
+        c.store?.patchCard(c.namespace, id, {'is_archived': false});
+        c.onChanged?.call();
+      },
+    );
     c.store?.patchCard(c.namespace, id, {'is_archived': true});
   },
   CardCommand.unarchiveCard: (p) async {
     final id = p['cardId'] as String;
-    await goneIsDone(() => c.userCards.unarchiveCard(id));
+    // 409 card_already_added: the server keeps the card archived.
+    await undoIfRefused(
+      () => goneIsDone(() => c.userCards.unarchiveCard(id)),
+      () {
+        c.store?.patchCard(c.namespace, id, {'is_archived': true});
+        c.onChanged?.call();
+      },
+    );
     c.store?.patchCard(c.namespace, id, {'is_archived': false});
   },
   CardCommand.setDefault: (p) async {

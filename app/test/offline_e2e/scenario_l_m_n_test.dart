@@ -160,6 +160,8 @@ void main() {
     // Kill mid-way, heal the server, reopen: the second goes, the first never again.
     await app.restart(online: true, overrides: overrides());
     app.server.failWhen = null;
+    // The 503 paused every queue; a long wait ends that pause.
+    app.advance(const Duration(minutes: 1));
     app.server.loseNext(1, ['/statement-imports']);
     // A lost answer leaves the batch saved until the next trigger (resume,
     // reconnect or a flush request); no timer retries imports by design.

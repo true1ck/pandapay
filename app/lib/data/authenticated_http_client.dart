@@ -108,6 +108,7 @@ class AuthenticatedHttpClient extends http.BaseClient {
       ServerBackoff.process.noteResponse(
         response.statusCode,
         response.headers['retry-after'],
+        path: request.url.path,
       );
       // Header arrival does not mean an outbox operation finished. Retain
       // admission through response consumption, cancellation or stream error.

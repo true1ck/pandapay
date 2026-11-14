@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:pandapay_domain/shared_expenses.dart';
 import 'package:uuid/uuid.dart';
+import '../../../data/connectivity/server_backoff.dart';
 import '../../../data/local/response_cache.dart';
 import '../data/shared_commands.dart';
 import '../data/shared_directory.dart';
@@ -305,6 +306,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
   Future<void> _refreshOnce({int maxPullPages = 2}) async {
     _current();
     if (busy) return;
+    if (ServerBackoff.process.isPaused) return; // the next trigger retries
     if (maxPullPages < 1 || maxPullPages > 5) {
       throw ArgumentError.value(maxPullPages);
     }

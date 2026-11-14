@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 import 'api_exception.dart';
 import 'local/app_database.dart';
+import 'connectivity/server_backoff.dart';
 import 'local/queue_retry_policy.dart';
 import 'user_cards_repository.dart';
 
@@ -462,6 +463,8 @@ class TransactionTagsRepository extends ChangeNotifier {
           });
       for (final row in pending) {
         if (_disposed) return;
+        // The server asked us to wait: leave the rest queued, no attempt.
+        if (ServerBackoff.process.isPaused) return;
         try {
           final response = await client
               .post(
