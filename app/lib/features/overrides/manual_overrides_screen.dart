@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../app/required_field.dart';
 import '../../data/api_exception.dart';
 import '../../data/card_overrides_repository.dart';
 import '../../data/catalogue_repository.dart' show SpendCategory;
@@ -268,6 +269,7 @@ class _CreateOverrideSheetState extends ConsumerState<_CreateOverrideSheet> {
   final _vpaController = TextEditingController();
   final _noteController = TextEditingController();
   bool _saving = false;
+  bool _submitted = false;
 
   @override
   void dispose() {
@@ -288,7 +290,11 @@ class _CreateOverrideSheetState extends ConsumerState<_CreateOverrideSheet> {
 
   Future<void> _save() async {
     final repo = ref.read(cardOverridesRepositoryProvider);
-    if (repo == null || !_canSave) return;
+    if (repo == null) return;
+    if (!_canSave) {
+      setState(() => _submitted = true);
+      return;
+    }
     setState(() => _saving = true);
     try {
       await repo.createOverride(
@@ -313,8 +319,11 @@ class _CreateOverrideSheetState extends ConsumerState<_CreateOverrideSheet> {
 
   @override
   Widget build(BuildContext context) {
-    InputDecoration inputDecoration(String label) => InputDecoration(
-      labelText: label,
+    InputDecoration inputDecoration(String label, {bool required = false, String? errorText}) =>
+        InputDecoration(
+      labelText: required ? null : label,
+      label: required ? requiredLabel(label) : null,
+      errorText: errorText,
       labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
       filled: true,
       fillColor: BambooInk.glassFillOnPaper,
@@ -347,19 +356,23 @@ class _CreateOverrideSheetState extends ConsumerState<_CreateOverrideSheet> {
           children: [
             Text('New override', style: BambooFonts.heading(17, color: BambooInk.ink900)),
             const SizedBox(height: AppSpace.md),
-            DropdownButtonFormField<String>(
-              initialValue: _selectedUserCardId,
-              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-              decoration: inputDecoration('Card'),
-              items: widget.userCards
-                  .map(
-                    (c) => DropdownMenuItem(
-                      value: c.id,
-                      child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (v) => setState(() => _selectedUserCardId = v),
+            RequiredBox(
+              invalid: _submitted && _selectedUserCardId == null,
+              radius: 16,
+              child: DropdownButtonFormField<String>(
+                initialValue: _selectedUserCardId,
+                style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                decoration: inputDecoration('Card', required: true),
+                items: widget.userCards
+                    .map(
+                      (c) => DropdownMenuItem(
+                        value: c.id,
+                        child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (v) => setState(() => _selectedUserCardId = v),
+              ),
             ),
             const SizedBox(height: AppSpace.md),
             SegmentedButton<OverrideScope>(
@@ -380,27 +393,39 @@ class _CreateOverrideSheetState extends ConsumerState<_CreateOverrideSheet> {
             ),
             const SizedBox(height: AppSpace.md),
             if (_scope == OverrideScope.category)
-              DropdownButtonFormField<String>(
-                initialValue: _selectedCategoryId,
-                style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-                decoration: inputDecoration('Category'),
-                items: widget.categories
-                    .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
-                    .toList(),
-                onChanged: (v) => setState(() => _selectedCategoryId = v),
+              RequiredBox(
+                invalid: _submitted && _selectedCategoryId == null,
+                radius: 16,
+                child: DropdownButtonFormField<String>(
+                  initialValue: _selectedCategoryId,
+                  style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                  decoration: inputDecoration('Category', required: true),
+                  items: widget.categories
+                      .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
+                      .toList(),
+                  onChanged: (v) => setState(() => _selectedCategoryId = v),
+                ),
               )
             else if (_scope == OverrideScope.merchantName)
               TextField(
                 controller: _merchantController,
                 style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-                decoration: inputDecoration('Merchant name'),
+                decoration: inputDecoration(
+                  'Merchant name',
+                  required: true,
+                  errorText: requiredError(_submitted, _merchantController.text),
+                ),
                 onChanged: (_) => setState(() {}),
               )
             else
               TextField(
                 controller: _vpaController,
                 style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-                decoration: inputDecoration('VPA (e.g. shop@upi)'),
+                decoration: inputDecoration(
+                  'VPA (e.g. shop@upi)',
+                  required: true,
+                  errorText: requiredError(_submitted, _vpaController.text),
+                ),
                 onChanged: (_) => setState(() {}),
               ),
             const SizedBox(height: AppSpace.md),
@@ -418,7 +443,7 @@ class _CreateOverrideSheetState extends ConsumerState<_CreateOverrideSheet> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
               ),
-              onPressed: _canSave && !_saving ? _save : null,
+              onPressed: _saving ? null : _save,
               child: _saving
                   ? const SizedBox(
                       width: 20,
@@ -460,6 +485,7 @@ class _EditOverrideSheetState extends ConsumerState<_EditOverrideSheet> {
       : null;
   late final _noteController = TextEditingController(text: widget.rule.reasonNote ?? '');
   bool _saving = false;
+  bool _submitted = false;
 
   @override
   void dispose() {
@@ -479,7 +505,10 @@ class _EditOverrideSheetState extends ConsumerState<_EditOverrideSheet> {
       }
       return;
     }
-    if (!_canSave) return;
+    if (!_canSave) {
+      setState(() => _submitted = true);
+      return;
+    }
     setState(() => _saving = true);
     try {
       await repo.updateOverride(
@@ -526,8 +555,11 @@ class _EditOverrideSheetState extends ConsumerState<_EditOverrideSheet> {
 
   @override
   Widget build(BuildContext context) {
-    InputDecoration inputDecoration(String label) => InputDecoration(
-      labelText: label,
+    InputDecoration inputDecoration(String label, {bool required = false, String? errorText}) =>
+        InputDecoration(
+      labelText: required ? null : label,
+      label: required ? requiredLabel(label) : null,
+      errorText: errorText,
       labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
       filled: true,
       fillColor: BambooInk.glassFillOnPaper,
@@ -560,19 +592,23 @@ class _EditOverrideSheetState extends ConsumerState<_EditOverrideSheet> {
           children: [
             Text('Edit override', style: BambooFonts.heading(17, color: BambooInk.ink900)),
             const SizedBox(height: AppSpace.md),
-            DropdownButtonFormField<String>(
-              initialValue: _selectedUserCardId,
-              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-              decoration: inputDecoration('Card'),
-              items: widget.userCards
-                  .map(
-                    (c) => DropdownMenuItem(
-                      value: c.id,
-                      child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (v) => setState(() => _selectedUserCardId = v),
+            RequiredBox(
+              invalid: _submitted && _selectedUserCardId == null,
+              radius: 16,
+              child: DropdownButtonFormField<String>(
+                initialValue: _selectedUserCardId,
+                style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                decoration: inputDecoration('Card', required: true),
+                items: widget.userCards
+                    .map(
+                      (c) => DropdownMenuItem(
+                        value: c.id,
+                        child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (v) => setState(() => _selectedUserCardId = v),
+              ),
             ),
             const SizedBox(height: AppSpace.md),
             TextField(
@@ -589,7 +625,7 @@ class _EditOverrideSheetState extends ConsumerState<_EditOverrideSheet> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
               ),
-              onPressed: _canSave && !_saving ? _save : null,
+              onPressed: _saving ? null : _save,
               child: _saving
                   ? const SizedBox(
                       width: 20,

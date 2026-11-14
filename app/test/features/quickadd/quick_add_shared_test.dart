@@ -12,6 +12,7 @@ import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:pandapay/features/quickadd/quick_add_screen.dart';
 import 'package:pandapay/features/shared_expenses/composer/shared_editor.dart';
+import 'package:pandapay/features/shared_expenses/composer/shared_editor_fields.dart';
 import 'package:pandapay/features/shared_expenses/data/shared_http_transport.dart';
 import 'package:pandapay/features/shared_expenses/runtime/shared_providers.dart';
 import 'package:pandapay/features/shared_expenses/runtime/shared_runtime.dart';
@@ -164,9 +165,10 @@ void main() {
       find.byKey(const ValueKey('quick-add-amount-field')),
       '900',
     );
-    final payer = find.widgetWithText(
-      DropdownButtonFormField<String>,
-      'Paid by',
+    // "Paid by" is the only dropdown inside the sharing fields.
+    final payer = find.descendant(
+      of: find.byType(SharedEditorFields),
+      matching: find.byType(DropdownButtonFormField<String>),
     );
     await tester.ensureVisible(payer);
     await tester.tap(payer);
@@ -260,7 +262,9 @@ void main() {
       final submit = tester.widget<FilledButton>(
         find.widgetWithText(FilledButton, 'Submit shared expense'),
       );
-      expect(submit.onPressed, isNull);
+      // Stays tappable so the person is told what is missing; the linked
+      // payment still cannot be submitted (see the hint above the button).
+      expect(submit.onPressed, isNotNull);
       await tester.pageBack();
       await tester.pumpAndSettle();
       expect(
@@ -348,7 +352,7 @@ void main() {
       '100',
     );
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Shared with \u00b7 2/50'));
+    await tester.ensureVisible(find.text('Shared with \u00b7 2/50 *', findRichText: true));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });

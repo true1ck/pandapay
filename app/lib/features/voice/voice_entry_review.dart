@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/category_picker.dart';
 import '../../app/design/app_theme.dart';
+import '../../app/required_field.dart';
 import '../../app/transaction_tag_picker.dart' show TransactionTagField;
 import '../../data/catalogue_repository.dart' show SpendCategory;
 import '../../data/user_cards_repository.dart' show TxnInstrument, UserCard;
@@ -29,6 +30,7 @@ class VoiceEntryReview extends StatelessWidget {
     required this.onFollowUpSkip,
     required this.onFollowUpListen,
     required this.listeningForAnswer,
+    this.submitted = false,
   });
 
   final VoiceActionDraft draft;
@@ -47,6 +49,9 @@ class VoiceEntryReview extends StatelessWidget {
   final void Function(FollowUp) onFollowUpSkip;
   final void Function(FollowUp) onFollowUpListen;
   final bool listeningForAnswer;
+
+  /// True once the user tapped Save; required fields then show errors.
+  final bool submitted;
 
   static const _moneyInHow = {
     TxnInstrument.upiBank: 'Bank or UPI',
@@ -105,11 +110,14 @@ class VoiceEntryReview extends StatelessWidget {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             onChanged: (_) => onChanged(),
             decoration: InputDecoration(
-              labelText: switch (editor.type) {
+              label: requiredLabel(switch (editor.type) {
                 VoiceActionType.moneyIn => 'Amount received (₹)',
                 VoiceActionType.refund => 'Refund amount (₹)',
                 _ => draft.isForeign ? 'Amount in rupees (₹)' : 'Amount (₹)',
-              },
+              }),
+              errorText: submitted && !((editor.amount ?? 0) > 0)
+                  ? 'Required'
+                  : null,
             ),
           ),
         ] else
@@ -117,7 +125,12 @@ class VoiceEntryReview extends StatelessWidget {
             controller: editor.pointsController,
             keyboardType: TextInputType.number,
             onChanged: (_) => onChanged(),
-            decoration: const InputDecoration(labelText: 'Points'),
+            decoration: InputDecoration(
+              label: requiredLabel('Points'),
+              errorText: submitted && !((editor.points ?? 0) > 0)
+                  ? 'Required'
+                  : null,
+            ),
           ),
         const SizedBox(height: 12),
         TextField(
@@ -199,14 +212,19 @@ class VoiceEntryReview extends StatelessWidget {
           const SizedBox(height: 12),
         ],
         if (!isMoneyIn)
-          DropdownButtonFormField<String>(
+          RequiredBox(
+            invalid:
+                submitted &&
+                editor.requiresWalletCard &&
+                !editor.hasWalletCard(cards),
+            child: DropdownButtonFormField<String>(
             initialValue: cards.any((c) => c.id == editor.selectedCardId)
                 ? editor.selectedCardId
                 : null,
             decoration: InputDecoration(
-              labelText: editor.requiresWalletCard
-                  ? 'Wallet card'
-                  : 'Wallet card (optional)',
+              label: editor.requiresWalletCard
+                  ? requiredLabel('Wallet card')
+                  : const Text('Wallet card (optional)'),
             ),
             items: [
               for (final card in cards)
@@ -221,6 +239,7 @@ class VoiceEntryReview extends StatelessWidget {
               editor.selectedCardId = value;
               onChanged();
             },
+          ),
           ),
         if (!isMoneyIn) const SizedBox(height: 12),
         TextField(

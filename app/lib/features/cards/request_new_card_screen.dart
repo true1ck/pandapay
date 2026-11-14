@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/required_field.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
@@ -27,6 +28,7 @@ class _RequestNewCardScreenState extends ConsumerState<RequestNewCardScreen> {
   CardNetwork? _networkGuess;
   bool _submitting = false;
   bool _submitted = false;
+  bool _tried = false;
   String? _error;
 
   @override
@@ -37,8 +39,8 @@ class _RequestNewCardScreenState extends ConsumerState<RequestNewCardScreen> {
   }
 
   Future<void> _submit() async {
+    setState(() => _tried = true);
     if (_issuerController.text.trim().isEmpty || _productController.text.trim().isEmpty) {
-      setState(() => _error = 'Issuer and card name are both required.');
       return;
     }
     setState(() {
@@ -113,8 +115,10 @@ class _RequestNewCardScreenState extends ConsumerState<RequestNewCardScreen> {
   }
 
   Widget _buildForm(BuildContext context) {
-    InputDecoration inputDecoration(String label) => InputDecoration(
-      labelText: label,
+    InputDecoration inputDecoration(String label, {bool required = false, String? errorText}) => InputDecoration(
+      labelText: required ? null : label,
+      label: required ? requiredLabel(label) : null,
+      errorText: errorText,
       labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
       filled: true,
       fillColor: BambooInk.glassFillOnPaper,
@@ -139,13 +143,19 @@ class _RequestNewCardScreenState extends ConsumerState<RequestNewCardScreen> {
         TextField(
           controller: _issuerController,
           style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-          decoration: inputDecoration('Issuer (e.g. HDFC Bank)'),
+          onChanged: (_) => _tried ? setState(() {}) : null,
+          decoration: inputDecoration('Issuer (e.g. HDFC Bank)',
+              required: true,
+              errorText: requiredError(_tried, _issuerController.text)),
         ),
         const SizedBox(height: AppSpace.lg),
         TextField(
           controller: _productController,
           style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-          decoration: inputDecoration('Card name'),
+          onChanged: (_) => _tried ? setState(() {}) : null,
+          decoration: inputDecoration('Card name',
+              required: true,
+              errorText: requiredError(_tried, _productController.text)),
         ),
         const SizedBox(height: AppSpace.lg),
         DropdownButtonFormField<CardNetwork>(

@@ -127,7 +127,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repo.lastReport, isNull);
-    expect(find.textContaining('Tell us which field'), findsOneWidget);
+    expect(find.text('Required'), findsOneWidget);
   });
 
   testWidgets('selects a known field with a radio button', (tester) async {

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/required_field.dart';
 import '../onboarding/entry_brand.dart';
 import '../onboarding/onboarding_back.dart';
 import '../../app/providers.dart';
@@ -77,6 +78,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   OtpChallenge? _challenge;
   int get _codeLength => ref.read(authApiProvider).otpCodeLength;
   bool _otpRequested = false;
+  bool _submitted = false;
   bool _loading = false;
   AuthNotice? _notice;
   bool _autoPhoneHintRequested = false;
@@ -223,24 +225,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return null;
   }
 
-  /// Whether the submit button should read as active. Mirrors [_validate]
-  /// without duplicating its messages: every hard requirement that would
-  /// just bounce straight back as an inline error instead greys the button
-  /// out until it's met.
-  bool get _canSubmit {
-    final identifier = _identifierController.text.trim();
-    if (identifier.isEmpty || !identifier.contains('@')) return false;
-    if (_isSignUp) {
-      if (indianMobileDigits(_phoneController.text) == null) return false;
-      if (!_acceptedTerms || !_confirmedAdult) return false;
-    }
-    return true;
-  }
-
   Future<void> _requestOtp() async {
     final validationError = _validate();
     if (validationError != null) {
-      setState(() => _notice = AuthNotice.input(validationError));
+      setState(() {
+        _submitted = true;
+        _notice = AuthNotice.input(validationError);
+      });
       return;
     }
     final resending = _otpRequested;
@@ -263,6 +254,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (!mounted) return;
       setState(() {
         _otpRequested = true;
+        _submitted = false;
         _codeController.clear();
         _startCodeTimer(_challenge?.expiresAt ?? _now().add(_codeLifetime));
         if (resending) {
@@ -323,16 +315,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (!RegExp(
         '^[0-9]{$_codeLength}\$',
       ).hasMatch(_codeController.text.trim())) {
-        setState(
-          () => _notice = AuthNotice.input(
+        setState(() {
+          _submitted = true;
+          _notice = AuthNotice.input(
             'Enter the $_codeLength-digit code from your email.',
-          ),
-        );
+          );
+        });
         return;
       }
     }
     setState(() {
       _loading = true;
+      _submitted = false;
       _notice = null;
     });
     var stage = alreadyVerified ? AuthStage.finishSignIn : AuthStage.verifyCode;
@@ -485,6 +479,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     _stopCodeTimer();
     setState(() {
       _otpRequested = false;
+      _submitted = false;
       _notice = null;
       _codeController.clear();
       _codeExpiresAt = null;
@@ -635,7 +630,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             phoneFocusNode: _phoneFocusNode,
                             loading: _loading,
                             onSubmit: _requestOtp,
-                            canSubmit: () => _canSubmit,
+                            submitted: _submitted,
+                            onFieldChanged: () {
+                              if (_submitted) setState(() {});
+                            },
                             onRequestPhoneHint: _requestPhoneNumberHint,
                             acceptedTerms: _acceptedTerms,
                             confirmedAdult: _confirmedAdult,
@@ -656,6 +654,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             controller: _codeController,
                             focusNode: _codeFocusNode,
                             loading: _loading,
+                            submitted: _submitted,
                             codeTimeLeft: _codeTimeLeft,
                             canResend: _canResend,
                             locked: _codeLocked,
@@ -806,9 +805,9 @@ class _IdentifierStep extends StatelessWidget {
   final bool loading;
   final VoidCallback onSubmit;
 
-  /// Read at build time so typing in either field re-evaluates it; the
-  /// submit button stays disabled while this returns false.
-  final bool Function() canSubmit;
+  /// True once the user tapped Send; required fields then show their errors.
+  final bool submitted;
+  final VoidCallback onFieldChanged;
   final VoidCallback onRequestPhoneHint;
 
   /// A4 — sign-up only. See _LoginScreenState's own fields for what each
@@ -830,7 +829,8 @@ class _IdentifierStep extends StatelessWidget {
     required this.phoneFocusNode,
     required this.loading,
     required this.onSubmit,
-    required this.canSubmit,
+    required this.submitted,
+    required this.onFieldChanged,
     required this.onRequestPhoneHint,
     required this.acceptedTerms,
     required this.confirmedAdult,
@@ -843,11 +843,14 @@ class _IdentifierStep extends StatelessWidget {
   });
 
   InputDecoration _fieldDecoration({
-    required String hint,
+    required String label,
     required IconData icon,
+    String? errorText,
   }) => InputDecoration(
-    hintText: hint,
-    hintStyle: BambooFonts.ui(15, color: BambooInk.ink500),
+    label: requiredLabel(label),
+    errorText: errorText,
+    floatingLabelBehavior: FloatingLabelBehavior.never,
+    labelStyle: BambooFonts.ui(15, color: BambooInk.ink500),
     prefixIcon: Icon(icon, size: 21, color: BambooInk.ink900),
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
     filled: true,
@@ -882,11 +885,16 @@ class _IdentifierStep extends StatelessWidget {
                 autofillHints: const [AutofillHints.email],
                 onSubmitted: (_) => isSignUp
                     ? phoneFocusNode.requestFocus()
-                    : (loading || !canSubmit() ? null : onSubmit()),
+                    : (loading ? null : onSubmit()),
+                onChanged: (_) => onFieldChanged(),
                 style: BambooFonts.ui(15),
                 decoration: _fieldDecoration(
-                  hint: 'Email address',
+                  label: 'Email address',
                   icon: Icons.mail_outline_rounded,
+                  errorText: requiredError(
+                    submitted,
+                    identifierController.text,
+                  ),
                 ),
               ),
               if (isSignUp) const SizedBox(height: 12),
@@ -897,12 +905,17 @@ class _IdentifierStep extends StatelessWidget {
                 keyboardType: TextInputType.phone,
                 textInputAction: TextInputAction.done,
                 autofillHints: const [AutofillHints.telephoneNumber],
-                onSubmitted: (_) => loading || !canSubmit() ? null : onSubmit(),
+                onSubmitted: (_) => loading ? null : onSubmit(),
+                onChanged: (_) => onFieldChanged(),
                 style: BambooFonts.ui(15),
                 decoration:
                     _fieldDecoration(
-                      hint: 'Mobile number (India)',
+                      label: 'Mobile number (India)',
                       icon: Icons.phone_outlined,
+                      errorText: requiredError(
+                        submitted,
+                        phoneController.text,
+                      ),
                     ).copyWith(
                       suffixIcon: IconButton(
                         tooltip: 'Use a saved phone number',
@@ -917,17 +930,25 @@ class _IdentifierStep extends StatelessWidget {
               ),
               if (isSignUp) ...[
                 const SizedBox(height: 20),
-                _ConsentCheckbox(
-                  value: acceptedTerms,
-                  onChanged: onAcceptedTermsChanged,
-                  label: 'I agree to the Terms & Privacy Policy',
-                  subtitle: 'Required to create an account.',
+                RequiredBox(
+                  invalid: submitted && !acceptedTerms,
+                  child: _ConsentCheckbox(
+                    value: acceptedTerms,
+                    onChanged: onAcceptedTermsChanged,
+                    label: 'I agree to the Terms & Privacy Policy',
+                    subtitle: 'Required to create an account.',
+                    required: true,
+                  ),
                 ),
-                _ConsentCheckbox(
-                  value: confirmedAdult,
-                  onChanged: onConfirmedAdultChanged,
-                  label: 'I am 18 or older.',
-                  subtitle: 'Required. PandaPay is only for adults.',
+                RequiredBox(
+                  invalid: submitted && !confirmedAdult,
+                  child: _ConsentCheckbox(
+                    value: confirmedAdult,
+                    onChanged: onConfirmedAdultChanged,
+                    label: 'I am 18 or older.',
+                    subtitle: 'Required. PandaPay is only for adults.',
+                    required: true,
+                  ),
                 ),
                 _ConsentCheckbox(
                   value: optInCrowdsource,
@@ -952,19 +973,10 @@ class _IdentifierStep extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.only(top: 24),
-            // Typing in either field doesn't rebuild the screen, so listen
-            // to both controllers here to flip the button between its light
-            // (not ready) and dark (ready) states.
-            child: ListenableBuilder(
-              listenable: Listenable.merge([
-                identifierController,
-                phoneController,
-              ]),
-              builder: (context, _) => EntryButton(
-                label: isSignUp ? 'Send verification code' : 'Send code',
-                onPressed: canSubmit() ? onSubmit : null,
-                loading: loading,
-              ),
+            child: EntryButton(
+              label: isSignUp ? 'Send verification code' : 'Send code',
+              onPressed: onSubmit,
+              loading: loading,
             ),
           ),
         ],
@@ -978,8 +990,10 @@ class _ConsentCheckbox extends StatelessWidget {
   final ValueChanged<bool> onChanged;
   final String label;
   final String subtitle;
+  final bool required;
 
   const _ConsentCheckbox({
+    this.required = false,
     required this.value,
     required this.onChanged,
     required this.label,
@@ -1001,10 +1015,15 @@ class _ConsentCheckbox extends StatelessWidget {
       activeColor: BambooInk.slate,
       checkColor: BambooInk.lime,
       side: const BorderSide(color: Color(0xFFACB2B6), width: 1.5),
-      title: Text(
-        label,
-        style: BambooFonts.ui(13, weight: FontWeight.w500, height: 1.3),
-      ),
+      title: required
+          ? requiredLabel(
+              label,
+              style: BambooFonts.ui(13, weight: FontWeight.w500, height: 1.3),
+            )
+          : Text(
+              label,
+              style: BambooFonts.ui(13, weight: FontWeight.w500, height: 1.3),
+            ),
       subtitle: Padding(
         padding: const EdgeInsets.only(top: 3),
         child: Text(
@@ -1021,6 +1040,7 @@ class _OtpStep extends StatefulWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool loading;
+  final bool submitted;
 
   /// Null when the code's expiry is unknown (it was sent by an earlier
   /// request); [Duration.zero] once it has expired.
@@ -1040,6 +1060,7 @@ class _OtpStep extends StatefulWidget {
     required this.controller,
     required this.focusNode,
     required this.loading,
+    required this.submitted,
     required this.codeTimeLeft,
     required this.canResend,
     required this.locked,
@@ -1105,16 +1126,23 @@ class _OtpStepState extends State<_OtpStep> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Verification code',
-          textAlign: TextAlign.center,
-          style: BambooFonts.ui(13, weight: FontWeight.w600),
+        Center(
+          child: requiredLabel(
+            'Verification code',
+            style: BambooFonts.ui(13, weight: FontWeight.w600),
+          ),
         ),
         const SizedBox(height: 14),
         Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 310),
-            child: SizedBox(
+            child: ValueListenableBuilder<TextEditingValue>(
+              valueListenable: widget.controller,
+              builder: (context, codeValue, child) => RequiredBox(
+                invalid: widget.submitted && codeValue.text.trim().isEmpty,
+                child: child!,
+              ),
+              child: SizedBox(
               height: 64,
               child: Stack(
                 fit: StackFit.expand,
@@ -1207,6 +1235,7 @@ class _OtpStepState extends State<_OtpStep> {
                   ),
                 ],
               ),
+            ),
             ),
           ),
         ),

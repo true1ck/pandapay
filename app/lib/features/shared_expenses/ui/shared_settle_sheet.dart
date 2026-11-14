@@ -5,6 +5,7 @@ import 'package:pandapay_domain/pandapay_domain.dart'
     show Money, buildUpiPayUri;
 import 'package:uuid/uuid.dart';
 import '../../../app/design/app_theme.dart';
+import '../../../app/required_field.dart';
 import '../../../app/design/bamboo_components.dart';
 import '../../../data/upi_payment_service.dart';
 import '../composer/shared_amount_input.dart';
@@ -64,7 +65,7 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
   List<SharedEditorMember> _members = const [];
   String? _own, _payer, _receiver, _error;
   String _method = 'upi';
-  bool _loading = true, _saving = false, _sealed = false;
+  bool _loading = true, _saving = false, _sealed = false, _submitted = false;
   DateTime _paidOn = DateTime.now();
   bool get _authorized =>
       widget.runtime.isCurrent() &&
@@ -290,6 +291,7 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
       }
       return;
     }
+    setState(() => _submitted = true);
     final rawAmount = sharedNormalizeAmountText(_amount.text);
     final amount = SharedDecimalInput.parse(
       rawAmount,
@@ -482,7 +484,13 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
                       decimal: true,
                     ),
                     style: BambooFonts.money(18),
-                    decoration: const InputDecoration(labelText: 'Amount (₹)'),
+                    decoration: InputDecoration(
+                      label: requiredLabel('Amount (₹)'),
+                      errorText: requiredError(_submitted, _amount.text),
+                    ),
+                    onChanged: (_) {
+                      if (_submitted) setState(() {});
+                    },
                     onTapOutside: (_) =>
                         FocusManager.instance.primaryFocus?.unfocus(),
                   ),

@@ -66,6 +66,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
   Timer? _completionTimer;
   Timer? _restartTimer;
   bool _saving = false;
+  bool _submitted = false;
   String? _error;
 
   /// On-device recognition could not start; the typed box is the way on.
@@ -253,6 +254,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
       _onDeviceProblem = false;
       _transcriptBuffer.clear();
       _drafts = const [];
+      _submitted = false;
     });
     for (final editor in _editors) {
       editor.dispose();
@@ -710,6 +712,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
       return;
     }
     final cards = ref.read(userCardsProvider).valueOrNull ?? const <UserCard>[];
+    setState(() => _submitted = true);
     for (final i in loggable) {
       final issues = _editors[i].currentIssues(cards);
       if (issues.isNotEmpty) {
@@ -1107,6 +1110,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
       onFollowUpSkip: (f) => _skipFollowUp(index, f),
       onFollowUpListen: (f) => _listenForAnswer(index, f),
       listeningForAnswer: _answerListening,
+      submitted: _submitted,
     );
   }
 
@@ -1119,6 +1123,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
     unawaited(_speaker.stop());
     setState(() {
       _drafts = const [];
+      _submitted = false;
       _answer = null;
       _speaking = null;
       _error = null;

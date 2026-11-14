@@ -7,6 +7,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../app/required_field.dart';
 import '../../data/api_exception.dart';
 import '../../data/support_api.dart';
 import '../../data/merchant_issue_rules_repository.dart';
@@ -61,6 +62,7 @@ class _ReportTransactionScreenState extends ConsumerState<ReportTransactionScree
   _IssueKind? _kind;
   final _details = TextEditingController();
   bool _submitting = false;
+  bool _submitted = false;
 
   @override
   void dispose() {
@@ -82,7 +84,12 @@ class _ReportTransactionScreenState extends ConsumerState<ReportTransactionScree
   Future<void> _submit() async {
     final kind = _kind;
     final token = ref.read(accessTokenProvider);
-    if (kind == null || token == null || _submitting) return;
+    if (_submitting) return;
+    if (kind == null) {
+      setState(() => _submitted = true);
+      return;
+    }
+    if (token == null) return;
 
     setState(() => _submitting = true);
     try {
@@ -228,9 +235,14 @@ class _ReportTransactionScreenState extends ConsumerState<ReportTransactionScree
           children: [
             _TransactionContextCard(entry: entry),
             const SizedBox(height: AppSpace.xl),
-            Text('What went wrong', style: BambooFonts.heading(15, color: BambooInk.ink900)),
+            requiredLabel('What went wrong', style: BambooFonts.heading(15, color: BambooInk.ink900)),
             const SizedBox(height: AppSpace.sm),
-            Wrap(
+            RequiredBox(
+              invalid: _submitted && _kind == null,
+              message: 'Pick what went wrong',
+              child: SizedBox(
+                width: double.infinity,
+                child: Wrap(
               spacing: AppSpace.sm,
               runSpacing: AppSpace.sm,
               children: [
@@ -262,6 +274,8 @@ class _ReportTransactionScreenState extends ConsumerState<ReportTransactionScree
                   ),
               ],
             ),
+              ),
+            ),
             const SizedBox(height: AppSpace.xl),
             Text('Tell us more (optional)', style: BambooFonts.heading(15, color: BambooInk.ink900)),
             const SizedBox(height: AppSpace.sm),
@@ -283,10 +297,10 @@ class _ReportTransactionScreenState extends ConsumerState<ReportTransactionScree
                 disabledBackgroundColor: BambooInk.paperMuted,
                 disabledForegroundColor: BambooInk.ink300,
               ),
-              // Disabled until a category is picked: an uncategorised report
-              // lands in the queue as "general" with no signal, which is how
-              // support inboxes rot.
-              onPressed: _kind == null || _submitting ? null : _submit,
+              // Tappable without a category so the missing pick is flagged: an
+              // uncategorised report lands in the queue as "general" with no
+              // signal, which is how support inboxes rot.
+              onPressed: _submitting ? null : _submit,
               child: _submitting
                   ? const SizedBox(
                       width: 18,

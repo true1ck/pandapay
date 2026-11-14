@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../app/design/app_theme.dart';
+import '../../../app/required_field.dart';
 import '../data/shared_directory.dart';
 
 /// Asks for the name other people in the split will see for one person.
@@ -115,7 +116,7 @@ class _RenameState extends State<SharedRenameMemberDialog> {
           textInputAction: TextInputAction.done,
           style: BambooFonts.ui(15),
           decoration: InputDecoration(
-            labelText: 'Name',
+            label: requiredLabel('Name'),
             errorText: _error,
             errorMaxLines: 3,
           ),

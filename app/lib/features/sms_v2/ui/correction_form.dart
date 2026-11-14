@@ -5,6 +5,7 @@ import '../../../app/design/bamboo_components.dart';
 import 'package:pandapay_domain/sms_v2.dart';
 import 'package:pandapay_domain/sms_v2_category.dart';
 import '../../../app/providers.dart' as app;
+import '../../../app/required_field.dart';
 import '../../consent/template_sharing_disclosure.dart';
 import '../pipeline/trace.dart';
 import '../providers/data_providers.dart';
@@ -172,9 +173,9 @@ class _CorrectionFormState extends ConsumerState<CorrectionForm> {
             DropdownButtonFormField<String>(
               initialValue: _instrument,
               isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: 'Account or card',
-                prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+              decoration: InputDecoration(
+                label: requiredLabel('Account or card'),
+                prefixIcon: const Icon(Icons.account_balance_wallet_outlined),
               ),
               items: [
                 for (final instrument in instruments.where(
@@ -198,11 +199,13 @@ class _CorrectionFormState extends ConsumerState<CorrectionForm> {
                   ? const TextInputType.numberWithOptions(decimal: true)
                   : TextInputType.text,
               decoration: InputDecoration(
-                labelText: _kind == CorrectionKind.wrongAmount
-                    ? 'Amount in rupees'
-                    : _kind == CorrectionKind.wrongDate
-                    ? 'Date (YYYY-MM-DD)'
-                    : 'Merchant name',
+                label: requiredLabel(
+                  _kind == CorrectionKind.wrongAmount
+                      ? 'Amount in rupees'
+                      : _kind == CorrectionKind.wrongDate
+                      ? 'Date (YYYY-MM-DD)'
+                      : 'Merchant name',
+                ),
                 prefixIcon: Icon(switch (_kind) {
                   CorrectionKind.wrongAmount => Icons.currency_rupee_rounded,
                   CorrectionKind.wrongDate => Icons.event_outlined,

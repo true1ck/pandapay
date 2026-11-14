@@ -228,7 +228,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Edit subscription'));
       await tester.pumpAndSettle();
-      expect(find.text('Service name'), findsOneWidget);
+      expect(find.text('Service name *', findRichText: true), findsOneWidget);
       expect(find.text('Save'), findsOneWidget);
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();

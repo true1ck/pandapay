@@ -8,6 +8,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../app/required_field.dart';
 import '../../data/local_first/pending_overlays.dart';
 import '../../data/api_exception.dart';
 import '../../data/bills_projection_api.dart';
@@ -667,6 +668,7 @@ class _AddSubscriptionDialogState extends State<_AddSubscriptionDialog> {
                           children: [
                             _FormFieldGroup(
                               title: 'Service name',
+                              required: true,
                               child: TextFormField(
                                 controller: _nameController,
                                 textCapitalization: TextCapitalization.words,
@@ -694,6 +696,7 @@ class _AddSubscriptionDialogState extends State<_AddSubscriptionDialog> {
                             const _SubscriptionFormDivider(),
                             _FormFieldGroup(
                               title: 'Typical amount',
+                              required: true,
                               child: TextFormField(
                                 controller: _amountController,
                                 keyboardType:
@@ -956,20 +959,28 @@ class _FormFieldGroup extends StatelessWidget {
   final String title;
   final Widget child;
 
-  const _FormFieldGroup({required this.title, required this.child});
+  final bool required;
+
+  const _FormFieldGroup({
+    required this.title,
+    required this.child,
+    this.required = false,
+  });
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      Text(
-        title,
-        style: BambooFonts.ui(
+      () {
+        final style = BambooFonts.ui(
           12,
           weight: FontWeight.w600,
           color: BambooInk.ink700,
-        ),
-      ),
+        );
+        return required
+            ? requiredLabel(title, style: style)
+            : Text(title, style: style);
+      }(),
       const SizedBox(height: 10),
       child,
     ],
@@ -1605,6 +1616,7 @@ class _SeriesCard extends ConsumerWidget {
         ? null
         : _nextEditableDate(series.nextExpectedOn!, series.cadenceDays);
     final formKey = GlobalKey<FormState>();
+    var submitted = false;
     final saved = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -1621,8 +1633,8 @@ class _SeriesCard extends ConsumerWidget {
                 children: [
                   TextFormField(
                     controller: name,
-                    decoration: const InputDecoration(
-                      labelText: 'Service name',
+                    decoration: InputDecoration(
+                      label: requiredLabel('Service name'),
                     ),
                     validator: (v) => (v == null || v.trim().length < 2)
                         ? 'Enter a service name'
@@ -1634,7 +1646,7 @@ class _SeriesCard extends ConsumerWidget {
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-                    decoration: const InputDecoration(labelText: 'Amount (₹)'),
+                    decoration: InputDecoration(label: requiredLabel('Amount (₹)')),
                     validator: (v) => (double.tryParse(v ?? '') ?? 0) <= 0
                         ? 'Enter a valid amount'
                         : null,
@@ -1643,8 +1655,8 @@ class _SeriesCard extends ConsumerWidget {
                   TextFormField(
                     controller: cadence,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Renewal interval (days)',
+                    decoration: InputDecoration(
+                      label: requiredLabel('Renewal interval (days)'),
                     ),
                     validator: (v) {
                       final n = int.tryParse(v ?? '');
@@ -1654,10 +1666,12 @@ class _SeriesCard extends ConsumerWidget {
                     },
                   ),
                   const SizedBox(height: AppSpace.sm),
-                  ListTile(
+                  RequiredBox(
+                    invalid: submitted && next == null,
+                    child: ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.calendar_month_outlined),
-                    title: Text(
+                    title: requiredLabel(
                       'Next renewal',
                       style: BambooFonts.ui(
                         13.5,
@@ -1684,6 +1698,7 @@ class _SeriesCard extends ConsumerWidget {
                         setDialogState(() => next = picked);
                       }
                     },
+                  ),
                   ),
                   const SizedBox(height: AppSpace.sm),
                   Align(
@@ -1715,6 +1730,7 @@ class _SeriesCard extends ConsumerWidget {
             FilledButton(
               style: BambooButtons.primary,
               onPressed: () {
+                setDialogState(() => submitted = true);
                 if (formKey.currentState!.validate() && next != null) {
                   Navigator.pop(dialogContext, true);
                 } else if (next == null) {

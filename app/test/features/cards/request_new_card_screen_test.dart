@@ -17,6 +17,12 @@ class _RecordingCardFeedbackRepository implements CardFeedbackRepository {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+
+Finder _field(String label) => find.ancestor(
+  of: find.text('$label *', findRichText: true),
+  matching: find.byType(TextField),
+);
+
 void main() {
   testWidgets('shows a validation error when submitted empty', (tester) async {
     final repo = _RecordingCardFeedbackRepository();
@@ -28,7 +34,7 @@ void main() {
     );
     await tester.tap(find.text('Submit request'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('required'), findsOneWidget);
+    expect(find.text('Required'), findsNWidgets(2));
     expect(repo.lastRequest, isNull);
   });
 
@@ -41,8 +47,8 @@ void main() {
       ),
     );
 
-    await tester.enterText(find.widgetWithText(TextField, 'Issuer (e.g. HDFC Bank)'), 'IDFC First');
-    await tester.enterText(find.widgetWithText(TextField, 'Card name'), 'Wealth Card');
+    await tester.enterText(_field('Issuer (e.g. HDFC Bank)'), 'IDFC First');
+    await tester.enterText(_field('Card name'), 'Wealth Card');
     await tester.tap(find.text('Submit request'));
     await tester.pumpAndSettle();
 

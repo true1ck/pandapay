@@ -16,6 +16,7 @@ import '../../app/design/widgets.dart';
 import '../../app/category_picker.dart';
 import '../../app/transaction_tag_picker.dart';
 import '../../app/providers.dart';
+import '../../app/required_field.dart';
 import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart'
     show SpendCategory, categoryIdForServer, userCategoryIdForServer;
@@ -80,6 +81,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   TxnRail _rail = TxnRail.unknown;
   bool _initialized = false;
   bool _saving = false;
+  bool _submitted = false;
   // After a saved SMS edit: the others that look the same, offered once the edit is committed.
   SimilarChanges? _similar;
   List<SimilarOffer> _similarOffers = const [];
@@ -176,6 +178,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   Future<void> _save() async {
     final amount = double.tryParse(_amountController.text.trim());
     if (amount == null || !amount.isFinite || amount <= 0) {
+      setState(() => _submitted = true);
       setState(() => _error = 'Enter a valid amount greater than zero.');
       return;
     }
@@ -902,8 +905,14 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     final cards = ref.watch(userCardsProvider).valueOrNull ?? const [];
     final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
 
-    InputDecoration inputDecoration(String label) => InputDecoration(
-      labelText: label,
+    InputDecoration inputDecoration(
+      String label, {
+      bool required = false,
+      String? errorText,
+    }) => InputDecoration(
+      labelText: required ? null : label,
+      label: required ? requiredLabel(label) : null,
+      errorText: errorText,
       labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
       filled: true,
       fillColor: BambooInk.glassFillOnPaper,
@@ -991,10 +1000,18 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                         decimal: true,
                       ),
                       style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                      onChanged: (_) {
+                        if (_submitted) setState(() {});
+                      },
                       decoration: inputDecoration(
                         _entryKind == TxnEntryKind.income
                             ? 'Amount credited (₹)'
                             : 'Amount (₹)',
+                        required: true,
+                        errorText: requiredError(
+                          _submitted,
+                          _amountController.text,
+                        ),
                       ),
                     ),
                     const SizedBox(height: AppSpace.lg),

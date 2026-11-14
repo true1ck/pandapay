@@ -5,6 +5,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../app/required_field.dart';
 import '../../data/local_first/pending_overlays.dart';
 import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart' show SpendCategory;
@@ -333,6 +334,7 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
   BudgetPeriod _period = BudgetPeriod.monthly;
   String? _scopeRefId;
   bool _saving = false;
+  bool _submitted = false;
   String? _error;
 
   @override
@@ -411,10 +413,12 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
             ),
             if (_scope == BudgetScope.category) ...[
               const SizedBox(height: AppSpace.md),
-              DropdownButtonFormField<String>(
+              RequiredBox(
+                invalid: _submitted && _scopeRefId == null,
+                child: DropdownButtonFormField<String>(
                 initialValue: _scopeRefId,
-                decoration: const InputDecoration(
-                  labelText: 'Category',
+                decoration: InputDecoration(
+                  label: requiredLabel('Category'),
                   prefixIcon: Icon(Icons.category_rounded),
                 ),
                 items: [
@@ -436,13 +440,16 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
                 ],
                 onChanged: (v) => setState(() => _scopeRefId = v),
               ),
+              ),
             ],
             if (_scope == BudgetScope.tag) ...[
               const SizedBox(height: AppSpace.md),
-              DropdownButtonFormField<String>(
+              RequiredBox(
+                invalid: _submitted && _scopeRefId == null,
+                child: DropdownButtonFormField<String>(
                 initialValue: _scopeRefId,
-                decoration: const InputDecoration(
-                  labelText: 'Tag',
+                decoration: InputDecoration(
+                  label: requiredLabel('Tag'),
                   prefixIcon: Icon(Icons.label_outline),
                 ),
                 items: [
@@ -452,13 +459,16 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
                 ],
                 onChanged: (value) => setState(() => _scopeRefId = value),
               ),
+              ),
             ],
             if (_scope == BudgetScope.card) ...[
               const SizedBox(height: AppSpace.md),
-              DropdownButtonFormField<String>(
+              RequiredBox(
+                invalid: _submitted && _scopeRefId == null,
+                child: DropdownButtonFormField<String>(
                 initialValue: _scopeRefId,
-                decoration: const InputDecoration(
-                  labelText: 'Card',
+                decoration: InputDecoration(
+                  label: requiredLabel('Card'),
                   prefixIcon: Icon(Icons.credit_card_rounded),
                 ),
                 items: [
@@ -479,6 +489,7 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
                     ),
                 ],
                 onChanged: (v) => setState(() => _scopeRefId = v),
+              ),
               ),
             ],
             const SizedBox(height: AppSpace.md),
@@ -501,9 +512,13 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
-              decoration: const InputDecoration(
-                labelText: 'Amount',
-                prefixIcon: Icon(Icons.currency_rupee_rounded),
+              onChanged: (_) {
+                if (_submitted) setState(() {});
+              },
+              decoration: InputDecoration(
+                label: requiredLabel('Amount'),
+                errorText: requiredError(_submitted, _amountController.text),
+                prefixIcon: const Icon(Icons.currency_rupee_rounded),
                 prefixText: '₹ ',
               ),
             ),
@@ -536,20 +551,17 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
   }
 
   Future<void> _save() async {
+    setState(() {
+      _submitted = true;
+      _error = null;
+    });
     final amount = double.tryParse(_amountController.text.trim());
-    if (amount == null || amount <= 0) {
-      setState(() => _error = 'Enter an amount above zero.');
+    if (_amountController.text.trim().isEmpty ||
+        (_scope != BudgetScope.overall && _scopeRefId == null)) {
       return;
     }
-    if (_scope != BudgetScope.overall && _scopeRefId == null) {
-      setState(
-        () => _error =
-            'Pick which ${_scope == BudgetScope.category
-                ? 'category'
-                : _scope == BudgetScope.tag
-                ? 'tag'
-                : 'card'}.',
-      );
+    if (amount == null || amount <= 0) {
+      setState(() => _error = 'Enter an amount above zero.');
       return;
     }
     final repo = ref.read(spendReportsRepositoryProvider);

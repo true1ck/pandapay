@@ -108,10 +108,11 @@ void main() {
   testWidgets('the details are checked on the spot and nothing is sent until all three are fine', (tester) async {
     final run = await mount(tester, (_) => json(startBody));
     await tapText(tester, 'Continue');
-    expect(find.textContaining('email address you used to sign in'), findsOneWidget);
+    expect(find.text('Required'), findsNWidgets(3));
 
     await typeInto(tester, 'recovery-lost-email', 'old.me@gmail.com');
     await typeInto(tester, 'recovery-phone', '12345');
+    await typeInto(tester, 'recovery-fact', '4821');
     await tapText(tester, 'Continue');
     expect(find.textContaining('valid 10-digit Indian mobile number'), findsOneWidget);
 

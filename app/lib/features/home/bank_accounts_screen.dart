@@ -9,6 +9,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
+import '../../app/required_field.dart';
 import '../../data/user_cards_repository.dart' show BankAccountSummary;
 
 class BankAccountsScreen extends ConsumerStatefulWidget {
@@ -103,7 +104,7 @@ class _BankAccountsScreenState extends ConsumerState<BankAccountsScreen> {
                   ),
                 ],
                 decoration: InputDecoration(
-                  labelText: 'Current balance',
+                  label: requiredLabel('Current balance'),
                   prefixText: '₹ ',
                   helperText: 'Enter the balance shown in your bank app.',
                   errorText: inputError,

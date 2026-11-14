@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
+import '../../app/required_field.dart';
 import '../../data/account_recovery_api.dart';
 import '../../data/api_exception.dart';
 import '../settings/feedback_support_screen.dart';
@@ -63,6 +64,7 @@ class _CantSignInScreenState extends ConsumerState<CantSignInScreen> {
 
   _Step _step = _Step.details;
   bool _busy = false;
+  bool _submitted = false;
   bool _loadingHold = true;
   String? _error;
   String? _attemptId;
@@ -149,7 +151,21 @@ class _CantSignInScreenState extends ConsumerState<CantSignInScreen> {
 
   // ------------------------------------------------------------- the steps
 
+  void _changed(String _) {
+    if (_submitted) setState(() {});
+  }
+
+  /// Marks the step as submitted; true when a required box is still empty.
+  bool _missing(List<TextEditingController> required) {
+    setState(() {
+      _submitted = true;
+      _error = null;
+    });
+    return required.any((c) => c.text.trim().isEmpty);
+  }
+
   Future<void> _submitDetails() async {
+    if (_missing([_emailController, _phoneController, _factController])) return;
     final email = _emailController.text.trim();
     if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
       setState(() => _error = 'Enter the email address you used to sign in.');
@@ -181,12 +197,14 @@ class _CantSignInScreenState extends ConsumerState<CantSignInScreen> {
       _attemptId = started.attemptId;
       _codeLength = started.codeLength;
       _codeController.clear();
+      _submitted = false;
       _step = _Step.code;
     });
     _startCountdown(started.codeLifetime);
   }
 
   Future<void> _submitCode() async {
+    if (_missing([_codeController])) return;
     final code = _codeController.text.trim();
     if (code.length != _codeLength) {
       setState(() => _error = 'Enter the $_codeLength-digit code.');
@@ -207,6 +225,7 @@ class _CantSignInScreenState extends ConsumerState<CantSignInScreen> {
     setState(() {
       _canUseRecoveryEmail = true;
       _slowPath = false;
+      _submitted = false;
       _step = _Step.newEmail;
     });
   }
@@ -226,11 +245,13 @@ class _CantSignInScreenState extends ConsumerState<CantSignInScreen> {
     setState(() {
       _canUseRecoveryEmail = false;
       _slowPath = true;
+      _submitted = false;
       _step = _Step.newEmail;
     });
   }
 
   Future<void> _submitNewEmail({bool useRecoveryEmail = false}) async {
+    if (!useRecoveryEmail && _missing([_newEmailController])) return;
     final email = _newEmailController.text.trim();
     if (!useRecoveryEmail &&
         !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
@@ -263,12 +284,14 @@ class _CantSignInScreenState extends ConsumerState<CantSignInScreen> {
     setState(() {
       _newEmailHint = result.set.hint ?? email;
       _newCodeController.clear();
+      _submitted = false;
       _step = _Step.newCode;
     });
     _startCountdown(const Duration(seconds: 60));
   }
 
   Future<void> _submitNewCode() async {
+    if (_missing([_newCodeController])) return;
     final code = _newCodeController.text.trim();
     if (code.length != _codeLength) {
       setState(() => _error = 'Enter the $_codeLength-digit code.');
@@ -354,6 +377,7 @@ class _CantSignInScreenState extends ConsumerState<CantSignInScreen> {
     _ticker?.cancel();
     setState(() {
       _step = _Step.details;
+      _submitted = false;
       _attemptId = null;
       _error = null;
       _startOver = false;
@@ -434,10 +458,12 @@ class _CantSignInScreenState extends ConsumerState<CantSignInScreen> {
       keyboardType: TextInputType.emailAddress,
       textInputAction: TextInputAction.next,
       autofillHints: const [AutofillHints.email],
-      decoration: const InputDecoration(
-        labelText: 'Your sign-in email',
+      onChanged: _changed,
+      decoration: InputDecoration(
+        label: requiredLabel('Your sign-in email'),
         helperText: 'The address you can no longer open.',
-        border: OutlineInputBorder(),
+        errorText: requiredError(_submitted, _emailController.text),
+        border: const OutlineInputBorder(),
       ),
     ),
     const SizedBox(height: AppSpace.lg),
@@ -452,10 +478,12 @@ class _CantSignInScreenState extends ConsumerState<CantSignInScreen> {
         FilteringTextInputFormatter.allow(RegExp(r'[0-9 +().-]')),
         LengthLimitingTextInputFormatter(20),
       ],
-      decoration: const InputDecoration(
-        labelText: 'Mobile number on your account',
+      onChanged: _changed,
+      decoration: InputDecoration(
+        label: requiredLabel('Mobile number on your account'),
         prefixText: '+91  ',
-        border: OutlineInputBorder(),
+        errorText: requiredError(_submitted, _phoneController.text),
+        border: const OutlineInputBorder(),
       ),
     ),
     const SizedBox(height: AppSpace.lg),
@@ -470,13 +498,15 @@ class _CantSignInScreenState extends ConsumerState<CantSignInScreen> {
         LengthLimitingTextInputFormatter(7),
       ],
       onSubmitted: (_) => _busy ? null : _submitDetails(),
-      decoration: const InputDecoration(
-        labelText: 'Card last 4 digits, or sign-up month',
+      onChanged: _changed,
+      decoration: InputDecoration(
+        label: requiredLabel('Card last 4 digits, or sign-up month'),
         helperText:
             'The last four digits of a card in your wallet. If you have no '
             'cards, the month you signed up, like 11/2026.',
         helperMaxLines: 3,
-        border: OutlineInputBorder(),
+        errorText: requiredError(_submitted, _factController.text),
+        border: const OutlineInputBorder(),
       ),
     ),
     _errorLine(),
@@ -540,9 +570,11 @@ class _CantSignInScreenState extends ConsumerState<CantSignInScreen> {
       textInputAction: TextInputAction.done,
       autofillHints: const [AutofillHints.email],
       onSubmitted: (_) => _busy ? null : _submitNewEmail(),
-      decoration: const InputDecoration(
-        labelText: 'New sign-in email',
-        border: OutlineInputBorder(),
+      onChanged: _changed,
+      decoration: InputDecoration(
+        label: requiredLabel('New sign-in email'),
+        errorText: requiredError(_submitted, _newEmailController.text),
+        border: const OutlineInputBorder(),
       ),
     ),
     _errorLine(),
@@ -583,6 +615,7 @@ class _CantSignInScreenState extends ConsumerState<CantSignInScreen> {
             ? null
             : () => setState(() {
                 _step = _Step.newEmail;
+                _submitted = false;
                 _error = null;
               }),
       )
@@ -689,8 +722,10 @@ class _CantSignInScreenState extends ConsumerState<CantSignInScreen> {
         FilteringTextInputFormatter.digitsOnly,
         LengthLimitingTextInputFormatter(_codeLength),
       ],
+      onChanged: _changed,
       decoration: InputDecoration(
-        labelText: label,
+        label: requiredLabel(label),
+        errorText: requiredError(_submitted, controller.text),
         border: const OutlineInputBorder(),
       ),
     );

@@ -299,9 +299,14 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Edit override'), findsOneWidget);
 
-    // No card selected (fell back to null) -> Save changes stays disabled.
-    final saveButton = tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Save changes'));
-    expect(saveButton.onPressed, isNull);
+    // No card selected (fell back to null) -> Save stays tappable but sends nothing.
+    final save = find.widgetWithText(FilledButton, 'Save changes');
+    expect(tester.widget<FilledButton>(save).onPressed, isNotNull);
+    await tester.ensureVisible(save);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    expect(fakeRepo.calls.where((c) => c.startsWith('update')), isEmpty);
+    expect(find.text('Edit override'), findsOneWidget);
   });
 
   testWidgets('toggling enabled while offline queues the change instead of failing outright', (tester) async {

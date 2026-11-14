@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../../app/design/app_theme.dart';
+import '../../../app/required_field.dart';
 import '../ui/shared_components.dart';
 import 'shared_editor.dart';
 
@@ -11,6 +12,10 @@ class SharedEditorFields extends StatelessWidget {
   final VoidCallback? onAddMember;
   final bool loading;
   final String? error;
+
+  /// True once Submit was tapped with something missing: required inputs that
+  /// are still empty get a red border.
+  final bool submitted;
   const SharedEditorFields({
     super.key,
     required this.editor,
@@ -18,12 +23,14 @@ class SharedEditorFields extends StatelessWidget {
     this.onAddMember,
     this.loading = false,
     this.error,
+    this.submitted = false,
   });
   Widget _field(
     String label,
     String value,
     ValueChanged<String> change, {
     String? suffix,
+    String? errorKey,
   }) => TextFormField(
     key: ValueKey('$label:${editor.contextId}:${editor.mode.name}'),
     initialValue: value,
@@ -36,7 +43,14 @@ class SharedEditorFields extends StatelessWidget {
       FocusManager.instance.primaryFocus?.unfocus();
     },
     onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-    decoration: InputDecoration(labelText: label, suffixText: suffix),
+    decoration: InputDecoration(
+      label: requiredLabel(label),
+      suffixText: suffix,
+      errorText: submitted && errorKey != null
+          ? editor.evaluation.errors[errorKey]
+          : null,
+      errorMaxLines: 2,
+    ),
   );
   @override
   Widget build(BuildContext context) {
@@ -58,37 +72,48 @@ class SharedEditorFields extends StatelessWidget {
                 'The original payment is retained. This form does not create another bank transaction.',
               ),
             ],
-            SharedTextAction(
-              label: editor.contextName.isEmpty
-                  ? 'Choose group or friend'
-                  : editor.contextName,
-              icon: Icons.people_outline_rounded,
-              onTap: onChooseContext,
+            RequiredBox(
+              invalid: submitted && !editor.contextVerified,
+              message: 'Choose who to split with',
+              child: SharedTextAction(
+                label: editor.contextName.isEmpty
+                    ? 'Choose group or friend *'
+                    : editor.contextName,
+                icon: Icons.people_outline_rounded,
+                onTap: onChooseContext,
+              ),
             ),
             if (loading) const LinearProgressIndicator(color: BambooInk.slate),
             if (error != null)
               Text(error!, style: BambooFonts.ui(12, color: BambooInk.clayInk)),
             if (editor.contextId != null) ...[
-              DropdownButtonFormField<String>(
-                key: ValueKey('${editor.contextId}:${editor.singlePayer}'),
-                initialValue:
-                    editor.members.any((m) => m.id == editor.singlePayer)
-                    ? editor.singlePayer
-                    : null,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Paid by'),
-                items: [
-                  for (final m in editor.members)
-                    DropdownMenuItem(
-                      value: m.id,
-                      child: Text(m.label, style: BambooFonts.ui(14)),
-                    ),
-                ],
-                onChanged: editor.sealed
-                    ? null
-                    : (value) {
-                        if (value != null) editor.choosePayer(value);
-                      },
+              RequiredBox(
+                invalid:
+                    submitted &&
+                    !editor.multiplePayers &&
+                    !editor.members.any((m) => m.id == editor.singlePayer),
+                message: 'Choose who paid',
+                child: DropdownButtonFormField<String>(
+                  key: ValueKey('${editor.contextId}:${editor.singlePayer}'),
+                  initialValue:
+                      editor.members.any((m) => m.id == editor.singlePayer)
+                      ? editor.singlePayer
+                      : null,
+                  isExpanded: true,
+                  decoration: InputDecoration(label: requiredLabel('Paid by')),
+                  items: [
+                    for (final m in editor.members)
+                      DropdownMenuItem(
+                        value: m.id,
+                        child: Text(m.label, style: BambooFonts.ui(14)),
+                      ),
+                  ],
+                  onChanged: editor.sealed
+                      ? null
+                      : (value) {
+                          if (value != null) editor.choosePayer(value);
+                        },
+                ),
               ),
               if (editor.hasUnavailableMembers) ...[
                 const SharedNotice(
@@ -135,6 +160,7 @@ class SharedEditorFields extends StatelessWidget {
                             ? editor.payerInputs[member.id]!.sharedText
                             : text,
                       ),
+                      errorKey: 'paid:${member.id}',
                     ),
                     if (editor.partial)
                       _field(
@@ -171,37 +197,46 @@ class SharedEditorFields extends StatelessWidget {
                     : (value) => editor.setPartial(value ?? false),
               ),
               if (editor.partial)
-                _field('Shared amount', editor.sharedText, editor.setShared),
+                _field(
+                  'Shared amount',
+                  editor.sharedText,
+                  editor.setShared,
+                  errorKey: 'shared',
+                ),
               const SizedBox(height: AppSpace.md),
-              Text(
+              requiredLabel(
                 'Shared with · ${editor.participants.length}/50',
                 style: BambooFonts.ui(13, weight: FontWeight.w600),
               ),
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  for (final member in editor.members)
-                    FilterChip(
-                      label: Text(
-                        member.label,
-                        style: BambooFonts.ui(
-                          13,
-                          weight: FontWeight.w600,
-                          color: editor.participants.contains(member.id)
-                              ? BambooInk.onSlate
-                              : BambooInk.ink900,
+              RequiredBox(
+                invalid: submitted && editor.participants.isEmpty,
+                message: 'Choose at least one person',
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    for (final member in editor.members)
+                      FilterChip(
+                        label: Text(
+                          member.label,
+                          style: BambooFonts.ui(
+                            13,
+                            weight: FontWeight.w600,
+                            color: editor.participants.contains(member.id)
+                                ? BambooInk.onSlate
+                                : BambooInk.ink900,
+                          ),
                         ),
+                        selected: editor.participants.contains(member.id),
+                        selectedColor: BambooInk.slate,
+                        checkmarkColor: BambooInk.lime,
+                        onSelected: editor.sealed
+                            ? null
+                            : (value) =>
+                                  editor.toggleParticipant(member.id, value),
                       ),
-                      selected: editor.participants.contains(member.id),
-                      selectedColor: BambooInk.slate,
-                      checkmarkColor: BambooInk.lime,
-                      onSelected: editor.sealed
-                          ? null
-                          : (value) =>
-                                editor.toggleParticipant(member.id, value),
-                    ),
-                ],
+                  ],
+                ),
               ),
               if (onAddMember != null)
                 Align(
@@ -256,6 +291,7 @@ class SharedEditorFields extends StatelessWidget {
                             : 'amount'}',
                         editor.splitInputs[m.id] ?? '',
                         (value) => editor.setSplit(m.id, value),
+                        errorKey: 'split:${m.id}',
                       ),
                     ),
               if (preview != null) ...[
