@@ -7,7 +7,9 @@ import 'package:pandapay/features/shared_expenses/data/shared_commands.dart';
 import 'package:pandapay/features/shared_expenses/runtime/shared_providers.dart';
 import 'package:pandapay/features/shared_expenses/runtime/split_share_entries.dart';
 import 'package:pandapay/features/shared_expenses/storage/shared_store.dart';
+import 'package:pandapay/features/activity/spend_exclusion.dart';
 import 'package:pandapay/features/sms_v2/ledger/reports.dart';
+import 'package:pandapay_domain/pandapay_domain.dart' show Money;
 import 'package:pandapay_domain/sms_v2_ledger.dart';
 import 'package:sqlite3/sqlite3.dart';
 
@@ -271,6 +273,17 @@ void main() {
       expect(identical(first.single, second.single), isTrue);
     });
 
+    test(
+      'an expense the person paid and split is read with what they paid',
+      () async {
+        final paid = (await read('50000')).single.paidExpenses.single;
+        expect(paid.id, 'e2');
+        expect(paid.paidMinor, 100000);
+        expect(paid.shareMinor, 50000);
+        expect(paid.occurredOn, '2026-11-09');
+      },
+    );
+
     test('rows follow what is still owed', () async {
       final owed = splitShareEntries(await read('50000')).single;
       expect(owed.countsAsSpend, isTrue);
@@ -282,12 +295,163 @@ void main() {
   test('looking at the shares never starts the Splits runtime', () async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
-    final shares = await container.read(splitShareEntriesProvider.future);
-    expect(shares, isEmpty);
+    final overlay = await container.read(splitOverlayProvider.future);
+    expect(overlay.isEmpty, isTrue);
     expect(
       container.exists(sharedExpensesRuntimeProvider),
       isFalse,
       reason: 'the app shell starts it; a reader must not do so earlier',
     );
+  });
+
+  group('a split of a payment the person made', () {
+    TransactionEntry bank(
+      String id, {
+      int rupees = 1200,
+      DateTime? at,
+      bool excluded = false,
+      TxnEntryKind kind = TxnEntryKind.spend,
+      String status = 'active',
+    }) => TransactionEntry(
+      id: id,
+      amount: Money.fromRupees(rupees),
+      occurredAt: at ?? DateTime(2026, 11, 9, 20),
+      merchantName: 'Dinner place',
+      source: 'sms',
+      status: status,
+      entryKind: kind,
+      excludeFromSpend: excluded,
+      tags: const [],
+    );
+
+    SplitOverlay overlayFor({
+      String day = '2026-11-09',
+      int paid = 120000,
+      int share = 60000,
+    }) => splitOverlay([
+      SplitShareContext(
+        id: 'c',
+        name: 'Ravi',
+        expenses: const [],
+        paidExpenses: [
+          SplitPaidExpense(
+            id: 'e1',
+            title: 'Dinner',
+            occurredOn: day,
+            paidMinor: paid,
+            shareMinor: share,
+          ),
+        ],
+      ),
+    ]);
+
+    test('only your share counts: the payment steps aside for it', () {
+      final base = [bank('p1')];
+      final applied = applySplitOverlay(base, overlayFor());
+      expect(applied.payments.single.excludeFromSpend, isTrue);
+      expect(applied.payments.single.excludeReason, kSplitCoveredReason);
+      expect(
+        applied.payments.single.amount.paise,
+        120000,
+        reason: 'cash is cash',
+      );
+      expect(applied.shares.single.amount.paise, 60000);
+      expect(applied.shares.single.note, contains('your share of'));
+      final rows = [...applied.payments, ...applied.shares];
+      final model = LedgerReadModel(
+        ledger: LedgerSnapshot(entries: [], events: []),
+        transactions: rows,
+      );
+      expect(model.totalsForTransactions(rows).spendMinor, 60000);
+    });
+
+    test('the day before or after still matches, two days away does not', () {
+      for (final at in [DateTime(2026, 11, 8, 23), DateTime(2026, 11, 10, 1)]) {
+        expect(
+          applySplitOverlay([bank('p', at: at)], overlayFor()).shares,
+          hasLength(1),
+        );
+      }
+      expect(
+        applySplitOverlay([
+          bank('p', at: DateTime(2026, 11, 12)),
+        ], overlayFor()).shares,
+        isEmpty,
+      );
+    });
+
+    test('a different amount is not the same payment', () {
+      final base = [bank('p', rupees: 1000)];
+      final applied = applySplitOverlay(base, overlayFor());
+      expect(identical(applied.payments, base), isTrue);
+      expect(applied.shares, isEmpty);
+    });
+
+    test('two payments that fit are not guessed between', () {
+      final base = [bank('p1'), bank('p2')];
+      final applied = applySplitOverlay(base, overlayFor());
+      expect(identical(applied.payments, base), isTrue);
+      expect(applied.shares, isEmpty);
+    });
+
+    test('a payment the person already left out is not touched', () {
+      expect(
+        applySplitOverlay([bank('p', excluded: true)], overlayFor()).shares,
+        isEmpty,
+      );
+    });
+
+    test('only an active spend is replaced', () {
+      expect(
+        applySplitOverlay([
+          bank('p', kind: TxnEntryKind.income),
+        ], overlayFor()).shares,
+        isEmpty,
+      );
+      expect(
+        applySplitOverlay([bank('p', status: 'ignored')], overlayFor()).shares,
+        isEmpty,
+      );
+    });
+
+    test('a share row is never mistaken for a payment', () {
+      final share = splitShareEntries([
+        SplitShareContext(
+          id: 'c',
+          name: 'Ravi',
+          expenses: [_e('x', '2026-11-09', 120000)],
+        ),
+      ]);
+      expect(applySplitOverlay(share, overlayFor()).shares, isEmpty);
+    });
+
+    test('one payment is stood in for by one split only', () {
+      final two = SplitOverlay(
+        linked: [...overlayFor().linked, ...overlayFor().linked],
+      );
+      final applied = applySplitOverlay([bank('p1')], two);
+      // Both splits fit the one payment equally, so it is replaced once.
+      expect(applied.shares, hasLength(1));
+    });
+
+    test('an unchanged payment keeps the same copy between calls', () {
+      final base = [bank('p1')];
+      final memo = <String, (TransactionEntry, TransactionEntry)>{};
+      final a = applySplitOverlay(base, overlayFor(), memo: memo);
+      final b = applySplitOverlay(base, overlayFor(), memo: memo);
+      expect(identical(a.payments.single, b.payments.single), isTrue);
+    });
+
+    test('a share as big as the payment is not a split worth changing', () {
+      expect(overlayFor(share: 120000).linked, isEmpty);
+    });
+
+    test('the label says why the payment is not counted in full', () {
+      final applied = applySplitOverlay([bank('p1')], overlayFor());
+      expect(
+        leftOutLabel(applied.payments.single),
+        'Counted as your share of a split',
+      );
+    });
   });
 }

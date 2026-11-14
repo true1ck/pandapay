@@ -13,7 +13,7 @@ import 'package:pandapay/app/design/widgets.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/activity/activity_screen.dart';
 import 'package:pandapay/features/shared_expenses/runtime/shared_providers.dart'
-    show splitShareEntriesProvider;
+    show splitOverlayProvider;
 import 'package:pandapay/features/shared_expenses/runtime/split_share_entries.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
@@ -164,6 +164,51 @@ Future<void> _pump(
 }
 
 void main() {
+  testWidgets('a payment you split counts only your share, shown beside it', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    final day =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
+    final overlay = splitOverlay([
+      SplitShareContext(
+        id: 'c',
+        name: 'Ravi',
+        expenses: const [],
+        paidExpenses: [
+          SplitPaidExpense(
+            id: 'e1',
+            title: 'Dinner',
+            occurredOn: day,
+            paidMinor: 120000,
+            shareMinor: 60000,
+          ),
+        ],
+      ),
+    ]);
+    await _pump(
+      tester,
+      cards: [],
+      repo: _FakeUserCardsRepository([
+        _txn(
+          id: 'v2:abc',
+          amount: Money.fromRupees(1200),
+          occurredAt: now,
+          merchantName: 'Avighna Enterprise',
+        ),
+      ]),
+      overrides: [
+        splitOverlayProvider.overrideWith((ref) => Stream.value(overlay)),
+      ],
+    );
+
+    expect(find.text('Avighna Enterprise'), findsOneWidget);
+    expect(find.textContaining('Counted as your share of a split'), findsOneWidget);
+    expect(find.text('Dinner'), findsOneWidget);
+    expect(find.textContaining('Split · Ravi · your share of'), findsOneWidget);
+  });
+
   testWidgets('shows the share of a split somebody else paid among the rest', (
     tester,
   ) async {
@@ -198,7 +243,9 @@ void main() {
         ),
       ]),
       overrides: [
-        splitShareEntriesProvider.overrideWith((ref) => Stream.value(share)),
+        splitOverlayProvider.overrideWith(
+          (ref) => Stream.value(SplitOverlay(rows: share)),
+        ),
       ],
     );
 

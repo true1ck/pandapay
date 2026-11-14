@@ -163,50 +163,72 @@ final sharedWaitingCountProvider = FutureProvider.autoDispose<int>((ref) async {
   }
 });
 
-/// The person's share of splits somebody else paid, as Activity rows. Empty
-/// when Splits is off, signed out or not ready. Re-read (at most every 1.5 s)
-/// when the phone's copy of Splits changes; rows whose content did not change
-/// keep their instance, so consumers that compare by identity (the ledger
-/// model) rebuild only when a share really changed.
-final splitShareEntriesProvider = StreamProvider<List<TransactionEntry>>((ref) {
-  if (!ref.watch(sharedExpensesEnabledProvider)) return Stream.value(const []);
+/// What Splits adds to the person's spending view: their share of splits
+/// somebody else paid, and their share of splits they paid for from a payment of
+/// their own (see [applySplitOverlay]). Empty when Splits is off, signed out or
+/// not ready. Re-read (at most every 1.5 s) when the phone's copy of Splits
+/// changes; rows whose content did not change keep their instance, so consumers
+/// that compare by identity (the ledger model) rebuild only when something
+/// really changed.
+final splitOverlayProvider = StreamProvider<SplitOverlay>((ref) {
+  if (!ref.watch(sharedExpensesEnabledProvider)) {
+    return Stream.value(SplitOverlay.empty);
+  }
   final runtime = ref.watch(sharedRuntimeLiveProvider);
-  if (runtime == null) return Stream.value(const []);
-  final controller = StreamController<List<TransactionEntry>>();
-  final previous = <String, (String, TransactionEntry)>{};
-  List<TransactionEntry>? last;
-  Timer? timer;
+  if (runtime == null) return Stream.value(SplitOverlay.empty);
+  final controller = StreamController<SplitOverlay>();
   final reader = SplitShareReader(runtime.store, runtime.accountId);
+  final previousRows = <String, (String, TransactionEntry)>{};
+  final previousLinked = <String, (String, SplitLinkedShare)>{};
+  SplitOverlay? last;
+  Timer? timer;
+  String key(TransactionEntry e) => jsonEncode(e.toJson());
   void compute() {
     if (controller.isClosed) return;
     try {
-      final next = splitShareEntries(reader.read());
-      final kept = <String, (String, TransactionEntry)>{};
+      final next = splitOverlay(reader.read());
+      final keptRows = <String, (String, TransactionEntry)>{};
       final rows = <TransactionEntry>[
-        for (final entry in next)
+        for (final entry in next.rows)
           () {
-            final key = jsonEncode(entry.toJson());
-            final old = previous[entry.id];
-            final row = old != null && old.$1 == key ? old.$2 : entry;
-            kept[entry.id] = (key, row);
+            final k = key(entry);
+            final old = previousRows[entry.id];
+            final row = old != null && old.$1 == k ? old.$2 : entry;
+            keptRows[entry.id] = (k, row);
             return row;
           }(),
       ];
-      previous
+      final keptLinked = <String, (String, SplitLinkedShare)>{};
+      final linked = <SplitLinkedShare>[
+        for (final link in next.linked)
+          () {
+            final k = '${key(link.row)}|${link.paidMinor}|${link.day}';
+            final old = previousLinked[link.row.id];
+            final out = old != null && old.$1 == k ? old.$2 : link;
+            keptLinked[link.row.id] = (k, out);
+            return out;
+          }(),
+      ];
+      previousRows
         ..clear()
-        ..addAll(kept);
-      final unchanged =
-          last != null &&
-          last!.length == rows.length &&
+        ..addAll(keptRows);
+      previousLinked
+        ..clear()
+        ..addAll(keptLinked);
+      bool same<T>(List<T> a, List<T> b) =>
+          a.length == b.length &&
           [
-            for (var i = 0; i < rows.length; i++) identical(last![i], rows[i]),
-          ].every((same) => same);
-      if (!unchanged) {
-        last = rows;
-        controller.add(rows);
+            for (var i = 0; i < a.length; i++) identical(a[i], b[i]),
+          ].every((x) => x);
+      final before = last;
+      if (before == null ||
+          !same(before.rows, rows) ||
+          !same(before.linked, linked)) {
+        last = SplitOverlay(rows: rows, linked: linked);
+        controller.add(last!);
       }
     } catch (_) {
-      if (last == null) controller.add(const []);
+      if (last == null) controller.add(SplitOverlay.empty);
     }
   }
 
@@ -224,3 +246,8 @@ final splitShareEntriesProvider = StreamProvider<List<TransactionEntry>>((ref) {
   });
   return controller.stream;
 });
+
+/// The share rows alone (see [splitOverlayProvider]).
+final splitShareEntriesProvider = Provider<AsyncValue<List<TransactionEntry>>>(
+  (ref) => ref.watch(splitOverlayProvider).whenData((o) => o.rows),
+);

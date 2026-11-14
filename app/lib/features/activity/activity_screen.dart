@@ -40,9 +40,9 @@ import 'transaction_avatar.dart';
 import 'transaction_badge.dart';
 import '../sms_v2/storage/outbox_store.dart';
 import '../shared_expenses/runtime/shared_providers.dart'
-    show splitShareEntriesProvider;
+    show splitOverlayProvider;
 import '../shared_expenses/runtime/split_share_entries.dart'
-    show isSplitShareEntry;
+    show applySplitOverlay, isSplitShareEntry;
 import '../sms_v2/sync/learning_signals.dart';
 import '../sms_v2/ui/review_controller.dart'
     show readSharingConsent, smsReviewController;
@@ -1872,16 +1872,21 @@ final activityTransactionsProvider = FutureProvider<List<TransactionEntry>>((
     tagIds: filter.tagIds,
     untagged: filter.untagged,
   );
-  // The person's share of splits somebody else paid sits among the rest, so
-  // what they owe shows up where they look for what they spent.
+  // What the person owes in splits sits among the rest, so it shows up where
+  // they look for what they spent; a payment they split is marked as counting
+  // only their share.
+  final applied = applySplitOverlay(
+    entries,
+    ref.watch(splitOverlayProvider).valueOrNull,
+  );
   final shares = activityShareRows(
-    ref.watch(splitShareEntriesProvider).valueOrNull ?? const [],
+    applied.shares,
     from: filter.from,
     to: filter.to,
     query: filter.query,
   );
   final unique = {
-    for (final entry in [...entries, ...shares]) entry.id: entry,
+    for (final entry in [...applied.payments, ...shares]) entry.id: entry,
   };
   return unique.values
       .where(
