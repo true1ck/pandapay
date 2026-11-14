@@ -227,13 +227,29 @@ async function requireVerifiedSession(req, res, next) {
   }
 }
 
+// Membership was one extra database transaction on every request. A positive answer is reused for a few
+// seconds; a negative or failed one is never cached, so a new member is let in at once and only a removal
+// can lag by up to MEMBERSHIP_CACHE_TTL_MS (account deletion is enforced separately in withUserClient).
+const MEMBERSHIP_CACHE_TTL_MS = 10_000;
+const MEMBERSHIP_CACHE_MAX_ENTRIES = 5_000;
+const membershipCache = new Map();
+
 async function getProductMembership(userId) {
-  return withUserClient(userId, async (client) => {
+  const cached = membershipCache.get(userId);
+  if (cached && cached > Date.now()) return true;
+  const isMember = await withUserClient(userId, async (client) => {
     const result = await client.query(
       'SELECT promotions.current_user_is_member() AS is_member',
     );
     return result.rows[0]?.is_member === true;
   });
+  if (isMember) {
+    if (membershipCache.size >= MEMBERSHIP_CACHE_MAX_ENTRIES) membershipCache.delete(membershipCache.keys().next().value);
+    membershipCache.set(userId, Date.now() + MEMBERSHIP_CACHE_TTL_MS);
+  } else {
+    membershipCache.delete(userId);
+  }
+  return isMember;
 }
 
 /** With the phone lock on, an account that has no phone can do nothing but add one. */
@@ -295,4 +311,5 @@ module.exports = {
   fetchCurrentSession,
   SessionVerificationError,
   _sessionCache: sessionCache,
+  _membershipCache: membershipCache,
 };

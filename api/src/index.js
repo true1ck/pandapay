@@ -156,6 +156,18 @@ app.set('trust proxy', resolveTrustProxyHops());
 // IDs and route templates without persistent account identifiers.
 app.use(optionalAuth);
 app.use(requestLogger);
+// Bounded first-come-first-served line in front of the database: a burst waits its turn and, when the line or
+// the wait is too long, is refused fast with 503 + Retry-After (never a 500). See admission.js.
+if (process.env.ADMISSION_ENABLED !== 'false') {
+  // Defaults measured with scripts/bench_http.js --conc 100 --retries 6: overall cap = pool size (no waiting on the
+  // pool), 13 s max wait (the app gives up on a response at 15 s), heavy/push classes ~60% of the pool.
+  app.use(require('./admission').createAdmission({
+    maxConcurrent: Number(process.env.ADMISSION_MAX_CONCURRENT) || config.dbPoolMax,
+    heavyMax: Number(process.env.ADMISSION_HEAVY_MAX) || Math.max(2, Math.round(config.dbPoolMax * 0.6)),
+    pushMax: Number(process.env.ADMISSION_PUSH_MAX) || Math.max(2, Math.round(config.dbPoolMax * 0.6)),
+    maxWaitMs: Number(process.env.ADMISSION_MAX_WAIT_MS) || 13000,
+  }));
+}
 app.use(rejectMalformedClientIp);
 app.use(...createCorsPolicy());
 // SMS pipeline v2 (WP-08): registered ahead of the global 100 KiB JSON parser because facts:batch reads its own, larger body. Routes answer 404 unless the sms_pipeline_v2_enabled flag is on.

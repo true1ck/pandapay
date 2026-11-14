@@ -35,6 +35,10 @@ function isTransientDbError(err) {
  * value reaching SQL is, in practice, a malformed uuid path/body parameter.
  */
 function classifyDbError(err) {
+  // No pool connection within the connect timeout (the pg error carries no code): busy, retry shortly.
+  if (err?.message === 'timeout exceeded when trying to connect') {
+    return { status: 503, body: { error: 'server_busy', retryable: true } };
+  }
   const code = err?.code;
   if (typeof code !== 'string') return null;
   if (code === '22P02') return { status: 400, body: { error: 'invalid_id' } };
@@ -51,7 +55,7 @@ function classifyDbError(err) {
 function respondDbError(res, err) {
   const mapped = classifyDbError(err);
   if (!mapped) return false;
-  if (mapped.body.retryable && typeof res.set === 'function') res.set('Retry-After', '1');
+  if (mapped.body.retryable && typeof res.set === 'function') res.set('Retry-After', mapped.body.error === 'server_busy' ? '5' : '1');
   res.status(mapped.status).json(mapped.body);
   return true;
 }

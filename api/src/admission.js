@@ -1,0 +1,192 @@
+'use strict';
+
+/**
+ * Admission control: a bounded first-come-first-served line in front of the database.
+ *
+ * Why: the pool has a handful of connections. Without a line, a burst makes requests wait on the pool,
+ * hit its 5 s connect timeout and answer a bare 500, which the app reads as a possibly-bad change (it
+ * parks a change for an hour after repeated 500s on the same row). Here a request waits its turn, and
+ * when the wait or the line is too long it is refused fast with 503 + Retry-After, which the app treats
+ * as "server busy, try again" and keeps the data.
+ *
+ * Three limits, checked in this order (all FIFO, one shared deadline):
+ *   1. per user: at most one /sync/push at a time (also serialises two devices of one account);
+ *   2. per class: a few slots for /sync/push and for heavy report routes, so they cannot starve the rest;
+ *   3. overall: total in-flight requests, a small multiple of the pool size.
+ * A request whose client has gone away while it waits leaves the line without running.
+ *
+ * ponytail: in-process only (one API container). With several containers each enforces its own caps;
+ * move the per-user lane to Postgres/Redis only if the API is scaled out and needs a global order.
+ */
+
+const { AsyncLocalStorage } = require('node:async_hooks');
+
+const als = new AsyncLocalStorage();
+
+const POOL_TIMEOUT_MESSAGE = 'timeout exceeded when trying to connect';
+const isPoolTimeout = (err) => err?.message === POOL_TIMEOUT_MESSAGE;
+
+// Called by the database layer when it could not get a connection in time. The response of the request
+// that was running is then answered 503 + Retry-After instead of the route's generic 500.
+function notePoolBusy() {
+  const store = als.getStore();
+  if (store) store.res.locals.poolBusy = true;
+}
+
+class Gate {
+  constructor(limit, maxQueue) {
+    this.limit = limit;
+    this.maxQueue = maxQueue;
+    this.active = 0;
+    this.queue = []; // FIFO of { grant, dead }
+  }
+
+  /** Resolves with a release function, or null when the line is full. `ctl.cancelled()` drops a waiter. */
+  acquire(ctl) {
+    if (this.active < this.limit && this.queue.length === 0) {
+      this.active += 1;
+      return Promise.resolve(this._releaser());
+    }
+    if (this.queue.length >= this.maxQueue) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      const waiter = { resolve, ctl };
+      this.queue.push(waiter);
+      ctl.onCancel(() => {
+        const i = this.queue.indexOf(waiter);
+        if (i >= 0) this.queue.splice(i, 1);
+        resolve(undefined); // cancelled: neither granted nor refused
+      });
+    });
+  }
+
+  _releaser() {
+    let done = false;
+    return () => {
+      if (done) return;
+      done = true;
+      this.active -= 1;
+      this._drain();
+    };
+  }
+
+  _drain() {
+    while (this.active < this.limit && this.queue.length > 0) {
+      const waiter = this.queue.shift();
+      this.active += 1;
+      waiter.resolve(this._releaser());
+    }
+  }
+}
+
+// Routes measured at 100 ms - 1 s+ per call on a 40k-transaction account (see scripts/bench_http.js).
+const HEAVY_GET = new Set(['/account-summaries', '/spend-report', '/monthly-reports', '/recurring', '/user-cards']);
+
+function classify(req) {
+  const path = req.path;
+  if (path === '/health' || path === '/ready') return null; // liveness probes never queue
+  if (req.method === 'POST' && path === '/sync/push') return 'push';
+  if (req.method === 'GET' && HEAVY_GET.has(path)) return 'heavy';
+  return 'default';
+}
+
+function createAdmission({
+  maxConcurrent = 20,
+  heavyMax = 3,
+  pushMax = 3,
+  maxQueue = 200,
+  maxWaitMs = 8000,
+} = {}) {
+  const overall = new Gate(maxConcurrent, maxQueue);
+  const classes = {
+    push: new Gate(pushMax, maxQueue),
+    heavy: new Gate(heavyMax, maxQueue),
+  };
+  const userLanes = new Map(); // userId -> Gate(1); removed when idle
+
+  const stats = { admitted: 0, refused: 0, cancelled: 0 };
+
+  function retryAfterSeconds() {
+    // Rough drain time of the overall line, clamped to what the app handles well (5-60 s is ideal for it).
+    const queued = overall.queue.length;
+    return Math.min(30, Math.max(5, 5 + Math.ceil(queued / Math.max(1, maxConcurrent))));
+  }
+
+  function refuse(res) {
+    stats.refused += 1;
+    if (res.headersSent) return;
+    res.set('Retry-After', String(retryAfterSeconds()));
+    res.status(503).json({ error: 'server_busy', retryable: true });
+  }
+
+  function middleware(req, res, next) {
+    const cls = classify(req);
+    if (cls === null) return next();
+
+    // A response whose request waited on the pool (not on us) is still a busy server, not a bug.
+    const status = res.status.bind(res);
+    res.status = (code) => {
+      if (code === 500 && res.locals.poolBusy) {
+        res.set('Retry-After', String(retryAfterSeconds()));
+        return status(503);
+      }
+      return status(code);
+    };
+
+    const cancels = [];
+    let cancelled = false;
+    let admitted = false;
+    const ctl = { onCancel: (fn) => { if (cancelled) fn(); else cancels.push(fn); } };
+    const releases = [];
+    const releaseAll = () => { while (releases.length) releases.pop()(); };
+    const leaveLine = () => {
+      if (cancelled) return;
+      cancelled = true;
+      cancels.splice(0).forEach((fn) => fn());
+      releaseAll();
+    };
+    // 'close' fires after a normal finish too, and when the client hangs up mid-request. A request that is
+    // still waiting just leaves the line. One already running keeps its work going (we cannot stop the
+    // handler), so its slots are freed here; that can briefly overshoot a cap after an abort.
+    res.on('close', () => {
+      if (!admitted && !res.writableEnded) { stats.cancelled += 1; leaveLine(); } else releaseAll();
+    });
+
+    const deadline = setTimeout(() => {
+      if (admitted || cancelled) return;
+      leaveLine();
+      refuse(res);
+    }, maxWaitMs);
+    deadline.unref?.();
+
+    (async () => {
+      const gates = [];
+      if (cls === 'push' && req.userId) {
+        let lane = userLanes.get(req.userId);
+        if (!lane) { lane = new Gate(1, 4); userLanes.set(req.userId, lane); }
+        gates.push({ gate: lane, lane: true });
+      }
+      if (classes[cls]) gates.push({ gate: classes[cls] });
+      gates.push({ gate: overall });
+
+      for (const { gate, lane } of gates) {
+        const release = await gate.acquire(ctl);
+        if (release === undefined) return; // client left or deadline hit while waiting
+        if (release === null) { clearTimeout(deadline); leaveLine(); refuse(res); return; } // line is full
+        // Releases run last-pushed-first: the gate is released, then an idle lane is dropped from the map.
+        if (lane) releases.push(() => { if (gate.active === 0 && gate.queue.length === 0) userLanes.delete(req.userId); });
+        releases.push(release);
+        if (cancelled) { releaseAll(); return; }
+      }
+      clearTimeout(deadline);
+      admitted = true;
+      stats.admitted += 1;
+      als.run({ req, res }, next);
+    })().catch(next);
+  }
+
+  middleware.stats = stats;
+  middleware._gates = { overall, classes, userLanes };
+  return middleware;
+}
+
+module.exports = { createAdmission, notePoolBusy, isPoolTimeout, classify, Gate, _als: als };

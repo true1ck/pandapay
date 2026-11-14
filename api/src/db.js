@@ -2,6 +2,7 @@ const { Pool } = require('pg');
 const config = require('./config');
 const { resolveDatabaseTls } = require('./db_tls');
 const { safeErrorCode } = require('./safeErrorCode');
+const { notePoolBusy, isPoolTimeout } = require('./admission');
 const { createPartnerWebhookPool, createImapWorkerPool,createAccountLifecyclePool,createSharedFeedbackPool,createNotificationOutboxPool } = require('./service_pools');
 const partnerWebhookPool = createPartnerWebhookPool(config.partnerWebhookDatabaseUrl);
 const imapWorkerPool = createImapWorkerPool(config.imapPollDatabaseUrl);
@@ -45,7 +46,15 @@ pool.on('error', (err) => {
  * returns null and every owner-scoped RLS policy denies by construction.
  */
 async function withUserClient(userId, fn) {
-  const client = await pool.connect();
+  let client;
+  try {
+    client = await pool.connect();
+  } catch (err) {
+    // No connection within the pool's connect timeout: the server is busy, not broken. Let the request's
+    // answer become 503 + Retry-After instead of a generic 500 (see admission.js).
+    if (isPoolTimeout(err)) notePoolBusy();
+    throw err;
+  }
   let discardConnection;
   try {
     await client.query('BEGIN');
