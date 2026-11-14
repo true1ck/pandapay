@@ -151,6 +151,23 @@ void main() {
       expect(find.byType(AccountScreen), findsOneWidget);
     },
   );
+  testWidgets('system back on Wallet, Insights and You returns to Home', (
+    tester,
+  ) async {
+    await _pumpApp(tester);
+    final scope = ProviderScope.containerOf(
+      tester.element(find.byType(MaterialApp)),
+    );
+    for (final path in [AppRoute.cards, AppRoute.insights, AppRoute.account]) {
+      scope.read(goRouterProvider).go(path);
+      await tester.pumpAndSettle();
+      expect(find.byType(HomeScreen), findsNothing);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(HomeScreen), findsOneWidget, reason: 'back on $path');
+    }
+  });
+
   testWidgets(
     'initial route renders Home inside the shell with Home highlighted',
     (tester) async {

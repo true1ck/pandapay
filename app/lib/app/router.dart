@@ -1395,10 +1395,19 @@ class _AppShellState extends ConsumerState<_AppShell> {
     // Insights/Spending. Only its own navigation controls change the view.
     final tutorialSeen = ref.watch(tutorialSeenProvider);
     final showTutorial = !(tutorialSeen.valueOrNull ?? true);
+    // Back on Wallet / Insights / You goes to Home; only Home lets the app
+    // close. Anything pushed on the shell navigator pops first (go_router
+    // tries the deepest navigator before this route sees the event).
+    final onHomeTab = widget.location == AppRoute.home;
     return PopScope(
-      canPop: !showTutorial,
+      canPop: !showTutorial && onHomeTab,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && showTutorial) unawaited(_finishTutorial(false));
+        if (didPop) return;
+        if (showTutorial) {
+          unawaited(_finishTutorial(false));
+        } else if (!onHomeTab) {
+          context.go(AppRoute.home);
+        }
       },
       child: Scaffold(
         backgroundColor: BambooInk.paper,
