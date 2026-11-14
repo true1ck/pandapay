@@ -2,7 +2,7 @@ const { Pool } = require('pg');
 const config = require('./config');
 const { resolveDatabaseTls } = require('./db_tls');
 const { safeErrorCode } = require('./safeErrorCode');
-const { notePoolBusy, isPoolTimeout } = require('./admission');
+const { noteDbError } = require('./admission');
 const { createPartnerWebhookPool, createImapWorkerPool,createAccountLifecyclePool,createSharedFeedbackPool,createNotificationOutboxPool } = require('./service_pools');
 const partnerWebhookPool = createPartnerWebhookPool(config.partnerWebhookDatabaseUrl);
 const imapWorkerPool = createImapWorkerPool(config.imapPollDatabaseUrl);
@@ -52,7 +52,7 @@ async function withUserClient(userId, fn) {
   } catch (err) {
     // No connection within the pool's connect timeout: the server is busy, not broken. Let the request's
     // answer become 503 + Retry-After instead of a generic 500 (see admission.js).
-    if (isPoolTimeout(err)) notePoolBusy();
+    noteDbError(err);
     throw err;
   }
   let discardConnection;
@@ -79,6 +79,8 @@ async function withUserClient(userId, fn) {
     await client.query('COMMIT');
     return result;
   } catch (err) {
+    // Remember what this database error means (busy/away -> 503, bad id -> 400, ...) for the response; see admission.js.
+    noteDbError(err);
     try { await client.query('ROLLBACK'); } catch(error) { discardConnection=error; }
     throw err;
   } finally {

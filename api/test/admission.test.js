@@ -189,3 +189,71 @@ test('the reporter logs while the line is busy and stays silent when idle', asyn
   assert.equal(lines[0].admittedInInterval, 1);
   assert.equal(lines[0].poolWaiting, 3);
 });
+
+test('isDbUnavailable: restarts, failovers and lost connections are 503 material, application errors are not', () => {
+  const { isDbUnavailable } = require('../src/admission');
+  const yes = [
+    Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:5432'), { code: 'ECONNREFUSED' }),
+    Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' }),
+    Object.assign(new Error('terminating connection due to administrator command'), { code: '57P01' }),
+    Object.assign(new Error('the database system is starting up'), { code: '57P03' }),
+    Object.assign(new Error('connection failure'), { code: '08006' }),
+    new Error('Connection terminated unexpectedly'),
+    new Error('timeout exceeded when trying to connect'),
+    new Error('Connection terminated due to connection timeout'),
+  ];
+  const no = [
+    Object.assign(new Error('duplicate key'), { code: '23505' }),
+    Object.assign(new Error('invalid input syntax for type uuid'), { code: '22P02' }),
+    Object.assign(new Error('permission denied'), { code: '42501' }),
+    Object.assign(new Error('canceling statement due to statement timeout'), { code: '57014' }), // handled as transient elsewhere
+    new TypeError("Cannot read properties of undefined (reading 'rows')"),
+    null,
+    undefined,
+  ];
+  for (const e of yes) assert.equal(isDbUnavailable(e), true, String(e?.message));
+  for (const e of no) assert.equal(isDbUnavailable(e), false, String(e?.message));
+});
+
+test('classifyDbError answers a lost database connection with 503 server_busy', () => {
+  const { classifyDbError } = require('../src/http_db_errors');
+  const out = classifyDbError(Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }));
+  assert.deepEqual(out, { status: 503, body: { error: 'server_busy', retryable: true } });
+  assert.equal(classifyDbError(Object.assign(new Error('x'), { code: '23505' })).status, 409);
+});
+
+test('a database error with a known meaning replaces the route\'s generic 500', async () => {
+  const { noteDbError, _als } = require('../src/admission');
+  const cases = [
+    [Object.assign(new Error('invalid input syntax for type uuid'), { code: '22P02' }), 400, { error: 'invalid_id' }],
+    [Object.assign(new Error('duplicate key'), { code: '23505' }), 409, { error: 'duplicate' }],
+    [Object.assign(new Error('violates foreign key'), { code: '23503' }), 409, { error: 'reference_conflict' }],
+    [Object.assign(new Error('canceling statement due to statement timeout'), { code: '57014' }), 503, { error: 'transient_db_error', retryable: true }],
+    [Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }), 503, { error: 'server_busy', retryable: true }],
+  ];
+  for (const [err, status, body] of cases) {
+    const mw = createAdmission({ maxConcurrent: 5, maxWaitMs: 1000 });
+    const a = send(mw); await tick();
+    _als.run({ res: a.res }, () => noteDbError(err));
+    a.res.status(500).json({ error: 'internal_error' });
+    assert.equal(a.res.statusCode, status, err.code);
+    assert.deepEqual(a.res.body, body, err.code);
+    if (body.retryable) assert.ok(a.res.headers['Retry-After'], 'Retry-After on 503');
+    else assert.equal(a.res.headers['Retry-After'], undefined);
+  }
+});
+
+test('unmapped errors keep their 500, and a route that answers something else is untouched', async () => {
+  const { noteDbError, _als } = require('../src/admission');
+  const mw = createAdmission({ maxConcurrent: 5, maxWaitMs: 1000 });
+  const a = send(mw); await tick();
+  _als.run({ res: a.res }, () => noteDbError(new TypeError('boom')));
+  a.res.status(500).json({ error: 'internal_error' });
+  assert.equal(a.res.statusCode, 500);
+  assert.deepEqual(a.res.body, { error: 'internal_error' });
+  const b = send(mw); await tick();
+  _als.run({ res: b.res }, () => noteDbError(Object.assign(new Error('dup'), { code: '23505' })));
+  b.res.status(409).json({ error: 'A tag with that name already exists.' }); // the route's own, more specific answer
+  assert.equal(b.res.statusCode, 409);
+  assert.deepEqual(b.res.body, { error: 'A tag with that name already exists.' });
+});

@@ -225,8 +225,10 @@ function onVerifiedSession(hook) {
 
 function sendSessionError(res, error) {
   if (error instanceof SessionVerificationError) {
+    if (error.status === 503) res.set('Retry-After', String(5 + Math.floor(Math.random() * 4)));
     return res.status(error.status).json({ error: error.code });
   }
+  res.set('Retry-After', String(5 + Math.floor(Math.random() * 4)));
   return res.status(503).json({ error: 'access_check_unavailable' });
 }
 

@@ -36,7 +36,7 @@ function isTransientDbError(err) {
  */
 function classifyDbError(err) {
   // No pool connection within the connect timeout (the pg error carries no code): busy, retry shortly.
-  if (err?.message === 'timeout exceeded when trying to connect') {
+  if (require('./admission').isDbUnavailable(err)) {
     return { status: 503, body: { error: 'server_busy', retryable: true } };
   }
   const code = err?.code;
