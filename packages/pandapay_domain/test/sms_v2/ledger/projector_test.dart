@@ -734,4 +734,32 @@ void main() {
     });
     expect(cardUsage(card), 10000);
   });
+
+  test('breakdown lines are slices: moneyIn, moneyOut and spend unchanged', () {
+    final iso = at.toIso8601String();
+    final cases = <(EventType, Fact, LegRole)>[
+      (EventType.dividend, h.credit('dividend', 1000, at: iso, inst: h.hdfcCard), LegRole.creditLeg),
+      (EventType.p2pIn, h.credit('p2p', 2000, at: iso, inst: h.hdfcCard), LegRole.creditLeg),
+      (EventType.investmentWithdrawal, h.credit('refund', 4000, at: iso, inst: h.hdfcCard), LegRole.creditLeg),
+      (EventType.cardBillPayment, h.debit('card_payment', 8000, at: iso, inst: h.hdfcCard), LegRole.debitLeg),
+      (EventType.ownTransfer, h.debit('transfer', 16000, at: iso, inst: h.hdfcCard), LegRole.debitLeg),
+    ];
+    final events = [for (final k in cases) event(k.$1, [k.$2], roles: [k.$3])];
+    final rows = [
+      for (var i = 0; i < events.length; i++)
+        ...projector.project(events[i], facts([cases[i].$2]), h.allInstruments, null),
+    ];
+    final t = projector.totals(rows, events, at, at.add(const Duration(days: 1)));
+    expect(t.investmentReturnsMinor, 1000);
+    expect(t.fromPeopleMinor, 2000);
+    expect(t.withdrawnMinor, 4000);
+    expect(t.withdrawnMinor, t.investmentReturnMinor);
+    expect(t.cardBillsPaidMinor, 8000);
+    expect(t.transfersMinor, 16000);
+    expect(t.incomeMinor, 3000);
+    expect(t.earnedIncomeMinor, 0);
+    expect(t.moneyInMinor, 7000);
+    expect(t.moneyOutMinor, 0);
+    expect(t.spendMinor, 0);
+  });
 }

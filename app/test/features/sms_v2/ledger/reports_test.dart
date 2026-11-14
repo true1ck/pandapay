@@ -3,6 +3,7 @@ import 'package:pandapay/data/spend_reports_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/sms_v2/ledger/reports.dart';
 import 'package:pandapay_domain/pandapay_domain.dart' show Money;
+import 'package:pandapay_domain/sms_v2.dart' as v2;
 import 'package:pandapay_domain/sms_v2_ledger.dart';
 
 TransactionEntry txn(String id, TxnEntryKind kind, int minor, {DateTime? at}) =>
@@ -146,4 +147,66 @@ void main() {
       expect(model.totalsForTransactions(rows.take(1)).spendMinor, 10000);
     },
   );
+
+  test('unnamed payees are not one UNKNOWN payee; prefix names merge', () {
+    final at = DateTime(2026, 11, 5);
+    final events = <v2.Event>[];
+    final entries = <v2.LedgerEntry>[];
+    for (final (i, name) in [
+      'UNKNOWN',
+      'ASHA TESTPERSON',
+      'ASHA TESTPERSON ROY',
+    ].indexed) {
+      final id = 'e$i';
+      events.add(
+        v2.Event(
+          eventId: id,
+          type: v2.EventType.p2pOut,
+          status: v2.EventStatus.complete,
+          legs: [v2.EventLeg(factId: id, role: v2.LegRole.debitLeg)],
+          confidence: 1,
+          occurredAt: at,
+          amountMinor: 100,
+        ),
+      );
+      entries.add(
+        v2.LedgerEntry(
+          entryId: 'x$i',
+          eventId: id,
+          from: const v2.OwnUnresolvedEndpoint(v2.InstrumentKind.bankAccount),
+          to: v2.ExternalEndpoint(name),
+          amountMinor: 100,
+          unit: v2.LedgerUnit.inr,
+          occurredAt: at,
+          countsAsTransaction: true,
+          isSpend: true,
+          isIncome: false,
+          isInvestment: false,
+        ),
+      );
+    }
+    final model = LedgerReadModel(
+      ledger: LedgerSnapshot(entries: entries, events: events),
+    );
+    final labels = model
+        .spendReport(
+          const SpendReportQuery.preset(SpendPeriod.month),
+          DateTime(2026, 11, 15),
+        )
+        .byMerchant
+        .map((r) => r.label)
+        .toSet();
+    expect(labels, {
+      'No payee in the SMS · unknown sender · payment',
+      'ASHA TESTPERSON ROY',
+    });
+    expect(
+      model.payeeAliases['ASHA TESTPERSON ROY'],
+      contains('ASHA TESTPERSON'),
+    );
+    expect(
+      model.moneyBridge(DateTime(2026, 11), DateTime(2026, 12)).leftYourAccounts,
+      300,
+    );
+  });
 }

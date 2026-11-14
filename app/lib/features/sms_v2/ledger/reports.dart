@@ -235,11 +235,64 @@ class LedgerReadModel {
     return out;
   }
 
-  late final _merchantByEvent = {
-    for (final entry in ledger.entries)
-      if (entry.isSpend || entry.from is v2.ExternalEndpoint)
-        entry.eventId: _ledgerMerchantKey(entry),
-  };
+  // Payee key per event. Stored entries still carry the shared 'UNKNOWN' key
+  // (old rows); here it becomes one group per sender and purpose instead.
+  // A payee whose name is a prefix of another's (>= 8 chars, same rail) is one
+  // payee; [payeeAliases] keeps every printed name.
+  late final _payees = _buildPayees();
+  Map<String, String> get _merchantByEvent => _payees.$1;
+  Map<String, Set<String>> get payeeAliases => _payees.$2;
+
+  (Map<String, String>, Map<String, Set<String>>) _buildPayees() {
+    final events = {for (final e in ledger.events) e.eventId: e};
+    final keys = <String, String>{}, rails = <String, v2.Rail?>{};
+    final byRail = <v2.Rail?, Set<String>>{};
+    for (final entry in ledger.entries) {
+      if (!(entry.isSpend || entry.from is v2.ExternalEndpoint)) continue;
+      final event = events[entry.eventId];
+      final fact = event == null ? null : moneyFactForEvent(event, factsById);
+      var key = _ledgerMerchantKey(entry);
+      if (key == 'UNKNOWN') {
+        key =
+            'No payee in the SMS · ${fact?.instrument?.issuerSlug ?? 'unknown sender'} · ${fact?.purpose.wire ?? 'payment'}';
+      }
+      keys[entry.eventId] = key;
+      rails[entry.eventId] = fact?.rail;
+      (byRail[fact?.rail] ??= <String>{}).add(key);
+    }
+    final canon = <(v2.Rail?, String), String>{};
+    final aliases = <String, Set<String>>{};
+    for (final r in byRail.entries) {
+      // Sorted, every name extending k follows k directly: one scan, no O(n^2).
+      final sorted = r.value.toList()..sort();
+      for (var i = 0; i < sorted.length; i++) {
+        final k = sorted[i];
+        if (k.replaceAll(' ', '').length < 8 || k.startsWith('No payee')) {
+          continue;
+        }
+        final longer = <String>[
+          for (var j = i + 1; j < sorted.length && sorted[j].startsWith(k); j++)
+            sorted[j],
+        ];
+        // Several different longer names would be a guess: keep them apart.
+        if (longer.length == 1) {
+          canon[(r.key, k)] = longer.single;
+          (aliases[longer.single] ??= {longer.single}).add(k);
+        }
+      }
+    }
+    String resolve(v2.Rail? rail, String k) {
+      var out = k;
+      for (var n = canon[(rail, out)]; n != null; n = canon[(rail, out)]) {
+        out = n;
+      }
+      return out;
+    }
+
+    return ({
+      for (final e in keys.entries) e.key: resolve(rails[e.key], e.value),
+    }, aliases);
+  }
 
   String merchantKeyForTransaction(TransactionEntry row) =>
       _merchantByEvent[row.eventId] ??
@@ -250,6 +303,53 @@ class LedgerReadModel {
     return endpoint is v2.ExternalEndpoint
         ? endpoint.counterpartyKey
         : 'UNKNOWN';
+  }
+
+  /// Data for "Where your money went" (A7): from Money out to Left your
+  /// accounts. Spending on cards and wallets (net of refunds to them) never
+  /// left a bank account; the card bills and own-account transfers did.
+  /// [family] is memo only (family-marked transfers, already in [transfers]).
+  ({int moneyOut, int cardWalletSpend, int cardBillsPaid, int transfers, int family, int leftYourAccounts})
+  moneyBridge(DateTime from, DateTime to) {
+    final totals = snapshot().totals(from, to);
+    final kinds = {for (final i in instruments) i.instrumentId: i.kind};
+    bool onCardOrWallet(v2.LedgerEndpoint e) =>
+        e is v2.InstrumentEndpoint &&
+        (kinds[e.instrumentId] == v2.InstrumentKind.creditCard ||
+            kinds[e.instrumentId] == v2.InstrumentKind.wallet);
+    final refunds = {
+      for (final e in ledger.events)
+        if (e.type == v2.EventType.refund) e.eventId,
+    };
+    var cardWallet = 0;
+    for (final e in ledger.entries) {
+      if (e.occurredAt.isBefore(from) || !e.occurredAt.isBefore(to)) continue;
+      if (e.isSpend && onCardOrWallet(e.from)) cardWallet += e.amountMinor;
+      if (refunds.contains(e.eventId) && onCardOrWallet(e.to)) {
+        cardWallet -= e.amountMinor;
+      }
+    }
+    var family = 0;
+    for (final r in transactions) {
+      if (r.status == 'active' &&
+          r.isFamilyTransfer &&
+          !r.occurredAt.isBefore(from) &&
+          r.occurredAt.isBefore(to)) {
+        family += r.amount.paise;
+      }
+    }
+    return (
+      moneyOut: totals.moneyOutMinor,
+      cardWalletSpend: cardWallet,
+      cardBillsPaid: totals.cardBillsPaidMinor,
+      transfers: totals.transfersMinor,
+      family: family,
+      leftYourAccounts:
+          totals.moneyOutMinor -
+          cardWallet +
+          totals.cardBillsPaidMinor +
+          totals.transfersMinor,
+    );
   }
 
   v2.Totals totalsForTransactions(Iterable<TransactionEntry> selected) =>
@@ -331,7 +431,9 @@ class LedgerReadModel {
     String card(v2.LedgerEntry e) =>
         display[e.eventId]?.userCardId ?? 'source:${sourceName(e)}';
     final categories = groups(category),
-        merchants = groups(_ledgerMerchantKey),
+        merchants = groups(
+          (e) => _merchantByEvent[e.eventId] ?? _ledgerMerchantKey(e),
+        ),
         cards = groups(card),
         methods = groups(instrument);
     final cardCategories = groups((e) => '${card(e)}|${category(e)}');
