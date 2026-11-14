@@ -211,10 +211,17 @@ class CommandOutbox {
         blocked.add(target);
         continue;
       }
+      // Read the payload again: an earlier command of this same pass (a card
+      // add) may have remapped ids inside it, or cancelled this row (WP-Q1).
+      final fresh = _appDb.db.select(
+        'SELECT payload_json FROM command_outbox WHERE id=? AND parked=0',
+        [id],
+      );
+      if (fresh.isEmpty) continue;
       try {
         await handler(
           Map<String, Object?>.from(
-            jsonDecode(row['payload_json'] as String) as Map,
+            jsonDecode(fresh.first['payload_json'] as String) as Map,
           ),
         );
         _appDb.db.execute('DELETE FROM command_outbox WHERE id=?', [id]);

@@ -40,6 +40,14 @@ abstract final class CardCommand {
   static const addFirst = {addCard};
 }
 
+/// Card ids whose `add_card` has not reached the server (queued, backing off or
+/// parked). Transactions naming one must wait for it (WP-Q1).
+Set<String> unsentCardAddTargets(CommandOutbox commands) => {
+  for (final c in commands.pendingOf(CardCommand.addFirst)) c.target,
+  for (final c in commands.parked())
+    if (c.kind == CardCommand.addCard) c.target,
+};
+
 // --- id remap (pure) -------------------------------------------------------
 
 /// Returns [value] with every string equal to [from] replaced by [to], through
