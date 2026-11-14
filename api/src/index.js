@@ -7014,6 +7014,7 @@ app.get('/budgets', requireAuth, async (req, res) => {
  * it", not "fail". The old row is DEACTIVATED, not deleted, so the
  * `budget_periods` history that references it survives.
  */
+require('./user_local_state_route').registerUserLocalStateRoutes(app, { requireAuth, withUserClient, keyring: config.imapKeyring });
 app.post('/budgets', requireAuth, createBudgetPostHandler({ withUserClient, BUDGET_SCOPES, BUDGET_PERIODS }));
 
 /**

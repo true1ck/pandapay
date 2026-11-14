@@ -625,6 +625,10 @@
       "disposition": "platform_ops",
       "reason": "Platform workflow, rate-limit, worker, or operator-control state; not part of the account-scoped portable export."
     },
+    "user_local_state": {
+      "disposition": "excluded_with_intent",
+      "reason": "Per-account state synced between phones (bill-card assignments, subscription overrides, and typed bank balances stored only as application-level ciphertext). Balances must not leave in a plaintext portable archive and are restored by the phone re-pulling /user-state; not exported in v1."
+    },
     "user_commitments": {
       "disposition": "exported_v1",
       "section": "user_commitments"
