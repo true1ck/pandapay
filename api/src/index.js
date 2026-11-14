@@ -1494,21 +1494,26 @@ app.post('/analytics/events', async (req, res) => {
   const batch = events.slice(0, ANALYTICS_MAX_BATCH);
   try {
     const accepted = await withUserClient(req.userId, async (client) => {
-      let count = 0;
-      for (const e of batch) {
-        if (!e || typeof e.event !== 'string') continue;
-        const result = await client.query(
-          `SELECT pandapay.record_analytics_event($1, $2, $3::jsonb, $4, $5) AS ok`,
-          [
-            req.userId,
-            e.event,
-            JSON.stringify(e.props && typeof e.props === 'object' ? e.props : {}),
-            typeof e.appVersion === 'string' ? e.appVersion : null,
-            typeof e.platform === 'string' ? e.platform : null,
-          ]
-        );
-        if (result.rows[0].ok) count += 1;
-      }
+      // One statement for the whole batch (it was one round trip per event). record_analytics_event is stateless per
+      // event, so the rows it writes and the count it returns are the same.
+      const valid = batch.filter((e) => e && typeof e.event === 'string');
+      if (valid.length === 0) return 0;
+      const result = await client.query(
+        `SELECT count(*) FILTER (WHERE x.ok)::int AS accepted
+           FROM (
+             SELECT pandapay.record_analytics_event($1, t.event, t.props, t.app_version, t.platform) AS ok
+               FROM unnest($2::text[], $3::jsonb[], $4::text[], $5::text[]) WITH ORDINALITY AS t(event, props, app_version, platform, ord)
+              ORDER BY t.ord
+           ) x`,
+        [
+          req.userId,
+          valid.map((e) => e.event),
+          valid.map((e) => JSON.stringify(e.props && typeof e.props === 'object' ? e.props : {})),
+          valid.map((e) => (typeof e.appVersion === 'string' ? e.appVersion : null)),
+          valid.map((e) => (typeof e.platform === 'string' ? e.platform : null)),
+        ]
+      );
+      const count = result.rows[0].accepted;
       return count;
     });
     res.status(202).json({ accepted, received: batch.length });
@@ -7072,14 +7077,27 @@ app.get('/recurring', requireAuth, async (req, res) => {
       );
       const dismissedKeys = new Set(dismissed.rows.map((r) => r.merchant_key));
 
+      // One upsert for every detected series (it was one round trip per series, on every read). Same ON CONFLICT rules,
+      // applied per row. A merchant key detected twice keeps its last occurrence, which is what the sequential
+      // upserts ended up with.
+      const toWrite = new Map();
       for (const s of detected) {
-        if (dismissedKeys.has(s.merchantKey)) continue;
+        if (!dismissedKeys.has(s.merchantKey)) toWrite.set(s.merchantKey, s);
+      }
+      if (toWrite.size > 0) {
+        const rows = [...toWrite.values()];
         await client.query(
           `INSERT INTO recurring_series
              (profile_id, merchant_key, display_name, category_id, user_category_id, user_card_id,
               payment_method, typical_amount_inr, cadence_days, occurrence_count,
               first_seen_on, last_seen_on, next_expected_on)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+           SELECT $1::uuid, t.merchant_key, t.display_name, t.category_id, t.user_category_id, t.user_card_id,
+                  t.payment_method, t.typical_amount_inr, t.cadence_days, t.occurrence_count,
+                  t.first_seen_on, t.last_seen_on, t.next_expected_on
+             FROM unnest($2::text[], $3::text[], $4::uuid[], $5::uuid[], $6::uuid[], $7::text[], $8::numeric[],
+                         $9::int[], $10::int[], $11::date[], $12::date[], $13::date[])
+                  AS t(merchant_key, display_name, category_id, user_category_id, user_card_id, payment_method,
+                       typical_amount_inr, cadence_days, occurrence_count, first_seen_on, last_seen_on, next_expected_on)
            ON CONFLICT (profile_id, merchant_key) DO UPDATE SET
              display_name = CASE WHEN recurring_series.user_edited THEN recurring_series.display_name ELSE EXCLUDED.display_name END,
              category_id = EXCLUDED.category_id,
@@ -7112,9 +7130,11 @@ app.get('/recurring', requireAuth, async (req, res) => {
              END,
              updated_at = now()`,
           [
-            req.userId, s.merchantKey, s.displayName, s.categoryId, s.userCategoryId || null, s.userCardId,
-            s.paymentMethod || null, s.typicalAmountInr, s.cadenceDays, s.occurrenceCount,
-            s.firstSeenOn, s.lastSeenOn, s.nextExpectedOn,
+            req.userId,
+            rows.map((s) => s.merchantKey), rows.map((s) => s.displayName), rows.map((s) => s.categoryId),
+            rows.map((s) => s.userCategoryId || null), rows.map((s) => s.userCardId), rows.map((s) => s.paymentMethod || null),
+            rows.map((s) => s.typicalAmountInr), rows.map((s) => s.cadenceDays), rows.map((s) => s.occurrenceCount),
+            rows.map((s) => s.firstSeenOn), rows.map((s) => s.lastSeenOn), rows.map((s) => s.nextExpectedOn),
           ]
         );
       }

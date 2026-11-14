@@ -26,11 +26,33 @@ const als = new AsyncLocalStorage();
 const POOL_TIMEOUT_MESSAGE = 'timeout exceeded when trying to connect';
 const isPoolTimeout = (err) => err?.message === POOL_TIMEOUT_MESSAGE;
 
-// Called by the database layer when it could not get a connection in time. The response of the request
-// that was running is then answered 503 + Retry-After instead of the route's generic 500.
+// The database is busy or briefly away (restart, failover, network blip): the same request can succeed shortly, so
+// it is answered 503 + Retry-After, never a 500 (the app parks a change for an hour after repeated 500s on one row).
+const UNAVAILABLE_NET_CODES = new Set(['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EPIPE', 'ENOTFOUND', 'EAI_AGAIN', 'ECONNABORTED']);
+const UNAVAILABLE_MESSAGE = /connection terminated|connection timeout|timeout exceeded when trying to connect|database system is (starting up|shutting down|in recovery)|client has encountered a connection error|cannot use a pool after calling end/i;
+function isDbUnavailable(err) {
+  const code = typeof err?.code === 'string' ? err.code : '';
+  return UNAVAILABLE_NET_CODES.has(code)
+    || /^08/.test(code)                 // connection exception class
+    || /^57P0[123]$/.test(code)         // admin_shutdown, crash_shutdown, cannot_connect_now
+    || UNAVAILABLE_MESSAGE.test(String(err?.message || ''));
+}
+
+// Called by the database layer when a request's database work failed. If the failure has a well-known meaning (busy or
+// away -> 503, malformed id -> 400, duplicate -> 409, ...) it is remembered on the response, and when the route's own
+// catch block then answers a generic 500, that answer is replaced (see the res.status wrapper in the middleware).
+// Routes that answer something else for the same error are untouched.
+function noteDbError(err) {
+  const store = als.getStore();
+  if (!store || store.res.locals.dbError) return;
+  const mapped = require('./http_db_errors').classifyDbError(err);
+  if (mapped) store.res.locals.dbError = mapped;
+}
+
+// Pool exhaustion / no connection in time (kept for callers that have no error object).
 function notePoolBusy() {
   const store = als.getStore();
-  if (store) store.res.locals.poolBusy = true;
+  if (store && !store.res.locals.dbError) store.res.locals.dbError = { status: 503, body: { error: 'server_busy', retryable: true } };
 }
 
 class Gate {
@@ -124,14 +146,16 @@ function createAdmission({
     const cls = classify(req);
     if (cls === null) return next();
 
-    // A response whose request waited on the pool (not on us) is still a busy server, not a bug.
+    // A route that fails on a database error with a known meaning answers a generic 500 from its own catch block. Replace
+    // that 500 with the right answer (and for 503 a Retry-After), so every route behaves the same way under failure.
     const status = res.status.bind(res);
     res.status = (code) => {
-      if (code === 500 && res.locals.poolBusy) {
-        res.set('Retry-After', String(retryAfterSeconds()));
-        return status(503);
-      }
-      return status(code);
+      const mapped = code === 500 ? res.locals.dbError : null;
+      if (!mapped) return status(code);
+      if (mapped.body.retryable) res.set('Retry-After', String(retryAfterSeconds()));
+      const json = res.json.bind(res);
+      res.json = () => json(mapped.body);
+      return status(mapped.status);
     };
 
     const cancels = [];
@@ -233,4 +257,4 @@ function startAdmissionReporter(admission, { log, pool, intervalMs = 30_000 }) {
   return timer;
 }
 
-module.exports = { startAdmissionReporter, createAdmission, notePoolBusy, isPoolTimeout, classify, Gate, _als: als };
+module.exports = { startAdmissionReporter, createAdmission, noteDbError, notePoolBusy, isPoolTimeout, isDbUnavailable, classify, Gate, _als: als };
