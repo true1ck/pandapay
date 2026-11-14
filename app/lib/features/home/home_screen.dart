@@ -9,6 +9,7 @@ import 'package:local_auth/local_auth.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/app_icons.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
@@ -2895,7 +2896,7 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
                   child: Row(
                     children: [
                       const Icon(
-                        Icons.account_balance_rounded,
+                        AppIcons.bank,
                         size: 20,
                         color: BambooInk.lime,
                       ),

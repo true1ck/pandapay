@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../app/design/app_icons.dart';
 import '../../app/design/app_theme.dart';
+import '../../app/design/party_avatar.dart' show TintedIconTile;
 
 /// The shared visual language for spending categories and payment methods.
 ///
@@ -24,13 +26,13 @@ SpendingVisual spendingCategoryVisual(String label) {
       value.contains('food') ||
       value.contains('restaurant')) {
     return const SpendingVisual(
-      icon: Icons.restaurant_rounded,
+      icon: AppIcons.dining,
       accent: BambooChartColors.coral,
     );
   }
   if (value.contains('fuel') || value.contains('petrol')) {
     return const SpendingVisual(
-      icon: Icons.local_gas_station_rounded,
+      icon: AppIcons.fuel,
       accent: BambooChartColors.amber,
     );
   }
@@ -38,7 +40,7 @@ SpendingVisual spendingCategoryVisual(String label) {
       value.contains('shopping') ||
       value.contains('retail')) {
     return const SpendingVisual(
-      icon: Icons.shopping_bag_rounded,
+      icon: AppIcons.shopping,
       accent: BambooChartColors.violet,
     );
   }
@@ -47,73 +49,75 @@ SpendingVisual spendingCategoryVisual(String label) {
       value.contains('transport') ||
       value.contains('cab')) {
     return const SpendingVisual(
-      icon: Icons.flight_takeoff_rounded,
+      icon: AppIcons.travel,
       accent: BambooChartColors.blue,
     );
   }
   if (value.contains('grocery')) {
     return const SpendingVisual(
-      icon: Icons.local_grocery_store_rounded,
+      icon: AppIcons.grocery,
       accent: BambooChartColors.teal,
     );
   }
   if (value.contains('bill') || value.contains('utility')) {
     return const SpendingVisual(
-      icon: Icons.receipt_long_rounded,
+      icon: AppIcons.bill,
       accent: BambooChartColors.cyan,
     );
   }
   if (value.contains('rent') || value.contains('home')) {
     return const SpendingVisual(
-      icon: Icons.home_work_rounded,
+      icon: AppIcons.home,
       accent: BambooChartColors.indigo,
     );
   }
   if (value.contains('education') || value.contains('school')) {
     return const SpendingVisual(
-      icon: Icons.school_rounded,
+      icon: AppIcons.education,
       accent: BambooChartColors.cyan,
     );
   }
   if (value.contains('health') || value.contains('medical')) {
     return const SpendingVisual(
-      icon: Icons.local_hospital_rounded,
+      icon: AppIcons.health,
       accent: BambooChartColors.rose,
     );
   }
   if (value.contains('entertainment') || value.contains('movie')) {
     return const SpendingVisual(
-      icon: Icons.movie_rounded,
+      icon: AppIcons.entertainment,
       accent: BambooChartColors.pink,
     );
   }
   return const SpendingVisual(
-    icon: Icons.category_rounded,
+    icon: AppIcons.otherCategory,
     accent: BambooChartColors.teal,
   );
 }
 
 SpendingVisual spendingInstrumentVisual(String instrument) {
+  // The same icon and hue as an account's avatar (AvatarKind), so a card, a
+  // bank and a wallet look alike wherever they appear.
   return switch (instrument.toLowerCase()) {
     'credit_card' => const SpendingVisual(
-      icon: Icons.credit_card_rounded,
-      accent: BambooChartColors.teal,
+      icon: AppIcons.card,
+      accent: BambooChartColors.indigo,
     ),
     'debit_card' => const SpendingVisual(
-      icon: Icons.credit_card_outlined,
-      accent: BambooChartColors.blue,
+      icon: AppIcons.card,
+      accent: BambooChartColors.indigo,
     ),
     'upi_bank' => const SpendingVisual(
-      icon: Icons.account_balance_rounded,
-      accent: BambooChartColors.violet,
+      icon: AppIcons.bank,
+      accent: BambooChartColors.blue,
     ),
     'wallet' => const SpendingVisual(
-      icon: Icons.account_balance_wallet_rounded,
-      accent: BambooChartColors.amber,
+      icon: AppIcons.wallet,
+      accent: BambooChartColors.teal,
     ),
     _ => const SpendingVisual(
-      icon: Icons.payments_rounded,
-      accent: BambooChartColors.teal,
+      icon: AppIcons.cash,
+      accent: BambooChartColors.rose,
     ),
   };
 }
@@ -129,16 +133,8 @@ class SpendingVisualBadge extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(
-      color: visual.surface,
-      borderRadius: BorderRadius.circular(size * 0.32),
-    ),
-    alignment: Alignment.center,
-    child: Icon(visual.icon, size: size * 0.46, color: visual.accent),
-  );
+  Widget build(BuildContext context) =>
+      TintedIconTile(visual.icon, visual.accent, size: size);
 }
 
 /// A shared, column-aligned header for expandable spending breakdown rows.

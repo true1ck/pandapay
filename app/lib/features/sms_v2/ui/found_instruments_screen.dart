@@ -6,6 +6,7 @@ import 'package:pandapay_domain/sms_v2.dart';
 
 import '../../../app/design/app_theme.dart';
 import '../../../app/design/bamboo_components.dart';
+import '../../../app/design/party_avatar.dart';
 import '../../../app/design/widgets.dart';
 import '../../../app/required_field.dart';
 
@@ -292,12 +293,15 @@ class FoundInstrumentsList extends StatelessWidget {
   }
 }
 
-IconData instrumentKindIcon(InstrumentKind kind) => switch (kind) {
+/// The avatar for an account or card kind: the same one wherever it is listed.
+AvatarKind instrumentAvatarKind(InstrumentKind kind) => switch (kind) {
   InstrumentKind.creditCard ||
-  InstrumentKind.debitCard => Icons.credit_card_rounded,
-  InstrumentKind.wallet => Icons.account_balance_wallet_outlined,
-  InstrumentKind.broker => Icons.show_chart_rounded,
-  _ => Icons.account_balance_outlined,
+  InstrumentKind.debitCard ||
+  InstrumentKind.prepaidCard ||
+  InstrumentKind.payLater => AvatarKind.card,
+  InstrumentKind.wallet => AvatarKind.wallet,
+  InstrumentKind.broker => AvatarKind.investment,
+  _ => AvatarKind.bank,
 };
 
 /// One question for a number that your messages call both a credit card and
@@ -316,7 +320,7 @@ class _KindQuestionPanel extends StatelessWidget {
         children: [
           Row(
             children: [
-              BambooIconTile(instrumentKindIcon(account.kind), size: 36),
+              PartyAvatar(instrumentAvatarKind(account.kind), size: 36),
               const SizedBox(width: AppSpace.md),
               Expanded(
                 child: Text(
@@ -472,8 +476,8 @@ class _InstrumentPanel extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    BambooIconTile(
-                      instrumentKindIcon(instrument.kind),
+                    PartyAvatar(
+                      instrumentAvatarKind(instrument.kind),
                       size: 36,
                     ),
                     const SizedBox(width: AppSpace.md),

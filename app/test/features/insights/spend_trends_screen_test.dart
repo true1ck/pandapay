@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:pandapay/app/design/app_icons.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/spend_reports_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
@@ -204,18 +205,18 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Dining'), findsOneWidget);
     expect(find.text('Travel'), findsOneWidget);
-    expect(find.byIcon(Icons.sell_rounded), findsOneWidget);
+    expect(find.byIcon(AppIcons.tag), findsOneWidget);
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('tag-category-trip-dining')),
-        matching: find.byIcon(Icons.restaurant_rounded),
+        matching: find.byIcon(AppIcons.dining),
       ),
       findsOneWidget,
     );
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('tag-category-trip-travel')),
-        matching: find.byIcon(Icons.flight_takeoff_rounded),
+        matching: find.byIcon(AppIcons.travel),
       ),
       findsOneWidget,
     );

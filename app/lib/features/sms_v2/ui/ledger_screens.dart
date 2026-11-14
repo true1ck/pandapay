@@ -11,6 +11,7 @@ import '../ledger/providers.dart';
 import '../ledger/reports.dart';
 import '../instruments/issuer_slugs.dart';
 import 'screen_parts.dart';
+import 'found_instruments_screen.dart' show instrumentAvatarKind;
 
 enum SmsLedgerScreen { investments, ipos, moneyIn }
 
@@ -464,9 +465,7 @@ class InstrumentDetailScreen extends ConsumerWidget {
                     title: instrument.displayName,
                     subtitle:
                         '${instrument.issuerSlug.toUpperCase()} ••${instrument.maskDigits ?? 'unknown'}',
-                    icon: instrument.kind == InstrumentKind.creditCard
-                        ? Icons.credit_card_rounded
-                        : Icons.account_balance_outlined,
+                    icon: instrumentAvatarKind(instrument.kind).icon,
                     titleSize: 22,
                   ),
                   const SizedBox(height: AppSpace.xl),

@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/merchant_brand.dart';
+import '../../app/design/merchant_brand_tile.dart';
+import '../../app/design/party_avatar.dart';
 import '../../app/env.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
@@ -318,7 +321,11 @@ class LocalMandateRow extends StatelessWidget {
         border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       child: Row(children: [
-        const Icon(Icons.receipt_long_rounded, color: BambooInk.ink500, size: 20),
+        MerchantBrandTile(
+          brand: MerchantBrand.forName(title),
+          size: 32,
+          fallback: PartyAvatar(AvatarKind.bill, size: 32),
+        ),
         const SizedBox(width: AppSpace.sm),
         Expanded(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -372,7 +379,11 @@ class CentralRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.receipt_long_rounded, color: BambooInk.ink500, size: 20),
+          MerchantBrandTile(
+            brand: MerchantBrand.forName(title),
+            size: 32,
+            fallback: PartyAvatar(AvatarKind.bill, size: 32),
+          ),
           const SizedBox(width: AppSpace.sm),
           Expanded(
             child: Column(

@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/api_exception.dart';
 import '../data/user_cards_repository.dart';
+import 'design/app_icons.dart';
 import 'design/app_theme.dart';
+import 'design/party_avatar.dart' show TintedIconTile;
 import 'providers.dart';
 
 /// Cancel returns null; applying an empty set explicitly removes all tags.
@@ -73,7 +75,7 @@ class TransactionTagField extends ConsumerWidget {
               InputChip(
                 label: Text(tag.name),
                 avatar: Icon(
-                  Icons.label_rounded,
+                  AppIcons.tag,
                   size: 16,
                   color: transactionTagColor(tag.color),
                 ),
@@ -236,9 +238,10 @@ class _TransactionTagPickerState extends ConsumerState<_TransactionTagPicker> {
                       CheckboxListTile(
                         value: _selected.contains(tag.id),
                         controlAffinity: ListTileControlAffinity.trailing,
-                        secondary: Icon(
-                          Icons.label_rounded,
-                          color: transactionTagColor(tag.color),
+                        secondary: TintedIconTile(
+                          AppIcons.tag,
+                          transactionTagColor(tag.color),
+                          size: 36,
                         ),
                         title: Text(tag.name),
                         subtitle: Text(

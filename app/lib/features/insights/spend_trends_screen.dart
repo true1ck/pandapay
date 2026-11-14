@@ -9,6 +9,10 @@ import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/app_icons.dart';
+import '../../app/design/merchant_brand.dart';
+import '../../app/design/merchant_brand_tile.dart';
+import '../../app/design/party_avatar.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
@@ -21,6 +25,7 @@ import '../../main.dart' show MoneyText;
 import '../cards/card_summary.dart';
 import '../import/data_transfer_screen.dart';
 import '../sms_v2/ui/rules_refresh_sheet.dart';
+import '../activity/transaction_avatar.dart';
 import 'spending_tag_projection.dart';
 import 'spending_visuals.dart';
 
@@ -2115,7 +2120,7 @@ class _ExpandableTagRowState extends State<_ExpandableTagRow> {
       ),
       leading: const _SpendingVisualBadge(
         visual: SpendingVisual(
-          icon: Icons.sell_rounded,
+          icon: AppIcons.tag,
           accent: BambooChartColors.teal,
         ),
         size: 38,
@@ -4720,6 +4725,35 @@ class _ExpandableInstrumentRow extends StatelessWidget {
   }
 }
 
+class _MerchantSpendingBadge extends StatelessWidget {
+  const _MerchantSpendingBadge({
+    required this.merchant,
+    required this.size,
+    this.person = false,
+  });
+
+  final String merchant;
+  final double size;
+
+  /// The payments are to a person (P2P transfers): no brand logo, a person.
+  final bool person;
+
+  @override
+  Widget build(BuildContext context) => MerchantBrandTile(
+    brand: person ? null : MerchantBrand.forName(merchant),
+    size: size,
+    fallback: PartyAvatar(
+      person ? AvatarKind.person : AvatarKind.business,
+      size: size,
+    ),
+  );
+}
+
+/// True when any of [entries] is a P2P transfer: the group is a person, not a
+/// shop. Uses the same rule as the Activity rows.
+bool _isPersonGroup(Iterable<TransactionEntry> entries) =>
+    entries.any((e) => transactionAvatarKind(e) == AvatarKind.person);
+
 /// A merchant (or UPI payee) total that opens in place — repeated payments to
 /// the same person or merchant are clubbed into one expandable row whose
 /// children are the underlying transactions.
@@ -4763,12 +4797,10 @@ class _ExpandableMerchantRow extends StatelessWidget {
           AppSpace.md,
           AppSpace.sm,
         ),
-        leading: _SpendingVisualBadge(
-          visual: const SpendingVisual(
-            icon: Icons.storefront_rounded,
-            accent: BambooChartColors.coral,
-          ),
+        leading: _MerchantSpendingBadge(
+          merchant: display.label,
           size: 38,
+          person: _isPersonGroup(entries),
         ),
         titleBuilder: (expanded) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -4938,12 +4970,10 @@ class _MerchantGroup extends ConsumerWidget {
           children: [
             Row(
               children: [
-                const _SpendingVisualBadge(
-                  visual: SpendingVisual(
-                    icon: Icons.storefront_rounded,
-                    accent: BambooChartColors.coral,
-                  ),
+                _MerchantSpendingBadge(
+                  merchant: merchant,
                   size: 30,
+                  person: _isPersonGroup(entries),
                 ),
                 const SizedBox(width: AppSpace.sm),
                 Expanded(
@@ -5012,6 +5042,7 @@ class _MerchantGroup extends ConsumerWidget {
         storageKey: groupStorageKey,
         initiallyExpanded: false,
         merchant: merchant,
+        person: _isPersonGroup(entries),
         vpa: vpa,
         amount: amount,
         subtitle: Column(
@@ -5080,6 +5111,7 @@ class _MerchantExpansionTile extends StatefulWidget {
   final String storageKey;
   final bool initiallyExpanded;
   final String merchant;
+  final bool person;
   final String? vpa;
   final Money amount;
   final Widget subtitle;
@@ -5089,6 +5121,7 @@ class _MerchantExpansionTile extends StatefulWidget {
     required this.storageKey,
     required this.initiallyExpanded,
     required this.merchant,
+    required this.person,
     required this.amount,
     required this.subtitle,
     required this.children,
@@ -5128,12 +5161,10 @@ class _MerchantExpansionTileState extends State<_MerchantExpansionTile> {
     ),
     shape: const Border(),
     collapsedShape: const Border(),
-    leading: const _SpendingVisualBadge(
-      visual: SpendingVisual(
-        icon: Icons.storefront_rounded,
-        accent: BambooChartColors.coral,
-      ),
+    leading: _MerchantSpendingBadge(
+      merchant: widget.merchant,
       size: 30,
+      person: widget.person,
     ),
     title: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -5228,18 +5259,15 @@ class _AccountRow extends StatelessWidget {
     final rate = row.effectiveRatePerRupee;
     final hasCardEvidence =
         row.cardId != null || entries.any((entry) => entry.cardLast4 != null);
-    final visual = SpendingVisual(
-      icon: hasCardEvidence
-          ? Icons.credit_card_rounded
-          : row.cardName == 'Wallet'
-          ? Icons.account_balance_wallet_rounded
-          : row.cardName == 'Cash'
-          ? Icons.payments_rounded
-          : Icons.account_balance_rounded,
-      accent: hasCardEvidence
-          ? BambooChartColors.blue
-          : BambooChartColors.violet,
-    );
+    // The same icon and hue as an account's avatar everywhere else.
+    final kind = hasCardEvidence
+        ? AvatarKind.card
+        : row.cardName == 'Wallet'
+        ? AvatarKind.wallet
+        : row.cardName == 'Cash'
+        ? AvatarKind.cash
+        : AvatarKind.bank;
+    final visual = SpendingVisual(icon: kind.icon, accent: kind.tone);
     final groups = _payeeGroups();
 
     return CardSummaryPanel(

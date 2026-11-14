@@ -8,6 +8,9 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/merchant_brand.dart';
+import '../../app/design/merchant_brand_tile.dart';
+import '../../app/design/party_avatar.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../app/required_field.dart';
@@ -589,7 +592,10 @@ class _PossibleSubscriptionsSection extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const BambooIconTile(Icons.help_outline_rounded, size: 40),
+                  MerchantBrandTile(
+                    brand: MerchantBrand.forName(item.displayName),
+                    fallback: PartyAvatar(AvatarKind.subscription),
+                  ),
                   const SizedBox(width: AppSpace.md),
                   Expanded(
                     child: Column(
@@ -1598,11 +1604,14 @@ class _SeriesCard extends ConsumerWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              BambooIconTile(switch (phase) {
-                SubscriptionPhase.active => Icons.autorenew_rounded,
-                SubscriptionPhase.paused => Icons.pause_rounded,
-                SubscriptionPhase.past => Icons.history_rounded,
-              }, size: 40),
+              MerchantBrandTile(
+                brand: MerchantBrand.forName(series.displayName),
+                fallback: PartyAvatar(switch (phase) {
+                  SubscriptionPhase.active => AvatarKind.subscription,
+                  SubscriptionPhase.paused => AvatarKind.paused,
+                  SubscriptionPhase.past => AvatarKind.ended,
+                }),
+              ),
               const SizedBox(width: AppSpace.md),
               Expanded(
                 child: Column(

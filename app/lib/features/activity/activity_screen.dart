@@ -34,6 +34,7 @@ import 'foreign_payments_screen.dart';
 import 'deleted_transactions_screen.dart';
 import 'local_category_learning.dart';
 import '../../data/local/sms_intake_repository.dart';
+import 'transaction_avatar.dart';
 import 'transaction_badge.dart';
 import '../sms_v2/storage/outbox_store.dart';
 import '../sms_v2/sync/learning_signals.dart';
@@ -3905,37 +3906,9 @@ class _TransactionTile extends StatelessWidget {
               Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: directionColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(AppRadius.sm),
-                    ),
-                    child: Icon(
-                      isRefund
-                          ? Icons.replay_rounded
-                          : isReversal
-                          ? Icons.undo_rounded
-                          : isIgnored
-                          ? Icons.block_rounded
-                          : ((isInvestmentCategory || isInvestmentReturn) &&
-                                isIncome)
-                          ? Icons.trending_up_rounded
-                          : isIncome
-                          ? Icons.arrow_downward_rounded
-                          : (entry.entryKind == TxnEntryKind.investment ||
-                                isInvestmentCategory)
-                          ? Icons.trending_up_rounded
-                          : isMoneyOut
-                          ? Icons.arrow_upward_rounded
-                          : entry.entryKind == TxnEntryKind.transfer
-                          ? Icons.swap_horiz_rounded
-                          : Icons.trending_up_rounded,
-                      size: 18,
-                      color: directionColor,
-                    ),
-                  ),
+                  // The brand's logo, else a person, a shop, a card... (one rule,
+                  // shared with the detail screen).
+                  transactionLeading(entry),
                   if (selecting)
                     Positioned(
                       left: -5,

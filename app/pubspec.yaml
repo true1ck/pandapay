@@ -244,6 +244,9 @@ dependencies:
   # Reads voice answers aloud with the phone's own on-device voices; nothing
   # is sent to a server. Used only by features/voice/voice_speaker.dart.
   flutter_tts: ^4.2.5
+  # One minimal outline icon family (stroke weight 300, tinted per kind) for
+  # the avatars, accounts and tags. See lib/app/design/party_avatar.dart.
+  lucide_icons_flutter: ^4.0.3
 
 dev_dependencies:
   integration_test:
@@ -263,6 +266,7 @@ flutter:
     - assets/logo/pandapay_mark.png
     - assets/illustrations/
     - assets/avatars/
+    - assets/merchant_brands/
     - assets/data/bundled_catalogue.json
     - assets/data/bundled_categories.json
     - assets/sms_rules/

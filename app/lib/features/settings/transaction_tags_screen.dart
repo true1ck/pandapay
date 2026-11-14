@@ -3,6 +3,8 @@ import '../../app/design/bamboo_components.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/app_icons.dart';
+import '../../app/design/party_avatar.dart' show TintedIconTile;
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../app/required_field.dart';
@@ -239,9 +241,10 @@ class _TransactionTagsScreenState extends ConsumerState<TransactionTagsScreen> {
                   for (final tag in tags)
                     ListTile(
                       contentPadding: EdgeInsets.zero,
-                      leading: Icon(
-                        Icons.label_rounded,
-                        color: transactionTagColor(tag.color),
+                      leading: TintedIconTile(
+                        AppIcons.tag,
+                        transactionTagColor(tag.color),
+                        size: 36,
                       ),
                       title: Text(tag.name),
                       subtitle: Text(

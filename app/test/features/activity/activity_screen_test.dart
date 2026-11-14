@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/app/design/app_icons.dart';
 import 'package:pandapay/app/design/widgets.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/activity/activity_screen.dart';
@@ -160,6 +161,53 @@ Future<void> _pump(
 }
 
 void main() {
+  testWidgets('brands purchases while keeping refund and unknown icons', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    await _pump(
+      tester,
+      cards: [],
+      repo: _FakeUserCardsRepository([
+        _txn(
+          id: 'known-purchase',
+          amount: Money.fromRupees(450),
+          occurredAt: now,
+          merchantName: 'CARD*SWIGGY MUMBAI',
+        ),
+        _txn(
+          id: 'unmatched-purchase',
+          amount: Money.fromRupees(200),
+          occurredAt: now,
+          merchantName: 'Avighna Enterprise',
+        ),
+        _txn(
+          id: 'known-refund',
+          amount: Money.fromRupees(100),
+          occurredAt: now,
+          merchantName: 'Swiggy',
+          note: '[ignored: refund]',
+        ),
+      ]),
+    );
+
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Image &&
+            widget.image is AssetImage &&
+            (widget.image as AssetImage).assetName ==
+                'assets/merchant_brands/swiggy.png',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Avighna Enterprise'), findsOneWidget);
+    // A merchant with no logo of its own is a shop; a refund keeps its own mark
+    // rather than the brand's logo.
+    expect(find.byIcon(AppIcons.business), findsOneWidget);
+    expect(find.byIcon(AppIcons.refund), findsOneWidget);
+  });
+
   testWidgets('keeps prior rows during a transaction refresh', (tester) async {
     final row = _txn(
       id: 'steady-row',
@@ -562,9 +610,10 @@ void main() {
     expect(find.text('Money out'), findsOneWidget);
     expect(find.text('+₹9,000'), findsOneWidget);
     expect(find.text('−₹1,250'), findsOneWidget);
-    // The slim summary strip has no arrows of its own; each row's tile has one.
-    expect(find.byIcon(Icons.arrow_downward_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.arrow_upward_rounded), findsOneWidget);
+    // The slim summary strip has no icons of its own; each row's tile has one:
+    // money in for the salary, a shop for the cafe.
+    expect(find.byIcon(AppIcons.moneyIn), findsOneWidget);
+    expect(find.byIcon(AppIcons.business), findsOneWidget);
   });
 
   testWidgets('compacts large summary totals to keep both metrics visible', (
@@ -915,7 +964,7 @@ void main() {
       expect(find.text('+₹2,500'), findsOneWidget);
       expect(find.textContaining('Investment'), findsNWidgets(2));
       expect(find.textContaining('Investment return'), findsOneWidget);
-      expect(find.byIcon(Icons.trending_up_rounded), findsNWidgets(2));
+      expect(find.byIcon(AppIcons.investment), findsNWidgets(2));
     },
   );
 

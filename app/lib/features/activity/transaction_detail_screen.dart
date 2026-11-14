@@ -21,6 +21,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/app_icons.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../app/transaction_tag_picker.dart';
@@ -44,6 +45,7 @@ import '../insights/spend_trends_screen.dart';
 import '../payments/payment_method_catalogue.dart';
 import '../shared_expenses/runtime/shared_providers.dart';
 import 'split_expense_screen.dart';
+import 'transaction_avatar.dart';
 
 /// D2 Transaction Detail (ui-spec Group D). Deep-linkable at /activity/:id.
 /// Full record incl. source and reconciliation status. Actions: edit (D3),
@@ -1494,6 +1496,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                   Center(
                     child: Column(
                       children: [
+                        // The brand's logo, else a person, a shop, a card...
+                        transactionLeading(entry, size: 44),
+                        const SizedBox(height: AppSpace.sm),
                         MoneyText(
                           entry.amount,
                           confidence: Confidence.estimated,
@@ -1571,7 +1576,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                                   ActionChip(
                                     label: Text(tags[index].name),
                                     avatar: Icon(
-                                      Icons.label_rounded,
+                                      AppIcons.tag,
                                       size: 16,
                                       color: transactionTagColor(
                                         tags[index].color,

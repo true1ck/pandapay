@@ -7,6 +7,9 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/merchant_brand.dart';
+import '../../app/design/merchant_brand_tile.dart';
+import '../../app/design/party_avatar.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
@@ -318,6 +321,7 @@ class _MerchantResultTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final brand = MerchantBrand.forName(candidate.displayName);
     final best = ref.watch(
       bestCardForMerchantProvider(
         MerchantRecommendationQuery(
@@ -338,6 +342,10 @@ class _MerchantResultTile extends ConsumerWidget {
         borderRadius: BorderRadius.circular(16),
         child: ListTile(
           onTap: onTap,
+          leading: MerchantBrandTile(
+            brand: brand,
+            fallback: PartyAvatar(AvatarKind.business),
+          ),
           title: Text(
             candidate.displayName ?? 'Unnamed merchant',
             style: BambooFonts.heading(14.5, color: BambooInk.ink900),

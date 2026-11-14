@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/merchant_brand.dart';
+import '../../app/design/merchant_brand_tile.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/local/sms_intake_repository.dart';
@@ -343,20 +345,25 @@ class _SubscriptionDetailScreenState
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: BambooInk.lime.withValues(alpha: 0.14),
-                          borderRadius: BorderRadius.circular(13),
-                          border: Border.all(
-                            color: BambooInk.lime.withValues(alpha: 0.25),
+                      MerchantBrandTile(
+                        brand: MerchantBrand.forName(series.displayName),
+                        size: 42,
+                        onSlate: true,
+                        fallback: Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: BambooInk.lime.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(13),
+                            border: Border.all(
+                              color: BambooInk.lime.withValues(alpha: 0.25),
+                            ),
                           ),
-                        ),
-                        child: const Icon(
-                          Icons.autorenew_rounded,
-                          color: BambooInk.lime,
-                          size: 22,
+                          child: const Icon(
+                            Icons.autorenew_rounded,
+                            color: BambooInk.lime,
+                            size: 22,
+                          ),
                         ),
                       ),
                       _headerStatusBadge(series),
