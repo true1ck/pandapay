@@ -415,7 +415,8 @@ void main() {
           ),
         ),
       );
-      expect(find.text('Offline · showing saved splits'), findsOneWidget);
+      // The global "Offline mode" banner already says this; no duplicate here.
+      expect(find.text('Offline · showing saved splits'), findsNothing);
       expect(find.text(sharedCatchingUpCopy), findsOneWidget);
       expect(find.text('Rahul'), findsOneWidget);
       expect(find.text('Settled!'), findsNothing);

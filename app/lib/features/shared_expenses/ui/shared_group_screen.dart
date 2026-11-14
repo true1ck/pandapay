@@ -38,11 +38,6 @@ class SharedGroupScreen extends StatelessWidget {
   });
 
   List<Widget> _header({bool incomplete = false}) => [
-    if (data.offline)
-      const SharedNotice(
-        'Offline · showing saved splits',
-        icon: Icons.cloud_off_outlined,
-      ),
     if (data.summary case final summary?)
       SharedSummaryCard(summary: summary, hideAmounts: data.hideAmounts),
     if (incomplete) const SharedNotice(sharedCatchingUpCopy),
@@ -134,13 +129,7 @@ class SharedGroupScreen extends StatelessWidget {
     key: ValueKey('${data.id}:totals'),
     state: data.totalsState,
     hasItems: data.totals != null,
-    header: [
-      if (data.offline)
-        const SharedNotice(
-          'Offline · showing saved splits',
-          icon: Icons.cloud_off_outlined,
-        ),
-    ],
+    header: const [],
     itemCount: data.totals == null ? 0 : 1,
     itemBuilder: (_, _) {
       final totals = data.totals!;

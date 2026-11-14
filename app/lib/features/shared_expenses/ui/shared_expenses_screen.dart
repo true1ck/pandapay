@@ -129,11 +129,6 @@ class _SharedExpensesScreenState extends State<SharedExpensesScreen>
         sharedPendingCopy(widget.data.pendingChanges),
         icon: Icons.sync_rounded,
       ),
-    if (widget.data.offline)
-      const SharedNotice(
-        'Offline · showing saved splits',
-        icon: Icons.cloud_off_outlined,
-      ),
     if (tab != SharedHubTab.activity) ...[
       if (widget.data.summary case final summary?)
         SharedSummaryCard(
