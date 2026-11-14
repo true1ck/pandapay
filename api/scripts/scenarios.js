@@ -180,6 +180,40 @@ async function s6Pushes() {
   } finally { api.stop(); }
 }
 
+async function s9TwoDevices() {
+  const api = await startApi();
+  try {
+    const t = tok(5);
+    const reg = async () => (await request(api.port, { method: 'POST', pathname: '/sync/register-device', token: t, body: { platform: 'android', appVersion: 'scenario' } })).json.deviceId;
+    const devA = await reg(); const devB = await reg();
+    check('S9 two devices', 'two devices register with different ids', !!devA && !!devB && devA !== devB);
+    const list = await request(api.port, { pathname: '/transactions?pageSize=5', token: t });
+    const X = list.json.transactions[0].id;
+    const T1 = Date.now(); const T0 = T1 - 60000;
+    const push = (deviceId, note, clock, seq) => request(api.port, { method: 'POST', pathname: '/sync/push', token: t,
+      body: { deviceId, strict: true, changes: [{ entity: 'transactions', entityId: X, op: 'update', clientSeq: seq, payload: { note }, fieldClocks: { note: clock } }] } });
+    const a = await push(devA, 'from device A (newer)', T1, 1);
+    check('S9 two devices', 'device A edit is applied', a.status === 200 && a.json.results[0].applied === true, JSON.stringify(a.json));
+    const b = await push(devB, 'from device B (older clock)', T0, 1);
+    const rb = b.json && b.json.results && b.json.results[0];
+    check('S9 two devices', 'the older edit from device B loses (last-writer-wins by field clock) and is reported as a conflict', b.status === 200 && rb && (rb.applied === false || rb.conflicts > 0), JSON.stringify(b.json));
+    const after = await request(api.port, { pathname: `/transactions/${X}`, token: t });
+    const note = (after.json.transaction || after.json).note;
+    check('S9 two devices', 'the newer edit is what everyone sees', note === 'from device A (newer)', `note=${note}`);
+    const pull = await request(api.port, { pathname: `/sync/pull?deviceId=${devB}&since=0&limit=25`, token: t });
+    const changes = (pull.json && pull.json.changes) || [];
+    check('S9 two devices', 'device B pulls the change made by device A', pull.status === 200 && changes.some((c) => (c.entity_id || c.entityId) === X && c.entity === 'transactions'), JSON.stringify(pull.json).slice(0, 200));
+    check('S9 two devices', 'device B does not receive its own change back', !changes.some((c) => (c.device_id || c.deviceId) === devB));
+    const seq = pull.json.latestServerSeq;
+    const ack = await request(api.port, { method: 'POST', pathname: '/sync/ack', token: t, body: { deviceId: devB, serverSeq: seq } });
+    check('S9 two devices', 'ack is accepted', ack.status === 200 || ack.status === 204, `status=${ack.status}`);
+    const again = await request(api.port, { pathname: `/sync/pull?deviceId=${devB}&since=${seq}&limit=25`, token: t });
+    check('S9 two devices', 'nothing new after the cursor (hasMore=false, no changes)', again.status === 200 && (again.json.changes || []).length === 0 && !again.json.hasMore, JSON.stringify(again.json).slice(0, 160));
+    const other = await request(api.port, { pathname: `/sync/pull?deviceId=${devA}&since=0&limit=25`, token: tok(6) });
+    check('S9 two devices', 'another user cannot pull this device stream (409 or empty, never the data)', other.status === 409 || ((other.json.changes || []).length === 0), `status=${other.status}`);
+  } finally { api.stop(); }
+}
+
 async function s7BadInput() {
   const api = await startApi();
   try {
@@ -220,7 +254,7 @@ async function s8Burst() {
 (async () => {
   await new Promise((r) => auth.listen(0, '127.0.0.1', r));
   const only = (process.argv[2] || '').toLowerCase();
-  const all = { s1: s1Baseline, s2: s2Overload, s3: s3Abort, s4: s4AuthOutage, s6: s6Pushes, s7: s7BadInput, s8: s8Burst, s5: s5DbOutage };
+  const all = { s1: s1Baseline, s2: s2Overload, s3: s3Abort, s4: s4AuthOutage, s6: s6Pushes, s9: s9TwoDevices, s7: s7BadInput, s8: s8Burst, s5: s5DbOutage };
   for (const [k, fn] of Object.entries(all)) {
     if (only && only !== k) continue;
     try { await fn(); } catch (e) { check(k.toUpperCase(), 'scenario ran without an exception', false, e.message.slice(0, 300)); }
