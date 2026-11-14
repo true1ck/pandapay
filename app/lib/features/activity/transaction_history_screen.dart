@@ -58,6 +58,7 @@ class TransactionHistoryScreen extends ConsumerWidget {
       ),
       body: AppBackground(
         child: history.when(
+          skipLoadingOnReload: true,
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (_, _) => const EmptyState(
             icon: Icons.history,

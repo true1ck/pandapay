@@ -1,3 +1,4 @@
+import '../../app/async_first_load.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -52,7 +53,7 @@ class BillProofSection extends ConsumerWidget {
     final isManual = key == null || key.isEmpty || key.startsWith('manual-');
     final sms = isManual ? null : ref.watch(billProofSmsProvider(key));
     final message = sms?.valueOrNull?.message;
-    final loading = sms?.isLoading ?? false;
+    final loading = sms?.isFirstLoad ?? false;
     final payId = paymentTransactionId;
 
     return Container(

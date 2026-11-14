@@ -1,3 +1,4 @@
+import '../../app/async_first_load.dart';
 import '../sms_v2/ledger/providers.dart';
 import 'dart:async';
 
@@ -589,11 +590,13 @@ class _DueList extends ConsumerWidget {
         (_showSmsBills && smsAsync.hasError) ||
         receiptsAsync.hasError ||
         (_showCardBillReview && reviewAsync.hasError);
-    final settled = !commitmentsAsync.isLoading &&
-        (!_showSmsBills || !smsAsync.isLoading) &&
-        !receiptsAsync.isLoading &&
-        !centralAsync.isLoading &&
-        (!_showCardBillReview || !reviewAsync.isLoading);
+    // Settled once every source has data; a refresh keeps the screen as it
+    // is instead of flipping it back to "not settled".
+    final settled = !commitmentsAsync.isFirstLoad &&
+        (!_showSmsBills || !smsAsync.isFirstLoad) &&
+        !receiptsAsync.isFirstLoad &&
+        !centralAsync.isFirstLoad &&
+        (!_showCardBillReview || !reviewAsync.isFirstLoad);
     final visibleCommitments = commitments
         .where((c) => _matchesCommitment(c, filter))
         .toList()

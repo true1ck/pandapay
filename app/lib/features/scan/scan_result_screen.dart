@@ -1,3 +1,4 @@
+import '../../app/async_first_load.dart';
 import 'package:flutter/material.dart';
 import '../../app/design/bamboo_components.dart';
 import 'package:flutter/services.dart';
@@ -209,10 +210,10 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       return _P2PNotice(vpa: widget.parsed.pa);
     }
 
-    if (catalogue.isLoading ||
-        categories.isLoading ||
-        userCards.isLoading ||
-        overrides.isLoading) {
+    if (catalogue.isFirstLoad ||
+        categories.isFirstLoad ||
+        userCards.isFirstLoad ||
+        overrides.isFirstLoad) {
       return const Center(child: CircularProgressIndicator());
     }
     final combinedError =

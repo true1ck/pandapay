@@ -1030,8 +1030,8 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
             child: searching
                 ? const _SearchSuggestions()
                 : transactions.when(
-                    // Explicit refreshes keep the list stable. Account/filter
-                    // dependency changes still enter loading below.
+                    // reload-ok: explicit refreshes keep the list stable; an
+                    // account/filter change is a different list, so it loads.
                     skipLoadingOnRefresh: true,
                     skipLoadingOnReload: false,
                     // See my_cards_screen.dart for why a list-shaped skeleton

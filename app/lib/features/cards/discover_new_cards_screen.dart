@@ -1,3 +1,4 @@
+import '../../app/async_first_load.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -59,7 +60,7 @@ class _DiscoverNewCardsScreenState extends ConsumerState<DiscoverNewCardsScreen>
   }
 
   Widget _body(AsyncValue<List<AcquisitionCandidate>> candidates, AsyncValue<List<SpendCategory>> categories) {
-    if (candidates.isLoading || categories.isLoading) {
+    if (candidates.isFirstLoad || categories.isFirstLoad) {
       return const Center(child: CircularProgressIndicator());
     }
     final error = candidates.error ?? categories.error;

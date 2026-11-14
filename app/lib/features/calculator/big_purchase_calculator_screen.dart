@@ -1,3 +1,4 @@
+import '../../app/async_first_load.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -208,7 +209,9 @@ class _BigPurchaseCalculatorScreenState
     RecommendationEngine engine,
     AsyncValue<List<CardOverride>> overrides,
   ) {
-    if (catalogue.isLoading || userCards.isLoading || overrides.isLoading) {
+    if (catalogue.isFirstLoad ||
+        userCards.isFirstLoad ||
+        overrides.isFirstLoad) {
       return const Center(child: CircularProgressIndicator());
     }
     final combinedError = catalogue.error ?? userCards.error ?? overrides.error;
