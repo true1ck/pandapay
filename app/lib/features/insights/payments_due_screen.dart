@@ -440,73 +440,59 @@ class BillsAndCommitmentsTab extends ConsumerWidget {
     final now = ref.watch(clockProvider).now();
     final filter = BillsHorizonFilter(ref.watch(billsHorizonProvider), now);
 
-    return Column(
+    // Same bottom-right add button as the Subscriptions tab (consistent UI).
+    return Stack(
+      fit: StackFit.expand,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpace.lg,
-            AppSpace.sm,
-            AppSpace.lg,
-            AppSpace.xs,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Flexible(
+        Column(
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(
+                AppSpace.lg,
+                AppSpace.sm,
+                AppSpace.lg,
+                AppSpace.xs,
+              ),
+              child: Align(
+                alignment: Alignment.centerLeft,
                 child: BillsHorizonFilterBar(),
               ),
-              const SizedBox(width: AppSpace.sm),
-              Tooltip(
-                message: 'Add bill or policy',
-                child: TextButton.icon(
-                  onPressed: () => showAddCommitmentSheet(context, ref),
-                  icon: const Icon(
-                    Icons.add_rounded,
-                    size: 16,
-                    color: BambooInk.jade,
-                  ),
-                  label: Text(
-                    'Add bill',
-                    style: BambooFonts.ui(
-                      12.5,
-                      color: BambooInk.jade,
-                      weight: FontWeight.w600,
-                    ),
-                  ),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpace.sm,
-                      vertical: AppSpace.xs,
-                    ),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ),
+            ),
+            Expanded(
+              child: Builder(
+                builder: (context) {
+                  final rows = due.valueOrNull;
+                  if (rows != null) {
+                    return _DueList(rows: rows, filter: filter);
+                  }
+                  if (due.isLoading) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: AppSpace.lg),
+                      child: SkeletonList(count: 3),
+                    );
+                  }
+                  if (due.hasError) {
+                    return ErrorState(
+                      message: userFacingErrorMessage(due.error!),
+                      onRetry: () => ref.invalidate(paymentsDueProvider),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-        Expanded(
-          child: Builder(
-            builder: (context) {
-              final rows = due.valueOrNull;
-              if (rows != null) {
-                return _DueList(rows: rows, filter: filter);
-              }
-              if (due.isLoading) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: AppSpace.lg),
-                  child: SkeletonList(count: 3),
-                );
-              }
-              if (due.hasError) {
-                return ErrorState(
-                  message: userFacingErrorMessage(due.error!),
-                  onRetry: () => ref.invalidate(paymentsDueProvider),
-                );
-              }
-              return const SizedBox.shrink();
-            },
+        Positioned(
+          right: AppSpace.lg,
+          bottom: AppSpace.lg,
+          child: SafeArea(
+            top: false,
+            left: false,
+            child: AppAddButton(
+              tooltip: 'Add bill or policy',
+              onPressed: () => showAddCommitmentSheet(context, ref),
+            ),
           ),
         ),
       ],
@@ -755,7 +741,7 @@ class _DueList extends ConsumerWidget {
         AppSpace.lg,
         AppSpace.md,
         AppSpace.lg,
-        AppSpace.xxl,
+        AppShell.navClearance, // clears the floating add button, like Subscriptions
       ),
       children: [
         if (localFailed) const _BillsLoadError(),
