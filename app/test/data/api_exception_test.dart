@@ -67,6 +67,13 @@ void main() {
       );
     });
 
+    test('429 and 408 mean "later": queue them, never show an error', () {
+      expect(isOfflineLike(ApiException('POST /x failed: 429 {}')), isTrue);
+      expect(isOfflineLike(ApiException('POST /x failed: 408 {}')), isTrue);
+      expect(isOfflineLike(ApiException('POST /x failed: 409 {}')), isFalse);
+      expect(isOfflineLike(ApiException('POST /x failed: 422 {}')), isFalse);
+    });
+
     test('ordinary failures are not offline-like while online', () {
       expect(isOfflineLike(ApiException('POST /x failed: 400 {}')), isFalse);
       expect(isOfflineLike(ApiException('GET /x failed: 401 {}')), isFalse);

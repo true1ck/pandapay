@@ -129,7 +129,9 @@ void main() {
     expect(isImportTransportFailure(const SocketException('x')), isTrue);
     expect(isImportTransportFailure(ApiException('POST /x timed out')), isTrue);
     expect(isImportTransportFailure(ApiException('POST /x failed: 503 {}')), isTrue);
-    expect(isImportTransportFailure(ApiException('POST /x failed: 500 {}')), isFalse);
+    expect(isImportTransportFailure(ApiException('POST /x failed: 500 {}')), isTrue);
+    expect(isImportTransportFailure(ApiException('POST /x failed: 429 {}')), isTrue);
+    expect(isImportTransportFailure(ApiException('POST /x failed: 408 {}')), isTrue);
     expect(isImportTransportFailure(ApiException('POST /x failed: 400 {}')), isFalse);
   });
 }

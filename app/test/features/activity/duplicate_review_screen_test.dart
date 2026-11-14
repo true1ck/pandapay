@@ -58,7 +58,7 @@ DuplicateCandidate _pair() => DuplicateCandidate(
   ),
 );
 
-Future<void> _pump(
+Future<DuplicateResolutionOutboxRepository> _pump(
   WidgetTester tester, {
   required _FakeUserCardsRepository repo,
 }) async {
@@ -80,6 +80,7 @@ Future<void> _pump(
     ),
   );
   await tester.pumpAndSettle();
+  return outbox;
 }
 
 void main() {
@@ -132,7 +133,7 @@ void main() {
     tester,
   ) async {
     final repo = _FakeUserCardsRepository([_pair()]);
-    await _pump(tester, repo: repo);
+    final outbox = await _pump(tester, repo: repo);
 
     await tester.ensureVisible(find.text('Keep this one').first);
     await tester.tap(find.text('Keep this one').first);
@@ -146,16 +147,20 @@ void main() {
     await tester.tap(find.text('Close'));
     await tester.pumpAndSettle();
 
-    expect(repo.lastResolveArgs?['id'], 'pair1');
-    expect(repo.lastResolveArgs?['resolution'], 'merged');
-    expect(repo.lastResolveArgs?['keepTransactionId'], 'txnA');
+    // Local first: the choice is stored on the phone and the screen never
+    // called the server; the outbox sends it in the background.
+    expect(repo.lastResolveArgs, isNull);
+    final queued = outbox.pending().single;
+    expect(queued.candidateId, 'pair1');
+    expect(queued.resolution, 'merged');
+    expect(queued.keepTransactionId, 'txnA');
   });
 
   testWidgets('Keep both waits for confirmation before resolving', (
     tester,
   ) async {
     final repo = _FakeUserCardsRepository([_pair()]);
-    await _pump(tester, repo: repo);
+    final outbox = await _pump(tester, repo: repo);
 
     await tester.ensureVisible(find.text('Keep both — not actually duplicates'));
     await tester.tap(find.text('Keep both — not actually duplicates'));
@@ -169,7 +174,9 @@ void main() {
     await tester.tap(find.text('Close'));
     await tester.pumpAndSettle();
 
-    expect(repo.lastResolveArgs?['resolution'], 'kept_both');
-    expect(repo.lastResolveArgs?['keepTransactionId'], isNull);
+    expect(repo.lastResolveArgs, isNull);
+    final queued = outbox.pending().single;
+    expect(queued.resolution, 'kept_both');
+    expect(queued.keepTransactionId, isNull);
   });
 }

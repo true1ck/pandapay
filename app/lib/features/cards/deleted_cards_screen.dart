@@ -7,6 +7,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
+import 'card_state_local_first.dart';
 import 'card_summary.dart';
 
 /// Settings → "Manage deleted cards".
@@ -44,40 +45,15 @@ class _DeletedCardsScreenState extends ConsumerState<DeletedCardsScreen> {
       );
       return;
     }
-    if (ref.read(isOnlineProvider).valueOrNull == false) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Restoring a card needs a connection. Try again when you are online.',
-          ),
-        ),
-      );
-      return;
-    }
-
     setState(() => _restoring.add(card.id));
 
     try {
-      await repo.unarchiveCard(card.id);
+      // Local first: the card is back in the wallet now (online or not); the
+      // outbox tells the server in the background.
+      await setCardArchived(ref, card.id, archived: false);
       if (!mounted) return;
-
-      // Publish the restored state before refreshing so the next wallet read
-      // cannot replay the cached archived snapshot.
-      await applyUserCardArchiveToCache(
-        ref,
-        userCardId: card.id,
-        archived: false,
-      );
-      await clearUserCardsCache(ref);
+      await refreshAfterCardChange(ref);
       ref.invalidate(archivedCardsProvider);
-      ref.invalidate(myCardsProvider);
-      ref.invalidate(userCardsProvider);
-      ref.invalidate(transactionsProvider);
-      ref.invalidate(utilizationTransactionsProvider);
-      ref.invalidate(homeSummaryProvider);
-      ref.invalidate(spendReportProvider);
-      ref.invalidate(budgetsProvider);
-      ref.invalidate(recurringReportProvider);
 
       if (!mounted) return;
       setState(() => _restored.add(card.id));

@@ -128,7 +128,8 @@ final statementImportRevisionProvider = StateProvider<int>((ref) => 0);
 bool isImportTransportFailure(Object error) {
   if (error is ApiException) {
     final status = error.statusCode;
-    return status == null || status == 502 || status == 503 || status == 504;
+    // 408/429/5xx say "later", not "no": the batches are already saved.
+    return status == null || status == 408 || status == 429 || status >= 500;
   }
   return isOfflineLike(error);
 }

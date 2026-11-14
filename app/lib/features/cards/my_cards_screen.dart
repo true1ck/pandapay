@@ -1061,7 +1061,9 @@ class _AddCardFormState extends ConsumerState<_AddCardForm> {
         if (local != null) {
           await local.updateCard(existingCard!.id, last4: scannedLast4);
         } else {
-          await repo!.updateCard(existingCard!.id, last4: scannedLast4);
+          await queueCardFieldPatch(ref, existingCard!.id, {
+            'last4': scannedLast4,
+          });
         }
         enrichedExisting = true;
       }

@@ -499,17 +499,20 @@ void main() {
       expect(p!.categoryCaps, isFalse);
     });
 
-    test('online, a toggle goes straight to the server and nothing is queued', () async {
-      await updateNotificationPreferences(ref, {'category_bills': false});
+    test('online, a toggle is saved on the phone at once and sent in the background (u)', () async {
+      final result = await updateNotificationPreferences(ref, {'category_bills': false});
+      expect(result, SettingsWrite.saved, reason: 'online: no "saved offline" note');
+      expect(prefsRepo.updates, isEmpty, reason: 'the screen never waits on the network');
+      expect(await pending(), 1);
+      final p = await container.read(notificationPreferencesProvider.future);
+      expect(p!.categoryBills, isFalse);
+      expect(await replay(), 1);
       expect(prefsRepo.updates, [
         {'category_bills': false},
       ]);
-      expect(await pending(), 0);
-      final p = await container.read(notificationPreferencesProvider.future);
-      expect(p!.categoryBills, isFalse);
     });
 
-    test('a refusal from the server is shown to the caller and rolled back', () async {
+    test('a server that would refuse never makes the save fail or roll back (u)', () async {
       final bad = _RefusingPrefsRepo();
       final c = ProviderContainer(overrides: [
         cacheNamespaceProvider.overrideWithValue(_ns),
@@ -520,13 +523,10 @@ void main() {
       late Ref r;
       c.read(Provider<void>((x) => r = x));
       await c.read(notificationPreferencesProvider.future);
-      await expectLater(
-        updateNotificationPreferences(r, {'daily_cap': 99}),
-        throwsA(isA<ApiException>()),
-      );
+      await updateNotificationPreferences(r, {'daily_cap': 99});
       final p = await c.read(notificationPreferencesProvider.future);
-      expect(p!.dailyCap, 3);
-      expect((await c.read(commandOutboxProvider.future)).pendingCount, 0);
+      expect(p!.dailyCap, 99);
+      expect((await c.read(commandOutboxProvider.future)).pendingCount, 1);
     });
 
     test('mute offline: the gate honours it straight away and it syncs later', () async {

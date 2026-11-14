@@ -8,6 +8,8 @@ import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
+import '../cards/add_card_local_first.dart' show queueCardFieldPatch;
+import '../cards/card_state_local_first.dart' show queuePointsBalance;
 import 'onboarding_back.dart';
 
 /// ui-spec.md A9 Card Details Setup. Walks [userCardIds] one at a time
@@ -122,16 +124,21 @@ class _CardDetailsSetupScreenState
             nickname: nicknameChanged ? nickname : null,
           );
         } else {
-          await repo.updateCard(
-            card.id,
-            nickname: nicknameChanged ? nickname : null,
-            creditLimitInr: creditLimit.isEmpty
-                ? null
-                : double.tryParse(creditLimit),
-            statementDay: _statementDay,
-            dueDay: _dueDay,
-            pointsBalance: points.isEmpty ? null : double.tryParse(points),
-          );
+          // Local first: stored on the phone now, sent by the outbox.
+          final fields = <String, Object?>{
+            if (nicknameChanged) 'nickname': nickname,
+            if (double.tryParse(creditLimit) != null)
+              'creditLimitInr': double.parse(creditLimit),
+            'statementDay': ?_statementDay,
+            'dueDay': ?_dueDay,
+          };
+          if (fields.isNotEmpty) {
+            await queueCardFieldPatch(ref, card.id, fields);
+          }
+          final pointsValue = double.tryParse(points);
+          if (pointsValue != null) {
+            await queuePointsBalance(ref, card.id, pointsValue);
+          }
         }
         ref.invalidate(userCardsProvider);
         ref.invalidate(myCardsProvider);

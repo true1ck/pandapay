@@ -65,7 +65,7 @@ class SyncEngine {
   bool _pushHasMore = false;
 
   /// Largest request body pushed in one go. The API rejects bodies over
-  /// 100 KiB for the whole request, so one oversize change would otherwise
+  /// 1 MiB for the whole request (this client stays well under at 60 KiB), so one oversize change would otherwise
   /// block every change behind it for ever. Changes are never split, so a
   /// single change larger than this goes alone and is judged on its own.
   static const maxPushBytes = 60 * 1024;

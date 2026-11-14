@@ -7,6 +7,7 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../app/required_field.dart';
+import '../../data/server_clock.dart';
 import '../../data/local_first/pending_overlays.dart';
 import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart' show SpendCategory;
@@ -321,7 +322,7 @@ class _BudgetCard extends ConsumerWidget {
         target: budget.id,
         payload: {
           'id': budget.id,
-          'clientEditedAt': DateTime.now().toUtc().toIso8601String(),
+          'clientEditedAt': ServerClock.instance.now().toUtc().toIso8601String(),
         },
       );
       await forgetLocalBudget(ref, budget.id);
@@ -636,7 +637,7 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
             'period': _period.wireValue,
             'amountInr': amount,
             'rollover': false,
-            'clientEditedAt': DateTime.now().toUtc().toIso8601String(),
+            'clientEditedAt': ServerClock.instance.now().toUtc().toIso8601String(),
           },
         );
         ref.invalidate(budgetsProvider);
