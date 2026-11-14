@@ -191,6 +191,29 @@ class OwnerIdentityActions {
     );
   }
 
+  /// True when the payee is a person whose name looks like the owner's family
+  /// but is not marked (a weak match, or a one-word name that cannot be marked
+  /// automatically), and the person has not already said it is not family. The
+  /// payment's screen then asks "Family?"; tapping "Mark as family transfer"
+  /// applies the usual mark.
+  Future<bool> familySuggestion(TransactionEntry entry) async {
+    final id = entry.eventId;
+    if (id == null) return false;
+    final o = await _open();
+    final cp = _counterpartyOf(o.db, o.namespace, id);
+    if (cp?.kind != CounterpartyKind.person || cp?.name == null) return false;
+    final all = o.store.entries(profileName: await profileName());
+    final owners = [for (final e in all) if (!e.contains(':')) e];
+    if (familyLikeName(cp!.name, owners) == FamilyMatch.none) return false;
+    final key = OwnerIdentity(familyNames: [cp.name!]).familyNames;
+    return key.isEmpty ||
+        !o.store.list().any(
+          (e) =>
+              e.source == OwnerEntrySource.dismissed &&
+              e.entry == '${OwnerIdentity.familyPayeePrefix}${key.single}',
+        );
+  }
+
   static final _digits = RegExp(r'^\d{4,}$');
 
   static bool _recognisable(Counterparty cp) =>

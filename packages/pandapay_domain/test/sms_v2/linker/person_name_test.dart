@@ -72,4 +72,18 @@ void main() {
       expect(nameIsOneOf('ASHA MARIA RAO', const []), isFalse);
     });
   });
+
+  group('familyLikeName', () {
+    FamilyMatch of(String p) => familyLikeName(p, const ['Ravi Mohan Patil']);
+    test('synthetic matrix', () {
+      expect(of('SMT PATIL'), FamilyMatch.strong);
+      expect(of('MOHAN R P'), FamilyMatch.strong);
+      expect(of('ASHA MOHAN PATIL'), FamilyMatch.strong);
+      expect(of('RAVI MOHAN'), FamilyMatch.none); // the owner
+      expect(of('RAVI SHARMA'), FamilyMatch.none);
+      expect(of('PATIL HARDWARE STORES'), FamilyMatch.none);
+      expect(of('MOHAN'), FamilyMatch.none);
+      expect(of('ANITA MOHAN'), FamilyMatch.weak);
+    });
+  });
 }

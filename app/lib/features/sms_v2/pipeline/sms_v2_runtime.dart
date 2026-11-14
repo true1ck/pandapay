@@ -1,4 +1,5 @@
 import '../personal/personal_rule_engine.dart';
+import '../personal/owner_identity_store.dart';
 import '../personal/personal_rule_store.dart';
 import '../migration/legacy_replay.dart';
 import '../migration/history_update.dart';
@@ -247,11 +248,47 @@ class SmsV2Runtime {
         ),
       );
     }
+    _markFamilyPayees();
     // A history import marked the saved subscription rows dirty instead of
     // re-deriving them per chunk. Tell the readers once, now that it is over.
     if (SubscriptionStore(financial.database.db, namespace: namespace)
         .isDirty) {
       financial.notifyExternalChanges(namespace, const ['subscriptions']);
+    }
+  }
+
+  /// Marks as family the person payees whose names strongly look like the
+  /// owner's family ([OwnerIdentityStore.autoFamily]), then asks the next sync
+  /// to read their earlier payments again. Reads only the facts since the last
+  /// pass (a week's overlap for late messages); does nothing with no owner name.
+  void _markFamilyPayees() {
+    try {
+      if (!ownerNames().any((e) => !e.contains(':'))) return;
+      final db = financial.database.db;
+      final from = (DateTime.tryParse(_state.get('family:scanned') ?? '') ??
+              DateTime.utc(1900))
+          .subtract(const Duration(days: 7));
+      final moves = FactStore(db, namespace: namespace).movementsSince(from);
+      if (moves.isEmpty) return;
+      _state.put(
+        'family:scanned',
+        moves.map((m) => m.observedAt).reduce((a, b) => a.isAfter(b) ? a : b)
+            .toUtc()
+            .toIso8601String(),
+      );
+      final names = {
+        for (final m in moves)
+          if (m.counterparty?.kind == CounterpartyKind.person &&
+              m.counterparty?.name != null)
+            m.counterparty!.name!,
+      };
+      final marked = OwnerIdentityStore(db, namespace: namespace).autoFamily(
+        names,
+        profileName: financial.database.profileDisplayName(namespace),
+      );
+      if (marked > 0) requestOwnerRecheck();
+    } catch (_) {
+      // A guess about family never stops a message from being captured.
     }
   }
 

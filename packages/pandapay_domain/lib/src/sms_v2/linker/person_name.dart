@@ -53,6 +53,58 @@ bool namesDescribeSamePerson(String? a, String? b) {
   return fullWords >= 2;
 }
 
+/// How much a payee's name looks like the owner's family.
+enum FamilyMatch { none, weak, strong }
+
+// ponytail: short fixed lists. Move to pack params, or count words seen in many
+// unrelated payees, when these miss real cases.
+const _honorifics = {'SMT', 'SHRI', 'SHRIMATI', 'MR', 'MRS', 'MS', 'KUM'};
+const _businessWords = {
+  'STORES', 'STORE', 'HARDWARE', 'TRADERS', 'TRADING', 'ENTERPRISES', 'ENTERPRISE',
+  'SHOP', 'MART', 'AGENCY', 'AGENCIES', 'SERVICES', 'PVT', 'LTD', 'LIMITED',
+  'CO', 'BANK', 'MEDICAL', 'FOODS', 'RESTAURANT', 'HOTEL', 'SONS', 'BROTHERS',
+};
+const _commonWords = {
+  'KUMAR', 'SINGH', 'DEVI', 'KAUR', 'KHAN', 'LAL', 'RAM', 'MOHD', 'MOHAMMED', 'SHARMA',
+};
+
+/// Whether [payee] looks like family of the owner (any of [ownerNames], in
+/// reading order: first, father's name, then surname).
+///
+/// Strong: shares the surname (whole, cut to four letters or more, or as an
+/// initial beside the father's name), with another word or an honorific beside
+/// it. Weak: the father's name plus one more word, or a very common surname.
+/// Never a first name alone, a business, or the owner themselves.
+FamilyMatch familyLikeName(String? payee, Iterable<String> ownerNames) {
+  final raw = personNameTokens(payee);
+  final p = [for (final t in raw) if (!_honorifics.contains(t)) t];
+  if (p.isEmpty || p.any(_businessWords.contains)) return FamilyMatch.none;
+  final hadHonorific = p.length < raw.length;
+  var best = FamilyMatch.none;
+  for (final owner in ownerNames) {
+    final o = [
+      for (final t in personNameTokens(owner)) if (!_honorifics.contains(t)) t,
+    ];
+    if (o.length < 2 || namesDescribeSamePerson(payee, owner)) continue;
+    final last = o.last;
+    final fathers = o.length >= 3 ? o.sublist(1, o.length - 1) : const <String>[];
+    final hasFather = p.any(fathers.contains);
+    final surname = p.asMap().entries.any((e) {
+      final t = e.value;
+      if (t == last || (t.length >= 4 && last.startsWith(t))) return true;
+      return t.length == 1 && e.key > 0 && last.startsWith(t) && hasFather;
+    });
+    var m = FamilyMatch.none;
+    if (surname && (p.length >= 2 || hadHonorific)) {
+      m = _commonWords.contains(last) ? FamilyMatch.weak : FamilyMatch.strong;
+    } else if (hasFather && p.length >= 2) {
+      m = FamilyMatch.weak;
+    }
+    if (m.index > best.index) best = m;
+  }
+  return best;
+}
+
 /// True when [name] is the name of one of the account owner's [ownerNames].
 ///
 /// For a three-word owner name the first-and-last form also counts
