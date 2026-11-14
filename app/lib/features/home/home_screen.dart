@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:local_auth/local_auth.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
@@ -1503,7 +1502,9 @@ class _RankedSectionState extends State<_RankedSection> {
 
   @override
   Widget build(BuildContext context) {
-    return widget.ranked.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
+    return widget.ranked.when(
+      skipLoadingOnReload: true,
+      skipLoadingOnRefresh: true,
       loading: () => const Padding(
         padding: EdgeInsets.symmetric(vertical: 40),
         child: Center(child: CircularProgressIndicator()),
@@ -2723,76 +2724,7 @@ class _HomeAccountSnapshot extends ConsumerStatefulWidget {
 }
 
 class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
-  final _localAuth = LocalAuthentication();
   bool _expanded = false;
-  bool _unlocked = false;
-  bool _authenticating = false;
-  String? _authError;
-
-  Future<void> _authenticate() async {
-    if (_authenticating) return;
-    setState(() {
-      _authenticating = true;
-      _authError = null;
-    });
-    try {
-      final supported = await _localAuth.isDeviceSupported();
-      if (!supported) {
-        if (mounted) {
-          setState(() {
-            _authError =
-                'Set up a fingerprint, face unlock, or device PIN to reveal balances.';
-          });
-        }
-        return;
-      }
-      final authenticated = await _localAuth.authenticate(
-        localizedReason: 'Reveal bank balances in PandaPay',
-        biometricOnly: false,
-      );
-      if (!mounted) return;
-      setState(() {
-        _unlocked = authenticated;
-        _authError = authenticated
-            ? null
-            : 'Authentication was cancelled. Balances remain hidden.';
-      });
-    } on LocalAuthException catch (error) {
-      if (!mounted) return;
-      final unavailable =
-          error.code == LocalAuthExceptionCode.noCredentialsSet ||
-          error.code == LocalAuthExceptionCode.noBiometricsEnrolled ||
-          error.code == LocalAuthExceptionCode.noBiometricHardware;
-      setState(() {
-        _authError = unavailable
-            ? 'Set up a fingerprint, face unlock, or device PIN to reveal balances.'
-            : 'Could not verify. Your balances are still hidden.';
-      });
-    } on PlatformException {
-      if (mounted) {
-        setState(
-          () =>
-              _authError = 'Could not verify. Your balances are still hidden.',
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(
-          () =>
-              _authError = 'Could not verify. Your balances are still hidden.',
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _authenticating = false);
-    }
-  }
-
-  void _hideBalances() {
-    setState(() {
-      _unlocked = false;
-      _authError = null;
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -2855,19 +2787,6 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
           });
     final accountCount = visibleAccounts.length;
 
-    var total = const Money.zero();
-    var balancesFound = 0;
-    for (final account in visibleAccounts) {
-      final balance = account.availableBalance;
-      if (balance == null) continue;
-      total += balance;
-      balancesFound += 1;
-    }
-
-    final hasBalances = balancesFound > 0;
-    final hasManualBalances = visibleAccounts.any(
-      (a) => a.isBalanceManuallySet,
-    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         HomeScreen._gutter,
@@ -2910,16 +2829,6 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
                           ),
                         ),
                       ),
-                      IconButton(
-                        tooltip: 'View and edit balances',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () => context.push(AppRoute.bankAccounts),
-                        icon: const Icon(
-                          Icons.edit_outlined,
-                          size: 19,
-                          color: BambooInk.lime,
-                        ),
-                      ),
                       Text(
                         accountCount == 0
                             ? 'No accounts yet'
@@ -2947,103 +2856,6 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
                 ),
               ),
             ),
-            const SizedBox(height: AppSpace.md),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        hasBalances
-                            ? 'Total ${hasManualBalances ? 'account' : 'detected'} balance'
-                            : 'Balance from SMS',
-                        style: BambooFonts.ui(
-                          11.5,
-                          color: BambooInk.onSlateMuted,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      if (hasBalances)
-                        _unlocked
-                            ? MoneyText(
-                                total,
-                                confidence: Confidence.estimated,
-                                style: BambooFonts.money(
-                                  28,
-                                  color: BambooInk.lime,
-                                ),
-                                hidePaise: true,
-                                showConfidenceIcon: false,
-                              )
-                            : Text(
-                                '₹••••',
-                                style: BambooFonts.money(
-                                  28,
-                                  color: BambooInk.onSlate,
-                                ),
-                              )
-                      else
-                        Text(
-                          accountCount == 0 ? 'Not available' : 'Not found yet',
-                          style: BambooFonts.ui(
-                            16,
-                            weight: FontWeight.w600,
-                            color: BambooInk.onSlateSubtle,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                if (hasBalances)
-                  IconButton(
-                    tooltip: _unlocked ? 'Hide balances' : 'Reveal balances',
-                    onPressed: _authenticating
-                        ? null
-                        : (_unlocked ? _hideBalances : _authenticate),
-                    icon: _authenticating
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: BambooInk.lime,
-                            ),
-                          )
-                        : Icon(
-                            _unlocked
-                                ? Icons.visibility_off_rounded
-                                : Icons.visibility_rounded,
-                            color: BambooInk.lime,
-                          ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppSpace.xs),
-            Text(
-              'Balances come from the latest bank SMS unless you updated them manually.',
-              style: BambooFonts.ui(11.5, color: BambooInk.onSlateSubtle),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              'Edit them anytime. Live bank balances are coming soon.',
-              style: BambooFonts.ui(11.5, color: BambooInk.onSlateSubtle),
-            ),
-            if (hasBalances) ...[
-              const SizedBox(height: 3),
-              Text(
-                'SMS amounts are snapshots, not live bank balances.',
-                style: BambooFonts.ui(11.5, color: BambooInk.onSlateSubtle),
-              ),
-            ],
-            if (_authError != null) ...[
-              const SizedBox(height: AppSpace.sm),
-              Text(
-                _authError!,
-                style: BambooFonts.ui(11.5, color: BambooInk.clay),
-              ),
-            ],
             AnimatedSize(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOutCubic,
@@ -3063,7 +2875,6 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
                               ),
                               last4: account.accountLast4,
                               summary: account,
-                              revealed: _unlocked,
                             ),
                         ],
                       ),
@@ -3080,21 +2891,16 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
 class _HomeBankAccountRow extends StatelessWidget {
   final String last4;
   final BankAccountSummary? summary;
-  final bool revealed;
 
   const _HomeBankAccountRow({
     super.key,
     required this.last4,
     required this.summary,
-    required this.revealed,
   });
 
   @override
   Widget build(BuildContext context) {
     final issuer = summary?.issuerShortName ?? summary?.issuerName;
-    final balance = summary?.availableBalance;
-    final balanceAt = summary?.latestBalanceSmsAt;
-    final latestSmsAt = summary?.latestSmsAt;
     final logoLabel = issuer == null || issuer.trim().isEmpty ? 'Bank' : issuer;
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpace.sm),
@@ -3118,57 +2924,6 @@ class _HomeBankAccountRow extends StatelessWidget {
                   'Account ending $last4',
                   style: BambooFonts.ui(11.5, color: BambooInk.onSlateMuted),
                 ),
-              ],
-            ),
-          ),
-          SizedBox(
-            width: 132,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                if (balance == null)
-                  Text(
-                    'No balance reported',
-                    style: BambooFonts.ui(11, color: BambooInk.onSlateMuted),
-                    textAlign: TextAlign.end,
-                  )
-                else if (!revealed)
-                  const Icon(
-                    Icons.lock_outline_rounded,
-                    size: 17,
-                    color: BambooInk.onSlateMuted,
-                  )
-                else
-                  MoneyText(
-                    balance,
-                    confidence: Confidence.estimated,
-                    style: BambooFonts.ui(
-                      13,
-                      weight: FontWeight.w700,
-                      color: BambooInk.lime,
-                    ),
-                    hidePaise: true,
-                    showConfidenceIcon: false,
-                  ),
-                if (summary?.isBalanceManuallySet == true &&
-                    summary?.manualBalanceUpdatedAt != null)
-                  Text(
-                    'Manually updated ${DateFormat('dd MMM, h:mm a').format(summary!.manualBalanceUpdatedAt!.toLocal())}',
-                    style: BambooFonts.ui(9.5, color: BambooInk.onSlateMuted),
-                    textAlign: TextAlign.end,
-                  )
-                else if (balanceAt != null)
-                  Text(
-                    'As of ${DateFormat('dd MMM, h:mm a').format(balanceAt.toLocal())}',
-                    style: BambooFonts.ui(9.5, color: BambooInk.onSlateMuted),
-                    textAlign: TextAlign.end,
-                  )
-                else if (latestSmsAt != null)
-                  Text(
-                    'Latest SMS ${DateFormat('dd MMM, h:mm a').format(latestSmsAt.toLocal())}',
-                    style: BambooFonts.ui(9.5, color: BambooInk.onSlateMuted),
-                    textAlign: TextAlign.end,
-                  ),
               ],
             ),
           ),
