@@ -13,6 +13,7 @@ import '../../data/support_api.dart';
 import '../consent/consent_commands.dart';
 import '../settings/feedback_support_screen.dart' show supportApiBaseUrl;
 import '../settings/merchant_rules_offline.dart';
+import '../sync_state/user_state_sync.dart';
 import 'account_local_first.dart';
 
 /// WP-C11 handlers for [AccountCommand] kinds. Built from a provider `Ref` at
@@ -25,6 +26,8 @@ Map<String, CommandHandler> accountCommandHandlers(dynamic ref) {
   dynamic need(dynamic v) => v ?? (throw StateError('Sign in to send this'));
   return {
     ...merchantRuleHandlers(ref),
+    // WP-C17: bill-card picks, typed balances, subscription overrides.
+    ...userStateCommandHandlers(ref),
     AccountCommand.consentSubmit: (p) =>
         replayConsent(need(ref.read(consentsApiProvider)), p),
     AccountCommand.profileName: (p) async {

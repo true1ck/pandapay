@@ -2,6 +2,7 @@ import '../features/sms_v2/providers/data_providers.dart' as sms_v2_data;
 import '../features/sms_v2/instruments/bank_summary_adapter.dart';
 import '../features/sms_v2/providers/runtime_provider.dart';
 import '../features/import/statement_import_continuation_provider.dart' show statementImportAutoResumeProvider;
+import '../features/sync_state/user_state_pull.dart' show userStatePullProvider;
 import '../features/consent/sms_reading_consent.dart';
 import '../features/sms_v2/ledger/providers.dart';
 import '../features/sms_v2/ledger/adapters.dart' as sms_v2_adapters;
@@ -3282,6 +3283,8 @@ final outboxFlushRequestProvider = StateProvider<int>((ref) => 0);
 final outboxFlushProvider = Provider<void>((ref) {
   // WP-C10: saved statement imports resume on the same triggers.
   ref.read(statementImportAutoResumeProvider);
+  // WP-C17: server state for bill cards, typed balances, subscription edits.
+  ref.read(userStatePullProvider);
   var running = false;
   var disposed = false;
   final startup = ref.read(startupWorkSchedulerProvider);

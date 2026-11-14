@@ -53,15 +53,15 @@ class LocalPortableSnapshotSource implements PortableLocalSnapshotSource {
     // the archive, each with the reason, so the gap is declared, not silent.
     // The archive format and version are unchanged.
     'bill_card_assignments (financial_entities rows of that type: the card a '
-        'person picked for a bill; phone-only choices, picked again after a restore)',
+        'person picked for a bill; synced to the server (user_local_state))',
     'manual_bank_balances (financial_entities rows of that type: balances the '
-        'person typed in; phone-only, re-entered after a restore)',
+        'person typed in; synced to the server (user_local_state))',
     'local_past_bill_receipts (phone-only record that a past bill was settled; '
         'not part of the archive contract)',
     'user_merchant_category_rules (locally learned merchant categories; never '
         'synced, not part of the archive contract)',
     'subscription_overrides (hide/edit/manual-add of SMS-derived subscriptions; '
-        'device-local by design, the server has no such series)',
+        'synced to the server (user_local_state))',
     'user_budgets (budgets created on the phone and awaiting delivery through '
         'the command outbox, which must drain before a backup)',
     'command_outbox (queued server commands are not exported: they must drain '

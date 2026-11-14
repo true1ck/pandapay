@@ -20,6 +20,7 @@ import '../../data/bills_projection_api.dart';
 import '../../data/commitments_repository.dart';
 import '../../data/past_bill_receipts.dart';
 import '../../data/user_cards_repository.dart';
+import '../sync_state/user_state_sync.dart';
 import 'bills_horizon.dart';
 import 'central_bills_section.dart';
 import 'card_bill_review_section.dart';
@@ -1499,6 +1500,9 @@ class _CardBillDetailSheetState extends ConsumerState<_CardBillDetailSheet> {
           dueDate: _selectedDate,
           statementDate: _selectedDate.subtract(const Duration(days: 20)),
         );
+        unawaited(
+          queueUserStatePush(ref, UserStateKind.billCardAssignment, obsId),
+        );
       }
 
       final pairs = ref.read(myCardsWithProductProvider).valueOrNull ?? const [];
@@ -1542,6 +1546,9 @@ class _CardBillDetailSheetState extends ConsumerState<_CardBillDetailSheet> {
         amountDuePaise: amountPaise,
         dueDate: _selectedDate,
         statementDate: _selectedDate.subtract(const Duration(days: 20)),
+      );
+      unawaited(
+        queueUserStatePush(ref, UserStateKind.billCardAssignment, manualId),
       );
 
       final txnId =
