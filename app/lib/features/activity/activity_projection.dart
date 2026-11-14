@@ -143,8 +143,7 @@ class ActivityProjection {
       if (entry.entryKind == TxnEntryKind.income ||
           entry.entryKind == TxnEntryKind.investmentReturn) {
         incomingPaise += entry.amount.paise;
-      } else if (entry.entryKind == TxnEntryKind.spend ||
-          entry.entryKind == TxnEntryKind.investment) {
+      } else if (entry.countsAsMoneyOut) {
         outgoingPaise += entry.amount.paise;
       }
     }

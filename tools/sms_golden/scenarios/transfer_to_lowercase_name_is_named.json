@@ -1,0 +1,36 @@
+{
+  "id": "transfer_to_lowercase_name_is_named",
+  "description": "\"debited for transfer to <name> Ac x####\" with a lowercase first name keeps the beneficiary.",
+  "knownInstruments": [
+    {
+      "kind": "bank_account",
+      "issuerSlug": "hdfc",
+      "maskDigits": "1234"
+    }
+  ],
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs 52000.00 debited from a/c XX1234 for transfer to ravi Ac x5678 on 05-11-26",
+      "observedAt": "2026-11-05T10:00:00Z"
+    }
+  ],
+  "expect": {
+    "events": [
+      {
+        "type": "p2p_out",
+        "legRoles": [
+          "debit_leg"
+        ]
+      }
+    ],
+    "totals": {
+      "from": "2026-10-31T18:30:00Z",
+      "to": "2026-11-30T18:30:00Z",
+      "spendMinor": 5200000,
+      "incomeMinor": 0,
+      "investmentMinor": 0,
+      "transactionCount": 1
+    }
+  }
+}

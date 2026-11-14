@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:pandapay_domain/sms_v2.dart' show Totals;
 
 import 'api_exception.dart';
 
@@ -265,6 +266,9 @@ class SpendReport {
   final List<CardCategorySpendRow> byCardCategory;
   final List<SpendSeriesPoint> series;
 
+  /// Full ledger totals for the period (Money in / out splits). Null off the ledger path.
+  final Totals? totals;
+
   const SpendReport({
     required this.period,
     required this.periodStart,
@@ -281,6 +285,7 @@ class SpendReport {
     required this.byInstrument,
     this.byCardCategory = const [],
     required this.series,
+    this.totals,
   });
 
   String get displayLabel => period == SpendPeriod.custom

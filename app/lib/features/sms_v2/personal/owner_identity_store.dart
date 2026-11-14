@@ -170,12 +170,48 @@ ON CONFLICT(namespace, entry) DO UPDATE SET source=excluded.source
     }
   }
 
-  /// The person took the family mark back for this payee.
+  /// Marks, as family, the payees whose printed name strongly looks like the
+  /// owner's family ([familyLikeName]). The mark is the same one a person makes
+  /// by hand, stored as `inferred` so Settings says it was automatic. A payee
+  /// the person already decided on (marked, took back, or said is theirs or not
+  /// theirs) is left alone. A weak match is only ever a suggestion on the
+  /// payment's screen. Returns how many payees were marked.
+  int autoFamily(Iterable<String> payees, {String? profileName, DateTime? now}) {
+    final all = entries(profileName: profileName);
+    final owners = [for (final e in all) if (!e.contains(':')) e];
+    if (owners.isEmpty) return 0;
+    final identity = OwnerIdentity.fromEntries(all);
+    final known = {for (final e in list()) e.entry};
+    var n = 0;
+    for (final p in payees) {
+      if (familyLikeName(p, owners) != FamilyMatch.strong ||
+          identity.matchesName(p)) {
+        continue;
+      }
+      // A one-word name cannot be remembered as a payee, so it stays a suggestion.
+      final key = OwnerIdentity(familyNames: [p]).familyNames;
+      if (key.isEmpty) continue;
+      final w = key.single;
+      if ([
+        '${OwnerIdentity.familyPayeePrefix}$w',
+        '${OwnerIdentity.payeePrefix}$w',
+        '${OwnerIdentity.notNamePrefix}$w',
+      ].any(known.contains)) {
+        continue;
+      }
+      _put('${OwnerIdentity.familyPayeePrefix}$w', OwnerEntrySource.inferred, now ?? DateTime.now());
+      n++;
+    }
+    return n;
+  }
+
+  /// The person took the family mark back for this payee. It is remembered as
+  /// dismissed, so [autoFamily] never puts it back.
   void unmarkFamily({String? name, String? vpa, String? mask}) {
     final n = name?.trim();
     if (n != null) {
       for (final w in OwnerIdentity(familyNames: [n]).familyNames) {
-        _delete('${OwnerIdentity.familyPayeePrefix}$w');
+        _put('${OwnerIdentity.familyPayeePrefix}$w', OwnerEntrySource.dismissed, DateTime.now());
       }
     }
     final v = vpa?.trim().toLowerCase();
@@ -314,7 +350,8 @@ ON CONFLICT(namespace) DO UPDATE SET payload=excluded.payload, updated_at=exclud
     };
     final have = {
       for (final e in current)
-        if (e.source == OwnerEntrySource.inferred) e.entry,
+        // Family payees marked automatically are not learned names.
+        if (e.source == OwnerEntrySource.inferred && e.isName) e.entry,
     };
     if (want.length == have.length && want.containsAll(have)) return false;
     final at = now ?? DateTime.now();

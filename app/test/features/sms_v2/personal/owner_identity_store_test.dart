@@ -173,6 +173,23 @@ void main() {
       expect(store.entries(), isEmpty);
     });
 
+    test('a strong family-like payee is marked automatically; a removal sticks', () {
+      store.addName(first: 'Ravi', middle: 'Mohan', last: 'Patil');
+      // Strong: marked. Weak, first-name-only, business, the owner: not marked.
+      final names = ['ASHA MOHAN PATIL', 'ANITA MOHAN', 'RAVI SHARMA', 'PATIL HARDWARE STORES', 'RAVI MOHAN PATIL'];
+      expect(store.autoFamily(names), 1);
+      expect(store.entries(), contains('family:payee:ASHA MOHAN PATIL'));
+      expect(store.identity().isFamilyPayee(name: 'Asha Mohan Patil'), isTrue);
+      // The person takes it back: a re-read does not mark it again.
+      store.unmarkFamily(name: 'Asha Mohan Patil');
+      expect(store.entries(), isNot(contains('family:payee:ASHA MOHAN PATIL')));
+      expect(store.autoFamily(names), 0);
+      expect(store.entries(), isNot(contains('family:payee:ASHA MOHAN PATIL')));
+      // Marking it by hand later still works.
+      store.markFamily(name: 'Asha Mohan Patil');
+      expect(store.entries(), contains('family:payee:ASHA MOHAN PATIL'));
+    });
+
     test('a single payment is marked by its message and replaced by the other kind', () {
       store.markOnce(sourceKey: 'sms:1', family: true);
       expect(store.entries(), ['once:family:sms:1']);

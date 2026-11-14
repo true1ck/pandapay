@@ -172,6 +172,18 @@ class Totals {
   /// of refunds against it. It is not in [spendMinor], budgets or breakdowns,
   /// but it did leave their account, so Money out still includes it.
   final int excludedSpendMinor;
+
+  /// Additive breakdown lines. Slices of figures above, none changes them.
+  /// [withdrawnMinor] equals [investmentReturnMinor] (redemptions, maturity).
+  /// [investmentReturnsMinor] (dividends, interest) and [fromPeopleMinor]
+  /// (credits from a person) are slices of [incomeMinor], so Money in is still
+  /// [moneyInMinor]. [cardBillsPaidMinor] and [transfersMinor] (own accounts,
+  /// wallet top-ups) are memo lines: never in Money out or Money in.
+  final int withdrawnMinor;
+  final int investmentReturnsMinor;
+  final int fromPeopleMinor;
+  final int cardBillsPaidMinor;
+  final int transfersMinor;
   final int transactionCount;
   final Map<String, int> byCategory;
   const Totals({
@@ -182,6 +194,11 @@ class Totals {
     this.investmentOutMinor = 0,
     this.investmentReturnMinor = 0,
     this.excludedSpendMinor = 0,
+    this.withdrawnMinor = 0,
+    this.investmentReturnsMinor = 0,
+    this.fromPeopleMinor = 0,
+    this.cardBillsPaidMinor = 0,
+    this.transfersMinor = 0,
     required this.transactionCount,
     required this.byCategory,
   });
@@ -199,4 +216,8 @@ class Totals {
   /// Everything that arrived from outside: income plus money back from
   /// investments. Refunds are netted inside [spendMinor] instead.
   int get moneyInMinor => incomeMinor + investmentReturnMinor;
+
+  /// Income that is neither a dividend/interest return nor a credit from a person.
+  int get earnedIncomeMinor =>
+      incomeMinor - investmentReturnsMinor - fromPeopleMinor;
 }

@@ -1,3 +1,4 @@
+import '../features/home/money_went_screen.dart';
 import '../features/sms_v2/ui/corrections_status_screen.dart';
 import '../features/sms_v2/ui/migration_report_screen.dart';
 import '../features/sms_v2/ui/found_instruments_screen.dart';
@@ -167,6 +168,7 @@ abstract final class AppRoute {
   /// against the previous period. Distinct from [spendingOverview], which
   /// only ever shows the current calendar month.
   static const spendTrends = '/insights/trends';
+  static const moneyWent = '/insights/money-went';
 
   /// Assistant/App Action fulfillment target. The native assistant entry
   /// point lands here and the app then shows the same authoritative Trends
@@ -857,6 +859,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // These two carry their own Scaffold+AppBar (unlike the tile screens
       // above, which are wrapped here) because both need a floating action
       // button and their own period chips under the title.
+      GoRoute(
+        path: AppRoute.moneyWent,
+        builder: (context, state) => const MoneyWentScreen(),
+      ),
       GoRoute(
         path: AppRoute.spendTrends,
         builder: (context, state) => SpendTrendsScreen(

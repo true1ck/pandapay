@@ -172,8 +172,9 @@ Future<TxnActionRecord> applyTxnAction(
   WidgetRef ref,
   TransactionEntry entry,
   TxnAction action,
-  ActionScope scope,
-) async {
+  ActionScope scope, {
+  String? excludeReason,
+}) async {
   final targets = [entry, ...scope.others];
   final undo = <String, Object?>{};
   int changed = 0;
@@ -226,7 +227,12 @@ Future<TxnActionRecord> applyTxnAction(
       }
       undo.addAll({'kind': 'type', 'prev': prev});
     case TxnAction.excludeSpend:
-      changed = await setSpendExclusion(ref, targets, excluded: true);
+      changed = await setSpendExclusion(
+        ref,
+        targets,
+        excluded: true,
+        reason: excludeReason,
+      );
       undo.addAll({
         'kind': 'exclude',
         'entries': [for (final t in targets) _snap(t)],

@@ -30,6 +30,26 @@ class TransferMarkPanel extends ConsumerStatefulWidget {
 class _TransferMarkPanelState extends ConsumerState<TransferMarkPanel> {
   bool _busy = false;
 
+  /// The payee's name looks like the owner's family: the panel says "Family?".
+  bool _suggestFamily = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final e = widget.entry;
+    if (e.pipelineVersion == 2 &&
+        e.eventId != null &&
+        txnBadgeKind(e) == null &&
+        e.entryKind != TxnEntryKind.transfer) {
+      _actions
+          .familySuggestion(e)
+          .then((v) {
+            if (mounted && v) setState(() => _suggestFamily = true);
+          })
+          .catchError((_) {});
+    }
+  }
+
   OwnerIdentityActions get _actions => OwnerIdentityActions(ref);
 
   void _say(String text, {SnackBarAction? action}) {
@@ -139,8 +159,13 @@ class _TransferMarkPanelState extends ConsumerState<TransferMarkPanel> {
         ? 'Self transfer'
         : isFamily
         ? 'Family transfer'
+        : _suggestFamily
+        ? 'Family?'
         : 'Is this a transfer?';
-    final body = isSelf
+    final body = _suggestFamily && !isSelf && !isFamily
+        ? 'The name looks like someone in your family. If so, mark it as a '
+              'family transfer so it is not counted as spending or money in.'
+        : isSelf
         ? 'Counted as a move between your own accounts, not as spending or '
               'money in.'
         : isFamily

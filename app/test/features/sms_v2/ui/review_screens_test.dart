@@ -56,6 +56,22 @@ void main() {
     expect(action, 'reject');
     await tester.tap(find.text('Rename'));
     expect(action, 'rename');
+    // A hint appears only for an account in notMineHints, and rejects nothing.
+    expect(find.byKey(const Key('not-mine-hint')), findsNothing);
+    await tester.pumpWidget(
+      app(
+        FoundInstrumentsList(
+          instruments: [instrument],
+          notMineHints: {instrument.instrumentId},
+          onConfirm: (i) {},
+          onReject: (i) => action = 'rejected-by-hint',
+          onRename: (i) {},
+          onOpen: (i) {},
+        ),
+      ),
+    );
+    expect(find.byKey(const Key('not-mine-hint')), findsOneWidget);
+    expect(action, 'rename');
   });
   testWidgets('tapping a found account opens its detail page', (tester) async {
     final instrument = Instrument(

@@ -507,5 +507,47 @@
     },
     "singleLeg": "complete",
     "priority": 53
+  },
+  {
+    "id": "LINK-DUP-CARD-PAYMENT-3D",
+    "eventType": "card_bill_payment",
+    "legs": [
+      {
+        "role": "credit_leg",
+        "match": {
+          "factType": "movement",
+          "direction": "credit",
+          "purpose": [
+            "card_payment"
+          ],
+          "instrumentKind": [
+            "credit_card"
+          ],
+          "evidenceOnly": false
+        }
+      },
+      {
+        "role": "duplicate_notice",
+        "match": {
+          "factType": "movement",
+          "direction": "credit",
+          "purpose": [
+            "card_payment"
+          ],
+          "instrumentKind": [
+            "credit_card"
+          ],
+          "evidenceOnly": false
+        }
+      }
+    ],
+    "join": {
+      "amountRole": "posted",
+      "amountTolerancePct": 0,
+      "windowHours": 72,
+      "reference": "prefer"
+    },
+    "singleLeg": "complete",
+    "priority": 52
   }
 ]

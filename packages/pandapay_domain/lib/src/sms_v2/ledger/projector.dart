@@ -349,6 +349,7 @@ class DefaultLedgerProjector implements LedgerProjector {
     };
     var spend = 0, refunds = 0, income = 0, investment = 0;
     var investmentOut = 0, investmentReturn = 0, excludedSpend = 0;
+    var returns = 0, fromPeople = 0, cardBills = 0, transfers = 0;
     final counts = <String>{};
     final byCategory = <String, int>{};
     for (final row in byId.values) {
@@ -400,6 +401,17 @@ class DefaultLedgerProjector implements LedgerProjector {
         );
       }
       if (row.isIncome) income += row.amountMinor;
+      switch (event.type) {
+        case EventType.dividend:
+          returns += row.amountMinor;
+        case EventType.p2pIn:
+          fromPeople += row.amountMinor;
+        case EventType.cardBillPayment:
+          cardBills += row.amountMinor;
+        case EventType.ownTransfer || EventType.walletTopup:
+          transfers += row.amountMinor;
+        default:
+      }
       if (row.isInvestment) {
         if (event.type == EventType.investmentWithdrawal) {
           investment -= row.amountMinor;
@@ -418,6 +430,11 @@ class DefaultLedgerProjector implements LedgerProjector {
       investmentOutMinor: investmentOut,
       investmentReturnMinor: investmentReturn,
       excludedSpendMinor: excludedSpend,
+      withdrawnMinor: investmentReturn,
+      investmentReturnsMinor: returns,
+      fromPeopleMinor: fromPeople,
+      cardBillsPaidMinor: cardBills,
+      transfersMinor: transfers,
       transactionCount: counts.length,
       byCategory: Map.unmodifiable(byCategory),
     );
