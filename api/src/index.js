@@ -5258,25 +5258,21 @@ app.get('/duplicate-candidates', requireAuth, async (req, res) => {
           ORDER BY detected_at DESC`,
         [req.userId]
       );
-      for (const pair of pairs.rows) {
-        const [a, b] = await Promise.all([
-          client.query(
-            `SELECT ${TXN_SUMMARY_COLUMNS} FROM transactions t
-               LEFT JOIN user_cards uc ON uc.id = t.user_card_id
-               LEFT JOIN card_products cp ON cp.id = uc.card_product_id
-              WHERE t.id = $1`,
-            [pair.txn_a_id]
-          ),
-          client.query(
-            `SELECT ${TXN_SUMMARY_COLUMNS} FROM transactions t
-               LEFT JOIN user_cards uc ON uc.id = t.user_card_id
-               LEFT JOIN card_products cp ON cp.id = uc.card_product_id
-              WHERE t.id = $1`,
-            [pair.txn_b_id]
-          ),
-        ]);
-        pair.txn_a = a.rows[0] || null;
-        pair.txn_b = b.rows[0] || null;
+      // Both sides of every pair in ONE query (it was two queries per pair, run in a loop), then matched up by id.
+      if (pairs.rows.length > 0) {
+        const ids = [...new Set(pairs.rows.flatMap((pair) => [pair.txn_a_id, pair.txn_b_id]))];
+        const summaries = await client.query(
+          `SELECT ${TXN_SUMMARY_COLUMNS} FROM transactions t
+             LEFT JOIN user_cards uc ON uc.id = t.user_card_id
+             LEFT JOIN card_products cp ON cp.id = uc.card_product_id
+            WHERE t.id = ANY($1::uuid[])`,
+          [ids]
+        );
+        const byId = new Map(summaries.rows.map((row) => [String(row.id), row]));
+        for (const pair of pairs.rows) {
+          pair.txn_a = byId.get(String(pair.txn_a_id)) || null;
+          pair.txn_b = byId.get(String(pair.txn_b_id)) || null;
+        }
       }
       return pairs.rows;
     });
@@ -6775,19 +6771,17 @@ app.get('/spend-report', requireAuth, async (req, res) => {
         ? spendReports.previousCustomPeriodBounds(current)
         : spendReports.previousPeriodBounds(period, anchor, calendarOptions);
 
-      const [totals, previousTotals, byCategory, bySubcategory, byMerchant, byCard, byInstrument, byCardCategory, series] = await Promise.all([
-        spendReports.periodTotals(client, req.userId, current),
-        spendReports.periodTotals(client, req.userId, previous),
-        spendReports.spendByCategory(client, req.userId, current),
-        spendReports.spendBySubcategory(client, req.userId, current),
-        spendReports.spendByMerchant(client, req.userId, current),
-        spendReports.spendByCard(client, req.userId, current),
-        spendReports.spendByInstrument(client, req.userId, current),
-        spendReports.spendByCardCategory(client, req.userId, current),
-        period === 'custom'
+      const totals = await spendReports.periodTotals(client, req.userId, current);
+      const previousTotals = await spendReports.periodTotals(client, req.userId, previous);
+      const byCategory = await spendReports.spendByCategory(client, req.userId, current);
+      const bySubcategory = await spendReports.spendBySubcategory(client, req.userId, current);
+      const byMerchant = await spendReports.spendByMerchant(client, req.userId, current);
+      const byCard = await spendReports.spendByCard(client, req.userId, current);
+      const byInstrument = await spendReports.spendByInstrument(client, req.userId, current);
+      const byCardCategory = await spendReports.spendByCardCategory(client, req.userId, current);
+      const series = await (period === 'custom'
           ? Promise.resolve([])
-          : spendReports.spendSeries(client, req.userId, period, buckets, anchor, calendarOptions),
-      ]);
+          : spendReports.spendSeries(client, req.userId, period, buckets, anchor, calendarOptions));
 
       return {
         period,
@@ -9358,6 +9352,17 @@ async function shutdown(signal) {
     process.exit(1);
   }
 }
+
+// A rejected promise nobody awaited (a fire-and-forget background task) must not take the whole API down with every
+// in-flight request. Log it, with its stack, and keep serving. uncaughtException keeps Node's default (crash and let the
+// supervisor restart), because the process state is unknown after a synchronous throw.
+process.on('unhandledRejection', (reason) => {
+  require('./observability').log('error', {
+    msg: 'unhandledRejection',
+    error: reason instanceof Error ? reason.message : String(reason),
+    stack: reason instanceof Error ? String(reason.stack || '').split('\n').slice(0, 6).join(' | ') : undefined,
+  });
+});
 
 process.once('SIGTERM', () => shutdown('SIGTERM'));
 process.once('SIGINT', () => shutdown('SIGINT'));
