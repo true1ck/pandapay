@@ -1,3 +1,4 @@
+import 'connectivity/server_backoff.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'api_exception.dart';
@@ -104,6 +105,10 @@ class AuthenticatedHttpClient extends http.BaseClient {
     final stopwatch = Stopwatch()..start();
     try {
       final response = await _send(request, policy, stopwatch, admission);
+      ServerBackoff.process.noteResponse(
+        response.statusCode,
+        response.headers['retry-after'],
+      );
       // Header arrival does not mean an outbox operation finished. Retain
       // admission through response consumption, cancellation or stream error.
       return http.StreamedResponse(

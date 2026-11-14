@@ -316,7 +316,7 @@ class SyncQueue {
       [clientSeq, namespace],
     );
     final attempts = (rows.isEmpty ? 0 : rows.first['attempts'] as int) + 1;
-    final due = _clock.now().add(queueBackoff(attempts)).millisecondsSinceEpoch;
+    final due = _clock.now().add(queueBackoffJittered(attempts)).millisecondsSinceEpoch;
     _appDb.db.execute(
       'UPDATE sync_pending_changes SET attempts = ?, next_attempt_at = ?, last_error = ? WHERE client_seq = ? AND namespace = ?',
       [attempts, due, error, clientSeq, namespace],

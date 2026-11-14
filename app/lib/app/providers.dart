@@ -1,3 +1,4 @@
+import '../data/connectivity/server_backoff.dart';
 import '../features/sms_v2/providers/data_providers.dart' as sms_v2_data;
 import '../features/sms_v2/instruments/bank_summary_adapter.dart';
 import '../features/sms_v2/providers/runtime_provider.dart';
@@ -3298,6 +3299,9 @@ final outboxFlushProvider = Provider<void>((ref) {
     final namespace = ref.read(cacheNamespaceProvider);
     final repo = ref.read(userCardsRepositoryProvider);
     if (repo == null || ref.read(isOnlineProvider).valueOrNull == false) return;
+    // The server asked us to wait (429/503 Retry-After): queued work stays
+    // queued and resumes when the pause ends (see the listener below).
+    if (ServerBackoff.process.isPaused) return;
     running = true;
     var workRemains = false;
     // True when this pass delivered something: a long queue (a reconnect after
@@ -3389,6 +3393,10 @@ final outboxFlushProvider = Provider<void>((ref) {
   }
 
   flushRef = flush;
+  final backoffSub = ServerBackoff.process.resumed.listen(
+    (_) => unawaited(flushRef()),
+  );
+  ref.onDispose(backoffSub.cancel);
 
   // Coming back online: a backoff was about a server problem that may have
   // passed, and time spent offline must not be waited out a second time.

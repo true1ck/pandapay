@@ -132,13 +132,17 @@ void main() {
     await syncQuietly(repo());
     expect(row('a' * 64)['attempts'], 1);
     expect(
-      row('a' * 64)['next_attempt_at'],
-      clock.add(const Duration(seconds: 30)).millisecondsSinceEpoch,
+      row('a' * 64)['next_attempt_at'] as int,
+      inInclusiveRange(
+        clock.add(const Duration(seconds: 30)).millisecondsSinceEpoch,
+        clock.add(const Duration(seconds: 36)).millisecondsSinceEpoch,
+      ),
+      reason: '30 s plus up to 20 % jitter',
     );
     final before = service.posts;
     await syncQuietly(repo());
     expect(service.posts, before, reason: 'not due yet');
-    clock = clock.add(const Duration(seconds: 31));
+    clock = clock.add(const Duration(seconds: 37));
     await syncQuietly(repo());
     expect(service.posts, before + 1);
     expect(row('a' * 64)['attempts'], 2);

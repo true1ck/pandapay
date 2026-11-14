@@ -89,15 +89,19 @@ void main() {
     expect(posted, hasLength(2), reason: 'rows are independent');
     expect(row('upsert_tag')['attempts'], 1);
     expect(
-      row('upsert_tag')['next_attempt_at'],
-      clock.add(const Duration(seconds: 30)).millisecondsSinceEpoch,
+      row('upsert_tag')['next_attempt_at'] as int,
+      inInclusiveRange(
+        clock.add(const Duration(seconds: 30)).millisecondsSinceEpoch,
+        clock.add(const Duration(seconds: 36)).millisecondsSinceEpoch,
+      ),
+      reason: '30 s plus up to 20 % jitter',
     );
     // Not due: a second sync sends nothing.
     posted.clear();
     await repo.sync();
     expect(posted, isEmpty);
     // Due again after the backoff.
-    clock = clock.add(const Duration(seconds: 31));
+    clock = clock.add(const Duration(seconds: 37));
     await repo.sync();
     expect(posted, hasLength(2));
     expect(row('upsert_tag')['attempts'], 2);

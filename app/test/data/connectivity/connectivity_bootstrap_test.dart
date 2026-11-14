@@ -209,8 +209,9 @@ void main() {
   );
 
   group('stale offline flag (H1-8)', () {
-    testWidgets('resume re-polls and corrects a missed online event',
-        (tester) async {
+    testWidgets('resume re-polls and corrects a missed online event', (
+      tester,
+    ) async {
       await tester.runAsync(() async {
         container.read(connectivityBootstrapProvider);
         await _settle();
@@ -230,8 +231,9 @@ void main() {
       });
     });
 
-    testWidgets('a foreground offline app re-polls every 60 s, then stops',
-        (tester) async {
+    testWidgets('a foreground offline app re-polls every 60 s, then stops', (
+      tester,
+    ) async {
       final fresh = ProviderContainer(
         overrides: [
           connectivityProvider.overrideWithValue(connectivity),
@@ -247,7 +249,9 @@ void main() {
       expect(KnownConnectivity.knownOffline, isTrue);
 
       connectivity.seed = _wifi;
-      await tester.pump(connectivityRepollInterval + const Duration(seconds: 1));
+      await tester.pump(
+        connectivityRepollInterval + const Duration(seconds: 1),
+      );
       await tester.pump();
       await tester.pump();
       expect(KnownConnectivity.knownOffline, isFalse);

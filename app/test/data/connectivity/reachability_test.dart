@@ -181,19 +181,21 @@ void main() {
       },
     );
 
-    test('429 and a JSON 500 mean the server is there; gateways do not',
-        () async {
-      Future<bool> probe(int code, String body) => httpServerProbe(
-        MockClient((_) async => http.Response(body, code)),
-        'https://api.example.test',
-      );
-      expect(await probe(429, ''), isTrue);
-      expect(await probe(500, '{"error":"internal_error"}'), isTrue);
-      expect(await probe(500, '<html>oops</html>'), isFalse);
-      for (final c in [502, 503, 504]) {
-        expect(await probe(c, '{"x":1}'), isFalse);
-      }
-    });
+    test(
+      '429 and a JSON 500 mean the server is there; gateways do not',
+      () async {
+        Future<bool> probe(int code, String body) => httpServerProbe(
+          MockClient((_) async => http.Response(body, code)),
+          'https://api.example.test',
+        );
+        expect(await probe(429, ''), isTrue);
+        expect(await probe(500, '{"error":"internal_error"}'), isTrue);
+        expect(await probe(500, '<html>oops</html>'), isFalse);
+        for (final c in [502, 503, 504]) {
+          expect(await probe(c, '{"x":1}'), isFalse);
+        }
+      },
+    );
 
     test('a hung request is aborted at the timeout', () async {
       final started = Completer<void>();
