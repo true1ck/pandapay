@@ -278,6 +278,18 @@ function buildRule(answer, template, matcher, model) {
   );
 }
 
+// What the phone's engine makes of a slot used as an attribute (rule_engine.dart: _dateAttrKeys, _instantAttrKeys and
+// the amount attributes): the synthetic value of the right kind, not the raw text of the slot.
+const ENGINE_ATTR_VALUES = Object.freeze({
+  dueDate: "2026-11-20",
+  statementDate: "2026-11-20",
+  asOf: "2026-11-20T00:00:00Z",
+  dueAt: "2026-11-20T00:00:00Z",
+  expiresAt: "2026-11-20T00:00:00Z",
+  previousMinor: 12745,
+  amountMinor: 12745,
+});
+
 // One line for a failed attribute check, e.g. "attrs_movement/purpose: one of purchase|p2p|atm".
 function attrProblem(factType, problem) {
   const where = problem.instancePath || "/";
@@ -319,8 +331,12 @@ function validateDraft(rule, template, model, otherLayouts = []) {
     ),
   );
   const references = captureReferences(rule);
-  if (references.some((name) => !names.has(name)))
+  const missingSlots = [...new Set(references.filter((name) => !names.has(name)))];
+  if (missingSlots.length) {
     errors.push("capture_group_missing");
+    // So the second try can correct it: which slot does not exist, and which ones do.
+    errors.push(`slot_not_in_layout: ${missingSlots.slice(0, 3).join(",")} (the layout has: ${[...names].join(",") || "no slots"})`.slice(0, 160));
+  }
   // The phone refuses a fact whose reference key is not in the fact contract.
   for (const emit of rule.emit ?? [])
     for (const key of Object.keys(emit.references ?? {}))
@@ -353,7 +369,8 @@ function validateDraft(rule, template, model, otherLayouts = []) {
     const attrs = {};
     for (const [key, value] of Object.entries(emit.attrs || {})) {
       if (value && typeof value === "object" && "from" in value) {
-        attrs[key] = sample?.groups?.[value.from];
+        const raw = sample?.groups?.[value.from];
+        attrs[key] = raw === undefined ? raw : ENGINE_ATTR_VALUES[key] ?? raw;
       } else if (value && typeof value === "object" && "sameAs" in value) {
         attrs[key] = priorAttrs[value.sameAs]?.[value.field || key];
       } else attrs[key] = value;

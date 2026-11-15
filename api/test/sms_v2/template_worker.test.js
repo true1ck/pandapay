@@ -931,3 +931,26 @@ test("a failed attribute says which one and why, so the second try can fix it", 
   delete missing.emit[0].attrs.rail;
   assert.ok(validateDraft(missing, template, config.model).some((e) => /^attrs_movement\/?.*missing rail$/.test(e)));
 });
+
+test("a date or amount slot used as an attribute is checked the way the phone reads it, and a missing slot is named", () => {
+  const layout = "Bal <AMT> as of <DATE>. Due <AMT> by <DATE>.";
+  const t = { template_hash: "a".repeat(64), sender_brand: "TESTBK", redacted_body: layout };
+  const matcher = buildMatcher(layout);
+  const ok = {
+    family: "balance_and_due",
+    confidence: 0.9,
+    emit: [
+      { factType: "balance_snapshot", attrs: { asOf: { from: "date1" } }, amounts: [{ role: "available_balance", from: "amt1", unit: "INR" }] },
+      { factType: "bill_due", attrs: { dueDate: { from: "date2" } }, amounts: [{ role: "due_total", from: "amt2", unit: "INR" }] },
+      { factType: "info", attrs: { category: "service", amountMinor: { from: "amt1" } } },
+    ],
+  };
+  // The phone turns the date slot into a timestamp or a day, and the amount slot into minor units, so these are fine.
+  assert.deepEqual(validateDraft(buildRule(ok, t, matcher, config.model), t, config.model), []);
+  // A slot the layout does not have is named, together with the ones it does have.
+  const wrong = JSON.parse(JSON.stringify(ok));
+  wrong.emit[0].amounts[0].from = "amt9";
+  const errors = validateDraft(buildRule(wrong, t, matcher, config.model), t, config.model);
+  assert.ok(errors.includes("capture_group_missing"));
+  assert.ok(errors.some((e) => /^slot_not_in_layout: amt9 \(the layout has: amt1,date1,amt2,date2\)$/.test(e)), errors.join(" | "));
+});
