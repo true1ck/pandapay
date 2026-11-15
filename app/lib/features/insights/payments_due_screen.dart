@@ -2342,56 +2342,6 @@ class _CommitmentRow extends ConsumerWidget {
 
 
 // ---------------------------------------------------------------------------
-// Interactive Commitment Detail Sheet — durable actions & payment rollover
-// ---------------------------------------------------------------------------
-
-class _DetailItem extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool isHighlighted;
-
-  const _DetailItem({
-    required this.label,
-    required this.value,
-    this.isHighlighted = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Flexible(
-            child: Text(
-              label,
-              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: AppSpace.md),
-          Flexible(
-            child: Text(
-              value,
-              style: BambooFonts.ui(
-                12.5,
-                weight: FontWeight.w600,
-                color: isHighlighted
-                    ? BambooInk.rankBadgeInk
-                    : BambooInk.ink900,
-              ),
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.end,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Add commitment sheet — manual durable registration with real DatePicker
 // ---------------------------------------------------------------------------
 

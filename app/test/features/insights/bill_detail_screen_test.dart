@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:pandapay/app/design/app_theme.dart';
-import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/commitments_repository.dart';
 import 'package:pandapay/data/local/sms_intake_repository.dart';
 import 'package:pandapay/data/past_bill_receipts.dart';

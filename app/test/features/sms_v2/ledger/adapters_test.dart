@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/commitments_repository.dart';
 import 'package:pandapay/features/sms_v2/ledger/adapters.dart';
 import 'package:pandapay/features/sms_v2/ledger/card_cycle_days.dart';
-import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay_domain/sms_v2.dart';
 
 Fact fixture(
