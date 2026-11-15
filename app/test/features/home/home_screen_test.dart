@@ -202,6 +202,30 @@ void main() {
     expect(find.byIcon(Icons.lock_outline_rounded), findsNothing);
   });
 
+  testWidgets('bank accounts section is hidden when there are no accounts', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(360, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          rankedRecommendationsProvider.overrideWithValue(
+            const AsyncValue.data([]),
+          ),
+          bankAccountSummariesProvider.overrideWith(
+            (ref) async => const <BankAccountSummary>[],
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: HomeScreen())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Your bank accounts'), findsNothing);
+    expect(find.text('No accounts yet'), findsNothing);
+  });
+
   testWidgets('rank-0 recommendation gets the compact best-card surface', (
     tester,
   ) async {

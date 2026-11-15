@@ -2786,6 +2786,8 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
                 : a.accountLast4.compareTo(b.accountLast4);
           });
     final accountCount = visibleAccounts.length;
+    // Nothing to show means no section at all, not an empty "No accounts yet" bar.
+    if (accountCount == 0) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -2806,9 +2808,7 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
             Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: accountCount == 0
-                    ? null
-                    : () => setState(() => _expanded = !_expanded),
+                onTap: () => setState(() => _expanded = !_expanded),
                 borderRadius: BorderRadius.circular(AppRadius.md),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
@@ -2830,27 +2830,23 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
                         ),
                       ),
                       Text(
-                        accountCount == 0
-                            ? 'No accounts yet'
-                            : '$accountCount ${accountCount == 1 ? 'account' : 'accounts'}',
+                        '$accountCount ${accountCount == 1 ? 'account' : 'accounts'}',
                         style: BambooFonts.ui(
                           12,
                           color: BambooInk.onSlateMuted,
                         ),
                       ),
-                      if (accountCount > 0) ...[
-                        const SizedBox(width: AppSpace.xs),
-                        AnimatedRotation(
-                          turns: _expanded ? 0.5 : 0,
-                          duration: const Duration(milliseconds: 240),
-                          curve: Curves.easeOutCubic,
-                          child: const Icon(
-                            Icons.keyboard_arrow_down_rounded,
-                            size: 22,
-                            color: BambooInk.onSlateMuted,
-                          ),
+                      const SizedBox(width: AppSpace.xs),
+                      AnimatedRotation(
+                        turns: _expanded ? 0.5 : 0,
+                        duration: const Duration(milliseconds: 240),
+                        curve: Curves.easeOutCubic,
+                        child: const Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 22,
+                          color: BambooInk.onSlateMuted,
                         ),
-                      ],
+                      ),
                     ],
                   ),
                 ),
@@ -2860,7 +2856,7 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOutCubic,
               alignment: Alignment.topCenter,
-              child: _expanded && visibleAccounts.isNotEmpty
+              child: _expanded
                   ? Padding(
                       key: const ValueKey('home-bank-accounts-expanded'),
                       padding: const EdgeInsets.only(top: AppSpace.md),
