@@ -365,6 +365,9 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
                       width: double.infinity,
                       child: OutlinedButton(
                         style: OutlinedButton.styleFrom(
+                          // The app theme fills outlined buttons white, which hid the
+                          // light text on this dark screen.
+                          backgroundColor: BambooInk.slateRaised,
                           foregroundColor: BambooInk.onSlate,
                           side: const BorderSide(
                             color: BambooInk.slateHairline,
