@@ -100,12 +100,20 @@ void _mockClipboard(WidgetTester tester) {
   );
 }
 
+/// The page is long; a tall screen builds every row, as a scroll would.
+void _tallScreen(WidgetTester tester) {
+  tester.view.physicalSize = const Size(900, 2600);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
 Future<void> _pumpScan(
   WidgetTester tester,
   _FakeUpiService fake, {
   ParsedUpiQr parsed = _shopQr,
   CardNetwork network = CardNetwork.visa,
 }) async {
+  _tallScreen(tester);
   _mockClipboard(tester);
   await tester.pumpWidget(
     ProviderScope(
@@ -212,7 +220,9 @@ void main() {
     await tester.pumpAndSettle();
 
     // The category chips: Fuel is picked for the user.
-    final fuel = tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Fuel'));
+    final fuel = tester.widget<ChoiceChip>(
+      find.widgetWithText(ChoiceChip, 'Fuel'),
+    );
     expect(fuel.selected, isTrue);
   });
 
@@ -441,26 +451,25 @@ void main() {
       },
     );
 
-    testWidgets(
-      'an app that refuses the shared QR falls back to the guide',
-      (tester) async {
-        final fake = _FakeUpiService(apps: const [_gpay])..shareResult = false;
-        await _pumpScan(tester, fake);
+    testWidgets('an app that refuses the shared QR falls back to the guide', (
+      tester,
+    ) async {
+      final fake = _FakeUpiService(apps: const [_gpay])..shareResult = false;
+      await _pumpScan(tester, fake);
 
-        await _enterAmountAndPay(tester, '250');
-        await tester.tap(find.text('Google Pay'));
-        await tester.pumpAndSettle();
+      await _enterAmountAndPay(tester, '250');
+      await tester.tap(find.text('Google Pay'));
+      await tester.pumpAndSettle();
 
-        expect(fake.shared, hasLength(1)); // tried first
-        expect(find.text('Scan the QR in Google Pay'), findsOneWidget);
-        await tester.tap(find.widgetWithText(FilledButton, 'Open Google Pay'));
-        await tester.pumpAndSettle();
+      expect(fake.shared, hasLength(1)); // tried first
+      expect(find.text('Scan the QR in Google Pay'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Open Google Pay'));
+      await tester.pumpAndSettle();
 
-        expect(fake.opened, ['com.google.android.apps.nbu.paisa.user']);
-        expect(_clipboard, '250');
-        expect(find.text('Continue in your UPI app'), findsOneWidget);
-      },
-    );
+      expect(fake.opened, ['com.google.android.apps.nbu.paisa.user']);
+      expect(_clipboard, '250');
+      expect(find.text('Continue in your UPI app'), findsOneWidget);
+    });
 
     testWidgets('a paise amount is shared and copied exactly', (tester) async {
       final fake = _FakeUpiService(apps: const [_gpay])..shareResult = false;
@@ -530,7 +539,10 @@ void main() {
 
         expect(find.textContaining("Couldn't open Google Pay"), findsOneWidget);
         expect(find.text('REWARD IF THIS COMPLETES'), findsNothing);
-        expect(find.widgetWithText(FilledButton, 'Pay with c1'), findsOneWidget);
+        expect(
+          find.widgetWithText(FilledButton, 'Pay with c1'),
+          findsOneWidget,
+        );
       },
     );
 
@@ -606,6 +618,7 @@ void main() {
       List<CardProduct> catalogue,
       List<UserCard> wallet,
     ) async {
+      _tallScreen(tester);
       _mockClipboard(tester);
       await tester.pumpWidget(
         ProviderScope(
@@ -652,10 +665,7 @@ void main() {
         tester.getTopLeft(find.text('Neu RuPay')).dy,
         lessThan(tester.getTopLeft(find.text('visa')).dy),
       );
-      expect(
-        find.widgetWithText(FilledButton, 'Pay with visa'),
-        findsNothing,
-      );
+      expect(find.widgetWithText(FilledButton, 'Pay with visa'), findsNothing);
       expect(
         find.widgetWithText(FilledButton, 'Pay with Neu RuPay'),
         findsOneWidget,
@@ -673,7 +683,10 @@ void main() {
       await tester.tap(find.text('Google Pay'));
       await tester.pumpAndSettle();
 
-      expect(fake.shared.single.package, 'com.google.android.apps.nbu.paisa.user');
+      expect(
+        fake.shared.single.package,
+        'com.google.android.apps.nbu.paisa.user',
+      );
       expect(
         Uri.parse(fake.shared.single.data).queryParameters['am'],
         '180.00',
@@ -683,12 +696,9 @@ void main() {
     testWidgets('a card the user does not own is still not payable', (
       tester,
     ) async {
-      await pumpWith(
-        tester,
-        _FakeUpiService(apps: const [_gpay]),
-        [noRuleRupay()],
-        const [],
-      );
+      await pumpWith(tester, _FakeUpiService(apps: const [_gpay]), [
+        noRuleRupay(),
+      ], const []);
 
       expect(
         find.widgetWithText(FilledButton, 'Pay with Neu RuPay'),
@@ -746,46 +756,34 @@ void main() {
   });
 
   testWidgets(
-    'the amount is entered on the hero card and the reward updates there',
+    'the amount has its own card with quick amounts and the reward updates',
     (tester) async {
-      const parsed = ParsedUpiQr(
-        pa: 'shop@okhdfcbank',
-        pn: 'DMart',
-        mc: '5411',
-        isLikelyP2P: false,
-      );
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            upiPaymentServiceProvider.overrideWithValue(
-              _FakeUpiService(apps: const [_gpay]),
-            ),
-            catalogueProvider.overrideWith(
-              (ref) async => [_card('c1', rate: 0.02)],
-            ),
-            categoriesProvider.overrideWith((ref) async => const []),
-            userCardsProvider.overrideWith((ref) async => [_owned('c1')]),
-            cardOverridesProvider.overrideWith((ref) async => const []),
-          ],
-          child: const MaterialApp(home: ScanResultScreen(parsed: parsed)),
-        ),
-      );
-      await tester.pumpAndSettle();
+      final fake = _FakeUpiService(apps: const [_gpay]);
+      await _pumpScan(tester, fake);
 
-      // No standalone "Amount to pay" field any more — merchant field + the
-      // on-card amount entry, and the reward is a prompt until an amount lands.
+      // Merchant name + the amount, in its own card, with quick amounts.
       expect(find.byType(TextField), findsNWidgets(2));
-      expect(find.text('Enter an amount to see your reward'), findsOneWidget);
+      expect(find.text('Enter amount'), findsOneWidget);
+      for (final v in ['₹100', '₹200', '₹500', '₹1,000']) {
+        expect(find.text(v), findsOneWidget);
+      }
+      expect(find.text('Recommended cards'), findsOneWidget);
+      expect(find.text('Continue without card'), findsOneWidget);
       expect(find.text('back'), findsNothing);
-      // Text-only card rows, as on the original page: no card picture.
-      expect(find.text('TAP THIS ONE'), findsOneWidget);
 
-      await tester.enterText(find.byType(TextField).last, '1000');
+      // A quick amount fills the box and the best card shows what it earns.
+      await tester.tap(find.text('₹1,000'));
       await tester.pump();
-
-      // Reward now resolves on the card itself.
-      expect(find.text('Enter an amount to see your reward'), findsNothing);
+      expect(
+        tester.widget<TextField>(find.byType(TextField).last).controller!.text,
+        '1000',
+      );
       expect(find.text('back'), findsOneWidget);
+
+      // The clear button empties it again.
+      await tester.tap(find.byTooltip('Clear amount'));
+      await tester.pump();
+      expect(find.text('back'), findsNothing);
     },
   );
 
@@ -827,6 +825,7 @@ void main() {
   testWidgets(
     'a no-mc QR still lists a UPI-linkable RuPay card, not the P2P notice',
     (tester) async {
+      _tallScreen(tester);
       const parsed = ParsedUpiQr(
         pa: 'q@ybl',
         pn: 'Corner Store',
@@ -964,6 +963,7 @@ void main() {
       List<UpiApp> apps = const [_gpay],
     }) async {
       final fake = _FakeUpiService(apps: apps);
+      _tallScreen(tester);
       _mockClipboard(tester);
       await tester.pumpWidget(
         ProviderScope(
@@ -982,10 +982,7 @@ void main() {
     }
 
     Future<void> tapContinue(WidgetTester tester) async {
-      final button = find.widgetWithText(
-        OutlinedButton,
-        'Continue without credit card',
-      );
+      final button = find.widgetWithText(FilledButton, 'Continue without card');
       await tester.ensureVisible(button);
       await tester.pumpAndSettle();
       await tester.tap(button);
@@ -1007,7 +1004,7 @@ void main() {
           find.text('Not usable via UPI — swipe this instead.'),
           findsOneWidget,
         );
-        expect(find.text('Continue without credit card'), findsOneWidget);
+        expect(find.text('Continue without card'), findsOneWidget);
 
         // Same steps as paying with a card: the amount comes first.
         await tapContinue(tester);
@@ -1021,7 +1018,9 @@ void main() {
         // The same app list as for a card, naming the bank account.
         expect(find.text('Open which UPI app?'), findsOneWidget);
         expect(
-          find.text("You'll pay with your bank account there, then enter your UPI PIN."),
+          find.text(
+            "You'll pay with your bank account there, then enter your UPI PIN.",
+          ),
           findsOneWidget,
         );
         await tester.tap(find.text('Google Pay'));
@@ -1056,7 +1055,7 @@ void main() {
         find.text("Credit cards can't be used for personal transfers"),
         findsOneWidget,
       );
-      expect(find.text('Continue without credit card'), findsOneWidget);
+      expect(find.text('Continue without card'), findsOneWidget);
 
       await tester.enterText(find.byType(TextField).last, '75');
       await tester.pump();

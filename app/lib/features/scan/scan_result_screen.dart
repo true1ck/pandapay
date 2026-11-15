@@ -206,13 +206,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     if (noMcc &&
         (walletPeek == null || walletPeek.isEmpty) &&
         !merchantResolution.isLoading) {
-      return _P2PNotice(
-        vpa: widget.parsed.pa,
-        action: _withoutCardPanel(
-          'Enter the amount, then pay from your bank account in any UPI app.',
-          withAmount: true,
-        ),
-      );
+      return _P2PNotice(vpa: widget.parsed.pa, action: _amountAndWithoutCard());
     }
 
     if (catalogue.isFirstLoad ||
@@ -292,10 +286,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       if (cards.isEmpty) {
         return _P2PNotice(
           vpa: widget.parsed.pa,
-          action: _withoutCardPanel(
-            'Enter the amount, then pay from your bank account in any UPI app.',
-            withAmount: true,
-          ),
+          action: _amountAndWithoutCard(),
         );
       }
     }
@@ -365,19 +356,12 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     final bestUpi = upiRanked.where((r) => !r.isExcluded).firstOrNull;
     final bestSwipe = swipeRanked.where((r) => !r.isExcluded).firstOrNull;
 
-    // The amount is entered inline on the card the user actually pays with —
-    // the best owned, eligible card — not in a field detached from it. Null
-    // when the wallet is empty (nothing to pay yet; add a card first).
     bool owns(CardProduct c) => wallet.any((w) => w.cardProductId == c.id);
     // An owned UPI-linkable card is payable even when it earns nothing here
     // (the engine excludes it for "no reward rule"), so it still gets Pay.
     bool payable(Recommendation r) => r.card.isUpiLinkable && owns(r.card);
     final heroCardId =
         bestUpi?.card.id ?? upiRanked.where(payable).firstOrNull?.card.id;
-    final amountEntryCardId =
-        (heroCardId != null && wallet.any((w) => w.cardProductId == heroCardId))
-        ? heroCardId
-        : null;
 
     return ListView(
       padding: const EdgeInsets.all(AppSpace.lg),
@@ -465,6 +449,8 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
           selectedId: activeCategoryId,
           onSelected: (id) => setState(() => _selectedCategoryId = id),
         ),
+        const SizedBox(height: AppSpace.md),
+        _amountAndWithoutCard(),
         const SizedBox(height: AppSpace.lg),
         if (walletEmpty && !noMcc)
           Container(
@@ -510,6 +496,27 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
               'Scan-and-pay earns ${bestUpi.expectedValue.format()} · swiping your ${bestSwipe.card.name} '
               'earns ${bestSwipe.expectedValue.format()} instead.',
               style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+            ),
+          ),
+        if (upiRanked.isNotEmpty)
+          _RecommendedHeader(
+            onInfo: () => showDialog<void>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Why these cards?'),
+                content: const Text(
+                  'Cards are ranked by what they earn on this payment. Only a RuPay '
+                  'credit card linked to UPI can pay a QR, and only at a shop that '
+                  'accepts credit cards. If yours is not accepted, use Continue '
+                  'without card.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Got it'),
+                  ),
+                ],
+              ),
             ),
           ),
         if (upiRanked.isEmpty && _locallyRejectedCardIds.isNotEmpty)
@@ -563,12 +570,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
                 isOwned: wallet.any((w) => w.cardProductId == rec.card.id),
                 showRupayUpiNote: rec.card.isUpiLinkable,
                 payDespiteExclusion: rec.isExcluded && payable(rec),
-                showAmountEntry: rec.card.id == amountEntryCardId,
                 amountEntered: _amount.rupees >= 1,
-                amountController: _amountController,
-                amountFocusNode: _amountFocusNode,
-                amountFieldKey: _amountFieldKey,
-                amountError: _amountError,
                 onNotAccepted: () =>
                     setState(() => _locallyRejectedCardIds.add(rec.card.id)),
                 onPay: () => _payWith(rec, wallet, activeCategoryId),
@@ -576,13 +578,6 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
                 onAddCard: () => _addCard(rec.card),
               ),
             ),
-        // Credit card not accepted here (or none to use): never a dead end.
-        _withoutCardPanel(
-          amountEntryCardId == null
-              ? 'No credit card to use here? Enter the amount, then pay from your bank account.'
-              : 'Credit card not accepted here, or not the one you want to use?',
-          withAmount: amountEntryCardId == null,
-        ),
       ],
     );
   }
@@ -653,18 +648,12 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
   /// pick the UPI app, which lets the user choose the account.
   Future<void> _continueWithoutCard() async {
     if (!await _requireAmount()) return;
-    await _handOff(rec: null, wallet: const [], categoryId: _selectedCategoryId);
+    await _handOff(
+      rec: null,
+      wallet: const [],
+      categoryId: _selectedCategoryId,
+    );
   }
-
-  Widget _withoutCardPanel(String message, {required bool withAmount}) =>
-      _ContinueWithoutCard(
-        message: message,
-        onPressed: _continueWithoutCard,
-        amountController: withAmount ? _amountController : null,
-        amountFocusNode: _amountFocusNode,
-        amountFieldKey: _amountFieldKey,
-        amountError: _amountError,
-      );
 
   /// Hands the payment to the UPI app the user picks. [rec] is the card being
   /// paid with, or null for a payment from a bank account.
@@ -773,6 +762,22 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       autoLog: false,
     );
   }
+
+  /// The amount card and the way out below it, as one block: used under the
+  /// category chips, and in the notices where no card can pay.
+  Widget _amountAndWithoutCard() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      _AmountCard(
+        controller: _amountController,
+        focusNode: _amountFocusNode,
+        fieldKey: _amountFieldKey,
+        errorText: _amountError,
+      ),
+      const SizedBox(height: AppSpace.md),
+      _WithoutCardBanner(onTap: _continueWithoutCard),
+    ],
+  );
 
   Future<void> _openPaymentSent({
     required Recommendation? rec,
@@ -925,10 +930,10 @@ class _CategoryPicker extends StatelessWidget {
             labelStyle: BambooFonts.ui(
               13,
               weight: FontWeight.w600,
-              color: selectedId == c.id ? BambooInk.onSlate : BambooInk.ink900,
+              color: BambooInk.ink900,
             ),
             selected: selectedId == c.id,
-            selectedColor: BambooInk.slate,
+            selectedColor: BambooInk.lime.withValues(alpha: 0.55),
             backgroundColor: BambooInk.paperMuted,
             side: BorderSide.none,
             shape: RoundedRectangleBorder(
@@ -941,83 +946,222 @@ class _CategoryPicker extends StatelessWidget {
   }
 }
 
-/// "Continue without credit card": opens the same UPI app list, and the user
-/// pays from their bank account.
-class _ContinueWithoutCard extends StatelessWidget {
-  final String message;
-  final VoidCallback onPressed;
-
-  /// Given when there is no card on the page to type the amount on.
-  final TextEditingController? amountController;
-  final FocusNode? amountFocusNode;
-  final GlobalKey? amountFieldKey;
-  final String? amountError;
-  const _ContinueWithoutCard({
-    required this.message,
-    required this.onPressed,
-    this.amountController,
-    this.amountFocusNode,
-    this.amountFieldKey,
-    this.amountError,
+/// The amount, in its own card above the cards, with quick amounts.
+class _AmountCard extends StatelessWidget {
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final GlobalKey fieldKey;
+  final String? errorText;
+  const _AmountCard({
+    required this.controller,
+    required this.focusNode,
+    required this.fieldKey,
+    required this.errorText,
   });
+
+  static const _quick = [100, 200, 500, 1000];
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpace.lg),
-      decoration: BoxDecoration(
-        color: BambooInk.paperMuted,
-        borderRadius: BorderRadius.circular(24),
+    final hasError = errorText != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpace.md,
+            AppSpace.xs,
+            AppSpace.md,
+            AppSpace.md,
+          ),
+          decoration: BoxDecoration(
+            color: BambooInk.glassFillOnPaper,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: hasError ? BambooInk.clay : BambooInk.hairlineOnPaper,
+              width: hasError ? 1.5 : 1,
+            ),
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Text(
+                    '₹',
+                    style: BambooFonts.money(30, color: BambooInk.ink500),
+                  ),
+                  const SizedBox(width: AppSpace.sm),
+                  Expanded(
+                    child: TextField(
+                      key: fieldKey,
+                      controller: controller,
+                      focusNode: focusNode,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      style: BambooFonts.money(26, color: BambooInk.ink900),
+                      cursorColor: BambooInk.slate,
+                      decoration: InputDecoration(
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        filled: false,
+                        hintText: 'Enter amount',
+                        hintStyle: BambooFonts.money(
+                          24,
+                          color: BambooInk.ink500.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ),
+                  ),
+                  ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: controller,
+                    builder: (context, value, _) => value.text.isEmpty
+                        ? const SizedBox.shrink()
+                        : IconButton(
+                            tooltip: 'Clear amount',
+                            icon: const Icon(
+                              Icons.cancel_rounded,
+                              color: BambooInk.ink500,
+                            ),
+                            onPressed: controller.clear,
+                          ),
+                  ),
+                ],
+              ),
+              const Divider(height: 1, color: BambooInk.hairlineOnPaper),
+              const SizedBox(height: AppSpace.sm),
+              Row(
+                children: [
+                  for (var i = 0; i < _quick.length; i++) ...[
+                    if (i > 0) const SizedBox(width: AppSpace.xs),
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: BambooInk.ink900,
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          minimumSize: const Size.fromHeight(40),
+                          side: const BorderSide(
+                            color: BambooInk.hairlineOnPaper,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                        onPressed: () => controller.text = '${_quick[i]}',
+                        child: Text(
+                          '₹${_quick[i] >= 1000 ? '1,000' : _quick[i]}',
+                          style: BambooFonts.ui(
+                            14,
+                            weight: FontWeight.w600,
+                            color: BambooInk.ink900,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+        if (hasError)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpace.md, 6, 0, 0),
+            child: Text(
+              errorText!,
+              style: BambooFonts.ui(12, color: BambooInk.clayInk),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// "Continue without card": a button that does the same as Pay with a card,
+/// opening the same UPI app list from the bottom, and the user pays from their
+/// bank account.
+class _WithoutCardBanner extends StatelessWidget {
+  final VoidCallback onTap;
+  const _WithoutCardBanner({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton(
+      style: FilledButton.styleFrom(
+        backgroundColor: BambooInk.lime.withValues(alpha: 0.35),
+        foregroundColor: BambooInk.ink900,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpace.md,
+          vertical: AppSpace.sm,
+        ),
+        minimumSize: const Size.fromHeight(64),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: BorderSide(color: BambooInk.lime.withValues(alpha: 0.7)),
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      onPressed: onTap,
+      child: Row(
         children: [
-          Text(message, style: BambooFonts.ui(13, color: BambooInk.ink500)),
-          const SizedBox(height: AppSpace.sm),
-          if (amountController != null) ...[
-            TextField(
-              key: amountFieldKey,
-              controller: amountController,
-              focusNode: amountFocusNode,
-              style: BambooFonts.ui(15, color: BambooInk.ink900),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(
-                labelText: 'Amount',
-                labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
-                prefixText: '₹ ',
-                errorText: amountError,
-                filled: true,
-                fillColor: BambooInk.glassFillOnPaper,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide.none,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
-                ),
-              ),
+          Container(
+            width: 40,
+            height: 40,
+            decoration: const BoxDecoration(
+              color: BambooInk.slate,
+              shape: BoxShape.circle,
             ),
-            const SizedBox(height: AppSpace.sm),
-          ],
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: BambooInk.ink900,
-                side: const BorderSide(color: BambooInk.hairlineOnPaper),
-                minimumSize: const Size.fromHeight(48),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              onPressed: onPressed,
-              child: const Text('Continue without credit card'),
+            child: const Icon(
+              Icons.account_balance_rounded,
+              size: 20,
+              color: BambooInk.lime,
             ),
+          ),
+          const SizedBox(width: AppSpace.md),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Continue without card',
+                  style: BambooFonts.heading(16, color: BambooInk.ink900),
+                ),
+                Text(
+                  'Pay using UPI directly',
+                  style: BambooFonts.ui(13, color: BambooInk.ink500),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded, color: BambooInk.ink900),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecommendedHeader extends StatelessWidget {
+  final VoidCallback onInfo;
+  const _RecommendedHeader({required this.onInfo});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpace.sm),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Recommended cards',
+              style: BambooFonts.heading(18, color: BambooInk.ink900),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Why these cards?',
+            icon: const Icon(Icons.info_outline_rounded),
+            color: BambooInk.ink900,
+            onPressed: onInfo,
           ),
         ],
       ),
@@ -1058,18 +1202,8 @@ class _ScanResultCard extends StatelessWidget {
   /// and just shows no reward.
   final bool payDespiteExclusion;
 
-  /// This is the card the user pays with, so the amount is entered right
-  /// here — in place of the reward figure — not in a field elsewhere.
-  final bool showAmountEntry;
-
-  /// Whether a payable amount (≥ ₹1) has been entered yet — drives the
-  /// "enter an amount" prompt vs. the resolved reward, independent of
-  /// whether *this* card happens to earn anything on the spend.
+  /// Whether a payable amount (≥ ₹1) has been entered yet.
   final bool amountEntered;
-  final TextEditingController? amountController;
-  final FocusNode? amountFocusNode;
-  final GlobalKey? amountFieldKey;
-  final String? amountError;
 
   final VoidCallback onNotAccepted;
   final VoidCallback onPay;
@@ -1082,12 +1216,7 @@ class _ScanResultCard extends StatelessWidget {
     required this.isOwned,
     required this.showRupayUpiNote,
     this.payDespiteExclusion = false,
-    this.showAmountEntry = false,
     this.amountEntered = false,
-    this.amountController,
-    this.amountFocusNode,
-    this.amountFieldKey,
-    this.amountError,
     required this.onNotAccepted,
     required this.onPay,
     required this.onAlwaysUseHere,
@@ -1104,20 +1233,12 @@ class _ScanResultCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpace.lg),
       decoration: BoxDecoration(
-        color: hero
-            ? BambooInk.lime
-            : (excluded ? BambooInk.paperMuted : BambooInk.glassFillOnPaper),
+        color: excluded ? BambooInk.paperMuted : BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(24),
-        border: hero ? null : Border.all(color: BambooInk.hairlineOnPaper),
-        boxShadow: hero
-            ? [
-                BoxShadow(
-                  color: BambooInk.lime.withValues(alpha: 0.35),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
-                ),
-              ]
-            : null,
+        border: Border.all(
+          color: hero ? BambooInk.lime : BambooInk.hairlineOnPaper,
+          width: hero ? 2 : 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1157,7 +1278,7 @@ class _ScanResultCard extends StatelessWidget {
               if (recommendation.isOverride)
                 StatusPill(
                   label: 'Override',
-                  foreground: hero ? BambooInk.slate : BambooInk.ink900,
+                  foreground: BambooInk.ink900,
                   background: hero
                       ? Colors.white.withValues(alpha: 0.5)
                       : BambooInk.paperMuted,
@@ -1198,7 +1319,7 @@ class _ScanResultCard extends StatelessWidget {
                     Icon(
                       Icons.qr_code_2_rounded,
                       size: 14,
-                      color: hero ? BambooInk.slate : BambooInk.ink500,
+                      color: BambooInk.ink500,
                     ),
                     const SizedBox(width: 4),
                     Text(
@@ -1206,23 +1327,13 @@ class _ScanResultCard extends StatelessWidget {
                       style: BambooFonts.ui(
                         11.5,
                         weight: FontWeight.w600,
-                        color: hero ? BambooInk.slate : BambooInk.ink500,
+                        color: BambooInk.ink500,
                       ),
                     ),
                   ],
                 ),
               ),
-            if (showAmountEntry) ...[
-              _OnCardAmountField(
-                controller: amountController!,
-                focusNode: amountFocusNode!,
-                fieldKey: amountFieldKey!,
-                errorText: amountError,
-                onSubmitted: (_) => onPay(),
-              ),
-              const SizedBox(height: AppSpace.sm),
-            ],
-            if (!showAmountEntry || amountEntered) ...[
+            if (!hero || amountEntered) ...[
               Row(
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
@@ -1254,14 +1365,7 @@ class _ScanResultCard extends StatelessWidget {
                 ),
               // D32d: say so when an exclusion could not be read.
               RecommendationCaution(recommendation: recommendation),
-            ] else
-              Text(
-                'Enter an amount to see your reward',
-                style: BambooFonts.ui(
-                  12.5,
-                  color: hero ? BambooInk.slate : BambooInk.ink500,
-                ),
-              ),
+            ],
             const SizedBox(height: AppSpace.sm),
             if (!isOwned)
               // Empty wallet: this is a catalogue pick, not a card the user
@@ -1272,10 +1376,7 @@ class _ScanResultCard extends StatelessWidget {
                 children: [
                   Text(
                     "You don't have this card yet.",
-                    style: BambooFonts.ui(
-                      12.5,
-                      color: hero ? BambooInk.slate : BambooInk.ink500,
-                    ),
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                   ),
                   const SizedBox(height: AppSpace.xs),
                   FilledButton.icon(
@@ -1308,22 +1409,17 @@ class _ScanResultCard extends StatelessWidget {
                     onPressed: onPay,
                     child: Text('Pay with ${recommendation.card.name}'),
                   ),
-                  OutlinedButton(
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.star_border_rounded, size: 18),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: hero
-                          ? BambooInk.slate
-                          : BambooInk.ink900,
-                      side: BorderSide(
-                        color: hero
-                            ? BambooInk.slate.withValues(alpha: 0.4)
-                            : BambooInk.hairlineOnPaper,
-                      ),
+                      foregroundColor: BambooInk.ink900,
+                      side: const BorderSide(color: BambooInk.hairlineOnPaper),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
                       ),
                     ),
                     onPressed: onAlwaysUseHere,
-                    child: const Text('Always use this card here'),
+                    label: const Text('Always use this card here'),
                   ),
                   TextButton(
                     style: TextButton.styleFrom(
@@ -1339,93 +1435,6 @@ class _ScanResultCard extends StatelessWidget {
           ],
         ],
       ),
-    );
-  }
-}
-
-/// The amount entry that sits on the hero card, where the reward figure
-/// would be — a large `₹ ____` line, red when the user tapped Pay with it
-/// empty. Sized for the lime card, so it paints its own light fill.
-class _OnCardAmountField extends StatelessWidget {
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final GlobalKey fieldKey;
-  final String? errorText;
-  final ValueChanged<String> onSubmitted;
-
-  const _OnCardAmountField({
-    required this.controller,
-    required this.focusNode,
-    required this.fieldKey,
-    required this.errorText,
-    required this.onSubmitted,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final hasError = errorText != null;
-    return Column(
-      key: fieldKey,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-          decoration: BoxDecoration(
-            color: BambooInk.paper,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: hasError
-                  ? BambooInk.clay
-                  : BambooInk.slate.withValues(alpha: 0.25),
-              width: hasError ? 1.5 : 1,
-            ),
-          ),
-          child: Row(
-            children: [
-              Text('₹', style: BambooFonts.money(24, color: BambooInk.ink500)),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  style: BambooFonts.money(26, color: BambooInk.ink900),
-                  cursorColor: BambooInk.slate,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                    border: InputBorder.none,
-                    hintText: 'Amount',
-                    suffix: const Text(
-                      '*',
-                      style: TextStyle(
-                        color: BambooInk.clayInk,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 20,
-                      ),
-                    ),
-                    hintStyle: BambooFonts.money(
-                      24,
-                      color: BambooInk.ink500.withValues(alpha: 0.5),
-                    ),
-                  ),
-                  onSubmitted: onSubmitted,
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (hasError)
-          Padding(
-            padding: const EdgeInsets.only(top: 4, left: 4),
-            child: Text(
-              errorText!,
-              style: BambooFonts.ui(12, color: BambooInk.clay),
-            ),
-          ),
-      ],
     );
   }
 }
