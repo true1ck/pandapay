@@ -712,4 +712,10 @@ class _FakeUpi implements UpiPaymentService {
     opened.add(packageName);
     return openResult;
   }
+
+  @override
+  Future<bool> shareQr({
+    required String packageName,
+    required String qrData,
+  }) async => false;
 }

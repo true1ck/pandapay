@@ -52,6 +52,10 @@ class ScanResultScreen extends ConsumerStatefulWidget {
   ConsumerState<ScanResultScreen> createState() => _ScanResultScreenState();
 }
 
+/// NPCI's cap on a payment made from a shared or gallery QR to a non-verified
+/// shop. Above it the user scans the shop's QR inside the UPI app instead.
+const _shareQrLimitRupees = 2000;
+
 class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
   late final TextEditingController _merchantController;
   late final TextEditingController _amountController;
@@ -354,11 +358,14 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     // The amount is entered inline on the card the user actually pays with —
     // the best owned, eligible card — not in a field detached from it. Null
     // when the wallet is empty (nothing to pay yet; add a card first).
+    bool owns(CardProduct c) => wallet.any((w) => w.cardProductId == c.id);
+    // An owned UPI-linkable card is payable even when it earns nothing here
+    // (the engine excludes it for "no reward rule"), so it still gets Pay.
+    bool payable(Recommendation r) => r.card.isUpiLinkable && owns(r.card);
     final amountEntryCardId =
-        (bestUpi != null &&
-            wallet.any((w) => w.cardProductId == bestUpi.card.id))
+        (bestUpi != null && owns(bestUpi.card))
         ? bestUpi.card.id
-        : null;
+        : upiRanked.where(payable).firstOrNull?.card.id;
 
     return ListView(
       padding: const EdgeInsets.all(AppSpace.lg),
@@ -541,6 +548,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
                 isHero: bestUpi != null && rec.card.id == bestUpi.card.id,
                 isOwned: wallet.any((w) => w.cardProductId == rec.card.id),
                 showRupayUpiNote: rec.card.isUpiLinkable,
+                payDespiteExclusion: rec.isExcluded && payable(rec),
                 showAmountEntry: rec.card.id == amountEntryCardId,
                 amountEntered: _amount.rupees >= 1,
                 amountController: _amountController,
@@ -614,9 +622,11 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     final service = ref.read(upiPaymentServiceProvider);
 
     // NPCI makes UPI apps decline a payment another app starts from a shop QR
-    // (an intent: initiation mode 04), while the same QR scanned inside the UPI
-    // app goes through. So PandaPay does not send a payment link. It picks the
-    // card, then sends the user to scan this QR in their own UPI app.
+    // (an intent: initiation mode 04), while a QR scanned or shared inside the
+    // UPI app goes through. So PandaPay never sends a payment link. It shares a
+    // QR image of this payment into the chosen app (read like a gallery QR, so
+    // the payee and amount arrive filled in). When that can't be used, it
+    // sends the user to scan the shop's QR inside the UPI app instead.
     final apps = await service.installedApps();
     if (!mounted) return;
 
@@ -629,6 +639,37 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
         cardName: rec.card.name,
       );
       if (chosen == null || !mounted) return;
+    }
+
+    // NPCI caps gallery and shared QR payments to a non-verified shop at
+    // ₹2,000, and a signed QR would break if it were redrawn with an amount.
+    // Both go the scan-it-yourself way.
+    if (chosen != null &&
+        widget.parsed.sign == null &&
+        _amount.rupees <= _shareQrLimitRupees) {
+      final shared = await service.shareQr(
+        packageName: chosen.packageName,
+        qrData: buildUpiPayUri(
+          pa: widget.parsed.pa,
+          pn: widget.parsed.pn,
+          am: _amount,
+          cu: widget.parsed.cu,
+          mc: widget.parsed.mc,
+          tr: widget.parsed.tr,
+          tn: widget.parsed.tn,
+          extraParams: widget.parsed.extraParams,
+        ),
+      );
+      if (!mounted) return;
+      if (shared) {
+        await _openPaymentSent(
+          rec: rec,
+          wallet: wallet,
+          categoryId: categoryId,
+          autoLog: false,
+        );
+        return;
+      }
     }
 
     final go = await UpiScanGuideDialog.show(
@@ -844,6 +885,12 @@ class _ScanResultCard extends StatelessWidget {
   final bool isOwned;
   final bool showRupayUpiNote;
 
+  /// An owned, UPI-linkable card the engine excluded only because it earns
+  /// nothing here (no reward rule, category excluded, cap reached). That is
+  /// not a reason to stop the user paying with it, so it keeps its Pay button
+  /// and just shows no reward.
+  final bool payDespiteExclusion;
+
   /// This is the card the user pays with, so the amount is entered right
   /// here — in place of the reward figure — not in a field elsewhere.
   final bool showAmountEntry;
@@ -867,6 +914,7 @@ class _ScanResultCard extends StatelessWidget {
     required this.isHero,
     required this.isOwned,
     required this.showRupayUpiNote,
+    this.payDespiteExclusion = false,
     this.showAmountEntry = false,
     this.amountEntered = false,
     this.amountController,
@@ -981,8 +1029,9 @@ class _ScanResultCard extends StatelessWidget {
                   ),
                 ),
               ],
-            )
-          else ...[
+            ),
+          if (!excluded || payDespiteExclusion) ...[
+            if (excluded) const SizedBox(height: AppSpace.sm),
             if (showRupayUpiNote)
               Padding(
                 padding: const EdgeInsets.only(bottom: 2),
@@ -1015,7 +1064,10 @@ class _ScanResultCard extends StatelessWidget {
               ),
               const SizedBox(height: AppSpace.sm),
             ],
-            if (!showAmountEntry || amountEntered) ...[
+            if (excluded)
+              // Pay is still allowed; the reason row above says why it earns nothing.
+              const SizedBox.shrink()
+            else if (!showAmountEntry || amountEntered) ...[
               Row(
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,

@@ -3,13 +3,17 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-/// Opens a UPI app the user picked, without sending it a payment.
+import 'upi_qr_image.dart';
+
+/// Hands a payment to a UPI app the user picked, without sending it a payment link.
 ///
 /// UPI apps decline a payment that another app starts for a shop or a person
 /// (an intent, NPCI initiation mode 04; clause 7.9 of NPCI's UPI consolidated
-/// circular), while the same QR or UPI ID used inside the UPI app goes through.
-/// So PandaPay never sends a `upi://pay` link. It lists the UPI apps installed,
-/// opens the one the user picked on its home screen, and the user pays there.
+/// circular), while the same QR scanned or shared inside the UPI app goes
+/// through. So PandaPay never sends a `upi://pay` link. It lists the UPI apps
+/// installed and either shares a QR image into the one the user picked
+/// ([shareQr], read like a QR saved in the gallery) or opens it on its home
+/// screen ([openApp]) and the user pays there.
 ///
 /// It is deliberately a thin wrapper over a MethodChannel with no third-party
 /// UPI plugin: the payment surface of this app has to stay small and
@@ -37,6 +41,12 @@ abstract class UpiPaymentService {
   /// Returns false when the app could not be opened (not installed, no
   /// launcher screen, or no channel on this platform).
   Future<bool> openApp(String packageName);
+
+  /// Draws [qrData] (a `upi://pay` string) as a QR image and shares it into the
+  /// UPI app [packageName], so that app shows the payee and amount ready to
+  /// pay. Returns false when the app can't take a shared image (or there is no
+  /// channel on this platform); the caller then falls back to [openApp].
+  Future<bool> shareQr({required String packageName, required String qrData});
 }
 
 class MethodChannelUpiPaymentService implements UpiPaymentService {
@@ -67,6 +77,21 @@ class MethodChannelUpiPaymentService implements UpiPaymentService {
       return const [];
     } on PlatformException {
       return const [];
+    }
+  }
+
+  @override
+  Future<bool> shareQr({required String packageName, required String qrData}) async {
+    try {
+      return await _channel.invokeMethod<bool>('shareQr', {
+            'packageName': packageName,
+            'png': renderUpiQrPng(qrData),
+          }) ??
+          false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
     }
   }
 

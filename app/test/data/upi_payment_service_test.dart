@@ -34,6 +34,43 @@ void main() {
     expect(await MethodChannelUpiPaymentService().installedApps(), isEmpty);
   });
 
+  group('shareQr', () {
+    test('sends the package and a PNG of the QR, never a payment link', () async {
+      Map<Object?, Object?>? args;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        expect(call.method, 'shareQr');
+        args = call.arguments as Map<Object?, Object?>;
+        return true;
+      });
+
+      final ok = await MethodChannelUpiPaymentService().shareQr(
+        packageName: 'com.phonepe.app',
+        qrData: 'upi://pay?pa=shop%40ybl&pn=Shop&am=10.00&cu=INR',
+      );
+
+      expect(ok, isTrue);
+      expect(args!['packageName'], 'com.phonepe.app');
+      final png = args!['png'] as Uint8List;
+      // PNG signature.
+      expect(png.sublist(0, 8), [137, 80, 78, 71, 13, 10, 26, 10]);
+      expect(args!.containsKey('uri'), isFalse);
+    });
+
+    test('is false when the app refuses, the platform throws or is missing', () async {
+      final svc = MethodChannelUpiPaymentService();
+      messenger.setMockMethodCallHandler(channel, (call) async => false);
+      expect(await svc.shareQr(packageName: 'a', qrData: 'upi://pay?pa=x@y'), isFalse);
+      messenger.setMockMethodCallHandler(channel, (call) async => null);
+      expect(await svc.shareQr(packageName: 'a', qrData: 'upi://pay?pa=x@y'), isFalse);
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        throw PlatformException(code: 'bad_args');
+      });
+      expect(await svc.shareQr(packageName: 'a', qrData: 'upi://pay?pa=x@y'), isFalse);
+      messenger.setMockMethodCallHandler(channel, null);
+      expect(await svc.shareQr(packageName: 'a', qrData: 'upi://pay?pa=x@y'), isFalse);
+    });
+  });
+
   group('openApp', () {
     test('sends only the package name, never a payment link', () async {
       Map<Object?, Object?>? args;

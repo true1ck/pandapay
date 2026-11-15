@@ -2,6 +2,7 @@ package app.pandapay.pandapay
 
 import android.app.Notification
 import android.app.NotificationManager
+import android.content.ClipData
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -18,6 +19,7 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.os.Trace
 import android.util.Log
+import androidx.core.content.FileProvider
 import com.android.installreferrer.api.InstallReferrerClient
 import com.android.installreferrer.api.InstallReferrerStateListener
 import com.android.installreferrer.api.InstallReferrerClient.InstallReferrerResponse
@@ -28,6 +30,7 @@ import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
+import java.io.File
 
 /**
  * Hosts the `app.pandapay/upi` MethodChannel used by
@@ -240,6 +243,15 @@ class MainActivity : FlutterFragmentActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "getInstalledUpiApps" -> result.success(installedUpiApps())
+                "shareQr" -> {
+                    val pkg = call.argument<String>("packageName")
+                    val png = call.argument<ByteArray>("png")
+                    if (pkg == null || png == null) {
+                        result.error("bad_args", "packageName and png are required", null)
+                    } else {
+                        result.success(shareQrToUpiApp(pkg, png))
+                    }
+                }
                 "openApp" -> {
                     val pkg = call.argument<String>("packageName")
                     if (pkg == null) {
@@ -465,10 +477,42 @@ class MainActivity : FlutterFragmentActivity() {
      * inside the UPI app instead. Only apps that handle `upi://pay` can be
      * opened, so this can't launch arbitrary packages.
      */
-    private fun openUpiApp(packageName: String): Boolean {
-        val isUpiApp = packageManager.queryIntentActivities(upiViewIntent(), 0)
+    private fun isUpiApp(packageName: String): Boolean =
+        packageManager.queryIntentActivities(upiViewIntent(), 0)
             .any { it.activityInfo?.packageName == packageName }
-        if (!isUpiApp) return false
+
+    /**
+     * Shares a QR image into the UPI app the user picked, as if they had shared a
+     * saved QR into it. The UPI app reads it like a QR scanned from the gallery
+     * (the route NPCI allows), so it shows the payee and amount ready to pay.
+     * Only apps that handle `upi://pay` are targeted. Returns false when the app
+     * can't take a shared image, and the caller falls back to opening the app.
+     */
+    private fun shareQrToUpiApp(upiPackage: String, png: ByteArray): Boolean {
+        if (!isUpiApp(upiPackage)) return false
+        return try {
+            val dir = File(cacheDir, "upi_qr").apply { mkdirs() }
+            dir.listFiles()?.forEach { it.delete() } // only the latest QR is kept
+            val file = File(dir, "pay-qr.png").apply { writeBytes(png) }
+            val uri = FileProvider.getUriForFile(this, "$packageName.upi_qr", file)
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "image/png"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                clipData = ClipData.newRawUri("", uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                setPackage(upiPackage)
+            }
+            if (send.resolveActivity(packageManager) == null) return false
+            grantUriPermission(upiPackage, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            startActivity(send)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun openUpiApp(packageName: String): Boolean {
+        if (!isUpiApp(packageName)) return false
         val intent = packageManager.getLaunchIntentForPackage(packageName) ?: return false
         return try {
             startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
