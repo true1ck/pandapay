@@ -458,6 +458,37 @@ void main() {
     },
   );
 
+  test(
+    'a bill from a card app that names no card is not taught to two cards of one bank',
+    () {
+      UserCard hdfc(String id, String name, String last4) => UserCard(
+        id: id,
+        cardProductId: 'p-$id',
+        cardName: name,
+        isDefault: false,
+        last4: last4,
+      );
+      store.replaceCards('a', [
+        hdfc('moneyback', 'HDFC MoneyBack+ Credit Card', '8708'),
+        hdfc('tataneu', 'Tata Neu Plus HDFC Bank Credit Card', '1366'),
+      ]);
+      store.saveObservation('a', 'card-app-bill', {
+        'event_type': 'bill',
+        'sender_bank': 'MYTNEU',
+        'biller_name': 'Tata Neu HDFC Credit Card',
+        'statement_date': '2026-10-06T00:00:00.000',
+        'statement_date_explicit': true,
+        'due_date': '2026-11-08T00:00:00.000',
+        'received_at': '2026-10-06T10:00:00.000',
+      });
+      store.syncCardDatesFromObservations('a');
+      for (final card in store.entities('a', 'cards')) {
+        expect(card['statement_day'], isNull, reason: '${card['id']}');
+        expect(card['due_day'], isNull, reason: '${card['id']}');
+      }
+    },
+  );
+
   test('legacy repair checks again when a newer local observation is stored', () {
     final card = UserCard(
       id: 'c-refresh',

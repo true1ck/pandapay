@@ -3607,36 +3607,40 @@ final FutureProvider<List<UserCard>>
 myCardsProvider = FutureProvider<List<UserCard>>((ref) async {
   final markReady = _financialChanges(ref, 'cards');
   try {
-    final repo = ref.watch(userCardsRepositoryProvider);
-    final includeArchived = ref.watch(showArchivedCardsProvider);
-    if (repo == null) {
-      final local = await ref.watch(localUserCardsRepositoryProvider.future);
-      final catalogue = await ref.watch(catalogueProvider.future);
-      final cards = await local.fetchUserCards(
-        includeArchived: includeArchived,
-        catalogue: catalogue,
-      );
-      return cards.where((card) => card.isArchived == includeArchived).toList();
-    }
-
-    // Keep Wallet consistent with Home: render the cached account snapshot
-    // first. Card mutations clear it before invalidating this provider, so this
-    // cannot replay a card that was just removed or replaced.
-    final cached = await _readUserCardsCache(
-      ref,
-      includeArchived: includeArchived,
-    );
-    if (cached != null) return cached;
-
-    return await _loadUserCardsWithOfflineCache(
-      ref,
-      repo,
-      includeArchived: includeArchived,
-    );
+    return _withTrustedDays(ref, await _loadMyCards(ref));
   } finally {
     markReady();
   }
 });
+
+Future<List<UserCard>> _loadMyCards(Ref ref) async {
+  final repo = ref.watch(userCardsRepositoryProvider);
+  final includeArchived = ref.watch(showArchivedCardsProvider);
+  if (repo == null) {
+    final local = await ref.watch(localUserCardsRepositoryProvider.future);
+    final catalogue = await ref.watch(catalogueProvider.future);
+    final cards = await local.fetchUserCards(
+      includeArchived: includeArchived,
+      catalogue: catalogue,
+    );
+    return cards.where((card) => card.isArchived == includeArchived).toList();
+  }
+
+  // Keep Wallet consistent with Home: render the cached account snapshot
+  // first. Card mutations clear it before invalidating this provider, so this
+  // cannot replay a card that was just removed or replaced.
+  final cached = await _readUserCardsCache(
+    ref,
+    includeArchived: includeArchived,
+  );
+  if (cached != null) return cached;
+
+  return await _loadUserCardsWithOfflineCache(
+    ref,
+    repo,
+    includeArchived: includeArchived,
+  );
+}
 
 /// Cards the user has removed from their wallet. Wallet itself reads
 /// [myCardsProvider] (active cards only); this is the one surface that needs
@@ -4597,25 +4601,44 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
   }
 });
 
-/// Saves the billing day and due day the bill history agrees on onto the card
-/// row (never over a day the person typed), so every screen that reads
-/// `card.dueDay` / `card.statementDay` sees them. Best effort: a failure here
-/// must not break the ledger.
+/// Remembers the billing day and due day each card's own bill history agrees
+/// on. They are kept beside the card, not written onto it (the server owns the
+/// card row and rewrites it on every refresh), and [myCardsProvider] lays them
+/// over the cards. Best effort: a failure here must not break the ledger.
 Future<void> _saveLearnedCardDays(
   Ref ref,
   Map<String, CardBillLedger> ledgers,
 ) async {
-  if (ledgers.isEmpty) return;
   try {
-    final cards = await ref.read(myCardsProvider.future);
-    final patches = cardDayPatches(cards, ledgers);
-    if (patches.isEmpty) return;
-    final store = (await _cacheOrNull(ref))?.financialStore;
-    if (store == null) return;
+    final cache = await _cacheOrNull(ref);
+    if (cache == null) return;
     final namespace = ref.read(cacheNamespaceProvider);
-    patches.forEach((id, patch) => store.patchCard(namespace, id, patch));
+    final store = cache.financialStore;
+    final changed = LearnedCardDaysStore(
+      store.database.db,
+      namespace: namespace,
+    ).replace(learnedDaysByCard(ledgers));
+    if (changed) store.notifyExternalChanges(namespace, const ['cards']);
   } catch (_) {
     // Learning the days is a convenience; the ledger itself is unaffected.
+  }
+}
+
+/// [cards] with each day from the person, then the card's own bills, then a
+/// stored day that is not suspect (see [cardsWithTrustedDays]).
+Future<List<UserCard>> _withTrustedDays(Ref ref, List<UserCard> cards) async {
+  if (cards.isEmpty) return cards;
+  try {
+    final cache = await _cacheOrNull(ref);
+    final learned = cache == null
+        ? const <String, LearnedCardDays>{}
+        : LearnedCardDaysStore(
+            cache.financialStore.database.db,
+            namespace: ref.read(cacheNamespaceProvider),
+          ).all();
+    return cardsWithTrustedDays(cards, learned);
+  } catch (_) {
+    return cards;
   }
 }
 

@@ -6,6 +6,10 @@
 /// cycles agree, or when an issuer printed the statement date outright.
 library;
 
+import 'dart:convert';
+
+import 'package:sqlite3/sqlite3.dart';
+
 import '../../../data/card_bill_ledger.dart';
 import '../../../data/user_cards_repository.dart';
 
@@ -75,36 +79,147 @@ LearnedCardDays learnCardDays(List<CardBill> history) {
   return LearnedCardDays(statementDay: statementDay, dueDay: dueDay);
 }
 
-/// Card-row edits that save what the ledgers learned. A day the person typed
-/// is never touched; a day learned earlier from SMS follows newer evidence; a
-/// day of unknown origin is left alone. Keys match the stored card row.
-Map<String, Map<String, dynamic>> cardDayPatches(
-  Iterable<UserCard> cards,
+/// What the bill history of each card agrees on, by card id. A bill message
+/// that was read as evidence for two cards (the same source on both) proves
+/// nothing about either, so those bills are left out of the reading.
+Map<String, LearnedCardDays> learnedDaysByCard(
   Map<String, CardBillLedger> ledgers,
 ) {
-  final out = <String, Map<String, dynamic>>{};
-  for (final card in cards) {
-    final ledger = ledgers[card.id];
-    if (ledger == null || card.isArchived) continue;
-    final learned = learnCardDays(ledger.history);
-    final patch = <String, dynamic>{};
-    bool mayWrite(int? current, String? source) =>
-        source != 'user' && (current == null || source == 'sms');
-    final s = learned.statementDay;
-    if (s != null &&
-        s != card.statementDay &&
-        mayWrite(card.statementDay, card.statementDaySource)) {
-      patch['statement_day'] = s;
-      patch['statement_day_source'] = 'sms';
+  final owners = <String, Set<String>>{};
+  ledgers.forEach((cardId, ledger) {
+    for (final b in ledger.history) {
+      for (final key in b.sourceIds) {
+        owners.putIfAbsent(key, () => {}).add(cardId);
+      }
     }
-    final d = learned.dueDay;
-    if (d != null &&
-        d != card.dueDay &&
-        mayWrite(card.dueDay, card.dueDaySource)) {
-      patch['due_day'] = d;
-      patch['due_day_source'] = 'sms';
-    }
-    if (patch.isNotEmpty) out[card.id] = patch;
-  }
+  });
+  bool shared(CardBill b) =>
+      b.sourceIds.any((key) => (owners[key]?.length ?? 0) > 1);
+  final out = <String, LearnedCardDays>{};
+  ledgers.forEach((cardId, ledger) {
+    final learned = learnCardDays([
+      for (final b in ledger.history)
+        if (!shared(b)) b,
+    ]);
+    if (!learned.isEmpty) out[cardId] = learned;
+  });
   return out;
+}
+
+/// The cards as the app should show them: each day comes from the person
+/// first, then from the card's own bill history, and from a day stored on the
+/// card by an older version only when it is not suspect.
+///
+/// A day typed by the person is never touched. A day an older version read from
+/// SMS is dropped when another active card holds the same billing and due day:
+/// one bank sender (a card app, an issuer-wide reminder) used to teach every
+/// card of that bank the same dates, and one message cannot be two cards' own
+/// cycle. The card row itself is not changed, so a refresh from the server
+/// cannot bring the wrong days back, and a day the card's own bills teach is
+/// kept even when another card happens to share it.
+List<UserCard> cardsWithTrustedDays(
+  List<UserCard> cards,
+  Map<String, LearnedCardDays> learned,
+) {
+  String key(UserCard c) => '${c.statementDay}|${c.dueDay}';
+  final active = cards.where((c) => !c.isArchived).toList();
+  final holders = <String, int>{};
+  for (final c in active) {
+    if (c.statementDay == null && c.dueDay == null) continue;
+    holders[key(c)] = (holders[key(c)] ?? 0) + 1;
+  }
+  return [
+    for (final c in cards)
+      () {
+        if (c.isArchived) return c;
+        final mine = learned[c.id];
+        final suspect = (holders[key(c)] ?? 0) > 1;
+        int? pick(int? stored, String? source, int? own) {
+          if (source == 'user') return stored;
+          if (own != null) return own;
+          return suspect ? null : stored;
+        }
+
+        final s = pick(
+          c.statementDay,
+          c.statementDaySource,
+          mine?.statementDay,
+        );
+        final d = pick(c.dueDay, c.dueDaySource, mine?.dueDay);
+        if (s == c.statementDay && d == c.dueDay) return c;
+        return UserCard.fromJson({
+          ...c.toJson(),
+          'statement_day': s,
+          'due_day': d,
+        });
+      }(),
+  ];
+}
+
+/// The days each card's own bills taught, kept apart from the card row (which
+/// the server owns and rewrites on every refresh). Saved in the same small
+/// table SMS v2 keeps its other state in.
+class LearnedCardDaysStore {
+  LearnedCardDaysStore(this._db, {required this.namespace});
+
+  final Database _db;
+  final String namespace;
+  static const _prefix = 'card-days:';
+
+  Map<String, LearnedCardDays> all() {
+    try {
+      final rows = _db.select(
+        'SELECT key, value FROM v2_sync_state WHERE namespace=? AND key LIKE ?',
+        [namespace, '$_prefix%'],
+      );
+      final out = <String, LearnedCardDays>{};
+      for (final r in rows) {
+        try {
+          final j = jsonDecode(r['value'] as String) as Map<String, dynamic>;
+          out[(r['key'] as String).substring(_prefix.length)] = LearnedCardDays(
+            statementDay: (j['s'] as num?)?.toInt(),
+            dueDay: (j['d'] as num?)?.toInt(),
+          );
+        } on Object {
+          continue; // one damaged row never hides the others
+        }
+      }
+      return out;
+    } on Object {
+      return const {}; // the table does not exist before the first capture
+    }
+  }
+
+  /// Saves [days] for each card, drops cards that no longer teach anything, and
+  /// says whether anything changed.
+  bool replace(Map<String, LearnedCardDays> days) {
+    final before = all();
+    var changed = false;
+    for (final e in days.entries) {
+      final old = before[e.key];
+      if (old?.statementDay == e.value.statementDay &&
+          old?.dueDay == e.value.dueDay) {
+        continue;
+      }
+      _db.execute(
+        'INSERT INTO v2_sync_state(namespace,key,value) VALUES(?,?,?) '
+        'ON CONFLICT(namespace,key) DO UPDATE SET value=excluded.value',
+        [
+          namespace,
+          '$_prefix${e.key}',
+          jsonEncode({'s': e.value.statementDay, 'd': e.value.dueDay}),
+        ],
+      );
+      changed = true;
+    }
+    for (final id in before.keys) {
+      if (days.containsKey(id)) continue;
+      _db.execute('DELETE FROM v2_sync_state WHERE namespace=? AND key=?', [
+        namespace,
+        '$_prefix$id',
+      ]);
+      changed = true;
+    }
+    return changed;
+  }
 }

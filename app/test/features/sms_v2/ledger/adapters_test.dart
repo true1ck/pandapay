@@ -606,19 +606,9 @@ void main() {
       final learned = learnCardDays(ledgers['card']!.history);
       expect(learned.statementDay, 18);
       expect(learned.dueDay, 5);
-      final patches = cardDayPatches(
-        [
-          UserCard(
-            id: 'card',
-            cardProductId: 'p',
-            cardName: 'Test card',
-            isDefault: false,
-          ),
-        ],
-        ledgers,
-      );
-      expect(patches['card'], containsPair('statement_day', 18));
-      expect(patches['card'], containsPair('due_day', 5));
+      final byCard = learnedDaysByCard(ledgers);
+      expect(byCard['card']!.statementDay, 18);
+      expect(byCard['card']!.dueDay, 5);
     },
   );
   test(
