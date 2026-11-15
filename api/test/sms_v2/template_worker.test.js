@@ -915,3 +915,19 @@ test("the average request is about a tenth of the old one, and a layout rich in 
   assert.ok(Math.max(...sizes) < 1800, "largest " + Math.max(...sizes) + " tokens");
   assert.ok(sizes.reduce((a, b) => a + b, 0) / sizes.length < 1500, "average " + sizes.join(", "));
 });
+
+test("a failed attribute says which one and why, so the second try can fix it", () => {
+  const draft = rule();
+  draft.emit[0].attrs.direction = "outgoing";
+  const errors = validateDraft(draft, template, config.model);
+  assert.ok(errors.includes("emitted_attrs_invalid"), "the code stays");
+  const detail = errors.find((e) => e.startsWith("attrs_movement"));
+  assert.match(detail, /^attrs_movement\/direction: one of debit\|credit$/);
+  // A value the schema does not know, and a missing one, are named too.
+  const extra = rule();
+  extra.emit[0].attrs.colour = "red";
+  assert.ok(validateDraft(extra, template, config.model).some((e) => /^attrs_movement\/?.*unknown attribute colour$/.test(e)));
+  const missing = rule();
+  delete missing.emit[0].attrs.rail;
+  assert.ok(validateDraft(missing, template, config.model).some((e) => /^attrs_movement\/?.*missing rail$/.test(e)));
+});

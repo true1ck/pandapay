@@ -13,7 +13,7 @@ const ruleSchema = require(path.join(SCHEMA_DIR, "rule_bundle.schema.json"));
 
 // Recorded on every attempt and inside the prompt. Change it with any change to the text or its rules;
 // a layout whose drafts failed under an older version is tried again once (requeueFailed).
-const PROMPT_VERSION = "tpl-2026-11-15-compact";
+const PROMPT_VERSION = "tpl-2026-11-15-detail";
 
 // What each placeholder in a layout stands for (the phone's skeleton and redaction in
 // packages/pandapay_domain/lib/src/sms_v2/template/).

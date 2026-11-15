@@ -278,6 +278,20 @@ function buildRule(answer, template, matcher, model) {
   );
 }
 
+// One line for a failed attribute check, e.g. "attrs_movement/purpose: one of purchase|p2p|atm".
+function attrProblem(factType, problem) {
+  const where = problem.instancePath || "/";
+  const { keyword, params = {} } = problem;
+  const detail =
+    keyword === "enum" ? `one of ${(params.allowedValues ?? []).join("|")}`
+    : keyword === "additionalProperties" ? `unknown attribute ${params.additionalProperty}`
+    : keyword === "required" ? `missing ${params.missingProperty}`
+    : keyword === "type" ? `must be ${params.type}`
+    : keyword === "format" ? `must be a ${params.format}`
+    : keyword;
+  return `attrs_${factType}${where}: ${detail}`.slice(0, 160);
+}
+
 function validateDraft(rule, template, model, otherLayouts = []) {
   const structural = validateRequest("admin_rule_draft", rule);
   if (!structural.ok) return structural.errors.map((error) => error.code);
@@ -346,8 +360,13 @@ function validateDraft(rule, template, model, otherLayouts = []) {
     }
     if (emit.factType === "balance_snapshot" && !attrs.asOf)
       attrs.asOf = "2026-11-20T00:00:00Z";
-    if (!attrValidators[emit.factType]?.(attrs))
+    const checkAttrs = attrValidators[emit.factType];
+    if (!checkAttrs?.(attrs)) {
       errors.push("emitted_attrs_invalid");
+      // Say which attribute and why, so the second try can fix it and the console shows it: a schema path and the
+      // allowed values, never message text.
+      for (const problem of (checkAttrs?.errors ?? []).slice(0, 3)) errors.push(attrProblem(emit.factType, problem));
+    }
     priorAttrs.push(attrs);
   }
 
