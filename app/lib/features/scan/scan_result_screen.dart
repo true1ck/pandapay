@@ -7,7 +7,6 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
-import '../../app/category_picker.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/card_overrides_repository.dart';
@@ -22,7 +21,6 @@ import '../../data/upi_payment_service.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
 import '../../main.dart' show MoneyText;
 import '../cards/add_card_local_first.dart';
-import '../cards/card_visual.dart';
 import '../overrides/override_local_first.dart';
 import '../cards/recommendation_confidence.dart';
 import '../cards/card_picker_screen.dart';
@@ -94,11 +92,9 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
   @override
   void initState() {
     super.initState();
-    _merchantController = TextEditingController(
-      text: isGenericUpiProviderLabel(widget.parsed.pn)
-          ? ''
-          : (widget.parsed.pn ?? ''),
-    );
+    // The merchant name the QR carries, as on the original scan-result page
+    // (a provider QR says "Paytm"; the user can correct it).
+    _merchantController = TextEditingController(text: widget.parsed.pn ?? '');
     final scannedAmount = widget.parsed.am;
     _amountController = TextEditingController(
       text: (scannedAmount != null && scannedAmount.rupees > 0)
@@ -402,7 +398,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
           controller: _merchantController,
           style: BambooFonts.ui(15, color: BambooInk.ink900),
           decoration: InputDecoration(
-            labelText: 'Merchant name (optional)',
+            labelText: 'Merchant name',
             labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
             filled: true,
             fillColor: BambooInk.glassFillOnPaper,
@@ -418,9 +414,6 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
               borderRadius: BorderRadius.circular(16),
               borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
             ),
-            hintText: 'Use the shop name if the QR did not include one',
-            helperText: 'The selected UPI app will verify ${widget.parsed.pa}',
-            helperStyle: BambooFonts.ui(11.5, color: BambooInk.ink500),
           ),
           // No onChanged/setState needed: _payWith reads _merchantController.text
           // directly at tap time, not from a build-time-captured value, so
@@ -842,7 +835,8 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
   }
 }
 
-class _CategoryPicker extends ConsumerWidget {
+/// The category chips of the original scan-result page.
+class _CategoryPicker extends StatelessWidget {
   final List<SpendCategory> categories;
   final String? selectedId;
   final ValueChanged<String?> onSelected;
@@ -853,12 +847,29 @@ class _CategoryPicker extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return CategoryPickerField(
-      categories: categories,
-      selectedId: selectedId,
-      onSelected: onSelected,
-      label: 'Purchase type',
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: AppSpace.xs,
+      runSpacing: AppSpace.xs,
+      children: [
+        for (final c in categories)
+          ChoiceChip(
+            label: Text(c.name),
+            labelStyle: BambooFonts.ui(
+              13,
+              weight: FontWeight.w600,
+              color: selectedId == c.id ? BambooInk.onSlate : BambooInk.ink900,
+            ),
+            selected: selectedId == c.id,
+            selectedColor: BambooInk.slate,
+            backgroundColor: BambooInk.paperMuted,
+            side: BorderSide.none,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(999),
+            ),
+            onSelected: (_) => onSelected(c.id),
+          ),
+      ],
     );
   }
 }
@@ -932,16 +943,13 @@ class _ScanResultCard extends StatelessWidget {
     final excluded = recommendation.isExcluded;
     final hero = isHero && !excluded;
     return Container(
-      padding: const EdgeInsets.all(AppSpace.md),
+      padding: const EdgeInsets.all(AppSpace.lg),
       decoration: BoxDecoration(
         color: hero
             ? BambooInk.lime
             : (excluded ? BambooInk.paperMuted : BambooInk.glassFillOnPaper),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: hero ? BambooInk.lime : BambooInk.hairlineOnPaper,
-          width: hero ? 2 : 1,
-        ),
+        border: hero ? null : Border.all(color: BambooInk.hairlineOnPaper),
         boxShadow: hero
             ? [
                 BoxShadow(
@@ -955,14 +963,6 @@ class _ScanResultCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpace.md),
-            child: CardVisual(
-              product: recommendation.card,
-              height: hero ? 142 : 116,
-              showProductName: false,
-            ),
-          ),
           Row(
             children: [
               if (hero) ...[
@@ -976,7 +976,7 @@ class _ScanResultCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
-                    'BEST PICK',
+                    'TAP THIS ONE',
                     style: BambooFonts.ui(
                       10.5,
                       weight: FontWeight.w700,
@@ -1044,7 +1044,7 @@ class _ScanResultCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      'RuPay · UPI eligible',
+                      'RuPay credit card — pays through any UPI app',
                       style: BambooFonts.ui(
                         11.5,
                         weight: FontWeight.w600,

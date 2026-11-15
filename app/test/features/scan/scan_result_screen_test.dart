@@ -7,7 +7,6 @@ import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/data/upi_payment_service.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/scan/scan_result_screen.dart';
-import 'package:pandapay/features/cards/card_visual.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 CardProduct _card(
@@ -212,8 +211,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
-    expect(find.text('Fuel'), findsOneWidget);
+    // The category chips: Fuel is picked for the user.
+    final fuel = tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Fuel'));
+    expect(fuel.selected, isTrue);
   });
 
   testWidgets(
@@ -770,7 +770,8 @@ void main() {
       expect(find.byType(TextField), findsNWidgets(2));
       expect(find.text('Enter an amount to see your reward'), findsOneWidget);
       expect(find.text('back'), findsNothing);
-      expect(find.byType(CardVisual), findsOneWidget);
+      // Text-only card rows, as on the original page: no card picture.
+      expect(find.text('TAP THIS ONE'), findsOneWidget);
 
       await tester.enterText(find.byType(TextField).last, '1000');
       await tester.pump();
