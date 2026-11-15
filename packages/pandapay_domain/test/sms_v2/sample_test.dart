@@ -25,6 +25,31 @@ void main() {
     expect(smsSkeleton(sample!), smsSkeleton(redact(original)));
   });
 
+  test('a wording sample keeps names and words, and changes only the numbers', () {
+    final named = redactSms(
+      sender: 'HDFCBK',
+      body: original,
+      observedAt: DateTime.utc(2026, 9, 14),
+      options: SmsRedactionOptions(salt: 'a-fixed-test-salt', keepNames: true),
+    ).body;
+    final sample = smsSample(original: original, redacted: named)!;
+    expect(sample, contains('RAHUL SHARMA'));
+    expect(sample, contains('debited from A/c'));
+    for (final secret in ['4,821', '1234', '427711903388', '61,204']) {
+      expect(sample, isNot(contains(secret)), reason: secret);
+    }
+  });
+
+  test('a mixed-case id is a reference in the layout', () {
+    final layout = redactSms(
+      sender: 'KOTAKB',
+      body: 'Your transaction for Rs.10.00 against txn ID mvtHfGfdjLvdwwKyVa7pF3 has been processed successfully.',
+      observedAt: DateTime.utc(2026, 9, 14),
+      options: SmsRedactionOptions(salt: 'a-fixed-test-salt'),
+    ).body;
+    expect(layout, contains('txn ID <REF> has been'));
+  });
+
   test('nothing goes when a number of the original could still be in it', () {
     expect(smsSample(original: 'Rs.4821 paid to X', redacted: 'Rs.4821 paid to <PARTY>'), isNull);
     expect(smsSample(original: 'code 482910 sent', redacted: 'code 482910 sent'), isNull);

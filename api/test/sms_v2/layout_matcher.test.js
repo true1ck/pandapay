@@ -72,7 +72,7 @@ test("refusals are named: empty layouts, too many name slots, a pattern too long
   const names = Array(MAX_WILDCARDS + 1).fill("<PARTY>").join(" x ");
   throwsCode(() => buildMatcher(names), "layout_too_many_wildcards");
   // An unknown tag is a wildcard too, so it counts.
-  throwsCode(() => buildMatcher("<MERCHANT> a <PARTY> b <W> c <W>"), "layout_too_many_wildcards");
+  throwsCode(() => buildMatcher(`<MERCHANT> a ${Array(MAX_WILDCARDS).fill("<W>").join(" c ")}`), "layout_too_many_wildcards");
   assert.doesNotThrow(() => buildMatcher(Array(MAX_WILDCARDS).fill("<PARTY>").join(" x ")));
   throwsCode(() => buildMatcher(Array(30).fill("<DATE>").join(" x ")), "layout_pattern_too_long");
   throwsCode(() => exampleBodies("<AMT> <DATE> ####"), "layout_has_no_words");

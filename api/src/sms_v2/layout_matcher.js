@@ -26,7 +26,7 @@ const WILDCARD = String.raw`[\s\S]{1,60}?`;
 const WILDCARD_KINDS = new Set(["party", "w"]);
 // A tag this module does not know (a newer phone) is read as a name too, and counts as one.
 const isWild = (kind) => WILDCARD_KINDS.has(kind) || !SLOT_PATTERNS[kind];
-const MAX_WILDCARDS = 3;
+const MAX_WILDCARDS = 8; // a 7-slot pattern reads a 400-character message in ~9 ms, a near miss in ~2 ms
 const MAX_PATTERN = 1900; // the rule schema allows 2,000
 
 class LayoutError extends Error {

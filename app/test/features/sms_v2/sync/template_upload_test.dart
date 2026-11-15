@@ -85,7 +85,7 @@ void main() {
     },
   );
 
-  test('the wording goes with the layout, numbers made up and names hidden; a queued layout without one goes without', () async {
+  test('the wording goes with the layout, numbers made up and names kept; a queued layout without one goes without', () async {
     final db = AppDatabase.forTesting(sqlite3.openInMemory());
     addTearDown(db.db.dispose);
     SmsV2Schema.ensure(db.db);
@@ -135,11 +135,13 @@ void main() {
     expect(sent, hasLength(2));
     final withSample = sent.firstWhere((item) => item['templateHash'] != legacyHash);
     final sample = withSample['sample'] as String;
-    for (final secret in ['12345', '6789', '1234567890', 'rahul', 'sharma', 'bank.example']) {
+    for (final secret in ['12345', '6789', '1234567890', 'bank.example']) {
       expect(sample.toLowerCase(), isNot(contains(secret)), reason: secret);
     }
     expect(sample, contains('debited from A/c'));
-    expect(smsSkeleton(sample), withSample['redactedBody'], reason: 'the sample has the layout it is sent with');
+    // The wording keeps the names; the layout it is sent with hides them.
+    expect(sample, contains('RAHUL SHARMA'));
+    expect(withSample['redactedBody'], isNot(contains('RAHUL')));
     final legacy = sent.firstWhere((item) => item['templateHash'] == legacyHash);
     expect(legacy.containsKey('sample'), isFalse, reason: 'no null is sent for a missing sample');
   });

@@ -11,6 +11,7 @@ class SmsRedactionOptions {
     required this.salt,
     Set<String>? merchantCatalogue,
     this.dateShiftDays,
+    this.keepNames = false,
   }) : merchantCatalogue = merchantCatalogue ?? smsMerchantCatalogue;
 
   /// Mixed into every synthetic value. Use a fresh random salt per run so the
@@ -24,6 +25,10 @@ class SmsRedactionOptions {
   /// (7 to 89 days) when null. One value per run keeps the order and spacing
   /// of messages, so multi-message scenarios still line up.
   final int? dateShiftDays;
+
+  /// Leave names and other words as they are (numbers, dates, links and addresses are still replaced). For the
+  /// wording sample only; the layout is always made with names hidden.
+  final bool keepNames;
 
   int get shiftDays => dateShiftDays ?? 7 + (_hashInt('$salt|shift') % 83);
 }
@@ -61,6 +66,10 @@ final RegExp _pass1 = RegExp(
   r'|\bending(?:\s+(?:with|in))?\s+\d{2,6}(?!\d))'
   r'|(?<dig>(?<!\d)\d{4,}(?!\d))',
   caseSensitive: false,
+);
+
+final RegExp _mixedId = RegExp(
+  r'(?<![A-Za-z0-9])(?=[A-Za-z0-9]*\d)(?=[A-Za-z0-9]*[a-z])(?=[A-Za-z0-9]*[A-Z])[A-Za-z0-9]{12,}(?![A-Za-z0-9])',
 );
 
 final RegExp _maskWord = RegExp(r'^[xX]{2,}\d*$');
@@ -139,8 +148,10 @@ RedactedSms redactSms({
   final seed = _hashInt('${options.salt}|$sender|${observedAt.toIso8601String()}|$body');
   final ctx = _Ctx(Random(seed), shift, options);
 
-  var text = body.replaceAllMapped(_pass1, (m) => _replacePass1(m as RegExpMatch, ctx));
-  text = _redactNames(text, options);
+  // An id like `mvtHfGfdjLvdwwKyVa7pF3` (letters of both cases and a digit) is a reference, not a word.
+  var text = body.replaceAll(_mixedId, '<REF>');
+  text = text.replaceAllMapped(_pass1, (m) => _replacePass1(m as RegExpMatch, ctx));
+  if (!options.keepNames) text = _redactNames(text, options);
 
   final digitsInSender = RegExp(r'\d').allMatches(sender).length;
   final outSender = digitsInSender >= 7 ? '<PHONE>' : sender;

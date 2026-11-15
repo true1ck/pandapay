@@ -629,7 +629,7 @@ class _ReviewInboxListState extends State<ReviewInboxList> {
       ),
       children: [
         const BambooNote(
-          'Your message text stays on this phone. A format choice applies to every message in that group.',
+          'Messages PandaPay cannot read yet are sent to Gemini (numbers changed) so it can learn their format. A format choice applies to every message in that group.',
         ),
         ?widget.header,
         if (widget.busy)

@@ -9,12 +9,10 @@ import '../storage/outbox_store.dart';
 import '../storage/sync_state_store.dart';
 import '../storage/template_origin_store.dart';
 
-/// Whether the wording of a message (its numbers made up, names hidden) goes next to the layout, for the AI to read.
-///
-/// OFF until the consent text, the privacy policy and the store declarations say so: today's copy promises that only
-/// layouts are shared. The server and this code are ready; see section 12 of
-/// docs/SMS_AI_PIPELINE_REDESIGN_PLAN_2026-11-15.md for what must change before this is set to true.
-const bool smsShareWording = false;
+/// Whether the wording of a message (the message as it is, only its numbers made up) goes next to the layout, for the
+/// AI to read. The owner chose this on 15 Nov 2026. NOTE: the consent text and privacy policy still say that only
+/// layouts are shared (section 12 of docs/SMS_AI_PIPELINE_REDESIGN_PLAN_2026-11-15.md).
+const bool smsShareWording = true;
 
 /// Unknown templates enter this queue only with current sharing consent.
 class TemplateUpload {
@@ -151,9 +149,18 @@ class TemplateUpload {
         options: SmsRedactionOptions(salt: salt),
       );
       final safe = smsSkeleton(redacted.body);
-      // The wording with made-up numbers, for the AI; null (the layout alone goes) when anything real could survive.
+      // The message as it is with only its numbers made up, for the AI; null (the layout alone goes) when an original
+      // number could survive. The same salt gives the same made-up numbers as the layout was made with.
       final sample = shareWording
-          ? smsSample(original: message.body, redacted: redacted.body)
+          ? smsSample(
+              original: message.body,
+              redacted: redactSms(
+                sender: message.sender,
+                body: message.body,
+                observedAt: message.receivedAt,
+                options: SmsRedactionOptions(salt: salt, keepNames: true),
+              ).body,
+            )
           : null;
       final brand = smsTemplateBrand(message.sender);
       final hash = smsTemplateHash(brand, safe);
