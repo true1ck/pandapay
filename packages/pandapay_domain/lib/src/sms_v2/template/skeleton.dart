@@ -41,6 +41,7 @@ final RegExp _bareAmount = RegExp(
 );
 final RegExp _mask = RegExp(
   r'(?<![A-Za-z0-9])(?:[xX*•●·]{1,12}|\.{2,})\d{2,6}(?!\d)'
+  r'|(?<![A-Za-z0-9])\d{2,6}[xX*•●·]{2,12}\d{2,6}(?!\d)'
   r'|\bending(?:\s+(?:with|in))?\s+\d{2,6}(?!\d)',
   caseSensitive: false,
 );
@@ -84,6 +85,25 @@ bool smsSkeletonIsShareable(String skeleton) =>
     skeleton.length <= 20000 &&
     !_digit.hasMatch(skeleton) &&
     !_addressOrLink.hasMatch(skeleton);
+
+final RegExp _threeDigits = RegExp(r'\d{3,}');
+final RegExp _wwwLink = RegExp(r'\bwww\.', caseSensitive: false);
+
+/// The message for the AI to read the wording of: [redacted] (every number made up by [redactSms], names hidden,
+/// links and addresses gone) with its spaces collapsed, or null when anything of [original] could still be in it.
+///
+/// A run of 3 or more digits of the original (an amount, an account or a reference number) must not appear in the
+/// result, whatever it is part of; years are public, so dates are not looked at. This is a guard on [redactSms],
+/// which already changes every one of them: a mistake there sends the layout alone, never the wording.
+String? smsSample({required String original, required String redacted}) {
+  final text = redacted.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).join(' ');
+  if (text.isEmpty || text.length > 2000) return null;
+  if (_addressOrLink.hasMatch(text) || _wwwLink.hasMatch(text) || _url.hasMatch(text)) return null;
+  for (final run in _threeDigits.allMatches(original.replaceAll(_date, ' '))) {
+    if (text.contains(run[0]!)) return null;
+  }
+  return text;
+}
 
 /// Counts, for each lower-case word, how many of [skeletons] contain it.
 Map<String, int> skeletonWordFrequency(Iterable<String> skeletons) {

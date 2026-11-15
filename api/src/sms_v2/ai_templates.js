@@ -15,6 +15,16 @@ const UNREDACTED =
   /\d{6,}|[\w.+-]+@[\w.-]+|https?:\/\/|\bwww\.|\b[a-z0-9-]+\.(?:com|in|co|io|ly|me|net|org)(?:\b|\/)|\+?\d(?:[ -]?\d){9,}/i;
 const denied = (value) => value === false || value?.ok === false;
 
+// The sample is the person's message with made-up numbers, so it may hold long digit runs; it must hold no link
+// or address, and stay short. (The phone checks that no original number survived; the server cannot.)
+const SAMPLE_UNSAFE = /https?:\/\/|\bwww\.|[\w.+-]+@[\w.-]+|\b[a-z0-9-]+\.(?:com|in|co|io|ly|me|net|org)(?:\b|\/)/i;
+function sampleError(sample) {
+  if (sample === undefined) return null;
+  if (typeof sample !== "string" || !sample.length || sample.length > 2000 || SAMPLE_UNSAFE.test(sample))
+    return "template_sample_invalid";
+  return null;
+}
+
 function redactionError(body) {
   if (typeof body !== "string" || !body.length || body.length > MAX_BODY)
     return "template_body_invalid";
@@ -116,7 +126,7 @@ function createTemplateHandler({ store, security }) {
     if (!check.ok) return res.status(400).json({ error: check.errors[0].code });
     const items = req.body.items;
     for (const item of items) {
-      const error = redactionError(item.redactedBody);
+      const error = redactionError(item.redactedBody) || sampleError(item.sample);
       if (error || item.senderBrand.length > 32)
         return res.status(400).json({ error: error || "sender_brand_invalid" });
     }
@@ -209,7 +219,7 @@ function registerPrivateTemplateRoutes(api) {
     // "rejected" is a decision on a draft that now sits at ai_status failed.
     const rows = await ctx.withAdminClient((client) =>
       client.query(
-        `SELECT t.template_hash,t.sender_brand,t.redacted_body,t.seen_count,t.distinct_profiles,t.ai_status,t.ai_draft,t.ai_model,t.failure_code,t.first_seen,t.last_seen,
+        `SELECT t.template_hash,t.sender_brand,t.redacted_body,t.seen_count,t.distinct_profiles,t.ai_status,t.ai_draft,t.ai_model,t.failure_code,t.failure_detail,t.first_seen,t.last_seen,
                 t.covered_by,t.admin_decision,t.admin_reason,t.admin_note,t.decided_at,
                 p.hits::int AS "privateHits",p.corrected::int AS "privateCorrected",p.phones::int AS "privatePhones"
        FROM sms_v2_unknown_templates t
@@ -357,7 +367,7 @@ function registerPrivateTemplateRoutes(api) {
         if (row.ai_status !== "failed")
           throw new HttpError(409, "template_not_requeueable");
         await client.query(
-          `UPDATE sms_v2_unknown_templates SET ai_status='queued',failure_code=NULL,admin_decision=NULL,admin_reason=NULL,admin_note=NULL,
+          `UPDATE sms_v2_unknown_templates SET ai_status='queued',failure_code=NULL,failure_detail=NULL,queued_at=clock_timestamp(),admin_decision=NULL,admin_reason=NULL,admin_note=NULL,
              decided_by=NULL,decided_at=NULL,result_revision=nextval('sms_v2_template_revision')
            WHERE template_hash=$1`,
           [req.params.hash],
@@ -394,7 +404,7 @@ function registerPrivateTemplateRoutes(api) {
         if (row.ai_status === "blocked")
           throw new HttpError(409, "template_already_blocked");
         await client.query(
-          `UPDATE sms_v2_unknown_templates SET ai_status='blocked',ai_draft=NULL,failure_code=NULL,lease_id=NULL,lease_expires_at=NULL,
+          `UPDATE sms_v2_unknown_templates SET ai_status='blocked',ai_draft=NULL,failure_code=NULL,failure_detail=NULL,sample=NULL,lease_id=NULL,lease_expires_at=NULL,
              admin_reason=$2,decided_by=$3,decided_at=clock_timestamp(),result_revision=nextval('sms_v2_template_revision')
            WHERE template_hash=$1`,
           [req.params.hash, reason, req.admin.userId],
@@ -416,6 +426,7 @@ module.exports = {
   TEMPLATE_STATUSES,
   REJECT_REASONS,
   redactionError,
+  sampleError,
   createTemplateStore,
   createTemplateHandler,
   createAiStatusHandler,

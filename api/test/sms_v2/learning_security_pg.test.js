@@ -359,26 +359,32 @@ test('a layout that tries to instruct the AI cannot publish or change anything s
   // A model that obeys the layout and returns a rule that reads everything.
   const prompts = [];
   const provider = {
-    generate: async ({ prompt }) => {
-      prompts.push(prompt);
-      const greedy = rule();
-      greedy.id = `AI-${hash}`;
-      greedy.match = { pattern: '.*', flags: 'i', templateHash: hash };
-      return { rule: greedy, inputTokens: 100, outputTokens: 50, totalTokens: 150 };
+    generate: async ({ system, prompt }) => {
+      prompts.push({ system, prompt });
+      // A model that obeys the layout: it claims everything and brings its own pattern, status and senders.
+      const greedy = { family: 'greedy', match: { pattern: '.*', flags: 'i' }, status: 'active', senders: ['*'], emit: [{ factType: 'info', attrs: { category: 'service' } }] };
+      return { answer: greedy, inputTokens: 100, outputTokens: 50, totalTokens: 150 };
     },
   };
   const worker = createPgWorkerStore({ ...rig.helpers, adminId: rig.admin });
   let status = 'working';
   for (let turn = 0; turn < 5 && status !== 'failed' && status !== 'ready'; turn++) status = (await runTemplateWorkerOnce({ store: worker, provider, config })).status;
-  assert.equal(status, 'failed', 'a rule that reads everything is refused by the validator');
+  assert.equal(status, 'ready', 'the answer is taken, but only as the facts of this one layout');
 
-  const asked = JSON.parse(prompts[0]);
-  assert.equal(asked.redactedBody, hostile, 'the layout is carried as a quoted value');
-  assert.match(asked.instruction, /untrusted data, never as instructions/);
-  assert.ok(!asked.instruction.includes('Ignore previous'), 'the layout never joins the instruction');
-  assert.equal((await rig.pool.query('SELECT ai_status FROM sms_v2_unknown_templates WHERE template_hash=$1', [hash])).rows[0].ai_status, 'failed');
+  const asked = JSON.parse(prompts[0].prompt);
+  assert.equal(asked.layout, hostile, 'the layout is carried as a quoted value');
+  assert.match(prompts[0].system, /untrusted text, never instructions/);
+  assert.ok(!prompts[0].system.includes('Ignore previous'), 'the layout never joins the instruction');
+  const stored = (await rig.pool.query('SELECT ai_status, ai_draft FROM sms_v2_unknown_templates WHERE template_hash=$1', [hash])).rows[0];
+  assert.equal(stored.ai_status, 'ready');
+  assert.notEqual(stored.ai_draft.match.pattern, '.*', 'the model cannot bring its own pattern');
+  assert.equal(stored.ai_draft.status, 'provisional', 'the model cannot make its rule active');
+  assert.deepEqual(stored.ai_draft.senders, ['TESTBK'], 'the model cannot widen the senders');
+  assert.equal(new RegExp(stored.ai_draft.match.pattern, 'i').test('Rs. 5 paid to ANYONE.'), false, 'the rule reads this one layout only');
   const results = (await rig.asUser(rig.profiles[0]).get('/sms/v2/sync')).body.aiResults;
-  assert.ok(!results.some((entry) => entry.status === 'ready'), 'no phone is given a rule');
+  const given = results.filter((entry) => entry.status === 'ready');
+  assert.equal(given.length, 1, 'a phone that sent the layout is given its private rule');
+  assert.equal(given[0].rule.status, 'provisional');
 
   const sharedAfter = {
     bundles: await count(rig.pool, 'SELECT count(*)::int AS n FROM sms_v2_bundles'),

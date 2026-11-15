@@ -1,0 +1,223 @@
+[
+  {
+    "layout": "<AMT> debited from A/c <MASK> on <DATE> to <PARTY>. UPI Ref <REF>. Avl Bal <AMT>.",
+    "rule": {
+      "version": 1,
+      "family": "upi_debit",
+      "senders": [
+        "HDFCBK"
+      ],
+      "priority": 500,
+      "match": {
+        "pattern": "^\\s*(?<amt1>(?:rs\\.?|inr|₹)?\\s*\\d[\\d,]*(?:\\.\\d+)?(?:\\s*/-)?)\\s+debited\\s+from\\s+A/c\\s+(?<mask1>[x*•●·]{1,12}\\d{2,6}|\\.{2,}\\d{2,6}|\\d{2,6}[x*•●·]{2,12}\\d{2,6}|ending(?:\\s+(?:with|in))?\\s+\\d{2,6})\\s+on\\s+(?<date1>\\d{4}-\\d{2}-\\d{2}(?:[:T ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}(?:,? \\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[ -]?[a-z]{3,9}[ ,-]*\\d{2,4}(?:,? \\d{2}:\\d{2}(?::\\d{2})?)?|[a-z]{3,9}\\.? \\d{1,2},? \\d{2,4})\\s+to\\s+(?<party1>[\\s\\S]{1,60}?)\\.\\s+UPI\\s+Ref\\s+(?<ref1>\\d{6,})\\.\\s+Avl\\s+Bal\\s+(?<amt2>(?:rs\\.?|inr|₹)?\\s*\\d[\\d,]*(?:\\.\\d+)?(?:\\s*/-)?)\\.\\s*$",
+        "flags": "i",
+        "templateHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "emit": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "purchase",
+            "rail": "upi"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "from": "amt1",
+              "unit": "INR"
+            }
+          ],
+          "occurredAt": {
+            "from": "date1"
+          },
+          "instrument": {
+            "kind": "bank_account",
+            "maskFrom": "mask1"
+          },
+          "counterparty": {
+            "nameFrom": "party1",
+            "kind": "merchant"
+          },
+          "references": {
+            "upiRef": "ref1"
+          }
+        },
+        {
+          "factType": "balance_snapshot",
+          "attrs": {
+            "asOf": {
+              "field": "occurredAt",
+              "sameAs": 0
+            }
+          },
+          "amounts": [
+            {
+              "role": "available_balance",
+              "from": "amt2",
+              "unit": "INR"
+            }
+          ],
+          "instrument": {
+            "sameAs": 0
+          }
+        }
+      ],
+      "confidence": 0.95,
+      "examples": [
+        {
+          "sender": "HDFCBK",
+          "body": "Rs. 127.45 debited from A/c x2468 on 2026-11-20 to SYNTHETIC STORE. UPI Ref 834217. Avl Bal Rs. 127.45.",
+          "expectFactTypes": [
+            "movement",
+            "balance_snapshot"
+          ]
+        },
+        {
+          "sender": "HDFCBK",
+          "body": "Rs.450 debited from A/c XX1234 on 20-Nov-26 to RAHUL SHARMA. UPI Ref 123456789012. Avl Bal Rs.450.",
+          "expectFactTypes": [
+            "movement",
+            "balance_snapshot"
+          ]
+        },
+        {
+          "sender": "HDFCBK",
+          "body": "Rs. 127.45 zqx from A/c x2468 on 2026-11-20 to SYNTHETIC STORE. UPI Ref 834217. Avl Bal Rs. 127.45.",
+          "expectFactTypes": []
+        },
+        {
+          "sender": "HDFCBK",
+          "body": "Rs. 127.45 debited from A/c x2468 on 2026-11-20 to SYNTHETIC STORE. UPI Ref 834217. Avl zqy Rs. 127.45.",
+          "expectFactTypes": []
+        }
+      ],
+      "id": "AI-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "provisional",
+      "createdBy": "ai:test-model",
+      "updatedAt": "2026-11-20T00:00:00Z"
+    }
+  },
+  {
+    "layout": "Dear Customer, your OTP is <REF>. Do not share it with anyone.",
+    "rule": {
+      "version": 1,
+      "family": "otp",
+      "senders": [
+        "HDFCBK"
+      ],
+      "priority": 500,
+      "match": {
+        "pattern": "^\\s*Dear\\s+Customer,\\s+your\\s+OTP\\s+is\\s+(?<ref1>\\d{6,})\\.\\s+Do\\s+not\\s+share\\s+it\\s+with\\s+anyone\\.\\s*$",
+        "flags": "i",
+        "templateHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "emit": [
+        {
+          "factType": "info",
+          "attrs": {
+            "category": "otp"
+          }
+        }
+      ],
+      "confidence": 0.95,
+      "examples": [
+        {
+          "sender": "HDFCBK",
+          "body": "Dear Customer, your OTP is 834217. Do not share it with anyone.",
+          "expectFactTypes": [
+            "info"
+          ]
+        },
+        {
+          "sender": "HDFCBK",
+          "body": "Dear Customer, your OTP is 123456789012. Do not share it with anyone.",
+          "expectFactTypes": [
+            "info"
+          ]
+        },
+        {
+          "sender": "HDFCBK",
+          "body": "zqx Customer, your OTP is 834217. Do not share it with anyone.",
+          "expectFactTypes": []
+        },
+        {
+          "sender": "HDFCBK",
+          "body": "Dear Customer, your OTP is 834217. Do not share it with zqy.",
+          "expectFactTypes": []
+        }
+      ],
+      "id": "AI-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "provisional",
+      "createdBy": "ai:test-model",
+      "updatedAt": "2026-11-20T00:00:00Z"
+    }
+  },
+  {
+    "layout": "Your <PARTY> bill of <AMT> is due on <DATE>.",
+    "rule": {
+      "version": 1,
+      "family": "bill_due",
+      "senders": [
+        "HDFCBK"
+      ],
+      "priority": 500,
+      "match": {
+        "pattern": "^\\s*Your\\s+(?<party1>[\\s\\S]{1,60}?)\\s+bill\\s+of\\s+(?<amt1>(?:rs\\.?|inr|₹)?\\s*\\d[\\d,]*(?:\\.\\d+)?(?:\\s*/-)?)\\s+is\\s+due\\s+on\\s+(?<date1>\\d{4}-\\d{2}-\\d{2}(?:[:T ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}(?:,? \\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[ -]?[a-z]{3,9}[ ,-]*\\d{2,4}(?:,? \\d{2}:\\d{2}(?::\\d{2})?)?|[a-z]{3,9}\\.? \\d{1,2},? \\d{2,4})\\.\\s*$",
+        "flags": "i",
+        "templateHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "emit": [
+        {
+          "factType": "bill_due",
+          "attrs": {
+            "dueDate": {
+              "from": "date1"
+            },
+            "billerName": {
+              "from": "party1"
+            }
+          },
+          "amounts": [
+            {
+              "role": "due_total",
+              "from": "amt1",
+              "unit": "INR"
+            }
+          ]
+        }
+      ],
+      "confidence": 0.9,
+      "examples": [
+        {
+          "sender": "HDFCBK",
+          "body": "Your SYNTHETIC STORE bill of Rs. 127.45 is due on 2026-11-20.",
+          "expectFactTypes": [
+            "bill_due"
+          ]
+        },
+        {
+          "sender": "HDFCBK",
+          "body": "Your RAHUL SHARMA bill of Rs.450 is due on 20-Nov-26.",
+          "expectFactTypes": [
+            "bill_due"
+          ]
+        },
+        {
+          "sender": "HDFCBK",
+          "body": "zqx SYNTHETIC STORE bill of Rs. 127.45 is due on 2026-11-20.",
+          "expectFactTypes": []
+        },
+        {
+          "sender": "HDFCBK",
+          "body": "Your SYNTHETIC STORE bill of Rs. 127.45 is due zqy 2026-11-20.",
+          "expectFactTypes": []
+        }
+      ],
+      "id": "AI-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "provisional",
+      "createdBy": "ai:test-model",
+      "updatedAt": "2026-11-20T00:00:00Z"
+    }
+  }
+]

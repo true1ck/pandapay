@@ -264,11 +264,20 @@ begin
     grant select on public.sms_v2_unknown_templates to sms_ai_worker;
     grant update (ai_status, ai_draft, ai_model, failure_code, lease_id, lease_expires_at, result_revision, covered_by)
       on public.sms_v2_unknown_templates to sms_ai_worker;
+    -- Pipeline v3 (20261123080000): the swapped-number sample is cleared, and failure reasons are kept, by the worker.
+    if exists (select 1 from information_schema.columns
+                where table_schema = 'public' and table_name = 'sms_v2_unknown_templates' and column_name = 'sample') then
+      grant update (sample, failure_detail) on public.sms_v2_unknown_templates to sms_ai_worker;
+    end if;
   end if;
   if to_regclass('public.sms_v2_template_attempts') is not null then
     grant select, insert on public.sms_v2_template_attempts to sms_ai_worker;
     grant update (input_tokens, output_tokens, total_tokens, latency_ms, cost_usd, outcome, prompt_version)
       on public.sms_v2_template_attempts to sms_ai_worker;
+    if exists (select 1 from information_schema.columns
+                where table_schema = 'public' and table_name = 'sms_v2_template_attempts' and column_name = 'error_kind') then
+      grant update (error_kind, error_codes, http_status) on public.sms_v2_template_attempts to sms_ai_worker;
+    end if;
   end if;
   if to_regclass('public.sms_v2_ai_capacity') is not null then
     grant select, insert on public.sms_v2_ai_capacity to sms_ai_worker;
@@ -292,6 +301,9 @@ begin
   end if;
   if to_regprocedure('pandapay.sms_v2_ai_requeue_failed()') is not null then
     grant execute on function pandapay.sms_v2_ai_requeue_failed() to sms_ai_worker;
+  end if;
+  if to_regprocedure('pandapay.sms_v2_ai_requeue_failed(text)') is not null then
+    grant execute on function pandapay.sms_v2_ai_requeue_failed(text) to sms_ai_worker;
   end if;
 end $$;
 

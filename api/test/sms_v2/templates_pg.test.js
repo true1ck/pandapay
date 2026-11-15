@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { template, config, rule } = require("./fixtures/template_draft");
+const { template, config, rule, answer } = require("./fixtures/template_draft");
 const { createTemplateStore } = require("../../src/sms_v2/ai_templates");
 const {
   createPgWorkerStore,
@@ -70,9 +70,9 @@ test(
     const provider = {
       generate: async ({ prompt }) => {
         calls++;
-        assert.equal(JSON.parse(prompt).redactedBody, template.redacted_body);
+        assert.equal(JSON.parse(prompt).layout, "<amt1> paid to <party1>.");
         return {
-          rule: rule(),
+          answer: answer(),
           inputTokens: 100,
           outputTokens: 150,
           totalTokens: 250,
@@ -149,15 +149,15 @@ test(
     const metrics = (await admin.get("/admin/sms/v2/metrics")).body;
     assert.equal(metrics.ai[0].calls, 1);
     assert.equal(Number(metrics.ai[0].total_tokens), 250);
-    // Popular templates win, and a single queued job cannot be leased twice.
+    // First in, first out (not most-submitted first), and a single queued job cannot be leased twice.
     const unpopular = { ...item, templateHash: "b".repeat(64) };
     const popular = { ...item, templateHash: "c".repeat(64) };
     await store.submit(profiles[3], [unpopular, popular], true);
     await store.submit(profiles[1], [popular], true);
     const claimed = await worker.claim();
-    assert.equal(claimed.template_hash, popular.templateHash);
+    assert.equal(claimed.template_hash, unpopular.templateHash);
     const second = await worker.claim();
-    assert.equal(second.template_hash, unpopular.templateHash);
+    assert.equal(second.template_hash, popular.templateHash);
     assert.equal(await worker.claim(), null);
     assert.equal(
       await worker.beginAttempt(claimed, 1, "synthetic prompt", {
@@ -195,7 +195,7 @@ test("rejecting a draft needs a reason, withdraws the private rule and teaches t
   const phone = rig.asUser(profiles[0]);
   const body = { items: [{ templateHash: template.template_hash, senderBrand: template.sender_brand, redactedBody: template.redacted_body, observedAt: new Date().toISOString() }] };
   assert.equal((await phone.post("/sms/v2/unknown-templates", body)).status, 202);
-  const provider = { generate: async () => ({ rule: rule(), inputTokens: 10, outputTokens: 10, totalTokens: 20 }) };
+  const provider = { generate: async () => ({ answer: answer(), inputTokens: 10, outputTokens: 10, totalTokens: 20 }) };
   assert.equal((await runTemplateWorkerOnce({ store: worker, provider, config })).status, "ready");
   const hash = template.template_hash;
   const state = async () => (await pool.query("SELECT ai_status,ai_draft,failure_code,admin_decision,admin_reason,admin_note,decided_by,result_revision FROM sms_v2_unknown_templates WHERE template_hash=$1", [hash])).rows[0];
@@ -289,7 +289,7 @@ test("a failed or rejected layout can be requeued, and a blocked one never reach
   const body = { items: [{ templateHash: hash, senderBrand: template.sender_brand, redactedBody: template.redacted_body, observedAt: new Date().toISOString() }] };
   assert.equal((await phone.post("/sms/v2/unknown-templates", body)).status, 202);
   let calls = 0;
-  const provider = { generate: async () => { calls++; return { rule: rule(), inputTokens: 1, outputTokens: 1, totalTokens: 2 }; } };
+  const provider = { generate: async () => { calls++; return { answer: answer(), inputTokens: 1, outputTokens: 1, totalTokens: 2 }; } };
   assert.equal((await runTemplateWorkerOnce({ store: worker, provider, config })).status, "ready");
   const row = async () => (await pool.query("SELECT ai_status,ai_draft,failure_code,admin_decision,admin_reason,lease_id,result_revision FROM sms_v2_unknown_templates WHERE template_hash=$1", [hash])).rows[0];
   const sync = async () => (await phone.get("/sms/v2/sync")).body.aiResults.find((entry) => entry.templateHash === hash);

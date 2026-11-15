@@ -4,7 +4,7 @@
 // as well as the loop harness' URLs (scripts/test_postgres_suites.sh sets all).
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { template, config, rule } = require("./fixtures/template_draft");
+const { template, config, answer } = require("./fixtures/template_draft");
 const { createPgWorkerStore, runTemplateWorkerOnce } = require("../../src/sms_v2/template_worker");
 const { openAiWorkerStore } = require("../../src/sms_v2/ai_worker_store");
 const { startLoopHarness, registerAllLoopAdminRoutes, skip: loopSkip } = require("./helpers/loop_harness");
@@ -40,8 +40,8 @@ test("the worker drafts, sees only consenting submitters and cannot touch anythi
   const provider = {
     generate: async ({ prompt }) => {
       prompts++;
-      assert.equal(JSON.parse(prompt).redactedBody, template.redacted_body);
-      return { rule: rule(), inputTokens: 100, outputTokens: 150, totalTokens: 250 };
+      assert.equal(JSON.parse(prompt).layout, "<amt1> paid to <party1>.");
+      return { answer: answer(), inputTokens: 100, outputTokens: 150, totalTokens: 250 };
     },
   };
   assert.equal((await runTemplateWorkerOnce({ store: worker, provider, config })).status, "ready");

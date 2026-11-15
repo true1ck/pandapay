@@ -57,10 +57,13 @@ final RegExp _pass1 = RegExp(
   r'|(?<phone>(?<!\d)(?<!(?:ref|utr|umrn|txn|id|no|rrn)[\s.:#\-]{0,4})'
   r'(?:(?:\+?91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}|18[06]0[\s-]?\d{3,4}(?:[\s-]?\d{3,4})?|0\d{2,4}[\s-]?\d{6,8})(?!\d))'
   r'|(?<mask>(?<![A-Za-z0-9])(?:[xX*•●·]{1,12}|\.{2,})\d{2,6}(?!\d)'
+  r'|(?<![A-Za-z0-9])\d{2,6}[xX*•●·]{2,12}\d{2,6}(?!\d)'
   r'|\bending(?:\s+(?:with|in))?\s+\d{2,6}(?!\d))'
   r'|(?<dig>(?<!\d)\d{4,}(?!\d))',
   caseSensitive: false,
 );
+
+final RegExp _maskWord = RegExp(r'^[xX]{2,}\d*$');
 
 final RegExp _nameToken = RegExp(r"<[A-Z_]+>|[A-Za-z][A-Za-z0-9'&]*");
 
@@ -270,7 +273,8 @@ class _Word {
     : lower = text.toLowerCase(),
       key = text.toLowerCase().replaceFirst(RegExp(r'\d+$'), ''),
       hasDigit = RegExp(r'\d').hasMatch(text),
-      isCap = text[0] == text[0].toUpperCase();
+      isCap = text[0] == text[0].toUpperCase(),
+      isMask = _maskWord.hasMatch(text);
 
   final int start;
   final int end;
@@ -279,6 +283,9 @@ class _Word {
   final String key;
   final bool hasDigit;
   final bool isCap;
+
+  /// A mask left over from pass 1 (`XXXXXXXX3456`): never a name.
+  final bool isMask;
   bool protected = false;
   bool replace = false;
 }
@@ -321,6 +328,7 @@ String _redactNames(String text, SmsRedactionOptions o) {
   }
 
   bool known(_Word w) =>
+      w.isMask ||
       smsTemplateVocabulary.contains(w.lower) ||
       smsTemplateVocabulary.contains(w.key) ||
       o.merchantCatalogue.contains(w.key);

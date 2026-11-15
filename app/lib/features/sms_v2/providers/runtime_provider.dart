@@ -13,6 +13,10 @@ import '../../../app/env.dart';
 import '../../../app/local_sms_rig_http_client.dart';
 import '../../../app/local_sms_rig_build.dart';
 import '../pipeline/sms_v2_runtime.dart';
+import '../storage/schema.dart';
+import '../storage/sync_state_store.dart';
+import '../sync/ai_status.dart' show hasFormatWaitingForAnswer;
+import 'sharing_consent_provider.dart';
 import '../sync/bundle_verifier.dart';
 import '../sync/rule_keys.dart';
 import '../sync/attestation.dart';
@@ -130,6 +134,35 @@ final smsV2LifecycleProvider = Provider<void>((ref) {
   ref.listen(app.accessTokenProvider, (_, token) {
     if (token != null) unawaited(run());
   });
+  // Sharing consent just granted: send what is waiting now, not at the next resume or ordinary sync.
+  ref.listen(smsSharingGrantedProvider, (previous, next) {
+    if (next.valueOrNull == true && previous?.valueOrNull != true) {
+      unawaited(run());
+    }
+  });
+  // A draft takes seconds on the server, but the next ordinary sync can be minutes away. While a format this phone
+  // sent in the last 10 minutes has no final answer yet, look for it every 30 seconds.
+  final waiting = Timer.periodic(const Duration(seconds: 30), (_) async {
+    if (disposed ||
+        WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      return;
+    }
+    try {
+      final cache = await ref.read(app.responseCacheProvider.future);
+      final db = cache.financialStore.database.db;
+      SmsV2Schema.ensure(db);
+      final state = SyncStateStore(
+        db,
+        namespace: ref.read(app.cacheNamespaceProvider),
+      );
+      if (hasFormatWaitingForAnswer(state, now: DateTime.now())) {
+        unawaited(run());
+      }
+    } catch (_) {
+      // The ordinary triggers still run.
+    }
+  });
+  ref.onDispose(waiting.cancel);
   final lifecycle = AppLifecycleListener(onResume: () => unawaited(run()));
   ref.onDispose(lifecycle.dispose);
   final timer = Timer.periodic(const Duration(minutes: 15), (_) {

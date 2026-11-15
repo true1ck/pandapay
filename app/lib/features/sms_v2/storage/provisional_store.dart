@@ -62,22 +62,43 @@ class ProvisionalStore {
     if (rules.isEmpty) {
       return (bundle: shared, revision: '${shared.bundleVersion}');
     }
-    final ruleJson = [for (final rule in rules) rule.toJson()];
+    var chosen = rules;
+    var overlay = _overlayOf(shared, chosen);
+    if (overlay == null) {
+      // One rule the engine will not take must not hide the others: keep the rules that are fine on their own.
+      chosen = [
+        for (final rule in rules)
+          if (_overlayOf(shared, [rule]) != null) rule,
+      ];
+      overlay = chosen.isEmpty ? null : _overlayOf(shared, chosen);
+    }
+    if (overlay == null) {
+      return (bundle: shared, revision: '${shared.bundleVersion}');
+    }
+    final ruleJson = [for (final rule in chosen) rule.toJson()];
+    return (
+      bundle: overlay,
+      revision:
+          '${shared.bundleVersion}:${sha256.convert(utf8.encode(canonicalJson(ruleJson)))}',
+    );
+  }
+
+  /// [shared] with [extra] added, or null when the engine refuses the result.
+  static RuleBundle? _overlayOf(RuleBundle shared, List<Rule> extra) {
     try {
-      final overlay = RuleBundle.fromJson({
+      final bundle = RuleBundle.fromJson({
         ...shared.toJson(),
-        'rules': [...shared.rules.map((rule) => rule.toJson()), ...ruleJson],
+        'rules': [
+          ...shared.rules.map((rule) => rule.toJson()),
+          ...extra.map((rule) => rule.toJson()),
+        ],
       });
-      RuleEngine().compiled(overlay);
-      return (
-        bundle: overlay,
-        revision:
-            '${shared.bundleVersion}:${sha256.convert(utf8.encode(canonicalJson(ruleJson)))}',
-      );
+      RuleEngine().compiled(bundle);
+      return bundle;
     } on ContractException {
-      return (bundle: shared, revision: '${shared.bundleVersion}');
+      return null;
     } on BundleRefusedException {
-      return (bundle: shared, revision: '${shared.bundleVersion}');
+      return null;
     }
   }
 }

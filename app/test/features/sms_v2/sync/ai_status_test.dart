@@ -28,6 +28,25 @@ void main() {
   });
   tearDown(() => db.dispose());
 
+  test('a format sent a moment ago and not answered is waited for, and stops once answered or old', () {
+    final now = DateTime.utc(2026, 11, 20, 12);
+    expect(hasFormatWaitingForAnswer(state, now: now), isFalse, reason: 'nothing sent');
+    state.put('template:sent:$remote', now.subtract(const Duration(minutes: 2)).toIso8601String());
+    expect(hasFormatWaitingForAnswer(state, now: now), isTrue, reason: 'sent, no answer yet');
+    state.put('ai:$remote', jsonEncode({'templateHash': remote, 'status': 'pending'}));
+    expect(hasFormatWaitingForAnswer(state, now: now), isTrue, reason: 'the server has it queued');
+    state.put('ai:$remote', jsonEncode({'templateHash': remote, 'status': 'ready'}));
+    expect(hasFormatWaitingForAnswer(state, now: now), isFalse, reason: 'answered');
+    state.put('ai:$remote', jsonEncode({'templateHash': remote, 'status': 'failed'}));
+    expect(hasFormatWaitingForAnswer(state, now: now), isFalse, reason: 'a failure is an answer too');
+    // Pending for ever (a layout a rule already covers) is only waited for ten minutes.
+    state.put('ai:$remote', jsonEncode({'templateHash': remote, 'status': 'pending'}));
+    expect(hasFormatWaitingForAnswer(state, now: now.add(const Duration(minutes: 7))), isTrue, reason: 'sent 9 minutes ago');
+    expect(hasFormatWaitingForAnswer(state, now: now.add(const Duration(minutes: 9))), isFalse, reason: 'sent 11 minutes ago');
+    // Another account's formats are not ours.
+    expect(hasFormatWaitingForAnswer(SyncStateStore(db, namespace: 'user:2'), now: now), isFalse);
+  });
+
   test('a format that was not uploaded is not "checking"', () {
     origin();
     expect(AiStatusReader(state).templateState(local), AiTemplateState.none);

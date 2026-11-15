@@ -1,0 +1,60 @@
+{
+  "_about": "Synthetic layouts and messages (every value is invented). Two tests read this file: api/test/sms_v2/layout_matcher.test.js (the server's matcher reads every message of its layout) and packages/pandapay_domain/test/sms_v2/layout_corpus_test.dart (the phone's skeleton of each message, where skeleton is true, IS the layout). Together they stop the matcher drifting from the skeleton.",
+  "entries": [
+    {
+      "layout": "<AMT> debited from A/c <MASK> on <DATE> to <PARTY>. UPI Ref <REF>. Avl Bal <AMT>.",
+      "skeleton": false,
+      "messages": [
+        "Rs.450.00 debited from A/c XX1234 on 20-11-26 to RAHUL SHARMA. UPI Ref 123456789012. Avl Bal Rs.10,500.25.",
+        "INR 1,23,456.78 debited from A/c *9876 on 2026-11-20 to Amazon Pay. UPI Ref 998877665544. Avl Bal INR 85,000.00.",
+        "Rs 99 debited from A/c x4321 on 20/11/2026 14:05 to TEST SHOP. UPI Ref 555566667777. Avl Bal Rs 1,200.5."
+      ]
+    },
+    {
+      "layout": "Dear Customer, your OTP is <REF>. Do not share it with anyone.",
+      "skeleton": true,
+      "messages": ["Dear Customer, your OTP is 482910. Do not share it with anyone.", "Dear Customer, your OTP is 7391204. Do not share it with anyone."]
+    },
+    {
+      "layout": "Your account <MASK> was credited with <AMT> on <DATE>. Avl Bal <AMT>.",
+      "skeleton": true,
+      "messages": [
+        "Your account XX4321 was credited with Rs.5,000.00 on 20/11/2026. Avl Bal Rs.12,345.67.",
+        "Your account X9876 was credited with INR 25,000 on 03-Dec-26. Avl Bal INR 1,02,345.00."
+      ]
+    },
+    {
+      "layout": "<AMT> spent on card <MASK> on <DATE>. Avl limit <AMT>.",
+      "skeleton": true,
+      "messages": [
+        "Rs.450 spent on card ending 1234 on 20-Nov-26. Avl limit Rs.45,000.00.",
+        "INR 1,299.50 spent on card XX9876 on 2026-11-20. Avl limit INR 2,31,870.25."
+      ]
+    },
+    {
+      "layout": "<AMT> spent on card <MASK>.",
+      "skeleton": true,
+      "messages": ["Rs.450 spent on card 4012XXXXXXXX3456.", "INR 99.00 spent on card 12XXXXXX78.", "Rs 1,299 spent on card XX9876."]
+    },
+    {
+      "layout": "For help call <PHONE>. Reply STOP to opt out.",
+      "skeleton": false,
+      "messages": ["For help call 9876543210. Reply STOP to opt out.", "For help call 18001234567. Reply STOP to opt out."]
+    },
+    {
+      "layout": "Your account has been updated.",
+      "skeleton": true,
+      "messages": ["Your account has been updated.", "Your   account has been\nupdated."]
+    },
+    {
+      "layout": "Money sent to <VPA> successfully. UPI Ref <REF>.",
+      "skeleton": true,
+      "messages": ["Money sent to shop.pay@ybl successfully. UPI Ref 123456789012.", "Money sent to abc@okhdfc successfully. UPI Ref 4567891234."]
+    },
+    {
+      "layout": "Track your order at <URL> now.",
+      "skeleton": true,
+      "messages": ["Track your order at https://shop.example.in/o/42 now.", "Track your order at www.example.com/track now."]
+    }
+  ]
+}

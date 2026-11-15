@@ -62,7 +62,9 @@ test('compose files and env examples carry no account recovery settings', () => 
 // rewards-worker and every other service must never receive it.
 test('old per-message AI worker settings are gone, and the Gemini key reaches only the drafts worker', () => {
   const read = (file) => fs.readFileSync(path.join(repo, file), 'utf8');
-  const stale = /\b(AI_WORKER_[A-Z_]+|AI_PROVIDER_TIMEOUT_MS|GEMINI_FALLBACK_[A-Z_]+|GEMINI_API_KEYS|GEMINI_MODEL|GEMINI_REQUESTS_PER_[A-Z]+|GEMINI_TOKENS_PER_MINUTE)\b/;
+  // GEMINI_FALLBACK_API_KEY and GEMINI_API_KEYS are back, for the drafts worker only (second and further keys, used in
+  // turn; see the compose block check below). The old per-message worker's model and quota names stay gone.
+  const stale = /\b(AI_WORKER_[A-Z_]+|AI_PROVIDER_TIMEOUT_MS|GEMINI_FALLBACK_MODEL|GEMINI_MODEL|GEMINI_REQUESTS_PER_[A-Z]+|GEMINI_TOKENS_PER_MINUTE)\b/;
   for (const file of ['.env.prod.example', 'api/example.env', 'docker-compose.yml', 'docker-compose.prod.yml',
     'docker-compose.staging.yml', 'deploy/deploy.sh', 'deploy/restart-services.sh', '.github/workflows/deploy-prod.yml',
     '.github/workflows/deploy-pushed-branch.yml', 'deploy/tests/test_deploy_security_order.py']) {
@@ -70,7 +72,7 @@ test('old per-message AI worker settings are gone, and the Gemini key reaches on
   }
   // Not delivered anywhere else.
   for (const file of ['docker-compose.staging.yml', 'docker-compose.yml', '.github/workflows/deploy-pushed-branch.yml']) {
-    assert.doesNotMatch(read(file), /GEMINI_API_KEY/, file);
+    assert.doesNotMatch(read(file), /GEMINI_(FALLBACK_)?API_KEYS?/, file);
   }
   // In docker-compose.prod.yml the key and the worker's database login sit in
   // the drafts worker's service block only.
@@ -79,6 +81,7 @@ test('old per-message AI worker settings are gone, and the Gemini key reaches on
   const blocks = services.split(/\n(?=  [a-z0-9-]+:\n)/).filter((block) => /^\s*[a-z0-9-]+:\n/.test(block));
   const nameOf = (block) => block.trim().split(':')[0];
   assert.deepEqual(blocks.filter((block) => /GEMINI_API_KEY/.test(block)).map(nameOf), ['sms-v2-template-worker']);
+  assert.deepEqual(blocks.filter((block) => /GEMINI_FALLBACK_API_KEY|GEMINI_API_KEYS/.test(block)).map(nameOf), ['sms-v2-template-worker']);
   assert.deepEqual(blocks.filter((block) => /SMS_AI_WORKER_DATABASE_URL/.test(block)).map(nameOf), ['sms-v2-template-worker']);
   const worker = blocks.find((block) => nameOf(block) === 'sms-v2-template-worker');
   assert.doesNotMatch(worker, /\b(ADMIN_API_DATABASE_URL|DATABASE_URL: )/);
@@ -88,6 +91,10 @@ test('old per-message AI worker settings are gone, and the Gemini key reaches on
   }
   // The admin host is started on demand and never runs the drafts worker, so it gets no key.
   assert.doesNotMatch(read('deploy/admin/compose.private.yml'), /GEMINI_|sms-v2-template-worker/);
+  // The second key is never echoed either.
+  for (const file of ['deploy/deploy.sh', '.github/workflows/deploy-prod.yml']) {
+    assert.doesNotMatch(read(file), /echo[^\n]*GEMINI_FALLBACK_API_KEY/, file);
+  }
 });
 
 test('a migration drops the account_recovery schema, so a database cannot keep the escrow tables', () => {

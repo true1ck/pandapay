@@ -267,6 +267,11 @@ services:
       NODE_ENV: production
       SMS_AI_WORKER_DATABASE_URL: "${SMS_AI_WORKER_DATABASE_URL:-}"
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      # Optional second key (and more, comma separated in GEMINI_API_KEYS): used in turn, and when one hits a limit.
+      GEMINI_FALLBACK_API_KEY: "${GEMINI_FALLBACK_API_KEY:-}"
+      GEMINI_API_KEYS: "${GEMINI_API_KEYS:-}"
+      # Optional: used once when the main model answers 404.
+      SMS_V2_AI_FALLBACK_MODEL: "${SMS_V2_AI_FALLBACK_MODEL:-}"
       SMS_V2_AI_MODEL: "${SMS_V2_AI_MODEL:-}"
       SMS_V2_AI_TPM: "${SMS_V2_AI_TPM:-}"
       SMS_V2_AI_RPM: "${SMS_V2_AI_RPM:-60}"

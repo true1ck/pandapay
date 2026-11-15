@@ -59,4 +59,19 @@ function rule() {
     ],
   };
 }
-module.exports = { template, config, rule };
+// What the model returns now: the facts, by slot name. The pattern comes from the layout (layout_matcher.js).
+function answer() {
+  return {
+    family: "bank_debit",
+    confidence: 0.6,
+    emit: [
+      {
+        factType: "movement",
+        attrs: { direction: "debit", purpose: "purchase", rail: "upi" },
+        amounts: [{ role: "posted", from: "amt1", unit: "INR" }],
+        counterparty: { nameFrom: "party1", kind: "merchant" },
+      },
+    ],
+  };
+}
+module.exports = { template, config, rule, answer };

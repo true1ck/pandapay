@@ -36,6 +36,12 @@
             "type": "string",
             "minLength": 1
           },
+          "sample": {
+            "description": "Optional. The message with its numbers swapped for made-up ones (names hidden), for the AI to read the wording. Deleted once the layout is answered.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
           "observedAt": {
             "$ref": "../common.schema.json#/$defs/utcTime"
           }

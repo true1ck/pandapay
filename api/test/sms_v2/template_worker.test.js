@@ -16,7 +16,9 @@ const {
   createTemplateHandler,
 } = require("../../src/sms_v2/ai_templates");
 
-const { template, config, rule } = require("./fixtures/template_draft");
+const { template, config, rule, answer } = require("./fixtures/template_draft");
+const { buildMatcher, slotValues } = require("../../src/sms_v2/layout_matcher");
+const { buildRule, AnswerError, SMS_PLACEHOLDERS, SMS_DOMAIN_RULES } = require("../../src/sms_v2/template_worker");
 
 test("redaction guard refuses long digits, URLs, email and spaced phones", () => {
   for (const body of [
@@ -30,48 +32,80 @@ test("redaction guard refuses long digits, URLs, email and spaced phones", () =>
   assert.equal(redactionError(template.redacted_body), null);
 });
 
-test("prompt uses only redacted data and at most five public rule summaries", () => {
-  const examples = Array.from({ length: 8 }, () => ({
-    ...rule(),
-    examples: [{ body: "USER SECRET MUST NOT REACH PROMPT" }],
-  }));
-  const prompt = JSON.parse(buildPrompt(template, examples));
-  assert.equal(prompt.redactedBody, template.redacted_body);
-  assert.equal(prompt.existingRules.length, 5);
-  assert.equal(JSON.stringify(prompt).includes("USER SECRET"), false);
-  assert.throws(
-    () => buildPrompt({ ...template, redacted_body: "Call 9876543210" }),
-    /redaction_required/,
-  );
-  assert.equal(
-    fillSynthetic(template.redacted_body),
-    "Rs. 127.45 paid to SYNTHETIC STORE.",
-  );
+test("the prompt names the layout's slots, shows the sample's values by slot, and nothing else of the message", () => {
+  const matcher = buildMatcher(template.redacted_body);
+  const sample = "Rs.4821.50 paid to ZAZA SHOP.";
+  const slots = slotValues(matcher, sample);
+  assert.deepEqual(slots, { amt1: "Rs.4821.50", party1: "ZAZA SHOP" });
+  const { system, user } = buildPrompt({
+    template,
+    matcher,
+    sample,
+    slots,
+    families: ["upi_debit"],
+    reports: { not_financial: 2 },
+    fix: ["example_mismatch"],
+  });
+  assert.deepEqual(JSON.parse(user), {
+    sender: "TESTBK",
+    layout: "<amt1> paid to <party1>.",
+    sample,
+    slotValues: slots,
+    familiesUsedBySender: ["upi_debit"],
+    peopleReported: { not_financial: 2 },
+    yourLastAnswerFailed: ["example_mismatch"],
+  });
+  // No wording and no values without a sample: the layout alone.
+  assert.deepEqual(Object.keys(JSON.parse(buildPrompt({ template, matcher }).user)).sort(), ["layout", "sender"]);
+  // A layout that could still hold a real number never leaves the server.
+  assert.throws(() => buildPrompt({ template: { ...template, redacted_body: "Call 9876543210" }, matcher }), /redaction_required/);
+  // The whole request stays small: free keys count tokens (the old prompt was about 14,000).
+  assert.ok((system.length + user.length) / 3.2 < 2000, `prompt is ${Math.round((system.length + user.length) / 3.2)} tokens`);
+  assert.equal(fillSynthetic(template.redacted_body), "Rs. 127.45 paid to SYNTHETIC STORE.");
 });
 
-test("prompt carries the India SMS rules and the placeholder legend", () => {
-  const prompt = JSON.parse(buildPrompt(template));
-  assert.ok(prompt.domainRules.some((rule) => rule.includes("bill_due")));
-  assert.ok(prompt.domainRules.some((rule) => rule.includes("hold fact")));
-  assert.ok(
-    prompt.domainRules.some((rule) =>
-      rule.includes("never the movement amount"),
-    ),
-  );
-  assert.match(prompt.placeholders["<AMT>"], /^an amount, with its currency marker/);
-  assert.equal(prompt.placeholders["#"], "one digit");
-  // Every placeholder the phone or the synthetic filler can produce is explained.
-  for (const key of ["AMT", "DATE", "MASK", "VPA", "REF", "PHONE", "EMAIL", "URL", "PARTY", "W"])
-    assert.ok(prompt.placeholders[`<${key}>`], key);
-  // The rules come right after the instruction, and every fact type they name exists.
-  assert.deepEqual(Object.keys(prompt).slice(0, 3), ["instruction", "placeholders", "domainRules"]);
+test("the system prompt carries the India SMS rules, every fact type and the slot kinds", () => {
+  const { SYSTEM } = require("../../src/sms_v2/ai_prompt");
+  const factSchema = require("../../../contracts/sms/v2/fact.schema.json");
+  const rules = SMS_DOMAIN_RULES.join("\n");
+  assert.ok(rules.includes("bill_due"));
+  assert.ok(rules.includes("hold fact"));
+  assert.ok(rules.includes("never the movement amount"));
+  for (const kind of ["amt", "date", "mask", "vpa", "ref", "phone", "email", "url", "party", "w"]) assert.ok(SMS_PLACEHOLDERS[kind], kind);
+  for (const type of Object.keys(factSchema.$defs)) assert.ok(SYSTEM.includes(type), `fact type ${type}`);
+  // Every fact type the rules name exists in the fact contract.
   const named = new Set(
-    prompt.domainRules
-      .flatMap((rule) => [...rule.matchAll(/\b(\w+) facts?\b/g)].map((m) => m[1]))
-      .filter((word) => !["a", "an", "one", "each"].includes(word)),
+    SMS_DOMAIN_RULES.flatMap((rule) => [...rule.matchAll(/\b(\w+) facts?\b/g)].map((m) => m[1])).filter((word) => !["a", "an", "one", "each"].includes(word)),
   );
   assert.ok(named.size >= 5);
-  for (const type of named) assert.ok(type in prompt.factContract, type);
+  for (const type of named) assert.ok(type in factSchema.$defs, type);
+  // The rules about regexes are gone: the model writes no regex now.
+  assert.equal(/backreference|named group|pattern runs/i.test(SYSTEM), false);
+});
+
+test("a rule is built from the layout and the model's answer, and passes the same checks as any draft", () => {
+  const matcher = buildMatcher(template.redacted_body);
+  const built = buildRule(answer(), template, matcher, config.model);
+  assert.equal(built.match.pattern, matcher.pattern);
+  assert.equal(built.match.templateHash, template.template_hash);
+  assert.equal(built.status, "provisional");
+  assert.deepEqual(validateDraft(built, template, config.model), []);
+  // Slot names, units and date formats are tidied: "<AMT1>" is amt1, rupees by default, formats are the engine's.
+  const messy = answer();
+  messy.emit[0].amounts[0] = { role: "posted", from: "<AMT1>" };
+  messy.emit[0].occurredAt = { from: "Date1", formats: ["dd/MM/yyyy"] };
+  messy.emit[0].counterparty.nameFrom = "PARTY1";
+  const tidy = buildRule(messy, template, matcher, config.model);
+  assert.deepEqual(tidy.emit[0].amounts[0], { role: "posted", from: "amt1", unit: "INR" });
+  assert.deepEqual(tidy.emit[0].occurredAt, { from: "date1" });
+  assert.equal(tidy.emit[0].counterparty.nameFrom, "party1");
+  // A slot the layout does not have is caught by the capture check, not guessed.
+  const wrong = answer();
+  wrong.emit[0].amounts[0].from = "amt9";
+  assert.ok(validateDraft(buildRule(wrong, template, matcher, config.model), template, config.model).includes("capture_group_missing"));
+  // Nothing usable: no emit.
+  for (const bad of [null, [], {}, { emit: [] }, { emit: ["x"] }, { emit: Array(7).fill({ factType: "info" }) }])
+    assert.throws(() => buildRule(bad, template, matcher, config.model), AnswerError);
 });
 
 test("draft validation checks scope, captures, two positives/negatives and family consistency", () => {
@@ -120,7 +154,6 @@ test("worker repairs once, records usage, and deduplicates subsequent work", asy
   let leased = false;
   const store = {
     claim: async () => (leased ? null : ((leased = true), template)),
-    examples: async () => [],
     beginAttempt: async () => null,
     recordAttempt: async (_t, a, usage) => attempts.push({ a, ...usage }),
     finish: async (_t, out) => {
@@ -128,18 +161,19 @@ test("worker repairs once, records usage, and deduplicates subsequent work", asy
     },
   };
   const provider = {
-    generate: async ({ prompt }) => {
+    generate: async ({ prompt, system }) => {
       calls++;
+      assert.ok(system.length > 1000, "the fixed instruction travels as the system prompt");
       if (calls === 1)
         return {
-          rule: {},
+          answer: {},
           inputTokens: 100,
           outputTokens: 20,
           totalTokens: 120,
         };
-      assert.ok(JSON.parse(prompt).repairErrors.length);
+      assert.deepEqual(JSON.parse(prompt).yourLastAnswerFailed, ["answer_shape_invalid"]);
       return {
-        rule: rule(),
+        answer: answer(),
         inputTokens: 100,
         outputTokens: 30,
         totalTokens: 135,
@@ -152,8 +186,13 @@ test("worker repairs once, records usage, and deduplicates subsequent work", asy
   );
   assert.equal(calls, 2);
   assert.equal(finish.rule.status, "provisional");
+  assert.equal(finish.rule.match.templateHash, template.template_hash);
   assert.equal(attempts[1].outputTokens, 35);
   assert.equal(attempts[1].costUsd, 0.00017);
+  // Why the first try failed is kept, as codes; a good try keeps none.
+  assert.equal(attempts[0].errorKind, "answer_invalid");
+  assert.deepEqual(attempts[0].errorCodes, ["answer_shape_invalid"]);
+  assert.equal(attempts[1].errorKind, null);
   assert.equal(
     (await runTemplateWorkerOnce({ store, provider, config })).status,
     "idle",
@@ -175,7 +214,7 @@ test("failed second draft stays failed, and exhausted capacity makes no call", a
   const provider = {
     generate: async () => {
       calls++;
-      return { rule: {} };
+      return { answer: {} };
     },
   };
   assert.equal(
@@ -184,6 +223,7 @@ test("failed second draft stays failed, and exhausted capacity makes no call", a
   );
   assert.equal(calls, 2);
   assert.equal(finish.code, "draft_validation_failed");
+  assert.deepEqual(finish.detail, ["answer_invalid", "answer_shape_invalid"], "the reason is kept");
   store.beginAttempt = async () => "capacity";
   calls = 0;
   assert.equal(
@@ -303,19 +343,18 @@ test("Gemini adapter sends JSON mode and bounds the configured output", async ()
 
 const { PROMPT_VERSION, coveredBy } = require("../../src/sms_v2/template_worker");
 
-test("each attempt records the prompt version, which is also in the prompt", async () => {
-  assert.match(PROMPT_VERSION, /^tpl-\d{4}-\d{2}-\d{2}$/);
-  assert.equal(JSON.parse(buildPrompt(template)).promptVersion, PROMPT_VERSION);
+test("each attempt records the prompt version", async () => {
+  assert.match(PROMPT_VERSION, /^tpl-\d{4}-\d{2}-\d{2}-[a-z]+$/);
   const attempts = [];
   let leased = false;
   const store = {
     claim: async () => (leased ? null : ((leased = true), template)),
-    examples: async () => [],
     beginAttempt: async () => null,
     recordAttempt: async (_t, _a, usage) => attempts.push(usage),
     finish: async () => {},
   };
-  const provider = { generate: async () => ({ rule: rule(), inputTokens: 10, outputTokens: 10, totalTokens: 20 }) };
+  // The model's answer may arrive as text.
+  const provider = { generate: async () => ({ answer: JSON.stringify(answer()), inputTokens: 10, outputTokens: 10, totalTokens: 20 }) };
   assert.equal((await runTemplateWorkerOnce({ store, provider, config })).status, "ready");
   assert.deepEqual(attempts.map((usage) => usage.promptVersion), [PROMPT_VERSION]);
 });
@@ -327,7 +366,6 @@ test("the temperature from the settings reaches the provider call and Gemini's g
     settings: async () => ({ ...require("../../src/sms_v2/settings").mergeSettings([]), ai_temperature: 0.3 }),
     monthSpend: async () => 0,
     claim: async () => (leased ? null : ((leased = true), template)),
-    examples: async () => [],
     beginAttempt: async () => null,
     recordAttempt: async () => {},
     finish: async () => {},
@@ -335,11 +373,12 @@ test("the temperature from the settings reaches the provider call and Gemini's g
   const provider = {
     generate: async (input) => {
       seen = input;
-      return { rule: rule(), inputTokens: 1, outputTokens: 1, totalTokens: 2 };
+      return { answer: answer(), inputTokens: 1, outputTokens: 1, totalTokens: 2 };
     },
   };
-  await runTemplateWorkerOnce({ store, provider, config });
+  const result = await runTemplateWorkerOnce({ store, provider, config });
   assert.equal(seen.temperature, 0.3);
+  assert.equal(result.gapSeconds, 20, "after a call the worker rests for the console's gap");
 
   let body;
   const gemini = createGeminiTemplateProvider({
@@ -352,21 +391,25 @@ test("the temperature from the settings reaches the provider call and Gemini's g
       }));
     },
   });
-  await gemini.generate({ prompt: "synthetic only", model: "test-model", maxOutputTokens: 512, temperature: 0.3 });
+  await gemini.generate({ system: "FIXED", prompt: "synthetic only", model: "test-model", maxOutputTokens: 512, temperature: 0.3 });
   assert.equal(body.generationConfig.temperature, 0.3);
+  assert.equal(body.systemInstruction.parts[0].text, "FIXED");
   await gemini.generate({ prompt: "synthetic only", model: "test-model", maxOutputTokens: 512 });
   assert.equal("temperature" in body.generationConfig, false, "no temperature unless one is set");
+  assert.equal("systemInstruction" in body, false, "no system prompt unless one is given");
 });
 
-test("a layout an active rule already reads ends covered and the provider is never called", async () => {
-  const active = { ...rule(), id: "TESTBK-PAID", version: 3, status: "active" };
-  delete active.match.templateHash;
+test("a layout an active rule already reads, in every way of writing its values, ends covered and the provider is never called", async () => {
+  const matcher = buildMatcher(template.redacted_body);
+  const active = { ...rule(), id: "TESTBK-PAID", version: 3, status: "active", match: { pattern: matcher.pattern, flags: "i" } };
   assert.equal(coveredBy(template, [active]), "TESTBK-PAID@3");
   assert.equal(coveredBy(template, [{ ...active, senders: ["OTHERBK"] }]), null, "another sender's rule");
   assert.equal(coveredBy(template, [{ ...active, match: { ...active.match, pattern: "^Never matches$" } }]), null);
   assert.equal(coveredBy(template, [{ ...active, match: { ...active.match, rejectAny: ["paid"] } }]), null, "rejectAny words");
   assert.equal(coveredBy(template, [{ ...active, match: { ...active.match, requireAll: ["absent"] } }]), null, "requireAll words");
   assert.equal(coveredBy(template, [{ ...active, match: { pattern: "(" } }]), null, "a broken rule covers nothing");
+  // A rule that only reads one way of writing the values ("Rs. 127.45") is not a cover: it would fail on "Rs.450".
+  assert.equal(coveredBy(template, [{ ...active, match: { pattern: "^Rs\\. [0-9.]+ paid to [A-Z ]+\\.$", flags: "i" } }]), null);
 
   let finished;
   let calls = 0;
@@ -374,12 +417,11 @@ test("a layout an active rule already reads ends covered and the provider is nev
   const store = {
     claim: async () => (leased ? null : ((leased = true), template)),
     activeRules: async () => [active],
-    examples: async () => assert.fail("no prompt is built for a covered layout"),
     beginAttempt: async () => assert.fail("no capacity is reserved for a covered layout"),
     recordAttempt: async () => assert.fail("no attempt is recorded"),
     finish: async (_t, out) => { finished = out; },
   };
-  const provider = { generate: async () => { calls++; return { rule: rule() }; } };
+  const provider = { generate: async () => { calls++; return { answer: answer() }; } };
   const result = await runTemplateWorkerOnce({ store, provider, config });
   assert.deepEqual(result, { status: "covered", templateHash: template.template_hash, covered: "TESTBK-PAID@3" });
   assert.equal(finished.covered, "TESTBK-PAID@3");
@@ -392,64 +434,23 @@ test("a layout no active rule reads still goes to the provider", async () => {
   const store = {
     claim: async () => (leased ? null : ((leased = true), template)),
     activeRules: async () => [],
-    examples: async () => [],
     beginAttempt: async () => null,
     recordAttempt: async () => {},
     finish: async () => {},
   };
-  const provider = { generate: async () => { calls++; return { rule: rule() }; } };
+  const provider = { generate: async () => { calls++; return { answer: answer() }; } };
   assert.equal((await runTemplateWorkerOnce({ store, provider, config })).status, "ready");
   assert.equal(calls, 1);
 });
 
 // ---- learning loop B2: better input for the AI
 
-const { rankSimilarRules } = require("../../src/sms_v2/template_worker");
-
-const ruleWith = (id, body) => ({ ...rule(), id, examples: [{ sender: "TESTBK", body, expectFactTypes: ["movement"] }] });
-
-test("the prompt carries what people reported and past admin rejections, as counts and layouts only", () => {
-  const empty = JSON.parse(buildPrompt(template));
-  assert.deepEqual(empty.userReports, {});
-  assert.deepEqual(empty.previousMistakes, []);
-  const prompt = JSON.parse(
-    buildPrompt(template, [], [], {
-      userReports: { not_financial: 3, wrong_amount: 1 },
-      previousMistakes: [
-        { redactedBody: "<AMT> will be debited.", reason: "overmatches" },
-        { redactedBody: "<AMT> blocked.", reason: "wrong_fact_type" },
-        { redactedBody: "<AMT> paid.", reason: "misses_fields" },
-        { redactedBody: "<AMT> fourth.", reason: "other" },
-      ],
-    }),
-  );
-  assert.deepEqual(prompt.userReports, { not_financial: 3, wrong_amount: 1 });
-  assert.equal(prompt.previousMistakes.length, 3, "at most three past mistakes");
-  assert.deepEqual(Object.keys(prompt.previousMistakes[0]).sort(), ["reason", "redactedBody"]);
-});
-
 test("the domain rules tell the AI how to treat user reports", () => {
-  const prompt = JSON.parse(buildPrompt(template));
-  assert.ok(prompt.domainRules.includes("If people reported this layout as not financial, draft a rule that emits only an info fact."));
-  assert.ok(prompt.domainRules.includes("A user report is a hint, not proof: the printed text decides."));
-});
-
-test("existing rules are chosen by word overlap with the layout, not by rule id", () => {
-  const rules = [
-    ruleWith("A-ALPHA", "Statement ready for your credit card please review"),
-    ruleWith("B-BETA", "Rs. 127.45 paid to SYNTHETIC STORE."),
-    ruleWith("C-GAMMA", "Rs. 50.00 paid to MY SHOP."),
-    ruleWith("D-DELTA", "Your OTP is 123456"),
-    ruleWith("E-EPSILON", "Account balance is low"),
-    ruleWith("F-ZETA", "Rs. 10.00 paid to SOME STORE today"),
-  ];
-  const ranked = rankSimilarRules(template, rules, 3).map((entry) => entry.id);
-  assert.deepEqual(ranked.slice(0, 2).sort(), ["B-BETA", "C-GAMMA"].sort());
-  assert.equal(ranked.length, 3);
-  assert.ok(!ranked.includes("A-ALPHA"), "the lowest rule id is not enough to be included");
-  const prompt = JSON.parse(buildPrompt(template, rules));
-  assert.equal(prompt.existingRules.length, 5);
-  assert.deepEqual(Object.keys(prompt.existingRules[0]).sort(), ["emit", "family", "match"], "example bodies never reach the prompt");
+  assert.ok(
+    SMS_DOMAIN_RULES.includes(
+      "If people reported this layout as not financial, draft a rule that emits only an info fact. A user report is a hint, not proof: the printed text decides.",
+    ),
+  );
 });
 
 test("a draft that reads a sibling layout with its own rule is refused", () => {
@@ -463,26 +464,196 @@ test("a draft that reads a sibling layout with its own rule is refused", () => {
   assert.deepEqual(validateDraft(rule(), template, config.model), []);
 });
 
-test("the worker hands the report counts, past mistakes and sibling layouts to the prompt and the check", async () => {
-  let prompt;
-  let siblings = 0;
+// ---- pipeline v3: wording, pacing, keys
+
+const wordingStore = (extra = {}) => {
   let leased = false;
-  const sibling = { template_hash: "b".repeat(64), redacted_body: "<AMT> credited to your account." };
-  const store = {
-    claim: async () => (leased ? null : ((leased = true), template)),
-    ruleCandidates: async () => [],
-    userReports: async () => ({ not_financial: 2 }),
-    previousMistakes: async () => [{ redactedBody: "<AMT> blocked.", reason: "overmatches" }],
-    siblingLayouts: async () => { siblings++; return [sibling]; },
+  return {
+    claim: async () => (leased ? null : ((leased = true), { ...template, sample: "Rs.4821.50 paid to ZAZA SHOP." })),
     beginAttempt: async () => null,
     recordAttempt: async () => {},
     finish: async () => {},
+    ...extra,
   };
-  const provider = { generate: async (input) => { prompt = JSON.parse(input.prompt); return { rule: rule(), inputTokens: 1, outputTokens: 1, totalTokens: 2 }; } };
+};
+const promptSeen = async (store) => {
+  let prompt;
+  const provider = { generate: async (input) => ((prompt = JSON.parse(input.prompt)), { answer: answer(), inputTokens: 1, outputTokens: 1, totalTokens: 2 }) };
   assert.equal((await runTemplateWorkerOnce({ store, provider, config })).status, "ready");
-  assert.deepEqual(prompt.userReports, { not_financial: 2 });
-  assert.equal(prompt.previousMistakes[0].reason, "overmatches");
-  assert.equal(siblings, 1);
+  return prompt;
+};
+
+test("Gemini sees the message wording with swapped numbers only when allowed, safe, and really this layout", async () => {
+  const settings = (more) => async () => ({ ...require("../../src/sms_v2/settings").mergeSettings([]), ...more });
+  // Allowed and aligned: wording and the value of each slot.
+  const shown = await promptSeen(wordingStore());
+  assert.equal(shown.sample, "Rs.4821.50 paid to ZAZA SHOP.");
+  assert.deepEqual(shown.slotValues, { amt1: "Rs.4821.50", party1: "ZAZA SHOP" });
+  // The console switch turns the wording off: the layout alone.
+  assert.equal("sample" in (await promptSeen(wordingStore({ settings: settings({ ai_use_sample: false }), monthSpend: async () => 0 }))), false);
+  // A sample that is not this layout, or holds a link or address, is dropped.
+  for (const sample of ["Something else entirely.", "Rs.1 paid to pay@bank.com.", "Rs.1 paid to https://x.example."]) {
+    let leased = false;
+    const store = wordingStore({ claim: async () => (leased ? null : ((leased = true), { ...template, sample })) });
+    assert.equal("sample" in (await promptSeen(store)), false, sample);
+  }
+});
+
+test("reports and the sender's rule families reach the prompt; nothing else is read for it", async () => {
+  const otherFamily = { ...rule(), family: "upi_debit", senders: ["TESTBK"], match: { pattern: "^never$", flags: "i" } };
+  const prompt = await promptSeen(
+    wordingStore({
+      activeRules: async () => [otherFamily, otherFamily],
+      userReports: async () => ({ not_financial: 2 }),
+      previousMistakes: async () => [{ redactedBody: "<AMT> blocked.", reason: "overmatches" }],
+      examples: async () => assert.fail("example rules are no longer sent"),
+      siblingLayouts: async () => assert.fail("sibling layouts are no longer compared"),
+    }),
+  );
+  assert.deepEqual(prompt.peopleReported, { not_financial: 2 });
+  assert.deepEqual(prompt.familiesUsedBySender, ["upi_debit"]);
+  assert.deepEqual(prompt.rejectedBefore, [{ layout: "<AMT> blocked.", reason: "overmatches" }], "what an admin turned down is not repeated");
+});
+
+test("a layout with too many name slots is refused with a reason, and Gemini is not called", async () => {
+  let finished;
+  let leased = false;
+  const store = {
+    claim: async () => (leased ? null : ((leased = true), { ...template, redacted_body: "<PARTY> a <PARTY> b <PARTY> c <PARTY>" })),
+    beginAttempt: async () => assert.fail("no capacity is reserved"),
+    finish: async (_t, out) => { finished = out; },
+  };
+  const provider = { generate: async () => assert.fail("no call") };
+  assert.equal((await runTemplateWorkerOnce({ store, provider, config })).status, "failed");
+  assert.equal(finished.code, "layout_too_many_wildcards");
+  assert.deepEqual(finished.detail, ["layout", "layout_too_many_wildcards"]);
+});
+
+test("while every key is resting after a rate limit the layout waits, with no try or reservation spent", async () => {
+  let finished;
+  let leased = false;
+  const store = {
+    claim: async () => (leased ? null : ((leased = true), template)),
+    beginAttempt: async () => assert.fail("no reservation while resting"),
+    finish: async (_t, out) => { finished = out; },
+  };
+  const provider = { waitMs: () => 17000, generate: async () => assert.fail("no call while resting") };
+  const result = await runTemplateWorkerOnce({ store, provider, config });
+  assert.deepEqual(result, { status: "provider_busy", retryAfterMs: 17000 });
+  assert.equal(finished.requeue, true);
+});
+
+test("a busy answer is recorded as such, with its HTTP status, and the layout stays at its place in the queue", async () => {
+  const { ProviderBusyError } = require("../../src/sms_v2/template_worker");
+  const attempts = [];
+  let finished;
+  const store = {
+    claim: async () => template,
+    beginAttempt: async () => null,
+    recordAttempt: async (_t, _n, usage) => attempts.push(usage),
+    providerFailures: async () => 0,
+    finish: async (_t, out) => { finished = out; },
+  };
+  const provider = { generate: async () => { throw new ProviderBusyError("template_provider_busy", { status: 503 }); } };
+  await runTemplateWorkerOnce({ store, provider, config });
+  assert.equal(attempts[0].errorKind, "provider_busy");
+  assert.equal(attempts[0].httpStatus, 503);
+  assert.deepEqual(attempts[0].errorCodes, ["template_provider_busy"]);
+  assert.equal(finished.requeue, true);
+});
+
+const ok = (text = "{}") =>
+  new Response(JSON.stringify({ candidates: [{ finishReason: "STOP", content: { parts: [{ text }] } }], usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1, totalTokenCount: 2 } }));
+const refused = (status, body) => new Response(typeof body === "string" ? body : JSON.stringify(body), { status });
+const retryIn = (seconds) => ({ error: { code: 429, status: "RESOURCE_EXHAUSTED", details: [{ "@type": "type.googleapis.com/google.rpc.RetryInfo", retryDelay: `${seconds}s` }] } });
+
+test("two keys are used in turn, and a key that hits a limit rests for exactly the wait Gemini gave", async () => {
+  let clock = 1_000_000;
+  const used = [];
+  const limited = new Set(["key-a"]);
+  const provider = createGeminiTemplateProvider({
+    apiKeys: ["key-a", "key-b"],
+    now: () => clock,
+    fetchImpl: async (_url, options) => {
+      const key = options.headers["x-goog-api-key"];
+      used.push(key);
+      return limited.has(key) ? refused(429, retryIn(20)) : ok();
+    },
+  });
+  assert.equal(provider.waitMs(), 0);
+  await provider.generate({ prompt: "{}", model: "m", maxOutputTokens: 10 });
+  assert.deepEqual(used, ["key-a", "key-b"], "a limited key hands over to the next one");
+  assert.equal(provider.waitMs(), 0, "one key is still usable");
+  used.length = 0;
+  await provider.generate({ prompt: "{}", model: "m", maxOutputTokens: 10 });
+  await provider.generate({ prompt: "{}", model: "m", maxOutputTokens: 10 });
+  assert.deepEqual(used, ["key-b", "key-b"], "the resting key is not asked while it rests");
+  clock += 21_000;
+  limited.clear();
+  used.length = 0;
+  await provider.generate({ prompt: "{}", model: "m", maxOutputTokens: 10 });
+  await provider.generate({ prompt: "{}", model: "m", maxOutputTokens: 10 });
+  assert.deepEqual([...new Set(used)].sort(), ["key-a", "key-b"], "after the wait both keys work again");
+});
+
+test("when every key is limited the call waits the shortest rest, and a daily quota waits half an hour", async () => {
+  let clock = 0;
+  const provider = createGeminiTemplateProvider({
+    apiKeys: ["key-a", "key-b"],
+    now: () => clock,
+    fetchImpl: async (_url, options) => refused(429, retryIn(options.headers["x-goog-api-key"] === "key-a" ? 20 : 35)),
+  });
+  await assert.rejects(
+    () => provider.generate({ prompt: "{}", model: "m", maxOutputTokens: 10 }),
+    (error) => error.name === "ProviderBusyError" && error.systemic === false && error.retryAfterMs === 20000 && error.status === 429,
+  );
+  assert.equal(provider.waitMs(), 20000);
+  clock += 5000;
+  assert.equal(provider.waitMs(), 15000);
+
+  const daily = createGeminiTemplateProvider({
+    apiKeys: ["only"],
+    now: () => 0,
+    fetchImpl: async () => refused(429, { error: { message: "quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier" }] }] } }),
+  });
+  await assert.rejects(() => daily.generate({ prompt: "{}", model: "m", maxOutputTokens: 10 }), (error) => error.retryAfterMs === 1800000);
+});
+
+test("a quota refusal is a wait, an old model name uses the fallback model, and an incomplete answer is a draft failure", async () => {
+  // 403 that talks about quota is a rate limit, not a broken key.
+  const quota403 = createGeminiTemplateProvider({ apiKeys: ["k"], now: () => 0, fetchImpl: async () => refused(403, "Quota exceeded for this project") });
+  await assert.rejects(() => quota403.generate({ prompt: "{}", model: "m", maxOutputTokens: 10 }), (error) => error.systemic === false && error.status === 403);
+
+  const urls = [];
+  const fallback = createGeminiTemplateProvider({
+    apiKeys: ["k"],
+    fallbackModel: "newer-model",
+    fetchImpl: async (url) => (urls.push(url), url.includes("old-model") ? refused(404, "gone") : ok()),
+  });
+  await fallback.generate({ prompt: "{}", model: "old-model", maxOutputTokens: 10 });
+  assert.equal(urls.length, 2);
+  assert.match(urls[1], /newer-model:generateContent$/);
+  // With no fallback model a 404 stays "the account's fault": wait, never fail layouts.
+  const none = createGeminiTemplateProvider({ apiKeys: ["k"], fetchImpl: async () => refused(404, "gone") });
+  await assert.rejects(() => none.generate({ prompt: "{}", model: "m", maxOutputTokens: 10 }), (error) => error.systemic === true);
+
+  // Cut off by the output limit: counted as a failed draft, with its reason.
+  const cut = createGeminiTemplateProvider({
+    apiKeys: ["k"],
+    fetchImpl: async () => new Response(JSON.stringify({ candidates: [{ finishReason: "MAX_TOKENS", content: { parts: [{ text: "{" }] } }] })),
+  });
+  await assert.rejects(() => cut.generate({ prompt: "{}", model: "m", maxOutputTokens: 10 }), /template_provider_incomplete/);
+});
+
+test("the provider's own wait is read from the Retry-After header or the retryDelay in the body, and keys come from the host in order", () => {
+  const { providerDelayMs, parseApiKeys } = require("../../src/sms_v2/template_worker");
+  assert.equal(providerDelayMs("", { get: () => "12" }), 12000);
+  assert.equal(providerDelayMs(JSON.stringify(retryIn(34)), { get: () => null }), 34000);
+  assert.equal(providerDelayMs(JSON.stringify(retryIn(0.5)), { get: () => null }), 500);
+  assert.equal(providerDelayMs("not json", { get: () => null }), 0);
+  assert.deepEqual(parseApiKeys({ GEMINI_API_KEY: "a", GEMINI_FALLBACK_API_KEY: "b", GEMINI_API_KEYS: "c, a ,d" }), ["a", "b", "c", "d"]);
+  assert.deepEqual(parseApiKeys({ GEMINI_API_KEY: " ", GEMINI_FALLBACK_API_KEY: "" }), []);
+  assert.throws(() => createGeminiTemplateProvider({ apiKeys: [] }), /GEMINI_API_KEY_required/);
 });
 
 test("the worker stamps the fields it owns, so a model slip there never fails a draft", () => {
@@ -541,7 +712,7 @@ test("validation runs in one reusable thread, and a runaway regex times out with
 // are built on. A draft that breaks them double counts money or swallows a message
 // the phone could still complete, so each rule is pinned by what it says.
 test("the prompt carries the rules the ledger depends on", () => {
-  const rules = JSON.parse(buildPrompt(template)).domainRules.join("\n").toLowerCase();
+  const rules = SMS_DOMAIN_RULES.join("\n").toLowerCase();
   const pinned = [
     // A provider's own receipt is never a second debit.
     "evidenceonly true",
@@ -557,8 +728,6 @@ test("the prompt carries the rules the ledger depends on", () => {
     "wallet_topup",
     // Never invent a date.
     "never invent a date",
-    // Repeated placeholders are different values.
-    "never use a backreference",
     // Reports and application status are information.
     "credit report",
   ];
@@ -600,7 +769,8 @@ test("an overloaded provider makes the layout wait in the queue instead of faili
 
   assert.deepEqual([1, 2, 3, 9].map((n) => busyWaitMs({}, n)), [5000, 10000, 20000, 120000]);
   assert.equal(busyWaitMs({ retryAfterMs: 90000 }, 1), 90000);
-  assert.equal(busyWaitMs({ retryAfterMs: 9e9 }, 1), 120000);
+  assert.equal(busyWaitMs({ retryAfterMs: 9e9 }, 1), 3600000, "a daily quota may ask for up to an hour");
+  assert.equal(busyWaitMs({ retryAfterMs: 1000 }, 1), 5000, "never less than the shortest pause");
 });
 
 function busyStore(overrides = {}) {
@@ -670,6 +840,7 @@ test("provider answers are told apart: key, model and billing problems versus a 
   assert.equal(isSystemicProviderAnswer(400, "models/gemini-x is not found for API version v1beta"), true);
   assert.equal(isSystemicProviderAnswer(400, '{"error":{"message":"Request contains an invalid argument."}}'), false);
   assert.equal(isSystemicProviderAnswer(422, "anything"), false);
+  assert.equal(isSystemicProviderAnswer(403, "Quota exceeded"), false, "a quota refusal is a rate limit");
 });
 
 test("the Gemini provider turns a refused key into a wait and a plain bad request into a draft failure", async () => {
@@ -686,4 +857,61 @@ test("the Gemini provider turns a refused key into a wait and a plain bad reques
     () => mk(400, "invalid argument").generate({ prompt: "{}", model: "m", maxOutputTokens: 10 }),
     (error) => error.name === "Error" && error.message === "template_provider_failed",
   );
+});
+
+// ---- the compact prompt: only the rules and the example that fit the layout are sent
+
+test("each layout gets only the rules and the one example that fit its words, and every rule can be reached", () => {
+  const { RULES, rulesFor, exampleFor, EXAMPLES } = require("../../src/sms_v2/ai_prompt");
+  // One layout per rule that names the words it is about: each rule is sent for such a layout and not for an unrelated one.
+  const triggers = [
+    [1, "Salary of <AMT> credited on <DATE>"], [2, "NEFT transfer of <AMT> received"], [3, "Your SIP of <AMT> in <PARTY> fund"],
+    [4, "Your bill of <AMT> is due on <DATE>"], [5, "Pay Later purchase of <AMT>"], [6, "AutoPay mandate registered for <AMT>"],
+    [7, "<AMT> blocked for IPO"], [8, "Cash withdrawn from ATM <AMT>"], [9, "Refund of <AMT> processed"], [10, "Refund of <AMT> initiated"],
+    [11, "Your renewal receipt for <AMT>"], [12, "Fixed deposit of <AMT> created"], [13, "Loan of <AMT> credited to wallet"],
+    [14, "You redeemed 500 coins for <AMT>"], [15, "AutoPay debit of <AMT> mandate ref <REF>"], [16, "Reminder: bill due <DATE>"],
+    [17, "Your credit report is ready"], [18, "Payment on your card of <AMT>"], [19, "Dear customer, your OTP is <REF>"],
+    [20, "Avl Bal <AMT>"], [21, "<AMT> paid and <AMT> fee"],
+  ];
+  const reachable = new Set();
+  for (const [index, layout] of triggers) {
+    const sent = rulesFor(layout.replace(/<([A-Z]+)>/g, (_m, k) => "<" + k.toLowerCase() + "1>").replace("<amt1> paid and <amt1>", "<amt1> paid and <amt2>"));
+    assert.ok(sent.includes(RULES[index].text), "rule " + index + " should be sent for: " + layout);
+    reachable.add(index);
+  }
+  reachable.add(0);
+  reachable.add(22);
+  assert.equal(reachable.size, RULES.length, "every rule is pinned by a layout that triggers it (the user-report rule by a report)");
+  assert.ok(rulesFor("<amt1> paid to <party1>.", { reported: true }).includes(RULES[22].text));
+  assert.equal(rulesFor("<amt1> paid to <party1>.").includes(RULES[22].text), false);
+
+  // What is sent is always a subset of the full list, in the same order, and never more than half of it for a plain layout.
+  const full = RULES.map((rule) => rule.text);
+  const plain = rulesFor("<amt1> debited from A/c <mask1> on <date1> to <party1>. UPI Ref <ref1>. Avl Bal <amt2>.");
+  assert.ok(plain.every((text) => full.includes(text)));
+  assert.deepEqual(plain, full.filter((text) => plain.includes(text)));
+  assert.ok(plain.length <= RULES.length / 2, "a plain debit gets " + plain.length + " rules");
+  // A layout with almost no words still gets the basics (money in, information, balance).
+  assert.ok(rulesFor("hello").length >= 3);
+  // One example, the one that fits.
+  assert.equal(exampleFor("Your OTP is <ref1>"), EXAMPLES[1]);
+  assert.equal(exampleFor("Your bill of <amt1> is due on <date1>"), EXAMPLES[2]);
+  assert.equal(exampleFor("<amt1> debited from A/c <mask1>"), EXAMPLES[0]);
+});
+
+test("the average request is about a tenth of the old one, and a layout rich in rules stays under budget", () => {
+  const { buildPrompt: build } = require("../../src/sms_v2/ai_prompt");
+  const layouts = [
+    "<AMT> debited from A/c <MASK> on <DATE> to <PARTY>. UPI Ref <REF>. Avl Bal <AMT>.",
+    "Dear Customer, your OTP is <REF>. Do not share it with anyone.",
+    "Your UPI mandate for <AMT> is successfully created towards <PARTY> from A/c <MASK>.",
+    "Refund of <AMT> for order <REF> has been initiated and will be credited in 5-7 days.",
+    "Your SIP of <AMT> in <PARTY> fund is processed on <DATE>. Units allotted at NAV <AMT>.",
+  ];
+  const sizes = layouts.map((layout) => {
+    const { system, user } = build({ template: { ...template, redacted_body: layout }, matcher: buildMatcher(layout) });
+    return Math.round((Buffer.byteLength(system) + Buffer.byteLength(user)) / 3.2);
+  });
+  assert.ok(Math.max(...sizes) < 1800, "largest " + Math.max(...sizes) + " tokens");
+  assert.ok(sizes.reduce((a, b) => a + b, 0) / sizes.length < 1500, "average " + sizes.join(", "));
 });

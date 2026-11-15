@@ -62,6 +62,7 @@ void main() {
           final redacted = item['redactedBody'] as String;
           expect(redacted, isNot(contains('12345.67')));
           expect(redacted, isNot(contains('6789')));
+          expect(item.containsKey('sample'), isFalse, reason: 'wording is not sent until the consent text allows it');
           expect(redacted.toLowerCase(), isNot(contains('rahul')));
           expect(RegExp(r'\d{6,}|https?://').hasMatch(redacted), isFalse);
           return http.Response('{}', 503);
@@ -83,6 +84,65 @@ void main() {
       );
     },
   );
+
+  test('the wording goes with the layout, numbers made up and names hidden; a queued layout without one goes without', () async {
+    final db = AppDatabase.forTesting(sqlite3.openInMemory());
+    addTearDown(db.db.dispose);
+    SmsV2Schema.ensure(db.db);
+    final intake = SmsIntakeRepository(db);
+    final now = DateTime.utc(2026, 11);
+    const raw =
+        'Rs.12345.67 debited from A/c XX6789 to RAHUL SHARMA. Ref 1234567890 https://bank.example.in';
+    final source = smsSourceKey('a', 'HDFCBK', raw);
+    intake.remember('a', QueuedSms(sender: 'HDFCBK', body: raw, receivedAt: now));
+    db.db.execute('INSERT INTO v2_review_items VALUES(?,?,?,?,?)', [
+      'a',
+      source,
+      'template',
+      jsonEncode({'sourceKey': source, 'templateHash': 'a' * 64}),
+      'open',
+    ]);
+    // A layout queued by an older build carries no sample.
+    const legacyBody = '<AMT> credited to your account.';
+    final legacyHash = smsTemplateHash('HDFCBK', legacyBody);
+    final queue = OutboxStore(db.db, namespace: 'a');
+    queue.enqueue('template', legacyHash, {
+      'templateHash': legacyHash,
+      'senderBrand': 'HDFCBK',
+      'redactedBody': legacyBody,
+      'observedAt': now.toIso8601String(),
+    });
+    final sent = <Map>[];
+    final uploader = TemplateUpload(
+      intake: intake,
+      queue: queue,
+      baseUri: Uri.parse('https://api.invalid'),
+      headers: () async => {},
+      hasConsent: () async => true,
+      accountIsCurrent: () => true,
+      clock: () => now,
+      shareWording: true,
+      client: MockClient((request) async {
+        final items = (jsonDecode(request.body) as Map)['items'] as List;
+        sent.addAll(items.cast<Map>());
+        return http.Response(
+          jsonEncode({'accepted': [for (final item in items) item['templateHash']]}),
+          202,
+        );
+      }),
+    );
+    await uploader.drain();
+    expect(sent, hasLength(2));
+    final withSample = sent.firstWhere((item) => item['templateHash'] != legacyHash);
+    final sample = withSample['sample'] as String;
+    for (final secret in ['12345', '6789', '1234567890', 'rahul', 'sharma', 'bank.example']) {
+      expect(sample.toLowerCase(), isNot(contains(secret)), reason: secret);
+    }
+    expect(sample, contains('debited from A/c'));
+    expect(smsSkeleton(sample), withSample['redactedBody'], reason: 'the sample has the layout it is sent with');
+    final legacy = sent.firstWhere((item) => item['templateHash'] == legacyHash);
+    expect(legacy.containsKey('sample'), isFalse, reason: 'no null is sent for a missing sample');
+  });
 
   test('layouts go in batches of at most ten, and a 429 is waited out', () async {
     final db = AppDatabase.forTesting(sqlite3.openInMemory());

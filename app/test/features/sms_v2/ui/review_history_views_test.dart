@@ -11,6 +11,7 @@ import 'package:pandapay/data/local/response_cache.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/sms_v2/providers/ai_status_provider.dart';
 import 'package:pandapay/features/sms_v2/sync/ai_server_status.dart';
+import 'package:pandapay/features/sms_v2/sync/ai_status.dart' show AiResolution;
 import 'package:pandapay/features/sms_v2/storage/schema.dart';
 import 'package:pandapay/features/sms_v2/ui/review_history_views.dart';
 import 'package:pandapay_domain/pandapay_domain.dart' show Money;
@@ -411,7 +412,7 @@ void main() {
         );
         expect(s.tone, GeminiTone.ok);
         expect(s.title, 'Gemini is working');
-        expect(s.detail, '1 drafting · 2 waiting · 2 done · 1 failed');
+        expect(s.detail, '1 drafting · 2 waiting · 2 answered · 0 applied here · 1 failed');
         expect(s.progress, isTrue);
       },
     );
@@ -453,9 +454,30 @@ void main() {
         expect(s.title, 'Gemini could not draft 1 format');
         // Says what happens next, so a failure is not a dead end.
         expect(s.detail, contains('stay in Needs review'));
-        expect(s.detail, contains('2 done · 1 failed'));
+        expect(s.detail, contains('2 answered · 0 applied here · 1 failed'));
       },
     );
+
+    test('the bar tells what Gemini answered apart from what this phone applied', () {
+      final s = geminiBarState(
+        server: const AiServerStatus(
+          countedNow: true,
+          eligible: true,
+          total: 3,
+          ready: 2,
+          covered: 1,
+        ),
+        local: const AiReviewStatus(
+          resolved: {'a': AiResolution(ruleId: 'AI-x', verified: true)},
+        ),
+        unreadOnPhone: 0,
+        openItems: 0,
+      );
+      expect(
+        s.detail,
+        '3 formats sent · 3 answered · 1 applied here · 0 held back',
+      );
+    });
 
     test('with sharing off the bar says so, whatever the server answers', () {
       for (final server in [
@@ -500,7 +522,7 @@ void main() {
         openItems: 0,
       );
       expect(s.title, 'Gemini is on');
-      expect(s.detail, '4 formats sent · 4 done · 0 held back');
+      expect(s.detail, '4 formats sent · 4 answered · 0 applied here · 0 held back');
       expect(s.progress, isFalse);
     });
 

@@ -119,6 +119,56 @@ void main() {
     expect(ProvisionalStore(state).overlay(shared).bundle.rules, hasLength(shared.rules.length + 1));
   });
 
+  test('one private rule the engine refuses does not hide the others', () {
+    final db = sqlite3.openInMemory();
+    addTearDown(db.dispose);
+    SmsV2Schema.ensure(db);
+    final json =
+        (jsonDecode(
+                  File('../contracts/sms/v2/fixtures/valid/bundle/full.json').readAsStringSync(),
+                )
+                as Map)
+            .cast<String, Object?>();
+    final bundle = RuleBundle.fromJson(json);
+    final good = bundle.rules.firstWhere((r) => r.status == RuleStatus.provisional);
+    final shared = RuleBundle.fromJson({
+      ...json,
+      'rules': [
+        for (final item in bundle.rules)
+          if (item.status != RuleStatus.provisional) item.toJson(),
+      ],
+    });
+    final state = SyncStateStore(db, namespace: 'a');
+    final origins = TemplateOriginStore(state);
+    final badRemote = 'c' * 64;
+    for (final remote in [good.match.templateHash!, badRemote]) {
+      origins.remember(remoteHash: remote, localHash: remote, senderBrand: good.senders.single);
+    }
+    // A rule that names a transform the engine does not know: refused as a whole bundle.
+    final emit = (good.toJson()['emit'] as List).first as Map;
+    final bad = {
+      ...good.toJson(),
+      'id': 'AI-bad',
+      'match': {...good.match.toJson(), 'templateHash': badRemote},
+      'emit': [
+        {
+          ...emit.cast<String, Object?>(),
+          'counterparty': {'nameFrom': 'amt', 'transforms': ['not_a_transform']},
+        },
+      ],
+    };
+    void deliver(String remote, Map<String, Object?> rule) => state.put(
+      'ai:$remote',
+      jsonEncode({'templateHash': remote, 'status': 'ready', 'rule': rule}),
+    );
+    deliver(good.match.templateHash!, good.toJson());
+    deliver(badRemote, bad);
+    final overlay = ProvisionalStore(state).overlay(shared).bundle;
+    expect(overlay.rules, hasLength(shared.rules.length + 1), reason: 'the good rule is kept');
+    expect(overlay.rules.last.id, startsWith(good.id));
+    expect(overlay.rules.any((r) => r.id.contains('AI-bad')), isFalse);
+  });
+
   test(
     'origin mappings bound each remote format and reject malformed state',
     () {

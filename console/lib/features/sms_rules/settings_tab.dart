@@ -22,6 +22,8 @@ const smsSettingLabels = <String, String>{
   'ai_tpm': 'AI tokens per minute',
   'ai_temperature': 'AI temperature',
   'ai_max_output_tokens': 'AI answer length limit (tokens)',
+  'ai_min_gap_seconds': 'Seconds to rest between AI requests',
+  'ai_use_sample': 'Send message wording (numbers swapped) to the AI',
   'ai_monthly_budget_usd': 'AI monthly budget (USD)',
   'auto_pause_min_hits': 'Auto-pause: hits needed before judging a rule',
   'auto_pause_min_rate': 'Auto-pause: correction rate that pauses a rule',

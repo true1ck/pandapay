@@ -28,7 +28,11 @@ const SETTINGS = Object.freeze({
   ai_rpm: { type: 'int', default: 30, min: 1, ceilingEnv: 'SMS_V2_AI_RPM' },
   ai_tpm: { type: 'int', default: 100000, min: 1000, ceilingEnv: 'SMS_V2_AI_TPM' },
   ai_temperature: { type: 'number', default: 0.1, min: 0, max: 1 },
-  ai_max_output_tokens: { type: 'int', default: 4096, min: 512, max: 8192 },
+  ai_max_output_tokens: { type: 'int', default: 2048, min: 512, max: 8192 },
+  // Rest between calls to the provider so the queue drains gently (free keys have small limits).
+  ai_min_gap_seconds: { type: 'int', default: 20, min: 5, max: 120 },
+  // OFF: Gemini sees only the placeholder layout, never the message wording with made-up numbers.
+  ai_use_sample: { type: 'bool', default: true },
   ai_monthly_budget_usd: { type: 'number', default: 10, min: 0, max: 1000 },
   auto_pause_min_hits: { type: 'int', default: 50, min: 10, max: 10000 },
   auto_pause_min_rate: { type: 'number', default: 0.01, min: 0.001, max: 0.5 },

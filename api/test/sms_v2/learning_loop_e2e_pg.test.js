@@ -6,7 +6,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const full = require('../../../contracts/sms/v2/fixtures/valid/bundle/full.json');
-const { template, config, rule } = require('./fixtures/template_draft');
+const { template, config, rule, answer } = require('./fixtures/template_draft');
 const { startLoopHarness, registerAllLoopAdminRoutes, skip, V3 } = require('./helpers/loop_harness');
 const { createPgWorkerStore, runTemplateWorkerOnce } = require('../../src/sms_v2/template_worker');
 const { importBundle } = require('../../src/sms_v2/rules_admin_route');
@@ -89,9 +89,9 @@ test('the whole learning loop, from a shared layout to a published rule and back
   const provider = {
     generate: async ({ prompt }) => {
       calls++;
-      const asked = JSON.parse(prompt);
-      const draft = asked.templateHash === template.template_hash ? rule() : secondRule(asked.templateHash);
-      return { rule: draft, inputTokens: 100, outputTokens: 50, totalTokens: 150 };
+      // Both layouts read the same way: an amount paid to a name.
+      assert.match(JSON.parse(prompt).layout, /^<amt1> paid (to|at) <party1>.$/);
+      return { answer: answer(), inputTokens: 100, outputTokens: 50, totalTokens: 150 };
     },
   };
   assert.equal((await runTemplateWorkerOnce({ store: worker, provider, config })).status, 'ready');

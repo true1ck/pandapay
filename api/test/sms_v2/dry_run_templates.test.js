@@ -11,7 +11,7 @@ const {
   dryRun,
   main,
 } = require("../../scripts/dry_run_sms_v2_templates");
-const { template, config, rule } = require("./fixtures/template_draft");
+const { template, config, rule, answer } = require("./fixtures/template_draft");
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "sms-v2-dry-run-"));
 
@@ -19,11 +19,11 @@ test("dry run drafts each layout, repairs once, and reports metadata only", asyn
   const prompts = [];
   const logs = [];
   const provider = {
-    generate: async ({ prompt }) => {
-      prompts.push(JSON.parse(prompt));
+    generate: async ({ prompt, system }) => {
+      prompts.push({ ...JSON.parse(prompt), system });
       return prompts.length === 1
-        ? { rule: "{}", inputTokens: 10, outputTokens: 5, totalTokens: 15 }
-        : { rule: rule(), inputTokens: 20, outputTokens: 30, totalTokens: 50 };
+        ? { answer: "{}", inputTokens: 10, outputTokens: 5, totalTokens: 15 }
+        : { answer: answer(), inputTokens: 20, outputTokens: 30, totalTokens: 50 };
     },
   };
   const { results, summary } = await dryRun({
@@ -34,8 +34,8 @@ test("dry run drafts each layout, repairs once, and reports metadata only", asyn
     log: (entry) => logs.push(entry),
   });
   assert.equal(prompts.length, 2);
-  assert.ok(prompts[1].repairErrors.length, "second attempt carries the errors");
-  assert.ok(prompts[0].domainRules.length, "the prompt carries the India rules");
+  assert.ok(prompts[1].yourLastAnswerFailed.length, "second attempt carries the errors");
+  assert.match(prompts[0].system, /bill_due/, "the prompt carries the India rules");
   assert.equal(results[0].valid, true);
   assert.equal(results[0].attempts, 2);
   assert.equal(results[0].aiStatus, "held");
@@ -55,7 +55,7 @@ test("an unredacted layout is never sent to the provider", async () => {
   const { results, summary } = await dryRun({
     templates: [{ ...template, redacted_body: "Call 9876543210 now" }],
     examplesFor: async () => [],
-    provider: { generate: async () => { calls++; return { rule: rule() }; } },
+    provider: { generate: async () => { calls++; return { answer: answer() }; } },
     config,
   });
   assert.equal(calls, 0);
@@ -160,15 +160,9 @@ test("--eval drafts approved layouts again and counts those that read and emit t
     { ...template, template_hash: "b".repeat(64), redacted_body: "<AMT> paid to <PARTY>.", ai_draft: { ...rule(), emit: [{ ...rule().emit[0], factType: "attempt" }] } },
   ];
   assert.notEqual(draftSignature(approved[0].ai_draft), draftSignature(approved[1].ai_draft));
-  // The fake model drafts a movement for any layout, scoped to the layout asked about.
+  // The fake model reads any layout as a movement.
   const provider = {
-    generate: async ({ prompt }) => {
-      const asked = JSON.parse(prompt);
-      const draft = rule();
-      draft.id = asked.expectedRuleId;
-      draft.match.templateHash = asked.templateHash;
-      return { rule: draft, inputTokens: 1, outputTokens: 1, totalTokens: 2 };
-    },
+    generate: async () => ({ answer: answer(), inputTokens: 1, outputTokens: 1, totalTokens: 2 }),
   };
   const { results, summary } = await evalApproved({ approved, examplesFor: async () => [], provider, config });
   assert.deepEqual(summary, { approved: 2, reproduced: 1 });

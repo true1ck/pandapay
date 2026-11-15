@@ -9,6 +9,13 @@ import '../storage/outbox_store.dart';
 import '../storage/sync_state_store.dart';
 import '../storage/template_origin_store.dart';
 
+/// Whether the wording of a message (its numbers made up, names hidden) goes next to the layout, for the AI to read.
+///
+/// OFF until the consent text, the privacy policy and the store declarations say so: today's copy promises that only
+/// layouts are shared. The server and this code are ready; see section 12 of
+/// docs/SMS_AI_PIPELINE_REDESIGN_PLAN_2026-11-15.md for what must change before this is set to true.
+const bool smsShareWording = false;
+
 /// Unknown templates enter this queue only with current sharing consent.
 class TemplateUpload {
   TemplateUpload({
@@ -19,6 +26,7 @@ class TemplateUpload {
     required this.headers,
     required this.hasConsent,
     required this.accountIsCurrent,
+    this.shareWording = smsShareWording,
     DateTime Function()? clock,
   }) : clock = clock ?? DateTime.now;
 
@@ -29,6 +37,7 @@ class TemplateUpload {
   final Future<Map<String, String>> Function() headers;
   final Future<bool> Function() hasConsent;
   final bool Function() accountIsCurrent;
+  final bool shareWording;
   final DateTime Function() clock;
 
   Future<bool> _canShare() async {
@@ -69,6 +78,11 @@ class TemplateUpload {
         body.isNotEmpty &&
         body.length <= 20000 &&
         !_unsafe.hasMatch(body) &&
+        // The sample is optional; when there is one it is short and holds no link or address.
+        (item['sample'] == null ||
+            (item['sample'] is String &&
+                (item['sample'] as String).length <= 2000 &&
+                !RegExp(r'@|https?://|www\.', caseSensitive: false).hasMatch(item['sample'] as String))) &&
         item['templateHash'] == smsTemplateHash(brand, body);
   }
 
@@ -137,6 +151,10 @@ class TemplateUpload {
         options: SmsRedactionOptions(salt: salt),
       );
       final safe = smsSkeleton(redacted.body);
+      // The wording with made-up numbers, for the AI; null (the layout alone goes) when anything real could survive.
+      final sample = shareWording
+          ? smsSample(original: message.body, redacted: redacted.body)
+          : null;
       final brand = smsTemplateBrand(message.sender);
       final hash = smsTemplateHash(brand, safe);
       final payload = <String, Object?>{
@@ -144,6 +162,7 @@ class TemplateUpload {
         'senderBrand': brand,
         'redactedBody': safe,
         'observedAt': message.receivedAt.toUtc().toIso8601String(),
+        'sample': ?sample,
       };
       if (!_validUpload(payload) ||
           !origins.remember(
@@ -186,8 +205,9 @@ class TemplateUpload {
                         'senderBrand',
                         'redactedBody',
                         'observedAt',
+                        'sample',
                       ])
-                        key: record.json[key],
+                        key: ?record.json[key],
                     },
                 ],
               }),

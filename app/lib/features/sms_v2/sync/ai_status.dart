@@ -131,3 +131,22 @@ class AiStatusReader {
     }
   }
 }
+
+/// True when a format this phone uploaded in the last [within] has no final answer yet: no result, or one still
+/// `pending`. A draft takes seconds on the server, so the phone looks for it soon instead of waiting minutes for the
+/// next ordinary sync. The window is short on purpose: a layout the server never drafts (one a rule already covers
+/// stays `pending` for ever) must not keep the phone asking.
+bool hasFormatWaitingForAnswer(
+  SyncStateStore state, {
+  required DateTime now,
+  Duration within = const Duration(minutes: 10),
+}) {
+  final cutoff = now.toUtc().subtract(within).toIso8601String();
+  return state.db.select(
+    "SELECT 1 FROM v2_sync_state s WHERE s.namespace=? AND s.key LIKE 'template:sent:%' AND s.value>? "
+    "AND NOT EXISTS (SELECT 1 FROM v2_sync_state a WHERE a.namespace=s.namespace "
+    "AND a.key='ai:' || substr(s.key, 15) "
+    "AND json_extract(a.value, '\$.status') IN ('ready', 'rejected', 'failed')) LIMIT 1",
+    [state.namespace, cutoff],
+  ).isNotEmpty;
+}

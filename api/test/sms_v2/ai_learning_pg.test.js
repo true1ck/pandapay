@@ -4,7 +4,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const { Pool } = require("pg");
-const { template, config, rule } = require("./fixtures/template_draft");
+const { template, config, rule, answer } = require("./fixtures/template_draft");
+const { buildMatcher } = require("../../src/sms_v2/layout_matcher");
 const { createTemplateStore } = require("../../src/sms_v2/ai_templates");
 const { createPgWorkerStore, runTemplateWorkerOnce, PROMPT_VERSION } = require("../../src/sms_v2/template_worker");
 const { createAdminDbHelpers } = require("../../src/admin/server");
@@ -46,19 +47,18 @@ test("prompt versions are stored and a covered layout reaches phones as queued",
 
   // First: the provider is called and the attempt carries the prompt version.
   await phone.submit(profile, [item], true);
-  const provider = { generate: async () => ({ rule: rule(), inputTokens: 100, outputTokens: 50, totalTokens: 150 }) };
+  const provider = { generate: async () => ({ answer: answer(), inputTokens: 100, outputTokens: 50, totalTokens: 150 }) };
   assert.equal((await runTemplateWorkerOnce({ store: worker, provider, config })).status, "ready");
   const attempt = (await pool.query("SELECT prompt_version, outcome FROM sms_v2_template_attempts")).rows;
   assert.deepEqual(attempt, [{ prompt_version: PROMPT_VERSION, outcome: "valid" }]);
 
   // Then an active rule appears; a re-queued layout is covered without a call.
-  const active = { ...rule(), id: "TESTBK-PAID", version: 1, status: "active" };
-  delete active.match.templateHash;
+  const active = { ...rule(), id: "TESTBK-PAID", version: 1, status: "active", match: { pattern: buildMatcher(template.redacted_body).pattern, flags: "i" } };
   await pool.query("INSERT INTO sms_v2_rules(rule_id,version,status,family,senders,body,created_by) VALUES($1,1,'active',$2,$3,$4,'admin')",
     ["TESTBK-PAID", active.family, active.senders, JSON.stringify(active)]);
   await pool.query("UPDATE sms_v2_unknown_templates SET ai_status='queued', ai_draft=NULL WHERE template_hash=$1", [template.template_hash]);
   let calls = 0;
-  const noCalls = { generate: async () => { calls++; return { rule: rule() }; } };
+  const noCalls = { generate: async () => { calls++; return { answer: answer() }; } };
   const result = await runTemplateWorkerOnce({ store: worker, provider: noCalls, config });
   assert.deepEqual(result, { status: "covered", templateHash: template.template_hash, covered: "TESTBK-PAID@1" });
   assert.equal(calls, 0);
@@ -100,14 +100,7 @@ test("the worker store counts distinct reporters per kind and finds sibling layo
   assert.deepEqual(await worker.userReports(row), { not_financial: 2, wrong_amount: 1 });
   assert.deepEqual(await worker.userReports({ ...row, template_hash: "e".repeat(64) }), {});
 
-  // Siblings: another layout of the sender with a ready rule counts; a queued one does not.
-  await pool.query("INSERT INTO sms_v2_unknown_templates(template_hash,sender_brand,redacted_body,ai_status) VALUES($1,'TESTBK',$2,'ready')", [other.hash, other.body]);
-  await pool.query("INSERT INTO sms_v2_unknown_templates(template_hash,sender_brand,redacted_body,ai_status) VALUES($1,'TESTBK',$2,'ready')", [template.template_hash, template.redacted_body]);
-  const siblings = await worker.siblingLayouts(row);
-  assert.deepEqual(siblings.map((entry) => entry.template_hash), [other.hash]);
-  await pool.query("UPDATE sms_v2_unknown_templates SET ai_status='queued' WHERE template_hash=$1", [other.hash]);
-  assert.deepEqual(await worker.siblingLayouts(row), []);
-  assert.ok((await worker.ruleCandidates()).every((body) => body && body.id));
+  // (Sibling layouts and example rules are no longer read: the prompt carries neither.)
 });
 
 // ---- learning loop B6: how a private AI rule fares on phones, shown on its draft

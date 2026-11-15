@@ -20,6 +20,7 @@ const {
   createGeminiTemplateProvider,
   runTemplateWorkerOnce,
   busyWaitMs,
+  PROMPT_VERSION,
 } = require("../template_worker");
 const {
   createPgSuggestionStore,
@@ -89,7 +90,7 @@ async function main() {
         // Layouts that failed through no fault of their own get another go (a few times each).
         try {
           if (typeof store.requeueFailed === "function")
-            console.log(JSON.stringify({ event: "sms_v2_ai_requeue", requeued: await store.requeueFailed() }));
+            console.log(JSON.stringify({ event: "sms_v2_ai_requeue", requeued: await store.requeueFailed(PROMPT_VERSION) }));
         } catch (error) {
           console.error("SMS v2 AI requeue failed", error.code || error.name);
         }
@@ -99,16 +100,20 @@ async function main() {
       // disabled: an admin switched AI drafting off. budget: this month's cap is
       // spent. Layouts wait in the queue meanwhile.
       // provider_busy: Gemini is overloaded; wait (longer each time in a row) rather than fail layouts.
+      // After a call to Gemini the worker rests for the console's gap (ai_min_gap_seconds), so a queue of layouts
+      // reaches the provider one at a time, first in first out, never in a burst.
       await delay(
         result.status === "provider_busy"
           ? busyWaitMs({ retryAfterMs: result.retryAfterMs }, consecutiveBusy)
           : result.status === "idle"
           ? 15000
-          : result.status === "capacity" || result.status === "disabled"
-            ? 60000
-            : result.status === "budget"
-              ? 600000
-              : 1000,
+          : result.gapSeconds > 0
+            ? result.gapSeconds * 1000
+            : result.status === "capacity" || result.status === "disabled"
+              ? 60000
+              : result.status === "budget"
+                ? 600000
+                : 1000,
       );
     } while (!stopped);
   } finally {

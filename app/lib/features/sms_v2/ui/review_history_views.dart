@@ -422,6 +422,8 @@ GeminiBarState geminiBarState({
 }) {
   String plural(int n, String one, [String? many]) =>
       '$n ${n == 1 ? one : (many ?? '${one}s')}';
+  // What Gemini answered is not the same as what this phone has applied: show both.
+  final applied = local?.resolved.length ?? 0;
   // Gemini only ever sees anonymised layouts the person agreed to share. With
   // that off nothing is sent, whatever the server says.
   if (sharingOff) {
@@ -487,7 +489,8 @@ GeminiBarState geminiBarState({
       title: 'Gemini is working',
       detail:
           '${server.working} drafting · ${server.queued} waiting · '
-          '${server.ready + server.covered} done · ${server.failed} failed',
+          '${server.ready + server.covered} answered · $applied applied here · '
+          '${server.failed} failed',
       progress: true,
     );
   }
@@ -496,11 +499,12 @@ GeminiBarState geminiBarState({
       tone: GeminiTone.warn,
       title: 'Gemini could not draft ${plural(server.failed, 'format')}',
       detail:
-          '${server.ready + server.covered} done · ${server.failed} failed'
+          '${server.ready + server.covered} answered · $applied applied here · '
+          '${server.failed} failed'
           '${server.held > 0 ? ' · ${server.held} held back' : ''}\n'
           'Messages in a failed format stay in Needs review for you to '
-          'answer. PandaPay tries failed formats again on its own when '
-          'the cause was a hiccup on our side.',
+          'answer. PandaPay tries a failed format again on its own after a '
+          'hiccup on our side, and once more whenever the AI is improved.',
     );
   }
   if (server.total == 0) {
@@ -515,7 +519,8 @@ GeminiBarState geminiBarState({
     title: 'Gemini is on',
     detail:
         '${plural(server.total, 'format')} sent · '
-        '${server.ready + server.covered} done · ${server.held} held back',
+        '${server.ready + server.covered} answered · $applied applied here · '
+        '${server.held} held back',
   );
 }
 

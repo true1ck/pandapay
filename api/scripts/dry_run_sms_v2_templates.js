@@ -32,8 +32,9 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { redactionError } = require('../src/sms_v2/ai_templates');
 const {
-  workerConfig, buildPrompt, stampDraft, validateDraftSafely, createGeminiTemplateProvider,
+  workerConfig, buildPrompt, buildRule, validateDraftSafely, createGeminiTemplateProvider,
 } = require('../src/sms_v2/template_worker');
+const { buildMatcher, slotValues, exampleBodies } = require('../src/sms_v2/layout_matcher');
 
 const REPO_ROOT = path.resolve(__dirname, '../..');
 const USAGE = 'usage: node api/scripts/dry_run_sms_v2_templates.js --out <file outside the repository> '
@@ -71,7 +72,7 @@ function parseArgs(argv) {
 
 // No network and no key: every draft is empty, so every layout reports errors.
 function createFakeProvider() {
-  return { async generate() { return { rule: '{}', inputTokens: 0, outputTokens: 0, totalTokens: 0 }; } };
+  return { async generate() { return { answer: '{}', inputTokens: 0, outputTokens: 0, totalTokens: 0 }; } };
 }
 
 const tokens = (value) => (Number.isSafeInteger(value) && value >= 0 ? value : 0);
@@ -79,29 +80,35 @@ const tokens = (value) => (Number.isSafeInteger(value) && value >= 0 ? value : 0
 async function draftOne({ template, examples, provider, config, validate }) {
   const out = { valid: false, errors: [], rule: null, attempts: 0, inputTokens: 0, outputTokens: 0 };
   let errors = [];
+  let matcher;
+  try {
+    matcher = buildMatcher(template.redacted_body);
+    exampleBodies(template.redacted_body);
+  } catch (error) {
+    return { ...out, errors: [error.code || 'layout_invalid'] };
+  }
+  // Rules already written for the sender only tell the AI which families exist; no pattern is sent.
+  const families = [...new Set(examples.map((rule) => rule?.family).filter(Boolean))];
+  const slots = template.sample ? slotValues(matcher, template.sample) : null;
   for (let attempt = 1; attempt <= 2 && (attempt === 1 || errors.length); attempt++) {
     let prompt;
     try {
-      prompt = buildPrompt(template, examples, errors);
+      prompt = buildPrompt({ template, matcher, sample: slots ? template.sample : null, slots, families, fix: errors });
     } catch {
       return { ...out, errors: ['template_redaction_required'] };
     }
     out.attempts = attempt;
     try {
-      const response = await provider.generate({ prompt, model: config.model, maxOutputTokens: config.maxOutputTokens });
+      const response = await provider.generate({ system: prompt.system, prompt: prompt.user, model: config.model, maxOutputTokens: config.maxOutputTokens });
       const input = tokens(response?.inputTokens);
       out.inputTokens += input;
       out.outputTokens += Math.max(tokens(response?.outputTokens), tokens(response?.totalTokens) - input);
-      // Stamped as the worker does (id, status, author, sender, template link), so
-      // the verdict here is the verdict the worker would reach.
-      out.rule = stampDraft(
-        typeof response.rule === 'string' ? JSON.parse(response.rule) : response.rule,
-        template,
-        config.model,
-      );
-      errors = await validate(out.rule, template, config.model);
-    } catch {
-      errors = ['provider_or_json_invalid'];
+      // Built as the worker builds it (pattern from the layout, facts from the answer), so the verdict here is
+      // the verdict the worker would reach.
+      out.rule = buildRule(typeof response.answer === 'string' ? JSON.parse(response.answer) : response.answer, template, matcher, config.model);
+      errors = await validate(out.rule, template, config.model, []);
+    } catch (error) {
+      errors = [error?.code || 'provider_or_json_invalid'];
     }
   }
   return { ...out, valid: errors.length === 0, errors };
