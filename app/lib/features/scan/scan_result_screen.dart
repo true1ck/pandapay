@@ -419,7 +419,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
               borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
             ),
             hintText: 'Use the shop name if the QR did not include one',
-            helperText: 'Check this payee in your UPI app: ${widget.parsed.pa}',
+            helperText: 'The selected UPI app will verify ${widget.parsed.pa}',
             helperStyle: BambooFonts.ui(11.5, color: BambooInk.ink500),
           ),
           // No onChanged/setState needed: _payWith reads _merchantController.text

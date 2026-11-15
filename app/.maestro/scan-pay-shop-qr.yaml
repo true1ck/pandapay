@@ -25,7 +25,7 @@ appId: app.pandapay.pandapay.dev2
 - extendedWaitUntil:
     visible: "Scan result"
     timeout: 20000
-- assertVisible: "Check this payee in your UPI app.*"
+- assertVisible: "The selected UPI app will verify.*"
 - assertVisible: "Pay with.*"
 # The amount box sits on the best card.
 - tapOn:
