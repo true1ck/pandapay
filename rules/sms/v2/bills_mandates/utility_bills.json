@@ -109,7 +109,7 @@
   },
   {
     "id": "BIL-INS-PREMIUM-DEBIT-01",
-    "version": 2,
+    "version": 1,
     "family": "bill_upcoming",
     "senders": [
       "*"
@@ -125,7 +125,7 @@
         "attrs": {
           "status": "scheduled",
           "direction": "debit",
-          "purpose": "insurance",
+          "purpose": "bill_payment",
           "dueAt": {
             "from": "due"
           }
@@ -136,14 +136,7 @@
             "from": "amt",
             "unit": "INR"
           }
-        ],
-        "counterparty": {
-          "kind": "merchant",
-          "nameFrom": "biller",
-          "transforms": [
-            "upperTrim"
-          ]
-        }
+        ]
       }
     ],
     "confidence": 0.9,

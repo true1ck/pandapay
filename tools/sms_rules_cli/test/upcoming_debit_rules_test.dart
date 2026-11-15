@@ -37,8 +37,8 @@ void main() {
   group('SIP instalment announced', () {
     for (final (label, body) in [
       (
-        'plain',
-        'Your SIP instalment of Rs 5,000 in Sunrise Equity Fund will be debited from your bank account on 05-Nov-26.',
+        'monthly SIP wording',
+        'Your monthly SIP of Rs 5,000 in Sunrise Equity Fund will be debited from your bank account on 05-Nov-26.',
       ),
       (
         'other wording and date style',
@@ -54,6 +54,20 @@ void main() {
         expect(f.dueAt, _istMidnight(2026, 11, 5));
       });
     }
+
+    test('wording an existing rule already reads is left to that rule', () {
+      // "SIP instalment of ... will be debited" has been read by the fund-house
+      // receipt rule all along. The new rule ranks below it and changes nothing.
+      const body =
+          'Your SIP instalment of Rs 5,000 in Sunrise Equity Fund will be debited from your bank account on 05-Nov-26.';
+      expect(attemptOf('VM-FUNDCO-S', body), isNull);
+      final o = engine.interpretDetailed(
+        SmsMessage(sender: 'VM-FUNDCO-S', body: body, observedAt: DateTime.utc(2026, 10, 25, 4), sourceKey: 'k'),
+        bundle,
+        appVersion: 'test',
+      );
+      expect(o.winnerId, 'BRK-MF-SIP-INSTALMENT-01');
+    });
 
     test('past tense is a receipt, never a scheduled debit', () {
       expect(
@@ -81,30 +95,26 @@ void main() {
   });
 
   group('insurance premium announced', () {
-    for (final (label, sender, body, insurer) in [
-      (
-        'keep-funds wording',
-        'VM-INSCOX-S',
-        'Please keep sufficient funds in your account for Sunrise policy no 123456789 premium Rs. 2500 which will be debited on 25-11-2026.',
-        'SUNRISE',
-      ),
-      (
-        'auto-debit wording',
+    test('the existing keep-funds rule keeps reading its wording, unchanged', () {
+      const body =
+          'Please keep sufficient funds in your account for Sunrise policy no 123456789 premium Rs. 2500 which will be debited on 25-11-2026.';
+      final f = attemptOf('VM-INSCOX-S', body)!;
+      expect(f.provenance.ruleId, 'BIL-INS-PREMIUM-DEBIT-01');
+      expect(f.purpose, MovementPurpose.billPayment);
+      expect(f.counterparty, isNull);
+    });
+
+    test('a premium notice no existing rule read is typed insurance', () {
+      final f = attemptOf(
         'VM-INSCOX-S',
         'Dear Customer, your Sunrise Life Insurance premium of Rs 2,500 for policy no 123456789 will be auto-debited from your account on 25-11-2026.',
-        'SUNRISE LIFE INSURANCE',
-      ),
-    ]) {
-      test(label, () {
-        final f = attemptOf(sender, body)!;
-        expect(f.status, AttemptStatus.scheduled);
-        expect(f.purpose, MovementPurpose.insurance);
-        // The rule names who is paid; the app classifies it from that name.
-        expect(f.counterparty?.name, insurer);
-        expect(f.amounts.single.minor, 250000);
-        expect(f.dueAt, _istMidnight(2026, 11, 25));
-      });
-    }
+      )!;
+      expect(f.status, AttemptStatus.scheduled);
+      expect(f.purpose, MovementPurpose.insurance);
+      expect(f.counterparty?.name, 'SUNRISE LIFE INSURANCE');
+      expect(f.amounts.single.minor, 250000);
+      expect(f.dueAt, _istMidnight(2026, 11, 25));
+    });
 
     test('a premium already debited is not a scheduled debit', () {
       expect(
@@ -268,5 +278,23 @@ void main() {
         isNot(anyOf('GENZ-SIP-UPCOMING-DEBIT', 'GENZ-INS-PREMIUM-UPCOMING-DEBIT')),
       );
     });
+  });
+
+  test('the new rules rank below every existing rule, so they only add', () {
+    const added = {
+      'GENZ-INS-PREMIUM-UPCOMING-DEBIT',
+      'GENZ-SIP-UPCOMING-DEBIT',
+      'GENZ-INS-PREMIUM-NEXT-MONTH',
+    };
+    final rules = bundle.rules;
+    final mine = rules.where((r) => added.contains(r.id)).toList();
+    expect(mine.map((r) => r.id).toSet(), added);
+    final lowestOther = rules
+        .where((r) => !added.contains(r.id))
+        .map((r) => r.priority)
+        .reduce((a, b) => a < b ? a : b);
+    for (final r in mine) {
+      expect(r.priority, lessThan(lowestOther), reason: r.id);
+    }
   });
 }

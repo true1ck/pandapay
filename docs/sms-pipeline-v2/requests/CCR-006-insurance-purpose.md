@@ -16,8 +16,7 @@ A scheduled debit ("keep funds ready, your insurance premium of Rs x will be deb
 
 ## Rules that use it
 
-- `BIL-INS-PREMIUM-DEBIT-01` (version 2): emits `purpose: insurance` and the insurer as the counterparty.
-- `GENZ-INS-PREMIUM-UPCOMING-DEBIT`: the generalized wording for any insurer.
+- `GENZ-INS-PREMIUM-UPCOMING-DEBIT`: the generalized wording for any insurer. It is ranked below every existing rule (priority 32; the lowest existing rule is 40), so it only reads a message no existing rule read. No existing rule was edited.
 
 The scheduled-debit kinds the Bills page shows come only from typed purposes: `emi`, `investment`, `insurance`; any other `bill_payment` is classified from the biller's name by the same classifier every other bill uses.
 

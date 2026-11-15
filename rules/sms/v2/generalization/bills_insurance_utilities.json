@@ -801,7 +801,7 @@
     "senders": [
       "*"
     ],
-    "priority": 246,
+    "priority": 32,
     "match": {
       "pattern": "^(?=[\\s\\S]*\\b(?:insurance|assurance|policy|lic)\\b)[\\s\\S]*?(?:\\byour\\s+)?(?:\\b(?!(?:your|the|this|monthly|annual|yearly|quarterly|half-yearly|next|regular|renewal)\\b)(?<biller>[a-z][a-z &.'-]{2,40}?)\\s+)?premium\\s+(?:amount\\s+)?(?:of\\s+)?(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)[^\\n]{0,80}?\\bwill\\s+be\\s+(?:auto-?)?(?:debited|deducted|charged)[^\\n]{0,70}?\\b(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
       "flags": "i",
@@ -878,7 +878,7 @@
     "senders": [
       "*"
     ],
-    "priority": 244,
+    "priority": 30,
     "match": {
       "pattern": "^(?![\\s\\S]*(?:\\brs\\.?|\\binr|₹)\\s*\\d)[\\s\\S]*?(?:policy\\s*(?:no\\.?|number)?\\s*:?\\s*[x*]*\\d*?(?<policy>\\d{4})(?!\\d)[\\s\\S]{0,80}?)?\\bnext\\s+premium\\b[^\\n]{0,40}?\\b(?:falls?\\s+)?due\\b\\s*(?:on|in|by)?\\s*:?\\s*(?<due>\\d{1,2}[/-]\\d{4}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\s+\\d{4})",
       "flags": "i",

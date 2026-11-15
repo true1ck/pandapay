@@ -76,7 +76,7 @@ void main() {
   test('a SIP instalment the fund announced is a SIP row on its date', () {
     read(
       'VM-FUNDCO-S',
-      'Your SIP instalment of Rs 5,000 in Sunrise Equity Fund will be debited from your bank account on 05-Nov-26.',
+      'Your monthly SIP of Rs 5,000 in Sunrise Equity Fund will be debited from your bank account on 05-Nov-26.',
       nov1,
     );
     final sip = rows(now).single;
@@ -90,7 +90,7 @@ void main() {
 
   test('the same reminder twice, or read again, is still one row', () {
     const body =
-        'Your SIP instalment of Rs 5,000 in Sunrise Equity Fund will be debited from your bank account on 05-Nov-26.';
+        'Your monthly SIP of Rs 5,000 in Sunrise Equity Fund will be debited from your bank account on 05-Nov-26.';
     read('VM-FUNDCO-S', body, nov1);
     read('VM-FUNDCO-S', body, nov1.add(const Duration(days: 3)));
     read('VM-FUNDCO-S', body, nov1); // the very same message again
@@ -160,7 +160,7 @@ void main() {
   test('every kind of notice together, each in its own place', () {
     read(
       'VM-FUNDCO-S',
-      'Your SIP instalment of Rs 5,000 in Sunrise Equity Fund will be debited from your bank account on 05-Nov-26.',
+      'Your monthly SIP of Rs 5,000 in Sunrise Equity Fund will be debited from your bank account on 05-Nov-26.',
       nov1,
     );
     read(
