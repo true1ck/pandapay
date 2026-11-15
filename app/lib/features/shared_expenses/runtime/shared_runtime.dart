@@ -2260,7 +2260,7 @@ class _ActivityLookup {
         .readPage(entity: 'expenses', contextId: contextId, limit: 100)
         .items) {
       final p = row.payload;
-      if (p is! Map || p['recordType'] != 'head') continue;
+      if (p['recordType'] != 'head') continue;
       final accepted = p['accepted'];
       if (accepted is! Map) continue;
       final snapshot = accepted['snapshot'];

@@ -32,7 +32,7 @@ class SharedPairIndex {
     final names = <String, (String, bool)>{};
     for (final context in store.readContexts(limit: 100).items) {
       final payload = context.payload;
-      if (payload is! Map || payload['state'] == 'archived') continue;
+      if (payload['state'] == 'archived') continue;
       final id = context.id;
       final direct = payload['kind'] == 'direct';
       names[id] = ('${payload['name'] ?? ''}'.trim(), direct);
@@ -62,7 +62,6 @@ class SharedPairIndex {
               .readPage(entity: 'balances', contextId: id, limit: 100)
               .items) {
         final b = row.payload;
-        if (b is! Map) continue;
         final low = b['lowMemberId'], high = b['highMemberId'];
         if (low != own && high != own) continue;
         final raw = int.tryParse('${b['balanceMinor']}') ?? 0;

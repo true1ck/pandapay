@@ -1,4 +1,4 @@
-import 'package:pandapay_domain/pandapay_domain.dart' show Money, TxnInstrument;
+import 'package:pandapay_domain/pandapay_domain.dart' show Money;
 
 import '../../../data/user_cards_repository.dart';
 import '../storage/shared_store.dart';
@@ -311,7 +311,7 @@ class SplitShareReader {
     final out = <SplitShareContext>[];
     for (final row in page.items) {
       final payload = row.payload;
-      if (payload is! Map || payload['state'] == 'archived') continue;
+      if (payload['state'] == 'archived') continue;
       seen.add(row.id);
       final signature =
           '${row.revision}|${payload['committedSequence']}|'
