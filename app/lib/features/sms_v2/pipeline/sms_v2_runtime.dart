@@ -17,7 +17,6 @@ import '../../../data/local/financial_store.dart';
 import '../../../data/connectivity/server_backoff.dart';
 import '../../../data/local_first/command_outbox.dart';
 import '../../../data/user_cards_repository.dart';
-import '../instruments/card_transaction_relinker.dart';
 import '../instruments/instrument_seeder.dart';
 import 'ai_withdrawal.dart';
 import '../storage/event_store.dart';
@@ -226,19 +225,7 @@ class SmsV2Runtime {
   /// failed chunk's messages pending in `sms_intake` for the next sync.
   Future<void> capture(List<QueuedSms> messages, {bool? backfill}) async {
     final shared = await _loadBundle();
-    final instrumentStore = InstrumentStore(
-      financial.database.db,
-      namespace: namespace,
-    );
-    final seeded = InstrumentSeeder(instrumentStore).seed(
-      cards: financial
-          .entities(namespace, 'cards')
-          .map(UserCard.fromJson)
-          .toList(),
-      issuerSlugOf: cardIssuerSlugFromCatalogue(catalogue),
-      bankAccounts: const [],
-    );
-    _relinkCardTransactions(seeded);
+    final wallet = _walletCards();
     final session = ++_captureSessions;
     for (var start = 0; start < messages.length; start += 200) {
       _checkAccount();
@@ -268,6 +255,10 @@ class SmsV2Runtime {
           shared: shared,
           groups: groups,
           ownerNames: ownerNames(),
+          // Seeding the wallet cards and stamping them on saved transactions
+          // happens in the worker, once, before the first chunk (R1).
+          walletCards: start == 0 ? wallet : null,
+          cardIssuerSlugs: _cardIssuerSlugs(wallet),
           onCommitted: (entities) =>
               financial.notifyExternalChanges(namespace, entities),
         ),
@@ -282,17 +273,43 @@ class SmsV2Runtime {
     }
   }
 
-  /// Writes the wallet card onto the transactions saved before their card was
-  /// linked: the cards linked by this run's seeding, and once per account every
-  /// card an older build linked without doing so. Never stops a message from
-  /// being captured; a failure is retried by the next capture (the one-time
-  /// pass only records itself when it finished).
-  void _relinkCardTransactions(SeedReport seeded) {
+  /// The wallet cards as plain data for the capture worker.
+  List<Map<String, Object?>> _walletCards() => [
+    for (final c in financial.entities(namespace, 'cards'))
+      Map<String, Object?>.of(c),
+  ];
+
+  Map<String, String?> _cardIssuerSlugs(List<Map<String, Object?>> cards) {
+    final slugOf = cardIssuerSlugFromCatalogue(catalogue);
+    return {
+      for (final c in cards)
+        c['id'] as String: slugOf(UserCard.fromJson(c)),
+    };
+  }
+
+  /// Links the wallet cards to the cards the messages found and stamps them on
+  /// the transactions saved before (a card just added or confirmed), in the
+  /// worker isolate. Never throws: a failure is retried by the next capture or
+  /// card change.
+  Future<void> relinkWalletCards() async {
     try {
-      final relinker = CardTransactionRelinker(financial, namespace: namespace);
-      relinker.moveFacts(seeded.merged);
-      relinker.relinkAll(seeded.linked);
-      relinker.repairOnce();
+      final wallet = _walletCards();
+      if (wallet.isEmpty) return;
+      await _executor.run(
+        CaptureChunkRequest(
+          namespace: namespace,
+          appVersion: appVersion,
+          categoryIdBySlug: categoryIdBySlug,
+          session: _captureSessions,
+          shared: await _loadBundle(),
+          groups: const [],
+          ownerNames: ownerNames(),
+          walletCards: wallet,
+          cardIssuerSlugs: _cardIssuerSlugs(wallet),
+          onCommitted: (entities) =>
+              financial.notifyExternalChanges(namespace, entities),
+        ),
+      );
     } catch (_) {}
   }
 
@@ -710,19 +727,10 @@ class SmsV2Runtime {
         _state.get('card:heal') != healMarker) {
       await guarded(() async {
         // The wallet card has no instrument until it is seeded, and capture
-        // (which seeds) only runs when messages arrive. Seeding is idempotent.
-        final seeded = InstrumentSeeder(
-          InstrumentStore(financial.database.db, namespace: namespace),
-        ).seed(
-          cards: cards,
-          issuerSlugOf: cardIssuerSlugFromCatalogue(catalogue),
-          bankAccounts: const [],
-        );
-        // Rows of facts already tied to a card the seeding just linked.
-        _relinkCardTransactions(seeded);
-        // Then the facts that were tied to no card. The walk (50 facts per short
-        // transaction) runs in the capture worker isolate on its own connection,
-        // not on the UI thread; the worker reports what it changed.
+        // (which seeds) only runs when messages arrive. Seeding, stamping the
+        // saved rows and then the walk over facts tied to no card (50 facts per
+        // short transaction) all run in the capture worker isolate on its own
+        // connection, not on the UI thread; it reports what it changed.
         await _executor.run(
           CaptureChunkRequest(
             namespace: namespace,
@@ -733,6 +741,8 @@ class SmsV2Runtime {
             groups: const [],
             ownerNames: ownerNames(),
             healCards: true,
+            walletCards: _walletCards(),
+            cardIssuerSlugs: _cardIssuerSlugs(_walletCards()),
             onCommitted: (entities) =>
                 financial.notifyExternalChanges(namespace, entities),
           ),

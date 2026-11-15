@@ -39,6 +39,39 @@ List<String> _offending(
 }
 
 void main() {
+
+  group('rule 1: card linking runs in the capture worker, not on the UI isolate', () {
+    // Stamping a wallet card on its saved history is O(that card's history):
+    // measured 160 ms for 2,600 rows on a desktop, so a phone drops frames.
+    // The runtime hands the cards to the worker (walletCards / healCards);
+    // only the worker-side loop (capture_executor.dart) may seed and stamp.
+    test('SmsV2Runtime does not seed instruments or stamp rows itself', () {
+      final offenders = _offending(
+        [File('lib/features/sms_v2/pipeline/sms_v2_runtime.dart')],
+        (line) =>
+            line.contains('InstrumentSeeder(') ||
+            line.contains('CardTransactionRelinker(') ||
+            line.contains('stampCardOnSmsTransactions('),
+      );
+      expect(
+        offenders,
+        isEmpty,
+        reason:
+            'Pass walletCards on CaptureChunkRequest so the worker isolate does '
+            'this (see capture_executor.dart seedAndRelinkWalletCards). '
+            '${offenders.join(', ')}',
+      );
+    });
+
+    test('adding a card does not link it on the UI isolate', () {
+      final offenders = _offending(
+        [File('lib/features/cards/add_card_local_first.dart')],
+        (line) => RegExp(r'(?<![\w.])linkWalletCards\(').hasMatch(line),
+      );
+      expect(offenders, isEmpty, reason: offenders.join(', '));
+    });
+  });
+
   group('rule 3: hot-path regular expressions are compiled once', () {
     // Per-message SMS code. `RegExp(` compiles on every call; the profile of a
     // cold start had regex compilation as its top self-time frame.

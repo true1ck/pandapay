@@ -188,6 +188,17 @@ decided when a row is read, so a plan that quietly stopped turns past without a 
 reader goes through `subscriptionStatesProvider`; `performance_guards_test.dart` fails when a screen,
 provider or reminder calls the ledger derivation again.
 
+Card linking, 15 Nov: seeding the wallet cards and stamping each one on its saved transactions
+(`CardTransactionRelinker`, O(the card's history): 160 ms for 2,600 rows on a desktop, so more on a
+phone) used to run on the UI isolate at every capture, at card add, and once per account
+(`repairOnce`). It now runs in the capture worker: `CaptureChunkRequest.walletCards` /
+`cardIssuerSlugs` (plain data) make `runCaptureChunk` call `seedAndRelinkWalletCards` before the
+messages, and `healCards` then links facts tied to no card, 50 per transaction. Adding a card goes
+through `SmsV2Runtime.relinkWalletCards()`. `performance_guards_test.dart` fails if the runtime or the
+add-card flow seeds or stamps on the UI isolate again. Still on the UI isolate: confirming a found
+card on "Accounts and cards we found" (`InstrumentActions._write`, bounded by that one card) and the
+rare server-id remap (`relinkCard`).
+
 Not yet verified on a phone: killing the app mid-import and relaunching (messages must be
 retried without duplicates); covered on the host by `capture_worker_test.dart`.
 

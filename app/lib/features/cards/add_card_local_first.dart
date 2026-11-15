@@ -17,7 +17,7 @@ import '../../data/local_first/command_outbox.dart';
 import '../../data/local_first/command_outcomes.dart';
 import '../../data/user_cards_repository.dart';
 import '../sms_v2/instruments/card_transaction_relinker.dart';
-import '../sms_v2/instruments/wallet_card_link.dart';
+import '../sms_v2/providers/runtime_provider.dart' show smsV2RuntimeProvider;
 
 /// WP-C6 master switch. `false` restores the old network-first card flows
 /// (the screens still call the helpers, which then go straight to the server).
@@ -381,7 +381,9 @@ Future<AddCardOutcome> addCardLocalFirst(
 /// capture seeds the wallet again.
 Future<void> _linkFoundCards(WidgetRef ref, FinancialStore store, String ns) async {
   try {
-    linkWalletCards(store, ns, await ref.read(catalogueProvider.future));
+    // In the capture worker isolate: stamping a card on its saved history is
+    // O(that history) and must not run on the UI thread.
+    await (await ref.read(smsV2RuntimeProvider.future))?.relinkWalletCards();
   } catch (_) {}
 }
 

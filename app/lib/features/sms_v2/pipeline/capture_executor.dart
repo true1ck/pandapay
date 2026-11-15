@@ -6,7 +6,11 @@ import '../../sms_import/sms_background_queue.dart';
 import '../category/category_snapshot.dart';
 import '../personal/personal_rule_store.dart';
 import '../storage/provisional_store.dart';
+import '../../../data/user_cards_repository.dart' show UserCard;
+import '../instruments/card_transaction_relinker.dart';
+import '../instruments/instrument_seeder.dart';
 import '../instruments/unlinked_card_healer.dart';
+import '../storage/instrument_store.dart';
 import 'sms_v2_pipeline.dart';
 
 /// One slice of a chunk that shares a backfill flag. History (`backfill`) goes
@@ -30,6 +34,8 @@ class CaptureChunkRequest {
     required this.groups,
     required this.ownerNames,
     this.healCards = false,
+    this.walletCards,
+    this.cardIssuerSlugs = const {},
     this.onCommitted,
     this.debugFault,
   });
@@ -46,6 +52,15 @@ class CaptureChunkRequest {
   /// card they name ([UnlinkedCardHealer]), after the groups. Plain data like
   /// the rest, so the whole walk runs in the worker isolate, off the UI thread.
   final bool healCards;
+
+  /// The wallet cards (their stored JSON) to link to the cards the messages
+  /// found, before the groups are captured: seeding the instruments, then
+  /// writing each wallet card onto the transactions saved before it was linked.
+  /// That is O(the card's history), so it runs here, in the worker, and never on
+  /// the UI isolate. [cardIssuerSlugs] maps a wallet card id to its issuer slug
+  /// (the catalogue is not sent); a card with none is skipped, as before.
+  final List<Map<String, Object?>>? walletCards;
+  final Map<String, String?> cardIssuerSlugs;
 
   /// Called on the calling isolate with the entity names a worker committed
   /// (including for a chunk whose caller already timed out), so the live
@@ -83,8 +98,23 @@ void runCaptureChunk({
   required List<CaptureGroup> groups,
   required List<String> ownerNames,
   bool healCards = false,
+  List<Map<String, Object?>>? walletCards,
+  Map<String, String?> cardIssuerSlugs = const {},
   void Function(void Function() work) transact = _direct,
 }) {
+  if (walletCards != null) {
+    // Never stops a message from being captured; the next run retries it.
+    try {
+      transact(
+        () => seedAndRelinkWalletCards(
+          financial,
+          namespace,
+          walletCards,
+          cardIssuerSlugs,
+        ),
+      );
+    } catch (_) {}
+  }
   final categories = CategorySnapshot.load(
     financial.database,
     namespace: namespace,
@@ -123,6 +153,28 @@ void runCaptureChunk({
       cursor = next;
     } while (cursor != null);
   }
+}
+
+/// Links each wallet card to the card the messages found and gives that card the
+/// transactions saved before it was linked (see [CardTransactionRelinker]).
+/// Idempotent; the heavy part is bounded by the linked cards' own history.
+void seedAndRelinkWalletCards(
+  FinancialStore financial,
+  String namespace,
+  List<Map<String, Object?>> walletCards,
+  Map<String, String?> cardIssuerSlugs,
+) {
+  final seeded = InstrumentSeeder(
+    InstrumentStore(financial.database.db, namespace: namespace),
+  ).seed(
+    cards: [for (final c in walletCards) UserCard.fromJson(c)],
+    issuerSlugOf: (card) => cardIssuerSlugs[card.id],
+    bankAccounts: const [],
+  );
+  final relinker = CardTransactionRelinker(financial, namespace: namespace);
+  relinker.moveFacts(seeded.merged);
+  relinker.relinkAll(seeded.linked);
+  relinker.repairOnce();
 }
 
 /// Synchronous path on the caller's own connection: in-memory databases (every
@@ -164,6 +216,8 @@ class InProcessCaptureExecutor implements CaptureExecutor {
       groups: request.groups,
       ownerNames: request.ownerNames,
       healCards: request.healCards,
+      walletCards: request.walletCards,
+      cardIssuerSlugs: request.cardIssuerSlugs,
     );
     await Future<void>.delayed(
       Duration.zero,

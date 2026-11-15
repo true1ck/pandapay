@@ -246,6 +246,8 @@ class SmsCaptureWorker implements CaptureExecutor {
         request.debugFault,
         request.ownerNames,
         request.healCards,
+        request.walletCards,
+        request.cardIssuerSlugs,
       ]);
       _sentBundleHash = bundle.hash;
     } catch (_) {
@@ -380,6 +382,12 @@ class _WorkerState {
     final fault = v[8] as String?;
     final ownerNames = (v[9] as List).cast<String>();
     final healCards = v.length > 10 && v[10] == true;
+    final walletCards = v.length > 11 && v[11] != null
+        ? [for (final c in v[11] as List) (c as Map).cast<String, Object?>()]
+        : null;
+    final cardIssuerSlugs = v.length > 12 && v[12] != null
+        ? (v[12] as Map).cast<String, String?>()
+        : const <String, String?>{};
     var injected = false;
     assert(() {
       injected = true;
@@ -451,6 +459,8 @@ class _WorkerState {
       groups: groups,
       ownerNames: ownerNames,
       healCards: healCards,
+      walletCards: walletCards,
+      cardIssuerSlugs: cardIssuerSlugs,
       transact: (work) {
         changed.clear();
         _db.execute('BEGIN IMMEDIATE');
