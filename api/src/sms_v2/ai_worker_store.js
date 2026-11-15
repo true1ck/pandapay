@@ -19,6 +19,12 @@ async function openAiWorkerStore({ env = process.env, PoolClass = Pool } = {}) {
   if (!env.SMS_AI_WORKER_DATABASE_URL) throw new Error('SMS_AI_WORKER_DATABASE_URL is required');
   const tls = resolveDatabaseTls(env.SMS_AI_WORKER_DATABASE_URL, env);
   const pool = new PoolClass({ connectionString: tls.connectionString, ssl: tls.ssl, max: 1, application_name: 'pandapay-sms-v2-ai-worker' });
+  // An idle connection the database drops (a pooler restart, a network blip) is reported on the pool as an
+  // 'error' event; with no listener Node treats it as uncaught and ends the process. The pool opens a fresh
+  // connection on the next query, so log the code only (never the message) and carry on.
+  if (typeof pool.on === 'function') {
+    pool.on('error', (error) => console.error('SMS v2 database pool error', (error && (error.code || error.name)) || 'Error'));
+  }
   try {
     const r = (await pool.query(
       `SELECT session_user AS name,
