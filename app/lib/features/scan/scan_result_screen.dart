@@ -206,7 +206,13 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     if (noMcc &&
         (walletPeek == null || walletPeek.isEmpty) &&
         !merchantResolution.isLoading) {
-      return _P2PNotice(vpa: widget.parsed.pa);
+      return _P2PNotice(
+        vpa: widget.parsed.pa,
+        action: _withoutCardPanel(
+          'Enter the amount, then pay from your bank account in any UPI app.',
+          withAmount: true,
+        ),
+      );
     }
 
     if (catalogue.isFirstLoad ||
@@ -283,7 +289,15 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     // Filter to those; if the user owns none, show nothing but the notice.
     if (noMcc) {
       cards = cards.where((c) => c.isUpiLinkable).toList();
-      if (cards.isEmpty) return _P2PNotice(vpa: widget.parsed.pa);
+      if (cards.isEmpty) {
+        return _P2PNotice(
+          vpa: widget.parsed.pa,
+          action: _withoutCardPanel(
+            'Enter the amount, then pay from your bank account in any UPI app.',
+            withAmount: true,
+          ),
+        );
+      }
     }
 
     // Same reasoning as rankedRecommendationsProvider's own override
@@ -562,8 +576,36 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
                 onAddCard: () => _addCard(rec.card),
               ),
             ),
+        // Credit card not accepted here (or none to use): never a dead end.
+        _withoutCardPanel(
+          amountEntryCardId == null
+              ? 'No credit card to use here? Enter the amount, then pay from your bank account.'
+              : 'Credit card not accepted here, or not the one you want to use?',
+          withAmount: amountEntryCardId == null,
+        ),
       ],
     );
+  }
+
+  /// A UPI payment needs a real amount. Merchant QRs usually don't carry one
+  /// (`am` absent), and handing ₹0 to the UPI app just bounces straight back
+  /// ("minimum amount of ₹1 is required"). Flag the Amount field inline and
+  /// focus it rather than popping a modal — the user fills it and taps Pay
+  /// again. True when there is an amount to pay.
+  Future<bool> _requireAmount() async {
+    if (_amount.rupees >= 1) return true;
+    setState(() => _amountError = 'Enter an amount to pay');
+    _amountFocusNode.requestFocus();
+    final fieldContext = _amountFieldKey.currentContext;
+    if (fieldContext != null) {
+      await Scrollable.ensureVisible(
+        fieldContext,
+        alignment: 0.35,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    }
+    return false;
   }
 
   Future<void> _payWith(
@@ -571,25 +613,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     List<UserCard> wallet,
     String? categoryId,
   ) async {
-    // A UPI payment needs a real amount. Merchant QRs usually don't carry one
-    // (`am` absent), and handing ₹0 to the UPI app just bounces straight back
-    // ("minimum amount of ₹1 is required"). Flag the Amount field inline and
-    // focus it rather than popping a modal — the user fills it and taps Pay
-    // again.
-    if (_amount.rupees < 1) {
-      setState(() => _amountError = 'Enter an amount to pay');
-      _amountFocusNode.requestFocus();
-      final fieldContext = _amountFieldKey.currentContext;
-      if (fieldContext != null) {
-        await Scrollable.ensureVisible(
-          fieldContext,
-          alignment: 0.35,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
-        );
-      }
-      return;
-    }
+    if (!await _requireAmount() || !mounted) return;
 
     // No merchant code on the QR: RuPay-credit-on-UPI is merchant-only, so
     // make the user affirm this is a business payment before handing off.
@@ -619,14 +643,47 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       if (ok != true || !mounted) return;
     }
 
+    await _handOff(rec: rec, wallet: wallet, categoryId: categoryId);
+  }
+
+  /// "Continue without credit card": the user pays from their own bank account
+  /// in any UPI app. It is the way out when they hold no RuPay credit card, the
+  /// shop doesn't accept credit cards, or the payee is a person, so a scan is
+  /// never a dead end. Same steps as paying with a card: enter the amount, then
+  /// pick the UPI app, which lets the user choose the account.
+  Future<void> _continueWithoutCard() async {
+    if (!await _requireAmount()) return;
+    await _handOff(rec: null, wallet: const [], categoryId: _selectedCategoryId);
+  }
+
+  Widget _withoutCardPanel(String message, {required bool withAmount}) =>
+      _ContinueWithoutCard(
+        message: message,
+        onPressed: _continueWithoutCard,
+        amountController: withAmount ? _amountController : null,
+        amountFocusNode: _amountFocusNode,
+        amountFieldKey: _amountFieldKey,
+        amountError: _amountError,
+      );
+
+  /// Hands the payment to the UPI app the user picks. [rec] is the card being
+  /// paid with, or null for a payment from a bank account.
+  Future<void> _handOff({
+    required Recommendation? rec,
+    required List<UserCard> wallet,
+    required String? categoryId,
+  }) async {
+    final payWith = rec?.card.name ?? 'your bank account';
     final service = ref.read(upiPaymentServiceProvider);
+    final hasAmount = _amount.rupees >= 1;
 
     // NPCI makes UPI apps decline a payment another app starts from a shop QR
     // (an intent: initiation mode 04), while a QR scanned or shared inside the
     // UPI app goes through. So PandaPay never sends a payment link. It shares a
     // QR image of this payment into the chosen app (read like a gallery QR, so
-    // the payee and amount arrive filled in). When that can't be used, it
-    // sends the user to scan the shop's QR inside the UPI app instead.
+    // the payee, and the amount when there is one, arrive filled in). When that
+    // can't be used, it sends the user to scan the shop's QR inside the UPI
+    // app instead.
     final apps = await service.installedApps();
     if (!mounted) return;
 
@@ -636,7 +693,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       chosen = await UpiAppPickerSheet.show(
         context,
         apps: apps,
-        cardName: rec.card.name,
+        cardName: payWith,
       );
       if (chosen == null || !mounted) return;
     }
@@ -652,7 +709,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
         qrData: buildUpiPayUri(
           pa: widget.parsed.pa,
           pn: widget.parsed.pn,
-          am: _amount,
+          am: hasAmount ? _amount : null,
           cu: widget.parsed.cu,
           mc: widget.parsed.mc,
           tr: widget.parsed.tr,
@@ -675,20 +732,22 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     final go = await UpiScanGuideDialog.show(
       context,
       appName: chosen?.name,
-      cardName: rec.card.name,
-      amount: _amount.format(),
+      cardName: payWith,
+      amount: hasAmount ? _amount.format() : null,
     );
     if (!go || !mounted) return;
 
     // Copied so it can be pasted in the UPI app's amount field.
-    final rupees = _amount.rupees;
-    await Clipboard.setData(
-      ClipboardData(
-        text: rupees == rupees.truncateToDouble()
-            ? rupees.toStringAsFixed(0)
-            : rupees.toStringAsFixed(2),
-      ),
-    ).catchError((_) {}); // a clipboard failure must not stop the app opening
+    if (hasAmount) {
+      final rupees = _amount.rupees;
+      await Clipboard.setData(
+        ClipboardData(
+          text: rupees == rupees.truncateToDouble()
+              ? rupees.toStringAsFixed(0)
+              : rupees.toStringAsFixed(2),
+        ),
+      ).catchError((_) {}); // a clipboard failure must not stop the app opening
+    }
 
     if (chosen != null) {
       final opened = await service.openApp(chosen.packageName);
@@ -716,15 +775,15 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
   }
 
   Future<void> _openPaymentSent({
-    required Recommendation rec,
+    required Recommendation? rec,
     required List<UserCard> wallet,
     required String? categoryId,
     required bool autoLog,
   }) async {
     if (!mounted) return;
-    final owned = wallet
-        .where((w) => w.cardProductId == rec.card.id)
-        .firstOrNull;
+    final owned = rec == null
+        ? null
+        : wallet.where((w) => w.cardProductId == rec.card.id).firstOrNull;
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => PaymentSentScreen(
@@ -736,7 +795,8 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
                         ?.displayName ??
                     ''),
           amount: _amount,
-          cardName: rec.card.name,
+          // An empty card name means a payment from a bank account.
+          cardName: rec?.card.name ?? '',
           userCardId: owned?.id,
           categoryId: categoryId,
           merchantVpa: widget.parsed.pa,
@@ -746,12 +806,12 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
                   .read(merchantResolutionProvider(widget.parsed.pa))
                   .valueOrNull
                   ?.mcc,
-          expectedValue: rec.expectedValue,
-          confidence: confidenceOf(rec),
+          expectedValue: rec?.expectedValue ?? const Money.zero(),
+          confidence: rec == null ? Confidence.estimated : confidenceOf(rec),
           // Plan Phase 2.1: both needed for the acceptance report that
           // screen asks for once the user confirms they finished paying.
           vpa: widget.parsed.pa,
-          cardNetwork: rec.card.network,
+          cardNetwork: rec?.card.network ?? CardNetwork.unknown,
           // Android returned a definite success — log the spend straight away
           // rather than asking the user to confirm what the app already told
           // us (RuPay-on-UPI plan, Phase 2).
@@ -881,9 +941,94 @@ class _CategoryPicker extends StatelessWidget {
   }
 }
 
+/// "Continue without credit card": opens the same UPI app list, and the user
+/// pays from their bank account.
+class _ContinueWithoutCard extends StatelessWidget {
+  final String message;
+  final VoidCallback onPressed;
+
+  /// Given when there is no card on the page to type the amount on.
+  final TextEditingController? amountController;
+  final FocusNode? amountFocusNode;
+  final GlobalKey? amountFieldKey;
+  final String? amountError;
+  const _ContinueWithoutCard({
+    required this.message,
+    required this.onPressed,
+    this.amountController,
+    this.amountFocusNode,
+    this.amountFieldKey,
+    this.amountError,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpace.lg),
+      decoration: BoxDecoration(
+        color: BambooInk.paperMuted,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(message, style: BambooFonts.ui(13, color: BambooInk.ink500)),
+          const SizedBox(height: AppSpace.sm),
+          if (amountController != null) ...[
+            TextField(
+              key: amountFieldKey,
+              controller: amountController,
+              focusNode: amountFocusNode,
+              style: BambooFonts.ui(15, color: BambooInk.ink900),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: 'Amount',
+                labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+                prefixText: '₹ ',
+                errorText: amountError,
+                filled: true,
+                fillColor: BambooInk.glassFillOnPaper,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpace.sm),
+          ],
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: BambooInk.ink900,
+                side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                minimumSize: const Size.fromHeight(48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              onPressed: onPressed,
+              child: const Text('Continue without credit card'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _P2PNotice extends StatelessWidget {
   final String vpa;
-  const _P2PNotice({required this.vpa});
+  final Widget action;
+  const _P2PNotice({required this.vpa, required this.action});
 
   @override
   Widget build(BuildContext context) {
@@ -892,7 +1037,11 @@ class _P2PNotice extends StatelessWidget {
       title: "Credit cards can't be used for personal transfers",
       message:
           'This looks like a personal UPI transfer to $vpa, not a merchant payment. '
-          "Use your bank account's UPI app to send this instead.",
+          "You can still pay it from your bank account.",
+      action: Padding(
+        padding: const EdgeInsets.only(top: AppSpace.md),
+        child: action,
+      ),
     );
   }
 }

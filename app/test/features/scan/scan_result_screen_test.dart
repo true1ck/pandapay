@@ -954,4 +954,166 @@ void main() {
       expect(find.text('Open which UPI app?'), findsOneWidget);
     },
   );
+
+  group('continue without credit card: a scan is never a dead end', () {
+    Future<_FakeUpiService> pumpWith(
+      WidgetTester tester, {
+      required List<CardProduct> catalogue,
+      required List<UserCard> wallet,
+      required ParsedUpiQr parsed,
+      List<UpiApp> apps = const [_gpay],
+    }) async {
+      final fake = _FakeUpiService(apps: apps);
+      _mockClipboard(tester);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            upiPaymentServiceProvider.overrideWithValue(fake),
+            catalogueProvider.overrideWith((ref) async => catalogue),
+            categoriesProvider.overrideWith((ref) async => const []),
+            userCardsProvider.overrideWith((ref) async => wallet),
+            cardOverridesProvider.overrideWith((ref) async => const []),
+          ],
+          child: MaterialApp(home: ScanResultScreen(parsed: parsed)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return fake;
+    }
+
+    Future<void> tapContinue(WidgetTester tester) async {
+      final button = find.widgetWithText(
+        OutlinedButton,
+        'Continue without credit card',
+      );
+      await tester.ensureVisible(button);
+      await tester.pumpAndSettle();
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets(
+      'no card can pay by UPI: enter the amount, continue, pick the app, pay from the bank',
+      (tester) async {
+        final fake = await pumpWith(
+          tester,
+          catalogue: [_card('visa', isUpiLinkable: false)],
+          wallet: [_owned('visa')],
+          parsed: _shopQr,
+        );
+
+        // The card is shown as unusable, and the way out is right there.
+        expect(
+          find.text('Not usable via UPI — swipe this instead.'),
+          findsOneWidget,
+        );
+        expect(find.text('Continue without credit card'), findsOneWidget);
+
+        // Same steps as paying with a card: the amount comes first.
+        await tapContinue(tester);
+        expect(find.text('Enter an amount to pay'), findsOneWidget);
+        expect(find.text('Open which UPI app?'), findsNothing);
+
+        await tester.enterText(find.byType(TextField).last, '300');
+        await tester.pump();
+        await tapContinue(tester);
+
+        // The same app list as for a card, naming the bank account.
+        expect(find.text('Open which UPI app?'), findsOneWidget);
+        expect(
+          find.text("You'll pay with your bank account there, then enter your UPI PIN."),
+          findsOneWidget,
+        );
+        await tester.tap(find.text('Google Pay'));
+        await tester.pumpAndSettle();
+
+        final qr = Uri.parse(fake.shared.single.data);
+        expect(qr.queryParameters['pa'], 'shop@okhdfcbank');
+        expect(qr.queryParameters['am'], '300.00');
+        expect(fake.shared.single.package, _gpay.packageName);
+        // No card, so no reward and no manual log on the next screen.
+        expect(find.text('Continue in your UPI app'), findsOneWidget);
+        expect(find.text('REWARD IF THIS COMPLETES'), findsNothing);
+        expect(find.text('No SMS? Log this spend manually'), findsNothing);
+      },
+    );
+
+    testWidgets('a person QR with no card to use can still be paid', (
+      tester,
+    ) async {
+      final fake = await pumpWith(
+        tester,
+        catalogue: [_card('visa', isUpiLinkable: false)],
+        wallet: [_owned('visa')],
+        parsed: const ParsedUpiQr(
+          pa: 'friend@okaxis',
+          pn: 'A Friend',
+          isLikelyP2P: true,
+        ),
+      );
+
+      expect(
+        find.text("Credit cards can't be used for personal transfers"),
+        findsOneWidget,
+      );
+      expect(find.text('Continue without credit card'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField).last, '75');
+      await tester.pump();
+      await tapContinue(tester);
+      await tester.tap(find.text('Google Pay'));
+      await tester.pumpAndSettle();
+
+      final qr = Uri.parse(fake.shared.single.data);
+      expect(qr.queryParameters['pa'], 'friend@okaxis');
+      expect(qr.queryParameters['am'], '75.00');
+    });
+
+    testWidgets(
+      'a card exists but is not accepted here: continue without it, using the amount already typed',
+      (tester) async {
+        final fake = await pumpWith(
+          tester,
+          catalogue: [_card('c1', rate: 0.03)],
+          wallet: [_owned('c1')],
+          parsed: _shopQr,
+        );
+
+        // Empty amount: flagged on the card's own field, nothing opens.
+        await tapContinue(tester);
+        expect(find.text('Enter an amount to pay'), findsOneWidget);
+        expect(find.text('Open which UPI app?'), findsNothing);
+
+        await tester.enterText(find.byType(TextField).last, '150');
+        await tester.pump();
+        await tapContinue(tester);
+        await tester.tap(find.text('Google Pay'));
+        await tester.pumpAndSettle();
+
+        expect(
+          Uri.parse(fake.shared.single.data).queryParameters['am'],
+          '150.00',
+        );
+        expect(find.text('REWARD IF THIS COMPLETES'), findsNothing);
+      },
+    );
+
+    testWidgets('dismissing the app list does nothing', (tester) async {
+      final fake = await pumpWith(
+        tester,
+        catalogue: [_card('c1', rate: 0.03)],
+        wallet: [_owned('c1')],
+        parsed: _shopQr,
+      );
+
+      await tester.enterText(find.byType(TextField).last, '150');
+      await tester.pump();
+      await tapContinue(tester);
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+
+      expect(fake.shared, isEmpty);
+      expect(find.text('Continue in your UPI app'), findsNothing);
+    });
+  });
 }

@@ -15,7 +15,9 @@ class UpiScanGuideDialog extends StatelessWidget {
   /// (iOS, or no UPI app was found) and the user has to open their own.
   final String? appName;
   final String cardName;
-  final String amount;
+
+  /// The amount to pay, or null when it will be entered in the UPI app.
+  final String? amount;
 
   const UpiScanGuideDialog({
     super.key,
@@ -29,7 +31,7 @@ class UpiScanGuideDialog extends StatelessWidget {
     BuildContext context, {
     required String? appName,
     required String cardName,
-    required String amount,
+    required String? amount,
   }) async {
     final go = await showDialog<bool>(
       context: context,
@@ -55,7 +57,12 @@ class UpiScanGuideDialog extends StatelessWidget {
           const SizedBox(height: AppSpace.md),
           _Step(number: 1, text: appName == null ? 'Open your UPI app' : 'Open $appName'),
           _Step(number: 2, text: "Scan the shop's QR again"),
-          _Step(number: 3, text: 'Pay $amount with $cardName (amount is copied)'),
+          _Step(
+            number: 3,
+            text: amount == null
+                ? 'Enter the amount and pay with $cardName'
+                : 'Pay $amount with $cardName (amount is copied)',
+          ),
         ],
       ),
       actions: [

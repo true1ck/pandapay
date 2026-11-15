@@ -73,6 +73,9 @@ class PaymentSentScreen extends ConsumerStatefulWidget {
 }
 
 class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
+  /// An empty card name means a payment from a bank account: no card, no
+  /// reward and nothing to log by hand (the bank SMS records it).
+  bool get _bank => widget.cardName.isEmpty;
   bool _logging = false;
 
   /// One identity for this screen's "log it", reused on every retry so a
@@ -232,51 +235,55 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
                         Text(
                           _logged
                               ? 'This spend now counts toward ${widget.cardName}\'s caps, milestones and points.'
-                              : 'Finish ${widget.merchantName.isEmpty ? 'the payment' : 'paying ${widget.merchantName}'} there, then wait for your bank SMS. If it does not arrive, log it manually below.',
+                              : 'Finish ${widget.merchantName.isEmpty ? 'the payment' : 'paying ${widget.merchantName}'} there, then wait for your bank SMS.${_bank ? '' : ' If it does not arrive, log it manually below.'}',
                           style: BambooFonts.ui(
                             14,
                             color: BambooInk.onSlateSubtle,
                           ),
                         ),
-                        const SizedBox(height: AppSpace.xxl),
-                        Container(
-                          padding: const EdgeInsets.all(AppSpace.lg),
-                          decoration: BoxDecoration(
-                            color: BambooInk.slateRaised,
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: BambooInk.slateHairline),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'REWARD IF THIS COMPLETES',
-                                style: BambooFonts.ui(
-                                  11,
-                                  weight: FontWeight.w600,
-                                  color: BambooInk.onSlateMuted,
-                                ).copyWith(letterSpacing: 1.1),
+                        if (!_bank) ...[
+                          const SizedBox(height: AppSpace.xxl),
+                          Container(
+                            padding: const EdgeInsets.all(AppSpace.lg),
+                            decoration: BoxDecoration(
+                              color: BambooInk.slateRaised,
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: BambooInk.slateHairline,
                               ),
-                              const SizedBox(height: 6),
-                              MoneyText(
-                                widget.expectedValue,
-                                confidence: widget.confidence,
-                                style: BambooFonts.money(
-                                  36,
-                                  color: BambooInk.lime,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'REWARD IF THIS COMPLETES',
+                                  style: BambooFonts.ui(
+                                    11,
+                                    weight: FontWeight.w600,
+                                    color: BambooInk.onSlateMuted,
+                                  ).copyWith(letterSpacing: 1.1),
                                 ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'with ${widget.cardName}',
-                                style: BambooFonts.ui(
-                                  13.5,
-                                  color: BambooInk.onSlateSubtle,
+                                const SizedBox(height: 6),
+                                MoneyText(
+                                  widget.expectedValue,
+                                  confidence: widget.confidence,
+                                  style: BambooFonts.money(
+                                    36,
+                                    color: BambooInk.lime,
+                                  ),
                                 ),
-                              ),
-                            ],
+                                const SizedBox(height: 4),
+                                Text(
+                                  'with ${widget.cardName}',
+                                  style: BambooFonts.ui(
+                                    13.5,
+                                    color: BambooInk.onSlateSubtle,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
+                        ],
                         if (_error != null) ...[
                           const SizedBox(height: AppSpace.md),
                           Text(
@@ -298,7 +305,7 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
                   ),
                 ),
                 const Spacer(),
-                if (!_logged)
+                if (!_logged && !_bank)
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(
@@ -359,7 +366,9 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
                       child: OutlinedButton(
                         style: OutlinedButton.styleFrom(
                           foregroundColor: BambooInk.onSlate,
-                          side: const BorderSide(color: BambooInk.slateHairline),
+                          side: const BorderSide(
+                            color: BambooInk.slateHairline,
+                          ),
                           minimumSize: const Size.fromHeight(48),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
@@ -397,7 +406,9 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
                     style: TextButton.styleFrom(
                       foregroundColor: BambooInk.onSlateSubtle,
                     ),
-                    child: Text(_logged ? 'Done' : "I'll log it later"),
+                    child: Text(
+                      _logged || _bank ? 'Done' : "I'll log it later",
+                    ),
                   ),
                 ),
               ],
