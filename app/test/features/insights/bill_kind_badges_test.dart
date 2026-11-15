@@ -14,7 +14,9 @@ import 'package:pandapay/data/past_bill_receipts.dart';
 import 'package:pandapay/data/pending_bills.dart';
 import 'package:pandapay/data/premium_reminders.dart';
 import 'package:pandapay/features/insights/bills_horizon.dart';
+import 'package:pandapay/features/insights/bill_proof_section.dart';
 import 'package:pandapay/features/insights/central_bills_section.dart';
+import 'package:pandapay/features/sms_v2/ledger/providers.dart';
 import 'package:pandapay/features/sms_v2/ledger/premium_notices.dart';
 import 'package:pandapay/features/insights/payments_due_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -65,9 +67,9 @@ void main() {
   final notice = PremiumNotice(
     sourceKey: 'n1',
     month: DateTime(2026, 9),
-    sender: 'VM-INSCO-S',
+    category: CommitmentCategory.insurance,
     receivedAt: DateTime(2026, 8, 20),
-    body: 'Next Premium falls due on 09/2026',
+    title: 'INSCO',
     policyLast4: '5522',
   );
   final pastReceipts = [
@@ -139,6 +141,10 @@ void main() {
             ],
           ),
           billsHorizonProvider.overrideWith((ref) => BillsHorizon.upcoming),
+          smsV2LedgerReadModelProvider.overrideWith(
+            (ref) async => throw StateError('no ledger in this test'),
+          ),
+          billProofSmsProvider.overrideWith((ref, key) async => null),
         ],
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
@@ -170,6 +176,37 @@ void main() {
     expect(find.text('Past premium · Payment not detected'), findsOneWidget);
     expect(find.text('Past premium · Needs confirmation'), findsOneWidget);
     expect(find.text('Paid · Linked'), findsOneWidget);
+
+    // Tapping a bill opens its own page, laid out like a transaction.
+    await tester.tap(find.text('Sunrise Life Insurance').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Premium details'), findsOneWidget);
+    expect(find.text('SMS evidence'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    // So does a past bill.
+    await tester.tap(find.text('Test Bank Credit Card'));
+    await tester.pumpAndSettle();
+    expect(find.text('Bill details'), findsOneWidget);
+    expect(find.text('CREDIT CARD'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    // An upcoming month-only premium opens a page that names the month.
+    await tester.tap(find.text('Evergreen Insurance'));
+    await tester.pumpAndSettle();
+    expect(find.text('Premium details'), findsOneWidget);
+    expect(find.text('December 2026 · day not stated'), findsOneWidget);
+    expect(find.text('Mark as paid'), findsNothing);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    // And so does a past month-only notice, asking for confirmation.
+    await tester.tap(find.text('INSCO'));
+    await tester.pumpAndSettle();
+    expect(find.text('Needs your confirmation'), findsOneWidget);
+    expect(find.text('September 2026 · day not stated'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
 
     if (shot != null) {
       await tester.runAsync(() async {

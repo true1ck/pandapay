@@ -80,6 +80,7 @@ const Set<MovementPurpose> mandateChargePurposes = {
   MovementPurpose.purchase,
   MovementPurpose.unknown,
   MovementPurpose.billPayment,
+  MovementPurpose.insurance,
   MovementPurpose.p2p,
 };
 
@@ -1980,7 +1981,8 @@ class _Run {
             debit ? EventType.atmWithdrawal : EventType.unknown,
           MovementPurpose.fee => debit ? EventType.fee : EventType.refund,
           MovementPurpose.emi => debit ? EventType.emi : EventType.unknown,
-          MovementPurpose.billPayment =>
+          MovementPurpose.billPayment ||
+          MovementPurpose.insurance =>
             debit ? EventType.billPayment : EventType.refund,
           MovementPurpose.tax =>
             debit ? EventType.billPayment : EventType.income,

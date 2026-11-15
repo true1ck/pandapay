@@ -6,6 +6,8 @@ import '../../../data/commitments_repository.dart';
 import '../../../data/card_bill_ledger.dart';
 import '../../../data/pending_bills.dart';
 import '../../../data/spend_reports_repository.dart';
+import 'premium_notices.dart' show categoryOfBillKind;
+import 'scheduled_commitments.dart';
 import 'subscription_state.dart';
 
 String _instrumentKey(v2.Fact f) => [
@@ -782,6 +784,8 @@ List<_BillRecord> _billRecords(
   final byId = _facts(facts);
   final groups = <String, List<v2.BillDueFact>>{};
   for (final fact in byId.values.whereType<v2.BillDueFact>()) {
+    // A notice that named only a month is a reminder, not a bill with a date.
+    if (fact.dueMonthOnly == true) continue;
     groups
         .putIfAbsent('${_billIdentity(fact)}|${fact.dueDate}', () => [])
         .add(fact);
@@ -983,6 +987,7 @@ List<Commitment> billsFromFacts(
   Iterable<v2.Event> events, {
   Map<String, String> transactionIdByEvent = const {},
   Iterable<Commitment> manualCopies = const [],
+  DateTime? now,
 }) {
   final copies = manualCopies.toList();
   Commitment? copyFor(Commitment bill) {
@@ -1003,8 +1008,18 @@ List<Commitment> billsFromFacts(
   }
 
   final out = <Commitment>[];
-  for (final record in _billRecords(facts, events)) {
-    final bill = _commitment(record, transactionIdByEvent: transactionIdByEvent);
+  // Dated statements, then EMI / premium / SIP debits the bank announced.
+  final all = <Commitment>[
+    for (final record in _billRecords(facts, events))
+      _commitment(record, transactionIdByEvent: transactionIdByEvent),
+    ...scheduledCommitments(
+      facts,
+      events,
+      now: now ?? DateTime.now(),
+      transactionIdByEvent: transactionIdByEvent,
+    ),
+  ];
+  for (final bill in all) {
     final copy = copyFor(bill);
     if (copy == null) {
       out.add(bill);
@@ -1024,14 +1039,24 @@ Commitment _commitment(
   Map<String, String> transactionIdByEvent = const {},
 }) {
   final bill = record.fact;
+  // An EMI notice names a loan account, not a biller: the account kind says
+  // what it is, so it lands under Loans & EMIs whatever the title reads.
+  final isLoan = bill.instrument?.kind == v2.InstrumentKind.loan;
   final title =
       bill.billerName ??
+      (isLoan ? 'Loan EMI' : null) ??
       bill.instrument?.productName ??
       '${bill.instrument?.issuerSlug ?? ''} bill'.trim();
   return Commitment(
     id: 'v2:${bill.factId}',
     title: title,
-    category: CommitmentCategory.fromText(title),
+    // What the rule says the bill is comes first; then the account kind; the
+    // biller's name is the last resort.
+    category:
+        categoryOfBillKind(bill.billKind) ??
+        (isLoan && bill.billerName == null
+            ? CommitmentCategory.loanOrEmi
+            : CommitmentCategory.fromText(title)),
     amount: record.dueMinor == null ? null : Money.fromPaise(record.dueMinor!),
     dueOn: DateTime.parse(bill.dueDate),
     identifier: bill.instrument?.maskDigits,

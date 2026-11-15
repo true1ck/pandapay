@@ -21,6 +21,21 @@ class BillKind {
     Color(0xFF3949AB),
   );
 
+  static const sip = BillKind(
+    'SIP',
+    Icons.trending_up_rounded,
+    Color(0xFFE0F2F1),
+    Color(0xFF00796B),
+  );
+
+  /// A repeating investment instalment reads SIP (its cadence says so);
+  /// everything else by its category.
+  static BillKind forCommitment(Commitment c) =>
+      c.category == CommitmentCategory.investment &&
+          c.cadence != CommitmentCadence.oneTime
+      ? sip
+      : ofCategory(c.category);
+
   static BillKind ofCategory(CommitmentCategory c) => BillKind(
     switch (c) {
       CommitmentCategory.utility => 'UTILITY',
@@ -44,6 +59,7 @@ class BillKind {
   static BillKind? ofPast(PastBillReceipt item) {
     final name = item.categoryName;
     if (name == 'creditCard') return creditCard;
+    if (name == 'sip') return sip;
     if (name != null) {
       for (final c in CommitmentCategory.values) {
         if (c.name == name) return ofCategory(c);

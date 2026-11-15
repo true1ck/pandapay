@@ -1,0 +1,34 @@
+{
+  "contractVersion": "2.0",
+  "factId": "6a40f688beacd979e905e29c43b9d18cc67abdc608ea7a95442b965cab4d9de4",
+  "sourceKey": "sms:synthetic:month-only",
+  "factType": "bill_due",
+  "observedAt": "2026-11-01T07:00:20Z",
+  "occurredAt": "2026-11-01T07:00:11Z",
+  "instrument": null,
+  "counterparty": null,
+  "amounts": [],
+  "references": {},
+  "attrs": {
+    "dueDate": "2026-09-30",
+    "billerName": "SYNTH LIFE",
+    "dueMonthOnly": true,
+    "billKind": "insurance"
+  },
+  "provenance": {
+    "engine": "rules",
+    "ruleId": "SYN-RULE-BILL_DUE_MONTH",
+    "ruleVersion": 1,
+    "bundleVersion": 1,
+    "engineVersion": "2.0.0",
+    "appVersion": "1.0.0+1"
+  },
+  "evidence": [
+    {
+      "field": "amt",
+      "start": 0,
+      "end": 10
+    }
+  ],
+  "confidence": 0.99
+}

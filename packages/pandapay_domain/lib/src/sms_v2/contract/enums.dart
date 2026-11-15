@@ -143,6 +143,7 @@ enum MovementPurpose implements WireEnum {
   walletTopup('wallet_topup'),
   investment('investment'),
   billPayment('bill_payment'),
+  insurance('insurance'),
   tax('tax'),
   transfer('transfer'),
   dividend('dividend'),

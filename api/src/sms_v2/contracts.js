@@ -108,6 +108,11 @@ function factSemantics(f, base) {
   (f.evidence || []).forEach((s, i) => {
     if (s.end < s.start) errs.push({ code: 'fact.evidence.span_invalid', path: `${base}/evidence/${i}` });
   });
+  // CCR-007: a bill needs an amount, unless the notice named only a month.
+  if (f.factType === 'bill_due' && !(f.attrs && f.attrs.dueMonthOnly === true)
+      && !(f.amounts || []).some((a) => a.role === 'due_total' || a.role === 'due_minimum')) {
+    errs.push({ code: 'fact.bill_due.amount_required', path: `${base}/amounts` });
+  }
   return errs;
 }
 

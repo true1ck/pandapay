@@ -793,5 +793,132 @@
     "status": "active",
     "createdBy": "baseline",
     "updatedAt": "2026-11-08T00:00:00Z"
+  },
+  {
+    "id": "GENZ-INS-PREMIUM-UPCOMING-DEBIT",
+    "version": 1,
+    "family": "bill_upcoming",
+    "senders": [
+      "*"
+    ],
+    "priority": 246,
+    "match": {
+      "pattern": "(?:\\byour\\s+)?(?<biller>[a-z][a-z &.'-]{2,40}?)\\s+premium\\s+(?:amount\\s+)?(?:of\\s+)?(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)[^\\n]{0,80}?\\bwill\\s+be\\s+(?:auto-?)?(?:debited|deducted|charged)[^\\n]{0,70}?\\b(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was debited",
+        "has been debited",
+        "failed",
+        "received",
+        "cancel"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "scheduled",
+          "direction": "debit",
+          "purpose": "insurance",
+          "dueAt": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "biller",
+          "transforms": [
+            "upperTrim"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-INSCOX-S",
+        "body": "Dear Customer, your Sunrise Life Insurance premium of Rs 2,500 for policy no 123456789 will be auto-debited from your account on 25-11-2026.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-INSCOX-S",
+        "body": "Dear Customer, your Sunrise Life Insurance premium of Rs 2,500 for policy no 123456789 was debited from your account on 25-11-2026.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-15T00:00:00Z"
+  },
+  {
+    "id": "GENZ-INS-PREMIUM-NEXT-MONTH",
+    "version": 1,
+    "family": "bill_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 244,
+    "match": {
+      "pattern": "^(?![\\s\\S]*(?:\\brs\\.?|\\binr|₹)\\s*\\d)[\\s\\S]*?(?:policy\\s*(?:no\\.?|number)?\\s*:?\\s*[x*]*\\d*?(?<policy>\\d{4})(?!\\d)[\\s\\S]{0,80}?)?\\bnext\\s+premium\\b[^\\n]{0,40}?\\b(?:falls?\\s+)?due\\b\\s*(?:on|in|by)?\\s*:?\\s*(?<due>\\d{1,2}[/-]\\d{4}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\s+\\d{4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "has been paid",
+        "payment received",
+        "thank you"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due",
+            "monthEnd": true
+          },
+          "dueMonthOnly": true,
+          "billKind": "insurance"
+        },
+        "amounts": [],
+        "counterparty": {
+          "kind": "merchant",
+          "accountMaskFrom": "policy"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-INSCOX-S",
+        "body": "Dear Policyholder, policy no. 123456789 Next Premium falls due on 09/2026. Please pay on time.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-INSCOX-S",
+        "body": "Dear Policyholder, your Next Premium is due in September 2026. Pay online to avoid lapse.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-INSCOX-S",
+        "body": "Premium of Rs 2,500 received for policy no 123456789. Next Premium falls due on 09/2026.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-15T00:00:00Z"
   }
 ]

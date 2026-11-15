@@ -1,3 +1,4 @@
+import 'bill_detail_screen.dart';
 import 'bill_kind_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -241,7 +242,9 @@ class _PastBillHistoryRow extends StatelessWidget {
             ),
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => PastBillReceiptDetailScreen(item: item),
+          builder: (_) => item.kind == PastBillReceiptKind.bill
+              ? BillDetailScreen.past(item)
+              : PastBillReceiptDetailScreen(item: item),
         ),
       ),
     );

@@ -63,12 +63,12 @@ A fact is one thing a message states. A message produces zero or more facts. Fac
 
 | `factType` | Meaning | Required amount roles | `attrs` |
 | --- | --- | --- | --- |
-| `movement` | Money actually moved | exactly one `posted` | `direction` (`debit`, `credit`); `purpose` (`purchase`, `p2p`, `atm`, `salary`, `interest`, `refund`, `cashback`, `reversal`, `fee`, `emi`, `card_payment`, `wallet_topup`, `investment`, `bill_payment`, `tax`, `transfer`, dividend, `unknown`); `rail` (`upi`, `card`, `imps`, `neft`, `rtgs`, `cheque`, `nach`, `wallet`, `cash`, `unknown`); `mandateRef?`; evidenceOnly? (true for a biller's or app's receipt, which never counts as money on its own) |
+| `movement` | Money actually moved | exactly one `posted` | `direction` (`debit`, `credit`); `purpose` (`purchase`, `p2p`, `atm`, `salary`, `interest`, `refund`, `cashback`, `reversal`, `fee`, `emi`, `card_payment`, `wallet_topup`, `investment`, `bill_payment`, `insurance`, `tax`, `transfer`, dividend, `unknown`); `rail` (`upi`, `card`, `imps`, `neft`, `rtgs`, `cheque`, `nach`, `wallet`, `cash`, `unknown`); `mandateRef?`; evidenceOnly? (true for a biller's or app's receipt, which never counts as money on its own) |
 | `attempt` | Did not move, or not yet | `posted` or `scheduled` | `status` (`failed`, `declined`, `pending`, `scheduled`, `cancelled`); `direction`; `purpose`; `dueAt?` |
 | `hold` | Money blocked, not moved | `held` or `released` | `phase` (`placed`, `released`, `converted`); `purpose` (`ipo_asba`, `upi_mandate_block`, `preauth`, `lien`, `other`); `issueName?` |
 | `balance_snapshot` | A balance at a point in time | one of `available_balance`, `available_credit`, `outstanding`, `points_balance` | `asOf` |
 | `limit_change` | A card or loan limit changed | `credit_limit` | `previousMinor?`; `reason` (`increase`, `decrease`, `assigned`) |
-| `bill_due` | An amount owed by a date | `due_total` and/or `due_minimum` | `dueDate` (date); `statementDate?`; `billerName?` |
+| `bill_due` | An amount owed by a date | `due_total` and/or `due_minimum` (none when `dueMonthOnly` is true) | `dueDate` (date); `statementDate?`; `billerName?`; `dueMonthOnly?` (true when only a month was named, `dueDate` is then its last day); `billKind?` (`utility`, `telecom`, `insurance`, `loan`, `rent`, `education`, `tax`) |
 | `mandate` | A standing instruction changed | `ceiling` optional | `phase` (`created`, `modified`, `paused`, `resumed`, `revoked`, `expired`); `frequency?`; `merchantName?`; oneTime?; mandatePurpose? (ipo, subscription, bill, sip, loan, other). A one-time or IPO mandate never becomes a subscription. |
 | `reward` | Points earned or redeemed | `points_earned` or `points_redeemed`; `cash_value` optional | `program?`; `expiresAt?` |
 | `instrument_hint` | Identity only, no money | none | `hint` (`card_issued`, `card_activated`, `account_opened`, `product_name`, `linked_upi`) |

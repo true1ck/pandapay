@@ -22,7 +22,6 @@ import '../storage/stats_store.dart';
 import '../storage/sync_state_store.dart';
 import 'receipt_review.dart';
 import 'trace.dart';
-import '../ledger/premium_notices.dart';
 
 /// The local part of WP-14. The caller supplies a verified bundle and a
 /// financial candidate that has already passed the existing safety gate.
@@ -128,17 +127,6 @@ class SmsV2Pipeline {
         final oldestFirst = unique.values.toList()
           ..sort((a, b) => a.observedAt.compareTo(b.observedAt));
         for (final message in oldestFirst) {
-          // A month-only insurance notice holds no amount, so no rule makes a
-          // bill of it; it is kept in its own small list for the Bills page.
-          final premium = premiumNoticeFromSms(
-            sourceKey: message.sourceKey,
-            sender: message.sender,
-            body: message.body,
-            receivedAt: message.observedAt.toLocal(),
-          );
-          if (premium != null) {
-            PremiumNoticeStore(_db, namespace: namespace).save(premium);
-          }
           var outcome = engine.interpretDetailed(
             message,
             bundle,

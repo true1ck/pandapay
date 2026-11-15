@@ -1,0 +1,45 @@
+{
+  "contractVersion": "2.0",
+  "factId": "ce963c0f4076e99bd17363e7bbee49b457b33d2dde374d46368b8f5e0e36e835",
+  "sourceKey": "sms:synthetic:billkind-bad",
+  "factType": "bill_due",
+  "observedAt": "2026-11-01T07:00:20Z",
+  "occurredAt": "2026-11-01T07:00:11Z",
+  "instrument": {
+    "kind": "credit_card",
+    "issuerSlug": "hdfc",
+    "maskDigits": "5678",
+    "maskLength": 16,
+    "productName": null,
+    "raw": "x5678"
+  },
+  "counterparty": null,
+  "amounts": [
+    {
+      "role": "due_total",
+      "minor": 450000,
+      "unit": "INR"
+    }
+  ],
+  "references": {},
+  "attrs": {
+    "dueDate": "2026-11-18",
+    "billKind": "spaceship"
+  },
+  "provenance": {
+    "engine": "rules",
+    "ruleId": "SYN-RULE-BILL_DUE",
+    "ruleVersion": 1,
+    "bundleVersion": 1,
+    "engineVersion": "2.0.0",
+    "appVersion": "1.0.0+1"
+  },
+  "evidence": [
+    {
+      "field": "amt",
+      "start": 0,
+      "end": 10
+    }
+  ],
+  "confidence": 0.99
+}

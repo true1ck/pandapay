@@ -1,3 +1,4 @@
+import 'bill_detail_screen.dart';
 import 'bill_kind_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -80,68 +81,74 @@ class _PremiumRow extends StatelessWidget {
       if (reminder.accountLast4?.isNotEmpty == true)
         'Policy ••${reminder.accountLast4}',
     ].join(' · ');
-    return Container(
-      padding: const EdgeInsets.all(AppSpace.md),
-      decoration: BoxDecoration(
-        color: BambooInk.glassFillOnPaper,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: BambooInk.hairlineOnPaper),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => BillDetailScreen.premium(reminder)),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: reminder.category.iconBg,
-              borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpace.md),
+        decoration: BoxDecoration(
+          color: BambooInk.glassFillOnPaper,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: BambooInk.hairlineOnPaper),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: reminder.category.iconBg,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                reminder.category.icon,
+                color: reminder.category.iconColor,
+                size: 20,
+              ),
             ),
-            child: Icon(
-              reminder.category.icon,
-              color: reminder.category.iconColor,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: AppSpace.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                NameWithBadge(
-                  name: reminder.title,
-                  style: BambooFonts.ui(
-                    14,
-                    weight: FontWeight.w600,
-                    color: BambooInk.ink900,
+            const SizedBox(width: AppSpace.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  NameWithBadge(
+                    name: reminder.title,
+                    style: BambooFonts.ui(
+                      14,
+                      weight: FontWeight.w600,
+                      color: BambooInk.ink900,
+                    ),
+                    kind: BillKind.ofCategory(reminder.category),
                   ),
-                  kind: BillKind.ofCategory(reminder.category),
+                  const SizedBox(height: 2),
+                  Text(
+                    meta,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: BambooFonts.ui(11.5, color: BambooInk.ink700),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpace.sm),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  'Next premium',
+                  style: BambooFonts.ui(11, color: BambooInk.ink500),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  meta,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: BambooFonts.ui(11.5, color: BambooInk.ink700),
+                  DateFormat('MMM yyyy').format(reminder.premiumMonth),
+                  style: BambooFonts.money(14, color: BambooInk.ink900),
                 ),
               ],
             ),
-          ),
-          const SizedBox(width: AppSpace.sm),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                'Next premium',
-                style: BambooFonts.ui(11, color: BambooInk.ink500),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                DateFormat('MMM yyyy').format(reminder.premiumMonth),
-                style: BambooFonts.money(14, color: BambooInk.ink900),
-              ),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

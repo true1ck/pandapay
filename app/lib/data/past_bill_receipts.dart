@@ -6,7 +6,6 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import 'commitments_repository.dart';
 import 'local/app_database.dart';
 import '../features/sms_v2/ledger/premium_notices.dart';
-import 'premium_reminders.dart';
 
 enum PastBillReceiptStatus {
   paidLinked,
@@ -38,6 +37,9 @@ class PastBillReceipt {
   /// Null on rows saved before bills were tagged.
   final String? categoryName;
 
+  /// The notice named a month and no day, so [dueDate] is that month's last day.
+  final bool dueMonthOnly;
+
   const PastBillReceipt({
     required this.id,
     required this.sourceKey,
@@ -54,6 +56,7 @@ class PastBillReceipt {
     this.sender,
     this.body,
     this.categoryName,
+    this.dueMonthOnly = false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -72,6 +75,7 @@ class PastBillReceipt {
     'sender': sender,
     'body': body,
     'categoryName': categoryName,
+    'dueMonthOnly': dueMonthOnly,
   };
 
   factory PastBillReceipt.fromJson(Map<String, dynamic> json) {
@@ -104,6 +108,7 @@ class PastBillReceipt {
       sender: json['sender'] as String?,
       body: json['body'] as String?,
       categoryName: json['categoryName'] as String?,
+      dueMonthOnly: json['dueMonthOnly'] as bool? ?? false,
     );
   }
 }
@@ -231,16 +236,21 @@ List<PastBillReceipt> pastBillReceiptsFromBills(
         linkedTransactionId: bill.linkedTransactionId,
         cardLast4: isCard ? bill.identifier : null,
         accountLast4: isCard ? null : bill.identifier,
-        categoryName: isCard ? 'creditCard' : bill.category.name,
+        categoryName: isCard
+            ? 'creditCard'
+            : bill.category == CommitmentCategory.investment &&
+                  bill.cadence != CommitmentCadence.oneTime
+            ? 'sip'
+            : bill.category.name,
       ),
     );
   }
   return out..sort((a, b) => b.dueDate!.compareTo(a.dueDate!));
 }
 
-/// Past insurance months from month-only notices: one row per policy and month,
-/// shown as history that needs confirming (SMS cannot say it was paid).
-/// [notices] are the saved ones; a month still ahead is an upcoming reminder.
+/// Past months from month-only notices: one row per policy and month, shown as
+/// history that needs confirming (SMS cannot say it was paid). A month still
+/// ahead is an upcoming reminder.
 List<PastBillReceipt> pastPremiumReceiptsFromNotices(
   Iterable<PremiumNotice> notices,
   DateTime now,
@@ -249,24 +259,25 @@ List<PastBillReceipt> pastPremiumReceiptsFromNotices(
   final byCycle = <String, PastBillReceipt>{};
   for (final n in notices) {
     if (!n.month.isBefore(thisMonth)) continue;
-    final premium = parseMonthOnlyPremium(n.toObservation());
-    if (premium == null) continue;
-    final cycle = '${premium.title}|${premium.accountLast4 ?? ''}|${n.month}';
+    final cycle = '${n.displayTitle}|${n.policyLast4 ?? ''}|${n.month}';
     final previous = byCycle[cycle];
-    if (previous != null && !n.receivedAt.isAfter(previous.receivedAt)) continue;
+    if (previous != null && !n.receivedAt.isAfter(previous.receivedAt)) {
+      continue;
+    }
     byCycle[cycle] = PastBillReceipt(
       id: 'past-premium-${n.sourceKey}',
       sourceKey: n.sourceKey,
-      merchant: premium.title,
+      merchant: n.displayTitle,
       kind: PastBillReceiptKind.bill,
       amount: null,
       occurredAt: n.receivedAt,
       receivedAt: n.receivedAt,
+      // The month's last day, flagged below: the day was never stated.
+      dueDate: DateTime(n.month.year, n.month.month + 1, 0),
+      dueMonthOnly: true,
       status: PastBillReceiptStatus.needsConfirmation,
-      accountLast4: premium.accountLast4,
-      sender: n.sender,
-      body: premium.body,
-      categoryName: CommitmentCategory.insurance.name,
+      accountLast4: n.policyLast4,
+      categoryName: n.category.name,
     );
   }
   return byCycle.values.toList()

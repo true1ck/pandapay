@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:pandapay_domain/sms_v2.dart' show Totals;
@@ -40,24 +41,32 @@ class MoneyFlowLines extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         for (final (head, split) in lines)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: '$head  ',
-                    style: BambooFonts.ui(
-                      10.5,
-                      weight: FontWeight.w700,
-                      color: BambooInk.ink900,
+          InkWell(
+            key: head == 'Investments'
+                ? const Key('home_investments_line')
+                : null,
+            onTap: head == 'Investments'
+                ? () => context.push('/activity?type=investments')
+                : null,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 4),
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: '$head  ',
+                      style: BambooFonts.ui(
+                        10.5,
+                        weight: FontWeight.w700,
+                        color: BambooInk.ink900,
+                      ),
                     ),
-                  ),
-                  TextSpan(
-                    text: split,
-                    style: BambooFonts.ui(9.5, color: BambooInk.ink500),
-                  ),
-                ],
+                    TextSpan(
+                      text: split,
+                      style: BambooFonts.ui(9.5, color: BambooInk.ink500),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

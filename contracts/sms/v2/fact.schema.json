@@ -260,6 +260,7 @@
                 "wallet_topup",
                 "investment",
                 "bill_payment",
+                "insurance",
                 "tax",
                 "transfer",
                 "dividend",
@@ -399,6 +400,7 @@
                 "wallet_topup",
                 "investment",
                 "bill_payment",
+                "insurance",
                 "tax",
                 "transfer",
                 "dividend",
@@ -694,22 +696,7 @@
             }
           },
           "x-codes": {
-            "type": "fact.malformed",
-            "contains": "fact.bill_due.amount_required"
-          },
-          "contains": {
-            "type": "object",
-            "required": [
-              "role"
-            ],
-            "properties": {
-              "role": {
-                "enum": [
-                  "due_total",
-                  "due_minimum"
-                ]
-              }
-            }
+            "type": "fact.malformed"
           }
         },
         "attrs": {
@@ -734,6 +721,24 @@
               "type": "string",
               "minLength": 1,
               "x-code": "fact.bill_due.billerName_invalid"
+            },
+            "dueMonthOnly": {
+              "type": "boolean",
+              "const": true,
+              "x-code": "fact.bill_due.dueMonthOnly_invalid"
+            },
+            "billKind": {
+              "type": "string",
+              "enum": [
+                "utility",
+                "telecom",
+                "insurance",
+                "loan",
+                "rent",
+                "education",
+                "tax"
+              ],
+              "x-code": "fact.bill_due.billKind_invalid"
             }
           },
           "additionalProperties": false,

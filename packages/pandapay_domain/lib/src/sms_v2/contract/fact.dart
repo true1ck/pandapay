@@ -107,7 +107,9 @@ sealed class Fact extends JsonValue {
         return BillDueFact(e,
             dueDate: a['dueDate'] as String,
             statementDate: a['statementDate'] as String?,
-            billerName: a['billerName'] as String?);
+            billerName: a['billerName'] as String?,
+            dueMonthOnly: a['dueMonthOnly'] as bool?,
+            billKind: a['billKind'] as String?);
       case FactType.mandate:
         return MandateFact(e,
             phase: MandatePhase.fromWire(a['phase'] as String),
@@ -294,12 +296,28 @@ final class LimitChangeFact extends Fact {
 
 /// An amount owed by a date.
 final class BillDueFact extends Fact {
-  BillDueFact(super.envelope, {required this.dueDate, this.statementDate, this.billerName});
+  BillDueFact(super.envelope,
+      {required this.dueDate,
+      this.statementDate,
+      this.billerName,
+      this.dueMonthOnly,
+      this.billKind});
 
-  /// `YYYY-MM-DD`.
+  /// `YYYY-MM-DD`. When [dueMonthOnly] is true the notice named only a month
+  /// ("Next premium falls due on 09/2026") and this is that month's last day:
+  /// the day was never stated.
   final String dueDate;
   final String? statementDate;
   final String? billerName;
+
+  /// True when the message gave a month and no day (CCR-007). Such a bill may
+  /// carry no amount.
+  final bool? dueMonthOnly;
+
+  /// What the bill is, when the rule that read it says (`utility`, `telecom`,
+  /// `insurance`, `loan`, `rent`, `education`, `tax`). Absent: the reader of the
+  /// fact classifies it from the biller's name.
+  final String? billKind;
 
   @override
   FactType get factType => FactType.billDue;
@@ -309,6 +327,8 @@ final class BillDueFact extends Fact {
         'dueDate': dueDate,
         if (statementDate != null) 'statementDate': statementDate,
         if (billerName != null) 'billerName': billerName,
+        if (dueMonthOnly != null) 'dueMonthOnly': dueMonthOnly,
+        if (billKind != null) 'billKind': billKind,
       };
 }
 

@@ -72,6 +72,10 @@ class ActivityScreen extends ConsumerStatefulWidget {
   /// A merchant or note search to start with, e.g. from a voice answer.
   final String? initialQuery;
 
+  /// A kind of activity to start on (`investments`, `moneyIn`, ...): the name
+  /// of one of the type filters. Starts on all time, since a SIP is monthly.
+  final String? initialType;
+
   const ActivityScreen({
     super.key,
     this.initialTagIds = const {},
@@ -81,6 +85,7 @@ class ActivityScreen extends ConsumerStatefulWidget {
     this.initialTo,
     this.initialSpendOnly = false,
     this.initialQuery,
+    this.initialType,
   });
 
   @override
@@ -250,7 +255,15 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       widget.initialFrom != null ||
       widget.initialTo != null ||
       widget.initialSpendOnly ||
-      widget.initialQuery != null;
+      widget.initialQuery != null ||
+      _initialType != null;
+
+  _ActivityTypeFilter? get _initialType {
+    for (final t in _ActivityTypeFilter.values) {
+      if (t.name == widget.initialType) return t;
+    }
+    return null;
+  }
 
   @override
   void initState() {
@@ -327,6 +340,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         oldWidget.initialFrom != widget.initialFrom ||
         oldWidget.initialTo != widget.initialTo ||
         oldWidget.initialSpendOnly != widget.initialSpendOnly ||
+        oldWidget.initialType != widget.initialType ||
         oldWidget.initialQuery != widget.initialQuery) {
       _initialFilterReady = !_hasInitialFilter;
       if (_hasInitialFilter) {
@@ -348,19 +362,32 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       ref.read(_activityViewRestoredProvider.notifier).state = false;
       final hasInitialDate =
           widget.initialFrom != null || widget.initialTo != null;
+      final startsOnType = _initialType != null && !hasInitialDate;
       final defaultMonth = _activityMonthFilter();
       ref.read(_activityFilterProvider.notifier).state = ActivityFilter(
         tagIds: widget.initialTagIds,
         categoryId: widget.initialCategoryId,
         categoryLabel: widget.initialCategoryLabel,
-        from: hasInitialDate ? widget.initialFrom : defaultMonth.from,
-        to: hasInitialDate ? widget.initialTo : defaultMonth.to,
+        from: hasInitialDate
+            ? widget.initialFrom
+            : startsOnType
+            ? null
+            : defaultMonth.from,
+        to: hasInitialDate
+            ? widget.initialTo
+            : startsOnType
+            ? null
+            : defaultMonth.to,
         datePreset: hasInitialDate
             ? _ActivityDatePreset.custom
+            : startsOnType
+            ? _ActivityDatePreset.allTime
             : _ActivityDatePreset.thisMonth,
-        type: widget.initialSpendOnly
-            ? _ActivityTypeFilter.spending
-            : _ActivityTypeFilter.all,
+        type:
+            _initialType ??
+            (widget.initialSpendOnly
+                ? _ActivityTypeFilter.spending
+                : _ActivityTypeFilter.all),
         query: widget.initialQuery,
       );
       setState(() => _initialFilterReady = true);

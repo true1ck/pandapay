@@ -77,6 +77,12 @@ List<ContractError> _factSemantics(Map<String, Object?> f, String base) {
       errs.add(ContractError('fact.amount.duplicate_role', '$base/amounts/$i/role'));
     }
   }
+  // CCR-007: a bill needs an amount, unless the notice named only a month.
+  if (f['factType'] == 'bill_due' &&
+      (f['attrs'] as Map)['dueMonthOnly'] != true &&
+      !amounts.any((a) => const {'due_total', 'due_minimum'}.contains((a as Map)['role']))) {
+    errs.add(ContractError('fact.bill_due.amount_required', '$base/amounts'));
+  }
   final evidence = f['evidence'] as List;
   for (var i = 0; i < evidence.length; i++) {
     final s = evidence[i] as Map;

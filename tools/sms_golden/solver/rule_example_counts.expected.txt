@@ -14,6 +14,7 @@ debit 12000 purchase: Your payment of Rs 120 from Pluxee card ending 1234 was su
 debit 1500000 purchase: Rs 15,000.00 transferred from your account via IMPS to RAVI KUMAR on 12-11-26. Ref 432198765000.
 debit 200 purchase: INR 2.00 txn of INR 2.00 was successful for ICICI Bank Credit Card XX1234.
 debit 200 purchase: INR 2.00 txn of INR 2.00 was successful for ICICI Bank Debit Card XX1234.
+debit 250000 bill_payment: Dear Customer, your Sunrise Life Insurance premium of Rs 2,500 for policy no 123456789 was debited from your account on 25-
 debit 250000 bill_payment: Premium Rs. 2500 for LIC policy no 123456789 has been debited on 25-10-2026.
 debit 31000 purchase: Spent Rs.310 From HDFC Bank Card x8406 At QUALITY FUEL STATION On 2026-04-07:21:41:16 Bal Rs.135317.02 Not You? Call 18002586161
 debit 50000 purchase: UPI txn of Rs 500.00 successful from your A/c XX1234 on 22-10-26

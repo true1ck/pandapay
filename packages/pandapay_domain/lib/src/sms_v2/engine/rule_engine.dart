@@ -200,6 +200,7 @@ const List<String> _defaultDateFormats = [
 ];
 
 const _dateAttrKeys = {'dueDate', 'statementDate'};
+const List<String> _defaultMonthFormats = ['MM/yyyy', 'MM-yyyy', 'MMM yyyy', 'MMM-yyyy'];
 const _instantAttrKeys = {'asOf', 'dueAt', 'expiresAt'};
 const _purposeReplaceable = {'unknown', 'p2p', 'purchase', 'transfer'};
 const _refFactTypes = {'movement', 'attempt', 'hold', 'mandate', 'bill_due'};
@@ -1224,7 +1225,14 @@ class RuleEngine implements SmsInterpreter {
     if (raw == null) return null;
     final formats = (spec['formats'] as List?)?.cast<String>() ?? _defaultDateFormats;
     if (_dateAttrKeys.contains(key)) {
-      final d = parseDate(raw, formats);
+      // `monthEnd`: the text names a month and no day; the fact carries that
+      // month's last day (and the rule flags it month-only).
+      final d = spec['monthEnd'] == true
+          ? parseMonthEnd(
+              raw,
+              (spec['formats'] as List?)?.cast<String>() ?? _defaultMonthFormats,
+            )
+          : parseDate(raw, formats);
       if (d == null) throw _Emitted('attr $key: cannot read date "$raw"');
       final l = d.add(istOffset);
       return '${l.year.toString().padLeft(4, '0')}-${l.month.toString().padLeft(2, '0')}-${l.day.toString().padLeft(2, '0')}';

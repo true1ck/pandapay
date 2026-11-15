@@ -1460,6 +1460,7 @@ final commitmentsProvider = FutureProvider<List<Commitment>>((ref) async {
         model.ledger.events,
         transactionIdByEvent: model.transactionIdByEvent,
         manualCopies: manual.where((c) => isCopy(c) && c.isUserConfirmed),
+        now: ref.watch(clockProvider).now(),
       ),
     ];
   }
@@ -1800,30 +1801,17 @@ final smsBillRowsProvider = FutureProvider<List<SmsBillRow>>((ref) async {
 /// Insurance renewals whose SMS named only a month. Past months belong to
 /// archived history, and rows with an amount already appear in the SMS bill
 /// list, so this feed is the only Bills surface for the remaining reminders.
-/// Month-only insurance notices SMS v2 saved when it read the messages. Small,
-/// and read from a saved list, never by scanning messages.
+/// Month-only bill notices the rules read ("Next Premium falls due on
+/// 09/2026"): typed facts, so nothing here reads wording.
 final premiumNoticesProvider = Provider<List<PremiumNotice>>((ref) {
-  // A capture that saves a notice also refreshes the ledger read model.
-  ref.watch(smsV2LedgerReadModelProvider);
-  final cache = ref.watch(responseCacheProvider).valueOrNull;
-  if (cache == null) return const [];
-  final namespace = ref.watch(cacheNamespaceProvider);
-  try {
-    return PremiumNoticeStore(
-      cache.financialStore.database.db,
-      namespace: namespace,
-    ).all();
-  } catch (_) {
-    return const [];
-  }
+  final model = ref.watch(smsV2LedgerReadModelProvider).valueOrNull;
+  return model == null ? const [] : premiumNoticesFromFacts(model.facts);
 });
 
 final premiumRemindersProvider = Provider<List<PremiumReminder>>((ref) {
   if (ref.watch(smsV2ReportingEnabledProvider)) {
-    return derivePremiumReminders(
-      observations: [
-        for (final n in ref.watch(premiumNoticesProvider)) n.toObservation(),
-      ],
+    return premiumRemindersFromNotices(
+      ref.watch(premiumNoticesProvider),
       commitments: ref.watch(commitmentsProvider).valueOrNull ?? const [],
       now: ref.watch(clockProvider).now(),
     );

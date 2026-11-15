@@ -166,6 +166,25 @@ DateTime? _tryFormat(String text, String format) {
   return utc.subtract(istOffset);
 }
 
+/// The last day of the month [text] names, at midnight IST (as UTC), or null.
+/// For notices that give a month and no day ("falls due on 09/2026"): the day
+/// is never guessed, so the caller flags the fact month-only. [formats] hold
+/// only month and year fields (`MM/yyyy`, `MMM yyyy`).
+DateTime? parseMonthEnd(String text, List<String> formats) {
+  // A full month name reads as its first three letters, and 9/2026 as 09/2026.
+  final t = text
+      .trim()
+      .replaceFirstMapped(RegExp(r'^([A-Za-z]{3})[A-Za-z]*'), (m) => m[1]!)
+      .replaceFirstMapped(RegExp(r'^(\d)(?=\D)'), (m) => '0${m[1]}');
+  for (final f in formats) {
+    final first = _tryFormat('01 $t', 'dd $f');
+    if (first == null) continue;
+    final ist = first.add(istOffset);
+    return DateTime.utc(ist.year, ist.month + 1, 0).subtract(istOffset);
+  }
+  return null;
+}
+
 /// Keeps only the digits.
 String digitsOnly(String text) => text.replaceAll(RegExp(r'\D'), '');
 

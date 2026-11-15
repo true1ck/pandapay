@@ -1,3 +1,4 @@
+import 'bill_detail_screen.dart';
 import 'bill_kind_badge.dart';
 import '../../app/async_first_load.dart';
 import '../sms_v2/ledger/providers.dart';
@@ -1004,7 +1005,9 @@ class _PastBillPreviewRow extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => PastBillReceiptDetailScreen(item: item),
+          builder: (_) => item.kind == PastBillReceiptKind.bill
+              ? BillDetailScreen.past(item)
+              : PastBillReceiptDetailScreen(item: item),
         ),
       ),
       child: Container(
@@ -2136,7 +2139,11 @@ class _CommitmentRow extends ConsumerWidget {
     }
 
     return GestureDetector(
-      onTap: () => _showCommitmentDetailSheet(context, ref, commitment),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => BillDetailScreen(commitment: commitment),
+        ),
+      ),
       behavior: HitTestBehavior.opaque,
       child: Container(
         decoration: BoxDecoration(
@@ -2179,7 +2186,7 @@ class _CommitmentRow extends ConsumerWidget {
                           weight: FontWeight.w600,
                           color: BambooInk.ink900,
                         ),
-                        kind: BillKind.ofCategory(commitment.category),
+                        kind: BillKind.forCommitment(commitment),
                       ),
                       if (metaParts.isNotEmpty) ...[
                         const SizedBox(height: 2),
@@ -2337,264 +2344,6 @@ class _CommitmentRow extends ConsumerWidget {
 // ---------------------------------------------------------------------------
 // Interactive Commitment Detail Sheet — durable actions & payment rollover
 // ---------------------------------------------------------------------------
-
-void _showCommitmentDetailSheet(
-  BuildContext context,
-  WidgetRef ref,
-  Commitment commitment,
-) {
-  showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: BambooInk.paper,
-    isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
-    builder: (ctx) => _CommitmentDetailSheet(commitment: commitment),
-  );
-}
-
-class _CommitmentDetailSheet extends ConsumerWidget {
-  final Commitment commitment;
-  const _CommitmentDetailSheet({required this.commitment});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final now = ref.watch(clockProvider).now();
-    final inGrace = commitment.isWithinGracePeriod(now);
-    final graceDaysLeft = commitment.daysRemainingInGrace(now);
-    final isPaid = commitment.status == CommitmentStatus.paid;
-
-    return SafeArea(
-      child: SingleChildScrollView(
-       child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpace.lg,
-          AppSpace.md,
-          AppSpace.lg,
-          AppSpace.lg,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: BambooInk.hairlineOnPaper,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpace.md),
-
-            Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: commitment.category.iconBg,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(
-                    commitment.category.icon,
-                    color: commitment.category.iconColor,
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: AppSpace.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        commitment.title,
-                        style: BambooFonts.heading(18, color: BambooInk.ink900),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        commitment.category.label,
-                        style: BambooFonts.ui(12, color: BambooInk.ink500),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                    ],
-                  ),
-                ),
-                if (commitment.amount != null)
-                  Text(
-                    commitment.amount!.format(hidePaise: true),
-                    style: BambooFonts.money(22, color: BambooInk.ink900),
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppSpace.lg),
-            const Divider(height: 1, color: BambooInk.hairlineOnPaper),
-            const SizedBox(height: AppSpace.md),
-
-            _DetailItem(
-              label: 'Due date',
-              value: DateFormat('EEEE, d MMMM yyyy').format(commitment.dueOn),
-            ),
-            if (commitment.identifier != null)
-              _DetailItem(
-                label: commitment.category == CommitmentCategory.insurance
-                    ? 'Policy number'
-                    : 'Account identifier',
-                value: commitment.identifier!,
-              ),
-            _DetailItem(label: 'Cadence', value: commitment.cadence.label),
-            if (commitment.gracePeriodDays != null)
-              _DetailItem(
-                label: 'Policy grace window',
-                value: inGrace
-                    ? 'Active · $graceDaysLeft days remaining'
-                    : '~${commitment.gracePeriodDays} days (verify with policy)',
-                isHighlighted: inGrace,
-              ),
-            _DetailItem(
-              label: 'Status',
-              value: isPaid
-                  ? 'Paid on ${commitment.paidOn != null ? DateFormat('d MMM').format(commitment.paidOn!) : 'record'}'
-                  : commitment.status == CommitmentStatus.paymentNotDetected
-                  ? 'Payment status unknown'
-                  : inGrace
-                  ? 'In grace window'
-                  : 'Due date recorded · payment status unknown',
-            ),
-            const SizedBox(height: AppSpace.md),
-
-            BillProofSection(
-              sourceKey: commitment.sourceKey,
-              paymentTransactionId: commitment.linkedTransactionId,
-              paidOn: commitment.paidOn,
-              onBeforeNavigate: () => Navigator.of(context).pop(),
-            ),
-            const SizedBox(height: AppSpace.md),
-
-            Container(
-              padding: const EdgeInsets.all(AppSpace.md),
-              decoration: BoxDecoration(
-                color: BambooInk.paperMuted,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.info_outline,
-                    size: 16,
-                    color: BambooInk.ink700,
-                  ),
-                  const SizedBox(width: AppSpace.sm),
-                  Expanded(
-                    child: Text(
-                      isPaid
-                          ? 'This commitment has been marked as paid.'
-                          : 'Mark as paid only after checking your provider. A recurring bill then moves to its next cycle.',
-                      style: BambooFonts.ui(12, color: BambooInk.ink700),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpace.lg),
-
-            if (!isPaid) ...[
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    await ref
-                        .read(commitmentsRepositoryProvider)
-                        .markAsPaid(
-                          commitment.id,
-                          paidOn: DateTime.now(),
-                          detectedCommitment: commitment,
-                        );
-                    ref.invalidate(commitmentsProvider);
-                    if (context.mounted) {
-                      Navigator.of(context).pop();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Marked ${commitment.title} as paid'),
-                        ),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.check_circle_outline, size: 18),
-                  label: const Text('Mark as paid'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: BambooInk.slate,
-                    foregroundColor: BambooInk.lime,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppSpace.sm),
-            ],
-
-            SizedBox(
-              width: double.infinity,
-              child: TextButton(
-                onPressed: () async {
-                  final repository = ref.read(commitmentsRepositoryProvider);
-                  if (commitment.source == CommitmentSource.sms) {
-                    // Detected SMS commitments are derived from observations,
-                    // so they are not in the durable manual list yet. Save a
-                    // tombstone with the full identity or the next refresh
-                    // would recreate the dismissed item.
-                    await repository.save(
-                      commitment.copyWith(
-                        status: CommitmentStatus.dismissed,
-                        isUserConfirmed: true,
-                      ),
-                    );
-                  } else {
-                    await repository.delete(commitment.id);
-                  }
-                  ref.invalidate(commitmentsProvider);
-                  if (context.mounted) Navigator.of(context).pop();
-                },
-                style: TextButton.styleFrom(
-                  foregroundColor: BambooInk.ink700,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-                child: Text(
-                  commitment.source == CommitmentSource.sms
-                      ? 'Dismiss detected commitment'
-                      : 'Delete commitment',
-                ),
-              ),
-            ),
-
-            const SizedBox(height: AppSpace.xs),
-            Row(
-              children: [
-                const Icon(Icons.security, size: 12, color: BambooInk.ink500),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    'PandaPay never opens unverified SMS links. Always pay via your official provider app or website.',
-                    style: BambooFonts.ui(10.5, color: BambooInk.ink500),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-       ),
-      ),
-    );
-  }
-}
 
 class _DetailItem extends StatelessWidget {
   final String label;

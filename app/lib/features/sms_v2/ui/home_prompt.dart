@@ -89,7 +89,7 @@ class SmsV2HomePrompt extends ConsumerWidget {
                 _ShortcutChip(
                   icon: Icons.show_chart_rounded,
                   label: 'Investments',
-                  onPressed: () => context.push('/sms-v2/investments'),
+                  onPressed: () => context.push('/activity?type=investments'),
                 ),
                 _ShortcutChip(
                   icon: Icons.lock_clock_outlined,

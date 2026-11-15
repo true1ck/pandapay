@@ -412,6 +412,37 @@ void main() {
     expect(repo.lastFetchArgs?.single['to'], DateTime(2026, 8, 31));
   });
 
+  testWidgets('starting on investments lists the SIPs from all time', (
+    tester,
+  ) async {
+    final rows = [
+      _txn(
+        id: 'sip',
+        amount: Money.fromRupees(5000),
+        occurredAt: DateTime(2026, 3, 5),
+        merchantName: 'Flexi Cap Fund',
+        entryKind: TxnEntryKind.investment,
+      ),
+      _txn(
+        id: 'shop',
+        amount: Money.fromRupees(250),
+        occurredAt: DateTime(2026, 3, 6),
+        merchantName: 'Corner Shop',
+      ),
+    ];
+    await _pump(
+      tester,
+      repo: _FakeUserCardsRepository(rows),
+      cards: const [],
+      activityScreen: const ActivityScreen(initialType: 'investments'),
+      // No date or card is chosen, so Activity reads the shared list.
+      overrides: [transactionsProvider.overrideWith((ref) async => rows)],
+    );
+    expect(find.text('Flexi Cap Fund'), findsOneWidget);
+    expect(find.text('Corner Shop'), findsNothing);
+    expect(find.text('Investments'), findsWidgets);
+  });
+
   testWidgets('shows an empty state when there are no transactions', (
     tester,
   ) async {

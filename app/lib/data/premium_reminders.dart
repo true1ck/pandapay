@@ -59,6 +59,9 @@ class PremiumReminder {
   final DateTime receivedAt;
   final String? sampleBody;
 
+  /// The message the notice came from, so its page can show it.
+  final String? sourceKey;
+
   const PremiumReminder({
     required this.id,
     required this.title,
@@ -67,6 +70,7 @@ class PremiumReminder {
     required this.premiumMonth,
     required this.receivedAt,
     required this.sampleBody,
+    this.sourceKey,
   });
 }
 
@@ -110,6 +114,7 @@ List<PremiumReminder> derivePremiumReminders({
       premiumMonth: premium.month,
       receivedAt: receivedAt,
       sampleBody: premium.body,
+      sourceKey: observation['id'] as String?,
     );
     final existing = byIdentity[identity];
     if (existing == null ||

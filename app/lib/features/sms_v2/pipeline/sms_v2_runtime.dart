@@ -49,7 +49,6 @@ import 'receipt_review.dart';
 import 'owner_recheck.dart';
 import 'salary_recheck.dart';
 import 'rules_refresh.dart';
-import '../ledger/premium_notices.dart';
 
 /// One foreground account owner. Capture is available offline, and the
 /// lifecycle provider admits network work at start, resume and foreground ticks.
@@ -748,18 +747,6 @@ class SmsV2Runtime {
           ),
         );
         _state.put('card:heal', healMarker);
-      });
-    }
-    // Month-only insurance notices ("Next Premium falls due on 09/2026") read
-    // before this build are found once among the captured messages. Later ones
-    // are saved as they are read.
-    if (_state.get('premium:scan') != 'premium-scan-1') {
-      await guarded(() async {
-        PremiumNoticeStore(
-          financial.database.db,
-          namespace: namespace,
-        ).scanCaptured();
-        _state.put('premium:scan', 'premium-scan-1');
       });
     }
     // A person asked to see what a re-sort would move before it moves

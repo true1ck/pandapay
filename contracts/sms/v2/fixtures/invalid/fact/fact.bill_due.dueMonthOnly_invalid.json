@@ -1,0 +1,38 @@
+{
+  "contractVersion": "2.0",
+  "factId": "c5fe036740c8074d513916dd1c12b48a99e52958190a96e1a0834f1a7f3ca62b",
+  "sourceKey": "sms:synthetic:month-only-bad",
+  "factType": "bill_due",
+  "observedAt": "2026-11-01T07:00:20Z",
+  "occurredAt": "2026-11-01T07:00:11Z",
+  "instrument": null,
+  "counterparty": null,
+  "amounts": [
+    {
+      "role": "due_total",
+      "minor": 100000,
+      "unit": "INR"
+    }
+  ],
+  "references": {},
+  "attrs": {
+    "dueDate": "2026-09-30",
+    "dueMonthOnly": false
+  },
+  "provenance": {
+    "engine": "rules",
+    "ruleId": "SYN-RULE-BILL_DUE_MONTH",
+    "ruleVersion": 1,
+    "bundleVersion": 1,
+    "engineVersion": "2.0.0",
+    "appVersion": "1.0.0+1"
+  },
+  "evidence": [
+    {
+      "field": "amt",
+      "start": 0,
+      "end": 10
+    }
+  ],
+  "confidence": 0.99
+}

@@ -150,5 +150,70 @@
     "status": "active",
     "createdBy": "baseline",
     "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "GENZ-SIP-UPCOMING-DEBIT",
+    "version": 1,
+    "family": "sip_upcoming",
+    "senders": [
+      "*"
+    ],
+    "priority": 246,
+    "match": {
+      "pattern": "\\bsip\\b[^\\n]{0,30}?(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:in|for|towards)\\s+(?<fund>[a-z][a-z0-9 &.'-]{2,60}?)\\s+(?:is\\s+|will\\s+be\\s+)(?:auto-?)?(?:debited|deducted|due)[^\\n]{0,60}?\\b(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was debited",
+        "has been debited",
+        "failed",
+        "cancel",
+        "paused"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "scheduled",
+          "direction": "debit",
+          "purpose": "investment",
+          "dueAt": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "fund",
+          "transforms": [
+            "upperTrim"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-FUNDCO-S",
+        "body": "Your SIP instalment of Rs 5,000 in Sunrise Equity Fund will be debited from your bank account on 05-Nov-26.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-FUNDCO-S",
+        "body": "Your SIP instalment of Rs 5,000 in Sunrise Equity Fund was debited from your bank account on 05-Nov-26.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-15T00:00:00Z"
   }
 ]

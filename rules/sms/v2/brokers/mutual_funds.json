@@ -63,7 +63,7 @@
   },
   {
     "id": "BRK-MF-SIP-INSTALMENT-01",
-    "version": 1,
+    "version": 2,
     "family": "mf_receipt",
     "senders": [
       "*"
@@ -77,7 +77,8 @@
         "rejected",
         "unsuccessful",
         "insufficient",
-        "bounced"
+        "bounced",
+        "will be"
       ]
     },
     "emit": [

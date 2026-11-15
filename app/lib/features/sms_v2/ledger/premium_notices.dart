@@ -1,158 +1,123 @@
-/// Month-only insurance premium notices ("Next Premium falls due on 09/2026").
+/// Month-only bill notices ("Next Premium falls due on 09/2026"), read from the
+/// facts the rules produce.
 ///
-/// They print no day and usually no amount, so they cannot be a bill fact (a
-/// bill needs both). The pipeline therefore keeps them in a small saved list of
-/// their own, written when a message is read, and the Bills page reads that
-/// list: a month still ahead is an upcoming reminder, a month gone by is past
-/// history. Reading never scans messages.
+/// A rule reads the message: it flags the bill month-only (`dueMonthOnly`), says
+/// what it is (`billKind`) and carries no amount and no invented day. This file
+/// only turns those typed facts into what the Bills page lists: a month still
+/// ahead is an upcoming reminder, a month gone by is past history. It reads no
+/// wording.
 library;
 
-import 'dart:convert';
+import 'package:pandapay_domain/sms_v2.dart' as v2;
 
-import 'package:sqlite3/sqlite3.dart';
+import '../../../data/commitments_repository.dart';
+import '../../../data/pending_bills.dart';
+import '../../../data/premium_reminders.dart';
 
-import '../../../data/sms_capture_signals.dart';
+/// The category a rule's `billKind` names, or null when it names none.
+CommitmentCategory? categoryOfBillKind(String? kind) => switch (kind) {
+  'utility' => CommitmentCategory.utility,
+  'telecom' => CommitmentCategory.telecom,
+  'insurance' => CommitmentCategory.insurance,
+  'loan' => CommitmentCategory.loanOrEmi,
+  'rent' => CommitmentCategory.rent,
+  'education' => CommitmentCategory.education,
+  'tax' => CommitmentCategory.tax,
+  _ => null,
+};
 
-const _prefix = 'premium-notice:';
-final _amountWord = RegExp(r'(?:rs\.?|inr|₹)\s*[\d,]+', caseSensitive: false);
-final _policyNo = RegExp(
-  r'(?:policy\s*(?:no\.?|number)?\s*[:#]?\s*)(?:[x*]+)?(\d{4,})',
-  caseSensitive: false,
-);
-
-/// One notice, as saved.
+/// One month-only notice.
 class PremiumNotice {
   const PremiumNotice({
     required this.sourceKey,
     required this.month,
-    required this.sender,
+    required this.category,
     required this.receivedAt,
-    required this.body,
+    this.title,
     this.policyLast4,
   });
 
+  /// The message the notice came from (its page shows the SMS).
   final String sourceKey;
 
   /// First day of the month the notice names.
   final DateTime month;
-  final String sender;
+  final CommitmentCategory category;
   final DateTime receivedAt;
-  final String body;
+
+  /// The biller, when the rule read one.
+  final String? title;
   final String? policyLast4;
 
-  Map<String, dynamic> toJson() => {
-    'month': '${month.year}-${month.month.toString().padLeft(2, '0')}',
-    'sender': sender,
-    'receivedAt': receivedAt.toUtc().toIso8601String(),
-    'body': body,
-    'policyLast4': policyLast4,
-  };
-
-  /// The shape the older premium reminder logic reads, so one derivation
-  /// (dedupe per policy, hide what a live bill already covers) serves both.
-  Map<String, dynamic> toObservation() => {
-    'id': sourceKey,
-    'event_type': 'bill',
-    'reason_codes': const ['next_premium_due_month_only'],
-    'sample_body': body,
-    'received_at': receivedAt.toUtc().toIso8601String(),
-    'sender_bank': sender,
-    'account_last4': policyLast4,
-  };
+  String get displayTitle => title ?? category.label;
 }
 
-/// The notice [body] is, or null when it is anything else. Cheap: a message
-/// without the words "next premium" is rejected before any pattern runs.
-PremiumNotice? premiumNoticeFromSms({
-  required String sourceKey,
-  required String sender,
-  required String body,
-  required DateTime receivedAt,
+/// Every month-only bill among [facts].
+List<PremiumNotice> premiumNoticesFromFacts(Iterable<v2.Fact> facts) {
+  final out = <PremiumNotice>[];
+  for (final f in facts.whereType<v2.BillDueFact>()) {
+    if (f.dueMonthOnly != true) continue;
+    final d = DateTime.tryParse(f.dueDate);
+    if (d == null) continue;
+    final mask = f.counterparty?.accountMask;
+    out.add(
+      PremiumNotice(
+        sourceKey: f.sourceKey,
+        month: DateTime(d.year, d.month),
+        category:
+            categoryOfBillKind(f.billKind) ?? CommitmentCategory.other,
+        receivedAt: f.observedAt.toLocal(),
+        title: f.billerName,
+        policyLast4: mask == null || mask.length < 4
+            ? mask
+            : mask.substring(mask.length - 4),
+      ),
+    );
+  }
+  return out;
+}
+
+/// Upcoming reminders: months not yet past, one per policy (the furthest month,
+/// the latest message), and none for a policy a live bill already covers.
+List<PremiumReminder> premiumRemindersFromNotices(
+  Iterable<PremiumNotice> notices, {
+  List<Commitment> commitments = const [],
+  required DateTime now,
 }) {
-  if (!body.toLowerCase().contains('next premium')) return null;
-  final month = SmsCaptureSignals.nextPremiumDueMonth(body);
-  if (month == null) return null;
-  // A message that also prints an amount is a payable bill; the rules read it.
-  if (_amountWord.hasMatch(body)) return null;
-  final policy = _policyNo.firstMatch(body)?.group(1);
-  return PremiumNotice(
-    sourceKey: sourceKey,
-    month: month,
-    sender: sender,
-    receivedAt: receivedAt,
-    body: body,
-    policyLast4: policy?.substring(policy.length - 4),
-  );
-}
-
-/// The saved notices, in the same table the rest of SMS v2 keeps its small
-/// state in (`v2_sync_state`).
-class PremiumNoticeStore {
-  PremiumNoticeStore(this._db, {required this.namespace});
-
-  final Database _db;
-  final String namespace;
-
-  void save(PremiumNotice notice) {
-    _db.execute(
-      'INSERT INTO v2_sync_state(namespace,key,value) VALUES(?,?,?) '
-      'ON CONFLICT(namespace,key) DO UPDATE SET value=excluded.value',
-      [namespace, '$_prefix${notice.sourceKey}', jsonEncode(notice.toJson())],
+  final thisMonth = DateTime(now.year, now.month);
+  final taken = <String>{
+    for (final c in commitments)
+      if (c.status != CommitmentStatus.paid) smsBillIdentityForCommitment(c),
+  };
+  final byIdentity = <String, PremiumReminder>{};
+  for (final n in notices) {
+    if (n.month.isBefore(thisMonth)) continue;
+    final identity = smsBillIdentity(
+      n.category.name,
+      n.displayTitle,
+      n.policyLast4,
     );
-  }
-
-  List<PremiumNotice> all() {
-    final rows = _db.select(
-      'SELECT key, value FROM v2_sync_state WHERE namespace=? AND key LIKE ?',
-      [namespace, '$_prefix%'],
-    );
-    final out = <PremiumNotice>[];
-    for (final row in rows) {
-      try {
-        final j = jsonDecode(row['value'] as String) as Map<String, dynamic>;
-        final parts = (j['month'] as String).split('-');
-        final received = DateTime.tryParse(j['receivedAt'] as String? ?? '');
-        if (received == null) continue;
-        out.add(
-          PremiumNotice(
-            sourceKey: (row['key'] as String).substring(_prefix.length),
-            month: DateTime(int.parse(parts[0]), int.parse(parts[1])),
-            sender: j['sender'] as String? ?? '',
-            receivedAt: received.toLocal(),
-            body: j['body'] as String? ?? '',
-            policyLast4: j['policyLast4'] as String?,
-          ),
-        );
-      } on Object {
-        continue; // one damaged row never hides the others
-      }
-    }
-    return out;
-  }
-
-  /// Saves every notice among the phone's already captured messages. Run once
-  /// (the caller keeps a marker), off the UI thread: it is the only place that
-  /// scans, and only the few messages that say "next premium".
-  int scanCaptured() {
-    final rows = _db.select(
-      "SELECT id, sender, body, received_at FROM sms_captured_messages "
-      "WHERE namespace=? AND body LIKE '%next premium%'",
-      [namespace],
-    );
-    var found = 0;
-    for (final row in rows) {
-      final notice = premiumNoticeFromSms(
-        sourceKey: row['id'] as String,
-        sender: row['sender'] as String,
-        body: row['body'] as String,
-        receivedAt: DateTime.fromMillisecondsSinceEpoch(
-          row['received_at'] as int,
-        ),
+    if (taken.contains(identity)) continue;
+    final existing = byIdentity[identity];
+    if (existing == null ||
+        n.month.isAfter(existing.premiumMonth) ||
+        (n.month.isAtSameMomentAs(existing.premiumMonth) &&
+            n.receivedAt.isAfter(existing.receivedAt))) {
+      byIdentity[identity] = PremiumReminder(
+        id: 'premium-reminder:$identity',
+        title: n.displayTitle,
+        category: n.category,
+        accountLast4: n.policyLast4,
+        premiumMonth: n.month,
+        receivedAt: n.receivedAt,
+        sampleBody: null,
+        sourceKey: n.sourceKey,
       );
-      if (notice == null) continue;
-      save(notice);
-      found++;
     }
-    return found;
   }
+  return byIdentity.values.toList()
+    ..sort((a, b) {
+      final byMonth = a.premiumMonth.compareTo(b.premiumMonth);
+      return byMonth != 0 ? byMonth : a.title.compareTo(b.title);
+    });
 }

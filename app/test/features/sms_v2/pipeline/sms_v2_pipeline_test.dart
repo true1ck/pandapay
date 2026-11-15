@@ -8,7 +8,6 @@ import 'package:pandapay/data/local/sms_import_store.dart';
 import 'package:pandapay/data/local/sms_intake_repository.dart';
 import 'package:pandapay/features/sms_import/sms_background_queue.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
-import 'package:pandapay/features/sms_v2/ledger/premium_notices.dart';
 import 'package:pandapay/features/sms_v2/pipeline/sms_v2_pipeline.dart';
 import 'package:pandapay/features/sms_v2/storage/event_store.dart';
 import 'package:pandapay/features/sms_v2/storage/fact_store.dart';
@@ -51,23 +50,6 @@ void main() {
     sourceKey: key * 64,
     observedAt: DateTime.utc(2026, 11, 1, 7),
   );
-
-  test('a month-only insurance notice is saved for the Bills page', () {
-    final sms = message(
-      key: 'p',
-      body:
-          'Your Next Premium falls due on 12/2026 for Policy No. 123456789. -INSCO',
-    );
-    pipeline.process(sms);
-    final saved = PremiumNoticeStore(db.db, namespace: 'user:test').all();
-    expect(saved.single.month, DateTime(2026, 12));
-    expect(saved.single.policyLast4, '6789');
-    // No money fact: it is a reminder, not a payment or a bill with an amount.
-    expect(
-      FactStore(db.db, namespace: 'user:test').forSource(sms.sourceKey),
-      isEmpty,
-    );
-  });
 
   test(
     'real stores receive facts, instruments, events, ledger and display once',

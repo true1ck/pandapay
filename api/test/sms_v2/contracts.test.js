@@ -140,3 +140,30 @@ test('validators never throw on non-object input', () => {
     assert.equal(c.validateRequest('corrections', bad).ok, false);
   }
 });
+
+test('CCR-006/007: a bill that names only a month, what a bill is, and the insurance purpose', () => {
+  const monthOnly = read(path.join(FIX, 'valid', 'fact', 'bill_due.month_only.json'));
+  assert.equal(monthOnly.attrs.dueMonthOnly, true);
+  assert.deepEqual(monthOnly.amounts, []);
+  assert.equal(c.validateFact(monthOnly).ok, true);
+  const codes = (fact) => JSON.stringify(c.validateFact(fact));
+  const due = { role: 'due_total', minor: 100000, unit: 'INR' };
+  // a dated bill still needs an amount; a month-only one may print one
+  assert.ok(codes({ ...monthOnly, attrs: { dueDate: '2026-09-30' } }).includes('fact.bill_due.amount_required'));
+  assert.equal(c.validateFact({ ...monthOnly, amounts: [due] }).ok, true);
+  assert.equal(c.validateFact({ ...monthOnly, attrs: { dueDate: '2026-09-30' }, amounts: [{ ...due, role: 'due_minimum' }] }).ok, true);
+  // the flag can only be true; a month-only bill still carries a date
+  assert.ok(codes({ ...monthOnly, attrs: { dueDate: '2026-09-30', dueMonthOnly: false }, amounts: [due] }).includes('fact.bill_due.dueMonthOnly_invalid'));
+  assert.ok(codes({ ...monthOnly, attrs: { dueMonthOnly: true } }).includes('fact.bill_due.dueDate_required'));
+  // billKind
+  for (const kind of ['utility', 'telecom', 'insurance', 'loan', 'rent', 'education', 'tax']) {
+    assert.equal(c.validateFact({ ...monthOnly, attrs: { dueDate: '2026-09-30', billKind: kind }, amounts: [due] }).ok, true, kind);
+  }
+  assert.ok(codes({ ...monthOnly, attrs: { dueDate: '2026-09-30', billKind: 'spaceship' }, amounts: [due] }).includes('fact.bill_due.billKind_invalid'));
+  // the insurance purpose, on an attempt and on a movement
+  for (const name of ['attempt.scheduled_debit', 'movement.card_spend']) {
+    const f = read(path.join(FIX, 'valid', 'fact', `${name}.json`));
+    assert.equal(c.validateFact({ ...f, attrs: { ...f.attrs, purpose: 'insurance' } }).ok, true, name);
+  }
+});
+
