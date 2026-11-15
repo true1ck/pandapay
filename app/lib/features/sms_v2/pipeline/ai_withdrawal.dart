@@ -174,6 +174,12 @@ class AiWithdrawal {
           ]);
         }
         for (final eventId in affected.keys) {
+          // A review item about an event that is being withdrawn would point at
+          // nothing; a fresh one is raised if the new reading is still unsure.
+          _db.execute(
+            "UPDATE v2_review_items SET status='resolved' WHERE namespace=? AND kind='event' AND json_extract(payload,'\$.eventId')=?",
+            [namespace, eventId],
+          );
           _db.execute(
             'DELETE FROM v2_events WHERE namespace=? AND event_id=?',
             [namespace, eventId],

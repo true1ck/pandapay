@@ -32,6 +32,7 @@ RuleBundle _withSolver(
   bool Function(String id)? drop,
   bool solver = true,
   bool oldPayeeWords = false,
+  String? weakRule,
 }) {
   final json = (jsonDecode(jsonEncode(b.toJson())) as Map).cast<String, Object?>();
   if (drop != null) {
@@ -39,6 +40,12 @@ RuleBundle _withSolver(
       for (final r in json['rules'] as List)
         if (!drop((r as Map)['id'] as String)) r,
     ];
+  }
+  if (weakRule != null) {
+    // A rule that is unsure of its reading (below the confident line): its facts go to review.
+    for (final r in json['rules'] as List) {
+      if ((r as Map)['id'] == weakRule) r['confidence'] = 0.6;
+    }
   }
   if (solver) {
     final pack =
@@ -117,8 +124,10 @@ void main() {
         ..sort();
 
   /// What the sync does after a rules update.
-  int recheck(RuleBundle b, {bool payeeless = false}) {
-    final sources = (payeeless
+  int recheck(RuleBundle b, {bool payeeless = false, bool unsure = false}) {
+    final sources = (unsure
+            ? SalaryRecheck.unsureReads(financial: financial, namespace: _ns, bundle: b)
+            : payeeless
             ? SalaryRecheck.payeeless(financial: financial, namespace: _ns, bundle: b)
             : SalaryRecheck(financial: financial, namespace: _ns, bundle: b))
         .sourcesToRecheck();
@@ -196,7 +205,7 @@ void main() {
   test('a spend read by a fallback rule gets its payee once a rule can name it', () {
     // A phone whose rules had no evidence reader read the alert with a generic
     // rule that prints no payee.
-    final before = _withSolver(testRuleBundle(), oldPayeeWords: true);
+    final before = _withSolver(testRuleBundle(), drop: (id) => id.startsWith('GENZ-ACCT-DR-LABELED-PAYEE'), oldPayeeWords: true);
     receive(before, 'VM-NEWBNK-S', fvg, '2026-10-21');
     expect(rows().single, endsWith(':250000:UNKNOWN'));
 
@@ -211,7 +220,35 @@ void main() {
     expect(recheck(current, payeeless: true), 1, reason: 'a fallback read is tried once');
     expect(rows(), before);
 
-    receive(_withSolver(testRuleBundle(), oldPayeeWords: true), 'VM-NEWBNK-S', fvg, '2026-10-22', keep: false);
+    receive(_withSolver(testRuleBundle(), drop: (id) => id.startsWith('GENZ-ACCT-DR-LABELED-PAYEE'), oldPayeeWords: true), 'VM-NEWBNK-S', fvg, '2026-10-22', keep: false);
     expect(recheck(current, payeeless: true), 1, reason: 'only the first, whose message is kept');
+  });
+
+  int openReviews() =>
+      db.db.select("SELECT COUNT(*) AS n FROM v2_review_items WHERE status = 'open'").single['n'] as int;
+
+  test('a read that went to review on a weak fact is read again and leaves review', () {
+    const msg =
+        'Union Bank of India A/c *8565 Debited Rs:81.00 on 25-10-2026 22:00:20 by Mob Bk ref no 629806980380, Fvg: Amazon P Avl Bal Rs:1723.92. Not you?Call 18002333';
+    final weak = _withSolver(testRuleBundle(), weakRule: 'UNION-ACCT-DEBIT-MOBBK-B', solver: false);
+    receive(weak, 'VA-UNIONB-T', msg, '2026-10-25');
+    expect(openReviews(), greaterThan(0), reason: 'an unsure rule sends its reading to review');
+    expect(rows().single, endsWith(':8100:Amazon P'));
+
+    expect(recheck(current, unsure: true), 1);
+    expect(openReviews(), 0, reason: 'read again with a confident rule: nothing to confirm');
+    expect(rows().single, endsWith(':8100:Amazon P'), reason: 'one row, same transaction');
+    expect(recheck(current, unsure: true), 0, reason: 'nothing is left to read again');
+  });
+
+  test('a review item the person is still looking at for a genuinely unsure read comes back', () {
+    const msg =
+        'Union Bank of India A/c *8565 Debited Rs:81.00 on 25-10-2026 22:00:20 by Mob Bk ref no 629806980380, Fvg: Amazon P Avl Bal Rs:1723.92. Not you?Call 18002333';
+    final weak = _withSolver(testRuleBundle(), weakRule: 'UNION-ACCT-DEBIT-MOBBK-B', solver: false);
+    receive(weak, 'VA-UNIONB-T', msg, '2026-10-25');
+    // Still unsure after the re-read (the rules did not improve): back to review, one row.
+    recheck(weak, unsure: true);
+    expect(openReviews(), greaterThan(0));
+    expect(rows().single, endsWith(':8100:Amazon P'));
   });
 }

@@ -88,7 +88,8 @@ class SmsV2Runtime {
   static Future<Map<String, String>> Function() _bounded(
     Future<Map<String, String>> Function() headers,
     Duration limit,
-  ) => () => headers().timeout(limit);
+  ) =>
+      () => headers().timeout(limit);
 
   static bool _neverOffline() => false;
 
@@ -266,8 +267,10 @@ class SmsV2Runtime {
     _markFamilyPayees();
     // A history import marked the saved subscription rows dirty instead of
     // re-deriving them per chunk. Tell the readers once, now that it is over.
-    if (SubscriptionStore(financial.database.db, namespace: namespace)
-        .isDirty) {
+    if (SubscriptionStore(
+      financial.database.db,
+      namespace: namespace,
+    ).isDirty) {
       financial.notifyExternalChanges(namespace, const ['subscriptions']);
     }
   }
@@ -281,8 +284,7 @@ class SmsV2Runtime {
   Map<String, String?> _cardIssuerSlugs(List<Map<String, Object?>> cards) {
     final slugOf = cardIssuerSlugFromCatalogue(catalogue);
     return {
-      for (final c in cards)
-        c['id'] as String: slugOf(UserCard.fromJson(c)),
+      for (final c in cards) c['id'] as String: slugOf(UserCard.fromJson(c)),
     };
   }
 
@@ -320,14 +322,17 @@ class SmsV2Runtime {
     try {
       if (!ownerNames().any((e) => !e.contains(':'))) return;
       final db = financial.database.db;
-      final from = (DateTime.tryParse(_state.get('family:scanned') ?? '') ??
-              DateTime.utc(1900))
-          .subtract(const Duration(days: 7));
+      final from =
+          (DateTime.tryParse(_state.get('family:scanned') ?? '') ??
+                  DateTime.utc(1900))
+              .subtract(const Duration(days: 7));
       final moves = FactStore(db, namespace: namespace).movementsSince(from);
       if (moves.isEmpty) return;
       _state.put(
         'family:scanned',
-        moves.map((m) => m.observedAt).reduce((a, b) => a.isAfter(b) ? a : b)
+        moves
+            .map((m) => m.observedAt)
+            .reduce((a, b) => a.isAfter(b) ? a : b)
             .toUtc()
             .toIso8601String(),
       );
@@ -393,7 +398,8 @@ class SmsV2Runtime {
       final shift = _rulesCheckEvery - wait;
       _state.put(
         'rules:last-check',
-        clock().subtract(shift.isNegative ? Duration.zero : shift)
+        clock()
+            .subtract(shift.isNegative ? Duration.zero : shift)
             .toUtc()
             .toIso8601String(),
       );
@@ -608,7 +614,8 @@ class SmsV2Runtime {
         accountIsCurrent: accountIsCurrent,
         // Consent is re-read at send time; the mirror is cleared by every
         // server answer that is not a grant and by a withdrawal.
-        sharingGranted: () => SmsSharedLearningConsentMirror.isGranted(namespace),
+        sharingGranted: () =>
+            SmsSharedLearningConsentMirror.isGranted(namespace),
         requeue: (sourceKey, eventId) => requeueForUpload(
           queue: correctionQueue,
           intake: intake,
@@ -749,6 +756,15 @@ class SmsV2Runtime {
         _state.put('card:heal', healMarker);
       });
     }
+    // Messages read by a rule but put in review because a stored fact was weak
+    // (below the confident line) stay there until read again. Same marker idea.
+    final reviewMarker = '${_revision(active.revision)}:review-1';
+    if (_state.get('review:recheck') != reviewMarker) {
+      await guarded(() async {
+        await _rereadPayerless(payeeless: false, unsure: true);
+        _state.put('review:recheck', reviewMarker);
+      });
+    }
     // A person asked to see what a re-sort would move before it moves
     // anything, so ordinary sync leaves categories alone. The refresh sheet
     // shows the preview and applies it on a tap. [autoApplyResort] set to true
@@ -794,10 +810,20 @@ class SmsV2Runtime {
 
   /// [payeeless] reads again spends and transfers that a fallback rule read
   /// without a payee; otherwise the salary credits without an employer.
-  Future<int> _rereadPayerless({required bool payeeless}) async {
+  Future<int> _rereadPayerless({
+    required bool payeeless,
+    bool unsure = false,
+  }) async {
     _checkAccount();
     final active = await activeBundle();
-    final recheck = payeeless
+    final recheck = unsure
+        ? SalaryRecheck.unsureReads(
+            financial: financial,
+            namespace: namespace,
+            bundle: active,
+            categoryIdBySlug: categoryIdBySlug,
+          )
+        : payeeless
         ? SalaryRecheck.payeeless(
             financial: financial,
             namespace: namespace,
@@ -1039,15 +1065,17 @@ class SmsV2Runtime {
       final linked = events.findByFactIds([
         for (final fact in facts.forSource(source)) fact.factId,
       ]);
-      for (final eventId in linked.isEmpty
-          ? <String?>[null]
-          : [for (final event in linked) event.eventId]) {
+      for (final eventId
+          in linked.isEmpty
+              ? <String?>[null]
+              : [for (final event in linked) event.eventId]) {
         queued += requeueForUpload(
           queue: queue,
           intake: intake,
           sourceKey: source,
           eventId: eventId,
-          brandOf: (sender) => uploadBrandOfSender(sender, _bundle?.senders ?? const []),
+          brandOf: (sender) =>
+              uploadBrandOfSender(sender, _bundle?.senders ?? const []),
         );
       }
     }

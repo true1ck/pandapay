@@ -35,7 +35,9 @@ class SalaryRecheck {
     required this.bundle,
     this.categoryIdBySlug = const {},
   }) : _where = _salaryWhere,
-       _types = const {EventType.income};
+       _types = const {EventType.income},
+       _nameless = true,
+       _args = const [];
 
   /// Spends and transfers that a fallback reading left without a payee (the
   /// "Unknown merchant" rows). Only readings made by a generic or solver rule
@@ -49,7 +51,25 @@ class SalaryRecheck {
     required this.bundle,
     this.categoryIdBySlug = const {},
   }) : _where = _payeelessWhere,
-       _types = const {EventType.purchase, EventType.p2pOut, EventType.p2pIn};
+       _types = const {EventType.purchase, EventType.p2pOut, EventType.p2pIn},
+       _nameless = true,
+       _args = const [];
+
+  /// Messages the pipeline read with a rule but put in review anyway, because a
+  /// fact stored with them was below the confident line (a generic rule's 0.6
+  /// balance). The stored facts keep that number, so only reading the message
+  /// again with the rules now in force clears it. Re-read once per rules update;
+  /// a message still unsure after that simply goes back to review, as before.
+  SalaryRecheck.unsureReads({
+    required this.financial,
+    required String namespace,
+    required this.bundle,
+    this.categoryIdBySlug = const {},
+  }) : namespace = namespace,
+       _where = _unsureWhere,
+       _types = null,
+       _nameless = false,
+       _args = [namespace, namespace];
 
   static const _salaryWhere =
       "AND json_extract(payload, '\$.attrs.purpose') = 'salary' "
@@ -61,8 +81,21 @@ class SalaryRecheck {
       "AND (json_extract(payload, '\$.provenance.ruleId') LIKE 'GEN%' "
       "OR json_extract(payload, '\$.provenance.ruleId') LIKE 'SOLVER%') ";
 
+  static const _unsureWhere =
+      "AND source_key IN (SELECT json_extract(payload, '\$.sourceKey') FROM v2_review_items "
+      "WHERE namespace = ? AND kind = 'template' AND status = 'open') "
+      "AND source_key IN (SELECT source_key FROM sms_source_decisions "
+      "WHERE namespace = ? AND decision = 'matched') "
+      "AND json_extract(payload, '\$.attrs.evidenceOnly') IS NULL "
+      // A private or published AI-drafted rule always sends its matches to review
+      // (that is how a person checks the draft): never withdraw those.
+      "AND COALESCE(json_extract(payload, '\$.provenance.ruleId'), '') NOT LIKE 'AI-%' "
+      "AND COALESCE(json_extract(payload, '\$.provenance.ruleId'), '') NOT LIKE '%:local:%' ";
+
   final String _where;
-  final Set<EventType> _types;
+  final Set<EventType>? _types;
+  final bool _nameless;
+  final List<Object?> _args;
 
   final FinancialStore financial;
   final String namespace;
@@ -80,9 +113,8 @@ class SalaryRecheck {
       "SELECT fact_id, source_key FROM v2_facts "
       "WHERE namespace = ? AND fact_type = 'movement' "
       "$_where"
-      "AND json_extract(payload, '\$.counterparty.name') IS NULL "
-      "AND json_extract(payload, '\$.counterparty.vpa') IS NULL",
-      [namespace],
+      "${_nameless ? "AND json_extract(payload, '\$.counterparty.name') IS NULL AND json_extract(payload, '\$.counterparty.vpa') IS NULL" : "AND 1 = 1"}",
+      [namespace, ..._args],
     );
     if (candidates.isEmpty) return const [];
 
@@ -124,7 +156,7 @@ class SalaryRecheck {
         // Only the event types this recheck is about (salary counted as income;
         // spends and transfers). Anything else, a transfer between own
         // accounts say, is left to its own rules.
-        if (_types.contains(e.type)) seeds.add(e);
+        if (_types == null || _types.contains(e.type)) seeds.add(e);
       }
     }
     if (seeds.isEmpty) return const [];

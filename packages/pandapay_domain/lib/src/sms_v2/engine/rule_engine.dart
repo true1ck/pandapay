@@ -711,9 +711,12 @@ class RuleEngine implements SmsInterpreter {
         }
         out.add(Fact.fromJson(json));
       }
-      // Anything else the rule found (a balance, say) is kept.
+      // Anything else the rule found (a balance, say) is kept. The evidence reader
+      // has just read the same amount and direction, so those facts are corroborated
+      // exactly as in [_secondOpinion]: a generic rule's weak balance (0.6) would
+      // otherwise send an otherwise confident reading to review.
       for (final f in facts) {
-        if (f is! MovementFact) out.add(f);
+        if (f is! MovementFact) out.add(_confirmed(f, null));
       }
       return out;
     } on Object {

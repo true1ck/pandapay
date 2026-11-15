@@ -1,0 +1,708 @@
+[
+  {
+    "id": "GENZ-ACCT-DR-LABELED-PAYEE",
+    "version": 1,
+    "family": "acct_debit",
+    "senders": [
+      "*"
+    ],
+    "priority": 430,
+    "match": {
+      "pattern": "\\b(?:a/?c(?:ct)?\\.?|account)(?:\\s*(?:no|number|num)\\.?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?debited(?:\\s+(?:for|by|with|of))?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?:\\s*/-)?(?:\\s+(?:on|dated)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?))?(?:(?!\\b(?:debited|credited)\\b)[\\s\\S]){0,160}?\\b(?:fvg|favou?ring|in\\s+favou?r\\s+of|beneficiary|payee)\\s*[:#\\-]?\\s*(?<payee>[A-Za-z][^\\n]*?)(?=\\s+(?:avl|avbl|avail(?:able)?|bal(?:ance)?|clear|ref(?:erence)?|utr|txn|transaction|not\\s+you|if\\s+not|call|sms|on|from|dated|via)\\b|\\s*[;,(]|\\.(?:\\s|$)|\\s*$)",
+      "flags": "i",
+      "rejectAny": [
+        "fail",
+        "declin",
+        "will be",
+        " otp",
+        "reject",
+        "insufficient",
+        "request",
+        "unauthoris",
+        "unauthoriz",
+        "beware",
+        "fake",
+        "if rs",
+        "if inr",
+        "if ₹",
+        "in case",
+        " emi",
+        "mandate",
+        "credit card",
+        "card ending",
+        "sip "
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "p2p",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payee",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-SAMPLEB-S",
+        "body": "Sample Bank A/c *1234 Debited Rs:2500.00 on 21-10-2026 19:28:42 by Mob Bk ref no 612345678900, Fvg: Asha Rao",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-SAMPLEB-S",
+        "body": "Your A/c No. XX1234 is debited for Rs. 700 on 25-Oct-26 through NEFT UTR 612345678902 in favour of Ravi Kumar",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-SAMPLEB-S",
+        "body": "Sample Bank A/c *1234 will be Debited Rs:2500.00 on 21-10-2026 19:28:42 by Mob Bk ref no 612345678900, Fvg: Asha Rao",
+        "expectFactTypes": []
+      },
+      {
+        "sender": "VM-SAMPLEB-S",
+        "body": "Sample Bank A/c *1234 Credited Rs:2500.00 on 21-10-2026 19:28:42 by Mob Bk ref no 612345678900, Fvg: Asha Rao",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "cbs-generalization",
+    "updatedAt": "2026-11-10T00:00:00Z"
+  },
+  {
+    "id": "GENZ-ACCT-DR-LABELED-PAYEE-B",
+    "version": 1,
+    "family": "acct_debit",
+    "senders": [
+      "*"
+    ],
+    "priority": 435,
+    "match": {
+      "pattern": "\\b(?:a/?c(?:ct)?\\.?|account)(?:\\s*(?:no|number|num)\\.?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?debited(?:\\s+(?:for|by|with|of))?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?:\\s*/-)?(?:\\s+(?:on|dated)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?))?(?:(?!\\b(?:debited|credited)\\b)[\\s\\S]){0,160}?\\b(?:fvg|favou?ring|in\\s+favou?r\\s+of|beneficiary|payee)\\s*[:#\\-]?\\s*(?<payee>[A-Za-z][^\\n]*?)(?=\\s+(?:avl|avbl|avail(?:able)?|bal(?:ance)?|clear|ref(?:erence)?|utr|txn|transaction|not\\s+you|if\\s+not|call|sms|on|from|dated|via)\\b|\\s*[;,(]|\\.(?:\\s|$)|\\s*$)[\\s\\S]{0,200}?\\b(?:avl|avbl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "fail",
+        "declin",
+        "will be",
+        " otp",
+        "reject",
+        "insufficient",
+        "request",
+        "unauthoris",
+        "unauthoriz",
+        "beware",
+        "fake",
+        "if rs",
+        "if inr",
+        "if ₹",
+        "in case",
+        " emi",
+        "mandate",
+        "credit card",
+        "card ending",
+        "sip "
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "p2p",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payee",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-SAMPLEB-S",
+        "body": "Sample Bank A/c *1234 Debited Rs:2637.00 on 22-10-2026 19:28:42 by Mob Bk ref no 612345678901, Fvg: Meera Iyer Avl Bal Rs:594.92. Not you?Call 1800000000",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-SAMPLEB-S",
+        "body": "Your A/c No. XX1234 is debited for Rs. 753 on 26-Oct-26 through NEFT UTR 612345678903 in favour of Kiran Shah. Avl Bal Rs 9,000.00",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-SAMPLEB-S",
+        "body": "Sample Bank A/c *1234 will be Debited Rs:2637.00 on 22-10-2026 19:28:42 by Mob Bk ref no 612345678901, Fvg: Meera Iyer Avl Bal Rs:594.92. Not you?Call 1800000000",
+        "expectFactTypes": []
+      },
+      {
+        "sender": "VM-SAMPLEB-S",
+        "body": "Sample Bank A/c *1234 Credited Rs:2637.00 on 22-10-2026 19:28:42 by Mob Bk ref no 612345678901, Fvg: Meera Iyer Avl Bal Rs:594.92. Not you?Call 1800000000",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "cbs-generalization",
+    "updatedAt": "2026-11-10T00:00:00Z"
+  },
+  {
+    "id": "GENZ-ACCT-DR-LABELED-PAYEE-AF",
+    "version": 1,
+    "family": "acct_debit",
+    "senders": [
+      "*"
+    ],
+    "priority": 428,
+    "match": {
+      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?:\\s*/-)?\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?debited\\s+(?:from\\s+|in\\s+|to\\s+)?(?:your\\s+)?\\b(?:a/?c(?:ct)?\\.?|account)(?:\\s*(?:no|number|num)\\.?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?:\\s+(?:on|dated)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?))?(?:(?!\\b(?:debited|credited)\\b)[\\s\\S]){0,160}?\\b(?:fvg|favou?ring|in\\s+favou?r\\s+of|beneficiary|payee)\\s*[:#\\-]?\\s*(?<payee>[A-Za-z][^\\n]*?)(?=\\s+(?:avl|avbl|avail(?:able)?|bal(?:ance)?|clear|ref(?:erence)?|utr|txn|transaction|not\\s+you|if\\s+not|call|sms|on|from|dated|via)\\b|\\s*[;,(]|\\.(?:\\s|$)|\\s*$)",
+      "flags": "i",
+      "rejectAny": [
+        "fail",
+        "declin",
+        "will be",
+        " otp",
+        "reject",
+        "insufficient",
+        "request",
+        "unauthoris",
+        "unauthoriz",
+        "beware",
+        "fake",
+        "if rs",
+        "if inr",
+        "if ₹",
+        "in case",
+        " emi",
+        "mandate",
+        "credit card",
+        "card ending",
+        "sip "
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "p2p",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payee",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-SAMPLEB-S",
+        "body": "Sample Bank: Rs 1372.00 debited from A/c XX1234 on 24-Oct-26 by UPI ref 612345678902 Beneficiary: Neha Das",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-SAMPLEB-S",
+        "body": "INR 474 debited from your account no. 1234 by IMPS Ref 71234567802 on 24-10-2026 fvg Tara Nair",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-SAMPLEB-S",
+        "body": "Sample Bank: Rs 1372.00 will be debited from A/c XX1234 on 24-Oct-26 by UPI ref 612345678902 Beneficiary: Neha Das",
+        "expectFactTypes": []
+      },
+      {
+        "sender": "VM-SAMPLEB-S",
+        "body": "Sample Bank: Rs 1372.00 credited from A/c XX1234 on 24-Oct-26 by UPI ref 612345678902 Beneficiary: Neha Das",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "cbs-generalization",
+    "updatedAt": "2026-11-10T00:00:00Z"
+  },
+  {
+    "id": "GENZ-ACCT-DR-LABELED-PAYEE-AF-B",
+    "version": 1,
+    "family": "acct_debit",
+    "senders": [
+      "*"
+    ],
+    "priority": 433,
+    "match": {
+      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?:\\s*/-)?\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?debited\\s+(?:from\\s+|in\\s+|to\\s+)?(?:your\\s+)?\\b(?:a/?c(?:ct)?\\.?|account)(?:\\s*(?:no|number|num)\\.?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?:\\s+(?:on|dated)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?))?(?:(?!\\b(?:debited|credited)\\b)[\\s\\S]){0,160}?\\b(?:fvg|favou?ring|in\\s+favou?r\\s+of|beneficiary|payee)\\s*[:#\\-]?\\s*(?<payee>[A-Za-z][^\\n]*?)(?=\\s+(?:avl|avbl|avail(?:able)?|bal(?:ance)?|clear|ref(?:erence)?|utr|txn|transaction|not\\s+you|if\\s+not|call|sms|on|from|dated|via)\\b|\\s*[;,(]|\\.(?:\\s|$)|\\s*$)[\\s\\S]{0,200}?\\b(?:avl|avbl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "fail",
+        "declin",
+        "will be",
+        " otp",
+        "reject",
+        "insufficient",
+        "request",
+        "unauthoris",
+        "unauthoriz",
+        "beware",
+        "fake",
+        "if rs",
+        "if inr",
+        "if ₹",
+        "in case",
+        " emi",
+        "mandate",
+        "credit card",
+        "card ending",
+        "sip "
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "p2p",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payee",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-SAMPLEB-S",
+        "body": "Sample Bank: Rs 1433.00 debited from A/c XX1234 on 25-Oct-26 by UPI ref 612345678903 Beneficiary: Omar Khan Avl Bal Rs:594.92. Not you?Call 1800000000",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-SAMPLEB-S",
+        "body": "INR 511 debited from your account no. 1234 by IMPS Ref 71234567803 on 25-10-2026 fvg Vikram Rao. Avl Bal Rs 9,000.00",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-SAMPLEB-S",
+        "body": "Sample Bank: Rs 1433.00 will be debited from A/c XX1234 on 25-Oct-26 by UPI ref 612345678903 Beneficiary: Omar Khan Avl Bal Rs:594.92. Not you?Call 1800000000",
+        "expectFactTypes": []
+      },
+      {
+        "sender": "VM-SAMPLEB-S",
+        "body": "Sample Bank: Rs 1433.00 credited from A/c XX1234 on 25-Oct-26 by UPI ref 612345678903 Beneficiary: Omar Khan Avl Bal Rs:594.92. Not you?Call 1800000000",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "cbs-generalization",
+    "updatedAt": "2026-11-10T00:00:00Z"
+  }
+]

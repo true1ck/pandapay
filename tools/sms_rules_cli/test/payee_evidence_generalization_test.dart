@@ -50,4 +50,30 @@ void main() {
     }
     expect(bad, isEmpty);
   });
+
+  // (Fvg-style labels are read by the labelled-payee rules; a cue like "towards" still takes the solver-refined path.)
+  // The solver-refined reading keeps the generic rule's balance fact. Its weak confidence (0.6)
+  // must not send a confident reading to review (anything below 0.7 does). Run without the
+  // bank's own rule, as a phone does while that rule is out of date in the live bundle.
+  test('a refined generic reading is confident throughout (no needless review)', () {
+    final source = readRulesFolder('../../rules/sms/v2');
+    final raw = Map<String, Object?>.of(source.bundle);
+    raw['rules'] = [
+      for (final r in raw['rules'] as List)
+        if (!((r as Map)['id'] as String).startsWith('UNION-ACCT-DEBIT-MOBBK')) r,
+    ];
+    final bundle = parseUnsignedBundle(raw);
+    final o = RuleEngine().interpretDetailed(
+      SmsMessage(
+        sender: 'VA-UNIONB-T',
+        body: 'Union Bank of India A/c *8565 Debited Rs:81.00 on 25-10-2026 22:00:20 by Mob Bk ref no 612345678901 to Amazon P Avl Bal Rs:1723.92. Not you?Call 1800000000',
+        observedAt: DateTime.utc(2026, 10, 25, 17),
+        sourceKey: 'k',
+      ),
+      bundle,
+      appVersion: 'test',
+    );
+    expect(o.winnerId, 'SOLVER-REFINED');
+    expect(o.result.facts.where((f) => f.confidence < 0.7), isEmpty);
+  });
 }
