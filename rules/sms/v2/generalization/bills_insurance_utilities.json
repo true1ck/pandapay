@@ -803,7 +803,7 @@
     ],
     "priority": 246,
     "match": {
-      "pattern": "(?:\\byour\\s+)?(?<biller>[a-z][a-z &.'-]{2,40}?)\\s+premium\\s+(?:amount\\s+)?(?:of\\s+)?(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)[^\\n]{0,80}?\\bwill\\s+be\\s+(?:auto-?)?(?:debited|deducted|charged)[^\\n]{0,70}?\\b(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "pattern": "^(?=[\\s\\S]*\\b(?:insurance|assurance|policy|lic)\\b)[\\s\\S]*?(?:\\byour\\s+)?(?:\\b(?!(?:your|the|this|monthly|annual|yearly|quarterly|half-yearly|next|regular|renewal)\\b)(?<biller>[a-z][a-z &.'-]{2,40}?)\\s+)?premium\\s+(?:amount\\s+)?(?:of\\s+)?(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)[^\\n]{0,80}?\\bwill\\s+be\\s+(?:auto-?)?(?:debited|deducted|charged)[^\\n]{0,70}?\\b(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
       "flags": "i",
       "rejectAny": [
         "was debited",
@@ -853,6 +853,18 @@
         "sender": "VM-INSCOX-S",
         "body": "Dear Customer, your Sunrise Life Insurance premium of Rs 2,500 for policy no 123456789 was debited from your account on 25-11-2026.",
         "expectFactTypes": []
+      },
+      {
+        "sender": "VM-BANKXX-S",
+        "body": "Your Example Bank Credit Card XX1234 premium of Rs 499 will be debited on 05-11-2026 towards your Netflix subscription.",
+        "expectFactTypes": []
+      },
+      {
+        "sender": "VM-BANKXX-S",
+        "body": "Dear Customer, your monthly premium of Rs 1,000 for Health Insurance will be deducted on 10-11-2026 from A/c XX1234.",
+        "expectFactTypes": [
+          "attempt"
+        ]
       }
     ],
     "status": "active",

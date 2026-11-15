@@ -84,9 +84,8 @@ void main() {
     // it to its notice, one-at-a-time cannot. That is the generator's date
     // mismatch, not a real order, so this test uses a seed without it. Adding
     // the typed credit-card rule redrew it again (seed 22 and 25 hit the same
-    // mismatch); seed 23 did not. The scheduled-debit and month-only premium
-    // rules redrew it once more (23, 24 and 28 hit a mismatch); seed 26 does not.
-    final history = sharedHistory(bundle, synthetic: 120, seed: 26);
+    // mismatch); seed 23 does not.
+    final history = sharedHistory(bundle, synthetic: 120, seed: 23);
     final other = Device('other');
     addTearDown(other.dispose);
     device.capture(bundle, history);

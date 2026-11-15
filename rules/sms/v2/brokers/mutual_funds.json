@@ -70,15 +70,14 @@
     ],
     "priority": 690,
     "match": {
-      "pattern": "(?:your\\s+)?sip\\s+instal?ment\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:in|for|towards)\\s+(?<fund>[a-z0-9 .&()\\'-]+?)\\s+(?:has been\\s+|is\\s+|was\\s+)?(?:debited|deducted|received|processed|successful|successfully\\s+(?:debited|processed|received))\\b",
+      "pattern": "(?:your\\s+)?sip\\s+instal?ment\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:in|for|towards)\\s+(?<fund>(?:(?!\\bwill\\s{1,3}be\\b)[a-z0-9 .&()\\'-])+?)\\s+(?:has been\\s+|is\\s+|was\\s+)?(?:debited|deducted|received|processed|successful|successfully\\s+(?:debited|processed|received))\\b",
       "flags": "i",
       "rejectAny": [
         "failed",
         "rejected",
         "unsuccessful",
         "insufficient",
-        "bounced",
-        "will be"
+        "bounced"
       ]
     },
     "emit": [

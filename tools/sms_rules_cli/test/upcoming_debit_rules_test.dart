@@ -205,4 +205,68 @@ void main() {
           '2028-02-29');
     });
   });
+
+  // What these rules must NOT change: the neighbours they sit next to.
+  group('existing readings stay as they were', () {
+    String? winner(String sender, String body) => engine
+        .interpretDetailed(
+          SmsMessage(
+            sender: sender,
+            body: body,
+            observedAt: DateTime.utc(2026, 11, 3, 6),
+            sourceKey: 'k',
+          ),
+          bundle,
+          appVersion: 'test',
+        )
+        .winnerId;
+
+    for (final body in [
+      'Your SIP instalment of Rs 2,500.00 in Acme Large Cap Fund has been debited. Units will be allotted within 2 working days.',
+      'Your SIP instalment of Rs 2,500.00 for Acme Large Cap Fund - Direct Growth has been debited. Folio 123456/78. Units will be allotted at NAV of the next business day.',
+      'Your SIP instalment of Rs 2,500.00 in Acme Large Cap Fund was successful. Your statement will be sent by email.',
+    ]) {
+      test('a SIP receipt that says "will be" later is still a receipt', () {
+        expect(winner('VM-FUNDCO-S', body), 'BRK-MF-SIP-INSTALMENT-01');
+        final o = engine.interpretDetailed(
+          SmsMessage(sender: 'VM-FUNDCO-S', body: body, observedAt: DateTime.utc(2026, 11, 3), sourceKey: 'k'),
+          bundle,
+          appVersion: 'test',
+        );
+        final m = o.result.facts.whereType<MovementFact>().single;
+        expect(m.evidenceOnly, isTrue); // never counted twice
+        expect(m.counterparty?.name, startsWith('ACME LARGE CAP FUND'));
+      });
+    }
+
+    test('a card or streaming "premium" is not an insurance premium', () {
+      // The general reader may still see a scheduled bill payment here, as it
+      // always did; what must not happen is typing it as insurance.
+      final f = attemptOf(
+        'VM-BANKXX-S',
+        'Your Example Bank Credit Card XX1234 premium of Rs 499 will be debited on 05-11-2026 towards your Netflix subscription.',
+      );
+      expect(f?.purpose, isNot(MovementPurpose.insurance));
+      expect(f?.provenance.ruleId, isNot('GENZ-INS-PREMIUM-UPCOMING-DEBIT'));
+    });
+
+    test('a word before "premium" is not the insurer', () {
+      final f = attemptOf(
+        'VM-BANKXX-S',
+        'Dear Customer, your monthly premium of Rs 1,000 for Health Insurance will be deducted on 10-11-2026 from A/c XX1234.',
+      )!;
+      expect(f.purpose, MovementPurpose.insurance);
+      expect(f.counterparty?.name, isNull);
+    });
+
+    test('a future-tense debit without a SIP or insurance word is untouched', () {
+      expect(
+        winner(
+          'VM-HDFCBK-S',
+          'Your A/c XX1234 will be debited by Rs.5000.00 on 14/08/2026 towards EMI. Maintain sufficient balance.',
+        ),
+        isNot(anyOf('GENZ-SIP-UPCOMING-DEBIT', 'GENZ-INS-PREMIUM-UPCOMING-DEBIT')),
+      );
+    });
+  });
 }
