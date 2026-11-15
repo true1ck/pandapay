@@ -1,3 +1,4 @@
+import 'bill_kind_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -92,7 +93,7 @@ class PastBillReceiptDetailScreen extends StatelessWidget {
               style: BambooFonts.money(26, color: BambooInk.ink900),
             ),
             Text(
-              _pastBillStatusLabel(item),
+              pastBillStatusLabel(item),
               style: BambooFonts.ui(
                 14,
                 color:
@@ -212,16 +213,17 @@ class _PastBillHistoryRow extends StatelessWidget {
         side: BorderSide(color: BambooInk.hairlineOnPaper),
       ),
       leading: const Icon(Icons.receipt_long_outlined, color: BambooInk.ink500),
-      title: Text(
-        item.merchant,
+      title: NameWithBadge(
+        name: item.merchant,
         style: BambooFonts.ui(
           14,
           color: BambooInk.ink900,
           weight: FontWeight.w600,
         ),
+        kind: BillKind.ofPast(item),
       ),
       subtitle: Text(
-        '${DateFormat('d MMM yyyy').format(item.occurredAt)} · ${_pastBillStatusLabel(item)}',
+        '${DateFormat('d MMM yyyy').format(item.occurredAt)} · ${pastBillStatusLabel(item)}',
         style: BambooFonts.ui(
           12,
           color:
@@ -246,13 +248,3 @@ class _PastBillHistoryRow extends StatelessWidget {
   }
 }
 
-String _pastBillStatusLabel(PastBillReceipt item) => switch (item.status) {
-  PastBillReceiptStatus.paidLinked => 'Paid · Linked',
-  PastBillReceiptStatus.paidUnlinked => 'Paid · Unlinked',
-  PastBillReceiptStatus.historicalUnpaid => 'Past bill · Payment not detected',
-  PastBillReceiptStatus.needsConfirmation =>
-    item.kind == PastBillReceiptKind.bill
-        ? 'Past bill · Needs confirmation'
-        : 'Receipt · Needs confirmation',
-  PastBillReceiptStatus.userSavedPurchase => 'Saved purchase',
-};

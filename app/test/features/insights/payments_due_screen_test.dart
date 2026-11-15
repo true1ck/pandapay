@@ -10,6 +10,7 @@ import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/response_cache.dart';
 import 'package:pandapay/data/past_bill_receipts.dart';
 import 'package:pandapay/data/pending_bills.dart';
+import 'package:pandapay/data/premium_reminders.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/insights/bills_horizon.dart';
 import 'package:pandapay/features/insights/central_bills_section.dart';
@@ -1193,4 +1194,173 @@ void main() {
       expect(assignments.isNotEmpty, isTrue);
     },
   );
+  group('whole bill picture (learned days, past bills, insurance)', () {
+    CardBill unverifiedBill() => CardBill(
+      statementDate: DateTime(2026, 10, 18),
+      dueDate: DateTime(2026, 11, 5),
+      amountDue: Money.fromRupees(1234),
+      minimumDue: Money.fromRupees(100),
+      paidToward: Money.zero(),
+      lastPaymentAt: null,
+      confidence: 0.9,
+    );
+
+    testWidgets(
+      'a card whose days were learned shows its bill amount and due date',
+      (tester) async {
+        await _pumpBills(
+          tester,
+          overrides: [
+            ..._deterministicOverrides(),
+            userCardsRepositoryProvider.overrideWithValue(_FakeRepo()),
+            myCardsProvider.overrideWith(
+              (ref) async => [
+                _card(id: 'c1', name: 'Test Card', dueDay: 5, statementDay: 18),
+              ],
+            ),
+            cardBillLedgerProvider.overrideWith(
+              (ref) async => {'c1': CardBillLedger(current: unverifiedBill())},
+            ),
+            commitmentsProvider.overrideWith(
+              (ref) async => const <Commitment>[],
+            ),
+          ],
+        );
+        expect(find.text('Test Card'), findsOneWidget);
+        expect(find.textContaining('1,234'), findsWidgets);
+        expect(find.textContaining('5 Nov'), findsWidgets);
+      },
+    );
+
+    testWidgets(
+      'one unconfirmed bill and no learned day does not claim a due row',
+      (tester) async {
+        await _pumpBills(
+          tester,
+          overrides: [
+            ..._deterministicOverrides(),
+            userCardsRepositoryProvider.overrideWithValue(_FakeRepo()),
+            myCardsProvider.overrideWith(
+              (ref) async => [_card(id: 'c1', name: 'Test Card')],
+            ),
+            cardBillLedgerProvider.overrideWith(
+              (ref) async => {'c1': CardBillLedger(current: unverifiedBill())},
+            ),
+            commitmentsProvider.overrideWith(
+              (ref) async => const <Commitment>[],
+            ),
+          ],
+        );
+        expect(find.text('Test Card'), findsNothing);
+      },
+    );
+
+    Commitment past(
+      String id,
+      DateTime due,
+      CommitmentStatus s, {
+      String? txn,
+    }) => Commitment(
+      id: id,
+      title: 'HDFC Bank Credit Card',
+      category: CommitmentCategory.other,
+      amount: Money.fromRupees(2500),
+      dueOn: due,
+      identifier: '1234',
+      cadence: CommitmentCadence.oneTime,
+      status: s,
+      linkedTransactionId: txn,
+      confidence: 0.95,
+      sourceKey: 'src-$id',
+    );
+
+    testWidgets(
+      'bills whose date has gone by move to Past bills with their state',
+      (tester) async {
+        final bills = [
+          past('v2:a', DateTime(2026, 9, 5), CommitmentStatus.paid, txn: 't1'),
+          past(
+            'v2:b',
+            DateTime(2026, 8, 5),
+            CommitmentStatus.paymentNotDetected,
+          ),
+        ];
+        await _pumpBills(
+          tester,
+          overrides: [
+            ..._deterministicOverrides(),
+            paymentsDueProvider.overrideWith(
+              (ref) async => const <DuePayment>[],
+            ),
+            commitmentsProvider.overrideWith((ref) async => bills),
+            pastBillReceiptsProvider.overrideWith(
+              (ref) async =>
+                  pastBillReceiptsFromBills(bills, DateTime(2026, 10, 25)),
+            ),
+            billsHorizonProvider.overrideWith((ref) => BillsHorizon.upcoming),
+          ],
+        );
+        expect(find.text('Past bills & receipts'), findsOneWidget);
+        expect(find.text('Paid · Linked'), findsOneWidget);
+        expect(find.text('Past bill · Payment not detected'), findsOneWidget);
+      },
+    );
+
+    testWidgets('a month-only insurance notice is an upcoming premium', (
+      tester,
+    ) async {
+      await _pumpBills(
+        tester,
+        overrides: [
+          ..._deterministicOverrides(),
+          paymentsDueProvider.overrideWith((ref) async => const <DuePayment>[]),
+          commitmentsProvider.overrideWith((ref) async => const <Commitment>[]),
+          premiumRemindersProvider.overrideWith(
+            (ref) => [
+              PremiumReminder(
+                id: 'p',
+                title: 'INSCO',
+                category: CommitmentCategory.insurance,
+                accountLast4: '6789',
+                premiumMonth: DateTime(2026, 12),
+                receivedAt: DateTime(2026, 10, 2),
+                sampleBody: 'Next Premium falls due on 12/2026',
+              ),
+            ],
+          ),
+          billsHorizonProvider.overrideWith((ref) => BillsHorizon.upcoming),
+        ],
+      );
+      expect(find.text('Upcoming premiums'), findsOneWidget);
+      expect(find.text('INSCO'), findsOneWidget);
+      expect(find.text('Dec 2026'), findsOneWidget);
+    });
+
+    testWidgets(
+      'in a past month a bill is listed once, not also under Past bills',
+      (tester) async {
+        final bill = past(
+          'v2:c',
+          DateTime(2026, 9, 12),
+          CommitmentStatus.paymentNotDetected,
+        ).copyWith(title: 'Water Board');
+        await _pumpBills(
+          tester,
+          overrides: [
+            ..._deterministicOverrides(),
+            paymentsDueProvider.overrideWith(
+              (ref) async => const <DuePayment>[],
+            ),
+            commitmentsProvider.overrideWith((ref) async => [bill]),
+            pastBillReceiptsProvider.overrideWith(
+              (ref) async =>
+                  pastBillReceiptsFromBills([bill], DateTime(2026, 10, 25)),
+            ),
+            billsHorizonProvider.overrideWith((ref) => BillsHorizon.lastMonth),
+          ],
+        );
+        expect(find.text('Water Board'), findsOneWidget);
+      },
+    );
+  });
 }

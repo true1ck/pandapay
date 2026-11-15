@@ -3,7 +3,10 @@ import 'dart:convert';
 
 import 'package:pandapay_domain/pandapay_domain.dart';
 
+import 'commitments_repository.dart';
 import 'local/app_database.dart';
+import '../features/sms_v2/ledger/premium_notices.dart';
+import 'premium_reminders.dart';
 
 enum PastBillReceiptStatus {
   paidLinked,
@@ -31,6 +34,10 @@ class PastBillReceipt {
   final String? sender;
   final String? body;
 
+  /// What the bill is: a [CommitmentCategory] name, or `creditCard`.
+  /// Null on rows saved before bills were tagged.
+  final String? categoryName;
+
   const PastBillReceipt({
     required this.id,
     required this.sourceKey,
@@ -46,6 +53,7 @@ class PastBillReceipt {
     this.accountLast4,
     this.sender,
     this.body,
+    this.categoryName,
   });
 
   Map<String, dynamic> toJson() => {
@@ -63,6 +71,7 @@ class PastBillReceipt {
     'accountLast4': accountLast4,
     'sender': sender,
     'body': body,
+    'categoryName': categoryName,
   };
 
   factory PastBillReceipt.fromJson(Map<String, dynamic> json) {
@@ -86,12 +95,15 @@ class PastBillReceipt {
       linkedTransactionId: json['linkedTransactionId'] as String?,
       // Compatibility with archives written before identity had its own fields.
       // Only the old exact synthetic label is migrated; raw SMS is not parsed.
-      cardLast4: json.containsKey('cardLast4') ? json['cardLast4'] as String? :
-          RegExp(r'^Card ending (\d{4})$')
-              .firstMatch(json['body'] as String? ?? '')?.group(1),
+      cardLast4: json.containsKey('cardLast4')
+          ? json['cardLast4'] as String?
+          : RegExp(
+              r'^Card ending (\d{4})$',
+            ).firstMatch(json['body'] as String? ?? '')?.group(1),
       accountLast4: json['accountLast4'] as String?,
       sender: json['sender'] as String?,
       body: json['body'] as String?,
+      categoryName: json['categoryName'] as String?,
     );
   }
 }
@@ -176,4 +188,87 @@ class PastBillReceiptRepository {
       ),
     );
   }
+}
+
+final RegExp _cardWord = RegExp(r'card|credit', caseSensitive: false);
+
+/// Past bills from the SMS-derived [bills] (ids `v2:<factId>`): every bill whose
+/// due date is before [now], newest first. Paid bills keep their receipt link;
+/// an unpaid one says its payment was not detected, which is all SMS can show.
+List<PastBillReceipt> pastBillReceiptsFromBills(
+  Iterable<Commitment> bills,
+  DateTime now,
+) {
+  final today = DateTime(now.year, now.month, now.day);
+  final out = <PastBillReceipt>[];
+  for (final bill in bills) {
+    if (!bill.id.startsWith('v2:') ||
+        bill.status == CommitmentStatus.dismissed ||
+        !bill.dueOn.isBefore(today)) {
+      continue;
+    }
+    final isCard = _cardWord.hasMatch(bill.title);
+    out.add(
+      PastBillReceipt(
+        id: 'past-${bill.id}',
+        sourceKey: bill.sourceKey ?? bill.id,
+        merchant: bill.title,
+        kind: PastBillReceiptKind.bill,
+        amount: bill.amount,
+        occurredAt: bill.paidOn ?? bill.dueOn,
+        receivedAt: bill.dueOn,
+        dueDate: bill.dueOn,
+        status: switch (bill.status) {
+          CommitmentStatus.paid =>
+            bill.linkedTransactionId != null
+                ? PastBillReceiptStatus.paidLinked
+                : PastBillReceiptStatus.paidUnlinked,
+          CommitmentStatus.needsConfirmation ||
+          CommitmentStatus.inGracePeriod =>
+            PastBillReceiptStatus.needsConfirmation,
+          _ => PastBillReceiptStatus.historicalUnpaid,
+        },
+        linkedTransactionId: bill.linkedTransactionId,
+        cardLast4: isCard ? bill.identifier : null,
+        accountLast4: isCard ? null : bill.identifier,
+        categoryName: isCard ? 'creditCard' : bill.category.name,
+      ),
+    );
+  }
+  return out..sort((a, b) => b.dueDate!.compareTo(a.dueDate!));
+}
+
+/// Past insurance months from month-only notices: one row per policy and month,
+/// shown as history that needs confirming (SMS cannot say it was paid).
+/// [notices] are the saved ones; a month still ahead is an upcoming reminder.
+List<PastBillReceipt> pastPremiumReceiptsFromNotices(
+  Iterable<PremiumNotice> notices,
+  DateTime now,
+) {
+  final thisMonth = DateTime(now.year, now.month);
+  final byCycle = <String, PastBillReceipt>{};
+  for (final n in notices) {
+    if (!n.month.isBefore(thisMonth)) continue;
+    final premium = parseMonthOnlyPremium(n.toObservation());
+    if (premium == null) continue;
+    final cycle = '${premium.title}|${premium.accountLast4 ?? ''}|${n.month}';
+    final previous = byCycle[cycle];
+    if (previous != null && !n.receivedAt.isAfter(previous.receivedAt)) continue;
+    byCycle[cycle] = PastBillReceipt(
+      id: 'past-premium-${n.sourceKey}',
+      sourceKey: n.sourceKey,
+      merchant: premium.title,
+      kind: PastBillReceiptKind.bill,
+      amount: null,
+      occurredAt: n.receivedAt,
+      receivedAt: n.receivedAt,
+      status: PastBillReceiptStatus.needsConfirmation,
+      accountLast4: premium.accountLast4,
+      sender: n.sender,
+      body: premium.body,
+      categoryName: CommitmentCategory.insurance.name,
+    );
+  }
+  return byCycle.values.toList()
+    ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
 }

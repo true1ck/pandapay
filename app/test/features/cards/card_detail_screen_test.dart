@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/data/card_bill_ledger.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/cards/card_detail_screen.dart';
+import 'package:pandapay/features/insights/payments_due_screen.dart' show DuePayment, paymentsDueProvider;
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 class _FakeCatalogueRepository implements CatalogueRepository {
@@ -91,10 +93,12 @@ Future<void> _pump(
   required List<UserCard> owned,
   String id = 'uc1',
   int initialTabIndex = 0,
+  List<Override> extra = const [],
 }) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        ...extra,
         catalogueRepositoryProvider.overrideWithValue(
           _FakeCatalogueRepository(catalogue),
         ),
@@ -211,6 +215,48 @@ void main() {
           .first,
     );
     expect(find.text('Statement date not set'), findsOneWidget);
+  });
+
+  testWidgets('Statement tab shows the bill amount, billing date and due date', (
+    tester,
+  ) async {
+    final card = _ownedCard();
+    await _pump(
+      tester,
+      catalogue: [_fullCard()],
+      owned: [card],
+      initialTabIndex: 6,
+      extra: [
+        paymentsDueProvider.overrideWith(
+          (ref) async => [
+            DuePayment(
+              card: card,
+              dueOn: DateTime(2026, 11, 5),
+              daysUntilDue: 9,
+              loggedThisCycle: Money.zero(),
+              bill: CardBill(
+                statementDate: DateTime(2026, 10, 18),
+                dueDate: DateTime(2026, 11, 5),
+                amountDue: Money.fromRupees(1234),
+                minimumDue: Money.fromRupees(100),
+                paidToward: Money.zero(),
+                lastPaymentAt: null,
+                confidence: 0.9,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+
+    expect(find.text('Active statement bill'), findsOneWidget);
+    expect(find.text('Total amount due'), findsOneWidget);
+    expect(find.textContaining('1,234'), findsWidgets);
+    expect(find.text('DUE IN 9 DAYS'), findsOneWidget);
+    expect(
+      find.text('Statement cut on 18 Oct · Due on 5 Nov'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('can open directly on the Statement tab', (tester) async {

@@ -8,6 +8,8 @@ import '../features/sync_state/user_state_pull.dart' show userStatePullProvider;
 import '../features/consent/sms_reading_consent.dart';
 import '../features/sms_v2/ledger/providers.dart';
 import '../features/sms_v2/ledger/adapters.dart' as sms_v2_adapters;
+import '../features/sms_v2/ledger/card_cycle_days.dart';
+import '../features/sms_v2/ledger/premium_notices.dart';
 import '../features/sms_v2/ledger/subscription_rebuild.dart';
 import '../features/sms_v2/ledger/subscription_state.dart';
 import '../features/sms_v2/storage/subscription_store.dart';
@@ -1610,6 +1612,18 @@ final pastBillReceiptsProvider = FutureProvider<List<PastBillReceipt>>((
   });
   final db = await ref.watch(appDatabaseProvider.future);
   final repository = PastBillReceiptRepository(db, namespace: namespace);
+  if (ref.watch(smsV2ReportingEnabledProvider)) {
+    // SMS v2 keeps no bill observations or archive rows: its past bills are the
+    // derived bills whose due date has gone by, plus past insurance months.
+    final bills = await ref.watch(commitmentsProvider.future);
+    final notices = ref.watch(premiumNoticesProvider);
+    ready = true;
+    final today = DateTime.now();
+    return [
+      ...pastBillReceiptsFromBills(bills, today),
+      ...pastPremiumReceiptsFromNotices(notices, today),
+    ]..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+  }
   final allArchived = repository.fetchAll(limit: null);
   final archived = allArchived.take(1000).toList(growable: false);
   final knownSources = <String>{
@@ -1786,7 +1800,34 @@ final smsBillRowsProvider = FutureProvider<List<SmsBillRow>>((ref) async {
 /// Insurance renewals whose SMS named only a month. Past months belong to
 /// archived history, and rows with an amount already appear in the SMS bill
 /// list, so this feed is the only Bills surface for the remaining reminders.
+/// Month-only insurance notices SMS v2 saved when it read the messages. Small,
+/// and read from a saved list, never by scanning messages.
+final premiumNoticesProvider = Provider<List<PremiumNotice>>((ref) {
+  // A capture that saves a notice also refreshes the ledger read model.
+  ref.watch(smsV2LedgerReadModelProvider);
+  final cache = ref.watch(responseCacheProvider).valueOrNull;
+  if (cache == null) return const [];
+  final namespace = ref.watch(cacheNamespaceProvider);
+  try {
+    return PremiumNoticeStore(
+      cache.financialStore.database.db,
+      namespace: namespace,
+    ).all();
+  } catch (_) {
+    return const [];
+  }
+});
+
 final premiumRemindersProvider = Provider<List<PremiumReminder>>((ref) {
+  if (ref.watch(smsV2ReportingEnabledProvider)) {
+    return derivePremiumReminders(
+      observations: [
+        for (final n in ref.watch(premiumNoticesProvider)) n.toObservation(),
+      ],
+      commitments: ref.watch(commitmentsProvider).valueOrNull ?? const [],
+      now: ref.watch(clockProvider).now(),
+    );
+  }
   ref.watch(financialStoreRevisionProvider('observations'));
   final cache = ref.watch(responseCacheProvider).valueOrNull;
   if (cache == null) return const [];
@@ -4568,6 +4609,28 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
   }
 });
 
+/// Saves the billing day and due day the bill history agrees on onto the card
+/// row (never over a day the person typed), so every screen that reads
+/// `card.dueDay` / `card.statementDay` sees them. Best effort: a failure here
+/// must not break the ledger.
+Future<void> _saveLearnedCardDays(
+  Ref ref,
+  Map<String, CardBillLedger> ledgers,
+) async {
+  if (ledgers.isEmpty) return;
+  try {
+    final cards = await ref.read(myCardsProvider.future);
+    final patches = cardDayPatches(cards, ledgers);
+    if (patches.isEmpty) return;
+    final store = (await _cacheOrNull(ref))?.financialStore;
+    if (store == null) return;
+    final namespace = ref.read(cacheNamespaceProvider);
+    patches.forEach((id, patch) => store.patchCard(namespace, id, patch));
+  } catch (_) {
+    // Learning the days is a convenience; the ledger itself is unaffected.
+  }
+}
+
 /// Per-card credit-card bill state derived from imported bank SMS — the
 /// bill-generated message ("Total amount due ₹X, due date dd MMM") and the
 /// card-bill payment receipts. Reactive to both SMS capture and the
@@ -4578,11 +4641,13 @@ final cardBillLedgerProvider = FutureProvider<Map<String, CardBillLedger>>((
 ) async {
   if (ref.watch(smsV2ReportingEnabledProvider)) {
     final model = await ref.watch(smsV2LedgerReadModelProvider.future);
-    return sms_v2_adapters.cardBillLedgersFromFacts(
+    final ledgers = sms_v2_adapters.cardBillLedgersFromFacts(
       model.facts,
       model.ledger.events,
       model.instruments,
     );
+    await _saveLearnedCardDays(ref, ledgers);
+    return ledgers;
   }
   final markReady = _financialChanges(ref, 'observations');
   final markTransactionsReady = _financialChanges(ref, 'transactions');

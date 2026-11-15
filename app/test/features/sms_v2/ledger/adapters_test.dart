@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/commitments_repository.dart';
 import 'package:pandapay/features/sms_v2/ledger/adapters.dart';
+import 'package:pandapay/features/sms_v2/ledger/card_cycle_days.dart';
+import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay_domain/sms_v2.dart';
 
 Fact fixture(
@@ -517,6 +519,108 @@ void main() {
     },
   );
 
+  test('a bill with no printed statement date starts on its first message', () {
+    Fact msg(String id, String at) => fixture(
+      'bill_due.total_only',
+      changes: {
+        'factId': id * 64,
+        'sourceKey': 'sms:cycle-$id',
+        'observedAt': at,
+        'occurredAt': null,
+        'attrs': {'dueDate': '2026-11-05'},
+        'amounts': [
+          {'role': 'due_total', 'minor': 250000, 'unit': 'INR'},
+        ],
+      },
+    );
+    final first = msg('a', '2026-10-17T20:00:00Z'); // 18 Oct, 01:30 IST
+    final later = msg('b', '2026-10-30T04:00:00Z');
+    final instrument = Instrument(
+      instrumentId: '00000000-0000-4000-8000-000000000002',
+      kind: InstrumentKind.creditCard,
+      issuerSlug: first.instrument!.issuerSlug!,
+      maskDigits: first.instrument!.maskDigits,
+      status: InstrumentStatus.confirmed,
+      displayName: 'Card',
+      userCardId: 'card',
+      firstSeenAt: first.observedAt,
+      lastSeenAt: first.observedAt,
+      evidenceCount: 1,
+    );
+    final ledger = cardBillLedgersFromFacts(
+      [later, first],
+      const [],
+      [instrument],
+    )['card']!;
+    expect(ledger.current!.statementDate, DateTime(2026, 10, 18));
+    expect(ledger.current!.statementDateExplicit, isFalse);
+  });
+
+  test(
+    'three months of the same bill story teach the card its billing and due day',
+    () {
+      // Each month: the bill arrives on the 18th, a reminder follows two days
+      // later, and the money is due on the 5th of the next month. No message
+      // prints a statement date.
+      final facts = <Fact>[];
+      void month(int m, int due) {
+        for (final (id, day) in [('a', 18), ('b', 20)]) {
+          facts.add(
+            fixture(
+              'bill_due.total_only',
+              changes: {
+                'factId': _hexId('cycle$id$m'),
+                'sourceKey': 'sms:cycle-$m-$id',
+                'observedAt':
+                    '2026-${m.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}T06:00:00Z',
+                'occurredAt': null,
+                'attrs': {
+                  'dueDate':
+                      '2026-${(m + 1).toString().padLeft(2, '0')}-${due.toString().padLeft(2, '0')}',
+                },
+                'amounts': [
+                  {'role': 'due_total', 'minor': 100000 + m, 'unit': 'INR'},
+                ],
+              },
+            ),
+          );
+        }
+      }
+      month(8, 5);
+      month(9, 5);
+      month(10, 6); // slid a day over a weekend
+      final first = facts.first as BillDueFact;
+      final instrument = Instrument(
+        instrumentId: '00000000-0000-4000-8000-000000000003',
+        kind: InstrumentKind.creditCard,
+        issuerSlug: first.instrument!.issuerSlug!,
+        maskDigits: first.instrument!.maskDigits,
+        status: InstrumentStatus.confirmed,
+        displayName: 'Card',
+        userCardId: 'card',
+        firstSeenAt: first.observedAt,
+        lastSeenAt: first.observedAt,
+        evidenceCount: 1,
+      );
+      final ledgers = cardBillLedgersFromFacts(facts, const [], [instrument]);
+      final learned = learnCardDays(ledgers['card']!.history);
+      expect(learned.statementDay, 18);
+      expect(learned.dueDay, 5);
+      final patches = cardDayPatches(
+        [
+          UserCard(
+            id: 'card',
+            cardProductId: 'p',
+            cardName: 'Test card',
+            isDefault: false,
+          ),
+        ],
+        ledgers,
+      );
+      expect(patches['card'], containsPair('statement_day', 18));
+      expect(patches['card'], containsPair('due_day', 5));
+    },
+  );
   test(
     'money in excludes own transfers and identifies repeated salary payer',
     () {

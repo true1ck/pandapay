@@ -1,3 +1,4 @@
+import 'bill_kind_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -106,15 +107,14 @@ class _PremiumRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  reminder.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                NameWithBadge(
+                  name: reminder.title,
                   style: BambooFonts.ui(
                     14,
                     weight: FontWeight.w600,
                     color: BambooInk.ink900,
                   ),
+                  kind: BillKind.ofCategory(reminder.category),
                 ),
                 const SizedBox(height: 2),
                 Text(

@@ -708,6 +708,7 @@ class _BillRecord {
     this.lastPayment, [
     this.receiptAt,
     this.superseded = false,
+    this.cycleStart,
   ]);
   final v2.BillDueFact fact;
   final int paidMinor;
@@ -721,6 +722,11 @@ class _BillRecord {
   /// is no longer a bill to pay: the newer statement carries whatever is owed
   /// (the old balance plus later spend), or the user settled this one elsewhere.
   final bool superseded;
+
+  /// When the first message of this cycle arrived (or its stated statement
+  /// date): the best available billing date when no message printed one. A
+  /// bill's first message is the one that announces it, later ones only nag.
+  final DateTime? cycleStart;
   int? get dueMinor =>
       _amount(fact, v2.AmountRole.dueTotal) ??
       _amount(fact, v2.AmountRole.dueMinimum);
@@ -757,6 +763,12 @@ String _billIdentity(v2.BillDueFact f) => f.instrument?.issuerSlug != null
     : _digitsOnly(f)
     ? 'anon|${f.instrument!.kind!.wire}|${f.instrument!.maskDigits}'
     : normalizeMerchantText(f.billerName ?? 'unknown:${f.factId}');
+/// The Indian calendar day of [at], as a plain date.
+DateTime _istDay(DateTime at) {
+  final ist = at.toUtc().add(_indiaOffset);
+  return DateTime(ist.year, ist.month, ist.day);
+}
+
 DateTime _statementAt(v2.BillDueFact f) => f.statementDate == null
     ? f.effectiveAt
     : DateTime.parse('${f.statementDate}T00:00:00+05:30').toUtc();
@@ -913,6 +925,7 @@ List<_BillRecord> _billRecords(
         last,
         receiptAt,
         superseded,
+        start,
       ),
     );
   }
@@ -1521,7 +1534,7 @@ Map<String, CardBillLedger> cardBillLedgersFromFacts(
         .add(
           CardBill(
             statementDate: fact.statementDate == null
-                ? fact.effectiveAt
+                ? _istDay(record.cycleStart ?? fact.effectiveAt)
                 : DateTime.parse(fact.statementDate!),
             statementDateExplicit: fact.statementDate != null,
             statementDateVerified: fact.statementDate != null,

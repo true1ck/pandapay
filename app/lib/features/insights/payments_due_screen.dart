@@ -1,3 +1,4 @@
+import 'bill_kind_badge.dart';
 import '../../app/async_first_load.dart';
 import '../sms_v2/ledger/providers.dart';
 import 'dart:async';
@@ -865,7 +866,12 @@ class _DueList extends ConsumerWidget {
           // 6. SMS bills
           if (_showSmsBills) SmsBillsSection(filter: filter),
           // 7. Past bills preview
-          _PastBillsPreview(filter: filter),
+          _PastBillsPreview(
+            filter: filter,
+            shownSources: {
+              for (final c in visibleCommitments) c.sourceKey ?? c.id,
+            },
+          ),
           const SizedBox(height: AppSpace.xl),
         ],
       ],
@@ -927,14 +933,24 @@ class _BillsLoadError extends ConsumerWidget {
 class _PastBillsPreview extends ConsumerWidget {
   final BillsHorizonFilter filter;
 
-  const _PastBillsPreview({required this.filter});
+  /// Bills a section above already lists (a past month lists them there), so
+  /// the same bill is not shown twice.
+  final Set<String> shownSources;
+
+  const _PastBillsPreview({required this.filter, this.shownSources = const {}});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final history = ref.watch(pastBillReceiptsProvider).valueOrNull ?? const [];
     final matching = filter.isUpcoming
         ? history
-        : history.where(filter.matchesReceipt).toList(growable: false);
+        : history
+              .where(
+                (r) =>
+                    filter.matchesReceipt(r) &&
+                    !shownSources.contains(r.sourceKey),
+              )
+              .toList(growable: false);
     final visible = matching
         .take(filter.isUpcoming ? 3 : 10)
         .toList(growable: false);
@@ -1000,25 +1016,27 @@ class _PastBillPreviewRow extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const Icon(Icons.receipt_long_outlined, color: BambooInk.ink500),
+            Icon(
+              BillKind.ofPast(item)?.icon ?? Icons.receipt_long_outlined,
+              color: BillKind.ofPast(item)?.fg ?? BambooInk.ink500,
+            ),
             const SizedBox(width: AppSpace.sm),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    item.merchant,
+                  NameWithBadge(
+                    name: item.merchant,
                     style: BambooFonts.ui(
                       14,
                       weight: FontWeight.w600,
                       color: BambooInk.ink900,
                     ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
+                    kind: BillKind.ofPast(item),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    _pastBillStatusLabel(item),
+                    pastBillStatusLabel(item),
                     style: BambooFonts.ui(
                       12,
                       color:
@@ -1046,17 +1064,6 @@ class _PastBillPreviewRow extends StatelessWidget {
     );
   }
 }
-
-String _pastBillStatusLabel(PastBillReceipt item) => switch (item.status) {
-  PastBillReceiptStatus.paidLinked => 'Paid · Linked',
-  PastBillReceiptStatus.paidUnlinked => 'Paid · Unlinked',
-  PastBillReceiptStatus.historicalUnpaid => 'Past bill · Payment not detected',
-  PastBillReceiptStatus.needsConfirmation =>
-    item.kind == PastBillReceiptKind.bill
-        ? 'Past bill · Needs confirmation'
-        : 'Receipt · Needs confirmation',
-  PastBillReceiptStatus.userSavedPurchase => 'Saved purchase',
-};
 
 void _showCardBillDetailSheet(
   BuildContext context,
@@ -2165,15 +2172,14 @@ class _CommitmentRow extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        commitment.title,
+                      NameWithBadge(
+                        name: commitment.title,
                         style: BambooFonts.ui(
                           14,
                           weight: FontWeight.w600,
                           color: BambooInk.ink900,
                         ),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
+                        kind: BillKind.ofCategory(commitment.category),
                       ),
                       if (metaParts.isNotEmpty) ...[
                         const SizedBox(height: 2),
@@ -2303,7 +2309,9 @@ class _CommitmentRow extends ConsumerWidget {
     }
     if (daysUntil == 0) {
       return Text(
-        'Due today',
+        commitment.category == CommitmentCategory.insurance
+            ? 'Premium due today'
+            : 'Due today',
         style: BambooFonts.ui(
           12,
           color: BambooInk.clayInk,
@@ -2313,8 +2321,11 @@ class _CommitmentRow extends ConsumerWidget {
         maxLines: 1,
       );
     }
+    final due = commitment.category == CommitmentCategory.insurance
+        ? 'Premium due'
+        : 'Due';
     return Text(
-      'Due ${DateFormat('d MMM').format(commitment.dueOn)} · in ${daysUntil}d',
+      '$due ${DateFormat('d MMM').format(commitment.dueOn)} · in ${daysUntil}d',
       style: BambooFonts.ui(12, color: BambooInk.ink500),
       overflow: TextOverflow.ellipsis,
       maxLines: 1,
