@@ -358,10 +358,12 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     // An owned UPI-linkable card is payable even when it earns nothing here
     // (the engine excludes it for "no reward rule"), so it still gets Pay.
     bool payable(Recommendation r) => r.card.isUpiLinkable && owns(r.card);
+    final heroCardId =
+        bestUpi?.card.id ?? upiRanked.where(payable).firstOrNull?.card.id;
     final amountEntryCardId =
-        (bestUpi != null && owns(bestUpi.card))
-        ? bestUpi.card.id
-        : upiRanked.where(payable).firstOrNull?.card.id;
+        (heroCardId != null && wallet.any((w) => w.cardProductId == heroCardId))
+        ? heroCardId
+        : null;
 
     return ListView(
       padding: const EdgeInsets.all(AppSpace.lg),
@@ -533,12 +535,17 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
           // apply here — see this class's test file for a reorder+rebuild
           // regression check confirming rows always show data matching
           // their current rank, not stale carried-over content.
-          for (final rec in upiRanked)
+          // The suggested card first, then the other cards that can pay, and the
+          // cards that cannot be used here last.
+          for (final rec in [
+            ...upiRanked.where((r) => !r.isExcluded || payable(r)),
+            ...upiRanked.where((r) => r.isExcluded && !payable(r)),
+          ])
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpace.md),
               child: _ScanResultCard(
                 recommendation: rec,
-                isHero: bestUpi != null && rec.card.id == bestUpi.card.id,
+                isHero: rec.card.id == heroCardId,
                 isOwned: wallet.any((w) => w.cardProductId == rec.card.id),
                 showRupayUpiNote: rec.card.isUpiLinkable,
                 payDespiteExclusion: rec.isExcluded && payable(rec),
@@ -940,7 +947,10 @@ class _ScanResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final excluded = recommendation.isExcluded;
+    // Only a card that truly cannot be used here is shown blocked. A card the
+    // engine excluded just because it earns nothing here (no reward rule) is
+    // shown like the others, with its ₹0.00, and can be paid with.
+    final excluded = recommendation.isExcluded && !payDespiteExclusion;
     final hero = isHero && !excluded;
     return Container(
       padding: const EdgeInsets.all(AppSpace.lg),
@@ -1030,8 +1040,7 @@ class _ScanResultCard extends StatelessWidget {
                 ),
               ],
             ),
-          if (!excluded || payDespiteExclusion) ...[
-            if (excluded) const SizedBox(height: AppSpace.sm),
+          if (!excluded) ...[
             if (showRupayUpiNote)
               Padding(
                 padding: const EdgeInsets.only(bottom: 2),
@@ -1064,10 +1073,7 @@ class _ScanResultCard extends StatelessWidget {
               ),
               const SizedBox(height: AppSpace.sm),
             ],
-            if (excluded)
-              // Pay is still allowed; the reason row above says why it earns nothing.
-              const SizedBox.shrink()
-            else if (!showAmountEntry || amountEntered) ...[
+            if (!showAmountEntry || amountEntered) ...[
               Row(
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,

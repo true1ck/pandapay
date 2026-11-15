@@ -639,12 +639,19 @@ void main() {
         [_owned('visa'), _owned('neu')],
       );
 
-      // Both reasons are still shown, but only the UPI-linkable card can pay.
+      // The Visa is shown as unusable; the RuPay card is a normal card with
+      // its ₹0.00 and the best-card badge, not a blocked one.
       expect(
         find.text('Not usable via UPI — swipe this instead.'),
         findsOneWidget,
       );
-      expect(find.text('No applicable reward rule.'), findsOneWidget);
+      expect(find.text('No applicable reward rule.'), findsNothing);
+      expect(find.text('TAP THIS ONE'), findsOneWidget);
+      // The card that can pay comes before the one that cannot be used.
+      expect(
+        tester.getTopLeft(find.text('Neu RuPay')).dy,
+        lessThan(tester.getTopLeft(find.text('visa')).dy),
+      );
       expect(
         find.widgetWithText(FilledButton, 'Pay with visa'),
         findsNothing,
