@@ -669,5 +669,8 @@ class _FakeUpi implements UpiPaymentService {
   }
 
   @override
+  Future<bool> openApp(String packageName) async => true;
+
+  @override
   String newTransactionRef() => 'test';
 }

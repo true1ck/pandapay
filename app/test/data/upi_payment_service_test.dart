@@ -56,6 +56,41 @@ void main() {
     expect(await statusFor(null), UpiPaymentStatus.submitted);
   });
 
+  group('openApp', () {
+    test('sends only the package name, never a payment link', () async {
+      Map<Object?, Object?>? args;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        expect(call.method, 'openApp');
+        args = call.arguments as Map<Object?, Object?>;
+        return true;
+      });
+
+      expect(await MethodChannelUpiPaymentService().openApp('com.phonepe.app'), isTrue);
+      expect(args, {'packageName': 'com.phonepe.app'});
+    });
+
+    test('is false when the app could not be opened', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async => false);
+      expect(await MethodChannelUpiPaymentService().openApp('com.phonepe.app'), isFalse);
+    });
+
+    test('is false when the channel returns nothing', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async => null);
+      expect(await MethodChannelUpiPaymentService().openApp('com.phonepe.app'), isFalse);
+    });
+
+    test('is false when the platform throws', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        throw PlatformException(code: 'bad_args');
+      });
+      expect(await MethodChannelUpiPaymentService().openApp('com.phonepe.app'), isFalse);
+    });
+
+    test('is false when the channel is not implemented (iOS, tests)', () async {
+      expect(await MethodChannelUpiPaymentService().openApp('com.phonepe.app'), isFalse);
+    });
+  });
+
   test('newTransactionRef is prefixed and unique-ish', () {
     final s = MethodChannelUpiPaymentService();
     final a = s.newTransactionRef();

@@ -253,6 +253,14 @@ class MainActivity : FlutterFragmentActivity() {
                         startPayment(uri, pkg, result)
                     }
                 }
+                "openApp" -> {
+                    val pkg = call.argument<String>("packageName")
+                    if (pkg == null) {
+                        result.error("bad_args", "packageName is required", null)
+                    } else {
+                        result.success(openUpiApp(pkg))
+                    }
+                }
                 else -> result.notImplemented()
             }
         }
@@ -462,6 +470,25 @@ class MainActivity : FlutterFragmentActivity() {
             )
         }
         return apps
+    }
+
+    /**
+     * Opens a UPI app's home screen with no payment link. Scan-to-pay uses this
+     * because NPCI makes UPI apps decline an intent from another app for a shop
+     * QR; the user scans the QR inside the UPI app instead. Only apps that
+     * handle `upi://pay` can be opened, so this can't launch arbitrary packages.
+     */
+    private fun openUpiApp(packageName: String): Boolean {
+        val isUpiApp = packageManager.queryIntentActivities(upiViewIntent(), 0)
+            .any { it.activityInfo?.packageName == packageName }
+        if (!isUpiApp) return false
+        val intent = packageManager.getLaunchIntentForPackage(packageName) ?: return false
+        return try {
+            startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            true
+        } catch (e: Exception) {
+            false
+        }
     }
 
     private fun startPayment(uri: String, packageName: String, result: MethodChannel.Result) {

@@ -70,6 +70,15 @@ abstract class UpiPaymentService {
   /// to return. [upiUri] must be the output of `buildUpiPayUri`.
   Future<UpiPaymentResult> pay({required String upiUri, required String packageName});
 
+  /// Opens the UPI app [packageName] on its home screen, with no payment link.
+  ///
+  /// Scan-to-pay uses this instead of [pay]: NPCI does not let a UPI app
+  /// accept an intent from another app for a shop QR, so the user scans the QR
+  /// inside the UPI app instead. Returns false when the app could not be
+  /// opened (not installed, no launcher screen, or no channel on this
+  /// platform).
+  Future<bool> openApp(String packageName);
+
   /// Generates a local reference for diagnostics or a future merchant-initiated
   /// flow. A scan-to-pay handoff does not add this to a static QR: the selected
   /// PSP app owns the transaction reference when the QR did not provide one.
@@ -135,6 +144,17 @@ class MethodChannelUpiPaymentService implements UpiPaymentService {
       // The app was launched but the channel couldn't read a clean result —
       // treat exactly like the old fire-and-forget launch.
       return const UpiPaymentResult(status: UpiPaymentStatus.submitted);
+    }
+  }
+
+  @override
+  Future<bool> openApp(String packageName) async {
+    try {
+      return await _channel.invokeMethod<bool>('openApp', {'packageName': packageName}) ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
     }
   }
 

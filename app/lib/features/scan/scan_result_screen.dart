@@ -4,7 +4,6 @@ import '../../app/design/bamboo_components.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
@@ -16,8 +15,7 @@ import '../../data/card_snapshots.dart';
 import '../../data/catalogue_repository.dart'
     show SpendCategory, categoryIdForServer;
 import '../../data/merchant_context.dart';
-import '../../data/merchant_search_repository.dart'
-    show MerchantResolution, safeMerchantMccForUpiHandoff;
+import '../../data/merchant_search_repository.dart' show MerchantResolution;
 import '../../data/override_resolver.dart';
 import '../../data/scanned_merchant_category.dart';
 import '../../data/upi_payment_service.dart';
@@ -31,6 +29,7 @@ import '../cards/card_picker_screen.dart';
 import '../comparison/comparison_view_screen.dart';
 import 'payment_sent_screen.dart';
 import 'upi_app_picker_sheet.dart';
+import 'upi_scan_guide_dialog.dart';
 
 /// ui-spec B3. Merchant identity/category resolution is best-effort and
 /// exact-VPA based: published directory data may enrich a QR before payment,
@@ -413,7 +412,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
               borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
             ),
             hintText: 'Use the shop name if the QR did not include one',
-            helperText: 'The selected UPI app will verify ${widget.parsed.pa}',
+            helperText: 'Check this payee in your UPI app: ${widget.parsed.pa}',
             helperStyle: BambooFonts.ui(11.5, color: BambooInk.ink500),
           ),
           // No onChanged/setState needed: _payWith reads _merchantController.text
@@ -613,141 +612,60 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     }
 
     final service = ref.read(upiPaymentServiceProvider);
-    // A static merchant QR can omit its acquiring-bank MCC. NPCI has
-    // documented that PSPs may then classify it as P2P, which can cause
-    // merchant payments to be declined. Use an exact-VPA directory MCC only
-    // when explicitly operator-verified. Never infer it from a user-entered
-    // category/name, and never alter a signed QR payload.
-    final resolvedMerchant = await ref
-        .read(merchantResolutionProvider(widget.parsed.pa).future)
-        .timeout(const Duration(seconds: 2), onTimeout: () => null);
-    if (!mounted) return;
-    final handoffMcc = safeMerchantMccForUpiHandoff(
-      qrMcc: widget.parsed.mc,
-      qrHasSignature: widget.parsed.sign != null,
-      resolution: resolvedMerchant,
-    );
 
-    final uriString = buildUpiPayUri(
-      pa: widget.parsed.pa,
-      // Preserve the QR's original payee name for the PSP handoff. PandaPay
-      // may show a richer locally detected merchant name in its own UI, but
-      // must not replace the QR's payee field before PSP validation.
-      pn: widget.parsed.pn,
-      am: _amount,
-      cu: widget.parsed.cu,
-      // Preserve QR transaction fields. The MCC may also be filled from an
-      // sufficiently trusted exact-VPA record when the QR omitted it;
-      // never invent a transaction reference for a static QR.
-      mc: handoffMcc,
-      tr: widget.parsed.tr,
-      tn: widget.parsed.tn,
-      mode: widget.parsed.mode,
-      orgid: widget.parsed.orgid,
-      sign: widget.parsed.sign,
-      extraParams: widget.parsed.extraParams,
-    );
-
+    // NPCI makes UPI apps decline a payment another app starts from a shop QR
+    // (an intent: initiation mode 04), while the same QR scanned inside the UPI
+    // app goes through. So PandaPay does not send a payment link. It picks the
+    // card, then sends the user to scan this QR in their own UPI app.
     final apps = await service.installedApps();
     if (!mounted) return;
 
-    // iOS, or Android with nothing enumerable — fall back to the plain
-    // scheme launch (OS picks the app, no status comes back).
-    if (apps.isEmpty) {
-      await _legacyLaunch(rec, wallet, categoryId, uriString);
-      return;
+    // iOS, or Android with nothing enumerable: no app to open from here.
+    UpiApp? chosen;
+    if (apps.isNotEmpty) {
+      chosen = await UpiAppPickerSheet.show(
+        context,
+        apps: apps,
+        cardName: rec.card.name,
+      );
+      if (chosen == null || !mounted) return;
     }
 
-    final chosen = await UpiAppPickerSheet.show(
+    final go = await UpiScanGuideDialog.show(
       context,
-      apps: apps,
+      appName: chosen?.name,
       cardName: rec.card.name,
+      amount: _amount.format(),
     );
-    if (chosen == null || !mounted) return;
+    if (!go || !mounted) return;
 
-    // The channel completes on the UPI app's Activity result. If Android
-    // recreated our Activity while the user was in the UPI app (low RAM), or
-    // they never came back, that result is lost — cap the wait so the future
-    // can't hang the screen forever, and fall to the manual-confirm path.
-    final result = await service
-        .pay(upiUri: uriString, packageName: chosen.packageName)
-        .timeout(
-          const Duration(minutes: 4),
-          onTimeout: () =>
-              const UpiPaymentResult(status: UpiPaymentStatus.submitted),
-        );
-    if (!mounted) return;
+    // Copied so it can be pasted in the UPI app's amount field.
+    final rupees = _amount.rupees;
+    await Clipboard.setData(
+      ClipboardData(
+        text: rupees == rupees.truncateToDouble()
+            ? rupees.toStringAsFixed(0)
+            : rupees.toStringAsFixed(2),
+      ),
+    );
 
-    switch (result.status) {
-      case UpiPaymentStatus.success:
-        // The UPI result is useful UX feedback, but the bank SMS is the
-        // authoritative settled spend. Logging here first creates a manual
-        // row which can race the SMS and count the same QR payment twice.
-        await _openPaymentSent(
-          rec: rec,
-          wallet: wallet,
-          categoryId: categoryId,
-          autoLog: false,
-        );
-        break;
-      case UpiPaymentStatus.submitted:
-        // The honest default: the app returned with no conclusive status.
-        await _openPaymentSent(
-          rec: rec,
-          wallet: wallet,
-          categoryId: categoryId,
-          autoLog: false,
-        );
-        break;
-      case UpiPaymentStatus.failure:
-        final responseCode = _upiResponseField(
-          result.rawResponse,
-          'responsecode',
-        );
+    if (chosen != null) {
+      final opened = await service.openApp(chosen.packageName);
+      if (!mounted) return;
+      if (!opened) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'The receiver bank declined this payment${responseCode == null ? '' : ' (code $responseCode)'}. Try another UPI app or bank account; no spend was logged in PandaPay.',
+              "Couldn't open ${chosen.name}. Open it yourself and scan the shop's QR there.",
             ),
-            duration: const Duration(seconds: 5),
           ),
         );
-        break;
-      case UpiPaymentStatus.cancelled:
-        break; // user backed out of the UPI app — nothing to report
-      case UpiPaymentStatus.noAppsAvailable:
-        await _legacyLaunch(rec, wallet, categoryId, uriString);
-        break;
+        return;
+      }
     }
-  }
 
-  /// Pre-channel behaviour: hand the `upi://` link to the OS and hope. Used
-  /// on iOS and whenever no UPI app can be enumerated.
-  Future<void> _legacyLaunch(
-    Recommendation rec,
-    List<UserCard> wallet,
-    String? categoryId,
-    String uriString,
-  ) async {
-    final uri = Uri.parse(uriString);
-    final launched =
-        await canLaunchUrl(uri) &&
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!mounted) return;
-    if (!launched) {
-      // ui-spec B3 edge case: no UPI app installed -> recommendation-only
-      // with a copy-VPA action.
-      await Clipboard.setData(ClipboardData(text: widget.parsed.pa));
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'No UPI app found — copied ${widget.parsed.pa} to your clipboard instead.',
-          ),
-        ),
-      );
-      return;
-    }
+    // The bank SMS is the authoritative settled spend, so nothing is logged
+    // here. The sent screen offers a manual log if no SMS arrives.
     await _openPaymentSent(
       rec: rec,
       wallet: wallet,
@@ -881,19 +799,6 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       }
     }
   }
-}
-
-String? _upiResponseField(String? raw, String wantedKey) {
-  if (raw == null || raw.isEmpty) return null;
-  for (final part in raw.split('&')) {
-    final separator = part.indexOf('=');
-    if (separator <= 0) continue;
-    if (part.substring(0, separator).trim().toLowerCase() == wantedKey) {
-      final value = part.substring(separator + 1).trim();
-      return value.isEmpty ? null : value;
-    }
-  }
-  return null;
 }
 
 class _CategoryPicker extends ConsumerWidget {

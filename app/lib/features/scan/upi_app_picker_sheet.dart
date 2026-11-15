@@ -50,7 +50,7 @@ class UpiAppPickerSheet extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              "You'll pay with $cardName there, then enter your UPI PIN.",
+              "Next you'll scan the shop's QR there and pay with $cardName.",
               style: BambooFonts.ui(13, color: BambooInk.ink500),
             ),
             const SizedBox(height: AppSpace.md),
