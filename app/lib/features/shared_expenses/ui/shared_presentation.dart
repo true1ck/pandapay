@@ -127,12 +127,24 @@ class SharedContextRow {
 
 class SharedActivityRow {
   final String id;
+
+  /// The headline: who did what to which expense.
   final String description;
   final String occurredAtLabel;
   final String? contextLabel;
   final String? impactLabel;
   final Money? impactAmount;
   final Confidence confidence;
+
+  /// What it says beneath the headline: the amounts, or what changed from what
+  /// to what.
+  final List<String> details;
+
+  /// What it means for you, in a sentence ("Rahul owes you ₹600.00").
+  final String? impact;
+
+  /// What the card is about, for its icon: expense, payment, member, group.
+  final String category;
   const SharedActivityRow({
     required this.id,
     required this.description,
@@ -141,6 +153,9 @@ class SharedActivityRow {
     this.impactLabel,
     this.impactAmount,
     this.confidence = Confidence.confirmed,
+    this.details = const [],
+    this.impact,
+    this.category = 'other',
   });
 }
 

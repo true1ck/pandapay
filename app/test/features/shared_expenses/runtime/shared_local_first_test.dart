@@ -22,6 +22,11 @@ const _priya = '99999999-9999-4999-8999-999999999999';
 const _expense = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const _revision = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const _priyaProfile = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const _dinner = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+const _dinnerV1 = 'dddddddd-0000-4ddd-8ddd-000000000001';
+const _dinnerV2 = 'dddddddd-0000-4ddd-8ddd-000000000002';
+const _dinnerV3 = 'dddddddd-0000-4ddd-8ddd-000000000003';
+const _settlement = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 
 SharedProjection _p(String entity, String id, Map<String, Object?> payload) =>
     SharedProjection(
@@ -150,62 +155,228 @@ void main() {
     expect(roster.members.map((m) => m.name), containsAll(['You', 'Priya']));
   });
 
-  test('activity says who did what, to which expense, and what it meant', () {
-    final added = runtime.describeActivity({
+  Future<void> seedHistory() => runtime.store.applyPage(
+    SharedChangePage(
+      records: [
+        // The first version of "Dinner": Priya paid 500, split equally.
+        _p('expenses', '$_dinner:$_dinnerV1', {
+          'recordType': 'revision',
+          'contextId': _ctx,
+          'expenseId': _dinner,
+          'revisionId': _dinnerV1,
+          'authorProfileId': _priyaProfile,
+          'expectedHeadRevisionId': null,
+          'title': 'Dinner',
+          'occurredOn': '2026-11-05',
+          'totalMinor': '50000',
+          'void': false,
+          'snapshot': {
+            'contributions': [
+              {'memberId': _priya, 'amountMinor': '50000'},
+            ],
+            'shares': [
+              {'memberId': _own, 'amountMinor': '25000'},
+              {'memberId': _priya, 'amountMinor': '25000'},
+            ],
+          },
+        }),
+        // Edited: renamed, now 600, and a different date.
+        _p('expenses', '$_dinner:$_dinnerV2', {
+          'recordType': 'revision',
+          'contextId': _ctx,
+          'expenseId': _dinner,
+          'revisionId': _dinnerV2,
+          'authorProfileId': _priyaProfile,
+          'expectedHeadRevisionId': _dinnerV1,
+          'title': 'Team dinner',
+          'occurredOn': '2026-11-06',
+          'totalMinor': '60000',
+          'void': false,
+          'snapshot': {
+            'contributions': [
+              {'memberId': _priya, 'amountMinor': '60000'},
+            ],
+            'shares': [
+              {'memberId': _own, 'amountMinor': '30000'},
+              {'memberId': _priya, 'amountMinor': '30000'},
+            ],
+          },
+        }),
+        _p('activity', 'ev-settle', {
+          'contextId': _ctx,
+          'eventId': 'ev-settle',
+          'kind': 'settlement.reported',
+          'originId': _settlement,
+          'actorProfileId': accountId,
+          'payload': {
+            'settlementId': _settlement,
+            'payerMemberId': _own,
+            'receiverMemberId': _priya,
+            'amountMinor': '30000',
+          },
+        }),
+      ],
+      nextCursor: null,
+    ),
+    expectedCursor: null,
+  );
+
+  test(
+    'a new expense says who added it, the amount, who paid and your part',
+    () async {
+      await seedHistory();
+      final card = runtime.describeActivity({
+        'contextId': _ctx,
+        'contextName': 'Flatmates',
+        'kind': 'expense.accepted',
+        'originId': _dinnerV1,
+        'createdAt': '2026-11-05T10:00:00Z',
+      });
+      expect(card.description, 'Priya added “Dinner”');
+      expect(
+        card.details.single,
+        '₹500.00 · Priya paid · split equally · 5 Nov 2026',
+      );
+      expect(card.impact, 'You owe Priya ₹250.00');
+      expect(card.category, 'expense');
+      expect(card.contextLabel, 'Flatmates');
+    },
+  );
+
+  test('an edit says what changed, from what to what', () async {
+    await seedHistory();
+    final card = runtime.describeActivity({
       'contextId': _ctx,
+      'contextName': 'Flatmates',
       'kind': 'expense.accepted',
-      'actorProfileId': _priyaProfile,
-      'createdAt': '2026-11-03T10:00:00Z',
-      'payload': {'expenseId': _expense, 'revisionId': _revision},
+      'originId': _dinnerV2,
+      'createdAt': '2026-11-06T10:00:00Z',
     });
-    expect(added.description, 'Priya added “Groceries”');
-    expect(added.impactLabel, 'You borrowed');
-    expect(added.impactAmount!.paise, 30000);
+    expect(card.description, 'Priya renamed “Dinner” to “Team dinner”');
+    expect(card.details, [
+      'Name: “Dinner” → “Team dinner”',
+      'Amount: ₹500.00 → ₹600.00',
+      'Date: 5 Nov 2026 → 6 Nov 2026',
+      'and 1 more changes',
+    ]);
+    expect(card.impact, 'You owe Priya ₹300.00');
+  });
 
-    final old = runtime.describeActivity({
-      'contextId': _ctx,
-      'kind': 'expense.accepted',
-      'actorProfileId': accountId,
-      'createdAt': '2026-11-02T10:00:00Z',
-      'payload': {'expenseId': _expense, 'revisionId': 'an-older-revision'},
-    });
-    expect(old.description, 'You added “Groceries”');
-    expect(
-      old.impactAmount,
-      isNull,
-      reason: "today's figure is not that event's",
-    );
+  test(
+    'an edit that keeps the name says edited, with only what moved',
+    () async {
+      await seedHistory();
+      // The same expense edited again, only the amount.
+      await runtime.store.applyPage(
+        SharedChangePage(
+          records: [
+            _p('expenses', '$_dinner:$_dinnerV3', {
+              'recordType': 'revision',
+              'contextId': _ctx,
+              'expenseId': _dinner,
+              'revisionId': _dinnerV3,
+              'authorProfileId': accountId,
+              'expectedHeadRevisionId': _dinnerV2,
+              'title': 'Team dinner',
+              'occurredOn': '2026-11-06',
+              'totalMinor': '80000',
+              'void': false,
+              'snapshot': {
+                'contributions': [
+                  {'memberId': _priya, 'amountMinor': '80000'},
+                ],
+                'shares': [
+                  {'memberId': _own, 'amountMinor': '40000'},
+                  {'memberId': _priya, 'amountMinor': '40000'},
+                ],
+              },
+            }),
+          ],
+          nextCursor: null,
+        ),
+        expectedCursor: null,
+      );
+      final card = runtime.describeActivity({
+        'contextId': _ctx,
+        'contextName': 'Flatmates',
+        'kind': 'expense.accepted',
+        'originId': _dinnerV3,
+        'createdAt': '2026-11-07T10:00:00Z',
+      });
+      expect(card.description, 'You edited “Team dinner”');
+      expect(card.details, [
+        'Amount: ₹600.00 → ₹800.00',
+        'Your share: ₹300.00 → ₹400.00',
+      ]);
+    },
+  );
 
-    final paid = runtime.describeActivity({
-      'contextId': _ctx,
-      'kind': 'settlement.reported',
-      'actorProfileId': accountId,
-      'createdAt': '2026-11-04T10:00:00Z',
-      'payload': {
-        'payerMemberId': _own,
-        'receiverMemberId': _priya,
-        'amountMinor': '30000',
-      },
-    });
-    expect(
-      paid.description,
-      'You paid Priya ₹300.00 · waiting for confirmation',
-    );
+  test(
+    'a payment says who paid whom, how much, and what happens next',
+    () async {
+      await seedHistory();
+      final card = runtime.describeActivity({
+        'contextId': _ctx,
+        'contextName': 'Flatmates',
+        'kind': 'settlement.reported',
+        'originId': _settlement,
+        'createdAt': '2026-11-08T10:00:00Z',
+      });
+      expect(card.description, 'You paid Priya ₹300.00');
+      expect(card.details, ['Waiting for the other person to confirm']);
+      expect(card.category, 'payment');
+    },
+  );
 
+  test('people and groups say who, and where', () async {
     final joined = runtime.describeActivity({
       'contextId': _ctx,
+      'contextName': 'Flatmates',
       'kind': 'membership.claimed',
+      'originId': _priya,
       'createdAt': '2026-11-01T10:00:00Z',
-      'payload': {'memberId': _priya},
     });
     expect(joined.description, 'Priya joined');
+    expect(joined.details, ['In “Flatmates”']);
+    final invited = runtime.describeActivity({
+      'contextId': _ctx,
+      'contextName': 'Flatmates',
+      'kind': 'member.invited',
+      'originId': _priya,
+      'createdAt': '2026-11-01T09:00:00Z',
+    });
+    expect(invited.description, 'Someone invited Priya');
+    expect(invited.details.first, 'To join “Flatmates”');
+    final created = runtime.describeActivity({
+      'contextId': _ctx,
+      'contextName': 'Flatmates',
+      'kind': 'context.created',
+      'originId': _ctx,
+      'createdAt': '2026-11-01T08:00:00Z',
+    });
+    expect(created.description, 'Someone created the group “Flatmates”');
   });
 
-  test('a group page knows its own balance, so its top line is never empty', () async {
-    final group = await runtime.loadGroup(_ctx);
-    expect(group.summary, isNotNull);
-    expect(group.summary!.youOwe.paise, 30000);
-    expect(group.summary!.owedToYou.paise, 0);
-    expect(group.summary!.netBalance.paise, -30000);
+  test('an event the phone has no record of still says something useful', () {
+    final card = runtime.describeActivity({
+      'contextId': _ctx,
+      'contextName': 'Flatmates',
+      'kind': 'expense.accepted',
+      'originId': 'unknown-revision',
+      'createdAt': '2026-11-01T08:00:00Z',
+    });
+    expect(card.description, 'An expense was added or changed');
+    expect(card.contextLabel, 'Flatmates');
   });
+
+  test(
+    'a group page knows its own balance, so its top line is never empty',
+    () async {
+      final group = await runtime.loadGroup(_ctx);
+      expect(group.summary, isNotNull);
+      expect(group.summary!.youOwe.paise, 30000);
+      expect(group.summary!.owedToYou.paise, 0);
+      expect(group.summary!.netBalance.paise, -30000);
+    },
+  );
 }

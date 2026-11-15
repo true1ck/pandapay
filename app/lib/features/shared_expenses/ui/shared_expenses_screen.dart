@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../app/design/app_theme.dart';
+import '../../../app/design/party_avatar.dart';
+import '../../../app/design/app_icons.dart';
 import '../../../app/design/widgets.dart';
 import 'shared_components.dart';
 import 'shared_presentation.dart';
@@ -452,6 +454,9 @@ String _activityTime(String value) {
   return time == null ? value : DateFormat.jm().format(time);
 }
 
+/// One Activity card: an icon for what it is about, who did what, the lines that
+/// say what changed (from what to what), what it means for you, and where and
+/// when. Everything is on the card; nothing needs a tap to understand it.
 class SharedActivityTile extends StatelessWidget {
   final SharedActivityRow row;
   final bool hideAmounts;
@@ -462,65 +467,133 @@ class SharedActivityTile extends StatelessWidget {
     this.hideAmounts = false,
     this.onTap,
   });
+
+  (IconData, Color) get _mark => switch (row.category) {
+    'expense' => (AppIcons.bill, BambooChartColors.pink),
+    'payment' => (AppIcons.settleUp, BambooChartColors.teal),
+    'member' => (AppIcons.person, BambooChartColors.violet),
+    'group' => (AppIcons.group, BambooChartColors.violet),
+    _ => (AppIcons.history, BambooChartColors.teal),
+  };
+
   @override
-  Widget build(BuildContext context) => Pressable(
-    onTap: onTap,
-    child: SharedPanel(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const ExcludeSemantics(
-            child: CircleAvatar(
-              radius: 20,
-              backgroundColor: BambooInk.rankBadgeBg,
-              child: Icon(
-                Icons.history_rounded,
-                size: 21,
-                color: BambooInk.jade,
+  Widget build(BuildContext context) {
+    final (icon, tone) = _mark;
+    final impact = row.impact;
+    final good =
+        impact != null &&
+        (impact.contains('owes you') || impact.startsWith('You get back'));
+    final bad = impact != null && impact.startsWith('You owe');
+    final where = [
+      ?row.contextLabel,
+      _activityTime(row.occurredAtLabel),
+    ].join(' · ');
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: AppSpace.sm),
+        padding: const EdgeInsets.all(AppSpace.md),
+        decoration: sharedCardDecoration(),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TintedIconTile(icon, tone, size: 40),
+            const SizedBox(width: AppSpace.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    hideAmounts
+                        ? row.description.replaceAll(
+                            RegExp(r'₹[0-9,.]+'),
+                            '••••',
+                          )
+                        : row.description,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: BambooFonts.ui(15.5, weight: FontWeight.w600),
+                  ),
+                  for (final line in row.details)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Text(
+                        hideAmounts
+                            ? line.replaceAll(RegExp(r'₹[0-9,.]+'), '••••')
+                            : line,
+                        style: BambooFonts.ui(13, color: BambooInk.ink700),
+                      ),
+                    ),
+                  if (row.impactAmount case final amount?)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: SharedMoneyLine(
+                        row.impactLabel ?? 'Your impact',
+                        amount,
+                        confidence: row.confidence,
+                        hidden: hideAmounts,
+                      ),
+                    )
+                  else if (row.impactLabel != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Text(
+                        row.impactLabel!,
+                        style: BambooFonts.ui(13, color: BambooInk.ink700),
+                      ),
+                    ),
+                  if (impact != null)
+                    Container(
+                      margin: const EdgeInsets.only(top: AppSpace.sm),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: good
+                            ? BambooInk.jade.withValues(alpha: .10)
+                            : bad
+                            ? BambooInk.clay.withValues(alpha: .10)
+                            : BambooInk.paperCool,
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                      ),
+                      child: Text(
+                        hideAmounts
+                            ? impact.replaceAll(RegExp(r'₹[0-9,.]+'), '••••')
+                            : impact,
+                        style: BambooFonts.ui(
+                          13,
+                          weight: FontWeight.w700,
+                          color: good
+                              ? BambooInk.jade
+                              : bad
+                              ? BambooInk.clayInk
+                              : BambooInk.ink900,
+                        ),
+                      ),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpace.sm),
+                    child: Text(
+                      where,
+                      style: BambooFonts.ui(12, color: BambooInk.ink500),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-          const SizedBox(width: AppSpace.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  row.description,
-                  style: BambooFonts.ui(15, weight: FontWeight.w600),
+            if (onTap != null)
+              const Padding(
+                padding: EdgeInsets.only(left: 2, top: 2),
+                child: Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: BambooInk.ink500,
                 ),
-                if (row.contextLabel != null)
-                  Text(
-                    row.contextLabel!,
-                    style: BambooFonts.ui(12, color: BambooInk.ink700),
-                  ),
-                if (row.impactAmount case final amount?)
-                  SharedMoneyLine(
-                    row.impactLabel ?? 'Your impact',
-                    amount,
-                    confidence: row.confidence,
-                    hidden: hideAmounts,
-                  )
-                else if (row.impactLabel != null)
-                  Text(
-                    row.impactLabel!,
-                    style: BambooFonts.ui(13, color: BambooInk.ink700),
-                  ),
-                Text(
-                  _activityTime(row.occurredAtLabel),
-                  style: BambooFonts.ui(12, color: BambooInk.ink700),
-                ),
-              ],
-            ),
-          ),
-          if (onTap != null)
-            const Icon(
-              Icons.chevron_right_rounded,
-              size: 18,
-              color: BambooInk.ink700,
-            ),
-        ],
+              ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }

@@ -769,6 +769,85 @@ void main() {
     expect(find.text('You are owed'), findsNothing);
   });
 
+  testWidgets('an activity card says what changed, what it means, and where', (
+    tester,
+  ) async {
+    final now = DateTime.now().toUtc().toIso8601String();
+    SharedHubPresentation hub({bool hidden = false}) => SharedHubPresentation(
+      summary: balances,
+      friends: SharedPage(),
+      groups: SharedPage(),
+      activity: SharedPage(
+        items: [
+          SharedActivityRow(
+            id: 'edit',
+            description: 'Priya renamed “Dinner” to “Team dinner”',
+            details: const [
+              'Name: “Dinner” → “Team dinner”',
+              'Amount: ₹500.00 → ₹600.00',
+            ],
+            impact: 'You owe Priya ₹300.00',
+            category: 'expense',
+            occurredAtLabel: now,
+            contextLabel: 'Flatmates',
+          ),
+          SharedActivityRow(
+            id: 'invite',
+            description: 'Priya invited Sam',
+            details: const ['To join “Flatmates”'],
+            category: 'member',
+            occurredAtLabel: now,
+            contextLabel: 'Flatmates',
+          ),
+        ],
+      ),
+    );
+    await pump(tester, SharedExpensesScreen(initialIndex: 2, data: hub()));
+    expect(
+      find.text('Priya renamed “Dinner” to “Team dinner”'),
+      findsOneWidget,
+    );
+    expect(find.text('Name: “Dinner” → “Team dinner”'), findsOneWidget);
+    expect(find.text('Amount: ₹500.00 → ₹600.00'), findsOneWidget);
+    expect(find.text('You owe Priya ₹300.00'), findsOneWidget);
+    expect(find.text('Priya invited Sam'), findsOneWidget);
+    expect(find.text('To join “Flatmates”'), findsOneWidget);
+    expect(find.textContaining('Flatmates ·'), findsNWidgets(2));
+  });
+
+  testWidgets('hidden amounts are hidden in the headline and the details', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      SharedExpensesScreen(
+        initialIndex: 2,
+        data: SharedHubPresentation(
+          hideAmounts: true,
+          summary: balances,
+          friends: SharedPage(),
+          groups: SharedPage(),
+          activity: SharedPage(
+            items: [
+              SharedActivityRow(
+                id: 'pay',
+                description: 'You paid Priya ₹300.00',
+                details: const ['Waiting for the other person to confirm'],
+                impact: 'You owe Priya ₹200.00',
+                category: 'payment',
+                occurredAtLabel: DateTime.now().toUtc().toIso8601String(),
+                contextLabel: 'Flatmates',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    expect(find.text('You paid Priya ••••'), findsOneWidget);
+    expect(find.text('You owe Priya ••••'), findsOneWidget);
+    expect(find.textContaining('₹'), findsNothing);
+  });
+
   test('oversized page DTOs are rejected rather than silently truncating', () {
     expect(
       () => SharedPage(items: List.filled(101, rahul)),

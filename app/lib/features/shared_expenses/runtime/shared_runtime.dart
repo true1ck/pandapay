@@ -18,6 +18,7 @@ import '../ui/shared_presentation.dart';
 import '../composer/shared_editor.dart';
 import '../data/shared_pending_phones.dart';
 import 'shared_expense_mapping.dart';
+import 'shared_activity_text.dart';
 import 'shared_pair_index.dart';
 import 'shared_local_reads.dart';
 
@@ -2087,14 +2088,12 @@ class SharedExpensesRuntime extends ChangeNotifier {
     _ => null,
   };
 
-  /// One Activity row in words a person reads at a glance: who did what to
-  /// which expense, and what it meant for them ("Sujay added “ZOMATO”",
-  /// "You lent ₹2,000.00"). The server's event says only what kind of thing
-  /// happened and to which expense or payment; the names, titles and amounts
-  /// come from this phone's copy of the split. An amount is shown only when it
-  /// belongs to that very event (the expense's accepted version is the one the
-  /// event is about, or the payment's own amount), never today's figure on an
-  /// old event.
+  /// One Activity card in words a person reads at a glance: who did what to
+  /// which expense, what changed from what to what, what it means for them and
+  /// where it happened. The list the server sends carries only the kind of
+  /// event and what it is about; who and what come from this phone's copy: the
+  /// change feed brings every version of every expense (with its author and the
+  /// version it replaced) and each event with its actor and details.
   @visibleForTesting
   SharedActivityRow describeActivity(Map<Object?, Object?> raw) =>
       _activityRow(raw, {});
@@ -2107,15 +2106,14 @@ class SharedExpensesRuntime extends ChangeNotifier {
     final contextLabel =
         _directTitles[contextId] ?? raw['contextName'] as String?;
     final createdAt = raw['createdAt'] as String;
-    final kind = raw['kind'];
-    final payload = raw['payload'] is Map ? raw['payload'] as Map : const {};
+    final kind = '${raw['kind']}';
     SharedActivityRow plain([String? text]) => SharedActivityRow(
       id: contextId,
       description: text ?? _activityCopy(kind),
       contextLabel: contextLabel,
       occurredAtLabel: createdAt,
     );
-    _ActivityLookup? look;
+    _ActivityLookup look;
     try {
       look = cache[contextId] ??= _ActivityLookup.read(
         store,
@@ -2126,77 +2124,61 @@ class SharedExpensesRuntime extends ChangeNotifier {
     } catch (_) {
       return plain();
     }
-    final actor = raw['actorProfileId'] == accountId
+    final origin = raw['originId'] as String?;
+    // The stored event for this one: its actor and its details.
+    final stored = look.events['$kind|$origin'];
+    final actorProfile = stored?['actorProfileId'] ?? raw['actorProfileId'];
+    final payload = raw['payload'] is Map
+        ? raw['payload'] as Map
+        : (stored?['payload'] is Map ? stored!['payload'] as Map : const {});
+    final actor = actorProfile == accountId
         ? 'You'
-        : look.nameOfProfile(raw['actorProfileId']) ?? 'Someone';
-    String member(Object? id) => look!.nameOfMember(id) ?? 'Someone';
-    switch (kind) {
-      case 'expense.proposed' || 'expense.accepted' || 'expense.responded':
-        final head = look.expenses[payload['expenseId']];
-        final title = head?.title;
-        if (title == null) return plain();
-        final current =
-            head!.acceptedRevisionId != null &&
-            head.acceptedRevisionId == payload['revisionId'];
-        final text = switch (kind) {
-          'expense.responded' => '$actor reviewed “$title”',
-          _ when current && head.isVoid => '$actor removed “$title”',
-          'expense.proposed' => '$actor added “$title” · waiting for approval',
-          _ => '$actor added “$title”',
-        };
-        if (!current || head.isVoid || kind == 'expense.responded') {
-          return plain(text);
-        }
-        final net = head.yourPaidMinor - head.yourShareMinor;
-        return SharedActivityRow(
-          id: contextId,
-          description: text,
-          contextLabel: contextLabel,
-          occurredAtLabel: createdAt,
-          impactLabel: head.yourPaidMinor == 0 && head.yourShareMinor == 0
-              ? 'Not involved'
-              : net < 0
-              ? 'You borrowed'
-              : net > 0
-              ? 'You lent'
-              : 'You paid your share',
-          impactAmount: net == 0 ? null : Money.fromPaise(net.abs()),
-        );
-      case 'settlement.reported' ||
-          'settlement.confirmed' ||
-          'settlement.rejected':
-        final payer = member(payload['payerMemberId']);
-        final receiver = member(payload['receiverMemberId']);
-        final amount = int.tryParse('${payload['amountMinor']}');
-        final paid = payer == 'You'
-            ? 'You paid $receiver'
-            : receiver == 'You'
-            ? '$payer paid you'
-            : '$payer paid $receiver';
-        final money = amount == null
-            ? ''
-            : ' ${Money.fromPaise(amount).format()}';
-        return plain(switch (kind) {
-          'settlement.reported' => '$paid$money · waiting for confirmation',
-          'settlement.confirmed' => '$paid$money · confirmed',
-          _ => '$paid$money · not confirmed',
-        });
-      case 'member.invited':
-        return plain('${member(payload['memberId'])} was invited');
-      case 'membership.claimed':
-        return plain('${member(payload['memberId'])} joined');
-      case 'membership.requested':
-        return plain('${member(payload['memberId'])} asked to join');
-      case 'membership.left':
-        return plain('${member(payload['memberId'])} left');
-      case 'member.removed':
-        return plain('${member(payload['memberId'])} was removed');
-      case 'context.created':
-        return plain(
-          look.direct ? '$actor started splitting' : '$actor created the group',
-        );
+        : look.nameOfProfile(actorProfile) ?? 'Someone';
+    String? memberName(Object? id) => look.nameOfMember(id);
+
+    SharedActivityRow done(SharedActivityText text, {String? category}) {
+      final impact = text.impact;
+      return SharedActivityRow(
+        id: contextId,
+        description: text.headline,
+        contextLabel: contextLabel,
+        occurredAtLabel: createdAt,
+        details: text.details,
+        impact: impact,
+        category: category ?? text.kind.name,
+      );
     }
-    return plain();
+
+    if (kind.startsWith('expense.')) {
+      final revision = look.revisions[origin];
+      final previous = revision?.expectedHeadRevisionId == null
+          ? null
+          : look.revisions[revision!.expectedHeadRevisionId];
+      return done(
+        describeExpenseEvent(
+          kind: kind,
+          revision: revision,
+          previous: previous,
+          names: look.names,
+          profiles: look.profiles,
+          own: look.own,
+          responderName: actorProfile == null ? null : actor,
+        ),
+      );
+    }
+    final amount = int.tryParse('${payload['amountMinor']}');
+    return done(
+      describeOtherEvent(
+        kind: kind,
+        actor: actor,
+        subject: memberName(payload['memberId'] ?? origin),
+        contextName: contextLabel,
+        direct: look.direct,
+        payer: memberName(payload['payerMemberId']),
+        receiver: memberName(payload['receiverMemberId']),
+        amountMinor: amount,
+      ),
+    );
   }
 
   static String _activityCopy(Object? kind) => switch (kind) {
@@ -2221,17 +2203,34 @@ class SharedExpensesRuntime extends ChangeNotifier {
   }
 }
 
-/// What one context's Activity rows need from this phone's copy: member names
-/// and each expense's accepted version, read once per context per page.
+/// What one context's Activity cards need from this phone's copy: member
+/// names, every stored version of its expenses and the stored events.
 class _ActivityLookup {
-  _ActivityLookup._(this.direct, this._names, this._profiles, this.expenses);
+  _ActivityLookup._(
+    this.direct,
+    this.own,
+    this.names,
+    this.profiles,
+    this.revisions,
+    this.events,
+  );
   final bool direct;
-  final Map<String, String> _names;
-  final Map<String, String> _profiles;
-  final Map<Object?, _ActivityExpense> expenses;
+  final String? own;
 
-  String? nameOfMember(Object? id) => _names[id];
-  String? nameOfProfile(Object? id) => _profiles[id];
+  /// Member id -> name ("You" for the viewer).
+  final Map<Object?, Object?> names;
+
+  /// Account id -> name.
+  final Map<String, String> profiles;
+
+  /// Revision id -> that version of an expense.
+  final Map<String?, SharedStoredRevision> revisions;
+
+  /// `kind|originId` -> the stored event (actor, payload).
+  final Map<String, Map<Object?, Object?>> events;
+
+  String? nameOfMember(Object? id) => names[id] as String?;
+  String? nameOfProfile(Object? id) => profiles[id];
 
   static _ActivityLookup read(
     SharedExpensesStore store,
@@ -2240,7 +2239,7 @@ class _ActivityLookup {
     String accountId,
   ) {
     final members = reads.memberRows(contextId);
-    final names = <String, String>{}, profiles = <String, String>{};
+    final names = <Object?, Object?>{}, profiles = <String, String>{};
     String? own;
     for (final m in members) {
       final id = m['memberId'], profile = m['profileId'];
@@ -2255,57 +2254,56 @@ class _ActivityLookup {
       names[id] = name;
       if (profile is String) profiles[profile] = name;
     }
-    final expenses = <Object?, _ActivityExpense>{};
-    for (final row in store
-        .readPage(entity: 'expenses', contextId: contextId, limit: 100)
-        .items) {
+    final revisions = <String?, SharedStoredRevision>{};
+    for (final row
+        in store
+            .readPage(entity: 'expenses', contextId: contextId, limit: 100)
+            .items) {
       final p = row.payload;
-      if (p['recordType'] != 'head') continue;
-      final accepted = p['accepted'];
-      if (accepted is! Map) continue;
-      final snapshot = accepted['snapshot'];
-      int sum(Object? list) {
-        var total = 0;
-        if (list is List) {
-          for (final x in list) {
-            if (x is Map && x['memberId'] == own) {
-              total += int.tryParse('${x['amountMinor']}') ?? 0;
-            }
-          }
-        }
-        return total;
-      }
-
-      expenses[p['expenseId']] = _ActivityExpense(
-        title: '${accepted['title'] ?? 'an expense'}',
-        acceptedRevisionId: accepted['revisionId'] as String?,
-        isVoid: accepted['void'] == true,
-        yourPaidMinor: snapshot is Map ? sum(snapshot['contributions']) : 0,
-        yourShareMinor: snapshot is Map ? sum(snapshot['shares']) : 0,
+      // A version of an expense: either a stored revision, or the accepted
+      // one a head carries.
+      final source = p['recordType'] == 'revision'
+          ? p
+          : (p['accepted'] is Map ? p['accepted'] as Map : null);
+      if (source == null) continue;
+      final revisionId = source['revisionId'];
+      if (revisionId is! String) continue;
+      revisions[revisionId] = SharedStoredRevision(
+        revisionId: revisionId,
+        expenseId: '${p['expenseId']}',
+        title: '${source['title'] ?? 'an expense'}',
+        occurredOn: source['occurredOn'] as String?,
+        totalMinor: int.tryParse('${source['totalMinor']}') ?? 0,
+        isVoid: source['void'] == true,
+        authorProfileId:
+            (source['authorProfileId'] ?? p['authorProfileId']) as String?,
+        expectedHeadRevisionId: source['expectedHeadRevisionId'] as String?,
+        snapshot: source['snapshot'] is Map
+            ? source['snapshot'] as Map<Object?, Object?>
+            : null,
       );
+    }
+    final events = <String, Map<Object?, Object?>>{};
+    for (final row
+        in store
+            .readPage(entity: 'activity', contextId: contextId, limit: 100)
+            .items) {
+      final p = row.payload;
+      events['${p['kind']}|${p['originId']}'] = p;
     }
     final context = store
         .readContexts(limit: 100)
         .items
         .where((c) => c.id == contextId)
         .firstOrNull;
-    final kind = context?.payload is Map ? (context!.payload as Map)['kind'] : null;
-    return _ActivityLookup._(kind == 'direct', names, profiles, expenses);
+    final kind = context?.payload['kind'];
+    return _ActivityLookup._(
+      kind == 'direct',
+      own,
+      names,
+      profiles,
+      revisions,
+      events,
+    );
   }
 }
-
-class _ActivityExpense {
-  const _ActivityExpense({
-    required this.title,
-    required this.acceptedRevisionId,
-    required this.isVoid,
-    required this.yourPaidMinor,
-    required this.yourShareMinor,
-  });
-  final String title;
-  final String? acceptedRevisionId;
-  final bool isVoid;
-  final int yourPaidMinor;
-  final int yourShareMinor;
-}
-
