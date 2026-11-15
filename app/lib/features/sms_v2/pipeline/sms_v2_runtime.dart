@@ -696,6 +696,9 @@ class SmsV2Runtime {
         _state.put('pipeline:revision', _revision(active.revision));
       });
     }
+    // A re-read that was cut short (app closed, an error) left messages without
+    // their transaction: finish it before anything else.
+    await guarded(finishPendingReread);
     final salaryMarker = '${_revision(active.revision)}:salary-payer-1';
     if (_state.get('salary:payer-recheck') != salaryMarker) {
       await guarded(() async {
@@ -839,6 +842,9 @@ class SmsV2Runtime {
     final sources = recheck.sourcesToRecheck();
     if (sources.isEmpty) return 0;
     final intake = SmsIntakeRepository(financial.database);
+    // Written BEFORE anything is withdrawn: a withdrawn message has no
+    // transaction until it is read again, and no query would find it any more.
+    _state.put(pendingRereadKey, jsonEncode(sources));
     final taken = AiWithdrawal(
       financial: financial,
       namespace: namespace,
@@ -851,7 +857,31 @@ class SmsV2Runtime {
           entry.message,
     ];
     if (messages.isNotEmpty) await capture(messages, backfill: true);
+    _state.put(pendingRereadKey, '');
     return taken.length;
+  }
+
+  /// Sources a recheck was about to withdraw and read again. Cleared once every
+  /// one was read again.
+  static const pendingRereadKey = 'recheck:pending';
+
+  /// Reads again the messages of a recheck that did not finish (the app was
+  /// closed, or capture failed, after their transactions were withdrawn).
+  /// Reading a message that still has its transaction changes nothing.
+  Future<int> finishPendingReread() async {
+    final raw = _state.get(pendingRereadKey);
+    if (raw == null || raw.isEmpty) return 0;
+    _checkAccount();
+    final sources = (jsonDecode(raw) as List).cast<String>();
+    final intake = SmsIntakeRepository(financial.database);
+    final messages = <QueuedSms>[
+      for (final source in sources)
+        if (intake.capturedById(namespace, source) case final entry?)
+          entry.message,
+    ];
+    if (messages.isNotEmpty) await capture(messages, backfill: true);
+    _state.put(pendingRereadKey, '');
+    return messages.length;
   }
 
   /// Asks the next sync to read again the messages whose reading depends on who
