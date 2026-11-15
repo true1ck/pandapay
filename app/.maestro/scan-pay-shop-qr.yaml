@@ -1,0 +1,40 @@
+# Scan a shop QR from the gallery, type an amount, tap Pay and pick a UPI app.
+# The UPI app should open with the shop and amount filled in (PandaPay shares a QR image into it).
+#
+# Needs: signed in (login-dev-local.yaml), a RuPay card in the wallet, a UPI app installed, and the QR
+# photo as the NEWEST photo on the device, e.g.
+#   adb -s emulator-5554 push shop_qr.jpg /sdcard/Pictures/ && adb -s emulator-5554 shell am broadcast \
+#     -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Pictures/shop_qr.jpg
+# Run: maestro --device emulator-5554 test app/.maestro/scan-pay-shop-qr.yaml
+# Written 15 Nov 2026 from a manual adb run of the same steps; not yet run with Maestro itself.
+appId: app.pandapay.pandapay.dev2
+---
+- launchApp
+- tapOn: "Scan & pay"
+- tapOn: "Pick a QR from photos"
+# Android photo picker: the newest photo is the first tile.
+- tapOn:
+    point: 16%,66%
+- extendedWaitUntil:
+    visible: "Scan result"
+    timeout: 20000
+- assertVisible: "Check this payee in your UPI app.*"
+- assertVisible: "Pay with.*"
+# The amount box sits on the best card.
+- tapOn:
+    text: "Amount"
+    optional: true
+- inputText: "250"
+- hideKeyboard
+- tapOn: "Pay with.*"
+- extendedWaitUntil:
+    visible: "Open which UPI app?"
+    timeout: 8000
+- takeScreenshot: pay-app-sheet
+# Pick the first UPI app listed; it opens with the QR shared into it.
+- tapOn:
+    point: 50%,92%
+- extendedWaitUntil:
+    notVisible: "Open which UPI app?"
+    timeout: 8000
+- takeScreenshot: upi-app-opened

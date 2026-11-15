@@ -232,7 +232,7 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
                         Text(
                           _logged
                               ? 'This spend now counts toward ${widget.cardName}\'s caps, milestones and points.'
-                              : 'Finish paying ${widget.merchantName.isEmpty ? '' : widget.merchantName} there, then wait for your bank SMS. If the payment did not show up, scan the shop QR inside the app. If the SMS does not arrive, log it manually below.',
+                              : 'Finish ${widget.merchantName.isEmpty ? 'the payment' : 'paying ${widget.merchantName}'} there, then wait for your bank SMS. If the payment did not show up, scan the shop QR inside the app. If the SMS does not arrive, log it manually below.',
                           style: BambooFonts.ui(
                             14,
                             color: BambooInk.onSlateSubtle,
