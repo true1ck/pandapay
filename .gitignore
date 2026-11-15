@@ -118,3 +118,11 @@ scratch/
 /app/.flutter-*/
 artifacts/*.xml
 artifacts/*-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/
+
+# Flutter-generated desktop plugin registrants: rewritten by every `flutter pub get`
+# (differently per machine), so they only create noise in git.
+/app/linux/flutter/generated_plugin_registrant.*
+/app/linux/flutter/generated_plugins.cmake
+/app/macos/Flutter/GeneratedPluginRegistrant.swift
+/app/windows/flutter/generated_plugin_registrant.*
+/app/windows/flutter/generated_plugins.cmake
