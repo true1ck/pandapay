@@ -647,7 +647,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
             ? rupees.toStringAsFixed(0)
             : rupees.toStringAsFixed(2),
       ),
-    );
+    ).catchError((_) {}); // a clipboard failure must not stop the app opening
 
     if (chosen != null) {
       final opened = await service.openApp(chosen.packageName);

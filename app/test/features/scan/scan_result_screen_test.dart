@@ -34,12 +34,6 @@ class _FakeUpiService implements UpiPaymentService {
   _FakeUpiService({this.apps = const []});
 
   final List<UpiApp> apps;
-  UpiPaymentResult result = const UpiPaymentResult(
-    status: UpiPaymentStatus.success,
-  );
-  String? lastUri;
-  String? lastPackage;
-  int payCalls = 0;
   bool openResult = true;
   final opened = <String>[];
 
@@ -47,24 +41,10 @@ class _FakeUpiService implements UpiPaymentService {
   Future<List<UpiApp>> installedApps() async => apps;
 
   @override
-  Future<UpiPaymentResult> pay({
-    required String upiUri,
-    required String packageName,
-  }) async {
-    payCalls++;
-    lastUri = upiUri;
-    lastPackage = packageName;
-    return result;
-  }
-
-  @override
   Future<bool> openApp(String packageName) async {
     opened.add(packageName);
     return openResult;
   }
-
-  @override
-  String newTransactionRef() => 'PPTEST01';
 }
 
 const _gpay = UpiApp(
@@ -367,9 +347,6 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(fake.opened, ['com.google.android.apps.nbu.paisa.user']);
-        // NPCI blocks an intent for a shop QR, so none is ever sent.
-        expect(fake.payCalls, 0);
-        expect(fake.lastUri, isNull);
         expect(_clipboard, '250');
         expect(find.text('REWARD IF THIS COMPLETES'), findsOneWidget);
         expect(find.text('Continue in your UPI app'), findsOneWidget);
@@ -433,7 +410,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(fake.opened, isEmpty);
-      expect(fake.payCalls, 0);
       expect(_clipboard, isNull);
       expect(find.text('REWARD IF THIS COMPLETES'), findsNothing);
       // Still on the scan screen, ready to try again.
@@ -475,7 +451,6 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(fake.opened, isEmpty);
-        expect(fake.payCalls, 0);
         expect(_clipboard, '250');
         expect(find.text('REWARD IF THIS COMPLETES'), findsOneWidget);
       },
@@ -506,8 +481,6 @@ void main() {
         await tester.tap(find.widgetWithText(FilledButton, 'Open Slice'));
         await tester.pumpAndSettle();
 
-        expect(fake.payCalls, 0);
-        expect(fake.lastUri, isNull);
         expect(fake.opened, ['in.slice.android']);
       },
     );
@@ -542,7 +515,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Pay with c1'));
     await tester.pumpAndSettle();
     expect(find.text('Enter an amount to pay'), findsOneWidget);
-    expect(fake.lastPackage, isNull);
+    expect(fake.opened, isEmpty);
     expect(find.text('Open which UPI app?'), findsNothing);
 
     // Still below the ₹1 floor -> error stays, no hand-off.
@@ -550,7 +523,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Pay with c1'));
     await tester.pumpAndSettle();
     expect(find.text('Enter an amount to pay'), findsOneWidget);
-    expect(fake.lastPackage, isNull);
+    expect(fake.opened, isEmpty);
 
     // A valid amount clears it and lets the hand-off through.
     await tester.enterText(find.byType(TextField).last, '50');

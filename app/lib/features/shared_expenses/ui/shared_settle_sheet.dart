@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:pandapay_domain/pandapay_domain.dart'
-    show Money, buildUpiPayUri;
+    show Money;
 import 'package:uuid/uuid.dart';
 import '../../../app/design/app_theme.dart';
 import '../../../app/required_field.dart';
@@ -154,11 +155,12 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
   static final _vpaPattern = RegExp(
     r'^[A-Za-z0-9._-]{2,64}@[A-Za-z][A-Za-z0-9]{1,31}$',
   );
-  static final _refPattern = RegExp(r'^[A-Za-z0-9][A-Za-z0-9:._-]{0,127}$');
 
-  /// Hands the payment to the payer's own UPI app. Nothing is recorded here:
-  /// the user must come back and tap Record payment, and the receiver must
-  /// still confirm before any balance changes.
+  /// Opens the payer's own UPI app and copies the receiver's UPI ID. UPI apps
+  /// decline a payment that another app starts (NPCI), so the payer pays inside
+  /// the UPI app. Nothing is recorded here: the user must come back and tap
+  /// Record payment, and the receiver must still confirm before any balance
+  /// changes.
   Future<void> _openUpi({bool confirmed = false}) async {
     final service = widget.upi;
     if (service == null || _upiBusy || _sealed || _saving) return;
@@ -232,45 +234,26 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
       _upiOpened = true;
     });
     try {
-      final receiver = _members.where((m) => m.id == _receiver).firstOrNull;
-      final uri = buildUpiPayUri(
-        pa: vpa,
-        pn: receiver?.name,
-        am: Money.fromPaise(amount),
-        tn: 'PandaPay split settle-up',
-      );
-      final result = await service.pay(
-        upiUri: uri,
-        packageName: app.packageName,
-      );
+      // The payer pastes this in the UPI app's "pay to UPI ID" screen.
+      // A clipboard failure must not stop the app from opening.
+      await Clipboard.setData(ClipboardData(text: vpa)).catchError((_) {});
+      final opened = await service.openApp(app.packageName);
       if (!mounted) return;
-      final ref = result.approvalRefNo;
       setState(() {
-        if (ref != null &&
-            _reference.text.isEmpty &&
-            _refPattern.hasMatch(ref)) {
-          _reference.text = ref;
-        }
-        _upiNotice = switch (result.status) {
-          UpiPaymentStatus.failure =>
-            'The UPI app reported the payment failed. Check your payment app before trying again.',
-          UpiPaymentStatus.cancelled =>
-            'Payment was cancelled. Nothing was recorded.',
-          UpiPaymentStatus.noAppsAvailable =>
-            'No UPI app was found on this device.',
-          _ =>
-            'Payment status is not confirmed. Check your payment app, then tap Record payment if it went through. The receiver still confirms.',
-        };
-        if (result.status == UpiPaymentStatus.cancelled ||
-            result.status == UpiPaymentStatus.noAppsAvailable) {
+        if (opened) {
+          _upiNotice =
+              "Opened ${app.name}. Choose pay to a UPI ID there, paste the UPI ID (copied) and pay ${Money.fromPaise(amount).format()}. Then tap Record payment here. The receiver still confirms.";
+        } else {
           _upiOpened = false;
+          _upiNotice =
+              "Couldn't open ${app.name}. Open your UPI app, pay $vpa, then record the payment here.";
         }
       });
     } catch (_) {
       if (mounted) {
         setState(
           () => _upiNotice =
-              'Could not open the UPI app. Check your payment app before trying again.',
+              'Could not open the UPI app. Open it yourself, pay, then record the payment here.',
         );
       }
     } finally {

@@ -34,28 +34,6 @@ void main() {
     expect(await MethodChannelUpiPaymentService().installedApps(), isEmpty);
   });
 
-  test('pay maps each NPCI status string, defaulting unknown to submitted', () async {
-    Future<UpiPaymentStatus> statusFor(String? s) async {
-      messenger.setMockMethodCallHandler(channel, (call) async {
-        expect(call.method, 'pay');
-        expect(call.arguments['uri'], 'upi://pay?pa=x@y&cu=INR');
-        expect(call.arguments['packageName'], 'com.phonepe.app');
-        return {'status': s, 'response': 'Status=$s'};
-      });
-      final r = await MethodChannelUpiPaymentService().pay(
-        upiUri: 'upi://pay?pa=x@y&cu=INR',
-        packageName: 'com.phonepe.app',
-      );
-      return r.status;
-    }
-
-    expect(await statusFor('success'), UpiPaymentStatus.success);
-    expect(await statusFor('failure'), UpiPaymentStatus.failure);
-    expect(await statusFor('cancelled'), UpiPaymentStatus.cancelled);
-    expect(await statusFor('weird'), UpiPaymentStatus.submitted);
-    expect(await statusFor(null), UpiPaymentStatus.submitted);
-  });
-
   group('openApp', () {
     test('sends only the package name, never a payment link', () async {
       Map<Object?, Object?>? args;
@@ -91,10 +69,4 @@ void main() {
     });
   });
 
-  test('newTransactionRef is prefixed and unique-ish', () {
-    final s = MethodChannelUpiPaymentService();
-    final a = s.newTransactionRef();
-    expect(a, startsWith('PP'));
-    expect(a.length, greaterThan(6));
-  });
 }

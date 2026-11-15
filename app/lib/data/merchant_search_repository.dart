@@ -73,24 +73,6 @@ class MerchantResolution {
   }
 }
 
-/// Supplies an MCC for an outbound UPI intent without guessing from merchant
-/// name/category. QR-provided MCC remains authoritative. For unsigned static
-/// QRs with no MCC, only an exact-VPA MCC explicitly verified by an operator
-/// may be added; confidence scores alone do not prove the acquiring MCC.
-String? safeMerchantMccForUpiHandoff({
-  required String? qrMcc,
-  required bool qrHasSignature,
-  required MerchantResolution? resolution,
-}) {
-  if (qrMcc != null && qrMcc.isNotEmpty) return qrMcc;
-  if (qrHasSignature || resolution == null || resolution.isP2p) return null;
-  final mcc = resolution.mcc;
-  if (mcc == null || mcc.isEmpty || !resolution.mccOperatorVerified) {
-    return null;
-  }
-  return mcc;
-}
-
 class HttpMerchantSearchRepository implements MerchantSearchRepository {
   final String baseUrl;
   final String? accessToken;

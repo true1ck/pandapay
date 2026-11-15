@@ -108,76 +108,7 @@ void main() {
       expect(result?.mcc, '5411');
       expect(result?.categorySlug, 'groceries');
       expect(result?.mccOperatorVerified, isFalse);
-      expect(
-        safeMerchantMccForUpiHandoff(
-          qrMcc: null,
-          qrHasSignature: false,
-          resolution: result,
-        ),
-        isNull,
-      );
     });
-
-    test(
-      'does not use weak, personal, or signed-QR MCC values for handoff',
-      () {
-        const weak = MerchantResolution(
-          merchantId: 'merchant-1',
-          vpa: 'shop@upi',
-          mcc: '5411',
-          confidence: 'high',
-          confidenceScore: 0.98,
-          confirmationCount: 12,
-        );
-        const personal = MerchantResolution(
-          merchantId: 'person-1',
-          vpa: 'person@upi',
-          mcc: '5411',
-          confidence: 'operator_verified',
-          isP2p: true,
-          mccOperatorVerified: true,
-        );
-        const verified = MerchantResolution(
-          merchantId: 'merchant-2',
-          vpa: 'shop@upi',
-          mcc: '5411',
-          mccOperatorVerified: true,
-        );
-
-        expect(
-          safeMerchantMccForUpiHandoff(
-            qrMcc: null,
-            qrHasSignature: false,
-            resolution: weak,
-          ),
-          isNull,
-        );
-        expect(
-          safeMerchantMccForUpiHandoff(
-            qrMcc: null,
-            qrHasSignature: false,
-            resolution: personal,
-          ),
-          isNull,
-        );
-        expect(
-          safeMerchantMccForUpiHandoff(
-            qrMcc: null,
-            qrHasSignature: true,
-            resolution: verified,
-          ),
-          isNull,
-        );
-        expect(
-          safeMerchantMccForUpiHandoff(
-            qrMcc: null,
-            qrHasSignature: false,
-            resolution: verified,
-          ),
-          '5411',
-        );
-      },
-    );
 
     test('returns null when the exact VPA is not in the directory', () async {
       final client = MockClient((request) async {

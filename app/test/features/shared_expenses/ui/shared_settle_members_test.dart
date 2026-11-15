@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -290,8 +291,22 @@ void main() {
   testWidgets(
     'UPI handoff opens the chosen app but never records a payment by itself',
     (tester) async {
-      final upi = _FakeUpi(
-        const UpiPaymentResult(status: UpiPaymentStatus.submitted),
+      final upi = _FakeUpi();
+      String? clipboard;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            clipboard = (call.arguments as Map)['text'] as String?;
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
       );
       await show(
         tester,
@@ -302,20 +317,20 @@ void main() {
         '250.50',
       );
       await tap(tester, 'Pay with UPI app');
-      expect(upi.paid, isEmpty);
+      expect(upi.opened, isEmpty);
       expect(find.textContaining('valid UPI ID'), findsOneWidget);
       await tester.enterText(
         find.byKey(const ValueKey('settlement-vpa')),
         'friend@okbank',
       );
       await tap(tester, 'Pay with UPI app');
-      expect(upi.paid, hasLength(1));
-      expect(
-        upi.paid.single,
-        allOf(contains('pa=friend%40okbank'), contains('am=250.50')),
-      );
-      expect(find.textContaining('not confirmed'), findsOneWidget);
-      // A returned status is not proof: nothing is queued until the user records it.
+      expect(upi.opened, ['test.upi']);
+      // The UPI ID is copied for the UPI app's "pay to UPI ID" screen; no
+      // payment link is sent, since NPCI makes UPI apps decline one.
+      expect(clipboard, 'friend@okbank');
+      expect(find.textContaining('Opened Test UPI'), findsOneWidget);
+      expect(find.textContaining('250.50'), findsWidgets);
+      // Opening the app is not proof: nothing is queued until the user records it.
       expect(runtime.store.pendingCount, 0);
       // A second launch needs an explicit check-your-app confirmation.
       await tap(tester, 'Open UPI app again');
@@ -325,7 +340,41 @@ void main() {
         findsOneWidget,
       );
       await tap(tester, 'Cancel');
-      expect(upi.paid, hasLength(1));
+      expect(upi.opened, ['test.upi']);
+    },
+  );
+  testWidgets(
+    'an app that cannot be opened says so and allows another try',
+    (tester) async {
+      final upi = _FakeUpi()..openResult = false;
+      // An unmocked platform channel never answers in a widget test.
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async => null,
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      await show(
+        tester,
+        SharedSettleSheet(runtime: runtime, contextId: group, upi: upi),
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('settlement-amount')),
+        '100',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('settlement-vpa')),
+        'friend@okbank',
+      );
+      await tap(tester, 'Pay with UPI app');
+      expect(find.textContaining("Couldn't open Test UPI"), findsOneWidget);
+      // Nothing was opened, so there is no "again" to confirm.
+      expect(find.text('Pay with UPI app'), findsOneWidget);
+      expect(runtime.store.pendingCount, 0);
     },
   );
   testWidgets(
@@ -652,25 +701,15 @@ void main() {
 }
 
 class _FakeUpi implements UpiPaymentService {
-  final UpiPaymentResult result;
-  final paid = <String>[];
-  _FakeUpi(this.result);
+  final opened = <String>[];
+  bool openResult = true;
   @override
   Future<List<UpiApp>> installedApps() async => const [
     UpiApp(packageName: 'test.upi', name: 'Test UPI'),
   ];
   @override
-  Future<UpiPaymentResult> pay({
-    required String upiUri,
-    required String packageName,
-  }) async {
-    paid.add(upiUri);
-    return result;
+  Future<bool> openApp(String packageName) async {
+    opened.add(packageName);
+    return openResult;
   }
-
-  @override
-  Future<bool> openApp(String packageName) async => true;
-
-  @override
-  String newTransactionRef() => 'test';
 }

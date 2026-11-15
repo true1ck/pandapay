@@ -31,14 +31,12 @@ import java.io.ByteArrayOutputStream
 
 /**
  * Hosts the `app.pandapay/upi` MethodChannel used by
- * `lib/data/upi_payment_service.dart` for scan-to-pay: enumerate the UPI
- * apps actually installed, and hand a `upi://pay` intent to the one the
- * user picked, reading back the NPCI transaction status.
+ * `lib/data/upi_payment_service.dart`: enumerate the UPI apps actually
+ * installed, and open the one the user picked on its home screen. No payment
+ * link is ever sent (see [openUpiApp]).
  *
- * Implemented directly on the Activity rather than as a FlutterPlugin
- * because it needs `startActivityForResult` / `onActivityResult` and there
- * is exactly one consumer — a plugin's `ActivityAware` plumbing would be
- * ceremony with no benefit here.
+ * Implemented directly on the Activity rather than as a FlutterPlugin because
+ * there is exactly one consumer.
  */
 class MainActivity : FlutterFragmentActivity() {
 
@@ -55,13 +53,11 @@ class MainActivity : FlutterFragmentActivity() {
         const val INSTALL_REFERRER_PREFS = "pandapay_install_referrer"
         const val INSTALL_REFERRER_CHECKED = "checked"
         const val INVITATION_CODE_KEY = "invitation_code"
-        const val REQUEST_CODE = 0x5091 // arbitrary, local to this Activity
         const val PHONE_NUMBER_HINT_REQUEST_CODE = 0x5092
         const val MAX_ICON_PX = 96
         const val STARTUP_TAG = "PandaPayStartup"
     }
 
-    private var pendingResult: MethodChannel.Result? = null
     private var pendingPhoneHintResult: MethodChannel.Result? = null
     private var assistantChannel: MethodChannel? = null
     private var pendingInstallReferrerResult: MethodChannel.Result? = null
@@ -244,15 +240,6 @@ class MainActivity : FlutterFragmentActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "getInstalledUpiApps" -> result.success(installedUpiApps())
-                "pay" -> {
-                    val uri = call.argument<String>("uri")
-                    val pkg = call.argument<String>("packageName")
-                    if (uri == null || pkg == null) {
-                        result.error("bad_args", "uri and packageName are required", null)
-                    } else {
-                        startPayment(uri, pkg, result)
-                    }
-                }
                 "openApp" -> {
                     val pkg = call.argument<String>("packageName")
                     if (pkg == null) {
@@ -473,10 +460,10 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     /**
-     * Opens a UPI app's home screen with no payment link. Scan-to-pay uses this
-     * because NPCI makes UPI apps decline an intent from another app for a shop
-     * QR; the user scans the QR inside the UPI app instead. Only apps that
-     * handle `upi://pay` can be opened, so this can't launch arbitrary packages.
+     * Opens a UPI app's home screen with no payment link. NPCI makes UPI apps
+     * decline a payment that another app starts (an intent), so the user pays
+     * inside the UPI app instead. Only apps that handle `upi://pay` can be
+     * opened, so this can't launch arbitrary packages.
      */
     private fun openUpiApp(packageName: String): Boolean {
         val isUpiApp = packageManager.queryIntentActivities(upiViewIntent(), 0)
@@ -488,26 +475,6 @@ class MainActivity : FlutterFragmentActivity() {
             true
         } catch (e: Exception) {
             false
-        }
-    }
-
-    private fun startPayment(uri: String, packageName: String, result: MethodChannel.Result) {
-        // A leftover pendingResult means the previous attempt's Activity
-        // result never arrived (Activity was recreated / user never returned).
-        // Close it out as "submitted" rather than refusing this new attempt.
-        pendingResult?.let { runCatching { it.success(mapOf("status" to "submitted", "response" to null)) } }
-        pendingResult = null
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri)).setPackage(packageName)
-        if (intent.resolveActivity(packageManager) == null) {
-            result.error("not_installed", "$packageName can't handle this UPI intent", null)
-            return
-        }
-        pendingResult = result
-        try {
-            startActivityForResult(intent, REQUEST_CODE)
-        } catch (e: Exception) {
-            pendingResult = null
-            result.error("launch_failed", e.message, null)
         }
     }
 
@@ -523,39 +490,8 @@ class MainActivity : FlutterFragmentActivity() {
             finishPhoneNumberHint(phoneNumber)
             return
         }
-        if (requestCode != REQUEST_CODE) {
-            super.onActivityResult(requestCode, resultCode, data)
-            return
-        }
-        val result = pendingResult
-        pendingResult = null
-        if (result == null) return
-
-        val response = data?.getStringExtra("response") ?: data?.getStringExtra("Response")
-        val fields = parseUpiResponse(response)
-        val status = when (fields["status"]?.lowercase()) {
-            "success" -> "success"
-            "failure", "failed" -> "failure"
-            "submitted" -> "submitted"
-            else -> if (response == null && resultCode == RESULT_CANCELED) "cancelled" else "submitted"
-        }
-        result.success(
-            mapOf(
-                "status" to status,
-                "response" to response,
-                "approvalRefNo" to (fields["approvalrefno"] ?: fields["approvalref"]),
-            ),
-        )
+        super.onActivityResult(requestCode, resultCode, data)
     }
-
-    private fun parseUpiResponse(response: String?): Map<String, String> {
-        if (response.isNullOrBlank()) return emptyMap()
-        return response.split('&').mapNotNull {
-            val i = it.indexOf('=')
-            if (i <= 0) null else it.substring(0, i).trim().lowercase() to it.substring(i + 1).trim()
-        }.toMap()
-    }
-
 
     private fun drawableToPng(drawable: Drawable): ByteArray {
         val bitmap = if (drawable is BitmapDrawable && drawable.bitmap != null) {
