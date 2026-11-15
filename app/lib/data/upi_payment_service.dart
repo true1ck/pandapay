@@ -42,6 +42,11 @@ abstract class UpiPaymentService {
   /// launcher screen, or no channel on this platform).
   Future<bool> openApp(String packageName);
 
+  /// Opens the UPI app [packageName] with the payment link [uri] (a
+  /// `upi://pay` string), so the payee and amount arrive filled in. Returns
+  /// false when the app can't take it.
+  Future<bool> launchUpiLink({required String packageName, required String uri});
+
   /// Draws [qrData] (a `upi://pay` string) as a QR image and shares it into the
   /// UPI app [packageName], so that app shows the payee and amount ready to
   /// pay. Returns false when the app can't take a shared image (or there is no
@@ -77,6 +82,21 @@ class MethodChannelUpiPaymentService implements UpiPaymentService {
       return const [];
     } on PlatformException {
       return const [];
+    }
+  }
+
+  @override
+  Future<bool> launchUpiLink({required String packageName, required String uri}) async {
+    try {
+      return await _channel.invokeMethod<bool>('launchUpiLink', {
+            'packageName': packageName,
+            'uri': uri,
+          }) ??
+          false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
     }
   }
 

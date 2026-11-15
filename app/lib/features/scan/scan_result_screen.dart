@@ -17,7 +17,6 @@ import '../../data/merchant_context.dart';
 import '../../data/merchant_search_repository.dart' show MerchantResolution;
 import '../../data/override_resolver.dart';
 import '../../data/scanned_merchant_category.dart';
-import '../../data/upi_payment_service.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
 import '../../main.dart' show MoneyText;
 import '../cards/add_card_local_first.dart';
@@ -27,7 +26,7 @@ import '../cards/card_picker_screen.dart';
 import '../comparison/comparison_view_screen.dart';
 import 'payment_sent_screen.dart';
 import 'upi_app_picker_sheet.dart';
-import 'upi_scan_guide_dialog.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// ui-spec B3. Merchant identity/category resolution is best-effort and
 /// exact-VPA based: published directory data may enrich a QR before payment,
@@ -49,10 +48,6 @@ class ScanResultScreen extends ConsumerStatefulWidget {
   @override
   ConsumerState<ScanResultScreen> createState() => _ScanResultScreenState();
 }
-
-/// NPCI's cap on a payment made from a shared or gallery QR to a non-verified
-/// shop. Above it the user scans the shop's QR inside the UPI app instead.
-const _shareQrLimitRupees = 2000;
 
 class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
   late final TextEditingController _merchantController;
@@ -666,91 +661,89 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     final service = ref.read(upiPaymentServiceProvider);
     final hasAmount = _amount.rupees >= 1;
 
-    // NPCI makes UPI apps decline a payment another app starts from a shop QR
-    // (an intent: initiation mode 04), while a QR scanned or shared inside the
-    // UPI app goes through. So PandaPay never sends a payment link. It shares a
-    // QR image of this payment into the chosen app (read like a gallery QR, so
-    // the payee, and the amount when there is one, arrive filled in). When that
-    // can't be used, it sends the user to scan the shop's QR inside the UPI
-    // app instead.
+    // Open the UPI app the user picks with the payee and amount already filled
+    // in, as before. Some banks decline a payment another app starts; the user
+    // then still has the shared-QR route below, or can pay in the UPI app.
     final apps = await service.installedApps();
     if (!mounted) return;
 
-    // iOS, or Android with nothing enumerable: no app to open from here.
-    UpiApp? chosen;
-    if (apps.isNotEmpty) {
-      chosen = await UpiAppPickerSheet.show(
-        context,
-        apps: apps,
-        cardName: payWith,
-      );
-      if (chosen == null || !mounted) return;
-    }
-
-    // NPCI caps gallery and shared QR payments to a non-verified shop at
-    // ₹2,000, and a signed QR would break if it were redrawn with an amount.
-    // Both go the scan-it-yourself way.
-    if (chosen != null &&
-        widget.parsed.sign == null &&
-        _amount.rupees <= _shareQrLimitRupees) {
-      final shared = await service.shareQr(
-        packageName: chosen.packageName,
-        qrData: buildUpiPayUri(
-          pa: widget.parsed.pa,
-          pn: widget.parsed.pn,
-          am: hasAmount ? _amount : null,
-          cu: widget.parsed.cu,
-          mc: widget.parsed.mc,
-          tr: widget.parsed.tr,
-          tn: widget.parsed.tn,
-          extraParams: widget.parsed.extraParams,
-        ),
-      );
-      if (!mounted) return;
-      if (shared) {
-        await _openPaymentSent(
-          rec: rec,
-          wallet: wallet,
-          categoryId: categoryId,
-          autoLog: false,
-        );
-        return;
-      }
-    }
-
-    final go = await UpiScanGuideDialog.show(
-      context,
-      appName: chosen?.name,
-      cardName: payWith,
-      amount: hasAmount ? _amount.format() : null,
+    final link = buildUpiPayUri(
+      pa: widget.parsed.pa,
+      pn: widget.parsed.pn,
+      am: hasAmount ? _amount : null,
+      cu: widget.parsed.cu,
+      mc: widget.parsed.mc,
+      tr: widget.parsed.tr,
+      tn: widget.parsed.tn,
+      mode: widget.parsed.mode,
+      orgid: widget.parsed.orgid,
+      sign: widget.parsed.sign,
+      extraParams: widget.parsed.extraParams,
     );
-    if (!go || !mounted) return;
 
-    // Copied so it can be pasted in the UPI app's amount field.
-    if (hasAmount) {
-      final rupees = _amount.rupees;
-      await Clipboard.setData(
-        ClipboardData(
-          text: rupees == rupees.truncateToDouble()
-              ? rupees.toStringAsFixed(0)
-              : rupees.toStringAsFixed(2),
-        ),
-      ).catchError((_) {}); // a clipboard failure must not stop the app opening
-    }
-
-    if (chosen != null) {
-      final opened = await service.openApp(chosen.packageName);
+    // iOS, or Android with nothing enumerable: hand the link to the system, as
+    // before; with no UPI app at all, copy the UPI ID instead.
+    if (apps.isEmpty) {
+      final uri = Uri.parse(link);
+      final launched =
+          await canLaunchUrl(uri) &&
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!mounted) return;
-      if (!opened) {
+      if (!launched) {
+        await Clipboard.setData(
+          ClipboardData(text: widget.parsed.pa),
+        ).catchError((_) {});
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              "Couldn't open ${chosen.name}. Open it yourself and scan the shop's QR there.",
+              'No UPI app found — copied ${widget.parsed.pa} to your clipboard instead.',
             ),
           ),
         );
         return;
       }
+      await _openPaymentSent(
+        rec: rec,
+        wallet: wallet,
+        categoryId: categoryId,
+        autoLog: false,
+      );
+      return;
+    }
+
+    final chosen = await UpiAppPickerSheet.show(
+      context,
+      apps: apps,
+      cardName: payWith,
+    );
+    if (chosen == null || !mounted) return;
+
+    var opened = await service.launchUpiLink(
+      packageName: chosen.packageName,
+      uri: link,
+    );
+    if (!mounted) return;
+
+    // The app could not take the link: try handing it the payment as a shared
+    // QR, which UPI apps read like a QR saved in the gallery.
+    if (!opened && widget.parsed.sign == null) {
+      opened = await service.shareQr(
+        packageName: chosen.packageName,
+        qrData: link,
+      );
+      if (!mounted) return;
+    }
+
+    if (!opened) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Couldn't open ${chosen.name}. Try another UPI app.",
+          ),
+        ),
+      );
+      return;
     }
 
     // The bank SMS is the authoritative settled spend, so nothing is logged

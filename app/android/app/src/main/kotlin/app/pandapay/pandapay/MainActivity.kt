@@ -243,6 +243,15 @@ class MainActivity : FlutterFragmentActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "getInstalledUpiApps" -> result.success(installedUpiApps())
+                "launchUpiLink" -> {
+                    val pkg = call.argument<String>("packageName")
+                    val uri = call.argument<String>("uri")
+                    if (pkg == null || uri == null) {
+                        result.error("bad_args", "packageName and uri are required", null)
+                    } else {
+                        result.success(launchUpiLink(pkg, uri))
+                    }
+                }
                 "shareQr" -> {
                     val pkg = call.argument<String>("packageName")
                     val png = call.argument<ByteArray>("png")
@@ -505,6 +514,22 @@ class MainActivity : FlutterFragmentActivity() {
             if (send.resolveActivity(packageManager) == null) return false
             grantUriPermission(upiPackage, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
             startActivity(send)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Opens the UPI app the user picked with the payment link, so the payee and
+     * amount arrive filled in. Only apps that handle `upi://pay` can be targeted.
+     */
+    private fun launchUpiLink(upiPackage: String, uri: String): Boolean {
+        if (!isUpiApp(upiPackage)) return false
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri)).setPackage(upiPackage)
+        if (intent.resolveActivity(packageManager) == null) return false
+        return try {
+            startActivity(intent)
             true
         } catch (e: Exception) {
             false

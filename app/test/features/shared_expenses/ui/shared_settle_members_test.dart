@@ -714,6 +714,12 @@ class _FakeUpi implements UpiPaymentService {
   }
 
   @override
+  Future<bool> launchUpiLink({
+    required String packageName,
+    required String uri,
+  }) async => false;
+
+  @override
   Future<bool> shareQr({
     required String packageName,
     required String qrData,

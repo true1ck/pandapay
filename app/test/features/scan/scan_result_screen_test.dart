@@ -34,8 +34,10 @@ class _FakeUpiService implements UpiPaymentService {
 
   final List<UpiApp> apps;
   bool openResult = true;
-  bool shareResult = true;
+  bool launchResult = true;
+  bool shareResult = false;
   final opened = <String>[];
+  final launched = <({String package, String uri})>[];
   final shared = <({String package, String data})>[];
 
   @override
@@ -45,6 +47,15 @@ class _FakeUpiService implements UpiPaymentService {
   Future<bool> openApp(String packageName) async {
     opened.add(packageName);
     return openResult;
+  }
+
+  @override
+  Future<bool> launchUpiLink({
+    required String packageName,
+    required String uri,
+  }) async {
+    launched.add((package: packageName, uri: uri));
+    return launchResult;
   }
 
   @override
@@ -78,17 +89,11 @@ const _shopQr = ParsedUpiQr(
   isLikelyP2P: false,
 );
 
-/// The last text the screen put on the clipboard, or null if none.
-String? _clipboard;
-
+/// An unmocked platform channel never answers in a widget test.
 void _mockClipboard(WidgetTester tester) {
-  _clipboard = null;
   tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
     SystemChannels.platform,
     (call) async {
-      if (call.method == 'Clipboard.setData') {
-        _clipboard = (call.arguments as Map)['text'] as String?;
-      }
       return null;
     },
   );
@@ -338,14 +343,14 @@ void main() {
     },
   );
 
-  group('pay: the shop QR is shared into the UPI app', () {
+  group('pay: the chosen UPI app opens with the payment filled in', () {
     testWidgets(
-      'shares the shop and amount into the chosen app, no dialog in between',
+      'opens the picked app with the payee and amount, no dialog in between',
       (tester) async {
         final fake = _FakeUpiService(apps: const [_gpay]);
         await _pumpScan(tester, fake);
 
-        // The QR carried no amount -> flagged inline, nothing is shared yet.
+        // The QR carried no amount -> flagged inline, nothing opens yet.
         await _tapPay(tester);
         expect(find.text('Enter an amount to pay'), findsOneWidget);
         expect(find.text('Open which UPI app?'), findsNothing);
@@ -356,32 +361,28 @@ void main() {
         await tester.tap(find.text('Google Pay'));
         await tester.pumpAndSettle();
 
-        // One QR, carrying the payee and the amount, goes to the app picked.
-        expect(fake.shared, hasLength(1));
+        expect(fake.launched, hasLength(1));
         expect(
-          fake.shared.single.package,
+          fake.launched.single.package,
           'com.google.android.apps.nbu.paisa.user',
         );
-        final qr = Uri.parse(fake.shared.single.data);
-        expect(qr.scheme, 'upi');
-        expect(qr.host, 'pay');
-        expect(qr.queryParameters['pa'], 'shop@okhdfcbank');
-        expect(qr.queryParameters['pn'], 'DMart');
-        expect(qr.queryParameters['am'], '250.00');
-        expect(qr.queryParameters['mc'], '5411');
-        expect(qr.queryParameters['cu'], 'INR');
-        // Nothing else was needed: no guide, no app opened separately.
+        final link = Uri.parse(fake.launched.single.uri);
+        expect(link.scheme, 'upi');
+        expect(link.host, 'pay');
+        expect(link.queryParameters['pa'], 'shop@okhdfcbank');
+        expect(link.queryParameters['pn'], 'DMart');
+        expect(link.queryParameters['am'], '250.00');
+        expect(link.queryParameters['mc'], '5411');
+        expect(link.queryParameters['cu'], 'INR');
+        // No how-to dialog, nothing else needed.
         expect(find.textContaining('Scan the QR in'), findsNothing);
-        expect(fake.opened, isEmpty);
+        expect(fake.shared, isEmpty);
         expect(find.text('Continue in your UPI app'), findsOneWidget);
         expect(find.text('REWARD IF THIS COMPLETES'), findsOneWidget);
       },
     );
 
-    testWidgets('a QR with no merchant code is shared without inventing one', (
-      tester,
-    ) async {
-      // The Paytm shop QR a user scanned: only pa and pn.
+    testWidgets('a QR with no merchant code is not given one', (tester) async {
       final fake = _FakeUpiService(apps: const [_gpay]);
       await _pumpScan(
         tester,
@@ -397,15 +398,15 @@ void main() {
       await tester.tap(find.text('Google Pay'));
       await tester.pumpAndSettle();
 
-      final qr = Uri.parse(fake.shared.single.data);
-      expect(qr.queryParameters['pa'], 'paytmqr60fkly@ptys');
-      expect(qr.queryParameters['pn'], 'Paytm');
-      expect(qr.queryParameters['am'], '120.00');
-      expect(qr.queryParameters.containsKey('mc'), isFalse);
-      expect(qr.queryParameters.containsKey('tr'), isFalse);
+      final link = Uri.parse(fake.launched.single.uri);
+      expect(link.queryParameters['pa'], 'paytmqr60fkly@ptys');
+      expect(link.queryParameters['pn'], 'Paytm');
+      expect(link.queryParameters['am'], '120.00');
+      expect(link.queryParameters.containsKey('mc'), isFalse);
+      expect(link.queryParameters.containsKey('tr'), isFalse);
     });
 
-    testWidgets('shares into whichever app is picked when several exist', (
+    testWidgets('opens whichever app is picked when several exist', (
       tester,
     ) async {
       final fake = _FakeUpiService(apps: const [_gpay, _slice]);
@@ -415,77 +416,81 @@ void main() {
       await tester.tap(find.text('Slice'));
       await tester.pumpAndSettle();
 
-      expect(fake.shared.single.package, 'in.slice.android');
-      expect(fake.opened, isEmpty);
+      expect(fake.launched.single.package, 'in.slice.android');
     });
 
-    testWidgets('exactly ₹2,000 is still shared; above it the user scans', (
+    testWidgets('a signed merchant QR keeps its signature and references', (
       tester,
     ) async {
+      final fake = _FakeUpiService(apps: const [_slice]);
+      await _pumpScan(
+        tester,
+        fake,
+        parsed: const ParsedUpiQr(
+          pa: 'q@ybl',
+          pn: 'Pump',
+          mc: '5541',
+          tr: 'ORD1',
+          mode: '02',
+          orgid: '159761',
+          sign: 'a+b',
+          isLikelyP2P: false,
+        ),
+      );
+
+      await _enterAmountAndPay(tester, '500');
+      await tester.tap(find.text('Slice'));
+      await tester.pumpAndSettle();
+
+      final link = Uri.parse(fake.launched.single.uri);
+      expect(link.queryParameters['tr'], 'ORD1');
+      expect(link.queryParameters['sign'], 'a+b');
+      expect(link.queryParameters['orgid'], '159761');
+    });
+
+    testWidgets('any amount opens the app, there is no cap', (tester) async {
       final fake = _FakeUpiService(apps: const [_gpay]);
       await _pumpScan(tester, fake);
-      await _enterAmountAndPay(tester, '2000');
+      await _enterAmountAndPay(tester, '25000');
       await tester.tap(find.text('Google Pay'));
       await tester.pumpAndSettle();
-      expect(fake.shared, hasLength(1));
-      expect(find.textContaining('Scan the QR in'), findsNothing);
+      expect(
+        Uri.parse(fake.launched.single.uri).queryParameters['am'],
+        '25000.00',
+      );
     });
 
     testWidgets(
-      'above NPCI\'s ₹2,000 share limit it goes to the scan-it-yourself guide',
+      'an app that cannot take the link is handed the payment as a shared QR',
       (tester) async {
-        final fake = _FakeUpiService(apps: const [_gpay]);
+        final fake = _FakeUpiService(apps: const [_gpay])
+          ..launchResult = false
+          ..shareResult = true;
         await _pumpScan(tester, fake);
 
-        await _enterAmountAndPay(tester, '2500');
+        await _enterAmountAndPay(tester, '250');
         await tester.tap(find.text('Google Pay'));
         await tester.pumpAndSettle();
 
-        expect(fake.shared, isEmpty);
-        expect(find.text('Scan the QR in Google Pay'), findsOneWidget);
-        await tester.tap(find.widgetWithText(FilledButton, 'Open Google Pay'));
-        await tester.pumpAndSettle();
-        expect(fake.opened, ['com.google.android.apps.nbu.paisa.user']);
-        expect(_clipboard, '2500');
-        expect(find.text('REWARD IF THIS COMPLETES'), findsOneWidget);
+        expect(fake.launched, hasLength(1));
+        expect(find.textContaining('Scan the QR in'), findsNothing);
+        expect(find.text('Continue in your UPI app'), findsOneWidget);
       },
     );
 
-    testWidgets('an app that refuses the shared QR falls back to the guide', (
+    testWidgets('when nothing works it says so and stays on the page', (
       tester,
     ) async {
-      final fake = _FakeUpiService(apps: const [_gpay])..shareResult = false;
+      final fake = _FakeUpiService(apps: const [_gpay])..launchResult = false;
       await _pumpScan(tester, fake);
 
       await _enterAmountAndPay(tester, '250');
       await tester.tap(find.text('Google Pay'));
       await tester.pumpAndSettle();
 
-      expect(fake.shared, hasLength(1)); // tried first
-      expect(find.text('Scan the QR in Google Pay'), findsOneWidget);
-      await tester.tap(find.widgetWithText(FilledButton, 'Open Google Pay'));
-      await tester.pumpAndSettle();
-
-      expect(fake.opened, ['com.google.android.apps.nbu.paisa.user']);
-      expect(_clipboard, '250');
-      expect(find.text('Continue in your UPI app'), findsOneWidget);
-    });
-
-    testWidgets('a paise amount is shared and copied exactly', (tester) async {
-      final fake = _FakeUpiService(apps: const [_gpay])..shareResult = false;
-      await _pumpScan(tester, fake);
-
-      await _enterAmountAndPay(tester, '250.5');
-      await tester.tap(find.text('Google Pay'));
-      await tester.pumpAndSettle();
-      expect(
-        Uri.parse(fake.shared.single.data).queryParameters['am'],
-        '250.50',
-      );
-      await tester.tap(find.widgetWithText(FilledButton, 'Open Google Pay'));
-      await tester.pumpAndSettle();
-
-      expect(_clipboard, '250.50');
+      expect(find.textContaining("Couldn't open Google Pay"), findsOneWidget);
+      expect(find.text('Continue in your UPI app'), findsNothing);
+      expect(find.widgetWithText(FilledButton, 'Pay with c1'), findsOneWidget);
     });
 
     testWidgets('dismissing the app picker does nothing', (tester) async {
@@ -497,106 +502,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Open which UPI app?'), findsNothing);
-      expect(find.textContaining('Scan the QR in'), findsNothing);
+      expect(fake.launched, isEmpty);
       expect(fake.shared, isEmpty);
-      expect(fake.opened, isEmpty);
-      expect(_clipboard, isNull);
-      expect(find.text('REWARD IF THIS COMPLETES'), findsNothing);
+      expect(find.text('Continue in your UPI app'), findsNothing);
     });
-
-    testWidgets('cancelling the guide opens nothing and copies nothing', (
-      tester,
-    ) async {
-      final fake = _FakeUpiService(apps: const [_gpay])..shareResult = false;
-      await _pumpScan(tester, fake);
-
-      await _enterAmountAndPay(tester, '250');
-      await tester.tap(find.text('Google Pay'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
-      await tester.pumpAndSettle();
-
-      expect(fake.opened, isEmpty);
-      expect(_clipboard, isNull);
-      expect(find.text('REWARD IF THIS COMPLETES'), findsNothing);
-      // Still on the scan screen, ready to try again.
-      expect(find.widgetWithText(FilledButton, 'Pay with c1'), findsOneWidget);
-    });
-
-    testWidgets(
-      'when sharing and opening both fail it says so and stays on the screen',
-      (tester) async {
-        final fake = _FakeUpiService(apps: const [_gpay])
-          ..shareResult = false
-          ..openResult = false;
-        await _pumpScan(tester, fake);
-
-        await _enterAmountAndPay(tester, '250');
-        await tester.tap(find.text('Google Pay'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.widgetWithText(FilledButton, 'Open Google Pay'));
-        await tester.pumpAndSettle();
-
-        expect(find.textContaining("Couldn't open Google Pay"), findsOneWidget);
-        expect(find.text('REWARD IF THIS COMPLETES'), findsNothing);
-        expect(
-          find.widgetWithText(FilledButton, 'Pay with c1'),
-          findsOneWidget,
-        );
-      },
-    );
-
-    testWidgets(
-      'with no UPI app to open (iOS), the guide says so and continues',
-      (tester) async {
-        final fake = _FakeUpiService();
-        await _pumpScan(tester, fake);
-
-        await _enterAmountAndPay(tester, '250');
-        // Nothing to pick, so it goes straight to the guide.
-        expect(find.text('Open which UPI app?'), findsNothing);
-        expect(find.text('Scan the QR in your UPI app'), findsOneWidget);
-        expect(find.text('Open your UPI app'), findsOneWidget);
-
-        await tester.tap(find.widgetWithText(FilledButton, 'Got it'));
-        await tester.pumpAndSettle();
-
-        expect(fake.shared, isEmpty);
-        expect(fake.opened, isEmpty);
-        expect(_clipboard, '250');
-        expect(find.text('REWARD IF THIS COMPLETES'), findsOneWidget);
-      },
-    );
-
-    testWidgets(
-      'a signed merchant QR is never redrawn: the user scans it in the app',
-      (tester) async {
-        final fake = _FakeUpiService(apps: const [_slice]);
-        await _pumpScan(
-          tester,
-          fake,
-          parsed: const ParsedUpiQr(
-            pa: 'q@ybl',
-            pn: 'Pump',
-            mc: '5541',
-            tr: 'ORD1',
-            mode: '02',
-            orgid: '159761',
-            sign: 'a+b',
-            isLikelyP2P: false,
-          ),
-        );
-
-        await _enterAmountAndPay(tester, '500');
-        await tester.tap(find.text('Slice'));
-        await tester.pumpAndSettle();
-        expect(fake.shared, isEmpty);
-        await tester.tap(find.widgetWithText(FilledButton, 'Open Slice'));
-        await tester.pumpAndSettle();
-
-        expect(fake.opened, ['in.slice.android']);
-      },
-    );
   });
 
   group('a card that earns nothing here can still pay', () {
@@ -684,11 +593,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        fake.shared.single.package,
+        fake.launched.single.package,
         'com.google.android.apps.nbu.paisa.user',
       );
       expect(
-        Uri.parse(fake.shared.single.data).queryParameters['am'],
+        Uri.parse(fake.launched.single.uri).queryParameters['am'],
         '180.00',
       );
     });
@@ -1026,10 +935,10 @@ void main() {
         await tester.tap(find.text('Google Pay'));
         await tester.pumpAndSettle();
 
-        final qr = Uri.parse(fake.shared.single.data);
+        final qr = Uri.parse(fake.launched.single.uri);
         expect(qr.queryParameters['pa'], 'shop@okhdfcbank');
         expect(qr.queryParameters['am'], '300.00');
-        expect(fake.shared.single.package, _gpay.packageName);
+        expect(fake.launched.single.package, _gpay.packageName);
         // No card, so no reward and no manual log on the next screen.
         expect(find.text('Continue in your UPI app'), findsOneWidget);
         expect(find.text('REWARD IF THIS COMPLETES'), findsNothing);
@@ -1063,7 +972,7 @@ void main() {
       await tester.tap(find.text('Google Pay'));
       await tester.pumpAndSettle();
 
-      final qr = Uri.parse(fake.shared.single.data);
+      final qr = Uri.parse(fake.launched.single.uri);
       expect(qr.queryParameters['pa'], 'friend@okaxis');
       expect(qr.queryParameters['am'], '75.00');
     });
@@ -1090,7 +999,7 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(
-          Uri.parse(fake.shared.single.data).queryParameters['am'],
+          Uri.parse(fake.launched.single.uri).queryParameters['am'],
           '150.00',
         );
         expect(find.text('REWARD IF THIS COMPLETES'), findsNothing);
@@ -1111,7 +1020,7 @@ void main() {
       await tester.tapAt(const Offset(10, 10));
       await tester.pumpAndSettle();
 
-      expect(fake.shared, isEmpty);
+      expect(fake.launched, isEmpty);
       expect(find.text('Continue in your UPI app'), findsNothing);
     });
   });
