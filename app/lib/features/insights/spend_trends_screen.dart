@@ -227,11 +227,19 @@ class _SpendTrendsScreenState extends ConsumerState<SpendTrendsScreen> {
     tagIds: widget.initialTagIds,
   );
 
+  /// The account and period the report on screen belongs to. A reload for the
+  /// same one is only fresher numbers; a reload for another one is a different
+  /// report and must not show the old one's content.
+  Object? _shownScope;
+
   @override
   Widget build(BuildContext context) {
     final query = ref.watch(selectedSpendQueryProvider);
     final report = ref.watch(spendReportProvider(query));
     final transactions = ref.watch(spendPeriodTransactionsProvider(query));
+    final scope = (query, ref.watch(cacheNamespaceProvider));
+    final sameReport = report.hasValue && _shownScope == scope;
+    if (report.hasValue && !report.isLoading) _shownScope = scope;
 
     return Scaffold(
       backgroundColor: BambooInk.paper,
@@ -301,10 +309,14 @@ class _SpendTrendsScreenState extends ConsumerState<SpendTrendsScreen> {
             ),
             Expanded(
               child: report.when(
-                // reload-ok: the heading stays stable during an explicit
-                // refresh; a changed account or period is a different report.
+                // reload-ok: the report recomputes on every write to the local
+                // transaction store (a sync, an SMS import chunk, a re-read), which
+                // Riverpod calls a reload. For the SAME account and period that is
+                // only fresher numbers: keep the list mounted so the person is not
+                // thrown back to the top while reading it. Another account or
+                // period is a different report and still loads fresh.
                 skipLoadingOnRefresh: true,
-                skipLoadingOnReload: false,
+                skipLoadingOnReload: sameReport,
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (err, _) => ErrorState(
                   message: userFacingErrorMessage(err),

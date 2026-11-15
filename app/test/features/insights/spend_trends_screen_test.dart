@@ -2043,7 +2043,52 @@ void main() {
     expect(find.byIcon(Icons.hourglass_top_rounded), findsNothing);
   });
 
-  testWidgets('background report reload hides prior report content', (
+  testWidgets('a background reload of the same report keeps its content mounted', (
+    tester,
+  ) async {
+    // Every write to the local transaction store (a sync, an SMS import chunk) reloads the report. For the same
+    // account and period that is fresher numbers: the list stays, so a reader is not thrown back to the top.
+    final refreshed = Completer<SpendReport?>();
+    const headerKey = ValueKey('spending-overview-header');
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          selectedSpendQueryProvider.overrideWith(
+            (ref) => const SpendReportQuery.preset(SpendPeriod.month),
+          ),
+          spendReportProvider.overrideWith((ref, query) async {
+            final generation = ref.watch(_reportRefreshGeneration);
+            if (generation == 0) return _report();
+            return refreshed.future;
+          }),
+          spendPeriodTransactionsProvider.overrideWith(
+            (ref, query) async => const [],
+          ),
+        ],
+        child: const MaterialApp(
+          home: SpendTrendsScreen(overviewKey: headerKey),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final header = find.byKey(headerKey);
+    final originalElement = tester.element(header);
+
+    final container = ProviderScope.containerOf(tester.element(header));
+    container.read(_reportRefreshGeneration.notifier).state++;
+    await tester.pump();
+    await tester.pump();
+    expect(header, findsOneWidget);
+    expect(tester.element(header), same(originalElement));
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+
+    refreshed.complete(_report(spend: 43000));
+    await tester.pumpAndSettle();
+    expect(header, findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+  });
+
+  testWidgets('a reload for another account hides the prior report content', (
     tester,
   ) async {
     final refreshed = Completer<SpendReport?>();
@@ -2059,6 +2104,10 @@ void main() {
             if (generation == 0) return _report();
             return refreshed.future;
           }),
+          // the account changes together with the report (generation 0 is one account, anything else another)
+          cacheNamespaceProvider.overrideWith(
+            (ref) => ref.watch(_reportRefreshGeneration) == 0 ? 'user:a' : 'user:b',
+          ),
           spendPeriodTransactionsProvider.overrideWith(
             (ref, query) async => const [],
           ),
