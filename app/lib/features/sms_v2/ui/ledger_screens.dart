@@ -500,6 +500,22 @@ class InstrumentUsageSection extends StatelessWidget {
       model.facts,
       ownEvents,
     ).where((i) => i.remainingHoldMinor > 0);
+    // Only what the messages (or the user) actually told us. Many banks (HDFC
+    // card spend SMS, for one) never print available credit or points, so an
+    // "unknown" row would just be noise; with nothing known the panel is gone.
+    final isCard = instrument.kind == InstrumentKind.creditCard;
+    final points = instrument.pointsBalance;
+    final rows = <(String, String)>[
+      if (instrument.availableMinor != null)
+        ('Available', smsMoney(instrument.availableMinor)),
+      if (isCard && instrument.creditLimitMinor != null)
+        ('Limit', smsMoney(instrument.creditLimitMinor)),
+      if (isCard && cardUsage(instrument) != null)
+        ('Used', smsMoney(cardUsage(instrument))),
+      // 0 is the wallet card's untouched default, not a balance anyone read.
+      if (points != null && points > 0) ('Points', '$points'),
+    ];
+    if (rows.isEmpty && holds.isEmpty) return const SizedBox.shrink();
     return BambooPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -509,19 +525,9 @@ class InstrumentUsageSection extends StatelessWidget {
             style: BambooFonts.heading(16.5, color: BambooInk.ink900),
           ),
           const SizedBox(height: AppSpace.sm),
-          BambooFigureRow('Available', smsMoney(instrument.availableMinor)),
-          if (instrument.kind == InstrumentKind.creditCard) ...[
-            BambooFigureRow('Limit', smsMoney(instrument.creditLimitMinor)),
-            BambooFigureRow('Used', smsMoney(cardUsage(instrument))),
-          ],
-          BambooFigureRow('Points', '${instrument.pointsBalance ?? 'unknown'}'),
-          const SizedBox(height: AppSpace.sm),
-          if (holds.isEmpty)
-            const BambooNote(
-              'No active IPO holds',
-              icon: Icons.lock_open_rounded,
-            )
-          else
+          for (final (label, value) in rows) BambooFigureRow(label, value),
+          if (holds.isNotEmpty) const SizedBox(height: AppSpace.sm),
+          if (holds.isNotEmpty)
             for (final hold in holds)
               Padding(
                 padding: const EdgeInsets.only(top: AppSpace.xs),
