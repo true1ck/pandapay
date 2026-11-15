@@ -91,6 +91,8 @@ function handle(req, res, body, { faults, log }) {
   let asked = {};
   try { asked = JSON.parse(prompt); } catch { /* the worker always sends JSON */ }
   const row = { at: new Date().toISOString(), key, model, layout: asked.layout, systemBytes: Buffer.byteLength(system), userBytes: Buffer.byteLength(prompt) };
+  // Opt-in, for a person checking by hand what the model is sent (never set on a hosted worker).
+  if (process.env.FAKE_GEMINI_KEEP_PROMPTS === '1') row.prompt = prompt;
   const done = (status, payload, headers) => { log.push({ ...row, status }); send(res, status, payload, headers); };
 
   const fault = takeFault(faults, key, model);
