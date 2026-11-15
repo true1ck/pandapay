@@ -6,15 +6,22 @@
 #   adb -s emulator-5554 push shop_qr.jpg /sdcard/Pictures/ && adb -s emulator-5554 shell am broadcast \
 #     -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Pictures/shop_qr.jpg
 # Run: maestro --device emulator-5554 test app/.maestro/scan-pay-shop-qr.yaml
-# Written 15 Nov 2026 from a manual adb run of the same steps; not yet run with Maestro itself.
+# Passed with Maestro 2.12.1 on an Android 15 emulator, 15 Nov 2026 (a stub UPI app received the QR).
+# Maestro installs to ~/.maestro/cli/maestro/bin; add that to PATH. Wait for the first screen: a cold debug start is slow.
 appId: app.pandapay.pandapay.dev2
 ---
 - launchApp
-- tapOn: "Scan & pay"
+# A cold start of the debug build is slow on an emulator.
+- extendedWaitUntil:
+    visible: "(?s).*Scan & pay.*"
+    timeout: 90000
+- tapOn: "(?s).*Scan & pay.*"
 - tapOn: "Pick a QR from photos"
 # Android photo picker: the newest photo is the first tile.
-- tapOn:
-    point: 16%,66%
+- extendedWaitUntil:
+    visible: "Photo taken on.*"
+    timeout: 15000
+- tapOn: "Photo taken on.*"
 - extendedWaitUntil:
     visible: "Scan result"
     timeout: 20000
