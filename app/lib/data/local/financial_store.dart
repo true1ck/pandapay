@@ -724,6 +724,60 @@ class FinancialStore {
   /// twin of an SMS (`v2:`) row never carries "don't count in spending" (the
   /// choice is not sent for SMS rows), so the phone's value wins; otherwise a
   /// refresh would silently count the amount in spending again.
+  /// Fields the phone's own SMS projection decides: how the payment was made
+  /// and when the SMS arrived. The server builds its copy from the uploaded
+  /// ledger and can know less (in Nov 2026 it could not name the card of 1,846
+  /// rows of one account, and every refresh put "Payment method not matched"
+  /// back on rows the phone had right).
+  static const _phoneReadingKeys = [
+    'instrument',
+    'user_card_id',
+    'card_name',
+    'card_last4',
+    'account_last4',
+    'rail',
+    'payment_method',
+  ];
+
+  /// The phone's reading of a stored row, or null when it has nothing the
+  /// server could lose: not an SMS (v2) row, or no known payment method.
+  static Map<String, dynamic>? _phoneReadingOf(String payload) {
+    final j = jsonDecode(payload) as Map<String, dynamic>;
+    if (j['pipeline_version'] != 2 || j['source'] != 'sms') return null;
+    final instrument = j['instrument'];
+    final known = instrument is String && instrument != 'other';
+    final received = j['sms_received_at'];
+    if (!known && received == null) return null;
+    return {
+      if (known)
+        for (final key in _phoneReadingKeys) key: j[key],
+      if (received != null) 'sms_received_at': received,
+    };
+  }
+
+  /// [row] from the server with the phone's [reading] kept where the server
+  /// says less: a payment method of "other" or none, and no received time.
+  /// A server row that names a payment method itself is taken as it is.
+  static TransactionEntry _keepPhoneReading(
+    TransactionEntry row,
+    Map<String, dynamic>? reading,
+  ) {
+    if (reading == null) return row;
+    final json = row.toJson();
+    final serverInstrument = json['instrument'];
+    final serverKnows = serverInstrument is String && serverInstrument != 'other';
+    final keepMethod = !serverKnows && reading.containsKey('instrument');
+    final keepReceived =
+        json['sms_received_at'] == null && reading['sms_received_at'] != null;
+    if (!keepMethod && !keepReceived) return row;
+    return TransactionEntry.fromJson({
+      ...json,
+      if (keepMethod)
+        for (final key in _phoneReadingKeys) key: reading[key],
+      if (keepReceived) 'sms_received_at': reading['sms_received_at'],
+    });
+  }
+
   static TransactionEntry _remapOntoLocal(
     TransactionEntry row,
     String localId,
@@ -767,11 +821,17 @@ class FinancialStore {
     ];
   }
 
+  ///
+  /// [fromPhoneProjection]: the rows are the phone's own projection of its SMS
+  /// ledger (`ProjectionWriter`). Every other caller saves rows that came from
+  /// the server, and a server row never overwrites what the phone read from
+  /// its own SMS about how a payment was made (see [_keepPhoneReading]).
   void saveTransactions(
     String ns,
     List<TransactionEntry> rows, {
     TransactionQuery? completeQuery,
     DateTime? at,
+    bool fromPhoneProjection = false,
   }) {
     final remoteEvents = rows.where((row) => row.eventId != null && row.id != 'v2:${row.eventId}').map((row) => row.eventId!).toSet().toList();
     if (remoteEvents.isNotEmpty) {
@@ -780,11 +840,14 @@ class FinancialStore {
       // remapped onto. For an SMS (v2) row it exists only on the phone.
       final localExcluded = <String, bool>{};
       final localReason = <String, String>{};
+      // What the phone's own projection says about how each SMS payment was
+      // made, for the rows a server copy lands on.
+      final phoneReading = <String, Map<String, dynamic>>{};
       for (var offset = 0; offset < remoteEvents.length; offset += 400) {
         final chunk = remoteEvents.skip(offset).take(400).toList();
         final marks = List.filled(chunk.length, '?').join(',');
         for (final row in database.db.select(
-          "SELECT id,json_extract(payload,'\$.event_id') AS event_id,json_extract(payload,'\$.exclude_from_spend') AS excluded,json_extract(payload,'\$.exclude_reason') AS reason FROM financial_entities WHERE namespace=? AND entity='transactions' AND json_extract(payload,'\$.event_id') IN ($marks)",
+          "SELECT id,json_extract(payload,'\$.event_id') AS event_id,json_extract(payload,'\$.exclude_from_spend') AS excluded,json_extract(payload,'\$.exclude_reason') AS reason,payload FROM financial_entities WHERE namespace=? AND entity='transactions' AND json_extract(payload,'\$.event_id') IN ($marks)",
           [ns, ...chunk],
         )) {
           byEvent[row['event_id'] as String] = row['id'] as String;
@@ -792,13 +855,20 @@ class FinancialStore {
           if (row['reason'] is String) {
             localReason[row['id'] as String] = row['reason'] as String;
           }
+          if (!fromPhoneProjection) {
+            final reading = _phoneReadingOf(row['payload'] as String);
+            if (reading != null) phoneReading[row['event_id'] as String] = reading;
+          }
         }
       }
       rows = [
         for (final row in rows)
-          if (byEvent[row.eventId] != null && byEvent[row.eventId] != row.id)
-            _remapOntoLocal(row, byEvent[row.eventId]!, localExcluded, localReason)
-          else row,
+          _keepPhoneReading(
+            byEvent[row.eventId] != null && byEvent[row.eventId] != row.id
+                ? _remapOntoLocal(row, byEvent[row.eventId]!, localExcluded, localReason)
+                : row,
+            phoneReading[row.eventId],
+          ),
       ];
     }
     rows = _keepPendingSpendExclusions(ns, rows);

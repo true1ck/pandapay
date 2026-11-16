@@ -24,7 +24,9 @@ import 'projection_writer.dart';
 ///
 /// 1: 15 Nov 2026 (b90e1257): a card SMS keeps its card type even when no card
 ///    record could be named; rows saved before said "Payment method not matched".
-const int projectionCodeVersion = 1;
+/// 2: 16 Nov 2026: a server copy no longer overwrites the phone's own reading
+///    of how an SMS payment was made; rebuild the rows it had overwritten.
+const int projectionCodeVersion = 2;
 
 /// One slice of a refresh: how many events were read, how many of them were
 /// rewritten, and whether the pass has more to do.

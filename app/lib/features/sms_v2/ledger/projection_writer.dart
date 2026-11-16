@@ -321,7 +321,7 @@ class ProjectionWriter {
         financial.saveTransactions(ledger.namespace, [
           for (final row in display)
             if (!_unchanged(existing[row.eventId], row)) row,
-        ]);
+        ], fromPhoneProjection: true);
         // Unconditional: a correction can move an event OUT of subscription_charge
         // (a wrong-kind fix to p2p_out, a refund, unknown), which the events it
         // writes no longer show.

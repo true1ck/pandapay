@@ -8,7 +8,7 @@
 // per-transaction reward machinery, are per row, and only for new card spends).
 
 const { isDeepStrictEqual } = require('node:util');
-const { projectEvent, movesCardState } = require('./projection');
+const { projectEvent, movesCardState, INFLOW_TYPES } = require('./projection');
 const cardStateV2 = require('../card_state_v2');
 const { creditRewardFacts } = require('../reward_credits');
 
@@ -559,6 +559,68 @@ const sameRow = (row, spec) => Math.round(Number(row.amount_inr) * 100) === spec
 
 const rowMovesCard = (r) => r.entry_kind === 'spend' && r.instrument === 'credit_card' && Boolean(r.user_card_id);
 
+const MONEY_LEG_ROLES = new Set(['debit_leg', 'credit_leg', 'reversal', 'charge']);
+
+/**
+ * A ledger entry can name an instrument id this server never stored. When a
+ * phone reads its history again (a reinstall), its new instrument ids clash
+ * with the ones it uploaded before and are refused (instrument_key_conflict),
+ * while its ledger entries keep the new ids. Projected as is, every such row
+ * says "Payment method not matched" (Nov 2026: 1,846 of one profile's spends).
+ * The money still moved on the instrument the event's own facts name, so the
+ * side the row is built from (the payer for money out, the payee for money in)
+ * is resolved through them: a fact's stored instrument id when the server
+ * knows it, else the stored instrument with the same key (kind, issuer, last
+ * digits) as the fact's mention. Only the in-memory entries are changed; the
+ * stored ledger keeps what the phone sent. Mutates `ledgerOf` and `instruments`.
+ */
+async function resolveUnknownInstruments(client, profileId, { events, ledgerOf, instruments }) {
+  const unknown = (id) => Boolean(id) && !instruments.has(id);
+  const needing = [...ledgerOf.entries()].filter(([, entries]) => entries.some((e) => unknown(e.fromInstrumentId) || unknown(e.toInstrumentId)));
+  if (!needing.length) return;
+  const all = await client.query(
+    'SELECT instrument_id AS id, kind, issuer_slug, mask_digits, user_card_id, status FROM sms_v2_instruments WHERE profile_id = $1',
+    [profileId],
+  );
+  const byKey = new Map();
+  for (const x of all.rows) {
+    if (!instruments.has(x.id)) instruments.set(x.id, { kind: x.kind, userCardId: x.user_card_id, status: x.status });
+    byKey.set(`${x.kind}|${x.issuer_slug}|${x.mask_digits || ''}`, x.id);
+  }
+  const factIds = new Set();
+  for (const [eventId] of needing) for (const leg of (events.get(eventId)?.legs || [])) factIds.add(leg.factId);
+  const facts = new Map();
+  if (factIds.size) {
+    const fr = await client.query(
+      `SELECT fact_id, instrument_id, payload->'instrument' AS mention FROM sms_v2_facts WHERE profile_id = $1 AND fact_id = ANY($2::text[])`,
+      [profileId, [...factIds]],
+    );
+    fr.rows.forEach((x) => facts.set(x.fact_id, x));
+  }
+  for (const [eventId, entries] of needing) {
+    const event = events.get(eventId);
+    if (!event) continue;
+    // Money legs first: a correction's leg says where the money really went.
+    const legs = [...(event.legs || [])].sort((a, b) => Number(MONEY_LEG_ROLES.has(b.role)) - Number(MONEY_LEG_ROLES.has(a.role)));
+    let resolved = null;
+    for (const leg of legs) {
+      const f = facts.get(leg.factId);
+      if (f && f.instrument_id && instruments.has(f.instrument_id)) { resolved = f.instrument_id; break; }
+    }
+    if (!resolved) {
+      for (const leg of legs) {
+        const m = facts.get(leg.factId)?.mention;
+        if (!m || !m.kind || !m.issuerSlug) continue;
+        const id = byKey.get(`${m.kind}|${m.issuerSlug}|${m.maskDigits || ''}`);
+        if (id) { resolved = id; break; }
+      }
+    }
+    if (!resolved) continue;
+    const side = INFLOW_TYPES.has(event.type) ? 'toInstrumentId' : 'fromInstrumentId';
+    ledgerOf.set(eventId, entries.map((e) => (unknown(e[side]) ? { ...e, [side]: resolved } : e)));
+  }
+}
+
 async function projectTransactions(client, profileId, eventIds, { backfill, categoryOnly = false, deps }) {
   if (!eventIds.length) return { inserted: 0, updated: 0, stateApplied: 0 };
   const evRows = await client.query(`SELECT event_id AS id, ${EVENT_DOC} AS doc FROM sms_v2_events WHERE profile_id = $1 AND event_id = ANY($2::text[])`, [profileId, eventIds]);
@@ -582,6 +644,7 @@ async function projectTransactions(client, profileId, eventIds, { backfill, cate
     const r = await client.query('SELECT instrument_id AS id, kind, user_card_id, status FROM sms_v2_instruments WHERE profile_id = $1 AND instrument_id = ANY($2::uuid[])', [profileId, [...instrumentIds]]);
     r.rows.forEach((x) => instruments.set(x.id, { kind: x.kind, userCardId: x.user_card_id, status: x.status }));
   }
+  await resolveUnknownInstruments(client, profileId, { events, ledgerOf, instruments });
   const anchorRows = await client.query(
     `SELECT fact_id AS id, source_key, payload->'attrs'->>'rail' AS rail FROM sms_v2_facts WHERE profile_id = $1 AND fact_id = ANY($2::text[])`,
     [profileId, eventIds],
@@ -843,7 +906,53 @@ async function ingestBatch(client, profileId, body, { backfill = false, category
     rejected.rows.forEach((r) => affected.add(r.event_id));
   }
   const stats = await projectTransactions(client, profileId, [...affected], { backfill, categoryOnly, deps });
+  if (!categoryOnly) {
+    const healed = await projectStaleInstrumentRows(client, profileId, { exclude: affected, deps });
+    if (healed) stats.healed = healed;
+  }
   return { results, stats };
+}
+
+/** Rows rebuilt per upload by [projectStaleInstrumentRows]. */
+const STALE_ROWS_PER_BATCH = 200;
+
+/**
+ * Rows written before [resolveUnknownInstruments] existed still say "not
+ * matched" while their ledger names an instrument id the server never stored.
+ * Each upload rebuilds up to STALE_ROWS_PER_BATCH of them for the uploading
+ * profile, so every account heals over its next few syncs with no manual
+ * step; once none are left this is one indexed query that returns nothing.
+ */
+async function projectStaleInstrumentRows(client, profileId, { exclude, deps }) {
+  const r = await client.query(
+    `SELECT DISTINCT t.event_id
+       FROM transactions t
+       JOIN sms_v2_ledger_entries l ON l.profile_id = t.profile_id AND l.event_id = t.event_id
+      WHERE t.profile_id = $1 AND t.pipeline_version = 2 AND t.status = 'active' AND t.instrument = 'other'
+        AND t.event_id IS NOT NULL
+        AND ((l.from_instrument_id IS NOT NULL AND NOT EXISTS (
+               SELECT 1 FROM sms_v2_instruments i WHERE i.profile_id = $1 AND i.instrument_id = l.from_instrument_id))
+          OR (l.to_instrument_id IS NOT NULL AND NOT EXISTS (
+               SELECT 1 FROM sms_v2_instruments i WHERE i.profile_id = $1 AND i.instrument_id = l.to_instrument_id)))
+        -- Only rows a rebuild can change: the event's own fact names an
+        -- instrument the server holds, of a kind that is not shown as "other".
+        -- A row nothing can resolve is never picked again and again.
+        AND EXISTS (
+          SELECT 1 FROM sms_v2_facts f
+            JOIN sms_v2_instruments i ON i.profile_id = f.profile_id
+             AND i.kind IN ('credit_card', 'debit_card', 'prepaid_card', 'bank_account', 'wallet', 'pay_later')
+             AND (i.instrument_id = f.instrument_id
+               OR (i.kind = f.payload->'instrument'->>'kind'
+                   AND i.issuer_slug = f.payload->'instrument'->>'issuerSlug'
+                   AND COALESCE(i.mask_digits, '') = COALESCE(f.payload->'instrument'->>'maskDigits', '')))
+           WHERE f.profile_id = $1 AND f.fact_id = t.event_id)
+      LIMIT $2`,
+    [profileId, STALE_ROWS_PER_BATCH],
+  );
+  const ids = r.rows.map((x) => x.event_id).filter((id) => !exclude.has(id));
+  if (!ids.length) return 0;
+  const healed = await projectTransactions(client, profileId, ids, { backfill: true, deps });
+  return healed.updated || 0;
 }
 
 // ---------- sync ----------
@@ -911,4 +1020,5 @@ async function readChanges(client, profileId, cursor, hookCursors = {}) {
 module.exports = {
   ingestBatch, readChanges, encodeCursor, decodeCursor, SYNC_LIMIT,
   mergeInstrument, mergeEvent, ownEntryLegAmounts, projectTransactions, takeProfileLock,
+  resolveUnknownInstruments, projectStaleInstrumentRows,
 };
