@@ -63,6 +63,25 @@ void main() {
       );
     });
 
+    test('SmsV2Runtime does not rebuild rows or re-read messages itself', () {
+      // Both walk the whole history (ProjectionRefresh, ReadingRefresh); the
+      // runtime only checks whether a pass is due and hands each slice to the
+      // capture worker (CaptureChunkRequest.refreshProjection / refreshReadings).
+      final offenders = _offending(
+        [File('lib/features/sms_v2/pipeline/sms_v2_runtime.dart')],
+        (line) =>
+            RegExp(r'\.(step|runAll|prepare)\(').hasMatch(line) &&
+            !line.contains('Completer'),
+      );
+      expect(
+        offenders,
+        isEmpty,
+        reason:
+            'Pass refreshProjection / refreshReadings on CaptureChunkRequest so '
+            'the worker isolate runs the slice. ${offenders.join(', ')}',
+      );
+    });
+
     test('adding a card does not link it on the UI isolate', () {
       final offenders = _offending(
         [File('lib/features/cards/add_card_local_first.dart')],

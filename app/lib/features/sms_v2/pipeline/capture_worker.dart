@@ -248,6 +248,9 @@ class SmsCaptureWorker implements CaptureExecutor {
         request.healCards,
         request.walletCards,
         request.cardIssuerSlugs,
+        request.refreshProjection,
+        request.refreshReadings,
+        request.readingPass,
       ]);
       _sentBundleHash = bundle.hash;
     } catch (_) {
@@ -388,6 +391,9 @@ class _WorkerState {
     final cardIssuerSlugs = v.length > 12 && v[12] != null
         ? (v[12] as Map).cast<String, String?>()
         : const <String, String?>{};
+    final refreshProjection = v.length > 13 && v[13] == true;
+    final refreshReadings = v.length > 14 && v[14] == true;
+    final readingPass = v.length > 15 ? v[15] as String? : null;
     var injected = false;
     assert(() {
       injected = true;
@@ -461,6 +467,9 @@ class _WorkerState {
       healCards: healCards,
       walletCards: walletCards,
       cardIssuerSlugs: cardIssuerSlugs,
+      refreshProjection: refreshProjection,
+      refreshReadings: refreshReadings,
+      readingPass: readingPass,
       transact: (work) {
         changed.clear();
         _db.execute('BEGIN IMMEDIATE');

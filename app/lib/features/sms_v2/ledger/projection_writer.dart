@@ -172,6 +172,40 @@ class ProjectionWriter {
   final FinancialStore financial;
   final LedgerStore ledger;
 
+  /// The display row [write] saves for [row], the event's fresh projection,
+  /// when [old] is what is stored: server-earned rewards and the person's own
+  /// display edits (note, tags, "leave out of spending", their category) carry
+  /// over from [old].
+  static TransactionEntry displayRow(
+    TransactionEntry row,
+    TransactionEntry? old,
+  ) => TransactionEntry.fromJson({
+    ...row.toJson(),
+    if (old != null) ...{
+      'id': old.id,
+      'expected_value_inr': old.rewardValue?.rupees,
+      'note': old.note,
+      // The person's own choice survives a re-projection, like a
+      // note or a tag does.
+      if (old.excludeFromSpend) 'exclude_from_spend': true,
+      if (old.excludeFromSpend && old.excludeReason != null)
+        'exclude_reason': old.excludeReason,
+      'tags': old.tags.map((t) => t.toJson()).toList(),
+      if (old.userCategoryId != null) ...{
+        'category_id': null,
+        'user_category_id': old.userCategoryId,
+        'category_name': old.categoryName,
+      },
+    },
+  });
+
+  /// True when [write] would save nothing for an event whose fresh projection
+  /// is [row] and whose stored display row is [old].
+  static bool displayUnchanged(TransactionEntry? row, TransactionEntry? old) {
+    if (row == null) return old == null || old.status == 'ignored';
+    return _unchanged(old, displayRow(row, old));
+  }
+
   /// A savepoint commits ledger and display rows together. An event that no
   /// longer has a money projection retires its old display row.
   void write(
@@ -275,28 +309,7 @@ class ProjectionWriter {
             if (candidates?.length == 1) old = candidates!.single;
           }
           if (row != null) {
-            // Keep server-earned rewards and local display edits on re-projection.
-            display.add(
-              TransactionEntry.fromJson({
-                ...row.toJson(),
-                if (old != null) ...{
-                  'id': old.id,
-                  'expected_value_inr': old.rewardValue?.rupees,
-                  'note': old.note,
-                  // The person's own choice survives a re-projection, like a
-                  // note or a tag does.
-                  if (old.excludeFromSpend) 'exclude_from_spend': true,
-                  if (old.excludeFromSpend && old.excludeReason != null)
-                    'exclude_reason': old.excludeReason,
-                  'tags': old.tags.map((t) => t.toJson()).toList(),
-                  if (old.userCategoryId != null) ...{
-                    'category_id': null,
-                    'user_category_id': old.userCategoryId,
-                    'category_name': old.categoryName,
-                  },
-                },
-              }),
-            );
+            display.add(displayRow(row, old));
           } else if (old != null) {
             display.add(old.copyWith(status: 'ignored'));
           }

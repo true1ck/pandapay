@@ -92,13 +92,40 @@ class AiWithdrawal {
   /// Withdraws the readings of [sources] and returns the sources to read again.
   /// A source the person has acted on (a user fact, or an event they confirmed)
   /// is left exactly as it is.
-  List<String> withdraw(List<String> candidates) {
+  ///
+  /// [personChecked]: the caller has already left out every source the person
+  /// acted on (with a check at least as strict), so it is not repeated.
+  List<String> withdraw(List<String> candidates, {bool personChecked = false}) {
     final facts = FactStore(_db, namespace: namespace);
     final events = EventStore(_db, namespace: namespace);
     final ledger = LedgerStore(_db, namespace: namespace);
+    // The events of every candidate in one look-up: the events table has no
+    // index on its legs, so one look-up per source was one full scan each.
+    final factsBySource = {
+      for (final source in candidates) source: facts.forSource(source),
+    };
+    final eventsByFact = <String, List<Event>>{};
+    for (final event in events.findByFactIds({
+      for (final list in factsBySource.values)
+        for (final fact in list) fact.factId,
+    })) {
+      for (final leg in event.legs) {
+        (eventsByFact[leg.factId] ??= []).add(event);
+      }
+    }
+    List<Event> eventsOf(String source) => {
+      for (final fact in factsBySource[source] ?? const <Fact>[])
+        for (final event in eventsByFact[fact.factId] ?? const <Event>[])
+          event.eventId: event,
+    }.values.toList();
+    bool touched(String source) =>
+        (factsBySource[source] ?? const <Fact>[]).any(
+          (fact) => fact.provenance.engine == Engine.user,
+        ) ||
+        eventsOf(source).any((e) => e.status == EventStatus.userConfirmed);
     final sources = [
       for (final source in candidates)
-        if (!_touchedByPerson(source, facts, events)) source,
+        if (personChecked || !touched(source)) source,
     ];
     if (sources.isEmpty) return const [];
     financial.batch(() {
@@ -107,11 +134,9 @@ class AiWithdrawal {
         final affected = <String, Event>{};
         final factIds = <String>{};
         for (final source in sources) {
-          final sourceFacts = facts.forSource(source);
+          final sourceFacts = factsBySource[source] ?? const <Fact>[];
           factIds.addAll(sourceFacts.map((fact) => fact.factId));
-          for (final event in events.findByFactIds(
-            sourceFacts.map((fact) => fact.factId),
-          )) {
+          for (final event in eventsOf(source)) {
             affected[event.eventId] = event.type == EventType.unknown
                 ? event
                 : events.upsert(

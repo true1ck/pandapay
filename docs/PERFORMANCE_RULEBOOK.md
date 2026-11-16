@@ -202,6 +202,26 @@ rare server-id remap (`relinkCard`).
 Not yet verified on a phone: killing the app mid-import and relaunching (messages must be
 retried without duplicates); covered on the host by `capture_worker_test.dart`.
 
+Keeping saved data current, 16 Nov: two background passes, both in the capture worker, a slice per
+worker call, cursor in `v2_sync_state`, a slice that fails three times in a row at the same place is
+passed over (`_sliceWithRetry` in `capture_executor.dart`).
+- `ProjectionRefresh` (`ledger/projection_refresh.dart`) rebuilds saved ledger entries and Activity
+  rows when what they are built from changed: card identity or link, shop names, owner marks,
+  category ids, or `projectionCodeVersion` (bump it when the projection writes something different).
+  No message is read again, no category moves, only changed rows and entries are written and queued.
+  250 events per slice by primary key, facts by id, rows by the event-id index; at most 12 slices
+  per sync. Checking whether a pass is due reads three small tables on the UI isolate.
+- `ReadingRefresh` (`pipeline/reading_refresh.dart`) applies a new rule set, engine or personal format
+  to messages already read: only messages from sender brands whose fingerprint changed, each read on
+  the side first (engine only), taken back and read for real only when the answer differs. Messages
+  the person acted on are never touched, and a known transaction is never turned into "unknown".
+  150 candidates per slice (scan stops at 2,000 rows), one look-up of the person's word per slice;
+  at most 8 slices per sync. Due check: one state row on the UI isolate.
+Measured on a desktop with a real 8,965-message, two-year inbox moving from the 10 Nov rules to the
+16 Nov rules: reading pass 29 slices, 8.4 s total, worst slice 370 ms; row rebuild 11 slices, 0.7 s,
+worst 83 ms; the check when nothing is due 2 ms. A phone is several times slower, all of it off the
+UI isolate. Not yet measured on a phone.
+
 ## 5. Finding the cause: CPU profile over the VM service
 
 A profile build prints `The Dart VM service is listening on http://127.0.0.1:<port>/<token>/`.

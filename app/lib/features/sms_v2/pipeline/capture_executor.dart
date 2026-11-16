@@ -11,6 +11,9 @@ import '../instruments/card_transaction_relinker.dart';
 import '../instruments/instrument_seeder.dart';
 import '../instruments/unlinked_card_healer.dart';
 import '../storage/instrument_store.dart';
+import '../storage/sync_state_store.dart';
+import '../ledger/projection_refresh.dart';
+import 'reading_refresh.dart';
 import 'sms_v2_pipeline.dart';
 
 /// One slice of a chunk that shares a backfill flag. History (`backfill`) goes
@@ -36,6 +39,9 @@ class CaptureChunkRequest {
     this.healCards = false,
     this.walletCards,
     this.cardIssuerSlugs = const {},
+    this.refreshProjection = false,
+    this.refreshReadings = false,
+    this.readingPass,
     this.onCommitted,
     this.debugFault,
   });
@@ -61,6 +67,20 @@ class CaptureChunkRequest {
   /// (the catalogue is not sent); a card with none is skipped, as before.
   final List<Map<String, Object?>>? walletCards;
   final Map<String, String?> cardIssuerSlugs;
+
+  /// Also run one slice of [ProjectionRefresh] after the groups: rebuild saved
+  /// ledger entries and Activity rows whose inputs changed (a card linked or
+  /// renamed, a newer projection). In the worker, like the rest.
+  final bool refreshProjection;
+
+  /// Also run one slice of [ReadingRefresh] before the groups: read again, with
+  /// the rules in force, the messages whose reading those rules change.
+  final bool refreshReadings;
+
+  /// The pass revision the runtime checks ([ReadingRefresh.passRevisionFor]).
+  /// The worker records a finished pass under exactly this value, so the two
+  /// sides can never disagree about whether a pass is still due.
+  final String? readingPass;
 
   /// Called on the calling isolate with the entity names a worker committed
   /// (including for a chunk whose caller already timed out), so the live
@@ -100,10 +120,16 @@ void runCaptureChunk({
   bool healCards = false,
   List<Map<String, Object?>>? walletCards,
   Map<String, String?> cardIssuerSlugs = const {},
+  bool refreshProjection = false,
+  bool refreshReadings = false,
+  String? readingPass,
   void Function(void Function() work) transact = _direct,
 }) {
   if (walletCards != null) {
-    // Never stops a message from being captured; the next run retries it.
+    // Never stops a message from being captured; the next run retries it. A
+    // heal run (the one the runtime records as done) leaves a note when it
+    // failed, so the runtime does not record it and tries again next sync:
+    // a failure swallowed here used to leave cards unlinked for good.
     try {
       transact(
         () => seedAndRelinkWalletCards(
@@ -113,7 +139,26 @@ void runCaptureChunk({
           cardIssuerSlugs,
         ),
       );
-    } catch (_) {}
+      if (healCards) {
+        transact(
+          () => financial.database.db.execute(
+            'DELETE FROM v2_sync_state WHERE namespace=? AND key=?',
+            [namespace, cardHealFailedKey],
+          ),
+        );
+      }
+    } catch (error) {
+      if (healCards) {
+        try {
+          transact(
+            () => SyncStateStore(
+              financial.database.db,
+              namespace: namespace,
+            ).put(cardHealFailedKey, '$error'),
+          );
+        } catch (_) {}
+      }
+    }
   }
   final categories = CategorySnapshot.load(
     financial.database,
@@ -132,6 +177,48 @@ void runCaptureChunk({
     revision: '$overlayRevision:personal:${personalRules.revision}',
     ownerNames: ownerNames,
   );
+  if (refreshReadings) {
+    ReadingRefresh refresh() => ReadingRefresh(
+      financial: financial,
+      namespace: namespace,
+      bundle: bundle,
+      engine: engine,
+      appVersion: appVersion,
+      passRevision:
+          readingPass ??
+          ReadingRefresh.passRevisionFor(
+            '$overlayRevision:personal:${personalRules.revision}',
+          ),
+      personalRevision: personalRules.revision,
+    );
+    // One slice, in one transaction: the messages whose reading changed are
+    // taken back and read again together, and the cursor moves with them.
+    _sliceWithRetry(
+      financial: financial,
+      namespace: namespace,
+      failuresKey: ReadingRefresh.failuresKey,
+      cursorKey: ReadingRefresh.cursorKey,
+      transact: transact,
+      skip: () => refresh().prepare(evaluate: false),
+      work: () {
+        final slice = refresh().prepare();
+        ReadingRefresh.withdrawAll(
+          financial: financial,
+          namespace: namespace,
+          bundle: bundle,
+          categoryIdBySlug: categoryIdBySlug,
+          sources: slice.withdraw,
+        );
+        if (slice.reread.isNotEmpty) {
+          SmsImportStore(
+            financial,
+            v2Pipeline: pipeline,
+            v2Backfill: true,
+          ).captureBatch(namespace, slice.reread);
+        }
+      },
+    );
+  }
   for (final group in groups) {
     if (group.messages.isEmpty) continue;
     transact(
@@ -153,7 +240,67 @@ void runCaptureChunk({
       cursor = next;
     } while (cursor != null);
   }
+  if (refreshProjection) {
+    ProjectionRefresh refresh() => ProjectionRefresh(
+      financial: financial,
+      namespace: namespace,
+      bundle: bundle,
+      categoryIdBySlug: categoryIdBySlug,
+    );
+    // One bounded slice per call; the runtime calls again while one is due.
+    _sliceWithRetry(
+      financial: financial,
+      namespace: namespace,
+      failuresKey: ProjectionRefresh.failuresKey,
+      cursorKey: ProjectionRefresh.cursorKey,
+      transact: transact,
+      skip: () => refresh().step(evaluate: false),
+      work: () => refresh().step(),
+    );
+  }
 }
+
+/// Runs one refresh slice in its own transaction. A slice that fails is tried
+/// again on the next calls (a busy database is a passing problem); the third
+/// failure in a row at the same place passes over that slice, so one message
+/// or event that cannot be processed never holds a pass (and every later rule
+/// set) up for good. What it passes over keeps its earlier reading or row.
+void _sliceWithRetry({
+  required FinancialStore financial,
+  required String namespace,
+  required String failuresKey,
+  required String cursorKey,
+  required void Function(void Function() work) transact,
+  required void Function() work,
+  required void Function() skip,
+}) {
+  final state = SyncStateStore(financial.database.db, namespace: namespace);
+  try {
+    transact(work);
+    if ((state.get(failuresKey) ?? '').isNotEmpty) {
+      transact(() => state.put(failuresKey, ''));
+    }
+  } catch (error) {
+    final at = state.get(cursorKey) ?? '';
+    final parts = (state.get(failuresKey) ?? '').split('|');
+    final count = parts.length == 2 && parts[0] == at
+        ? (int.tryParse(parts[1]) ?? 0) + 1
+        : 1;
+    if (count >= 3) {
+      transact(() {
+        skip();
+        state.put(failuresKey, '');
+      });
+    } else {
+      transact(() => state.put(failuresKey, '$at|$count'));
+    }
+    rethrow;
+  }
+}
+
+/// Set by a heal run whose wallet-card seeding failed; cleared by one that
+/// worked. While it is set the runtime does not record the heal as done.
+const cardHealFailedKey = 'card:heal:failed';
 
 /// Links each wallet card to the card the messages found and gives that card the
 /// transactions saved before it was linked (see [CardTransactionRelinker]).
@@ -218,6 +365,9 @@ class InProcessCaptureExecutor implements CaptureExecutor {
       healCards: request.healCards,
       walletCards: request.walletCards,
       cardIssuerSlugs: request.cardIssuerSlugs,
+      refreshProjection: request.refreshProjection,
+      refreshReadings: request.refreshReadings,
+      readingPass: request.readingPass,
     );
     await Future<void>.delayed(
       Duration.zero,

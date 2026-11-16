@@ -22,6 +22,8 @@ import 'ai_withdrawal.dart';
 import '../storage/event_store.dart';
 import '../storage/fact_store.dart';
 import '../storage/instrument_store.dart';
+import '../ledger/projection_refresh.dart';
+import 'reading_refresh.dart';
 import '../ledger/card_state_adapter.dart';
 import '../../../data/local/sms_intake_repository.dart';
 import '../../sms_import/sms_background_queue.dart';
@@ -726,8 +728,13 @@ class SmsV2Runtime {
         .entities(namespace, 'cards')
         .map(UserCard.fromJson)
         .toList();
+    // The issuer each card resolves to is part of the marker: a run made while
+    // the catalogue could not name a card's bank skips that card, and the run
+    // must happen again once it can (Nov 2026: six of seven cards stayed
+    // unlinked for days after such a run was recorded as done).
+    final issuerSlugs = _cardIssuerSlugs(_walletCards());
     final healMarker =
-        'card-heal-3:${([for (final c in cards) '${c.id}:${c.last4}']..sort()).join(',')}';
+        'card-heal-4:${([for (final c in cards) '${c.id}:${c.last4}:${issuerSlugs[c.id]}']..sort()).join(',')}';
     // Not before the card catalogue is loaded: a card's issuer comes from it, and
     // a card whose issuer cannot be named is skipped by the seeding. Recording a
     // run that skipped every card would mean it is never retried.
@@ -751,12 +758,16 @@ class SmsV2Runtime {
             ownerNames: ownerNames(),
             healCards: true,
             walletCards: _walletCards(),
-            cardIssuerSlugs: _cardIssuerSlugs(_walletCards()),
+            cardIssuerSlugs: issuerSlugs,
             onCommitted: (entities) =>
                 financial.notifyExternalChanges(namespace, entities),
           ),
         );
-        _state.put('card:heal', healMarker);
+        // A run whose seeding failed is not done: the next sync tries again.
+        final failed = _state.get(cardHealFailedKey);
+        if (failed == null || failed.isEmpty) {
+          _state.put('card:heal', healMarker);
+        }
       });
     }
     // Messages read by a rule but put in review because a stored fact was weak
@@ -768,6 +779,13 @@ class SmsV2Runtime {
         _state.put('review:recheck', reviewMarker);
       });
     }
+    // A new rule set, engine or personal format can change how messages that
+    // were already read should read. Re-read only those, in the worker.
+    await guarded(() => _refreshReadings(_revision(active.revision)));
+    // Saved ledger entries and Activity rows are copies. When what they are
+    // built from changed (a card linked, renamed or marked not mine, a shop
+    // renamed, a payee marked, a newer projection), rebuild them in the worker.
+    await guarded(_refreshSavedRows);
     // A person asked to see what a re-sort would move before it moves
     // anything, so ordinary sync leaves categories alone. The refresh sheet
     // shows the preview and applies it on a tap. [autoApplyResort] set to true
@@ -777,6 +795,71 @@ class SmsV2Runtime {
     }
     final failure = firstError;
     if (failure != null) Error.throwWithStackTrace(failure, firstStack!);
+  }
+
+  /// Slices of [ProjectionRefresh] one sync may run. A slice is at most
+  /// [ProjectionRefresh.defaultChunk] events in one worker call; what is left
+  /// carries on at the next sync (the cursor is saved), so new messages are
+  /// never held up for long.
+  static const refreshSlicesPerSync = 12;
+
+  /// Slices of [ReadingRefresh] one sync may run (each at most
+  /// [ReadingRefresh.defaultChunk] messages read on the side in one worker call).
+  static const readingSlicesPerSync = 8;
+
+  /// Applies the rules in force to messages already read, where their reading
+  /// changes. A slice per worker call; the rest carries on at the next sync.
+  Future<void> _refreshReadings(String pipelineRevision) async {
+    final pass = ReadingRefresh.passRevisionFor(pipelineRevision);
+    for (var slice = 0;
+        slice < readingSlicesPerSync && ReadingRefresh.isPending(_state, pass);
+        slice++) {
+      _checkAccount();
+      await _executor.run(
+        CaptureChunkRequest(
+          namespace: namespace,
+          appVersion: appVersion,
+          categoryIdBySlug: categoryIdBySlug,
+          session: _captureSessions,
+          shared: await _loadBundle(),
+          groups: const [],
+          ownerNames: ownerNames(),
+          refreshReadings: true,
+          readingPass: pass,
+          onCommitted: (entities) =>
+              financial.notifyExternalChanges(namespace, entities),
+        ),
+      );
+    }
+  }
+
+  /// Rebuilds saved rows whose inputs changed, a slice per worker call. The
+  /// check itself reads three small tables (see [ProjectionRefresh.revision]).
+  Future<void> _refreshSavedRows() async {
+    if (categoryIdBySlug.isEmpty) return;
+    final refresh = ProjectionRefresh(
+      financial: financial,
+      namespace: namespace,
+      bundle: _bundle!,
+      categoryIdBySlug: categoryIdBySlug,
+    );
+    for (var slice = 0; slice < refreshSlicesPerSync && refresh.pending; slice++) {
+      _checkAccount();
+      await _executor.run(
+        CaptureChunkRequest(
+          namespace: namespace,
+          appVersion: appVersion,
+          categoryIdBySlug: categoryIdBySlug,
+          session: _captureSessions,
+          shared: await _loadBundle(),
+          groups: const [],
+          ownerNames: ownerNames(),
+          refreshProjection: true,
+          onCommitted: (entities) =>
+              financial.notifyExternalChanges(namespace, entities),
+        ),
+      );
+    }
   }
 
   /// Reads every message still marked "unknown" again with the rules now in

@@ -129,6 +129,42 @@ ON CONFLICT(namespace, fact_id) DO NOTHING
 
   Fact? get(String factId) => _read('fact_id = ?', [factId]).firstOrNull;
 
+  /// The facts with these ids, through the primary key, 400 ids per query
+  /// (R4, R5). Ids that are not stored are left out.
+  Map<String, Fact> byIds(Iterable<String> factIds) {
+    final ids = factIds.toSet().toList();
+    final out = <String, Fact>{};
+    for (var start = 0; start < ids.length; start += 400) {
+      final chunk = ids.skip(start).take(400).toList();
+      for (final fact in _read(
+        'fact_id IN (${List.filled(chunk.length, '?').join(',')})',
+        chunk,
+      )) {
+        out[fact.factId] = fact;
+      }
+    }
+    return out;
+  }
+
+  /// The instrument each of these facts is linked to (facts with none are left
+  /// out), through the primary key, 400 ids per query.
+  Map<String, String> instrumentIdsFor(Iterable<String> factIds) {
+    final ids = factIds.toSet().toList();
+    final out = <String, String>{};
+    for (var start = 0; start < ids.length; start += 400) {
+      final chunk = ids.skip(start).take(400).toList();
+      for (final row in _db.select(
+        'SELECT fact_id, instrument_id FROM v2_facts '
+        'WHERE namespace = ? AND fact_id IN (${List.filled(chunk.length, '?').join(',')}) '
+        'AND instrument_id IS NOT NULL',
+        [namespace, ...chunk],
+      )) {
+        out[row['fact_id'] as String] = row['instrument_id'] as String;
+      }
+    }
+    return out;
+  }
+
   Map<String, String> instrumentIdsSince(DateTime from) => {
     for (final row in _db.select(
       'SELECT fact_id, instrument_id FROM v2_facts '
