@@ -2,3 +2,10 @@ node_modules/
 .env
 scripts/import-report-*.json
 scripts/.staging/
+
+# local scratch scripts (may hold prod access)
+/extract_rule.py
+/test_pipeline_e2e.js
+/test_validate.js
+/worker_bench.js
+/lightweight_worker_bench.js
