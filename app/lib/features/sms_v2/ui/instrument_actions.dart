@@ -78,6 +78,11 @@ class InstrumentActions {
   void reject(String id) =>
       _write(_owned(id).copyWith(status: InstrumentStatus.rejected));
 
+  /// Undoes [reject]: the account goes back to the list, waiting to be
+  /// confirmed again, and its movements show in the ledger again.
+  void restore(String id) =>
+      _write(_owned(id).copyWith(status: InstrumentStatus.detected));
+
   /// The existing add-card flow returned this server-created wallet identity.
   void attachCard(String id, UserCard card) {
     final instrument = _owned(id);

@@ -74,6 +74,8 @@ class FoundInstrumentsScreen extends ConsumerWidget {
         if (name != null) actions.rename(instrument.instrumentId, name);
       } else if (action == 'reject') {
         actions.reject(instrument.instrumentId);
+      } else if (action == 'restore') {
+        actions.restore(instrument.instrumentId);
       } else if (action == 'asCard' || action == 'asAccount') {
         // [instrument] is the bank-account reading of a number that is also a
         // credit card. Keep the side the user names; archive the other.
@@ -179,7 +181,23 @@ class FoundInstrumentsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final instruments = ref.watch(instrumentsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Accounts and cards we found')),
+      appBar: AppBar(
+        title: const Text('Accounts and cards we found'),
+        actions: [
+          IconButton(
+            key: const Key('not-mine-history'),
+            tooltip: 'Marked as not mine',
+            icon: const Icon(Icons.history_rounded),
+            onPressed: () => showModalBottomSheet<void>(
+              context: context,
+              isScrollControlled: true,
+              builder: (_) => _NotMineHistorySheet(
+                onRestore: (i) => _act(context, ref, i, 'restore'),
+              ),
+            ),
+          ),
+        ],
+      ),
       body: AppBackground(
         child: instruments.when(
           skipLoadingOnReload: true,
@@ -289,6 +307,60 @@ class FoundInstrumentsList extends StatelessWidget {
               ),
           ],
       ],
+    );
+  }
+}
+
+/// Accounts the user marked "Not mine", each with a way to bring it back.
+class _NotMineHistorySheet extends ConsumerWidget {
+  const _NotMineHistorySheet({required this.onRestore});
+  final ValueChanged<Instrument> onRestore;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final rejected = (ref.watch(instrumentsProvider).valueOrNull ?? const [])
+        .where((i) => i.status == InstrumentStatus.rejected)
+        .toList();
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.7,
+        ),
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.all(AppSpace.lg),
+          children: [
+            Text(
+              'Marked as not mine',
+              style: BambooFonts.ui(
+                17,
+                weight: FontWeight.w700,
+                color: BambooInk.ink900,
+              ),
+            ),
+            const SizedBox(height: AppSpace.sm),
+            if (rejected.isEmpty)
+              Text(
+                'Nothing here. Accounts you mark Not mine will appear here so you can bring them back.',
+                style: BambooFonts.ui(13, color: BambooInk.ink700, height: 1.4),
+              ),
+            for (final i in rejected)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: PartyAvatar(instrumentAvatarKind(i.kind), size: 36),
+                title: Text(i.displayName, maxLines: 1),
+                subtitle: Text(
+                  '${i.issuerSlug.toUpperCase()} ••${i.maskDigits ?? 'unknown'}',
+                ),
+                trailing: TextButton(
+                  style: _compactQuiet,
+                  onPressed: () => onRestore(i),
+                  child: const Text('Restore'),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
