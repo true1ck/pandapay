@@ -34,7 +34,7 @@ async function setup(t, respond) {
     try {
       assert.equal(request.url, "/v1/sms-rule-drafts");
       assert.equal(request.headers.authorization, `Bearer ${token}`);
-      assert.equal(request.headers["x-prompt-version"], promptVersion);
+      assert.equal(request.headers["x-expected-model"], undefined);
       const chunks = [];
       for await (const chunk of request) chunks.push(chunk);
       const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));

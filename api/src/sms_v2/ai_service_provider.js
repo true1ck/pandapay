@@ -68,14 +68,24 @@ function createAiServiceProvider({ env = process.env, fetchImpl = fetch, logger 
   const timeoutMs = Number(env.SMS_V2_AI_SERVICE_TIMEOUT_MS || DEFAULT_TIMEOUT_MS);
   if (!Number.isInteger(timeoutMs) || timeoutMs < 5000 || timeoutMs > 170000)
     throw new Error("SMS_V2_AI_SERVICE_TIMEOUT_MS_invalid");
-  const promptVersion = env.SMS_V2_AI_SERVICE_PROMPT_VERSION || DEFAULT_PROMPT_VERSION;
-  if (!/^[a-zA-Z0-9_.-]{1,64}$/.test(promptVersion))
+  // The service owns the model, the output cap and the prompt, so none is sent. A prompt version is checked only when
+  // one is pinned (SMS_V2_AI_SERVICE_PROMPT_VERSION); otherwise whatever version answers is recorded.
+  const pinnedVersion = env.SMS_V2_AI_SERVICE_PROMPT_VERSION || null;
+  if (pinnedVersion && !/^[a-zA-Z0-9_.-]{1,64}$/.test(pinnedVersion))
     throw new Error("SMS_V2_AI_SERVICE_PROMPT_VERSION_invalid");
+  let seenVersion = null;
+  const versionOk = (response) => {
+    const seen = response.headers.get("x-prompt-version");
+    if (seen && /^[a-zA-Z0-9_.-]{1,64}$/.test(seen)) seenVersion = seen;
+    return !pinnedVersion || seen === pinnedVersion;
+  };
 
   return {
     assertLayout,
-    promptVersion,
-    async generateLayout({ senderBrand, redactedBody, model, maxOutputTokens }) {
+    get promptVersion() {
+      return pinnedVersion ?? seenVersion ?? DEFAULT_PROMPT_VERSION;
+    },
+    async generateLayout({ senderBrand, redactedBody }) {
       assertLayout({ senderBrand, redactedBody });
       const requestId = randomUUID();
       const started = performance.now();
@@ -99,9 +109,7 @@ function createAiServiceProvider({ env = process.env, fetchImpl = fetch, logger 
             // The same layout always carries the same key, so the service can recognise a retry of work it already did.
             "X-Idempotency-Key": createHash("sha256").update(`${senderBrand}
 ${redactedBody}`).digest("hex"),
-            "X-Prompt-Version": promptVersion,
-            "X-Expected-Model": model,
-            "X-Expected-Max-Output-Tokens": String(maxOutputTokens),
+            ...(pinnedVersion ? { "X-Prompt-Version": pinnedVersion } : {}),
           },
           body: JSON.stringify({ senderBrand, redactedBody }),
         });
@@ -122,14 +130,12 @@ ${redactedBody}`).digest("hex"),
         }
         if (response.status === 502) {
           if (body?.error?.code !== "invalid_provider_output") throw busy("ai_service_unavailable", 15000);
-          if (response.headers.get("x-prompt-version") !== promptVersion)
-            throw busy("ai_service_prompt_version_mismatch", 300000);
+          if (!versionOk(response)) throw busy("ai_service_prompt_version_mismatch", 300000);
           throw Object.assign(new SyntaxError("ai_service_invalid_provider_output"), {
             usage: usage && MODEL_ID.test(body.model ?? "") ? { ...usage, model: body.model } : null,
           });
         }
-        if (response.headers.get("x-prompt-version") !== promptVersion)
-          throw busy("ai_service_prompt_version_mismatch", 300000);
+        if (!versionOk(response)) throw busy("ai_service_prompt_version_mismatch", 300000);
         if (!usage || typeof body?.model !== "string" || !body.answer || typeof body.answer !== "object" || Array.isArray(body.answer))
           throw busy("ai_service_invalid_response", 300000);
         // A fallback AI may answer instead of the primary one: accept it and record which model it was.

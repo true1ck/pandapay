@@ -81,9 +81,9 @@ test("worker sends only the layout and accepts a draft after the usual validatio
     assert.equal(new Headers(options.headers).get("authorization"), `Bearer ${env.SMS_V2_AI_SERVICE_TOKEN}`);
     requestId = new Headers(options.headers).get("x-request-id");
     assert.match(requestId, /^[0-9a-f-]{36}$/);
-    assert.equal(new Headers(options.headers).get("x-prompt-version"), promptVersion);
-    assert.equal(new Headers(options.headers).get("x-expected-model"), config.model);
-    assert.equal(new Headers(options.headers).get("x-expected-max-output-tokens"), String(config.maxOutputTokens));
+    // No model, output cap or prompt version is sent unless a version is pinned: the service owns them.
+    for (const name of ["x-prompt-version", "x-expected-model", "x-expected-max-output-tokens"])
+      assert.equal(new Headers(options.headers).get(name), null);
     assert.deepEqual(JSON.parse(options.body), { senderBrand: template.sender_brand, redactedBody: template.redacted_body });
     return serviceJson({ answer: answer(), ...usage });
   } });
@@ -121,7 +121,6 @@ test("worker holds mismatched models and incompatible service responses safely",
     serviceJson({ answer: answer(), ...usage, totalTokens: -1 }),
     serviceJson({ error: { code: "wrong_token" } }, { status: 401 }),
     serviceJson({ error: { code: "config_mismatch" } }, { status: 412 }),
-    serviceJson({ answer: answer(), ...usage }, { headers: { "X-Prompt-Version": "sms-rule-draft-v2.0.0" } }),
   ]) {
     const store = makeStore();
     const provider = createAiServiceProvider({ env, fetchImpl: async () => response });
@@ -234,4 +233,19 @@ test("the wait is configurable (5-170 s, default 100 s) and every request carrie
   });
   await runWorkerCycle({ layoutStore: makeStore(), provider, config });
   assert.match(key, /^[a-f0-9]{64}$/);
+});
+
+test("an unpinned prompt version is accepted and recorded; a pinned one must match", async () => {
+  const store = makeStore();
+  const unpinned = createAiServiceProvider({ env, fetchImpl: async () => serviceJson({ answer: answer(), ...usage }, { headers: { "X-Prompt-Version": "sms-rule-draft-v9.9.9" } }) });
+  assert.equal((await runWorkerCycle({ layoutStore: store, provider: unpinned, config })).status, "ready");
+  assert.equal(store.attempts[0].promptVersion, "sms-rule-draft-v9.9.9");
+  assert.equal(unpinned.promptVersion, "sms-rule-draft-v9.9.9");
+  const pinned = createAiServiceProvider({
+    env: { ...env, SMS_V2_AI_SERVICE_PROMPT_VERSION: "sms-rule-draft-v1.0.0" },
+    fetchImpl: async () => serviceJson({ answer: answer(), ...usage }, { headers: { "X-Prompt-Version": "sms-rule-draft-v2.0.0" } }),
+  });
+  const held = makeStore();
+  assert.equal((await runWorkerCycle({ layoutStore: held, provider: pinned, config })).status, "provider_busy");
+  assert.equal(held.finished[0].requeue, true);
 });
