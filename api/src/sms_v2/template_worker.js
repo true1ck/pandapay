@@ -776,6 +776,7 @@ async function runTemplateWorkerOnce({
   config: baseConfig = workerConfig(),
   clock = Date.now,
 }) {
+  const layoutOnly = typeof provider.generateLayout === "function";
   let config = baseConfig;
   let settings = null;
   if (typeof store.settings === "function") {
@@ -787,6 +788,9 @@ async function runTemplateWorkerOnce({
     )
       return { status: "budget" };
     config = applyWorkerSettings(baseConfig, settings);
+    // The separate service owns model selection and the output limit. Use the
+    // worker's deployment settings for matching provenance, price and capacity.
+    if (layoutOnly) config = { ...config, model: baseConfig.model, maxOutputTokens: baseConfig.maxOutputTokens };
   }
   // Seconds to rest after a call to the provider, so the queue drains gently (free keys have small limits).
   const gapSeconds = settings?.ai_min_gap_seconds ?? 0;
@@ -810,7 +814,9 @@ async function runTemplateWorkerOnce({
       return { status: "provider_busy", retryAfterMs: resting };
     }
     let matcher;
+    const layout = { senderBrand: template.sender_brand, redactedBody: template.redacted_body };
     try {
+      if (layoutOnly) provider.assertLayout?.(layout);
       matcher = buildMatcher(template.redacted_body);
       exampleBodies(template.redacted_body);
     } catch (error) {
@@ -819,14 +825,22 @@ async function runTemplateWorkerOnce({
       await store.finish(template, { model: config.model, code, detail: ["layout", code] });
       return { status: "failed", templateHash: template.template_hash };
     }
-    // The wording is used only when allowed, safe, and really this layout; otherwise Gemini sees the layout alone.
-    const wording = settings?.ai_use_sample === false || !template.sample || sampleError(template.sample) ? null : fillTags(template.sample);
-    const slots = wording ? slotValues(matcher, wording) : null;
-    const reports = typeof store.userReports === "function" ? await store.userReports(template) : {};
-    const mistakes = typeof store.previousMistakes === "function" ? await store.previousMistakes(template) : [];
-    const families = [...new Set(rules.map((rule) => rule.family).filter(Boolean))];
+    let directContext;
+    if (!layoutOnly) {
+      // The legacy provider only uses wording when allowed, safe, and really this layout.
+      const wording = settings?.ai_use_sample === false || !template.sample || sampleError(template.sample) ? null : fillTags(template.sample);
+      const slots = wording ? slotValues(matcher, wording) : null;
+      directContext = {
+        sample: slots ? wording : null,
+        slots,
+        reports: typeof store.userReports === "function" ? await store.userReports(template) : {},
+        mistakes: typeof store.previousMistakes === "function" ? await store.previousMistakes(template) : [],
+        families: [...new Set(rules.map((rule) => rule.family).filter(Boolean))],
+      };
+    }
     for (let attempt = 1; attempt <= 2; attempt++) {
-      const prompt = buildPrompt({ template, matcher, sample: slots ? wording : null, slots, families, reports, mistakes, fix: errors });
+      // In service mode this prompt is used locally for the capacity estimate only.
+      const prompt = buildPrompt({ template, matcher, ...directContext, fix: layoutOnly ? [] : errors });
       const blocked = await store.beginAttempt(template, attempt, prompt.system + prompt.user, config);
       if (blocked) {
         await store.finish(template, {
@@ -840,23 +854,28 @@ async function runTemplateWorkerOnce({
       const started = clock();
       let response;
       let busy = null;
+      let layoutError = null;
       try {
-        response = await provider.generate({
-          system: prompt.system,
-          prompt: prompt.user,
-          model: config.model,
-          maxOutputTokens: config.maxOutputTokens,
-          temperature: config.temperature,
-        });
+        response = layoutOnly
+          ? await provider.generateLayout({ ...layout, model: config.model, maxOutputTokens: config.maxOutputTokens })
+          : await provider.generate({
+              system: prompt.system,
+              prompt: prompt.user,
+              model: config.model,
+              maxOutputTokens: config.maxOutputTokens,
+              temperature: config.temperature,
+            });
         const answer = typeof response.answer === "string" ? JSON.parse(response.answer) : response.answer;
         const rule = buildRule(answer, template, matcher, config.model);
         errors = await validateDraftSafely(rule, template, config.model, []);
         failure = errors.length ? { kind: "validation", codes: errors, status: null } : null;
         if (!errors.length) draft = rule;
       } catch (error) {
+        if (layoutOnly) response ??= error?.usage;
         failure = failureOf(error);
         errors = failure.codes;
         if (error instanceof ProviderBusyError) busy = error;
+        if (layoutOnly && error instanceof LayoutError) layoutError = error.code;
       }
       const tokens = (value) =>
         Number.isSafeInteger(value) && value >= 0 ? value : 0;
@@ -875,7 +894,7 @@ async function runTemplateWorkerOnce({
         outputTokens: billedOutputTokens,
         totalTokens,
         latencyMs: Math.max(0, clock() - started),
-        promptVersion: PROMPT_VERSION,
+        promptVersion: provider.promptVersion ?? PROMPT_VERSION,
         outcome: busy?.systemic ? "provider_error" : errors.length ? "rejected" : "valid",
         errorKind: failure?.kind ?? null,
         errorCodes: failure?.codes ?? null,
@@ -889,6 +908,10 @@ async function runTemplateWorkerOnce({
                 billedOutputTokens * config.outputPrice) /
               1000000,
       });
+      if (layoutError) {
+        await store.finish(template, { model: config.model, code: layoutError, detail: ["layout", layoutError] });
+        return { status: "failed", templateHash: template.template_hash };
+      }
       if (busy) {
         // The provider failed, not the draft. Do not spend the layout's tries on it: put it back in the queue and
         // let the worker wait. Only a layout the provider has failed on many separate times is given up on.

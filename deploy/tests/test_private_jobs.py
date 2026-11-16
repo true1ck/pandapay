@@ -64,6 +64,19 @@ class PrivateJobsTest(unittest.TestCase):
         for key in ('GEMINI_', 'SMS_AI_WORKER_DATABASE_URL'):
             self.assertNotIn(key, rest)
 
+    def test_isolated_ai_credentials_are_scoped_to_the_worker(self):
+        worker = service(PUBLIC, 'sms-v2-template-worker')
+        self.assertIn('stop_grace_period: 40s', worker)
+        rest = PUBLIC.replace(worker, '')
+        for key in ('SMS_V2_AI_SERVICE_URL', 'SMS_V2_AI_SERVICE_TOKEN', 'SMS_V2_AI_SERVICE_PROMPT_VERSION'):
+            self.assertIn(key, worker)
+            self.assertNotIn(key, rest)
+        deploy = (ROOT / 'deploy/deploy.sh').read_text()
+        workflow = (ROOT / '.github/workflows/deploy-prod.yml').read_text()
+        for key in ('SMS_V2_AI_SERVICE_URL', 'SMS_V2_AI_SERVICE_TOKEN', 'SMS_V2_AI_SERVICE_PROMPT_VERSION'):
+            self.assertIn(key, deploy)
+            self.assertIn(key, workflow)
+
 
 if __name__ == '__main__':
     unittest.main()

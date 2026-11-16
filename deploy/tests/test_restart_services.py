@@ -112,6 +112,21 @@ class SequentialRolloutTest(unittest.TestCase):
         starts = [args[-1] for name, args, _ in commands if name == "docker" and "up" in args]
         self.assertEqual(starts[-1], WORKER)
 
+    def test_remote_ai_worker_accepts_service_credentials_without_a_gemini_key(self):
+        remote = AI_ENV.split("\n", 1)[1] + (
+            "SMS_V2_AI_SERVICE_URL=https://ai.internal.invalid\n"
+            "SMS_V2_AI_SERVICE_TOKEN=synthetic-service-token-0123456789\n"
+        )
+        result, commands = self.rollout(ENV_CONTENT=remote)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(any("up" in args and args[-1] == WORKER for _, args, _ in commands))
+
+    def test_incomplete_remote_ai_configuration_does_not_use_the_gemini_key(self):
+        result, commands = self.rollout(ENV_CONTENT=AI_ENV +
+            "SMS_V2_AI_SERVICE_URL=https://ai.internal.invalid\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(any(WORKER in args for name, args, _ in commands if name == "docker"))
+
     def test_ai_worker_failing_to_become_ready_is_stopped_and_never_fails_the_release(self):
         result, commands = self.rollout(ENV_CONTENT=AI_ENV, FAIL_HEALTH=WORKER)
         self.assertEqual(result.returncode, 0, result.stderr)

@@ -206,6 +206,9 @@ jobs:
           GEMINI_FALLBACK_API_KEY: ${{ secrets.GEMINI_FALLBACK_API_KEY }}
           SMS_AI_WORKER_DB_PASSWORD: ${{ secrets.SMS_AI_WORKER_DB_PASSWORD }}
           SMS_AI_WORKER_DATABASE_URL: ${{ secrets.SMS_AI_WORKER_DATABASE_URL }}
+          SMS_V2_AI_SERVICE_URL: ${{ secrets.SMS_V2_AI_SERVICE_URL }}
+          SMS_V2_AI_SERVICE_TOKEN: ${{ secrets.SMS_V2_AI_SERVICE_TOKEN }}
+          SMS_V2_AI_SERVICE_PROMPT_VERSION: ${{ vars.SMS_V2_AI_SERVICE_PROMPT_VERSION }}
         run: |
           test -n "$NOTIFICATION_SERVICE_URL"
           test -n "$NOTIFICATION_SERVICE_API_KEY"
@@ -215,7 +218,7 @@ jobs:
             if [ -n "$GOOGLE_PLACES_API_KEY" ]; then
               printf 'export GOOGLE_PLACES_API_KEY=%q\n' "$GOOGLE_PLACES_API_KEY"
             fi
-            for name in GEMINI_API_KEY GEMINI_FALLBACK_API_KEY SMS_AI_WORKER_DB_PASSWORD SMS_AI_WORKER_DATABASE_URL; do
+            for name in GEMINI_API_KEY GEMINI_FALLBACK_API_KEY SMS_AI_WORKER_DB_PASSWORD SMS_AI_WORKER_DATABASE_URL SMS_V2_AI_SERVICE_URL SMS_V2_AI_SERVICE_TOKEN SMS_V2_AI_SERVICE_PROMPT_VERSION; do
               if [ -n "${!name}" ]; then
                 printf 'export %s=%q\n' "$name" "${!name}"
               fi

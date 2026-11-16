@@ -6,15 +6,16 @@
 // host (deploy/admin/compose.private.yml):
 //   node src/sms_v2/jobs/template_worker_main.js          (service, loops until SIGTERM)
 //   node src/sms_v2/jobs/template_worker_main.js --once   (one claim, then exit)
-// Needs SMS_AI_WORKER_DATABASE_URL (or ADMIN_API_DATABASE_URL + SMS_V2_JOB_ADMIN_ID), GEMINI_API_KEY (paid tier),
-// SMS_V2_AI_MODEL and SMS_V2_AI_TPM. Gemini sees only redacted layouts that pass
-// redactionError in ../ai_templates.js, never message text.
+// Uses SMS_AI_WORKER_DATABASE_URL (or ADMIN_API_DATABASE_URL + SMS_V2_JOB_ADMIN_ID).
+// With SMS_V2_AI_SERVICE_URL and SMS_V2_AI_SERVICE_TOKEN, sends only redacted
+// layouts to PandaPay AI. The legacy provider uses GEMINI_API_KEY.
 
 const fs = require("node:fs");
 const { setTimeout: delay } = require("node:timers/promises");
 const { openRuleAdminStore } = require("../admin_store");
 const { openAiWorkerStore } = require("../ai_worker_store");
 const { createAdminDbHelpers } = require("../../admin/server");
+const { createAiServiceProvider } = require("../ai_service_provider");
 const {
   workerConfig,
   createPgWorkerStore,
@@ -40,7 +41,7 @@ const {
 // "Other" (only if the admin switched shop suggestions on).
 async function runWorkerCycle({ layoutStore, suggestionStore, provider, config }) {
   const layout = await runTemplateWorkerOnce({ store: layoutStore, provider, config });
-  if (layout.status !== "idle" || !suggestionStore) return layout;
+  if (layout.status !== "idle" || !suggestionStore || typeof provider.generateLayout === "function") return layout;
   const shop = await runSuggestionOnce({ store: suggestionStore, provider, config });
   return shop.status === "disabled" ? layout : { ...shop, job: "shop" };
 }
@@ -84,7 +85,7 @@ function currentHeadroom(settings) {
 async function main() {
   const once = process.argv.includes("--once");
   const config = workerConfig();
-  const provider = createGeminiTemplateProvider();
+  const provider = createAiServiceProvider({ logger: (entry) => console.log(JSON.stringify(entry)) }) ?? createGeminiTemplateProvider();
   const stopping = new AbortController();
   const stopped = () => stopping.signal.aborted;
   const onSignal = () => stopping.abort();
