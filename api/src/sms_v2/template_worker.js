@@ -838,7 +838,8 @@ async function runTemplateWorkerOnce({
         families: [...new Set(rules.map((rule) => rule.family).filter(Boolean))],
       };
     }
-    for (let attempt = 1; attempt <= 2; attempt++) {
+    // The service gets only the layout, so a second try would repeat the same paid call: one attempt there.
+    for (let attempt = 1; attempt <= (layoutOnly ? 1 : 2); attempt++) {
       // In service mode this prompt is used locally for the capacity estimate only.
       const prompt = buildPrompt({ template, matcher, ...directContext, fix: layoutOnly ? [] : errors });
       const blocked = await store.beginAttempt(template, attempt, prompt.system + prompt.user, config);

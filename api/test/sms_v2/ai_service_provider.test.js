@@ -144,17 +144,26 @@ test("a configured prompt version is sent and recorded for the matching service 
   assert.equal(store.attempts[0].promptVersion, customVersion);
 });
 
-test("worker rejects invalid drafts and accounts for billed invalid provider output", async () => {
+test("worker rejects an invalid draft after one paid call (a retry would repeat the same request)", async () => {
   const store = makeStore();
   let calls = 0;
   const invalid = answer();
   invalid.emit[0].attrs.direction = "sideways";
-  const provider = createAiServiceProvider({ env, fetchImpl: async () => ++calls === 1
-    ? serviceJson({ answer: invalid, ...usage })
-    : serviceJson({ error: { code: "invalid_provider_output" }, ...usage }, { status: 502 }) });
+  const provider = createAiServiceProvider({ env, fetchImpl: async () => (++calls, serviceJson({ answer: invalid, ...usage })) });
   assert.equal((await runWorkerCycle({ layoutStore: store, provider, config })).status, "failed");
   assert.equal(store.finished[0].code, "draft_validation_failed");
-  assert.deepEqual(store.attempts.map((a) => [a.errorKind, a.costUsd]), [["validation", 0.0001], ["json_invalid", 0.0001]]);
+  assert.equal(calls, 1);
+  assert.deepEqual(store.attempts.map((a) => [a.errorKind, a.costUsd]), [["validation", 0.0001]]);
+});
+
+test("worker accounts for billed invalid provider output", async () => {
+  const store = makeStore();
+  let calls = 0;
+  const provider = createAiServiceProvider({ env, fetchImpl: async () => (++calls,
+    serviceJson({ error: { code: "invalid_provider_output" }, ...usage }, { status: 502 })) });
+  assert.equal((await runWorkerCycle({ layoutStore: store, provider, config })).status, "failed");
+  assert.equal(calls, 1);
+  assert.deepEqual(store.attempts.map((a) => [a.errorKind, a.costUsd]), [["json_invalid", 0.0001]]);
 });
 
 test("unsafe sender and wording cannot cross the service boundary", async () => {
