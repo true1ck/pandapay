@@ -8,7 +8,8 @@
 //   node src/sms_v2/jobs/template_worker_main.js --once   (one claim, then exit)
 // Uses SMS_AI_WORKER_DATABASE_URL (or ADMIN_API_DATABASE_URL + SMS_V2_JOB_ADMIN_ID).
 // With SMS_V2_AI_SERVICE_URL and SMS_V2_AI_SERVICE_TOKEN, sends only redacted
-// layouts to PandaPay AI. The legacy provider uses GEMINI_API_KEY.
+// layouts to PandaPay AI. Without them (or with a malformed token or URL) the
+// worker stays up and idle: drafting pauses, nothing else is affected.
 
 const fs = require("node:fs");
 const { setTimeout: delay } = require("node:timers/promises");
@@ -19,7 +20,6 @@ const { createAiServiceProvider } = require("../ai_service_provider");
 const {
   workerConfig,
   createPgWorkerStore,
-  createGeminiTemplateProvider,
   runTemplateWorkerOnce,
   busyWaitMs,
   PROMPT_VERSION,
@@ -82,10 +82,24 @@ function currentHeadroom(settings) {
   return { ...memoryHeadroom({ rssMb, availableMb }, settings), rssMb };
 }
 
+// The PandaPay AI client, or null (with a metadata-only log) when it is not set up or its settings are malformed.
+// Never throws: a bad setting must not crash-loop the container.
+function chooseProvider(log, env = process.env) {
+  try {
+    const provider = createAiServiceProvider({ env, logger: log });
+    if (provider) return provider;
+    log({ event: "sms_v2_ai_service", status: "not_configured" });
+  } catch (error) {
+    log({ event: "sms_v2_ai_service", status: "misconfigured", code: String(error?.message).slice(0, 60) });
+  }
+  return null;
+}
+
 async function main() {
   const once = process.argv.includes("--once");
   const config = workerConfig();
-  const provider = createAiServiceProvider({ logger: (entry) => console.log(JSON.stringify(entry)) }) ?? createGeminiTemplateProvider();
+  const log = (line) => console.log(JSON.stringify(line));
+  const provider = chooseProvider(log);
   const stopping = new AbortController();
   const stopped = () => stopping.signal.aborted;
   const onSignal = () => stopping.abort();
@@ -96,8 +110,15 @@ async function main() {
     delay(ms, undefined, { signal: stopping.signal }).catch((error) => {
       if (error.name !== "AbortError") throw error;
     });
-  // Metadata only. Templates, prompts and provider responses are private.
-  const log = (line) => console.log(JSON.stringify(line));
+  // No usable provider: idle until told to stop (the database is not touched). A fixed setting needs a restart.
+  if (!provider) {
+    if (once) return "stopped";
+    while (!stopped()) {
+      await sleep(300000);
+      if (!stopped()) log({ event: "sms_v2_ai_service", status: "idle_no_provider" });
+    }
+    return "stopped";
+  }
   // A database login that fails or a connection that is down for a while is waited out, not a reason to exit.
   const opened = await openPatiently({
     open: () => openStores(),
@@ -138,7 +159,7 @@ async function main() {
           // Layouts that failed through no fault of their own get another go (a few times each).
           try {
             if (typeof store.requeueFailed === "function")
-              console.log(JSON.stringify({ event: "sms_v2_ai_requeue", requeued: await store.requeueFailed(PROMPT_VERSION) }));
+              console.log(JSON.stringify({ event: "sms_v2_ai_requeue", requeued: await store.requeueFailed(provider.promptVersion ?? PROMPT_VERSION) }));
           } catch (error) {
             console.error("SMS v2 AI requeue failed", error.code || error.name);
           }
@@ -182,4 +203,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { main, runWorkerCycle, openStores };
+module.exports = { main, runWorkerCycle, openStores, chooseProvider };
