@@ -9,6 +9,7 @@ import '../sms_v2/ui/review_controller.dart';
 import '../sms_v2/ui/transaction_actions.dart';
 import '../sms_v2/ui/why_sheet.dart';
 import 'package:flutter/material.dart';
+import '../../data/local/financial_store.dart';
 import 'dart:async';
 import '../sync/sync_engine.dart';
 import 'dart:convert';
@@ -244,7 +245,12 @@ final transactionDetailProvider =
                   )) {
                     return;
                   }
-                  _freshTransactionDetails[id] = row;
+                  // The server builds its copy from what was uploaded and can
+                  // know less than this phone read from its own SMS.
+                  _freshTransactionDetails[id] = FinancialStore.keepPhoneReading(
+                    row,
+                    fallback,
+                  );
                   ref.invalidateSelf();
                 })
                 .catchError((_) {}),

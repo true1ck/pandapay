@@ -778,6 +778,24 @@ class FinancialStore {
     });
   }
 
+  /// [server], a copy fetched to be shown (not saved), with the phone's own
+  /// reading of the same SMS payment kept from [phone] where the server says
+  /// less: the same rule [saveTransactions] applies to saved rows. Screens that
+  /// paint the saved row and then the server copy use it, or the payment method
+  /// flips back to "not matched" a moment after it appears.
+  static TransactionEntry keepPhoneReading(
+    TransactionEntry server,
+    TransactionEntry? phone,
+  ) {
+    if (phone == null) return server;
+    if (server.eventId != null &&
+        phone.eventId != null &&
+        server.eventId != phone.eventId) {
+      return server;
+    }
+    return _keepPhoneReading(server, _phoneReadingOf(jsonEncode(phone.toJson())));
+  }
+
   static TransactionEntry _remapOntoLocal(
     TransactionEntry row,
     String localId,

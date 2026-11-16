@@ -25,7 +25,7 @@ import '../../data/catalogue_repository.dart'
 import '../../data/merchant_category_rules_repository.dart';
 import '../../data/user_cards_repository.dart';
 import '../../data/self_transfer.dart';
-import '../../data/local/financial_store.dart' show canonicalBankSender;
+import '../../data/local/financial_store.dart' show FinancialStore, canonicalBankSender;
 import '../../data/local/self_transfer_rules.dart';
 import '../../data/local/sms_intake_repository.dart';
 import '../../data/connectivity/reachability.dart';
@@ -1492,7 +1492,13 @@ final _editTransactionProvider =
         throw ApiException('Not signed in');
       }
       try {
-        return await repo.fetchTransaction(id);
+        // The phone's own SMS reading is kept where the server copy says less,
+        // so saving an edit never sends "not matched" back as the person's
+        // choice of payment method.
+        return FinancialStore.keepPhoneReading(
+          await repo.fetchTransaction(id),
+          cached,
+        );
       } catch (_) {
         if (cached != null) return cached;
         rethrow;

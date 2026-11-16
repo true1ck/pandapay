@@ -111,4 +111,17 @@ void main() {
     ]);
     expect(only()['instrument'], 'other');
   });
+
+  test('a server copy shown on a screen keeps the phone\'s reading too', () {
+    final shown = FinancialStore.keepPhoneReading(serverRow(), phoneRow());
+    expect(shown.instrument, TxnInstrument.creditCard);
+    expect(shown.cardLast4, '2837');
+    expect(shown.userCardId, 'wallet-sbi');
+    expect(shown.smsReceivedAt, isNotNull);
+    expect(shown.note, 'set on another phone');
+    // Another transaction's row is never mixed in.
+    final other = TransactionEntry.fromJson({...phoneRow().toJson(), 'event_id': 'e2'});
+    expect(FinancialStore.keepPhoneReading(serverRow(), other).instrument, TxnInstrument.other);
+    expect(FinancialStore.keepPhoneReading(serverRow(), null).instrument, TxnInstrument.other);
+  });
 }
