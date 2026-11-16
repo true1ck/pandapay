@@ -35,7 +35,7 @@ void main() {
         unreadOnPhone: 0,
         openItems: 4,
       );
-      expect(s.title, 'Gemini status unavailable');
+      expect(s.title, 'AI status unavailable');
       expect(s.detail, contains('Could not reach the server'));
     });
 
@@ -59,7 +59,7 @@ void main() {
         offline: true,
         sharingOff: true,
       );
-      expect(s.title, 'Gemini is off: sharing is off on this phone');
+      expect(s.title, 'AI is off: sharing is off on this phone');
     });
   });
 
@@ -130,7 +130,7 @@ void main() {
       tester,
     ) async {
       final asked = await pumpBar(tester, online: true);
-      expect(find.text('Gemini status unavailable'), findsOneWidget);
+      expect(find.text('AI status unavailable'), findsOneWidget);
       final first = asked();
       await tester.pump(const Duration(seconds: 35));
       expect(asked(), greaterThan(first));

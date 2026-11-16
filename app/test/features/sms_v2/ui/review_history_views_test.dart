@@ -77,7 +77,7 @@ void main() {
       expect(lists.history.single.byUser, isTrue);
       // Rule reads are silent; only the Gemini one (c) is listed.
       expect(lists.auto.map((i) => i.entry.id), ['c']);
-      expect(lists.auto.single.how, 'Read by a Gemini AI rule, verified');
+      expect(lists.auto.single.how, 'Read by an AI rule, verified');
       expect(lists.auto.single.source, SettledSource.ai);
     },
   );
@@ -100,7 +100,7 @@ void main() {
       },
       now: now,
     );
-    expect(lists.auto.single.how, 'Read by a Gemini AI rule, not yet verified');
+    expect(lists.auto.single.how, 'Read by an AI rule, not yet verified');
   });
 
   test('old, unsourced and non-v2 transactions are left out', () {
@@ -289,7 +289,7 @@ void main() {
                     entry: _entry('g', 'sg', DateTime(2026, 11, 8)),
                     byUser: false,
                     source: SettledSource.ai,
-                    how: 'Read by a Gemini AI rule, verified',
+                    how: 'Read by an AI rule, verified',
                   ),
                 ],
               ),
@@ -301,9 +301,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.textContaining('Filed by Gemini AI'), findsOneWidget);
+      expect(find.textContaining('Filed by AI'), findsOneWidget);
       expect(find.text('Shop g'), findsOneWidget);
-      expect(find.text('Read by a Gemini AI rule, verified'), findsOneWidget);
+      expect(find.text('Read by an AI rule, verified'), findsOneWidget);
     },
   );
 
@@ -321,7 +321,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.textContaining('Nothing filed by Gemini yet'), findsOneWidget);
+    expect(find.textContaining('Nothing filed by AI yet'), findsOneWidget);
   });
 
   group('the Gemini status bar', () {
@@ -337,7 +337,7 @@ void main() {
           openItems: 4,
         );
         expect(s.tone, GeminiTone.unknown);
-        expect(s.title, 'Gemini status unavailable');
+        expect(s.title, 'AI status unavailable');
         expect(s.detail, contains('4 still need you'));
         expect(s.progress, isFalse);
       },
@@ -353,13 +353,13 @@ void main() {
           openItems: 1,
         );
         expect(s.tone, GeminiTone.ok);
-        expect(s.title, 'Gemini is checking 2 message formats');
+        expect(s.title, 'AI is checking 2 message formats');
         expect(s.progress, isTrue);
       },
     );
 
     test(
-      'a phone that is not counted says Gemini is not receiving its formats',
+      'a phone that is not counted says AI is not receiving its formats',
       () {
         final s = geminiBarState(
           server: const AiServerStatus(
@@ -373,7 +373,7 @@ void main() {
           openItems: 0,
         );
         expect(s.tone, GeminiTone.warn);
-        expect(s.title, 'Gemini is not receiving your message formats yet');
+        expect(s.title, 'AI is not receiving your message formats yet');
         expect(s.detail, contains('12 formats held back'));
         expect(s.detail, contains('Nothing for you to do'));
         // No roles or owners are ever asked of the person.
@@ -411,7 +411,7 @@ void main() {
           openItems: 0,
         );
         expect(s.tone, GeminiTone.ok);
-        expect(s.title, 'Gemini is working');
+        expect(s.title, 'AI is working');
         expect(s.detail, '1 drafting · 2 waiting · 2 answered · 0 applied here · 1 failed');
         expect(s.progress, isTrue);
       },
@@ -431,7 +431,7 @@ void main() {
           unreadOnPhone: 0,
           openItems: 0,
         );
-        expect(s.title, 'Gemini is working');
+        expect(s.title, 'AI is working');
       },
     );
 
@@ -451,7 +451,7 @@ void main() {
           openItems: 0,
         );
         expect(s.tone, GeminiTone.warn);
-        expect(s.title, 'Gemini could not draft 1 format');
+        expect(s.title, 'AI could not draft 1 format');
         // Says what happens next, so a failure is not a dead end.
         expect(s.detail, contains('stay in Needs review'));
         expect(s.detail, contains('2 answered · 0 applied here · 1 failed'));
@@ -493,7 +493,7 @@ void main() {
           sharingOff: true,
         );
         expect(s.tone, GeminiTone.warn);
-        expect(s.title, 'Gemini is off: sharing is off on this phone');
+        expect(s.title, 'AI is off: sharing is off on this phone');
         expect(s.detail, contains('Help PandaPay read messages'));
         expect(s.progress, isFalse);
       }
@@ -521,7 +521,7 @@ void main() {
         unreadOnPhone: 0,
         openItems: 0,
       );
-      expect(s.title, 'Gemini is on');
+      expect(s.title, 'AI is on');
       expect(s.detail, '4 formats sent · 4 answered · 0 applied here · 0 held back');
       expect(s.progress, isFalse);
     });
@@ -587,7 +587,7 @@ void main() {
       );
       expect(find.byKey(const Key('gemini-status-bar')), findsOneWidget);
       expect(
-        find.text('Gemini is not receiving your message formats yet'),
+        find.text('AI is not receiving your message formats yet'),
         findsOneWidget,
       );
       expect(find.byType(LinearProgressIndicator), findsNothing);
@@ -607,7 +607,7 @@ void main() {
         sharing: false,
       );
       expect(
-        find.text('Gemini is off: sharing is off on this phone'),
+        find.text('AI is off: sharing is off on this phone'),
         findsOneWidget,
       );
       expect(find.textContaining('done'), findsNothing);
@@ -624,7 +624,7 @@ void main() {
           queued: 1,
         ),
       );
-      expect(find.text('Gemini is working'), findsOneWidget);
+      expect(find.text('AI is working'), findsOneWidget);
       expect(find.byType(LinearProgressIndicator), findsOneWidget);
     });
   });

@@ -433,7 +433,7 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
                 ),
               ),
             ),
-            // Always shown, on every tab: whether Gemini is working or not.
+            // Always shown, on every tab: whether AI is working or not.
             GeminiStatusBar(
               openItems: (review.valueOrNull?.length ?? 0) - aiItems.length,
             ),
@@ -629,7 +629,7 @@ class _ReviewInboxListState extends State<ReviewInboxList> {
       ),
       children: [
         const BambooNote(
-          'Messages PandaPay cannot read yet are sent to Gemini (numbers changed) so it can learn their format. A format choice applies to every message in that group.',
+          'Messages PandaPay cannot read yet are sent to an AI service (numbers changed) so it can learn their format. A format choice applies to every message in that group.',
         ),
         ?widget.header,
         if (widget.busy)

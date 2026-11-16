@@ -125,8 +125,8 @@ SettledLists settledLists(
           : switch (reader) {
               SettledSource.ai =>
                 unverified
-                    ? 'Read by a Gemini AI rule, not yet verified'
-                    : 'Read by a Gemini AI rule, verified',
+                    ? 'Read by an AI rule, not yet verified'
+                    : 'Read by an AI rule, verified',
               SettledSource.onDevice => 'Read by the on-device reader',
               SettledSource.rule => 'Read by a rule',
             },
@@ -231,7 +231,7 @@ class SettledList extends ConsumerWidget {
           return SmsEmpty(
             history
                 ? 'Nothing settled by you yet. Messages you confirm or fix appear here, so you can change them again.'
-                : 'Nothing filed by Gemini yet. Messages Gemini AI sorted without asking appear here, so you can correct a wrong guess.',
+                : 'Nothing filed by AI yet. Messages AI sorted without asking appear here, so you can correct a wrong guess.',
             icon: history ? Icons.history_rounded : Icons.auto_awesome_outlined,
           );
         }
@@ -253,7 +253,7 @@ class SettledList extends ConsumerWidget {
                 ? BambooNote(
                     history
                         ? 'Things you confirmed or fixed, last 90 days. Open one to change it again.'
-                        : 'Filed by Gemini AI without asking you, last 90 days. Open one if it is wrong.',
+                        : 'Filed by AI without asking you, last 90 days. Open one if it is wrong.',
                     icon: Icons.info_outline_rounded,
                   )
                 : SettledCard(item: items[i - 1]),
@@ -429,9 +429,9 @@ GeminiBarState geminiBarState({
   if (sharingOff) {
     return const GeminiBarState(
       tone: GeminiTone.warn,
-      title: 'Gemini is off: sharing is off on this phone',
+      title: 'AI is off: sharing is off on this phone',
       detail:
-          'Gemini only sees anonymised message layouts you agree to share. '
+          'The AI only sees anonymised message layouts you agree to share. '
           'Turn on "Help PandaPay read messages" to let it work.',
     );
   }
@@ -445,7 +445,7 @@ GeminiBarState geminiBarState({
         tone: GeminiTone.unknown,
         title: "You're offline",
         detail:
-            "Gemini's status will show again when you're back online. "
+            "The AI status will show again when you're back online. "
             'This phone knows: '
             '${waiting > 0 ? '$waiting waiting · ' : ''}$read read by AI'
             '${unreadOnPhone > 0 ? ' · $unreadOnPhone could not be read' : ''}'
@@ -455,7 +455,7 @@ GeminiBarState geminiBarState({
     if (waiting > 0) {
       return GeminiBarState(
         tone: GeminiTone.ok,
-        title: 'Gemini is checking ${plural(waiting, 'message format')}',
+        title: 'AI is checking ${plural(waiting, 'message format')}',
         detail:
             'From this phone: $waiting waiting · $read read by AI · '
             '$openItems still need you',
@@ -464,7 +464,7 @@ GeminiBarState geminiBarState({
     }
     return GeminiBarState(
       tone: GeminiTone.unknown,
-      title: 'Gemini status unavailable',
+      title: 'AI status unavailable',
       detail:
           'Could not reach the server. This phone knows: $read read by AI'
           '${unreadOnPhone > 0 ? ' · $unreadOnPhone could not be read' : ''}'
@@ -474,7 +474,7 @@ GeminiBarState geminiBarState({
   if (!server.countedNow && server.inProgress == 0) {
     return GeminiBarState(
       tone: GeminiTone.warn,
-      title: 'Gemini is not receiving your message formats yet',
+      title: 'AI is not receiving your message formats yet',
       detail: server.held > 0
           ? '${plural(server.held, 'format')} held back: AI drafts are not '
                 'switched on for this phone yet. Nothing for you to do; they '
@@ -486,7 +486,7 @@ GeminiBarState geminiBarState({
   if (server.inProgress > 0) {
     return GeminiBarState(
       tone: GeminiTone.ok,
-      title: 'Gemini is working',
+      title: 'AI is working',
       detail:
           '${server.working} drafting · ${server.queued} waiting · '
           '${server.ready + server.covered} answered · $applied applied here · '
@@ -497,7 +497,7 @@ GeminiBarState geminiBarState({
   if (server.failed > 0) {
     return GeminiBarState(
       tone: GeminiTone.warn,
-      title: 'Gemini could not draft ${plural(server.failed, 'format')}',
+      title: 'AI could not draft ${plural(server.failed, 'format')}',
       detail:
           '${server.ready + server.covered} answered · $applied applied here · '
           '${server.failed} failed'
@@ -510,13 +510,13 @@ GeminiBarState geminiBarState({
   if (server.total == 0) {
     return const GeminiBarState(
       tone: GeminiTone.ok,
-      title: 'Gemini is on',
+      title: 'AI is on',
       detail: 'No unreadable message formats have been sent yet.',
     );
   }
   return GeminiBarState(
     tone: GeminiTone.ok,
-    title: 'Gemini is on',
+    title: 'AI is on',
     detail:
         '${plural(server.total, 'format')} sent · '
         '${server.ready + server.covered} answered · $applied applied here · '
@@ -553,7 +553,7 @@ final geminiServerStatusProvider = FutureProvider.autoDispose<AiServerStatus?>((
   return status;
 });
 
-/// A bar at the top of Needs review that says whether Gemini is working: how
+/// A bar at the top of Needs review that says whether AI is working: how
 /// many formats it is drafting or waiting on, how many are done or failed, and
 /// whether this phone's formats are reaching it at all.
 class GeminiStatusBar extends ConsumerStatefulWidget {
