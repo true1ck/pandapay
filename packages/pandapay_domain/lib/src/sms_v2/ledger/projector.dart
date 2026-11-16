@@ -238,11 +238,30 @@ class DefaultLedgerProjector implements LedgerProjector {
       for (final leg in event.legs) {
         if (leg.role != LegRole.duplicateNotice) continue;
         final receipt = factsById[leg.factId];
-        if (receipt is! MovementFact ||
-            receipt.evidenceOnly != true ||
-            receipt.purpose != MovementPurpose.cardPayment) {
+        if (receipt is! MovementFact || receipt.evidenceOnly != true) {
           continue;
         }
+        // The card's own issuer says "repayment received for the <issuer> credit
+        // card" without a number: the card the notice is about is the one card of
+        // that issuer, when there is exactly one.
+        final said = receipt.instrument;
+        if (said != null &&
+            said.kind == InstrumentKind.creditCard &&
+            said.issuerSlug != null &&
+            (receipt.purpose == MovementPurpose.cardPayment ||
+                receipt.purpose == MovementPurpose.billPayment)) {
+          final fits = instrumentsById.values
+              .where(
+                (i) =>
+                    i.kind == InstrumentKind.creditCard &&
+                    i.status != InstrumentStatus.rejected &&
+                    i.issuerSlug == said.issuerSlug &&
+                    (said.maskDigits == null || i.maskDigits == said.maskDigits),
+              )
+              .toList();
+          if (fits.length == 1) return fits.single;
+        }
+        if (receipt.purpose != MovementPurpose.cardPayment) continue;
         final mask = receipt.counterparty?.accountMask;
         if (mask == null || mask.isEmpty) continue;
         final name = normalizeMerchantText(receipt.counterparty?.name ?? '');
