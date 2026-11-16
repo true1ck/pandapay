@@ -66,7 +66,7 @@ class PrivateJobsTest(unittest.TestCase):
 
     def test_isolated_ai_credentials_are_scoped_to_the_worker(self):
         worker = service(PUBLIC, 'sms-v2-template-worker')
-        self.assertIn('stop_grace_period: 40s', worker)
+        self.assertIn('stop_grace_period: 130s', worker)
         rest = PUBLIC.replace(worker, '')
         for key in ('SMS_V2_AI_SERVICE_URL', 'SMS_V2_AI_SERVICE_TOKEN', 'SMS_V2_AI_SERVICE_PROMPT_VERSION'):
             self.assertIn(key, worker)

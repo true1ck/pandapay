@@ -116,7 +116,8 @@ test("worker requeues service outages with Retry-After and resumes when availabl
 
 test("worker holds mismatched models and incompatible service responses safely", async () => {
   for (const response of [
-    serviceJson({ answer: answer(), ...usage, model: "different-model" }),
+    serviceJson({ answer: answer(), ...usage, model: "bad model!" }),
+    serviceJson({ error: { code: "bad_gateway_timeout" } }, { status: 524 }),
     serviceJson({ answer: answer(), ...usage, totalTokens: -1 }),
     serviceJson({ error: { code: "wrong_token" } }, { status: 401 }),
     serviceJson({ error: { code: "config_mismatch" } }, { status: 412 }),
@@ -195,4 +196,42 @@ test("layout-only service cannot be used for merchant suggestions", async () => 
     config,
   });
   assert.deepEqual(result, { status: "idle" });
+});
+
+test("a fallback AI may answer: its model is accepted and recorded, and cost is not guessed", async () => {
+  const store = makeStore();
+  const provider = createAiServiceProvider({ env, fetchImpl: async () => serviceJson({ answer: answer(), ...usage, model: "openai/gpt-oss-20b" }) });
+  assert.equal((await runWorkerCycle({ layoutStore: store, provider, config })).status, "ready");
+  assert.equal(store.finished[0].model, "openai/gpt-oss-20b");
+  assert.equal(store.finished[0].rule.createdBy, "ai:openai/gpt-oss-20b");
+  assert.equal(store.attempts[0].costUsd, null);
+});
+
+test("a timeout puts the layout back in the queue and is named as a timeout", async () => {
+  const store = makeStore();
+  const logs = [];
+  const provider = createAiServiceProvider({
+    env,
+    logger: (entry) => logs.push(entry),
+    fetchImpl: async () => { throw new DOMException("timed out", "TimeoutError"); },
+  });
+  const result = await runWorkerCycle({ layoutStore: store, provider, config });
+  assert.equal(result.status, "provider_busy");
+  assert.equal(store.finished[0].requeue, true);
+  assert.equal(logs[0].outcome, "ai_service_timeout");
+});
+
+test("the wait is configurable (5-170 s, default 100 s) and every request carries an idempotency key", async () => {
+  for (const bad of ["1000", "171000", "abc"])
+    assert.throws(() => createAiServiceProvider({ env: { ...env, SMS_V2_AI_SERVICE_TIMEOUT_MS: bad } }), /TIMEOUT_MS_invalid/);
+  let key;
+  const provider = createAiServiceProvider({
+    env: { ...env, SMS_V2_AI_SERVICE_TIMEOUT_MS: "150000" },
+    fetchImpl: async (_url, options) => {
+      key = new Headers(options.headers).get("x-idempotency-key");
+      return serviceJson({ answer: answer(), ...usage });
+    },
+  });
+  await runWorkerCycle({ layoutStore: makeStore(), provider, config });
+  assert.match(key, /^[a-f0-9]{64}$/);
 });

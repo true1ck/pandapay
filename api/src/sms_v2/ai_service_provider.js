@@ -1,12 +1,16 @@
 "use strict";
 
-const { randomUUID } = require("node:crypto");
+const { createHash, randomUUID } = require("node:crypto");
 const { redactionError } = require("./ai_templates");
 const { LayoutError } = require("./layout_matcher");
 const { ProviderBusyError, providerDelayMs } = require("./template_worker");
 
 const DEFAULT_PROMPT_VERSION = "sms-rule-draft-v1.0.0";
 const MAX_RESPONSE_BYTES = 256 * 1024;
+// The service may fall back across several AIs, so a call can take a while. The worker is a background process and the
+// layout lease is 3 minutes: wait up to 100 s by default, never more than 170 s.
+const DEFAULT_TIMEOUT_MS = 100000;
+const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9_.:\/-]{0,99}$/;
 const POSTGRES_INTEGER_MAX = 2147483647;
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const SERVICE_LAYOUT_UNSAFE = /[\x00-\x1f\x7f\p{Nd}@]/u;
@@ -61,6 +65,9 @@ function createAiServiceProvider({ env = process.env, fetchImpl = fetch, logger 
   const endpoint = serviceEndpoint(rawUrl);
   if (typeof token !== "string" || !/^[A-Za-z0-9_-]{32,512}$/.test(token))
     throw new Error("SMS_V2_AI_SERVICE_TOKEN_invalid");
+  const timeoutMs = Number(env.SMS_V2_AI_SERVICE_TIMEOUT_MS || DEFAULT_TIMEOUT_MS);
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 5000 || timeoutMs > 170000)
+    throw new Error("SMS_V2_AI_SERVICE_TIMEOUT_MS_invalid");
   const promptVersion = env.SMS_V2_AI_SERVICE_PROMPT_VERSION || DEFAULT_PROMPT_VERSION;
   if (!/^[a-zA-Z0-9_.-]{1,64}$/.test(promptVersion))
     throw new Error("SMS_V2_AI_SERVICE_PROMPT_VERSION_invalid");
@@ -84,11 +91,14 @@ function createAiServiceProvider({ env = process.env, fetchImpl = fetch, logger 
         response = await fetchImpl(endpoint, {
           method: "POST",
           redirect: "error",
-          signal: AbortSignal.timeout(25000),
+          signal: AbortSignal.timeout(timeoutMs),
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
             "X-Request-ID": requestId,
+            // The same layout always carries the same key, so the service can recognise a retry of work it already did.
+            "X-Idempotency-Key": createHash("sha256").update(`${senderBrand}
+${redactedBody}`).digest("hex"),
             "X-Prompt-Version": promptVersion,
             "X-Expected-Model": model,
             "X-Expected-Max-Output-Tokens": String(maxOutputTokens),
@@ -97,7 +107,8 @@ function createAiServiceProvider({ env = process.env, fetchImpl = fetch, logger 
         });
         if (!response.ok && ![422, 502].includes(response.status)) {
           await response.body?.cancel();
-          if ([408, 425, 429, 500, 503, 504].includes(response.status))
+          // Any 5xx (a proxy gives 520-524 when the service is slow or restarting) is the service being unavailable, not a bad setup.
+          if ([408, 425, 429].includes(response.status) || response.status >= 500)
             throw busy("ai_service_unavailable", 15000);
           if (response.status === 409) throw busy("ai_service_prompt_version_mismatch", 300000);
           if (response.status === 412) throw busy("ai_service_config_mismatch", 300000);
@@ -113,20 +124,21 @@ function createAiServiceProvider({ env = process.env, fetchImpl = fetch, logger 
           if (body?.error?.code !== "invalid_provider_output") throw busy("ai_service_unavailable", 15000);
           if (response.headers.get("x-prompt-version") !== promptVersion)
             throw busy("ai_service_prompt_version_mismatch", 300000);
-          if (body.model !== undefined && body.model !== model) throw busy("ai_service_model_mismatch", 300000);
           throw Object.assign(new SyntaxError("ai_service_invalid_provider_output"), {
-            usage: body.model === model ? usage : null,
+            usage: usage && MODEL_ID.test(body.model ?? "") ? { ...usage, model: body.model } : null,
           });
         }
         if (response.headers.get("x-prompt-version") !== promptVersion)
           throw busy("ai_service_prompt_version_mismatch", 300000);
         if (!usage || typeof body?.model !== "string" || !body.answer || typeof body.answer !== "object" || Array.isArray(body.answer))
           throw busy("ai_service_invalid_response", 300000);
-        if (body.model !== model) throw busy("ai_service_model_mismatch", 300000);
-        return { answer: body.answer, ...usage };
+        // A fallback AI may answer instead of the primary one: accept it and record which model it was.
+        if (!MODEL_ID.test(body.model)) throw busy("ai_service_invalid_response", 300000);
+        return { answer: body.answer, model: body.model, ...usage };
       } catch (error) {
         const known = error instanceof ProviderBusyError || error instanceof SyntaxError || error instanceof LayoutError;
-        const failure = known ? error : busy("ai_service_unreachable", 15000);
+        // A timeout is retried like any outage (the layout goes back in the queue); it is named apart so it can be counted.
+        const failure = known ? error : error?.name === "TimeoutError" ? busy("ai_service_timeout", 30000) : busy("ai_service_unreachable", 15000);
         outcome = failure.message;
         throw failure;
       } finally {

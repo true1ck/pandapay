@@ -856,6 +856,8 @@ async function runTemplateWorkerOnce({
       let response;
       let busy = null;
       let layoutError = null;
+      // The model that really answered: the service may fall back to another AI than the one pinned in config.
+      let answeredModel = config.model;
       try {
         response = layoutOnly
           ? await provider.generateLayout({ ...layout, model: config.model, maxOutputTokens: config.maxOutputTokens })
@@ -867,8 +869,9 @@ async function runTemplateWorkerOnce({
               temperature: config.temperature,
             });
         const answer = typeof response.answer === "string" ? JSON.parse(response.answer) : response.answer;
-        const rule = buildRule(answer, template, matcher, config.model);
-        errors = await validateDraftSafely(rule, template, config.model, []);
+        if (layoutOnly && typeof response.model === "string") answeredModel = response.model;
+        const rule = buildRule(answer, template, matcher, answeredModel);
+        errors = await validateDraftSafely(rule, template, answeredModel, []);
         failure = errors.length ? { kind: "validation", codes: errors, status: null } : null;
         if (!errors.length) draft = rule;
       } catch (error) {
@@ -901,6 +904,7 @@ async function runTemplateWorkerOnce({
         errorCodes: failure?.codes ?? null,
         httpStatus: failure?.status ?? null,
         costUsd:
+          answeredModel !== config.model ||
           config.inputPrice === null ||
           config.outputPrice === null ||
           !Number.isSafeInteger(response?.totalTokens)
@@ -937,7 +941,7 @@ async function runTemplateWorkerOnce({
         return { status: "provider_busy", retryAfterMs: busy.retryAfterMs || 0, providerStatus: busy.status };
       }
       if (!errors.length) {
-        await store.finish(template, { rule: draft, model: config.model });
+        await store.finish(template, { rule: draft, model: answeredModel });
         return { status: "ready", templateHash: template.template_hash, gapSeconds };
       }
     }

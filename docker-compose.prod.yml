@@ -237,7 +237,8 @@ services:
   # db-migrate from SMS_AI_WORKER_DB_PASSWORD); api/auth/rewards-worker get neither.
   sms-v2-template-worker:
     profiles: [sms-ai]
-    stop_grace_period: 40s
+    # A call to the AI service can take up to its timeout (100 s by default); let it finish before a stop.
+    stop_grace_period: 130s
     build:
       context: ./api
     command: ["node", "src/sms_v2/jobs/template_worker_main.js"]
@@ -270,6 +271,7 @@ services:
       SMS_V2_AI_SERVICE_URL: "${SMS_V2_AI_SERVICE_URL:-}"
       SMS_V2_AI_SERVICE_TOKEN: "${SMS_V2_AI_SERVICE_TOKEN:-}"
       SMS_V2_AI_SERVICE_PROMPT_VERSION: "${SMS_V2_AI_SERVICE_PROMPT_VERSION:-}"
+      SMS_V2_AI_SERVICE_TIMEOUT_MS: "${SMS_V2_AI_SERVICE_TIMEOUT_MS:-}"
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
       # Optional second key (and more, comma separated in GEMINI_API_KEYS): used in turn, and when one hits a limit.
       GEMINI_FALLBACK_API_KEY: "${GEMINI_FALLBACK_API_KEY:-}"
