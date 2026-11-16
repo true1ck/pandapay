@@ -113,3 +113,22 @@ The test-only define selected a fresh Flutter compiler cache key when the existi
 | Provider expansion | Groq, Cloudflare Workers AI, and Experiential Labs are the next candidates for synthetic benchmarks. NVIDIA Build, OpenRouter, and OpenAI are later candidates. |
 
 Before enabling production jobs, review the provider's data handling, configure the production worker, and monitor the first small rollout for queue age, errors, draft quality, and usage. To pause, use the existing drafting toggle. For an explicit rollback to direct Gemini, remove both service connection settings on the worker and verify the legacy provider and optional wording policy before resuming. The PostgreSQL queue stays in place for either mode.
+## Experiential Labs fallback
+
+Gemini stays first for SMS rule drafts. To enable the optional fallback, set
+`EXPLABS_API_KEY` and `PANDAPAY_AI_EXPERIENTIAL_FREE_MODEL` on the isolated AI
+service. Set `SMS_V2_AI_EXPERIENTIAL_FREE_MODEL` to the same value on the
+PandaPay worker after applying the updated database role setup.
+
+`auto:free` checks the catalog's current visible Free promotions for Jev
+(`jev-latest`), Clef, and GPT-6 Luna. The model must support chat and have an
+eligible zero-retention route. A pinned `:free` alias must pass the same check.
+Before enabling SMS layouts, confirm the
+Experiential organization's provider policy requires zero-data-retention
+routing and prompt and response storage is off. Smoke-test with synthetic
+data on the deployment credential.
+
+Only the explicit `:free` alias is sent. If Gemini fails and Experiential
+has no eligible free route or has reached quota, the worker requeues the
+draft using its existing retry behavior. Successful fallback attempts record
+the free model and its zero inference charge in PostgreSQL.

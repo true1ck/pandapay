@@ -114,6 +114,45 @@ test("worker requeues service outages with Retry-After and resumes when availabl
   assert.equal((await runWorkerCycle({ layoutStore: store, provider, config })).status, "ready");
 });
 
+test("automatic free mode records the actual free model and its zero cost", async () => {
+  const model = "clef:free";
+  const store = makeStore();
+  const provider = createAiServiceProvider({
+    env: { ...env, SMS_V2_AI_EXPERIENTIAL_FREE_MODEL: "auto:free" },
+    fetchImpl: async (_url, { headers }) => {
+      assert.equal(new Headers(headers).get("x-allow-experiential-free"), "auto:free");
+      return serviceJson({ answer: answer(), ...usage, model, provider: "experiential" });
+    },
+  });
+  assert.equal((await runWorkerCycle({ layoutStore: store, provider, config })).status, "ready");
+  assert.equal(store.finished[0].model, "experiential:clef:free");
+  assert.equal(store.finished[0].rule.createdBy, "ai:experiential:clef:free");
+  assert.equal(store.attempts[0].model, "experiential:clef:free");
+  assert.equal(store.attempts[0].costUsd, 0);
+});
+
+test("an Experiential draft needs the exact free alias and valid usage", async () => {
+  const model = "clef:free";
+  assert.throws(() => createAiServiceProvider({ env: { ...env, SMS_V2_AI_EXPERIENTIAL_FREE_MODEL: "clef" } }),
+    /SMS_V2_AI_EXPERIENTIAL_FREE_MODEL_invalid/);
+  for (const [freeModel, overrides] of [
+    [undefined, {}],
+    ["other:free", {}],
+    [model, { totalTokens: 49 }],
+    [model, { model: config.model }],
+    ["auto:free", { model: "auto:free" }],
+    ["auto:free", { model: "clef" }],
+  ]) {
+    const store = makeStore();
+    const provider = createAiServiceProvider({
+      env: { ...env, SMS_V2_AI_EXPERIENTIAL_FREE_MODEL: freeModel },
+      fetchImpl: async () => serviceJson({ answer: answer(), ...usage, model, provider: "experiential", ...overrides }),
+    });
+    assert.equal((await runWorkerCycle({ layoutStore: store, provider, config })).status, "provider_busy");
+    assert.equal(store.finished[0].requeue, true);
+  }
+});
+
 test("worker holds mismatched models and incompatible service responses safely", async () => {
   for (const response of [
     serviceJson({ answer: answer(), ...usage, model: "different-model" }),

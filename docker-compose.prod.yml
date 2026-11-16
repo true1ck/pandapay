@@ -269,6 +269,7 @@ services:
       SMS_AI_WORKER_DATABASE_URL: "${SMS_AI_WORKER_DATABASE_URL:-}"
       SMS_V2_AI_SERVICE_URL: "${SMS_V2_AI_SERVICE_URL:-}"
       SMS_V2_AI_SERVICE_TOKEN: "${SMS_V2_AI_SERVICE_TOKEN:-}"
+      SMS_V2_AI_EXPERIENTIAL_FREE_MODEL: "${SMS_V2_AI_EXPERIENTIAL_FREE_MODEL:-}"
       SMS_V2_AI_SERVICE_PROMPT_VERSION: "${SMS_V2_AI_SERVICE_PROMPT_VERSION:-}"
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
       # Optional second key (and more, comma separated in GEMINI_API_KEYS): used in turn, and when one hits a limit.

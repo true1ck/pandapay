@@ -17,7 +17,7 @@ const skip = loopSkip || !workerUrl;
 const token = "synthetic_database_service_token_for_testing";
 const promptVersion = "sms-rule-draft-v1.0.0";
 
-async function setup(t, respond) {
+async function setup(t, respond, fallbackModel) {
   // This harness clears shared SMS tables, so require the throwaway loopback DB.
   for (const key of ["SMS_V2_TEST_DATABASE_URL", "SMS_V2_TEST_ADMIN_DATABASE_URL", "SMS_V2_TEST_AI_WORKER_DATABASE_URL"]) {
     const url = new URL(process.env[key]);
@@ -35,6 +35,7 @@ async function setup(t, respond) {
       assert.equal(request.url, "/v1/sms-rule-drafts");
       assert.equal(request.headers.authorization, `Bearer ${token}`);
       assert.equal(request.headers["x-prompt-version"], promptVersion);
+      assert.equal(request.headers["x-allow-experiential-free"], fallbackModel);
       const chunks = [];
       for await (const chunk of request) chunks.push(chunk);
       const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
@@ -56,6 +57,7 @@ async function setup(t, respond) {
   const provider = createAiServiceProvider({ env: {
     SMS_V2_AI_SERVICE_URL: `http://127.0.0.1:${server.address().port}`,
     SMS_V2_AI_SERVICE_TOKEN: token,
+    SMS_V2_AI_EXPERIENTIAL_FREE_MODEL: fallbackModel,
   } });
   for (const id of rig.profiles) await rig.consent(id, true);
   const item = {
@@ -67,16 +69,31 @@ async function setup(t, respond) {
   };
   assert.equal((await rig.asUser(rig.profiles[0]).post("/sms/v2/unknown-templates", { items: [item] })).status, 202);
   const row = async () => (await rig.pool.query(
-    "SELECT ai_status,ai_draft,lease_id,failure_code,sample FROM sms_v2_unknown_templates WHERE template_hash=$1",
+    "SELECT ai_status,ai_draft,ai_model,lease_id,failure_code,sample FROM sms_v2_unknown_templates WHERE template_hash=$1",
     [template.template_hash],
   )).rows[0];
   return { rig, worker, provider, requests, row };
 }
 
-function ready(response) {
+function ready(response, overrides = {}) {
   response.writeHead(200, { "content-type": "application/json", "x-prompt-version": promptVersion });
-  response.end(JSON.stringify({ answer: answer(), model: config.model, inputTokens: 27, outputTokens: 12, totalTokens: 39 }));
+  response.end(JSON.stringify({ answer: answer(), model: config.model, inputTokens: 27, outputTokens: 12, totalTokens: 39, ...overrides }));
 }
+
+test("the dedicated PostgreSQL worker records the free fallback model and cost", { skip }, async (t) => {
+  const model = "clef:free";
+  const { rig, worker, provider, row } = await setup(t, async ({ response }) =>
+    ready(response, { model, provider: "experiential" }), model);
+  assert.equal((await runTemplateWorkerOnce({ store: worker, provider, config })).status, "ready");
+  const result = await row();
+  assert.equal(result.ai_model, "experiential:clef:free");
+  assert.equal(result.ai_draft.createdBy, "ai:experiential:clef:free");
+  const attempts = (await rig.pool.query("SELECT model,cost_usd,total_tokens FROM sms_v2_template_attempts")).rows;
+  assert.equal(attempts.length, 1);
+  assert.equal(attempts[0].model, result.ai_model);
+  assert.equal(Number(attempts[0].cost_usd), 0);
+  assert.equal(attempts[0].total_tokens, 39);
+});
 
 test("remote outage keeps the PostgreSQL job queued, recovery stores one validated result and private sync", { skip }, async (t) => {
   let available = false;

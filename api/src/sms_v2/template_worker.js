@@ -569,12 +569,13 @@ async function monthSpendUsd(client) {
 
 // Records what a finished attempt used, and tops up the reservation if needed.
 async function recordUsage(client, { jobId, attempt, usage }) {
+  const actualModel = usage.model ? [usage.model] : [];
   const attemptRow = (
     await client.query(
       `UPDATE sms_v2_template_attempts SET input_tokens=$3,output_tokens=$4,total_tokens=$5,latency_ms=$6,cost_usd=$7,outcome=$8,prompt_version=$9,
-        error_kind=$10,error_codes=$11::text[],http_status=$12
+        error_kind=$10,error_codes=$11::text[],http_status=$12${actualModel.length ? ",model=$13" : ""}
         WHERE job_id=$1 AND attempt=$2 RETURNING capacity_minute,reserved_tokens`,
-      [jobId, attempt, usage.inputTokens, usage.outputTokens, usage.totalTokens, usage.latencyMs, usage.costUsd, usage.outcome, usage.promptVersion ?? null, usage.errorKind ?? null, usage.errorCodes ?? null, usage.httpStatus ?? null],
+      [jobId, attempt, usage.inputTokens, usage.outputTokens, usage.totalTokens, usage.latencyMs, usage.costUsd, usage.outcome, usage.promptVersion ?? null, usage.errorKind ?? null, usage.errorCodes ?? null, usage.httpStatus ?? null, ...actualModel],
     )
   ).rows[0];
   if (attemptRow && usage.totalTokens > attemptRow.reserved_tokens) {
@@ -853,6 +854,7 @@ async function runTemplateWorkerOnce({
       }
       const started = clock();
       let response;
+      let fallbackModel;
       let busy = null;
       let layoutError = null;
       try {
@@ -865,9 +867,11 @@ async function runTemplateWorkerOnce({
               maxOutputTokens: config.maxOutputTokens,
               temperature: config.temperature,
             });
+        fallbackModel = layoutOnly && response.provider === "experiential" ? response.model : undefined;
+        const actualModel = fallbackModel ?? config.model;
         const answer = typeof response.answer === "string" ? JSON.parse(response.answer) : response.answer;
-        const rule = buildRule(answer, template, matcher, config.model);
-        errors = await validateDraftSafely(rule, template, config.model, []);
+        const rule = buildRule(answer, template, matcher, actualModel);
+        errors = await validateDraftSafely(rule, template, actualModel, []);
         failure = errors.length ? { kind: "validation", codes: errors, status: null } : null;
         if (!errors.length) draft = rule;
       } catch (error) {
@@ -899,7 +903,8 @@ async function runTemplateWorkerOnce({
         errorKind: failure?.kind ?? null,
         errorCodes: failure?.codes ?? null,
         httpStatus: failure?.status ?? null,
-        costUsd:
+        ...(fallbackModel ? { model: fallbackModel } : {}),
+        costUsd: fallbackModel ? 0 :
           config.inputPrice === null ||
           config.outputPrice === null ||
           !Number.isSafeInteger(response?.totalTokens)
@@ -936,7 +941,7 @@ async function runTemplateWorkerOnce({
         return { status: "provider_busy", retryAfterMs: busy.retryAfterMs || 0, providerStatus: busy.status };
       }
       if (!errors.length) {
-        await store.finish(template, { rule: draft, model: config.model });
+        await store.finish(template, { rule: draft, model: fallbackModel ?? config.model });
         return { status: "ready", templateHash: template.template_hash, gapSeconds };
       }
     }

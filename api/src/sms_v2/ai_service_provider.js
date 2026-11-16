@@ -8,6 +8,8 @@ const { ProviderBusyError, providerDelayMs } = require("./template_worker");
 const DEFAULT_PROMPT_VERSION = "sms-rule-draft-v1.0.0";
 const MAX_RESPONSE_BYTES = 256 * 1024;
 const POSTGRES_INTEGER_MAX = 2147483647;
+const FREE_MODEL = /^[a-z0-9][a-z0-9._-]{0,94}:free$/;
+const AUTO_FREE_MODEL = "auto:free";
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const SERVICE_LAYOUT_UNSAFE = /[\x00-\x1f\x7f\p{Nd}@]/u;
 
@@ -64,6 +66,9 @@ function createAiServiceProvider({ env = process.env, fetchImpl = fetch, logger 
   const promptVersion = env.SMS_V2_AI_SERVICE_PROMPT_VERSION || DEFAULT_PROMPT_VERSION;
   if (!/^[a-zA-Z0-9_.-]{1,64}$/.test(promptVersion))
     throw new Error("SMS_V2_AI_SERVICE_PROMPT_VERSION_invalid");
+  const freeModel = env.SMS_V2_AI_EXPERIENTIAL_FREE_MODEL;
+  if (freeModel && !FREE_MODEL.test(freeModel))
+    throw new Error("SMS_V2_AI_EXPERIENTIAL_FREE_MODEL_invalid");
 
   return {
     assertLayout,
@@ -92,6 +97,7 @@ function createAiServiceProvider({ env = process.env, fetchImpl = fetch, logger 
             "X-Prompt-Version": promptVersion,
             "X-Expected-Model": model,
             "X-Expected-Max-Output-Tokens": String(maxOutputTokens),
+            ...(freeModel ? { "X-Allow-Experiential-Free": freeModel } : {}),
           },
           body: JSON.stringify({ senderBrand, redactedBody }),
         });
@@ -122,7 +128,14 @@ function createAiServiceProvider({ env = process.env, fetchImpl = fetch, logger 
           throw busy("ai_service_prompt_version_mismatch", 300000);
         if (!usage || typeof body?.model !== "string" || !body.answer || typeof body.answer !== "object" || Array.isArray(body.answer))
           throw busy("ai_service_invalid_response", 300000);
-        if (body.model !== model) throw busy("ai_service_model_mismatch", 300000);
+        const allowedFreeModel = freeModel === AUTO_FREE_MODEL
+          ? body.model !== AUTO_FREE_MODEL && FREE_MODEL.test(body.model)
+          : body.model === freeModel;
+        if (body.provider === "experiential" && allowedFreeModel &&
+            usage.inputTokens > 0 && usage.outputTokens > 0 && usage.totalTokens >= usage.inputTokens + usage.outputTokens)
+          return { answer: body.answer, ...usage, model: `experiential:${body.model}`, provider: body.provider };
+        if (body.provider !== undefined || body.model !== model)
+          throw busy("ai_service_model_mismatch", 300000);
         return { answer: body.answer, ...usage };
       } catch (error) {
         const known = error instanceof ProviderBusyError || error instanceof SyntaxError || error instanceof LayoutError;

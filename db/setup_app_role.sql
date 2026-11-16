@@ -272,7 +272,7 @@ begin
   end if;
   if to_regclass('public.sms_v2_template_attempts') is not null then
     grant select, insert on public.sms_v2_template_attempts to sms_ai_worker;
-    grant update (input_tokens, output_tokens, total_tokens, latency_ms, cost_usd, outcome, prompt_version)
+    grant update (input_tokens, output_tokens, total_tokens, latency_ms, cost_usd, outcome, prompt_version, model)
       on public.sms_v2_template_attempts to sms_ai_worker;
     if exists (select 1 from information_schema.columns
                 where table_schema = 'public' and table_name = 'sms_v2_template_attempts' and column_name = 'error_kind') then
