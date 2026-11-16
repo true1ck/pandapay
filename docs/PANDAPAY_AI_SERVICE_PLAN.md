@@ -18,6 +18,8 @@ The owner confirmed the isolated project on 16 November 2026. PandaPay AI lives 
 
 Reuse the existing Gemini credentials from the PandaPay `.env` or the server secret store. The service supports the existing Gemini key configuration and worker model/output settings. Give the isolated API its own random service bearer token. Provision these through the runtime environment. Provider credentials belong in the isolated service deployment, and the worker needs the service URL and bearer token. The legacy key can stay staged only when a direct-path rollback is intended. An existing GitHub Gemini secret can repopulate the PandaPay host `.env` during deployment, so coordinate that secret when completing a credential transfer.
 
+The supported existing names are `GEMINI_API_KEY`, `GEMINI_FALLBACK_API_KEY`, `GEMINI_API_KEYS`, `SMS_V2_AI_MODEL` and `SMS_V2_AI_MAX_OUTPUT_TOKENS`. Repeated keys are deduplicated. Available keys rotate, and explicit quota failures can try another available key within the same 20-second deadline. Network timeouts and unusable paid output return control to the worker. Model fallback is explicit because a model change also changes validation provenance, capacity and price assumptions.
+
 Existing draft failures remain observable through the stored failure code and attempt metadata. A queue outage, rejected candidate and unresolved destination card require their respective retry, validation and review paths. The isolated service preserves these outcomes through the API contract.
 
 ## Request and security boundary
@@ -47,6 +49,7 @@ Evaluate OpenAI on the same synthetic and redacted fixture set, including false-
 
 | Check | Result |
 | --- | --- |
+| Standalone service suite | 14 passed, including independent startup, existing configuration aliases and key rotation/cooldown |
 | Full PandaPay API suite | 2,537 passed, 41 skipped, four existing TODO cases |
 | SMS worker and contract suite | 279 passed, 73 database/environment-gated skips |
 | Real Gemini through standalone HTTP API and PandaPay validator | Synthetic layout accepted with existing `.env` key and `gemini-3.1-flash-lite`, 1,261 reported tokens |
