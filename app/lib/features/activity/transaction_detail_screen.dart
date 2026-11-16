@@ -1655,7 +1655,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                   _DetailRow(label: 'Rail', value: _paymentRouteLabel(entry)),
                   _DetailRow(
                     label: 'Source',
-                    value: _sourceLabel(entry.source),
+                    value: entry.viaPandaPay
+                        ? 'Paid via PandaPay'
+                        : _sourceLabel(entry.source),
                   ),
                   _DetailRow(
                     label: 'Verification',

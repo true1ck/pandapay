@@ -3943,6 +3943,7 @@ class _TransactionTile extends StatelessWidget {
         entry.note ?? 'Split',
       ] else
         isSmsImported ? '$timeLabel · SMS' : timeLabel,
+      if (entry.viaPandaPay) 'PandaPay',
       if ((entry.entryKind != TxnEntryKind.spend || isInvestmentCategory) &&
           !showInvestmentChip &&
           !showSelfChip)

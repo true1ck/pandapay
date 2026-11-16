@@ -2923,6 +2923,11 @@ class TransactionEntry {
       entryKind == TxnEntryKind.transfer && transferType == 'family';
   final String source;
 
+  /// Paid through PandaPay's scan-and-pay: logged by the app itself on the UPI
+  /// QR rail (a bank SMS for the same payment is matched to it, not counted
+  /// again).
+  bool get viaPandaPay => source == 'manual' && rail == TxnRail.upiQr;
+
   /// The latest time an SMS observation for this transaction was received by
   /// the device. This is intentionally separate from [occurredAt]: the bank's
   /// transaction date drives accounting, while the activity row should show
