@@ -19,6 +19,7 @@ const ROUTES = Object.freeze({
   'unknown-templates': [{ bucket: 'unknown-templates', seconds: DAY, limit: 50, env: 'SMS_V2_UNKNOWN_TEMPLATES_PER_DAY', items: true, setting: 'templates_per_user_per_day' }],
   corrections: [{ bucket: 'corrections', seconds: DAY, limit: 200, env: 'SMS_V2_CORRECTIONS_PER_DAY', items: true, setting: 'corrections_per_user_per_day' }],
   'learning-signals': [{ bucket: 'learning-signals', seconds: DAY, limit: 500, env: 'SMS_V2_LEARNING_SIGNALS_PER_DAY', items: true, setting: 'signals_per_user_per_day' }],
+  'draft-rejections': [{ bucket: 'draft-rejections', seconds: DAY, limit: 200, env: 'SMS_V2_DRAFT_REJECTIONS_PER_DAY', items: true }],
   'rule-stats': [{ bucket: 'rule-stats', seconds: DAY, limit: 24, env: 'SMS_V2_RULE_STATS_PER_DAY' }],
 });
 

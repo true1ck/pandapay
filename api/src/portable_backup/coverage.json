@@ -729,6 +729,14 @@
       "disposition": "platform_ops",
       "reason": "Redacted template drafting and shared rule state is managed by the platform and preserved by full database recovery."
     },
+    "sms_v2_draft_deliveries": {
+      "disposition": "excluded_with_intent",
+      "reason": "Account-linked record of which private AI draft was shown to which opted-in profile. Excluded from portable export; complete database recovery preserves it."
+    },
+    "sms_v2_draft_rejections": {
+      "disposition": "excluded_with_intent",
+      "reason": "Account-linked report that a private AI draft did not fit the person's own message (draft id and reason code only). Excluded from portable export; complete database recovery preserves it."
+    },
     "sms_v2_template_submitters": {
       "disposition": "excluded_with_intent",
       "reason": "Account-linked opt-in template submissions are excluded from portable export. Consent revocation purges submitter access, and complete database recovery preserves outstanding submissions."

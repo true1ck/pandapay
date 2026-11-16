@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:pandapay_domain/sms_v2.dart';
 
+import 'draft_verdict_store.dart';
 import 'sync_state_store.dart';
 import 'template_origin_store.dart';
 
@@ -23,6 +24,12 @@ class ProvisionalStore {
         if (result['status'] != 'ready' || result['rule'] is! Map) continue;
         final remoteHash = result['templateHash'];
         if (remoteHash is! String || row['key'] != 'ai:$remoteHash') continue;
+        // This phone checked the draft against its own message and refused it.
+        if (DraftVerdictStore(
+          state,
+        ).isRejected(remoteHash, DraftVerdictStore.draftIdOf(result))) {
+          continue;
+        }
         final origin = TemplateOriginStore(state).get(remoteHash);
         if (origin == null) continue;
         final rule = Rule.fromJson(

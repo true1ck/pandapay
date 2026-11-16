@@ -48,24 +48,30 @@ class TemplateUpload {
     }
     if (!accountIsCurrent()) return false;
     if (!consent) {
-      queue.db.execute('SAVEPOINT sms_v2_template_revoke');
-      try {
-        queue.db.execute(
-          "DELETE FROM v2_sync_state WHERE namespace=? AND (key LIKE 'ai:%' OR key LIKE 'template:sent:%' OR key LIKE 'template:origins:%')",
-          [queue.namespace],
-        );
-        queue.db.execute(
-          "DELETE FROM v2_outbox WHERE namespace=? AND kind='template'",
-          [queue.namespace],
-        );
-        queue.db.execute('RELEASE sms_v2_template_revoke');
-      } catch (_) {
-        queue.db.execute('ROLLBACK TO sms_v2_template_revoke');
-        queue.db.execute('RELEASE sms_v2_template_revoke');
-        rethrow;
-      }
+      forgetSharedState(queue);
     }
     return consent;
+  }
+
+  /// Consent is gone: drop everything that came from sharing, including the
+  /// drafts, this phone's verdicts on them and any report still waiting.
+  static void forgetSharedState(OutboxStore queue) {
+    queue.db.execute('SAVEPOINT sms_v2_template_revoke');
+    try {
+      queue.db.execute(
+        "DELETE FROM v2_sync_state WHERE namespace=? AND (key LIKE 'ai:%' OR key LIKE 'template:sent:%' OR key LIKE 'template:origins:%' OR key LIKE 'draft:%')",
+        [queue.namespace],
+      );
+      queue.db.execute(
+        "DELETE FROM v2_outbox WHERE namespace=? AND kind IN ('template','draft_rejection')",
+        [queue.namespace],
+      );
+      queue.db.execute('RELEASE sms_v2_template_revoke');
+    } catch (_) {
+      queue.db.execute('ROLLBACK TO sms_v2_template_revoke');
+      queue.db.execute('RELEASE sms_v2_template_revoke');
+      rethrow;
+    }
   }
 
   bool _validUpload(Map<String, Object?> item) {

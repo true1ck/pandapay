@@ -7,6 +7,7 @@ import 'package:pandapay_domain/sms_v2_ledger.dart';
 
 import '../../../data/local/financial_store.dart';
 import '../ledger/projection_writer.dart';
+import '../storage/draft_verdict_store.dart';
 import '../storage/event_store.dart';
 import '../storage/fact_store.dart';
 import '../storage/instrument_store.dart';
@@ -73,7 +74,7 @@ class SyncPull {
             headers: {
               ...await headers(),
               // CCR-003: this build reads a category on refund ledger entries.
-              'X-Sms-Contract-Features': 'refund-category',
+              'X-Sms-Contract-Features': 'refund-category,draft-feedback',
             },
           )
           .timeout(const Duration(seconds: 30));
@@ -235,6 +236,11 @@ class SyncPull {
         }
         for (final result in body['aiResults'] as List) {
           _state.put('ai:${result['templateHash']}', jsonEncode(result));
+          // A replacement draft (new id) is checked afresh on this phone.
+          DraftVerdictStore(_state).clearIfReplaced(
+            '${result['templateHash']}',
+            DraftVerdictStore.draftIdOf(result as Map),
+          );
         }
         for (final result in body['corrections'] as List) {
           _state.put('correction:${result['caseId']}', jsonEncode(result));

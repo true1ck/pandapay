@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pandapay.app/contracts/sms/v2/api/draft_rejections.response.schema.json",
+  "title": "POST /sms/v2/draft-rejections response",
+  "type": "object",
+  "required": ["status"],
+  "additionalProperties": false,
+  "properties": {
+    "status": { "type": "string", "enum": ["recorded", "already_recorded"] }
+  }
+}

@@ -8,6 +8,7 @@ import 'package:http/testing.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/financial_store.dart';
 import 'package:pandapay/features/sms_v2/pipeline/sms_v2_pipeline.dart';
+import 'package:pandapay/features/sms_v2/storage/draft_verdict_store.dart';
 import 'package:pandapay/features/sms_v2/storage/event_store.dart';
 import 'package:pandapay/features/sms_v2/storage/ledger_store.dart';
 import 'package:pandapay/features/sms_v2/storage/outbox_store.dart';
@@ -195,7 +196,7 @@ void main() {
         return response();
       });
       await puller(client: client).pull();
-      expect(sentFeatures, everyElement('refund-category'));
+      expect(sentFeatures, everyElement('refund-category,draft-feedback'));
       final ledger = LedgerStore(database.db, namespace: 'target');
       final refund = EventStore(database.db, namespace: 'target')
           .listSince(DateTime.utc(2026))
@@ -412,4 +413,38 @@ void main() {
       );
     },
   );
+
+  test('aiResults draftId is stored, and a new draftId clears the old verdict', () async {
+    final rule = bundle.rules.firstWhere((r) => r.status == RuleStatus.provisional);
+    final hash = rule.match.templateHash!;
+    const first = '11111111-1111-4111-8111-111111111111';
+    const second = '22222222-2222-4222-8222-222222222222';
+    final state = SyncStateStore(database.db, namespace: 'target');
+    Future<void> pullWith(Object? draftId) async {
+      body['aiResults'] = [
+        {
+          'templateHash': hash,
+          'status': 'ready',
+          'ruleId': rule.id,
+          'ruleVersion': rule.version,
+          'rule': rule.toJson(),
+          'draftId': ?draftId,
+        },
+      ];
+      await puller(client: MockClient((_) async => response())).pull();
+    }
+
+    DraftVerdictStore(state).put(hash, first, rejected: true);
+    await pullWith(first);
+    expect(jsonDecode(state.get('ai:$hash')!)['draftId'], first);
+    expect(DraftVerdictStore(state).isRejected(hash, first), isTrue);
+    await pullWith(second);
+    expect(jsonDecode(state.get('ai:$hash')!)['draftId'], second);
+    expect(DraftVerdictStore(state).get(hash), isNull);
+    // An old server sends none: stored as before, no verdict survives.
+    DraftVerdictStore(state).put(hash, second, rejected: true);
+    await pullWith(null);
+    expect(jsonDecode(state.get('ai:$hash')!).containsKey('draftId'), isFalse);
+    expect(DraftVerdictStore(state).get(hash), isNull);
+  });
 }

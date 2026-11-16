@@ -41,6 +41,13 @@ class AiWithdrawal {
     ))
       if (_isRejection(row['value'] as String))
         (row['key'] as String).substring('ai:'.length),
+    // Drafts this phone refused on its own check read nothing from now on.
+    for (final row in _db.select(
+      "SELECT key FROM v2_sync_state WHERE namespace=? AND key LIKE 'draft:verdict:%' "
+      "AND json_extract(value,'\$.verdict')='rejected'",
+      [namespace],
+    ))
+      (row['key'] as String).substring('draft:verdict:'.length),
   ];
 
   static bool _isRejection(String raw) {

@@ -49,7 +49,19 @@ function createTemplateStore({ withUserClient }) {
         return row?.summary || {};
       });
     },
-    async results(profileId, cursor) {
+    // 'recorded' | 'already_recorded'. Throws the database's SQLSTATE (42501 consent, P0404 not delivered).
+    rejectDraft(profileId, draftId, reason) {
+      return withUserClient(profileId, async (client) => {
+        const row = (
+          await client.query(
+            "SELECT pandapay.sms_v2_report_draft_rejection($1::uuid,$2) AS status",
+            [draftId, reason],
+          )
+        ).rows[0];
+        return row.status;
+      });
+    },
+    async results(profileId, cursor, { draftFeedback = false } = {}) {
       if (
         cursor !== null &&
         (typeof cursor !== "string" ||
@@ -61,29 +73,34 @@ function createTemplateStore({ withUserClient }) {
       return withUserClient(profileId, async (client) => {
         const rows = (
           await client.query(
-            "SELECT * FROM pandapay.sms_v2_template_results($1::bigint)",
-            [cursor || "0"],
+            "SELECT * FROM pandapay.sms_v2_template_results($1::bigint,$2)",
+            [cursor || "0", draftFeedback === true],
           )
         ).rows;
         return {
-          items: rows.map((row) => ({
-            templateHash: row.template_hash,
-            // The sync contract allows only pending, ready and rejected; any other
-            // value makes the phone refuse the whole sync response.
-            status:
-              row.ai_status === "ready"
-                ? "ready"
-                : row.ai_status === "failed"
-                  ? "rejected"
-                  : "pending",
-            // The contract wants a string and an integer here, so leave them out
-            // (never null) when there is no draft.
-            ...(row.ai_draft?.id ? { ruleId: row.ai_draft.id } : {}),
-            ...(row.ai_draft?.version ? { ruleVersion: row.ai_draft.version } : {}),
-            ...(row.ai_status === "ready" && row.ai_draft
-              ? { rule: row.ai_draft }
-              : {}),
-          })),
+          items: rows.map((row) => {
+            const base = { templateHash: row.template_hash };
+            // The caller's own rejection of the current draft hides it from this person only.
+            if (row.rejected) return { ...base, status: "rejected" };
+            return {
+              ...base,
+              // The sync contract allows only pending, ready and rejected; any other
+              // value makes the phone refuse the whole sync response.
+              status:
+                row.ai_status === "ready"
+                  ? "ready"
+                  : row.ai_status === "failed"
+                    ? "rejected"
+                    : "pending",
+              // The contract wants a string and an integer here, so leave them out
+              // (never null) when there is no draft.
+              ...(row.ai_draft?.id ? { ruleId: row.ai_draft.id } : {}),
+              ...(row.ai_draft?.version ? { ruleVersion: row.ai_draft.version } : {}),
+              ...(row.ai_status === "ready" && row.ai_draft
+                ? { rule: row.ai_draft, ...(row.draft_id ? { draftId: row.draft_id } : {}) }
+                : {}),
+            };
+          }),
           cursor: rows.at(-1)?.revision?.toString() || cursor || "0",
         };
       });
@@ -167,6 +184,27 @@ function createTemplateHandler({ store, security }) {
   };
 }
 
+function createDraftRejectionHandler({ store, security }) {
+  return async (req, res) => {
+    const check = validateRequest("draft_rejections", req.body);
+    if (!check.ok) return res.status(400).json({ error: check.errors[0].code });
+    try {
+      if (denied(await security.verifyAttestation(req)))
+        return res.status(403).json({ error: "attestation_required" });
+      if (denied(await security.checkRate(req, "draft-rejections", 1)))
+        return res.status(429).json({ error: "rate_limited" });
+      const status = await store.rejectDraft(req.userId, req.body.draftId, req.body.reason);
+      return res.status(200).json({ status });
+    } catch (error) {
+      if (error.code === "42501")
+        return res.status(403).json({ error: "sms_shared_learning_consent_required" });
+      if (error.code === "P0404") return res.status(404).json({ error: "draft_not_delivered" });
+      console.error("sms_v2 draft rejection unavailable", error.code || error.name);
+      return res.status(503).json({ error: "draft_rejections_unavailable" });
+    }
+  };
+}
+
 function registerTemplates(
   app,
   { requireSmsV2, requireMember, withUserClient, hooks },
@@ -184,8 +222,14 @@ function registerTemplates(
     requireMember,
     createAiStatusHandler({ store, security: hooks.security }),
   );
-  hooks.aiResultsSince = (profileId, cursor) =>
-    store.results(profileId, cursor);
+  app.post(
+    "/sms/v2/draft-rejections",
+    requireSmsV2,
+    requireMember,
+    createDraftRejectionHandler({ store, security: hooks.security }),
+  );
+  hooks.aiResultsSince = (profileId, cursor, opts) =>
+    store.results(profileId, cursor, opts);
 }
 
 function registerPrivateTemplateRoutes(api) {
@@ -430,6 +474,7 @@ module.exports = {
   createTemplateStore,
   createTemplateHandler,
   createAiStatusHandler,
+  createDraftRejectionHandler,
   registerTemplates,
   registerPrivateTemplateRoutes,
 };

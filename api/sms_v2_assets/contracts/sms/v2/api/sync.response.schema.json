@@ -68,6 +68,10 @@
           },
           "rule": {
             "$ref": "../rule_bundle.schema.json#/$defs/rule"
+          },
+          "draftId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
           }
         }
       }

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../storage/draft_verdict_store.dart';
 import '../storage/sync_state_store.dart';
 
 /// Where one of this account's unreadable formats stands with the AI check.
@@ -65,7 +66,13 @@ class AiStatusReader {
         }
         final raw = state.get('ai:$remote');
         final status = raw == null ? null : (jsonDecode(raw) as Map)['status'];
-        if (status == 'ready') return AiTemplateState.ready;
+        if (status == 'ready') {
+          // A draft this phone refused is as good as none.
+          final draftId = DraftVerdictStore.draftIdOf(jsonDecode(raw!) as Map);
+          return DraftVerdictStore(state).isRejected(remote, draftId)
+              ? AiTemplateState.unavailable
+              : AiTemplateState.ready;
+        }
         if (status == 'rejected' || status == 'failed') {
           return AiTemplateState.unavailable;
         }

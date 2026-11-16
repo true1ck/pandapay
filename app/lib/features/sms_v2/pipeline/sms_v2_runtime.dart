@@ -37,6 +37,7 @@ import '../storage/provisional_store.dart';
 import '../storage/stats_store.dart';
 import '../sync/learning_signals.dart';
 import '../sync/sharing_consent_mirror.dart';
+import '../sync/draft_feedback.dart';
 import '../sync/template_upload.dart';
 import '../sync/stats_upload.dart';
 import '../telemetry/client_metrics.dart';
@@ -688,6 +689,26 @@ class SmsV2Runtime {
         await _refreshRules();
       }
     });
+    // Drafts that arrived (or were stored before this build) are checked on the
+    // phone before they are trusted; failures are reported just below.
+    await guarded(
+      () => DraftVerifier(
+        intake: intake,
+        queue: OutboxStore(financial.database.db, namespace: namespace),
+        accountIsCurrent: accountIsCurrent,
+      ).verifyPending(_bundle!),
+    );
+    await networked(
+      () => DraftRejectionUpload(
+        queue: OutboxStore(financial.database.db, namespace: namespace),
+        client: client,
+        baseUri: baseUri,
+        headers: headers,
+        hasConsent: hasSharingConsent,
+        accountIsCurrent: accountIsCurrent,
+        clock: clock,
+      ).drain(),
+    );
     await guarded(_withdrawRejectedAiReadings);
     await guarded(_recheckIfRequested);
     final active = ProvisionalStore(_state).overlay(_bundle!);

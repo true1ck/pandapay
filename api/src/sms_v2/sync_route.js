@@ -33,6 +33,14 @@ const isRefundShaped = (l) => has(l.from, 'external') && !has(l.to, 'external') 
   && l.isSpend === false && l.isIncome === false && l.isInvestment === false;
 const supportsRefundCategory = (req) => String(req.get ? req.get('x-sms-contract-features') || '' : '')
   .split(',').map((x) => x.trim().toLowerCase()).includes('refund-category');
+// An older phone refuses a sync response with an unknown aiResults field, so only a client that sends
+// `X-Sms-Contract-Features: draft-feedback` is given draft ids (and can report drafts).
+const supportsDraftFeedback = (req) => String(req.get ? req.get('x-sms-contract-features') || '' : '')
+  .split(',').map((x) => x.trim().toLowerCase()).includes('draft-feedback');
+function aiResultsForClient(items, req) {
+  if (supportsDraftFeedback(req)) return items;
+  return items.map(({ draftId, ...rest }) => rest);
+}
 function ledgerForClient(ledger, req) {
   if (supportsRefundCategory(req)) return ledger;
   return ledger.map((l) => (l.category !== null && l.category !== undefined && isRefundShaped(l)
@@ -52,7 +60,7 @@ function createSyncHandler({ withUserClient, hooks }) {
     const cursor = storage.decodeCursor(Array.isArray(raw) ? raw[0] : raw);
     if (!cursor) return res.status(400).json({ error: 'cursor_invalid' });
     try {
-      const ai = hookItems(await hooks.aiResultsSince(req.userId, cursor.a || null));
+      const ai = hookItems(await hooks.aiResultsSince(req.userId, cursor.a || null, { draftFeedback: supportsDraftFeedback(req) }));
       const corrections = hookItems(await hooks.correctionStatusSince(req.userId, cursor.c || null));
       const latestBundleVersion = Number(await hooks.latestBundleVersion(req.userId)) || 0;
       const changes = await withUserClient(req.userId, (client) => storage.readChanges(client, req.userId, cursor, {
@@ -66,7 +74,7 @@ function createSyncHandler({ withUserClient, hooks }) {
         ledger: ledgerForClient(changes.ledger, req),
         facts: changes.facts,
         updatedAt: changes.updatedAt,
-        aiResults: ai.items,
+        aiResults: aiResultsForClient(ai.items, req),
         corrections: corrections.items,
         latestBundleVersion,
       });
@@ -81,4 +89,4 @@ function registerSyncRoute(app, { requireSmsV2, requireMember, withUserClient, h
   app.get('/sms/v2/sync', requireSmsV2, requireMember, createSyncHandler({ withUserClient, hooks }));
 }
 
-module.exports = { registerSyncRoute, createSyncHandler, ledgerForClient };
+module.exports = { registerSyncRoute, createSyncHandler, ledgerForClient, aiResultsForClient };
