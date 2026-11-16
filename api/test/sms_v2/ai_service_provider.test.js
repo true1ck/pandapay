@@ -41,12 +41,16 @@ function makeStore() {
       assert.doesNotMatch(prompt, /SOME PERSON/);
       assert.equal(attemptConfig.model, config.model);
       assert.equal(attemptConfig.maxOutputTokens, config.maxOutputTokens);
+      assert.equal(attemptConfig.rpm, Infinity); // the service, not the worker, limits its own rate
     },
     async userReports() {
       assert.fail("service mode should not read correction reports");
     },
     async previousMistakes() {
       assert.fail("service mode should not read admin decisions");
+    },
+    async monthSpend() {
+      return 1e9; // a spent budget must not stop service mode: the service owns cost
     },
     async providerFailures() {
       assert.fail("service outages must not count against layouts");
@@ -94,7 +98,7 @@ test("worker sends only the layout and accepts a draft after the usual validatio
   assert.equal(store.attempts[0].outcome, "valid");
   assert.equal(store.attempts[0].promptVersion, promptVersion);
   assert.equal(store.attempts[0].totalTokens, 60);
-  assert.equal(store.attempts[0].costUsd, 0.0001);
+  assert.equal(store.attempts[0].costUsd, null);
   assert.deepEqual(logs, [{ event: "sms_v2_ai_service_request", entryPoint: "template_worker", requestId, outcome: "ok", httpStatus: 200, latencyMs: logs[0].latencyMs }]);
   assert.ok(Number.isInteger(logs[0].latencyMs));
 });
@@ -153,7 +157,7 @@ test("worker rejects an invalid draft after one paid call (a retry would repeat 
   assert.equal((await runWorkerCycle({ layoutStore: store, provider, config })).status, "failed");
   assert.equal(store.finished[0].code, "draft_validation_failed");
   assert.equal(calls, 1);
-  assert.deepEqual(store.attempts.map((a) => [a.errorKind, a.costUsd]), [["validation", 0.0001]]);
+  assert.deepEqual(store.attempts.map((a) => [a.errorKind, a.costUsd]), [["validation", null]]);
 });
 
 test("worker accounts for billed invalid provider output", async () => {
@@ -163,7 +167,7 @@ test("worker accounts for billed invalid provider output", async () => {
     serviceJson({ error: { code: "invalid_provider_output" }, ...usage }, { status: 502 })) });
   assert.equal((await runWorkerCycle({ layoutStore: store, provider, config })).status, "failed");
   assert.equal(calls, 1);
-  assert.deepEqual(store.attempts.map((a) => [a.errorKind, a.costUsd]), [["json_invalid", 0.0001]]);
+  assert.deepEqual(store.attempts.map((a) => [a.errorKind, a.costUsd]), [["json_invalid", null]]);
 });
 
 test("unsafe sender and wording cannot cross the service boundary", async () => {

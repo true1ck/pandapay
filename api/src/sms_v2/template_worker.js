@@ -782,7 +782,9 @@ async function runTemplateWorkerOnce({
   if (typeof store.settings === "function") {
     settings = await store.settings();
     if (settings.ai_enabled === false) return { status: "disabled" };
+    // The service owns cost and limits: only the direct provider is held to the monthly budget.
     if (
+      !layoutOnly &&
       typeof store.monthSpend === "function" &&
       (await store.monthSpend()) >= settings.ai_monthly_budget_usd
     )
@@ -792,6 +794,8 @@ async function runTemplateWorkerOnce({
     // worker's deployment settings for matching provenance, price and capacity.
     if (layoutOnly) config = { ...config, model: baseConfig.model, maxOutputTokens: baseConfig.maxOutputTokens };
   }
+  // Nor does the worker throttle a service call by request/token rate: the service rate-limits and falls back itself.
+  if (layoutOnly) config = { ...config, rpm: Infinity, tpm: Infinity };
   // Seconds to rest after a call to the provider, so the queue drains gently (free keys have small limits).
   const gapSeconds = settings?.ai_min_gap_seconds ?? 0;
   const template = await store.claim();
@@ -904,7 +908,7 @@ async function runTemplateWorkerOnce({
         errorCodes: failure?.codes ?? null,
         httpStatus: failure?.status ?? null,
         costUsd:
-          answeredModel !== config.model ||
+          layoutOnly ||
           config.inputPrice === null ||
           config.outputPrice === null ||
           !Number.isSafeInteger(response?.totalTokens)
