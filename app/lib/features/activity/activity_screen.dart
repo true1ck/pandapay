@@ -24,6 +24,7 @@ import '../../data/catalogue_repository.dart' show SpendCategory;
 import '../../data/merchant_identity.dart';
 import '../../data/foreign_payment.dart';
 import '../../data/spending_selection.dart';
+import '../../data/legacy_twin_rows.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
 import '../auth/login_screen.dart';
@@ -94,6 +95,11 @@ class ActivityScreen extends ConsumerStatefulWidget {
 
 class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   final _projectionCache = ActivityProjectionCache();
+
+  /// The list (filters and account) last shown with its rows. A data update on
+  /// the same list only refreshes its rows; the reader keeps their place. Any
+  /// other list is a different one and loads from the top.
+  Object? _shownListScope;
 
   Future<void> _openPeriodSheet(
     BuildContext context,
@@ -928,6 +934,11 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       );
     }
     final transactions = ref.watch(activityTransactionsProvider);
+    final listScope = (filter, ref.watch(cacheNamespaceProvider));
+    final sameList = transactions.hasValue && _shownListScope == listScope;
+    if (transactions.hasValue && !transactions.isLoading) {
+      _shownListScope = listScope;
+    }
     final tagRepository = ref.watch(transactionTagsProvider);
     final foreign =
         foreignPaymentsForPeriod(
@@ -1064,10 +1075,12 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
             child: searching
                 ? const _SearchSuggestions()
                 : transactions.when(
-                    // reload-ok: explicit refreshes keep the list stable; an
-                    // account/filter change is a different list, so it loads.
+                    // reload-ok: a data update on the list already shown (a sync,
+                    // a re-read, an outbox send) keeps the rows and the scroll
+                    // place; an account/filter change is a different list, so it
+                    // loads from the top.
                     skipLoadingOnRefresh: true,
-                    skipLoadingOnReload: false,
+                    skipLoadingOnReload: sameList,
                     // See my_cards_screen.dart for why a list-shaped skeleton
                     // rather than a centred spinner.
                     loading: () => const Padding(
@@ -1884,15 +1897,17 @@ final activityTransactionsProvider = FutureProvider<List<TransactionEntry>>((
       filter.categoryId != null ||
       (filter.query != null && filter.query!.trim().isNotEmpty);
   final entries = hasServerFilter
-      ? await loadTransactionsWithOfflineCache(
-          ref,
-          repo: repo,
-          cacheKey: 'transactions:activity',
-          from: filter.from,
-          to: filter.to,
-          cardId: filter.cardId,
-          categoryId: filter.categoryId,
-          query: filter.query,
+      ? withoutLegacyTwins(
+          await loadTransactionsWithOfflineCache(
+            ref,
+            repo: repo,
+            cacheKey: 'transactions:activity',
+            from: filter.from,
+            to: filter.to,
+            cardId: filter.cardId,
+            categoryId: filter.categoryId,
+            query: filter.query,
+          ),
         )
       : await ref.watch(transactionsProvider.future);
   final selection = SpendingSelection(

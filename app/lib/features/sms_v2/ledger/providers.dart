@@ -5,6 +5,7 @@ import 'package:pandapay_domain/sms_v2.dart' show Instrument;
 import 'package:pandapay_domain/sms_v2_ledger.dart';
 import 'package:sqlite3/sqlite3.dart';
 import '../../../app/providers.dart' as app;
+import '../../../data/legacy_twin_rows.dart';
 import '../../../data/local/financial_store.dart';
 import '../../../data/user_cards_repository.dart';
 import '../../shared_expenses/runtime/shared_providers.dart'
@@ -36,7 +37,8 @@ LedgerReadModel loadLedgerReadModel({
   Map<String, (TransactionEntry, TransactionEntry)>? splitMemo,
 }) {
   final applied = applySplitOverlay(
-    _readTransactions(db, financialStore, namespace),
+    // An old-pipeline copy of a message already read here is not a second payment.
+    withoutLegacyTwins(_readTransactions(db, financialStore, namespace)),
     splitOverlay,
     memo: splitMemo,
   );

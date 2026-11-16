@@ -65,6 +65,7 @@ import '../data/import_repository.dart';
 import '../data/local/app_database.dart';
 import '../data/portable_backup/account_recovery_operation_gate.dart';
 import '../data/local/response_cache.dart';
+import '../data/legacy_twin_rows.dart';
 import '../data/local/financial_store.dart';
 import '../data/local/financial_read_worker.dart';
 import '../data/local/sms_intake_repository.dart';
@@ -2535,14 +2536,18 @@ final transactionsProvider = FutureProvider<List<TransactionEntry>>((
 ) async {
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return const [];
-  return loadTransactionsWithOfflineCache(
-    ref,
-    repo: repo,
-    cacheKey: '$_transactionsCacheKey:all',
-    // Activity is the one broad history surface that can safely render a
-    // partial, newest-first snapshot. Keep cold starts bounded and let the
-    // durable page cursor resume older history on a later refresh.
-    useBoundedRefresh: true,
+  // An old-pipeline copy of a message the phone has since read itself is not a
+  // second payment (see withoutLegacyTwins).
+  return withoutLegacyTwins(
+    await loadTransactionsWithOfflineCache(
+      ref,
+      repo: repo,
+      cacheKey: '$_transactionsCacheKey:all',
+      // Activity is the one broad history surface that can safely render a
+      // partial, newest-first snapshot. Keep cold starts bounded and let the
+      // durable page cursor resume older history on a later refresh.
+      useBoundedRefresh: true,
+    ),
   );
 });
 
