@@ -4,6 +4,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/bamboo_components.dart';
 import '../../app/providers.dart';
 import '../quickadd/quick_add_screen.dart';
 import '../shared_expenses/runtime/shared_providers.dart';
@@ -72,7 +73,8 @@ class PaymentSentScreen extends ConsumerStatefulWidget {
   ConsumerState<PaymentSentScreen> createState() => _PaymentSentScreenState();
 }
 
-class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
+class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen>
+    with WidgetsBindingObserver {
   /// An empty card name means a payment from a bank account: no card, no
   /// reward and nothing to log by hand (the bank SMS records it).
   bool get _bank => widget.cardName.isEmpty;
@@ -86,15 +88,72 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
   String? _error;
   bool _acceptanceAnswered = false;
 
+  /// True once the user has been in the UPI app and not yet come back.
+  bool _leftApp = false;
+  bool _asking = false;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (widget.autoLog) {
       // The UPI app reported success — record the spend without making the
       // user tap "I've paid" first. The acceptance prompt still appears
       // afterwards (it's the one honest moment to ask).
       WidgetsBinding.instance.addPostFrameCallback((_) => _confirmAndLog());
     }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _leftApp = true;
+    } else if (state == AppLifecycleState.resumed && _leftApp) {
+      _leftApp = false;
+      _askDidItGoThrough();
+    }
+  }
+
+  /// Coming back from the UPI app does not mean the payment went through (the
+  /// user may have pressed Back, or the bank may have declined), so ask. A Yes
+  /// records the spend at once, without waiting for the bank SMS, and the same
+  /// stable id keeps a later SMS from counting it twice.
+  Future<void> _askDidItGoThrough() async {
+    // A bank-account payment has no card to record against; its SMS records it.
+    if (_bank || _logged || _logging || _asking || !mounted) return;
+    if (ModalRoute.of(context)?.isCurrent != true) return;
+    _asking = true;
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Did the payment go through?'),
+        content: Text(
+          widget.merchantName.isEmpty
+              ? 'If it did, PandaPay will record this spend now.'
+              : 'If paying ${widget.merchantName} went through, PandaPay will '
+                    'record this spend now.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Not yet'),
+          ),
+          FilledButton(
+            style: BambooButtons.primary,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Yes, it went through'),
+          ),
+        ],
+      ),
+    );
+    _asking = false;
+    if (yes == true && mounted) await _confirmAndLog();
   }
 
   /// Files an acceptance report (plan Phase 2.1). Every refusal path is
