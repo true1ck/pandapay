@@ -249,7 +249,7 @@ function buildRule(answer, template, matcher, model) {
     const out = { ...fact };
     // Money is rupees unless the model says points; the engine reads the date forms itself.
     if (Array.isArray(out.amounts))
-      out.amounts = out.amounts.map((a) => (a && typeof a === "object" && !a.unit && !String(a.role).startsWith("points") ? { ...a, unit: "INR" } : a));
+      out.amounts = out.amounts.map((a) => (a && typeof a === "object" && !a.unit ? { ...a, unit: String(a.role).startsWith("points") ? "POINTS" : "INR" } : a));
     if (out.occurredAt && typeof out.occurredAt === "object") {
       const { formats: _formats, ...rest } = out.occurredAt;
       out.occurredAt = rest;
