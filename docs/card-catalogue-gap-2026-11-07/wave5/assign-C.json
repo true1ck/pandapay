@@ -1,0 +1,253 @@
+{
+ "agent": "W5C",
+ "issuers": [
+  "Union Bank of India",
+  "Indian Bank",
+  "IDBI Bank"
+ ],
+ "cards": [
+  {
+   "name": "Union NEXTERIA Credit Card",
+   "product_url": "https://www.unionbankofindia.bank.in/en/Details/nexteria-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "On the listing; RuPay 'Ekaa' metal card, the bank's first metal credit card. Page has the generic Apply Now enquiry form.",
+   "issuer": "Union Bank of India"
+  },
+  {
+   "name": "Union Unicorn RuPay Credit Card",
+   "product_url": "https://www.unionbankofindia.bank.in/en/Details/union-unicorn-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "On the listing; premium RuPay card; Apply Now enquiry form on page. KFS name 'UNICORN'.",
+   "issuer": "Union Bank of India"
+  },
+  {
+   "name": "Union DIVAA ICON Credit Card",
+   "product_url": "https://www.unionbankofindia.bank.in/en/Details/divaa-icon-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "On the listing; women-only RuPay Platinum (KFS: 'Divaa Icon Credit Card (Female Only - RuPay Platinum)'); page says it upgrades the bank's earlier women-centric card. Apply Now form on page.",
+   "issuer": "Union Bank of India"
+  },
+  {
+   "name": "Union PM SVANidhi Credit Card",
+   "product_url": "https://www.unionbankofindia.bank.in/en/Details/pm-svanidhi-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "On the listing; RuPay credit card for PM SVANidhi beneficiaries (street vendors). Apply Now form on page; eligibility restricted to scheme beneficiaries.",
+   "issuer": "Union Bank of India"
+  },
+  {
+   "name": "Union JCB Wellness Credit Card",
+   "product_url": "https://www.unionbankofindia.bank.in/en/Details/union-jcb-wellness-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "On the listing; premium wellness card (annual benefits stated by the issuer). Apply Now form on page.",
+   "issuer": "Union Bank of India"
+  },
+  {
+   "name": "Union RuPay Select Credit Card",
+   "product_url": "https://www.unionbankofindia.bank.in/en/Details/rupay-select-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "On the listing; Apply Now form on page. KFS fee row 'RuPay Select'.",
+   "issuer": "Union Bank of India"
+  },
+  {
+   "name": "Union JCB Health Credit Card",
+   "product_url": "https://www.unionbankofindia.bank.in/en/Details/union-jcb-health-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "On the listing; Apply Now form on page. KFS fee row 'Union JCB Health'.",
+   "issuer": "Union Bank of India"
+  },
+  {
+   "name": "Union UNI-CARBON Credit Card",
+   "product_url": "https://www.unionbankofindia.bank.in/en/Details/union-uni-carbon-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": "HPCL",
+   "evidence": "On the listing; co-brand with HPCL on RuPay for fuel savings. Apply Now form on page.",
+   "issuer": "Union Bank of India"
+  },
+  {
+   "name": "Union RuPay Platinum Credit Card",
+   "product_url": "https://www.unionbankofindia.bank.in/en/Details/rupay-platinum-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "On the listing; Apply Now form on page. KFS fee row 'RuPay Platinum'.",
+   "issuer": "Union Bank of India"
+  },
+  {
+   "name": "Union VISA Signature Credit Card",
+   "product_url": "https://www.unionbankofindia.bank.in/en/Details/visa-signature-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "On the listing; Apply Now form on page. KFS fee row 'VISA Signature'.",
+   "issuer": "Union Bank of India"
+  },
+  {
+   "name": "Union VISA Platinum Credit Card",
+   "product_url": "https://www.unionbankofindia.bank.in/en/Details/visa-platinum-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "On the listing; Apply Now form on page. KFS fee row 'VISA Platinum'.",
+   "issuer": "Union Bank of India"
+  },
+  {
+   "name": "Union VISA Gold Credit Card",
+   "product_url": "https://www.unionbankofindia.bank.in/en/Details/visa-gold-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "On the listing; Apply Now form on page. KFS fee row 'VISA Gold'.",
+   "issuer": "Union Bank of India"
+  },
+  {
+   "name": "Union Sparsh Credit Card",
+   "product_url": "https://www.unionbankofindia.bank.in/en/Details/union-sparsh-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "On the listing; accessible RuPay card for visually impaired customers, with a tactile notch (also a 'sparsh-braille-card' page). Apply Now form on page; eligibility restricted to visually impaired customers.",
+   "issuer": "Union Bank of India"
+  },
+  {
+   "name": "IB-VISA-Platinum Credit Card",
+   "product_url": "https://indianbank.bank.in/en/credit-cards",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Listed on the Credit Cards page ('From golf, to dining, shopping...'); page carries 'Apply Online' and a customer portal link. No separate product page.",
+   "issuer": "Indian Bank"
+  },
+  {
+   "name": "IB-VISA-Business Credit Card",
+   "product_url": "https://indianbank.bank.in/en/credit-cards",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Listed on the Credit Cards page for corporate / business entities; same 'Apply Online' link.",
+   "issuer": "Indian Bank"
+  },
+  {
+   "name": "Indian Bank Secured Credit Card (VISA / RuPay)",
+   "product_url": "https://indianbank.bank.in/en/credit-cards",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Listed on the Credit Cards page as 'Secured cards (VISA/ RuPay)': limit from Rs 25,000 or 90% of term deposit face value, with a lien on the deposit. Counted as one entry; it is offered on two networks.",
+   "issuer": "Indian Bank"
+  },
+  {
+   "name": "IB-RuPay-Select Credit Card",
+   "product_url": "https://indianbank.bank.in/en/credit-cards",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Listed on the Credit Cards page ('A high end product...'); same 'Apply Online' link.",
+   "issuer": "Indian Bank"
+  },
+  {
+   "name": "IB-RuPay-Platinum Credit Card",
+   "product_url": "https://indianbank.bank.in/en/credit-cards",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Listed on the Credit Cards page; same 'Apply Online' link.",
+   "issuer": "Indian Bank"
+  },
+  {
+   "name": "IB-RuPay-Classic Credit Card",
+   "product_url": "https://indianbank.bank.in/en/credit-cards",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Listed on the Credit Cards page; same 'Apply Online' link.",
+   "issuer": "Indian Bank"
+  },
+  {
+   "name": "IND Youth Credit Card",
+   "product_url": "https://indianbank.bank.in/en/credit-cards",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Listed on the Credit Cards page as designed for ages 18-29. Its MITC (https://indianbank.bank.in/documents/d/guest/mitc-youth-credit-card, created 30 Oct 2026) describes a Visa Platinum product with no joining fee.",
+   "issuer": "Indian Bank"
+  },
+  {
+   "name": "IDBI Bank Royale Signature Credit Card",
+   "product_url": "https://www.idbi.bank.in/royal-credit-card.aspx",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Overview page shows 'Apply Now' beside it; FAQ names it as a Visa variant.",
+   "issuer": "IDBI Bank"
+  },
+  {
+   "name": "IDBI Bank Euphoria World Credit Card",
+   "product_url": "https://www.idbi.bank.in/Euphoria-credit-card.aspx",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Overview page shows 'Apply Now'; FAQ names it as a Mastercard variant.",
+   "issuer": "IDBI Bank"
+  },
+  {
+   "name": "IDBI Bank Aspire Platinum Credit Card",
+   "product_url": "https://www.idbi.bank.in/aspire-credit-card.aspx",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Overview page shows 'Apply Now'; FAQ names it as a Visa variant.",
+   "issuer": "IDBI Bank"
+  },
+  {
+   "name": "IDBI Bank Imperium Platinum Credit Card",
+   "product_url": "https://www.idbi.bank.in/Imperium-credit-card.aspx",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Overview page shows 'Apply Now'; FAQ names it as a Visa variant.",
+   "issuer": "IDBI Bank"
+  },
+  {
+   "name": "IDBI Bank Winnings Credit Card (Winnings Select)",
+   "product_url": "https://www.idbi.bank.in/Winnings-credit-card.aspx",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Overview page shows 'Apply Now'; FAQ names it 'Winnings Select (RuPay)'.",
+   "issuer": "IDBI Bank"
+  },
+  {
+   "name": "IDBI Bank - LIC CSL Lumine Platinum Credit Card",
+   "product_url": "https://www.idbi.bank.in/Lumine-credit-card.aspx",
+   "status": "sold",
+   "variant_of": null,
+   "partner": "LIC CSL (LIC Cards Services Ltd)",
+   "evidence": "Overview tile has 'Know More' only. Product page ('LIC Co-Branded Credit Cards') says to call phone banking or visit an LIC branch; no joining fee. FAQ names it a RuPay variant.",
+   "issuer": "IDBI Bank"
+  },
+  {
+   "name": "IDBI Bank - LIC CSL Eclat Select Credit Card",
+   "product_url": "https://www.idbi.bank.in/Eclat-credit-card.aspx",
+   "status": "sold",
+   "variant_of": null,
+   "partner": "LIC CSL (LIC Cards Services Ltd)",
+   "evidence": "Overview tile has 'Know More' only; the nav spells it 'Elat'. Product page says to call phone banking or visit an LIC branch; no joining fee. FAQ names it a RuPay variant.",
+   "issuer": "IDBI Bank"
+  }
+ ]
+}

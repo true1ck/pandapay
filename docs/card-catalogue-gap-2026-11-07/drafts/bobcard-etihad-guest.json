@@ -1,0 +1,567 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "bobcard-etihad-guest",
+    "name": "BOBCARD Etihad Guest",
+    "issuer_slug": "bobcard",
+    "network": null,
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 2500,
+    "annual_fee_inr": 2500,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": false,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": null,
+    "point_expiry_months": 24,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.bobcard.co.in/credit-card-types/bobcard-etihad-guest",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": null,
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": 1,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "etihad-excl-annexure",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          763,
+          780,
+          820,
+          821,
+          822,
+          823,
+          824,
+          825,
+          1520,
+          1711,
+          1731,
+          1740,
+          1750,
+          1761,
+          1771,
+          1799,
+          4111,
+          4112,
+          4131,
+          4784,
+          4789,
+          4814,
+          6513,
+          7349,
+          7211,
+          7230,
+          7276,
+          8111,
+          8641,
+          9211,
+          9222,
+          9311,
+          9399,
+          9402,
+          9405,
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299,
+          8011,
+          8062,
+          6539,
+          6541,
+          6542,
+          6543,
+          5960,
+          6300,
+          8398,
+          8661
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Special merchant categories earn no base miles (MITC section D, exclusion list; this list differs from the points-card Annexure 1: it adds telecom 4814 and omits supermarkets, fast food and wallet MCC 6540)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "etihad-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5172,
+          5541,
+          5542,
+          5983
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel transactions earn no reward points (product page note \"No Cashback/Reward Points are earned on fuel transactions\"). Fuel MCCs from the MITC fuel processing-fee row."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "etihad-etihad-airways",
+      "category_id": "travel",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100,
+        "merchant": "Etihad Airways"
+      },
+      "action": {
+        "multiplier": 3,
+        "points_per_block": 3,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "3 Etihad Guest Miles per ₹100 on Etihad Airways spends (product page; the Aug-Sep 2026 double-miles campaign is expired and not modelled)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "etihad-other",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "1 Etihad Guest Miles per ₹100 on every other domestic and cross-border spend (product page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 45
+    },
+    "forex_markup": {
+      "markup_percent": 1,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 500,
+      "max_txn_inr": 5000,
+      "monthly_waiver_cap_inr": 250
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": 30
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% of the transaction amount on every rent payment (MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "wallet",
+        "mcc_list": [
+          6539,
+          6540,
+          6541,
+          6542
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% processing fee on wallet loads (MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "bills",
+        "mcc_list": [
+          4900
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% (maximum ₹3,000 per transaction) on utility payments of ₹50,000 or more (MITC)",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          5172,
+          5541,
+          5542,
+          5983
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% processing fee on a fuel transaction of ₹10,000 or more (MITC)",
+        "threshold_spend_inr": 10000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education",
+        "mcc_list": [
+          8299,
+          8211,
+          8241,
+          8244,
+          8249,
+          8220
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% (maximum ₹5,000 per transaction) on online education fees paid through third-party apps (Cheq, CRED, Ease My Deal, Mobikwik, NoBroker, Paytm, Phonepe, SuperPe), from 1 Apr 2026 (MITC, REV1)",
+        "threshold_spend_inr": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      },
+      {
+        "category_id": "travel",
+        "mcc_list": [
+          4784
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% on toll and bus bookings (MCC 4784) of ₹5,000 or more, from 1 Apr 2026 (MITC, REV1)",
+        "threshold_spend_inr": 5000,
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      },
+      {
+        "category_id": "travel",
+        "mcc_list": [
+          4112
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% (maximum ₹5,000 per transaction) on railway bookings (MCC 4112) of ₹30,000 or more, from 1 Apr 2026 (MITC, REV1)",
+        "threshold_spend_inr": 30000,
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 600,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": 500,
+      "cheque_bounce_charge_inr": 500
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 0,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 50,
+    "grace_period_void_on_revolving_balance": true,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "100% of fees, finance charges, GST and EMI amount",
+        "2% of retail spends and cash advances",
+        "minimum ₹200 (MITC)"
+      ]
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 99,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 100,
+        "max_balance_inr": 500,
+        "fee_inr": 100
+      },
+      {
+        "min_balance_inr": 501,
+        "max_balance_inr": 1000,
+        "fee_inr": 400
+      },
+      {
+        "min_balance_inr": 1001,
+        "max_balance_inr": 10000,
+        "fee_inr": 750
+      },
+      {
+        "min_balance_inr": 10001,
+        "max_balance_inr": 25000,
+        "fee_inr": 950
+      },
+      {
+        "min_balance_inr": 25001,
+        "max_balance_inr": 50000,
+        "fee_inr": 1100
+      },
+      {
+        "min_balance_inr": 50001,
+        "max_balance_inr": null,
+        "fee_inr": 1300
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 300000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "Joining and annual fee ₹2,500 + GST; the annual fee is waived on spends of ₹3,00,000 in the card anniversary year. The joining fee is charged on the issuance date and is not reversed (MITC, KFS, page FAQ).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 2500
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "card_issuance",
+      "benefit_points": 7500,
+      "effective_value_inr": null,
+      "condition": "Page: 7,500 Etihad Guest bonus miles: 5,000 joining miles on ₹25,000 spent within 65 days of issue and payment of the joining fee, plus 2,500 miles on cumulative spends of ₹50,000. The MITC (7 Oct 2026) and the Etihad KFS say 2,500 miles on ₹10,000 within 60 days."
+    },
+    "spend_milestones": [
+      {
+        "id": "etihad-monthly",
+        "label": "Bonus 250 miles on any 4 transactions totalling ₹25,000, once per month (page) or per billing cycle (MITC)",
+        "threshold_spend_inr": 25000,
+        "reward_value_inr": null,
+        "period": "statement_cycle",
+        "is_repeatable": true,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "id": "etihad-quarterly",
+        "label": "Bonus 2,000 miles on ₹2,00,000 spends in a calendar quarter",
+        "threshold_spend_inr": 200000,
+        "reward_value_inr": null,
+        "period": "quarter",
+        "is_repeatable": true,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "id": "etihad-annual",
+        "label": "Bonus 12,000 miles on ₹7,50,000 spends in an anniversary year (MITC; the page tile shows 12,000 annual miles)",
+        "threshold_spend_inr": 750000,
+        "reward_value_inr": null,
+        "period": "card_anniversary_year",
+        "is_repeatable": true,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ]
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "etihad-lounge",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "BOBCARD",
+      "label": "Domestic lounge access, 2 per quarter, and international lounge access, 1 per quarter, no spend criteria (MITC D.5; page: 8 domestic and 4 international a year)",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 3,
+      "quota_period": "quarter",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 0,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": 18
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-15",
+          "sources": [
+            {
+              "url": "https://www.bobcard.co.in/credit-card-types/bobcard-etihad-guest",
+              "kind": "BOBCARD Etihad Guest product page (plain fetch, text read 2026-11-15)",
+              "read": "page text"
+            },
+            {
+              "url": "https://media.bobcard.co.in//media/4wnez0dz/bobcard-consolidated-mitc.pdf",
+              "kind": "BOBCARD Consolidated MITC (PDF created 7 Oct 2026, GENERIC MITC 2.0 JULY2026): joining and annual fees, finance charges, forex, fuel, surcharges, late fee, reward T&C",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://media.bobcard.co.in//media/0h5cim12/features-and-rewards-important-terms-conditions-11112026.pdf",
+              "kind": "Features & Rewards Important T&C (PDF created 11 Nov 2026): core rate, accelerated categories and caps, lounge table, TWID",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://media.bobcard.co.in//media/rfnlbqkz/bobcard-kfs_4x8_17jul2026.pdf",
+              "kind": "BOBCARD Key Fact Statement (PDF created 17 Jul 2026)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://media.bobcard.co.in//media/nfkmkemd/revision-in-product-features-charges-wef-1st-april-26v1.pdf",
+              "kind": "Revision in product features and charges w.e.f. 1 Apr 2026 (core rates table, telecom, new surcharges)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://media.bobcard.co.in//media/lfhhmpw2/revision-in-charges-and-benefits-166.pdf",
+              "kind": "Revision in product features/benefits (PDF created 16 Jun 2026): lounge spend rule, finance charge, insurance withdrawn for new cards",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://media.bobcard.co.in//media/3mjfujsg/etihad-mitc-kfs-22062026.pdf",
+              "kind": "Etihad Guest and Guest Premium MITC and KFS (PDF created 22 Jun 2026, ETIHAD MITC 2.0 APR 2026)",
+              "read": "pdftotext, raw mode"
+            },
+            {
+              "url": "https://media.bobcard.co.in//media/dlobtvcn/revision-in-etihad-features-charges-wef5th-aug26.pdf",
+              "kind": "Revision in Etihad features w.e.f. 5 Aug 2026 (gold tier criterion)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://media.bobcard.co.in//media/1funxwuy/miles-offer-tnc-003.pdf",
+              "kind": "Etihad additional miles campaign T&C, 1 Aug to 30 Sep 2026 (expired; not modelled)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://media.bobcard.co.in//media/utrlq3g0/bobcard-etihad-global-lounge-list.pdf",
+              "kind": "Global airport lounge list for the Etihad cards",
+              "read": "pdftotext"
+            }
+          ],
+          "open_questions": [
+            "Network: not stated by any BOBCARD page or document for BOBCARD Etihad Guest. The card art on the product page shows only the contactless symbol only and no network wordmark; the chevron is not taken as proof of RuPay.",
+            "Miles: the issuer states no rupee value for an Etihad Guest mile and the miles are redeemed only on the Etihad platform, so point_value_inr_baseline is null and no effective return is computed.",
+            "Welcome miles conflict: the page (undated, live) says 7,500 miles (5,000 on ₹25,000 within 65 days plus 2,500 on ₹50,000); the MITC and KFS say 2,500 miles on ₹10,000 within 60 days. The page figure is used; a person should confirm which is current.",
+            "Monthly bonus: \"once per month\" on the page, \"once per billing cycle\" in the MITC; statement_cycle is used.",
+            "Reward point value: only the cashback value shown on the product page is used; points expire 2 years after accrual except Eterna/Tiara (FEAT 1.4). Minimum 1,000 points to redeem against the statement (FEAT).",
+            "EMI processing fee, foreclosure charge and merchant-EMI fees are in the separate \"T&C for EMI on BOBCARD\" PDF and were not read; those fields are null.",
+            "Interest, cash-advance (2.5% or ₹500, limit 40% of available limit), overlimit (2.5% or ₹600) and cheque-return rows are the MITC \"all other credit cards\" rows; the MITC names this card in the fee tables but not in those rows."
+          ],
+          "notes": [
+            "Miles are credited to the cardholder's Etihad Guest account; the validity of the miles follows the Etihad Guest tier; miles are redeemable only on Etihad (MITC D.3).",
+            "Linking the Etihad Guest membership number is the cardholder's responsibility and cannot be changed (MITC D.2).",
+            "Cash withdrawal limit for Etihad Guest is 30% of available limit (MITC).",
+            "BOBCARD can change fees and benefits at its discretion with 30 days notice on its website (MITC)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

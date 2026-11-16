@@ -1,0 +1,234 @@
+{
+ "agent": "W5A",
+ "issuers": [
+  "HDFC Bank",
+  "ICICI Bank"
+ ],
+ "cards": [
+  {
+   "name": "HDFC Bank UPI RuPay Biz Credit Card",
+   "product_url": "https://www.hdfc.bank.in/business-credit-cards/hdfc-bank-upi-rupay-biz-credit-card",
+   "status": "sold",
+   "variant_of": "HDFC Bank UPI RuPay Credit Card",
+   "partner": null,
+   "evidence": "[business] in business menu, Apply Now on page; MITC groups it with the personal UPI RuPay card (same fee row)",
+   "issuer": "HDFC Bank"
+  },
+  {
+   "name": "Paytm HDFC Bank Select Business Credit Card",
+   "product_url": "https://www.hdfc.bank.in/business-credit-cards/paytm-select-business-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": "Paytm",
+   "evidence": "[business] in business menu, Apply Now on page, joining fee Rs 1,000. POSSIBLE DUPLICATE of live paytm-hdfc-bank-select (same Rs 1,000 fee, name lacks 'Business'); MITC has separate rows for 'Paytm HDFC Bank Select' and 'Paytm Select Business'",
+   "issuer": "HDFC Bank"
+  },
+  {
+   "name": "Corporate Platinum Credit Card",
+   "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/corporate-platinum-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "[commercial] in Commercial Credit Cards menu; page CTA 'Enquire Now'",
+   "issuer": "HDFC Bank"
+  },
+  {
+   "name": "Purchase MoneyBack Credit Card",
+   "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/purchase-moneyback-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "[commercial] in Commercial Credit Cards menu; enquiry-led",
+   "issuer": "HDFC Bank"
+  },
+  {
+   "name": "AP: Accounts Payable Program",
+   "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/accounts-payable-program",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "[commercial] in Commercial Credit Cards menu; this is a payables programme rather than a named card; CTA 'Enquire Now'",
+   "issuer": "HDFC Bank"
+  },
+  {
+   "name": "Fleet Credit Card (Fleet Program)",
+   "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/fleet-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "[commercial] in Commercial Credit Cards menu as 'Fleet Program'; CTA 'Enquire Now'",
+   "issuer": "HDFC Bank"
+  },
+  {
+   "name": "Purchase Credit Card",
+   "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/purchase-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "[commercial] in Commercial Credit Cards menu; enquiry-led",
+   "issuer": "HDFC Bank"
+  },
+  {
+   "name": "AR: Accounts Receivables Solution",
+   "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/accounts-receivables-solution",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "[commercial] in Commercial Credit Cards menu; a receivables solution rather than a named card; CTA 'Enquire Now'",
+   "issuer": "HDFC Bank"
+  },
+  {
+   "name": "TMC Credit Card",
+   "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/tmc-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "[commercial] in Commercial Credit Cards menu; CTA 'Enquire Now' (travel management company card)",
+   "issuer": "HDFC Bank"
+  },
+  {
+   "name": "Dealer Credit Card",
+   "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/dealer-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "[commercial] in Commercial Credit Cards menu, Apply Now on page",
+   "issuer": "HDFC Bank"
+  },
+  {
+   "name": "Purchase Reward Credit Card",
+   "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/purchase-reward-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "[commercial] in Commercial Credit Cards menu; enquiry-led",
+   "issuer": "HDFC Bank"
+  },
+  {
+   "name": "Business Corporate MoneyBack Credit Card",
+   "product_url": "https://www.hdfc.bank.in/commercial-credit-cards/business-corporate-moneyback-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "[commercial] page live with Apply Now, but not in the Commercial Credit Cards menu",
+   "issuer": "HDFC Bank"
+  },
+  {
+   "name": "Adani One Signature Credit Card",
+   "product_url": "https://www.icici.bank.in/personal-banking/cards/credit-card/adani-icici-credit-card/signature-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": "Adani One",
+   "evidence": "listing tile Apply Now (adanione.com); co-branded; MITC fee Rs 5,000",
+   "issuer": "ICICI Bank"
+  },
+  {
+   "name": "Adani One Platinum Credit Card",
+   "product_url": "https://www.icici.bank.in/personal-banking/cards/credit-card/adani-icici-credit-card/platinum-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": "Adani One",
+   "evidence": "listing tile Apply Now (adanione.com); co-branded; MITC fee Rs 750",
+   "issuer": "ICICI Bank"
+  },
+  {
+   "name": "MakeMyTrip Credit Card",
+   "product_url": "https://www.icici.bank.in/personal-banking/cards/credit-card/makemytrip/makemytrip-icici-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": "MakeMyTrip",
+   "evidence": "listing tile Apply Now (makemytrip.com link); MITC fee Rs 999; this is the current MakeMyTrip card, separate from the older Platinum and Signature",
+   "issuer": "ICICI Bank"
+  },
+  {
+   "name": "Expressions Credit Card",
+   "product_url": "https://www.icici.bank.in/personal-banking/cards/credit-card/expressions-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "listing tile Apply Now; MITC fee Rs 499",
+   "issuer": "ICICI Bank"
+  },
+  {
+   "name": "Alumni Credit Card",
+   "product_url": "https://www.icici.bank.in/personal-banking/cards/credit-card/alumni-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": "College alumni programme",
+   "evidence": "page has APPLY NOW and a college selector; no joining or annual fee; linked from the listing page but not in the grid; not in the MITC fee table",
+   "issuer": "ICICI Bank"
+  },
+  {
+   "name": "Instant Platinum Credit Card (against Fixed Deposit)",
+   "product_url": "https://www.icici.bank.in/personal-banking/cards/credit-card/credit-card-against-fixed-deposit",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Credit Card Against Fixed Deposit page offers 'ICICI Bank Instant Platinum Credit Card' and 'ICICI Bank Coral Credit Card' variants (APPLY NOW); MITC has 'Instant Platinum Credit Card' row",
+   "issuer": "ICICI Bank"
+  },
+  {
+   "name": "Coral Credit Card against Fixed Deposit",
+   "product_url": "https://www.icici.bank.in/personal-banking/cards/credit-card/credit-card-against-fixed-deposit",
+   "status": "sold",
+   "variant_of": "Coral Credit Card",
+   "partner": null,
+   "evidence": "FD-secured variant offered on the Credit Card Against Fixed Deposit page; MITC has a separate row at the same Rs 500 fee",
+   "issuer": "ICICI Bank"
+  },
+  {
+   "name": "NRI Secured Coral Credit Card",
+   "product_url": "https://www.icici.bank.in/nri-banking/cards/credit-card",
+   "status": "sold",
+   "variant_of": "Coral Credit Card",
+   "partner": null,
+   "evidence": "NRI page lists it with an Apply button; not a separate row in the MITC",
+   "issuer": "ICICI Bank"
+  },
+  {
+   "name": "Platinum Business Card",
+   "product_url": "https://www.icici.bank.in/business-banking/cards/business-credit-card/platinum-business-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "[business] business-card page lists it with Apply",
+   "issuer": "ICICI Bank"
+  },
+  {
+   "name": "Business Ascent Card (American Express)",
+   "product_url": "https://www.icici.bank.in/business-banking/cards/business-credit-card/ascent-business-advantage-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": "American Express",
+   "evidence": "[business] business-card page lists it with Apply; MITC row 'ICICI Bank Ascent American Express Credit Card' Rs 4,000",
+   "issuer": "ICICI Bank"
+  },
+  {
+   "name": "Business Essential Credit Card",
+   "product_url": "https://www.icici.bank.in/business-banking/cards/business-credit-card/essential-business-advantage-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "[business] listed on the business-card page",
+   "issuer": "ICICI Bank"
+  },
+  {
+   "name": "Gold Business Credit Card",
+   "product_url": "https://www.icici.bank.in/business-banking/cards/business-credit-card/gold-business-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "[business] business-card page lists it with a lead-form apply link",
+   "issuer": "ICICI Bank"
+  },
+  {
+   "name": "Business Micro Credit Card",
+   "product_url": "https://www.icici.bank.in/business-banking/cards/business-credit-card/micro-business-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "[business] listed on the business-card page with a lead-form apply link",
+   "issuer": "ICICI Bank"
+  }
+ ]
+}

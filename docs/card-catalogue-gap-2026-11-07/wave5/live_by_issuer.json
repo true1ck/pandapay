@@ -1,0 +1,2162 @@
+{
+ "note": "live published cards by issuer_slug from GET https://api.pandapath.live/catalogue on 2026-11-15; reuse an existing issuer_slug when the issuer is here",
+ "issuers": {
+  "kotak-mahindra-bank": [
+   {
+    "slug": "indigo-kotak-6e-rewards",
+    "name": "6E Rewards IndiGo Kotak Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "kotak-bizedge-credit-card",
+    "name": "BizEdge Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "kotak-corporate-wealth-signature-credit-card",
+    "name": "Corporate Wealth Signature Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "kotak-delight-platinum-credit-card",
+    "name": "Delight Platinum Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "kotak-feast-gold-credit-card",
+    "name": "Feast Gold Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "indigo-kotak-6e-rewards-xl-credit-card",
+    "name": "IndiGo Kotak 6E Rewards XL Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "indigo-kotak-credit-card",
+    "name": "IndiGo Kotak Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "kotak-811-credit-card",
+    "name": "Kotak 811 Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "kotak-air-credit-card",
+    "name": "Kotak Air Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "kotak-air-plus-credit-card",
+    "name": "Kotak Air+ Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "kotak-air-plus-prime-credit-card",
+    "name": "Kotak Air+ Prime Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "kotak-cashback-plus-credit-card",
+    "name": "Kotak Cashback+ Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "kotak-privy-league-signature-credit-card",
+    "name": "Kotak Privy League Signature Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "kotak-811-dream-different",
+    "name": "Kotak811 #DreamDifferent Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "kotak811-super-money-credit-card",
+    "name": "Kotak811 Super Money Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "kotak-league-platinum-credit-card",
+    "name": "League Platinum Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "kotak-mojo-platinum-credit-card",
+    "name": "Mojo Platinum Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "kotak-privy-league-platinum-corporate-credit-card",
+    "name": "Privy League Platinum Corporate Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "kotak-purchase-credit-card",
+    "name": "Purchase Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "pvr-inox-kotak-credit-card",
+    "name": "PVR INOX Kotak Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "pvr-kotak-gold-credit-card",
+    "name": "PVR Kotak Gold Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "pvr-kotak-platinum-credit-card",
+    "name": "PVR Kotak Platinum Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "kotak-royale-signature-credit-card",
+    "name": "Royale Signature Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "kotak-zen-signature-credit-card",
+    "name": "Zen Signature Credit Card",
+    "network": "visa"
+   }
+  ],
+  "yes-bank": [
+   {
+    "slug": "yes-bank-ace",
+    "name": "ACE",
+    "network": "unknown"
+   },
+   {
+    "slug": "yes-bank-byoc",
+    "name": "BYOC (Build Your Own Card)",
+    "network": "mastercard"
+   },
+   {
+    "slug": "yes-bank-elite",
+    "name": "ELITE Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "yes-bank-emi",
+    "name": "EMI Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "yes-bank-klick-rupay-kiwi",
+    "name": "Klick RuPay Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "yes-bank-marquee",
+    "name": "MARQUEE Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "yes-bank-paisasave",
+    "name": "PaisaSave Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "yes-bank-reserv",
+    "name": "RESERV Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "yes-bank-select",
+    "name": "SELECT Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "yes-bank-wellness",
+    "name": "Wellness Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "yes-bank-wellness-plus",
+    "name": "Wellness Plus",
+    "network": "mastercard"
+   },
+   {
+    "slug": "yes-bank-finbooster",
+    "name": "YES BANK FinBooster Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "yes-bank-paisasave-rupay",
+    "name": "YES BANK Paisabazaar PaisaSave RuPay Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "yes-bank-pop-club-rupay",
+    "name": "YES BANK POP-CLUB RuPay Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "yes-bank-uni",
+    "name": "YES BANK Uni Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "yes-bank-yes-first-exclusive",
+    "name": "YES First Exclusive",
+    "network": "mastercard"
+   },
+   {
+    "slug": "yes-bank-first-preferred",
+    "name": "YES First Preferred",
+    "network": "mastercard"
+   },
+   {
+    "slug": "yes-bank-premia",
+    "name": "YES Premia",
+    "network": "mastercard"
+   },
+   {
+    "slug": "yes-private-credit-card",
+    "name": "YES Private Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "yes-private-prime",
+    "name": "YES Private Prime",
+    "network": "mastercard"
+   }
+  ],
+  "sbi": [
+   {
+    "slug": "aditya-birla-sbi-card",
+    "name": "Aditya Birla SBI Card",
+    "network": "visa"
+   },
+   {
+    "slug": "aditya-birla-sbi-card-select",
+    "name": "Aditya Birla SBI Card SELECT",
+    "network": "visa"
+   },
+   {
+    "slug": "air-india-sbi-signature",
+    "name": "Air India SBI Signature Card",
+    "network": "visa"
+   },
+   {
+    "slug": "apollo-sbi-card",
+    "name": "Apollo SBI Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "apollo-sbi-card-select",
+    "name": "Apollo SBI Card SELECT",
+    "network": "rupay"
+   },
+   {
+    "slug": "sbi-aurum",
+    "name": "AURUM SBI Card",
+    "network": "visa"
+   },
+   {
+    "slug": "bank-of-maharashtra-sbi-card-elite",
+    "name": "Bank of Maharashtra SBI Card ELITE",
+    "network": "visa"
+   },
+   {
+    "slug": "bpcl-sbi-card",
+    "name": "BPCL SBI Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "bpcl-sbi-card-octane",
+    "name": "BPCL SBI Card OCTANE",
+    "network": "visa"
+   },
+   {
+    "slug": "cashback-sbi-card",
+    "name": "CASHBACK SBI Card",
+    "network": "visa"
+   },
+   {
+    "slug": "central-bank-of-india-sbi-card-elite",
+    "name": "Central Bank of India SBI Card ELITE",
+    "network": "visa"
+   },
+   {
+    "slug": "central-sbi-card",
+    "name": "Central SBI Card",
+    "network": "visa"
+   },
+   {
+    "slug": "central-sbi-select",
+    "name": "Central SBI Select Card",
+    "network": "visa"
+   },
+   {
+    "slug": "city-union-bank-sbi-card-elite",
+    "name": "City Union Bank SBI Card ELITE",
+    "network": "visa"
+   },
+   {
+    "slug": "city-union-bank-sbi-card-prime",
+    "name": "City Union Bank SBI Card PRIME",
+    "network": "unknown"
+   },
+   {
+    "slug": "city-union-bank-simplysave-sbi-card",
+    "name": "City Union Bank SimplySAVE SBI Card",
+    "network": "visa"
+   },
+   {
+    "slug": "club-vistara-sbi-card",
+    "name": "Club Vistara SBI Card",
+    "network": "visa"
+   },
+   {
+    "slug": "doctors-sbi-card-ima",
+    "name": "Doctor's SBI Card (IMA)",
+    "network": "visa"
+   },
+   {
+    "slug": "doctors-ima-sbi-card",
+    "name": "Doctor's SBI Card (in Association with IMA)",
+    "network": "visa"
+   },
+   {
+    "slug": "eternal-sbi-card",
+    "name": "Eternal SBI Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "fabindia-sbi-card",
+    "name": "FABindia SBI Card",
+    "network": "visa"
+   },
+   {
+    "slug": "fabindia-sbi-card-select",
+    "name": "FABindia SBI Card SELECT",
+    "network": "visa"
+   },
+   {
+    "slug": "fbb-sbi-styleup-card",
+    "name": "FBB SBI Styleup Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "flipkart-sbi-card",
+    "name": "Flipkart SBI Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "google-pay-flex-sbi-card",
+    "name": "Google Pay Flex SBI Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "indigo-sbi-card-elite",
+    "name": "IndiGo SBI Card ELITE",
+    "network": "mastercard"
+   },
+   {
+    "slug": "indigo-sbi-credit-card",
+    "name": "IndiGo SBI Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "irctc-rupay-sbi-card",
+    "name": "IRCTC SBI Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "irctc-sbi-card-premier",
+    "name": "IRCTC SBI Card Premier",
+    "network": "unknown"
+   },
+   {
+    "slug": "irctc-sbi-platinum-card",
+    "name": "IRCTC SBI Platinum Card",
+    "network": "visa"
+   },
+   {
+    "slug": "karnataka-bank-sbi-card-prime",
+    "name": "Karnataka Bank SBI Card PRIME",
+    "network": "visa"
+   },
+   {
+    "slug": "karnataka-bank-simplysave-sbi-card",
+    "name": "Karnataka Bank SimplySAVE SBI Card",
+    "network": "visa"
+   },
+   {
+    "slug": "karur-vysya-bank-sbi-card-elite",
+    "name": "Karur Vysya Bank SBI Card ELITE",
+    "network": "unknown"
+   },
+   {
+    "slug": "karur-vysya-bank-sbi-card-prime",
+    "name": "Karur Vysya Bank SBI Card PRIME",
+    "network": "mastercard"
+   },
+   {
+    "slug": "karur-vysya-bank-sbi-card-simplysave",
+    "name": "Karur Vysya Bank SimplySAVE SBI Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "krisflyer-sbi-card",
+    "name": "KrisFlyer SBI Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "krisflyer-sbi-card-apex",
+    "name": "KrisFlyer SBI Card Apex",
+    "network": "mastercard"
+   },
+   {
+    "slug": "landmark-rewards-sbi-card",
+    "name": "Landmark Rewards SBI Card",
+    "network": "visa"
+   },
+   {
+    "slug": "landmark-rewards-sbi-prime",
+    "name": "Landmark Rewards SBI Card PRIME",
+    "network": "visa"
+   },
+   {
+    "slug": "landmark-rewards-sbi-card-select",
+    "name": "Landmark Rewards SBI Card SELECT",
+    "network": "visa"
+   },
+   {
+    "slug": "lifestyle-home-centre-sbi-card",
+    "name": "Lifestyle Home Centre SBI Card",
+    "network": "visa"
+   },
+   {
+    "slug": "lifestyle-home-centre-sbi-card-prime",
+    "name": "Lifestyle Home Centre SBI Card PRIME",
+    "network": "visa"
+   },
+   {
+    "slug": "max-sbi-card-select",
+    "name": "MAX SBI Card SELECT",
+    "network": "visa"
+   },
+   {
+    "slug": "natures-basket-sbi-card",
+    "name": "Nature's Basket SBI Card",
+    "network": "visa"
+   },
+   {
+    "slug": "natures-basket-sbi-card-elite",
+    "name": "Nature's Basket SBI Card Elite",
+    "network": "visa"
+   },
+   {
+    "slug": "paytm-sbi-card",
+    "name": "Paytm\n SBI Card",
+    "network": "visa"
+   },
+   {
+    "slug": "paytm-sbi-card-select",
+    "name": "Paytm SBI Card SELECT",
+    "network": "visa"
+   },
+   {
+    "slug": "phonepe-sbi-card-purple",
+    "name": "PhonePe SBI Card PURPLE",
+    "network": "rupay"
+   },
+   {
+    "slug": "phonepe-sbi-select-black",
+    "name": "PhonePe SBI Card SELECT BLACK",
+    "network": "unknown"
+   },
+   {
+    "slug": "punjab-sind-bank-sbi-card-elite",
+    "name": "Punjab & Sind Bank SBI Card ELITE",
+    "network": "visa"
+   },
+   {
+    "slug": "punjab-sind-bank-simplysave-sbi-card",
+    "name": "Punjab & Sind Bank SimplySAVE SBI Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "reliance-sbi-card",
+    "name": "Reliance\n SBI Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "reliance-sbi-card-prime",
+    "name": "Reliance SBI Card PRIME",
+    "network": "unknown"
+   },
+   {
+    "slug": "sbi-card-elite",
+    "name": "SBI Card ELITE",
+    "network": "unknown"
+   },
+   {
+    "slug": "sbi-card-elite-advantage",
+    "name": "SBI Card ELITE Advantage",
+    "network": "unknown"
+   },
+   {
+    "slug": "sbi-card-miles",
+    "name": "SBI Card MILES",
+    "network": "mastercard"
+   },
+   {
+    "slug": "sbi-card-miles-elite",
+    "name": "SBI Card MILES ELITE",
+    "network": "mastercard"
+   },
+   {
+    "slug": "sbi-card-prime",
+    "name": "SBI Card PRIME",
+    "network": "visa"
+   },
+   {
+    "slug": "sbi-card-prime-advantage",
+    "name": "SBI Card PRIME Advantage",
+    "network": "visa"
+   },
+   {
+    "slug": "sbi-card-pulse",
+    "name": "SBI Card PULSE",
+    "network": "visa"
+   },
+   {
+    "slug": "sbi-miles-prime",
+    "name": "SBI MILES PRIME Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "sbi-simplysave-upi-rupay",
+    "name": "SBI SimplySAVE UPI SBI Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "sbi-shaurya-credit-card",
+    "name": "Shaurya SBI Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "sbi-shaurya-select",
+    "name": "Shaurya Select SBI Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "simplyclick-advantage-sbi-card",
+    "name": "SimplyCLICK Advantage SBI Card",
+    "network": "visa"
+   },
+   {
+    "slug": "sbi-simplyclick",
+    "name": "SimplyCLICK SBI Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "simplysave-advantage-sbi-card",
+    "name": "SimplySAVE Advantage SBI Card",
+    "network": "visa"
+   },
+   {
+    "slug": "simplysave-sbi-credit-card",
+    "name": "SimplySAVE SBI Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "south-indian-bank-sbi-card-prime",
+    "name": "South Indian Bank SBI Card PRIME",
+    "network": "mastercard"
+   },
+   {
+    "slug": "south-indian-bank-simplysave-sbi-card",
+    "name": "South Indian Bank SimplySAVE SBI Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "spar-sbi-card",
+    "name": "Spar SBI Card",
+    "network": "visa"
+   },
+   {
+    "slug": "spar-sbi-card-prime",
+    "name": "Spar SBI Card PRIME",
+    "network": "visa"
+   },
+   {
+    "slug": "tata-neu-plus-sbi-credit-card",
+    "name": "Tata Neu Plus SBI Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "titan-sbi-card",
+    "name": "Titan\n SBI Card",
+    "network": "visa"
+   },
+   {
+    "slug": "uco-bank-sbi-card-elite",
+    "name": "UCO Bank SBI Card ELITE",
+    "network": "visa"
+   },
+   {
+    "slug": "uco-bank-sbi-card-prime",
+    "name": "UCO Bank SBI Card PRIME",
+    "network": "visa"
+   },
+   {
+    "slug": "uco-bank-simplysave-sbi-card",
+    "name": "UCO Bank SimplySAVE SBI Card",
+    "network": "visa"
+   },
+   {
+    "slug": "yatra-sbi-card",
+    "name": "Yatra SBI Card",
+    "network": "rupay"
+   }
+  ],
+  "axis-bank": [
+   {
+    "slug": "airtel-axis-bank-credit-card",
+    "name": "Airtel Axis Bank Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "axis-bank-aura",
+    "name": "Axis\n Bank Aura Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "axis-bank-ace",
+    "name": "Axis Bank ACE Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "axis-atlas",
+    "name": "Axis Bank Atlas Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "axis-bank-cashback-credit-card",
+    "name": "Axis Bank Cashback Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "axis-bank-magnus",
+    "name": "Axis Bank Magnus",
+    "network": "mastercard"
+   },
+   {
+    "slug": "axis-bank-my-zone",
+    "name": "Axis Bank My Zone Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "axis-bank-my-zone-easy",
+    "name": "Axis Bank MY ZONE EASY Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "axis-bank-neo",
+    "name": "Axis Bank Neo Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "axis-bank-privilege",
+    "name": "Axis Bank Privilege Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "axis-bank-reserve",
+    "name": "Axis Bank Reserve Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "axis-bank-rewards-credit-card",
+    "name": "Axis Bank REWARDS Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "axis-bank-select",
+    "name": "Axis Bank Select Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "axis-bank-shoppers-stop",
+    "name": "Axis Bank Shoppers Stop Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "axis-bank-supermoney-rupay",
+    "name": "Axis Bank super.money RuPay Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "axis-horizon-credit-card",
+    "name": "Axis Horizon Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "flipkart-axis-bank-credit-card",
+    "name": "Flipkart Axis Bank Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "google-pay-flex-axis-bank",
+    "name": "Google Pay Flex Axis Bank Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "indianoil-axis-bank-credit-card",
+    "name": "IndianOil Axis Bank Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "axis-indianoil-premium",
+    "name": "IndianOil Axis Bank Premium Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "indianoil-easy-axis-bank",
+    "name": "IndianOil Easy Axis Bank Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "axis-bank-indigo",
+    "name": "IndiGo Axis Bank Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "axis-bank-indigo-premium",
+    "name": "IndiGo Axis Bank Premium Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "axis-bank-kwik",
+    "name": "Kwik Axis Bank Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "lic-axis-bank-platinum",
+    "name": "LIC\n Axis Bank Platinum Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "lic-axis-bank-signature",
+    "name": "LIC Axis Bank Signature Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "axis-samsung-infinite",
+    "name": "Samsung Axis Bank Infinite Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "axis-samsung-signature",
+    "name": "Samsung Axis Bank Signature Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "axis-bank-scapia-credit-card",
+    "name": "Scapia Axis Bank Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "spicejet-axis-bank-voyage-black",
+    "name": "SpiceJet Axis Bank Voyage Black Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "spicejet-axis-bank-voyage",
+    "name": "SpiceJet Axis Bank Voyage Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "axis-bank-vistara-infinite",
+    "name": "Vistara Axis Bank Infinite",
+    "network": "visa"
+   },
+   {
+    "slug": "vistara-axis-bank-signature",
+    "name": "Vistara Axis Bank Signature",
+    "network": "visa"
+   }
+  ],
+  "au-small-finance-bank": [
+   {
+    "slug": "au-altura",
+    "name": "Altura",
+    "network": "visa"
+   },
+   {
+    "slug": "au-altura-plus",
+    "name": "Altura Plus",
+    "network": "visa"
+   },
+   {
+    "slug": "au-spont",
+    "name": "AU SPONT Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "au-xcite-ultra",
+    "name": "AU Xcite Ultra Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "au-zenith",
+    "name": "AU Zenith Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "cheq-au-credit-card",
+    "name": "CheQ AU Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "ixigo-au-credit-card",
+    "name": "ixigo AU Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "au-lit-credit-card",
+    "name": "LIT Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "paytm-au-credit-card",
+    "name": "Paytm AU Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "au-small-finance-bank-vetta",
+    "name": "Vetta",
+    "network": "visa"
+   },
+   {
+    "slug": "au-zenith-plus-metal",
+    "name": "Zenith+ Metal Credit Card",
+    "network": "visa"
+   }
+  ],
+  "icici-bank": [
+   {
+    "slug": "amazon-pay-icici-bank-credit-card",
+    "name": "Amazon Pay ICICI Bank Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "chennai-super-kings-icici-bank-credit-card",
+    "name": "Chennai Super Kings ICICI Bank Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "icici-coral",
+    "name": "Coral Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "icici-emeralde-credit-card",
+    "name": "Emeralde Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "icici-emeralde-private-metal",
+    "name": "Emeralde Private Metal Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "emirates-skywards-icici-bank-emeralde",
+    "name": "Emirates Skywards ICICI Bank Emeralde Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "emirates-skywards-icici-bank-rubyx",
+    "name": "Emirates Skywards ICICI Bank Rubyx Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "emirates-skywards-icici-bank-sapphiro",
+    "name": "Emirates Skywards ICICI Bank Sapphiro Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "icici-hpcl-coral-credit-card",
+    "name": "HPCL Coral Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "icici-business-advantage-black",
+    "name": "ICICI Bank Business Advantage Black",
+    "network": "visa"
+   },
+   {
+    "slug": "icici-business-advantage-blue",
+    "name": "ICICI Bank Business Advantage Blue Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "icici-hpcl-super-saver-credit-card",
+    "name": "ICICI Bank HPCL Super Saver Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "intermiles-icici-bank-coral",
+    "name": "InterMiles ICICI Bank Coral Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "intermiles-icici-bank-rubyx",
+    "name": "InterMiles ICICI Bank Rubyx Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "intermiles-icici-bank-sapphiro",
+    "name": "InterMiles ICICI Bank Sapphiro Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "makemytrip-icici-bank-platinum",
+    "name": "MakeMyTrip ICICI Bank Platinum Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "makemytrip-icici-bank-signature-credit-card",
+    "name": "MakeMyTrip ICICI Bank Signature Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "icici-manchester-united-platinum",
+    "name": "Manchester United Platinum Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "icici-manchester-united-signature",
+    "name": "Manchester United Signature Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "icici-bank-parakram-select",
+    "name": "Parakram Select Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "icici-platinum-chip",
+    "name": "Platinum Chip Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "icici-rubyx",
+    "name": "Rubyx Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "icici-sapphiro",
+    "name": "Sapphiro Credit Card",
+    "network": "unknown"
+   }
+  ],
+  "american-express-india": [
+   {
+    "slug": "american-express-corporate-platinum-card-india",
+    "name": "American Express Corporate Platinum Card",
+    "network": "amex"
+   },
+   {
+    "slug": "american-express-gold-charge-card-india",
+    "name": "American Express Gold Card",
+    "network": "amex"
+   },
+   {
+    "slug": "american-express-gold-corporate-card-india",
+    "name": "American Express Gold Corporate Card",
+    "network": "amex"
+   },
+   {
+    "slug": "american-express-membership-rewards-credit-card-india",
+    "name": "American Express Membership Rewards Credit Card",
+    "network": "amex"
+   },
+   {
+    "slug": "american-express-platinum-charge-card-india",
+    "name": "American Express Platinum Card",
+    "network": "amex"
+   },
+   {
+    "slug": "american-express-platinum-reserve-credit-card-india",
+    "name": "American Express Platinum Reserve Credit Card",
+    "network": "amex"
+   },
+   {
+    "slug": "american-express-platinum-travel-credit-card-india",
+    "name": "American Express Platinum Travel Credit Card",
+    "network": "amex"
+   },
+   {
+    "slug": "american-express-smartearn-credit-card-india",
+    "name": "American Express SmartEarn Credit Card",
+    "network": "amex"
+   }
+  ],
+  "idfc-first-bank": [
+   {
+    "slug": "idfc-first-ashva-metal",
+    "name": "Ashva Metal Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "idfc-first-business-max",
+    "name": "Business Max",
+    "network": "rupay"
+   },
+   {
+    "slug": "idfc-first-business-multiplier",
+    "name": "Business Multiplier",
+    "network": "mastercard"
+   },
+   {
+    "slug": "club-vistara-idfc-first",
+    "name": "Club\n Vistara IDFC FIRST Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "idfc-first-diamond-reserve",
+    "name": "Diamond Reserve Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "idfc-first-business",
+    "name": "FIRST\n Business",
+    "network": "mastercard"
+   },
+   {
+    "slug": "idfc-first-classic",
+    "name": "FIRST Classic",
+    "network": "visa"
+   },
+   {
+    "slug": "idfc-first-corporate",
+    "name": "FIRST Corporate",
+    "network": "mastercard"
+   },
+   {
+    "slug": "idfc-first-digital",
+    "name": "FIRST Digital RuPay Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "idfc-first-earn",
+    "name": "FIRST EA\u20b9N",
+    "network": "rupay"
+   },
+   {
+    "slug": "idfc-first-millennia",
+    "name": "FIRST Millennia",
+    "network": "visa"
+   },
+   {
+    "slug": "idfc-first-private",
+    "name": "FIRST Private Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "idfc-first-purchase",
+    "name": "FIRST Purchase",
+    "network": "mastercard"
+   },
+   {
+    "slug": "idfc-first-select",
+    "name": "FIRST Select",
+    "network": "unknown"
+   },
+   {
+    "slug": "idfc-first-swyp",
+    "name": "FIRST SWYP",
+    "network": "visa"
+   },
+   {
+    "slug": "idfc-first-wealth",
+    "name": "FIRST Wealth",
+    "network": "visa"
+   },
+   {
+    "slug": "idfc-first-wow",
+    "name": "FIRST WOW!",
+    "network": "visa"
+   },
+   {
+    "slug": "idfc-first-wow-black",
+    "name": "FIRST WOW! Black",
+    "network": "mastercard"
+   },
+   {
+    "slug": "idfc-first-gaj-metal",
+    "name": "Gaj: Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "idfc-first-hello-cashback",
+    "name": "Hello Cashback",
+    "network": "rupay"
+   },
+   {
+    "slug": "hpcl-idfc-first-power-plus",
+    "name": "HPCL\n IDFC FIRST Power+",
+    "network": "rupay"
+   },
+   {
+    "slug": "hpcl-idfc-first-power",
+    "name": "HPCL IDFC FIRST Power",
+    "network": "rupay"
+   },
+   {
+    "slug": "indigo-idfc-first-dual-card",
+    "name": "IndiGo IDFC FIRST Dual Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "idfc-first-lic-classic",
+    "name": "LIC Classic Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "idfc-first-lic-select",
+    "name": "LIC Select Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "idfc-first-mayura-metal",
+    "name": "Mayura Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "idfc-first-micro-enterprise",
+    "name": "Micro Enterprise Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "idfc-first-quantum-plus",
+    "name": "Quantum+ Credit Card",
+    "network": "rupay"
+   }
+  ],
+  "indusind": [
+   {
+    "slug": "indusind-avios-visa-infinite-credit-card",
+    "name": "Avios Visa Infinite",
+    "network": "visa"
+   },
+   {
+    "slug": "indusind-celesta-credit-card",
+    "name": "Celesta Credit Card",
+    "network": "amex"
+   },
+   {
+    "slug": "club-vistara-indusind-bank-explorer",
+    "name": "Club Vistara IndusInd Bank Explorer Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "indusind-bank-cred-rupay",
+    "name": "CRED IndusInd Bank RuPay Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "indusind-crest-credit-card",
+    "name": "Crest Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "indusind-duo-card",
+    "name": "Duo Card",
+    "network": "visa"
+   },
+   {
+    "slug": "indusind-duo-plus",
+    "name": "Duo Plus Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "eazydiner-indusind-signature",
+    "name": "EazyDiner IndusInd Bank Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "eazydiner-indusind-platinum",
+    "name": "EazyDiner IndusInd Bank Platinum Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "indusind-iconia-amex",
+    "name": "Iconia Amex",
+    "network": "amex"
+   },
+   {
+    "slug": "indusind-iconia-visa",
+    "name": "Iconia Visa",
+    "network": "visa"
+   },
+   {
+    "slug": "indusind-indulge-credit-card",
+    "name": "Indulge Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "indusind-intermiles-voyage-visa",
+    "name": "InterMiles Voyage Visa",
+    "network": "visa"
+   },
+   {
+    "slug": "indusind-jio-bp-mobility-plus-credit-card",
+    "name": "Jio-bp Mobility+ Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "indusind-legend",
+    "name": "Legend Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "indusind-nexxt-credit-card",
+    "name": "Nexxt Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "indusind-pinnacle-credit-card",
+    "name": "Pinnacle Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "indusind-pinnacle-world-credit-card",
+    "name": "Pinnacle World Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "indusind-pioneer-heritage-credit-card",
+    "name": "Pioneer Heritage Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "indusind-pioneer-legacy-credit-card",
+    "name": "Pioneer Legacy Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "indusind-platinum-aura-edge",
+    "name": "Platinum Aura Edge",
+    "network": "unknown"
+   },
+   {
+    "slug": "indusind-platinum",
+    "name": "Platinum Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "indusind-platinum-rupay",
+    "name": "Platinum RuPay",
+    "network": "rupay"
+   },
+   {
+    "slug": "indusind-platinum-select",
+    "name": "Platinum Select",
+    "network": "visa"
+   },
+   {
+    "slug": "indusind-platinum-visa",
+    "name": "Platinum Visa Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "indusind-samman-rupay-credit-card",
+    "name": "Samman RuPay Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "indusind-signature-visa",
+    "name": "Signature Visa",
+    "network": "visa"
+   },
+   {
+    "slug": "indusind-tiger-credit-card",
+    "name": "Tiger Credit Card",
+    "network": "visa"
+   }
+  ],
+  "bandhan-bank": [
+   {
+    "slug": "bandhan-flare",
+    "name": "Bandhan Bank Flare Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "bandhan-lumina",
+    "name": "Bandhan Bank Lumina Credit Card",
+    "network": "unknown"
+   }
+  ],
+  "bank-of-maharashtra": [
+   {
+    "slug": "bank-of-maharashtra-sbi-card-prime",
+    "name": "Bank of Maharashtra SBI Card PRIME",
+    "network": "unknown"
+   }
+  ],
+  "state-bank-of-india": [
+   {
+    "slug": "bank-of-maharashtra-simplysave-sbi-card",
+    "name": "Bank of Maharashtra SimplySAVE SBI Card",
+    "network": "unknown"
+   }
+  ],
+  "hdfc": [
+   {
+    "slug": "hdfc-best-price-save-max-walmart",
+    "name": "Best Price Save Max HDFC Bank Credit Card",
+    "network": "diners"
+   },
+   {
+    "slug": "hdfc-bizblack-metal-edition",
+    "name": "BizBlack Metal Edition Credit Card",
+    "network": "diners"
+   },
+   {
+    "slug": "hdfc-bizfirst",
+    "name": "BizFirst",
+    "network": "unknown"
+   },
+   {
+    "slug": "hdfc-bizgrow",
+    "name": "BizGrow",
+    "network": "visa"
+   },
+   {
+    "slug": "hdfc-bizpower",
+    "name": "BizPower",
+    "network": "rupay"
+   },
+   {
+    "slug": "hdfc-central-travel-account",
+    "name": "Central Travel Account",
+    "network": "visa"
+   },
+   {
+    "slug": "hdfc-corporate-premium",
+    "name": "Corporate Premium",
+    "network": "mastercard"
+   },
+   {
+    "slug": "hdfc-diners-club-miles",
+    "name": "Diners\n Club Miles",
+    "network": "diners"
+   },
+   {
+    "slug": "hdfc-diners-club-black-metal",
+    "name": "Diners Club Black Metal Edition",
+    "network": "diners"
+   },
+   {
+    "slug": "hdfc-diners-club-privilege",
+    "name": "Diners Club Privilege",
+    "network": "diners"
+   },
+   {
+    "slug": "flipkart-wholesale",
+    "name": "Flipkart Wholesale HDFC Bank Credit Card",
+    "network": "diners"
+   },
+   {
+    "slug": "hdfc-freedom",
+    "name": "Freedom Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "hdfc-giga-business",
+    "name": "GIGA Business Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "hdfc-visa-signature",
+    "name": "HDFC\n Bank Visa Signature Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "hdfc-bharat-cashback",
+    "name": "HDFC Bank Bharat Cashback Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "hdfc-upi-rupay-credit-card",
+    "name": "HDFC Bank UPI RuPay Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "indianoil-hdfc-bank-credit-card",
+    "name": "IndianOil HDFC Bank Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "indigo-hdfc-6e-rewards-xl",
+    "name": "IndiGo HDFC Bank Credit Card (6E Rewards XL)",
+    "network": "mastercard"
+   },
+   {
+    "slug": "indigo-hdfc-6e-rewards",
+    "name": "IndiGo HDFC Bank Credit Card (6E Rewards)",
+    "network": "mastercard"
+   },
+   {
+    "slug": "hdfc-infinia-metal",
+    "name": "Infinia Metal Edition",
+    "network": "visa"
+   },
+   {
+    "slug": "irctc-hdfc-bank-credit-card",
+    "name": "IRCTC HDFC Bank Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "marriott-bonvoy-hdfc-bank-credit-card",
+    "name": "Marriott Bonvoy HDFC Bank Credit Card",
+    "network": "diners"
+   },
+   {
+    "slug": "hdfc-millennia",
+    "name": "Millennia Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "hdfc-moneyback-plus",
+    "name": "MoneyBack+ Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "paytm-hdfc-bank-select",
+    "name": "Paytm\n HDFC Bank Select Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "paytm-business-hdfc",
+    "name": "Paytm HDFC Bank Business Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "paytm-hdfc-bank-credit-card",
+    "name": "Paytm HDFC Bank Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "paytm-hdfc-bank-mobile-credit-card",
+    "name": "Paytm HDFC Bank Mobile Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "phonepe-hdfc-bank-ultimo",
+    "name": "PhonePe\n HDFC Bank Ultimo Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "hdfc-phonepe-uno",
+    "name": "PhonePe HDFC Bank Uno Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "hdfc-pixel-go",
+    "name": "PIXEL Go Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "hdfc-pixel-play",
+    "name": "PIXEL Play Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "hdfc-purchase-premium",
+    "name": "Purchase Premium",
+    "network": "mastercard"
+   },
+   {
+    "slug": "hdfc-regalia-first",
+    "name": "Regalia First Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "hdfc-regalia-gold",
+    "name": "Regalia Gold",
+    "network": "unknown"
+   },
+   {
+    "slug": "hdfc-shoppers-stop-black",
+    "name": "Shoppers Stop Black HDFC Bank Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "shoppers-stop-hdfc-bank-credit-card",
+    "name": "Shoppers Stop HDFC Bank Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "snapdeal-hdfc-bank-credit-card",
+    "name": "Snapdeal HDFC Bank Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "swiggy-hdfc-bank-credit-card",
+    "name": "Swiggy\n HDFC Bank Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "swiggy-blck-hdfc-bank",
+    "name": "Swiggy BLCK HDFC Bank Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "swiggy-ornge-hdfc-bank-credit-card",
+    "name": "Swiggy Ornge HDFC Bank Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "tata-neu-infinity-hdfc-bank",
+    "name": "Tata Neu Infinity HDFC Bank Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "tata-neu-infinity-sbi-credit-card",
+    "name": "Tata Neu Infinity SBI Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "tata-neu-plus-hdfc-bank",
+    "name": "Tata Neu Plus HDFC Bank Credit Card",
+    "network": "rupay"
+   }
+  ],
+  "standard-chartered": [
+   {
+    "slug": "standard-chartered-beyond",
+    "name": "Beyond Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "standard-chartered-digismart",
+    "name": "DigiSmart Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "standard-chartered-easemytrip",
+    "name": "EaseMyTrip Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "standard-chartered-emirates-world",
+    "name": "Emirates World Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "standard-chartered-manhattan-platinum",
+    "name": "Manhattan Platinum Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "standard-chartered-platinum-rewards",
+    "name": "Platinum Rewards Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "standard-chartered-priority-visa-infinite",
+    "name": "Priority Visa Infinite Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "standard-chartered-rewards",
+    "name": "Rewards Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "standard-chartered-smart",
+    "name": "Smart Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "standard-chartered-super-value-titanium",
+    "name": "Super Value Titanium Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "standard-chartered-ultimate",
+    "name": "Ultimate Credit Card",
+    "network": "mastercard"
+   }
+  ],
+  "bank-of-baroda": [
+   {
+    "slug": "bobcard-corporate",
+    "name": "BOBCARD Corporate",
+    "network": "unknown"
+   },
+   {
+    "slug": "bobcard-easy",
+    "name": "BOBCARD Easy",
+    "network": "rupay"
+   },
+   {
+    "slug": "bobcard-select",
+    "name": "BOBCARD Select",
+    "network": "unknown"
+   },
+   {
+    "slug": "bobcard-cma-one",
+    "name": "CMA One BOBCARD",
+    "network": "rupay"
+   }
+  ],
+  "bobcard": [
+   {
+    "slug": "bobcard-eterna",
+    "name": "BOBCARD Eterna",
+    "network": "unknown"
+   },
+   {
+    "slug": "bobcard-icai-exclusive",
+    "name": "BOBCARD ICAI Exclusive",
+    "network": "rupay"
+   },
+   {
+    "slug": "bobcard-irctc",
+    "name": "BOBCARD IRCTC",
+    "network": "rupay"
+   },
+   {
+    "slug": "bobcard-premier",
+    "name": "BOBCARD Premier",
+    "network": "visa"
+   },
+   {
+    "slug": "bobcard-scapia-credit-card",
+    "name": "BOBCARD Scapia Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "bobcard-snapdeal",
+    "name": "BOBCARD Snapdeal",
+    "network": "rupay"
+   },
+   {
+    "slug": "bobcard-vikram",
+    "name": "BOBCARD VIKRAM",
+    "network": "rupay"
+   },
+   {
+    "slug": "hpcl-energie-bobcard",
+    "name": "HPCL\n ENERGIE BOBCARD",
+    "network": "rupay"
+   },
+   {
+    "slug": "bobcard-icsi-diamond",
+    "name": "ICSI Diamond BOBCARD",
+    "network": "rupay"
+   }
+  ],
+  "canara-bank": [
+   {
+    "slug": "canara-bank-international-travel-prepaid-card",
+    "name": "Canara Bank International Travel Prepaid Card",
+    "network": "visa"
+   },
+   {
+    "slug": "canara-mastercard-standard-global",
+    "name": "Canara MasterCard Standard Global",
+    "network": "mastercard"
+   },
+   {
+    "slug": "canara-mastercard-world",
+    "name": "Canara MasterCard World Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "canara-rupay-platinum",
+    "name": "Canara RuPay Platinum",
+    "network": "rupay"
+   },
+   {
+    "slug": "canara-rupay-select-credit-card",
+    "name": "Canara RuPay Select Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "canara-select-platinum",
+    "name": "Canara Select Platinum",
+    "network": "rupay"
+   },
+   {
+    "slug": "canara-visa-classic",
+    "name": "Canara Visa Classic",
+    "network": "visa"
+   },
+   {
+    "slug": "canara-visa-platinum",
+    "name": "Canara Visa Platinum Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "canara-visa-signature-business",
+    "name": "Canara Visa Signature Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "canara-visa-signature-travel",
+    "name": "Canara Visa Signature Travel",
+    "network": "visa"
+   }
+  ],
+  "rbl-bank": [
+   {
+    "slug": "rbl-bank-cookies",
+    "name": "Cookies Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "rbl-bank-indianoil",
+    "name": "IndianOil RBL Bank Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "rbl-bank-monthly-treats",
+    "name": "Monthly Treats Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "rbl-bank-platinum-delight",
+    "name": "Platinum Delight Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "rbl-bank-platinum-maxima",
+    "name": "Platinum Maxima Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "rbl-bank-platinum-maxima-plus",
+    "name": "Platinum Maxima Plus Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "rbl-bank-practo-plus",
+    "name": "Practo Plus Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "rbl-bank-bankbazaar-savemax",
+    "name": "RBL Bank BankBazaar SaveMax Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "rbl-bank-icon",
+    "name": "RBL Bank Icon Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "rbl-bank-iglobe",
+    "name": "RBL Bank iGlobe Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "rbl-bank-indianoil-xtra",
+    "name": "RBL Bank IndianOil XTRA Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "rbl-bank-irctc",
+    "name": "RBL Bank IRCTC Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "rbl-bank-movies-and-more",
+    "name": "RBL Bank Movies & More Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "rbl-bank-nova",
+    "name": "RBL Bank Nova Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "rbl-bank-paisabazaar-duet-plus",
+    "name": "RBL Bank Paisabazaar Duet Plus Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "rbl-rupay-credit-card",
+    "name": "RBL Bank RuPay Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "rbl-bank-salaryse-up",
+    "name": "RBL Bank SalarySe UP Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "rbl-bank-shoppers-stop-black",
+    "name": "RBL Bank Shoppers Stop Black Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "rbl-bank-shoppers-stop-gold",
+    "name": "RBL Bank Shoppers Stop Gold Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "rbl-bank-shoppers-stop-platinum",
+    "name": "RBL Bank Shoppers Stop Platinum Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "rbl-bank-world-safari",
+    "name": "RBL Bank World Safari Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "rbl-bank-world-safari-plus",
+    "name": "RBL Bank World Safari Plus Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "rbl-bank-shoprite",
+    "name": "Shoprite Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "rbl-bank-titanium-delight",
+    "name": "Titanium Delight Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "rbl-bank-tvs-credit",
+    "name": "TVS Credit RBL Bank Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "rbl-bank-zomato-edition-black-legacy",
+    "name": "Zomato Edition Black (Legacy)",
+    "network": "mastercard"
+   },
+   {
+    "slug": "rbl-bank-zomato-edition-classic-legacy",
+    "name": "Zomato Edition Classic (Legacy)",
+    "network": "mastercard"
+   }
+  ],
+  "kotak": [
+   {
+    "slug": "kotak-corporate-platinum-credit-card",
+    "name": "Corporate Platinum Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "indianoil-kotak-credit-card",
+    "name": "IndianOil Kotak Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "indigo-kotak-premium",
+    "name": "IndiGo Kotak Premium Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "indigo-kotak-xl",
+    "name": "IndiGo Kotak XL Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "kotak-biz-credit-card",
+    "name": "Kotak Biz Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "kotak-cashback-plus-prime-credit-card",
+    "name": "Kotak Cashback+ Prime Credit Card",
+    "network": "unknown"
+   },
+   {
+    "slug": "kotak-infinite-credit-card",
+    "name": "Kotak Infinite Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "kotak-solitaire-credit-card",
+    "name": "Kotak Solitaire Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "kotak-upi-rupay-credit-card",
+    "name": "Kotak UPI RuPay Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "kotak-white-credit-card",
+    "name": "Kotak White Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "myntra-kotak-credit-card",
+    "name": "Myntra Kotak Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "kotak-solitaire-business-credit-card",
+    "name": "Solitaire Business Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "kotak-travel-agent-credit-card",
+    "name": "Travel Agent Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "kotak-urbane-gold-credit-card",
+    "name": "Urbane Gold Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "kotak-white-reserve",
+    "name": "White Reserve Credit Card",
+    "network": "visa"
+   }
+  ],
+  "dbs-bank": [
+   {
+    "slug": "dbs-superx",
+    "name": "DBS\n SuperX Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "dbs-vantage-credit-card",
+    "name": "DBS\n Vantage Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "dbs-spark10-credit-card",
+    "name": "DBS Spark10 Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "dbs-spark20",
+    "name": "DBS Spark20 Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "dbs-spark5-credit-card",
+    "name": "DBS Spark5 Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "dbs-superx-plus",
+    "name": "DBS SuperX Plus Credit Card",
+    "network": "mastercard"
+   }
+  ],
+  "equitas-small-finance-bank": [
+   {
+    "slug": "equitas-elegance",
+    "name": "Equitas Elegance Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "equitas-excite",
+    "name": "Excite Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "equitas-powermiles",
+    "name": "PowerMiles Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "equitas-selfe",
+    "name": "Selfe Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "equitas-tiga",
+    "name": "Tiga Credit Card",
+    "network": "rupay"
+   }
+  ],
+  "hsbc": [
+   {
+    "slug": "hsbc-rupay-cashback-credit-card",
+    "name": "HSBC RuPay Cashback Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "hsbc-taj-credit-card",
+    "name": "HSBC Taj Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "hsbc-live-plus-credit-card",
+    "name": "Live+ Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "hsbc-premier-metal-credit-card",
+    "name": "Premier Metal Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "hsbc-rupay-platinum-credit-card",
+    "name": "RuPay Platinum Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "hsbc-travelone-credit-card",
+    "name": "TravelOne Credit Card",
+    "network": "mastercard"
+   },
+   {
+    "slug": "hsbc-visa-platinum-credit-card",
+    "name": "Visa\n Platinum Credit Card",
+    "network": "visa"
+   }
+  ],
+  "indian-overseas-bank": [
+   {
+    "slug": "indian-overseas-bank-rupay-platinum",
+    "name": "IOB RuPay Platinum Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "indian-overseas-bank-rupay-select",
+    "name": "IOB RuPay Select Credit Card",
+    "network": "rupay"
+   }
+  ],
+  "sbm-bank-india": [
+   {
+    "slug": "sbm-bank-india-onecard-metal",
+    "name": "OneCard Metal Credit Card (SBM Bank India variant)",
+    "network": "visa"
+   },
+   {
+    "slug": "sbm-kredit-pe",
+    "name": "SBM Kredit.Pe Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "sbm-mobikwik-first",
+    "name": "SBM MobiKwik First Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "sbm-niyo-global",
+    "name": "SBM Niyo Global Credit Card",
+    "network": "visa"
+   },
+   {
+    "slug": "sbm-paisabazaar-paisa-plus",
+    "name": "SBM Paisabazaar Paisa Plus Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "sbm-paisabazaar-step-up",
+    "name": "SBM Paisabazaar Step Up Credit Card",
+    "network": "unknown"
+   }
+  ],
+  "pnb": [
+   {
+    "slug": "pnb-emt-rupay-platinum",
+    "name": "PNB\n EMT RuPay Platinum",
+    "network": "rupay"
+   },
+   {
+    "slug": "pnb-patanjali-rupay-select",
+    "name": "PNB\n Patanjali RuPay Select Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "pnb-kiwi-credit-card",
+    "name": "PNB Kiwi Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "pnb-luxura-rupay-metal",
+    "name": "PNB LUXURA RuPay Metal",
+    "network": "rupay"
+   },
+   {
+    "slug": "pnb-rakshak-rupay-select",
+    "name": "PNB Rakshak RuPay Select",
+    "network": "rupay"
+   },
+   {
+    "slug": "pnb-rupay-millennial",
+    "name": "PNB RuPay Millennial",
+    "network": "rupay"
+   },
+   {
+    "slug": "pnb-rupay-platinum",
+    "name": "PNB RuPay Platinum",
+    "network": "rupay"
+   },
+   {
+    "slug": "pnb-rupay-select",
+    "name": "PNB RuPay Select",
+    "network": "rupay"
+   },
+   {
+    "slug": "pnb-salary-rupay-select",
+    "name": "PNB SALARY RuPay Select",
+    "network": "rupay"
+   }
+  ],
+  "punjab-and-sind-bank": [
+   {
+    "slug": "punjab-sind-bank-sbi-card-prime",
+    "name": "Punjab & Sind Bank SBI Card PRIME",
+    "network": "visa"
+   }
+  ],
+  "federal-bank": [
+   {
+    "slug": "federal-bank-scapia-credit-card",
+    "name": "Scapia Federal Bank Credit Card",
+    "network": "unknown"
+   }
+  ],
+  "slice-small-finance-bank": [
+   {
+    "slug": "slice-small-finance-bank-upi-credit-card",
+    "name": "slice UPI Credit Card",
+    "network": "rupay"
+   }
+  ],
+  "suryoday-small-finance-bank": [
+   {
+    "slug": "stable-money-suryoday-rupay-platinum",
+    "name": "Stable Money Suryoday RuPay Platinum Credit Card",
+    "network": "rupay"
+   },
+   {
+    "slug": "suryoday-stable-money-rupay-select",
+    "name": "Stable Money Suryoday RuPay Select Credit Card",
+    "network": "rupay"
+   }
+  ],
+  "ujjivan-small-finance-bank": [
+   {
+    "slug": "ujjivan-sfb-elite",
+    "name": "UJJIVAN SFB Elite",
+    "network": "rupay"
+   }
+  ],
+  "ujjivan-sfb": [
+   {
+    "slug": "ujjivan-sfb-platinum",
+    "name": "USFB Platinum Credit Card",
+    "network": "rupay"
+   }
+  ]
+ }
+}

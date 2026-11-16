@@ -1,0 +1,316 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "indian-bank-visa-platinum",
+    "name": "Indian Bank IB-VISA-Platinum Credit Card",
+    "issuer_slug": "indian-bank",
+    "network": "visa",
+    "network_tier": "visa_platinum",
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 250,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": null,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 1,
+    "point_value_baseline_basis": "Dec 2023 features sheet: \"1 point valued at Re.1 for every Rs.100 spent\"; Jan 2025 poster states the same Rs 1 per Rs 100 as cashback credited in the same billing month. Treated as 1% value; see open question.",
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://indianbank.bank.in/en/credit-cards",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": null,
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": "N/A",
+    "base_cashback_percent": 1,
+    "effective_base_return_percent": 1,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "indian-bank-visa-platinum-no-reward",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "categories": [
+          "wallet_load",
+          "emi",
+          "cash_withdrawal",
+          "upi_below_2000"
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No cashback on wallet load, EMI transactions, ATM withdrawals and UPI transactions below Rs 2,000 (poster, Jan 2025)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "indian-bank-visa-platinum-low-rate",
+      "category_id": "bills",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "categories": [
+          "rent",
+          "utilities",
+          "fuel",
+          "insurance",
+          "jewellery",
+          "government"
+        ],
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 0.5,
+        "points_per_block": "N/A",
+        "cashback_percent": 0.5,
+        "cap_reference": null,
+        "reason": "Rs 0.50 cashback per Rs 100 (0.5%) on rent, utilities, fuel, insurance, jewellery and government spends (poster, Jan 2025)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "indian-bank-visa-platinum-base",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 1,
+        "cap_reference": null,
+        "reason": "Rs 1 cashback (1 point of Re 1) per Rs 100 spent, credited in the same billing month (poster, Jan 2025; features sheet Dec 2023)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 1.66,
+      "annual_interest_rate_percent": 19.919999999999998
+    },
+    "forex_markup": {
+      "markup_percent": 3,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": "No separate DCC markup is stated in the issuer documents read"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 2.5,
+      "waiver_percent": null,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": null,
+      "atm_transaction_fee_min_inr": 50,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": 40
+    },
+    "category_surcharges": [],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": 3,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": null,
+        "min_fee_inr": 50,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": 250,
+      "cheque_bounce_charge_inr": 250
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": null,
+        "fee_inr": 250
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 50000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "AMC Rs 250 from the 2nd year (1st year free); waived if the previous year's transaction usage exceeds Rs 50,000 (MITC and listing page footnote).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 250
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "N/A",
+      "benefit_points": "N/A",
+      "effective_value_inr": "N/A",
+      "condition": "No welcome benefit is stated in the issuer documents read."
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "indian-bank-visa-platinum-accident",
+      "category_id": "insurance_related_perk",
+      "network_program": null,
+      "sponsor": "Indian Bank",
+      "label": "Free insurance cover for Visa Platinum: death by air accident Rs 5 lakh, other accident Rs 2 lakh, hospitalisation, baggage and purchase protection per MITC table",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": 4,
+    "fee_per_card_inr": 0,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-15",
+          "sources": [
+            {
+              "url": "https://indianbank.bank.in/documents/d/guest/mitc-final-with-effective-apr",
+              "kind": "Most Important Terms and Conditions (PDF created 27 Sep 2026): AMC, interest, late fee, forex, fuel surcharge, limits, insurance",
+              "date": "PDF created 2026-09-27",
+              "read": "pdftotext and page image"
+            },
+            {
+              "url": "https://indianbank.bank.in/documents/d/guest/CREDIT-CARD-FEATURES-AND-BENEFITS-6",
+              "kind": "Credit Card Features and Benefits sheet (PDF created 29 Dec 2023, older): card variants, credit limits, reward points, lounge line",
+              "date": "PDF created 2023-12-29",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://indianbank.bank.in/documents/d/guest/Get-Rewards-for-Every-Spent-with-IB-Credit-Card-3",
+              "kind": "\"Get rewards for every spent with IB credit card\" poster (PDF created 24 Jan 2025, image only): Rs 1 cashback per Rs 100, Rs 0.50 on listed categories, exclusions; shows a RuPay Platinum and a Visa Platinum card",
+              "date": "PDF created 2025-01-24",
+              "read": "page image read visually"
+            },
+            {
+              "url": "https://indianbank.bank.in/en/credit-cards",
+              "kind": "Credit Cards page (last modified 30 Oct 2026): list of variants, AMC waiver footnote, daily limits",
+              "date": "last modified 2026-10-30",
+              "read": "plain page fetch"
+            },
+            {
+              "url": "https://indianbank.bank.in/documents/d/guest/mitc-final-with-effective-apr",
+              "kind": "MITC names \"VISA Platinum\" with its own purchase interest rate, insurance column and daily limits; the poster shows a Visa Platinum card face",
+              "date": "PDF created 2026-09-27",
+              "read": "pdftotext and image"
+            }
+          ],
+          "open_questions": [
+            "Reward documents are older than the 2026 MITC and disagree in form: the Dec 2023 features sheet says \"1 point valued at Re.1 for every Rs.100 spent\" (Platinum, Select, Visa Gold) while the Jan 2025 poster says \"cashback of Rs 1 for every Rs 100 spent, credited to the card statement in the same billing month\" and Rs 0.50 per Rs 100 on rent, utilities, fuel, insurance, jewellery and government spends. Both give Rs 1 per Rs 100. The poster does not say which variants it covers (it shows Platinum cards). The 2026 MITC does not mention rewards. A person should confirm which variants earn the cashback and whether it is still current.",
+            "Poster note: no cashback on wallet load, EMI transactions, ATM withdrawals and UPI transactions below Rs 2,000. Whether there is a monthly cap is not stated.",
+            "Fuel: the MITC states a surcharge of Rs 10 or 2.5% of the transaction amount, whichever is higher, on petrol and pump purchases, and no surcharge waiver for these cards. Surcharge is recorded as 2.5% with the Rs 10 minimum noted here.",
+            "Cash advance: MITC states a fee of Rs 50 per cash advance and interest of 2.25% a month from the transaction date; the percentage-based fee is not applicable (flat Rs 50). Late fee Rs 250 flat (MITC).",
+            "Over limit fee Rs 50 flat (MITC schedule). EMI processing fee 2% of the converted amount, minimum Rs 199, maximum Rs 1,000; EMI interest 18% a year; foreclosure 3% of pending principal (MITC).",
+            "MITC states \"All the charges and interest mentioned are excluding GST\" only in the Youth MITC; the main MITC does not say it, so the GST flag follows the Youth MITC wording.",
+            "No lounge line for this variant in the features sheet."
+          ],
+          "notes": [],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,476 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "unity-bank-zero",
+    "name": "Unity Bank Zero Credit Card",
+    "issuer_slug": "unity-small-finance-bank",
+    "network": "rupay",
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 0.25,
+    "point_value_baseline_basis": "Unity ZERO Credit Card Rewards and Benefits T&Cs (Version 1.0, October 2026) clause 2.1: for redemption as cashback or statement credit, 1 Reward Point = INR 0.25; other redemption options may differ.",
+    "point_expiry_months": 24,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_page",
+    "source_url": "https://cards.unity.bank.in/",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "Fixed-deposit-backed: start with an FD of INR 2,000; assured approval, no income proof or credit history needed (page).",
+    "rules": [
+      {
+        "parameter": "fd_amount_inr",
+        "operator": ">=",
+        "threshold_value": 2000,
+        "allowed_values": []
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": 1,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": 0.25,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "unity-zero-excl-intl",
+      "category_id": "international_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "International and foreign-currency transactions earn no reward points (T&Cs 2.5 and 2.7)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "unity-zero-excl-upi-small",
+      "category_id": "upi",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "transaction_amount_lte_inr": 2000,
+        "rail": "upi"
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Credit-card-on-UPI transactions of INR 2,000 or below at small offline merchants earn no reward points (T&Cs 2.5 and 2.7)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "unity-zero-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5541,
+          5983,
+          5542
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel earns 0 reward points (T&Cs 2.7)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "unity-zero-essentials",
+      "category_id": "bills",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100,
+        "mcc_list": [
+          5812,
+          5811,
+          5814,
+          5462,
+          5813,
+          4900,
+          4814,
+          4816,
+          4899,
+          5411,
+          5451,
+          5499,
+          5422,
+          5441,
+          5912,
+          8062,
+          8099,
+          8071,
+          742,
+          5122,
+          8021,
+          6513
+        ]
+      },
+      "action": {
+        "multiplier": 3,
+        "points_per_block": 3,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Monthly Essentials (dining, utilities, groceries, medical, rent) 3 reward points per INR 100, each point INR 0.25 (0.75%) (T&Cs 2.7)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "unity-zero-shopping",
+      "category_id": "online",
+      "priority": 11,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100,
+        "mcc_list": [
+          5699,
+          5691,
+          5651,
+          5311,
+          5331,
+          5137,
+          5611,
+          5621,
+          5631,
+          5641,
+          5661,
+          5697,
+          5977,
+          5712,
+          5999,
+          5947,
+          5943,
+          5942,
+          5995,
+          5945,
+          5948,
+          5310,
+          5940,
+          5941,
+          5949,
+          5946,
+          5719,
+          5309,
+          5733,
+          5950,
+          5931,
+          5714,
+          5735,
+          5262,
+          5399,
+          7311,
+          5944,
+          5094
+        ]
+      },
+      "action": {
+        "multiplier": 4,
+        "points_per_block": 4,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Shopping 4 reward points per INR 100 (1%) (T&Cs 2.7)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "unity-zero-electronics",
+      "category_id": "online",
+      "priority": 12,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100,
+        "mcc_list": [
+          5732,
+          4812,
+          5722,
+          5045,
+          5099
+        ]
+      },
+      "action": {
+        "multiplier": 4,
+        "points_per_block": 4,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Electronics 4 reward points per INR 100 (1%) (T&Cs 2.7)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "unity-zero-wallet",
+      "category_id": "wallet",
+      "priority": 13,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100,
+        "mcc_list": [
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 4,
+        "points_per_block": 4,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Wallet loads 4 reward points per INR 100 (1%) (T&Cs 2.7)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "unity-zero-udeals",
+      "category_id": "online",
+      "priority": 9,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100,
+        "merchant": "u_deals_gift_cards"
+      },
+      "action": {
+        "multiplier": 6,
+        "points_per_block": 6,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Eligible U-Deals gift card and voucher purchases 6 points per INR 100 (1.5%), the total earn, not additional; card journey only, credit-card-on-UPI disabled (T&Cs 4)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "unity-zero-base",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100,
+        "rounding": "nearest_100_then_multiply",
+        "min_txn_inr": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Other eligible transactions 1 reward point per INR 100 (0.25%); points = round(amount / 100) x rate; under INR 100 earns nothing; no accrual cap (T&Cs 2.2, 2.6, 2.7)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": null,
+      "annual_interest_rate_percent": null
+    },
+    "forex_markup": {
+      "markup_percent": 0,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 1000,
+      "max_txn_inr": 5000,
+      "monthly_waiver_cap_inr": 100
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": null,
+      "atm_transaction_fee_min_inr": null,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": null,
+        "min_fee_inr": null,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": null,
+        "fee_inr": 0
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "Joining fee, annual fee, EMI processing fee, rewards redemption fee and late payment fee all stated as none on the issuer card page.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": null,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-15",
+          "sources": [
+            {
+              "url": "https://cards.unity.bank.in/",
+              "kind": "Unity ZERO card page (read in the built-in browser): fees, up to 1.5% cashback, exclusions",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://cards.unity.bank.in/docs/credit-cards/zero-credit-card-terms",
+              "kind": "ZERO Credit Card Rewards and Benefits T&Cs, Version 1.0, October 2026 (PDF created 28 Oct 2026): earn table, point value, expiry, fuel waiver, forex, RuPay exchange rate",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://unity.bank.in/personal-banking/cards/credit-card",
+              "kind": "Unity credit card listing page: Zero card summary",
+              "read": "page text"
+            }
+          ],
+          "open_questions": [
+            "Network RuPay: the T&Cs (5.3) say non-DCC conversion uses the \"applicable RuPay exchange rate\" and the Unity listing is titled RuPay; tier not stated.",
+            "Interest rate on revolving balances, MITC, KFS and per-card fee schedule were not found on the Unity site (the cardholder agreement of Oct 2026 is generic); APR left null. The page says the late payment fee is nil.",
+            "Page says up to 1.5% cashback; the T&Cs give 0.25% base, 0.75% essentials, 1% shopping, electronics and wallet, 1.5% U-Deals, which is consistent.",
+            "Rent MCC 6513 is listed under Monthly Essentials in the T&Cs (3 points per INR 100), while the page footer groups rent with essentials; no conflict, noted because other issuers exclude rent.",
+            "Reward points expire 24 months from accrual; minimum redemption 250 points (INR 62.50).",
+            "Rewards T&Cs mention an optional \"Reward Plan\" concept (used on Vibe); Zero has none stated."
+          ],
+          "notes": [],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

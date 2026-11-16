@@ -1,0 +1,311 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "miles-more-axis-bank-world",
+    "name": "Miles & More Axis Bank World Credit Card",
+    "issuer_slug": "axis-bank",
+    "network": "mastercard",
+    "network_tier": "mastercard_world",
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 3500,
+    "annual_fee_inr": 3500,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": false,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": null,
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_page",
+    "source_url": "https://www.axis.bank.in/cards/credit-card/miles-more-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": null,
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 200,
+    "rounding_mode": null,
+    "base_points_per_block": 4,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "axis-mm-world-excl",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No award miles on utilities and telecom, rent, wallet load, government services, insurance, gold and jewellery, gift cards, fuel, cash advances, tolls, repayments, EMI, fees and interest (Axis T&C revision effective 20 Jun 2025; product page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "axis-mm-world-base",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 200
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 4,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "4 award miles per INR 200 of eligible spend (product page). Value of a mile not stated by Axis; redemption is through Miles & More."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 55.55
+    },
+    "forex_markup": {
+      "markup_percent": 3.5,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": null,
+      "waiver_percent": null,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": null,
+      "atm_transaction_fee_min_inr": null,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": null,
+        "min_fee_inr": null,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 500,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 501,
+        "max_balance_inr": 5000,
+        "fee_inr": 500
+      },
+      {
+        "min_balance_inr": 5001,
+        "max_balance_inr": 10000,
+        "fee_inr": 750
+      },
+      {
+        "min_balance_inr": 10001,
+        "max_balance_inr": 50000,
+        "fee_inr": 1200
+      },
+      {
+        "min_balance_inr": 50001,
+        "max_balance_inr": null,
+        "fee_inr": 1300
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "Joining and annual fee are waived for HON and Senator status members of Miles & More (page). No spend-based waiver is stated.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "first_transaction_within_30_days",
+      "benefit_points": 5000,
+      "effective_value_inr": null,
+      "condition": "5,000 award miles welcome bonus on first transaction within 30 days of issuance (page)."
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "axis-mm-world-lounge-dom",
+      "category_id": "lounge",
+      "network_program": "mastercard_lounge",
+      "sponsor": "Axis Bank",
+      "label": "Complimentary domestic lounge visits, subject to INR 50,000 spend in the previous 3 calendar months (T&C revision effective 1 May 2024)",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 4,
+      "quota_period": "quarter",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "axis-mm-world-lounge-pp",
+      "category_id": "lounge",
+      "network_program": "priority_pass",
+      "sponsor": "Axis Bank",
+      "label": "Priority Pass lounge visits, primary cardholder only",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 2,
+      "quota_period": "annual",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": null,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-15",
+          "sources": [
+            {
+              "url": "https://www.axis.bank.in/cards/credit-card/miles-more-credit-card",
+              "kind": "Axis Miles & More page (T&Cs updated w.e.f. 28 Aug 2026): earn, welcome miles, fees, lounge, MasterCard lounge section",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://www.axis.bank.in/images/default-source/l4-banner/card/phase-2-cards_copy-and-without-copy/miles-and-more-axis-bank-credit-card_copy/23_hero-pages_set-02_axis-bank_rewamp-banner_feedback_desktop_1366-x-400-px_04-dec-2024_1-to-100-copy.webp",
+              "kind": "Hero image opened and looked at: two Miles & More cards, both with Mastercard WORLD marks",
+              "read": "image viewed"
+            },
+            {
+              "url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-mmi-world-credit-card.pdf",
+              "kind": "Miles & More World T&C revision (PDF created 21 Aug 2026; text effective 20 Apr 2024): excluded MCCs, lounge spend rule",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-mmi-world-select-credit-card.pdf",
+              "kind": "Miles & More card T&C revision effective 20 Jun 2025: excluded spend categories",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.axis.bank.in/docs/default-source/default-document-library/mitc-credit-cards.pdf",
+              "kind": "Axis Credit Card MITC, 62 pages, PDF created 8 Oct 2026: fee table, interest rates, fuel waiver caps",
+              "read": "pdftotext"
+            }
+          ],
+          "open_questions": [
+            "Network Mastercard World: stated by the issuer page (\"MasterCard Lounge Access\", Mastercard lounge programme for these two cards) and shown on the card art in the hero image.",
+            "Value of one award mile in rupees is not stated by Axis (redemption sits on the Miles & More site); left null.",
+            "Interest: Axis MITC says 3.75% a month (55.55% a year); the product page says 3.7%. MITC used.",
+            "Annual bonus 3,000 miles on renewal is stated on the page; not modelled as a milestone (renewal event).",
+            "Dining Delights and Wednesday offers on the page are partner offers not modelled."
+          ],
+          "notes": [],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

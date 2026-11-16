@@ -1,0 +1,219 @@
+{
+ "agent": "W5B",
+ "issuers": [
+  "BOBCARD (Bank of Baroda)",
+  "Canara Bank",
+  "Kotak Mahindra Bank",
+  "IndusInd Bank",
+  "IDFC FIRST Bank"
+ ],
+ "cards": [
+  {
+   "name": "Kotak NRI Royale Signature Credit Card",
+   "product_url": "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/nri-royale-signature-card.html",
+   "status": "sold",
+   "variant_of": "Royale Signature Credit Card (NRI version)",
+   "partner": null,
+   "evidence": "Listing tile 'NRI Royale Signature Credit Card' and NRI menu entry; product page heading 'Apply for Kotak NRI Royale Signature Credit Card'. The resident Royale Signature card (live) is marked 'Discontinued for new applications' but this NRI card is not.",
+   "issuer": "Kotak Mahindra Bank"
+  },
+  {
+   "name": "Kotak Corporate Gold Credit Card",
+   "product_url": "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/corporate-gold-card.html",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Listing tile 'Corporate Gold Credit Card' and Business menu entry; page heading 'Apply for Kotak Corporate Gold Credit Card Online'. No restriction text. [segment: commercial]",
+   "issuer": "Kotak Mahindra Bank"
+  },
+  {
+   "name": "IndusInd Bank Secured Credit Card (Credit Card Against FD)",
+   "product_url": "https://induseasycredit.indusind.bank.in/customer/credit-card/secured-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Linked from the IndusInd cards menu as 'Credit Card Against FD' / 'Secured Credit Card' (apply flow on induseasycredit.indusind.bank.in). Not read in detail; fixed-deposit backed.",
+   "issuer": "IndusInd Bank"
+  },
+  {
+   "name": "FIRST WOW! Credit Card for NRIs",
+   "product_url": "https://www.idfcfirst.bank.in/credit-card/wow/nri-credit-card",
+   "status": "sold",
+   "variant_of": "FIRST WOW!",
+   "partner": null,
+   "evidence": "Listed under NRI menu ('NRI Credit Card' -> /credit-card/wow/nri-credit-card). Page: 'FIRST WOW! Credit Card for NRIs is fixed-deposit-backed premium credit card' with zero forex markup, needs an IDFC FIRST NRE savings account. Same FIRST WOW! product line restricted to NRIs; may not warrant its own catalogue row.",
+   "issuer": "IDFC FIRST Bank"
+  },
+  {
+   "name": "BOBCARD Etihad Guest Premium",
+   "product_url": "https://www.bobcard.co.in/credit-card-types/bobcard-etihad-guest-premium",
+   "status": "sold",
+   "variant_of": "BOBCARD Etihad Guest",
+   "partner": "Etihad Airways (Etihad Guest)",
+   "evidence": "Listed on the BOBCARD card hub and on Bank of Baroda's card page; product page carries Apply Now (etihadguest.bobcard.in). MITC has separate fee rows and a section for it. Separate fee tier from Etihad Guest.",
+   "issuer": "BOBCARD (Bank of Baroda)"
+  },
+  {
+   "name": "BOBCARD Etihad Guest",
+   "product_url": "https://www.bobcard.co.in/credit-card-types/bobcard-etihad-guest",
+   "status": "sold",
+   "variant_of": null,
+   "partner": "Etihad Airways (Etihad Guest)",
+   "evidence": "Listed on the hub and on Bank of Baroda's page; product page carries Apply Now. MITC and KFS PDFs for it are linked from the MITC page.",
+   "issuer": "BOBCARD (Bank of Baroda)"
+  },
+  {
+   "name": "BOBCARD TIARA",
+   "product_url": "https://www.bobcard.co.in/credit-card-types/tiara",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Listed on the hub, the compare page and Bank of Baroda's page; product page carries Apply Now. Women's credit card, premium category.",
+   "issuer": "BOBCARD (Bank of Baroda)"
+  },
+  {
+   "name": "BOBCARD Cashback",
+   "product_url": "https://www.bobcard.co.in/credit-card-types/bobcard-cashback",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Listed on hub and compare page and on Bank of Baroda's page; product page carries Apply Now.",
+   "issuer": "BOBCARD (Bank of Baroda)"
+  },
+  {
+   "name": "BOBCARD Micro Enterprise",
+   "product_url": "https://www.bobcard.co.in/credit-card-types/micro-enterprise-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Listed on hub. Product page has no apply button; page says the application must start from the Government of India Jan Samarth portal. Eligibility limited to registered micro enterprises.",
+   "issuer": "BOBCARD (Bank of Baroda)"
+  },
+  {
+   "name": "BOBCARD EMPOWER (Empower Business)",
+   "product_url": "https://www.bobcard.co.in/credit-card-types/empower",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Listed on hub and Bank of Baroda's page; product page carries Apply Now. For proprietors and self-employed (business card).",
+   "issuer": "BOBCARD (Bank of Baroda)"
+  },
+  {
+   "name": "BOBCARD Uni GoldX",
+   "product_url": "https://www.bobcard.co.in/credit-card-types/bobcard-uni-goldx",
+   "status": "sold",
+   "variant_of": null,
+   "partner": "Uni (Uni Coins)",
+   "evidence": "Listed on hub; product page carries Apply Now; MITC, KFS and T&C PDFs for it are linked from the MITC page.",
+   "issuer": "BOBCARD (Bank of Baroda)"
+  },
+  {
+   "name": "BOBCARD UPGB/GGB/BRKGB PRAGATI",
+   "product_url": "https://www.bobcard.co.in/credit-card-types/upgb-ggb-brkgb-pragati",
+   "status": "sold",
+   "variant_of": null,
+   "partner": "UPGB / GGB / BRKGB (regional rural banks)",
+   "evidence": "Listed on hub; product page carries Apply Now. Page says it is for customers of the regional rural banks UPGB, GGB and BRKGB (UP, Gujarat, Rajasthan). MITC also names Pragati BGGB / BRKGB / BUPB.",
+   "issuer": "BOBCARD (Bank of Baroda)"
+  },
+  {
+   "name": "Nainital Bank RENAISSANCE BOBCARD",
+   "product_url": "https://www.bobcard.co.in/credit-card-types/nainital-bank-renaissance",
+   "status": "sold",
+   "variant_of": null,
+   "partner": "The Nainital Bank",
+   "evidence": "Listed on hub and on Bank of Baroda's page; product page carries Apply Now. Page says it is made for Nainital Bank customers.",
+   "issuer": "BOBCARD (Bank of Baroda)"
+  },
+  {
+   "name": "Indian Army YODDHA BOBCARD",
+   "product_url": "https://www.bobcard.co.in/credit-card-types/indian-army-yoddha",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Listed on hub and Bank of Baroda's page; product page carries Apply Now. Exclusively for Indian Army personnel.",
+   "issuer": "BOBCARD (Bank of Baroda)"
+  },
+  {
+   "name": "Indian Navy VARUNAH BOBCARD",
+   "product_url": "https://www.bobcard.co.in/credit-card-types/indian-navy-varunah",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Listed on hub and Bank of Baroda's page; product page carries Apply Now. Exclusively for Indian Navy personnel. Page shows 'Varunah Premium'; MITC has fee rows for both Varunah Premium and Varunah Plus (fee-tier variants).",
+   "issuer": "BOBCARD (Bank of Baroda)"
+  },
+  {
+   "name": "Indian Coast Guard RAKSHAMAH BOBCARD",
+   "product_url": "https://www.bobcard.co.in/credit-card-types/indian-coast-guard-rakshamah",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Listed on hub and Bank of Baroda's page; product page carries Apply Now. Exclusively for Indian Coast Guard personnel.",
+   "issuer": "BOBCARD (Bank of Baroda)"
+  },
+  {
+   "name": "Assam Rifles The SENTINEL BOBCARD",
+   "product_url": "https://www.bobcard.co.in/credit-card-types/assam-rifles-the-sentinel",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Listed on hub and Bank of Baroda's page; product page carries Apply Now. Exclusively for Assam Rifles personnel.",
+   "issuer": "BOBCARD (Bank of Baroda)"
+  },
+  {
+   "name": "PM SVANidhi BOBCARD",
+   "product_url": "https://www.bobcard.co.in/credit-card-types/pm-svanidhi",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Listed on hub and compare page; page gives a 'Click Here' apply link and says applications start on the PM SVANidhi portal. Only for street vendors who repaid PM SVANidhi loans; MITC/KFS linked on MITC page.",
+   "issuer": "BOBCARD (Bank of Baroda)"
+  },
+  {
+   "name": "Instant RuPay BOBCARD",
+   "product_url": "https://bankofbaroda.bank.in/digital-products/cards/credit-cards",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Appears only on Bank of Baroda's own credit-card page (lifetime-free RuPay BOBCARD applied for in the bob ePay app: 'Apply on iOS / Apply on Android'). No tile on bobcard.co.in. May be a channel offer of an existing BOBCARD rather than its own product; the page does not say which.",
+   "issuer": "BOBCARD (Bank of Baroda)"
+  },
+  {
+   "name": "Canara RuPay Select Secured Credit Card",
+   "product_url": "https://www.canarabank.bank.in/rupay-select-secured-credit-card",
+   "status": "sold",
+   "variant_of": "Canara RuPay Select Credit Card",
+   "partner": null,
+   "evidence": "On the Credit Cards page (fixed-deposit-backed). The page offers an 'Apply now for Pre-approved / Secured Credit Card' link. Variants PDF lists it in the Select/World/Signature tier.",
+   "issuer": "Canara Bank"
+  },
+  {
+   "name": "Canara RuPay Platinum Secured Credit Card",
+   "product_url": "https://www.canarabank.bank.in/rupay-platinum-secured-credit-card",
+   "status": "sold",
+   "variant_of": "Canara RuPay Platinum Credit Card",
+   "partner": null,
+   "evidence": "On the Credit Cards page (fixed-deposit-backed) with the same 'Apply now for Pre-approved / Secured Credit Card' link.",
+   "issuer": "Canara Bank"
+  },
+  {
+   "name": "Canara Mastercard Gold Secured Credit Card",
+   "product_url": "https://www.canarabank.bank.in/mastercard-gold-secured-credit-card",
+   "status": "sold",
+   "variant_of": "Canara Mastercard Gold Credit Card",
+   "partner": null,
+   "evidence": "On the Credit Cards page (fixed-deposit-backed) with the 'Apply now for Pre-approved / Secured' link.",
+   "issuer": "Canara Bank"
+  },
+  {
+   "name": "Canara Visa Gold Secured Credit Card",
+   "product_url": "https://www.canarabank.bank.in/visa-gold-secured-credit-card",
+   "status": "sold",
+   "variant_of": "Canara Visa Gold Credit Card",
+   "partner": null,
+   "evidence": "On the Credit Cards page (fixed-deposit-backed) with the 'Apply now for Pre-approved / Secured' link.",
+   "issuer": "Canara Bank"
+  }
+ ]
+}

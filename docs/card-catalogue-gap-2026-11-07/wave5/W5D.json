@@ -1,0 +1,363 @@
+{
+ "agent": "W5D",
+ "cards": [
+  {
+   "name": "Axis Bank Pride Platinum Credit Card",
+   "slug": "axis-bank-pride-platinum",
+   "status": "still_blocked",
+   "network": null,
+   "network_evidence": "None: only shared Visa Signature art identical to the Pride Signature page",
+   "reason": "Network, point value and waiver figure (MITC INR 20,000 vs page INR 40,000) unresolved",
+   "sources": [
+    "https://www.axis.bank.in/cards/credit-card/pride-platinum-credit-card",
+    "https://www.axis.bank.in/docs/default-source/default-document-library/mitc-credit-cards.pdf"
+   ],
+   "still_missing": [
+    "Network of the Platinum card",
+    "Rupee value of an EDGE point",
+    "Which waiver threshold is current (20,000 or 40,000)"
+   ]
+  },
+  {
+   "name": "Axis Bank Pride Signature Credit Card",
+   "slug": "axis-bank-pride-signature",
+   "status": "still_blocked",
+   "network": "visa",
+   "network_evidence": "Card art on the issuer product page (Visa Signature mark)",
+   "reason": "Complete except the rupee value of an EDGE point; network from card art only",
+   "sources": [
+    "https://www.axis.bank.in/cards/credit-card/pride-signature-credit-card",
+    "https://www.axis.bank.in/docs/default-source/default-document-library/mitc-credit-cards.pdf"
+   ],
+   "still_missing": [
+    "Rupee value of an EDGE point",
+    "Network stated in text"
+   ]
+  },
+  {
+   "name": "Flipkart Axis Bank Super Elite Credit Card",
+   "slug": "flipkart-axis-bank-super-elite",
+   "status": "still_blocked",
+   "network": null,
+   "network_evidence": "None: card art has no network mark; no Axis text names it",
+   "reason": "Network and SuperCoin rupee value not published; waiver conflict page vs MITC",
+   "sources": [
+    "https://www.axis.bank.in/cards/credit-card/flipkart-axis-bank-super-elite-credit-card",
+    "https://www.axis.bank.in/docs/default-source/default-document-library/mitc-credit-cards.pdf"
+   ],
+   "still_missing": [
+    "Network",
+    "Rupee value of a SuperCoin",
+    "Annual fee waiver (page INR 2 lakh vs MITC none)"
+   ]
+  },
+  {
+   "name": "Miles & More Axis Bank World Credit Card",
+   "slug": "miles-more-axis-bank-world",
+   "status": "still_blocked",
+   "network": "mastercard",
+   "network_evidence": "Issuer page names MasterCard lounge programme; hero card art shows Mastercard World",
+   "reason": "Rupee value of an award mile not published by Axis",
+   "sources": [
+    "https://www.axis.bank.in/cards/credit-card/miles-more-credit-card",
+    "https://www.axis.bank.in/docs/default-source/default-document-library/mitc-credit-cards.pdf"
+   ],
+   "still_missing": [
+    "Rupee value of an award mile"
+   ]
+  },
+  {
+   "name": "Miles & More Axis Bank World Select Credit Card",
+   "slug": "miles-more-axis-bank-world-select",
+   "status": "still_blocked",
+   "network": "mastercard",
+   "network_evidence": "Issuer page names MasterCard lounge programme; hero card art shows Mastercard World",
+   "reason": "Rupee value of an award mile not published; own fee tier so kept as its own card",
+   "sources": [
+    "https://www.axis.bank.in/cards/credit-card/miles-more-credit-card",
+    "https://www.axis.bank.in/docs/default-source/default-document-library/mitc-credit-cards.pdf"
+   ],
+   "still_missing": [
+    "Rupee value of an award mile",
+    "Lounge spend rule for Select"
+   ]
+  },
+  {
+   "name": "Axis Bank Privilege Easy Credit Card",
+   "slug": "axis-bank-privilege-easy",
+   "status": "still_blocked",
+   "network": null,
+   "network_evidence": "None: card art has no network mark",
+   "reason": "Network not stated; EDGE point value conflicts (INR 0.20 vs 0.16)",
+   "sources": [
+    "https://www.axis.bank.in/cards/credit-card/privilege-easy-credit-card",
+    "https://campaign.axis.bank.in/generic/terms-and-conditions-privilegeeasy.pdf",
+    "https://www.axis.bank.in/docs/default-source/default-document-library/mitc-credit-cards.pdf"
+   ],
+   "still_missing": [
+    "Network",
+    "Rupee value of an EDGE point"
+   ]
+  },
+  {
+   "name": "SIB One Co-Branded Credit Card",
+   "slug": "sib-one-co-branded-credit-card",
+   "status": "still_blocked",
+   "network": "visa",
+   "network_evidence": "SIB MITC and FAQ: VISA powered credit card; page: Visa Signature",
+   "reason": "Rupee value of a reward point not stated by SIB (OneCard app only)",
+   "sources": [
+    "https://www.southindianbank.bank.in/personal/cards/credit-card/sib-one-co-branded-credit-card",
+    "https://www.southindianbank.bank.in/userfiles/upload/sib_onecard_kfs.pdf",
+    "https://www.southindianbank.bank.in/userfiles/upload/sib_onecard_credit_card_general_terms_and_conditions.pdf"
+   ],
+   "still_missing": [
+    "Rupee value of a reward point"
+   ]
+  },
+  {
+   "name": "Secured SIB One Co-Branded Credit Card",
+   "slug": null,
+   "status": "variant",
+   "network": "visa",
+   "network_evidence": "SIB page: Visa Signature",
+   "reason": "Same fees (nil) and same KFS, MITC and rewards T&Cs links as SIB One; FD-backed with 100% of deposit as limit. Noted on the parent",
+   "sources": [
+    "https://www.southindianbank.bank.in/personal/cards/credit-card/secured-sib-one-co-branded-credit-card",
+    "https://www.southindianbank.bank.in/userfiles/upload/tandc_secured_sib_onecard.pdf"
+   ],
+   "still_missing": [
+    "Whether secured card earns at the same rate (page says 'attractive rewards')"
+   ]
+  },
+  {
+   "name": "Utkarsh Eternal Credit Card",
+   "slug": "utkarsh-eternal",
+   "status": "still_blocked",
+   "network": null,
+   "network_evidence": "None: page FAQ says only 'Mastercard/ RuPay' generically",
+   "reason": "KFS/MITC not readable; earn rules, network, forex unknown",
+   "sources": [
+    "https://www.utkarsh.bank.in/personal/cards/credit-card/eternal"
+   ],
+   "still_missing": [
+    "Read the KFS and MITC (plain fetch 406, browser download only)",
+    "Network",
+    "Forex markup"
+   ]
+  },
+  {
+   "name": "Utkarsh Rhodium Credit Card",
+   "slug": "utkarsh-rhodium",
+   "status": "still_blocked",
+   "network": null,
+   "network_evidence": "Forex row says Visa currency conversion; not a network statement",
+   "reason": "KFS/MITC not readable; earn rules and network unconfirmed",
+   "sources": [
+    "https://www.utkarsh.bank.in/personal/cards/credit-card/rhodium"
+   ],
+   "still_missing": [
+    "Read the KFS and MITC",
+    "Network",
+    "Lounge spend conditions"
+   ]
+  },
+  {
+   "name": "Utkarsh SmartGen Credit Card",
+   "slug": "utkarsh-smartgen",
+   "status": "still_blocked",
+   "network": null,
+   "network_evidence": "None",
+   "reason": "KFS/MITC not readable; earn rules, network, forex unknown",
+   "sources": [
+    "https://www.utkarsh.bank.in/personal/cards/credit-card/smartgen"
+   ],
+   "still_missing": [
+    "Read the KFS and MITC",
+    "Network",
+    "Forex markup"
+   ]
+  },
+  {
+   "name": "Utkarsh superCard",
+   "slug": "utkarsh-supercard",
+   "status": "still_blocked",
+   "network": null,
+   "network_evidence": "None on the page",
+   "reason": "Percent earn stated but caps, exclusions, network are in the MITC which was not readable",
+   "sources": [
+    "https://www.utkarsh.bank.in/personal/cards/credit-card/supercard"
+   ],
+   "still_missing": [
+    "Read the MITC and KFS",
+    "Network",
+    "Cashback caps and exclusions"
+   ]
+  },
+  {
+   "name": "Utkarsh Wish Credit Card",
+   "slug": "utkarsh-wish",
+   "status": "still_blocked",
+   "network": null,
+   "network_evidence": "None on the page",
+   "reason": "Earn stated as reward points with no rupee value; MITC not readable",
+   "sources": [
+    "https://www.utkarsh.bank.in/personal/cards/credit-card/wish-credit-card"
+   ],
+   "still_missing": [
+    "Read the MITC",
+    "Rupee value of a reward point",
+    "Network"
+   ]
+  },
+  {
+   "name": "Unity Bank Zero Credit Card",
+   "slug": "unity-bank-zero",
+   "status": "complete",
+   "network": "rupay",
+   "network_evidence": "Unity ZERO Rewards and Benefits T&Cs (Oct 2026) clause 5.3 'applicable RuPay exchange rate'; listing titled RuPay",
+   "reason": "Fees nil, full earn table, caps none, point value INR 0.25 stated",
+   "sources": [
+    "https://cards.unity.bank.in/",
+    "https://cards.unity.bank.in/docs/credit-cards/zero-credit-card-terms"
+   ],
+   "still_missing": [
+    "Interest rate and MITC/KFS for Zero (not found on the site)"
+   ]
+  },
+  {
+   "name": "Unity Bank Vibe Credit Card",
+   "slug": "unity-bank-vibe",
+   "status": "held",
+   "network": null,
+   "network_evidence": "None",
+   "reason": "No Vibe-specific terms reachable; only listing headlines",
+   "sources": [
+    "https://unity.bank.in/personal-banking/cards/credit-card"
+   ],
+   "still_missing": [
+    "Vibe rewards T&C, fees, network"
+   ]
+  },
+  {
+   "name": "Roarbank Credit Card (Unity SFB)",
+   "slug": "roarbank-unity-credit-card",
+   "status": "held",
+   "network": null,
+   "network_evidence": "None: MITC defines 'Card Network' generically",
+   "reason": "Category cashback percentages (up to 20%) vary monthly and are not published",
+   "sources": [
+    "https://unity.bank.in/personal-banking/cards/credit-card/usfb-roarbank-credit-card",
+    "https://theunitybank.com/docs/roarbank/roarbank-credit-card-most-important-terms-and-conditions.pdf"
+   ],
+   "still_missing": [
+    "Published cashback percentages by category",
+    "Network"
+   ]
+  },
+  {
+   "name": "Unity Bank BharatPe Credit Card",
+   "slug": "unity-bank-bharatpe",
+   "status": "complete",
+   "network": "rupay",
+   "network_evidence": "Issuer page: 'Unity BharatPe RuPay Credit Card'",
+   "reason": "Fees nil, 2% Zillion Coins on repayment of bill spends, 4 coins = INR 1",
+   "sources": [
+    "https://unity.bank.in/personal-banking/cards/credit-card/usfb-bharatpe-credit-card",
+    "https://unity.bank.in/docs/credit-cards/mitc-unity-bank-bharatpe-credit-card.pdf"
+   ],
+   "still_missing": [
+    "Confirm tier (Select) and that 2% applies to every bill band"
+   ]
+  },
+  {
+   "name": "DCB ZET Credit Card",
+   "slug": "dcb-zet",
+   "status": "held",
+   "network": "rupay",
+   "network_evidence": "DCB KFS: 'DCB ZET Card (Rupay Select)'",
+   "reason": "No earn rate published in page, KFS or MITC",
+   "sources": [
+    "https://www.dcb.bank.in/personal/cards/secured-card/dcb-zet-credit-card",
+    "https://www.dcb.bank.in/api/dcb/assets/2026-02/KFS-for-DCB-Zet-Credit-Card.pdf"
+   ],
+   "still_missing": [
+    "Earn rate (revenue-sharing PDF exists)",
+    "Forex 2.49% (KFS) vs 3.5% (FAQ)"
+   ]
+  },
+  {
+   "name": "DCB novio Credit Card (RuPay Platinum / RuPay Select)",
+   "slug": "dcb-novio",
+   "status": "held",
+   "network": "rupay",
+   "network_evidence": "DCB MITC v1.1 Apr 2026: RuPay Platinum and RuPay Select",
+   "reason": "Rewards table blank in the MITC; powered by novio app",
+   "sources": [
+    "https://www.dcb.bank.in/personal/cards/secured-card/dcb-novio-credit-card",
+    "https://www.dcb.bank.in/api/dcb/assets/2026-04/MITC-DCB-Novio-Card.pdf"
+   ],
+   "still_missing": [
+    "Novio reward table and quarterly milestone"
+   ]
+  },
+  {
+   "name": "DCB Niyo Credit Card",
+   "slug": "dcb-niyo",
+   "status": "held",
+   "network": "visa",
+   "network_evidence": "DCB KFS: 'Visa Card network'",
+   "reason": "No earn rate published",
+   "sources": [
+    "https://www.dcb.bank.in/personal/cards/secured-card/dcb-niyo-credit-card",
+    "https://www.dcb.bank.in/api/dcb/assets/2025-10/KFS-for-DCB-Niyo-Secured-Credit-Card.pdf"
+   ],
+   "still_missing": [
+    "Earn rate"
+   ]
+  },
+  {
+   "name": "DCB PayLess Platinum Credit Card",
+   "slug": "dcb-payless-platinum",
+   "status": "complete",
+   "network": "rupay",
+   "network_evidence": "DCB page: 'powered by RuPay'",
+   "reason": "Fees, INR 250 on INR 50,000 quarterly, exclusions, fuel waiver stated; fees from page table only (no KFS link on page)",
+   "sources": [
+    "https://www.dcb.bank.in/personal/cards/secured-card/dcb-payless-platinum-card"
+   ],
+   "still_missing": [
+    "Quarter definition, limited-offer end date, KFS/MITC link"
+   ]
+  },
+  {
+   "name": "DCB PayLess Select Credit Card",
+   "slug": "dcb-payless-select",
+   "status": "complete",
+   "network": "rupay",
+   "network_evidence": "DCB page: 'powered by RuPay'",
+   "reason": "Fees, INR 1,000 on INR 1 lakh quarterly, exclusions, lounge stated; fees from page table only",
+   "sources": [
+    "https://www.dcb.bank.in/personal/cards/secured-card/dcb-payless-select-card"
+   ],
+   "still_missing": [
+    "Quarter definition, limited-offer end date, KFS/MITC link"
+   ]
+  },
+  {
+   "name": "ESAF INORI RuPay Platinum Credit Card",
+   "slug": "esaf-inori-rupay-platinum",
+   "status": "still_blocked",
+   "network": "rupay",
+   "network_evidence": "Page heading 'RuPay Platinum Credit Card'",
+   "reason": "MITC blocked (403 to plain fetch; browser download only); fees and terms unknown",
+   "sources": [
+    "https://www.esaf.bank.in/credit-card/"
+   ],
+   "still_missing": [
+    "Read the MITC and fuel cashback T&C",
+    "Fees, exclusions, caps"
+   ]
+  }
+ ]
+}

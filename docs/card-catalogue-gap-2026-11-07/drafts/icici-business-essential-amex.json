@@ -1,0 +1,441 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "icici-business-essential-amex",
+    "name": "ICICI Bank American Express Business Essential Credit Card",
+    "issuer_slug": "icici-bank",
+    "network": "amex",
+    "network_tier": "N/A",
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 1000,
+    "annual_fee_inr": 1000,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": false,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": "Not stated by ICICI for this card.",
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.icici.bank.in/business-banking/cards/business-credit-card/essential-business-advantage-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "Business credit card for entrepreneurs, owners and self-employed professionals (page FAQ); documents: business registration, address proof, financial documents.",
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 200,
+    "rounding_mode": null,
+    "base_points_per_block": null,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "biz-ess-excl-cash",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6011,
+          6050,
+          6051,
+          6529,
+          6530,
+          6538,
+          6666,
+          7777,
+          9999,
+          6010,
+          3882,
+          6541,
+          6542
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on cash withdrawals (page: \"except cash withdrawals, fuel, rent and utilities\")."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "biz-ess-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          1361,
+          3851,
+          5172,
+          5541,
+          5542,
+          5983,
+          9752,
+          5555
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on fuel (page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "biz-ess-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          7014,
+          7407,
+          5271,
+          6513
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on rent (page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "biz-ess-excl-utility",
+      "category_id": "bills",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4899,
+          4900,
+          4901,
+          3887,
+          4897,
+          5416,
+          5417,
+          4812,
+          4813,
+          4814,
+          4815,
+          4821,
+          4896,
+          4902,
+          3886
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on utilities (page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "biz-ess-online-4",
+      "category_id": "online",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "online",
+      "conditions": {
+        "per_inr_block": 200
+      },
+      "action": {
+        "multiplier": 4,
+        "points_per_block": 4,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "4 points per ₹200 on online spend (page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "biz-ess-dining-airline-2",
+      "category_id": "dining",
+      "priority": 11,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 200,
+        "categories": [
+          "dining",
+          "airlines"
+        ]
+      },
+      "action": {
+        "multiplier": 2,
+        "points_per_block": 2,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "2 points per ₹200 on dining and airline spend (page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "biz-ess-base-1",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 200
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "1 point per ₹200 on other spend (page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 45
+    },
+    "forex_markup": {
+      "markup_percent": 3.5,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 3.5,
+      "gst_applicable": true,
+      "trigger_condition": "Business MITC: 1% until 24 Nov 2026, 3.5% w.e.f. 25 Nov 2026 on Indian-rupee transactions abroad or at foreign-registered merchants; 3.5% used as the standing rate"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": null,
+      "waiver_percent": 1,
+      "min_txn_inr": null,
+      "max_txn_inr": 5000,
+      "monthly_waiver_cap_inr": 500
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": null,
+      "atm_transaction_fee_min_inr": null,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on rent payments (Business MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 550,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 99,
+      "gst_applicable": true,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 99,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 100,
+        "max_balance_inr": 500,
+        "fee_inr": 100
+      },
+      {
+        "min_balance_inr": 501,
+        "max_balance_inr": 1000,
+        "fee_inr": 500
+      },
+      {
+        "min_balance_inr": 1001,
+        "max_balance_inr": 5000,
+        "fee_inr": 600
+      },
+      {
+        "min_balance_inr": 5001,
+        "max_balance_inr": 10000,
+        "fee_inr": 750
+      },
+      {
+        "min_balance_inr": 10001,
+        "max_balance_inr": 25000,
+        "fee_inr": 900
+      },
+      {
+        "min_balance_inr": 25001,
+        "max_balance_inr": 50000,
+        "fee_inr": 1100
+      },
+      {
+        "min_balance_inr": 50001,
+        "max_balance_inr": null,
+        "fee_inr": 1300
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 500000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "Spend ₹5,00,000 or more during an anniversary year and the annual fee is reversed for the subsequent year (Business MITC).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 1000
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "first_month_bill_payment",
+      "benefit_points": 1500,
+      "effective_value_inr": null,
+      "condition": "1,500 reward points on payment of the first month's bill; 1,500 points within 30 days of paying the annual fee (page). Rupee value of a point not stated."
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": null,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-15",
+          "sources": [
+            {
+              "url": "https://www.icici.bank.in/business-banking/cards/business-credit-card/essential-business-advantage-card",
+              "kind": "issuer business card page: fees, earn, benefits, FAQ (no revision date)",
+              "read": "plain HTTP fetch, page text"
+            },
+            {
+              "url": "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc-terms-and-conditions-business.pdf",
+              "kind": "ICICI Business Cards MITC dated 14 Oct 2026: fee table, fuel waiver table, interest, late fee, forex",
+              "read": "pdftotext"
+            }
+          ],
+          "open_questions": [
+            "Network: American Express, from the issuer page name \"ICICI Bank American Express Business Essential Credit Card\" and the Business MITC \"AMEX\" wording; no separate network statement or tier.",
+            "Value of one reward point: not stated.",
+            "Fuel waiver: 1% at HPCL pumps, maximum transaction ₹5,000, capped ₹500 a month per card (Business MITC, page).",
+            "Online spend (4 points per ₹200): the page does not say what counts as online, nor any cap.",
+            "The page says \"except cash withdrawals, fuel, rent and utilities\" without MCC lists; the MCC lists drafted are the personal-card MITC lists and are not stated for this card."
+          ],
+          "notes": [
+            "Late payment fee table, interest, over-limit fee, redemption fee, forex 3.5% and rent fee come from the Business MITC of 14 Oct 2026. Business card variants have corporate-liability and individual-liability forms (BCCL, BCIL)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

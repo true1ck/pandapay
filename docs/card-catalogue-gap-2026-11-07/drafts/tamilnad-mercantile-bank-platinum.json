@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "tamilnad-mercantile-bank-platinum",
+    "name": "TMB Platinum Credit Card",
+    "issuer_slug": "tamilnad-mercantile-bank",
+    "network": "rupay",
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": false,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": null,
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.tmb.bank.in/personal/savings/tmb-platinum-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "Page: individual holding a TMB Term Deposit of INR 50,000 or more for a minimum 3 years; secured card against Term Deposit; limit INR 20,000 to INR 5,00,000, up to 75% of the Term Deposit value; no income documentation.",
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": null,
+    "rounding_mode": null,
+    "base_points_per_block": null,
+    "base_cashback_percent": null,
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": null,
+      "annual_interest_rate_percent": null
+    },
+    "forex_markup": {
+      "markup_percent": 3.5,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": null,
+      "waiver_percent": null,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 3,
+      "atm_transaction_fee_min_inr": null,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": null,
+        "min_fee_inr": null,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": 150,
+      "cheque_bounce_charge_inr": 150
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "No annual fee to waive (issuer states nil annual fee).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 0,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-15",
+          "sources": [
+            {
+              "url": "https://www.tmb.bank.in/personal/savings/tmb-platinum-credit-card",
+              "kind": "TMB card page: key features table (card type, limits, deposit/eligibility), interest and finance charges, other charges",
+              "read": "curl, stripped to text"
+            },
+            {
+              "url": "https://s3.ap-south-2.amazonaws.com/tmbwebsite-prod-v1.0-s3/s3fs-public/2026-10/Forex%20Charges.pdf",
+              "kind": "Forex Charges PDF linked from the page (not read for card-specific rates)",
+              "read": "link only"
+            }
+          ],
+          "open_questions": [
+            "Fees: the page says \"no joining or annual fees\" in prose and has no fees-and-charges table, so the late payment fee, renewal fee and replacement fee are not stated.",
+            "Card type row reads \"RuPay Platinum Credit Card\"; tagline \"A Premium RuPay Platinum Credit Card\".",
+            "Daily cash withdrawal limit INR 25,000 (subject to RBI norms, if applicable).",
+            "Rewards: no reward rate, points, cashback, lounge, fuel waiver or welcome benefit appears anywhere on the issuer card page; the page links only TMB Rewards (rewards.tmbdigital.bank.in), a portal behind a login that was not opened. No earn rule is written; the card is held until TMB publishes a reward structure for it.",
+            "Purchase interest rate (APR) and minimum amount due are not stated on the page; only the finance charge on cash withdrawals (2% a month, 24% a year) is given.",
+            "Foreign currency conversion markup is \"Up to 3.5%\" (page); the separate Forex Charges PDF linked from the page was not read for a card-specific figure.",
+            "Cash withdrawal fee 3% of the amount (page: \"Min Rs.30 per Rs.1,000 or part\", wording ambiguous) at TMB ATMs; 3% plus other bank charges elsewhere.",
+            "Network wording: the \"Card Type\" row of the page table names it. No separate network tier is stated.",
+            "Other charges stated: charge slip retrieval INR 100 + GST, outstation cheque collection INR 100 + GST + bank charges, duplicate statement older than 2 months INR 100 + GST, cheque dishonour / failed payment INR 150 + GST. Add-on cards free for spouse and children above 18. Free credit period up to 45 days. Card validity 3 years. Cash advance limit 25% of sanctioned limit."
+          ],
+          "notes": [],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

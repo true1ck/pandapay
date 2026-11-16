@@ -1,0 +1,678 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "icici-expressions",
+    "name": "ICICI Bank Expressions Credit Card",
+    "issuer_slug": "icici-bank",
+    "network": null,
+    "network_tier": "N/A",
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 499,
+    "annual_fee_inr": 499,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": false,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": "Not stated: the page lists reward-point categories for redemption (vouchers, appliances, electronics) with no rupee value per point.",
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.icici.bank.in/personal-banking/cards/credit-card/expressions-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "Page FAQ: age 21 to 65.",
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": 3,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": "statement_cycle",
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "expr-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          7014,
+          7407,
+          5271,
+          6513
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on rent payments (MITC, Reward Points Capping: \"No reward points ... Cash and Rent categories\")."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "expr-excl-cash",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6011,
+          6050,
+          6051,
+          6529,
+          6530,
+          6538,
+          6666,
+          7777,
+          9999,
+          6010,
+          3882,
+          6541,
+          6542
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on cash transactions (MITC)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "expr-excl-wallet",
+      "category_id": "wallet",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on e-wallet reloads (MITC)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "expr-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          1361,
+          3851,
+          5172,
+          5541,
+          5542,
+          5983,
+          9752,
+          5555
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on fuel transactions (MITC)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "expr-utility-insurance-1",
+      "category_id": "bills",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100,
+        "mcc_list": [
+          4899,
+          4900,
+          4901,
+          3887,
+          4897,
+          5416,
+          5417,
+          4812,
+          4813,
+          4814,
+          4815,
+          4821,
+          4896,
+          4902,
+          3886
+        ]
+      },
+      "action": {
+        "multiplier": 0.3333333333333333,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": "expr-utility-cap",
+        "reason": "1 point per ₹100 on utility spend (page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "expr-insurance-1",
+      "category_id": "insurance",
+      "priority": 11,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100,
+        "mcc_list": [
+          5960,
+          6300,
+          6381,
+          6399
+        ]
+      },
+      "action": {
+        "multiplier": 0.3333333333333333,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": "expr-insurance-cap",
+        "reason": "1 point per ₹100 on insurance spend (page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "expr-retail-3",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 3,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "3 points per ₹100 on retail spend (page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "expr-utility-cap",
+      "category_id": "bills",
+      "metric": "eligible_spend_amount",
+      "mcc_target_list": [
+        4899,
+        4900,
+        4901,
+        3887,
+        4897,
+        5416,
+        5417,
+        4812,
+        4813,
+        4814,
+        4815,
+        4821,
+        4896,
+        4902,
+        3886
+      ],
+      "period": "statement_cycle",
+      "limit_value": "N/A",
+      "limit_value_inr": 40000,
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "expr-insurance-cap",
+      "category_id": "insurance",
+      "metric": "eligible_spend_amount",
+      "mcc_target_list": [
+        5960,
+        6300,
+        6381,
+        6399
+      ],
+      "period": "statement_cycle",
+      "limit_value": "N/A",
+      "limit_value_inr": 40000,
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "expr-grocery-cap",
+      "category_id": "groceries",
+      "metric": "eligible_spend_amount",
+      "mcc_target_list": [
+        3333,
+        5411,
+        5412,
+        5441,
+        9751,
+        5311,
+        5331,
+        5499
+      ],
+      "period": "statement_cycle",
+      "limit_value": "N/A",
+      "limit_value_inr": 20000,
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "expr-transport-cap",
+      "category_id": "travel",
+      "metric": "eligible_spend_amount",
+      "mcc_target_list": [
+        4111,
+        4112,
+        4784,
+        4131
+      ],
+      "period": "statement_cycle",
+      "limit_value": "N/A",
+      "limit_value_inr": 10000,
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 45
+    },
+    "forex_markup": {
+      "markup_percent": 3.5,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 3.5,
+      "gst_applicable": true,
+      "trigger_condition": "MITC: 3.5% DCC fee w.e.f. 15 Jan 2026 on transactions in Indian currency at international locations or at India-located merchants registered abroad"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": null,
+      "waiver_percent": 1,
+      "min_txn_inr": 400,
+      "max_txn_inr": 4000,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on rent payment transactions (MCC 6513) (MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          1361,
+          3851,
+          5172,
+          5541,
+          5542,
+          5983,
+          9752,
+          5555
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on fuel transactions above ₹10,000 (MITC, w.e.f. 15 Nov 2024)",
+        "threshold_spend_inr": 10000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "utility",
+        "mcc_list": [
+          4899,
+          4900,
+          4901,
+          4814,
+          4821
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on utility payments above ₹50,000 (MITC, w.e.f. 15 Nov 2024)",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education",
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299,
+          8493,
+          8494,
+          7911
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on education payments made through third-party apps (MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "wallet",
+        "mcc_list": [
+          6540
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on wallet loads of ₹5,000 or more (MITC, w.e.f. 15 Jan 2026)",
+        "threshold_spend_inr": 5000,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": 299,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": 3,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 550,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 99,
+      "gst_applicable": true,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 99,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 100,
+        "max_balance_inr": 500,
+        "fee_inr": 100
+      },
+      {
+        "min_balance_inr": 501,
+        "max_balance_inr": 1000,
+        "fee_inr": 500
+      },
+      {
+        "min_balance_inr": 1001,
+        "max_balance_inr": 5000,
+        "fee_inr": 600
+      },
+      {
+        "min_balance_inr": 5001,
+        "max_balance_inr": 10000,
+        "fee_inr": 750
+      },
+      {
+        "min_balance_inr": 10001,
+        "max_balance_inr": 25000,
+        "fee_inr": 900
+      },
+      {
+        "min_balance_inr": 25001,
+        "max_balance_inr": 50000,
+        "fee_inr": 1100
+      },
+      {
+        "min_balance_inr": 50001,
+        "max_balance_inr": null,
+        "fee_inr": 1300
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 150000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "Spend over ₹1.5 lakh and the annual fee is waived for the next year (page; MITC fee table 1,50,000 with the anniversary-year footnote). EMI, rent, government and education spends do not count (MITC).",
+      "excluded_category_ids": [
+        "rent",
+        "government",
+        "education",
+        "emi"
+      ],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 499
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "N/A",
+      "benefit_points": "N/A",
+      "effective_value_inr": "N/A",
+      "condition": "No welcome benefit stated on the page."
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "expr-lounge-dom",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "ICICI Bank",
+      "label": "Domestic airport lounge access, primary cardholder only, on ₹75,000 spent in the preceding quarter",
+      "evaluation_engine": {
+        "conditions": {
+          "preceding_quarter_spend_inr": 75000
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 1,
+      "quota_period": "quarter",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": null,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [
+    {
+      "promo_id": "expr-inox",
+      "category_id": "movie",
+      "network_program": "N/A",
+      "sponsor": "INOX",
+      "platform": "INOX",
+      "offer_type": "instant_discount",
+      "discount_percent": 25,
+      "max_discount_inr": 100,
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": true,
+      "is_permanent_card_feature": true,
+      "valid_from": null,
+      "valid_to": null
+    },
+    {
+      "promo_id": "expr-bms",
+      "category_id": "movie",
+      "network_program": "N/A",
+      "sponsor": "BookMyShow",
+      "platform": "BookMyShow",
+      "offer_type": "instant_discount",
+      "discount_percent": 25,
+      "max_discount_inr": 100,
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": true,
+      "is_permanent_card_feature": true,
+      "valid_from": "2026-04-01",
+      "valid_to": null
+    }
+  ],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-15",
+          "sources": [
+            {
+              "url": "https://www.icici.bank.in/personal-banking/cards/credit-card/expressions-card",
+              "kind": "issuer card page: fees, earn (3 per ₹100 retail, 1 utility and insurance), lounge, fuel, FAQ (no revision date)",
+              "read": "plain HTTP fetch, page text"
+            },
+            {
+              "url": "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf",
+              "kind": "ICICI credit card MITC, last updated 6 Nov 2026: fee table, forex, DCC, late fee, interest, reward exclusions and caps, lounge rules",
+              "read": "pdftotext"
+            }
+          ],
+          "open_questions": [
+            "Network NOT STATED on the page or in the MITC; no card-art network found. Ask ICICI or read an issued card.",
+            "Value of one reward point in rupees: not stated.",
+            "Cap tables (MITC): utility ₹40,000, insurance ₹40,000, grocery and department store ₹20,000, transportation ₹10,000 per statement cycle for Expressions. The MITC heads the columns \"Utility Spend\" etc. and says \"Reward Points accrued per statement cycle will be capped\", so whether the ₹ figure is eligible spend or points is not fully clear; read as eligible spend. What happens above the cap (zero points) is not stated explicitly; zero_accrual is the reading of \"capped\".",
+            "Grocery: no accelerated rate is stated for grocery; it sits in the standard 3 points per ₹100 and is subject to the ₹20,000 cap.",
+            "Fuel waiver: 1% on transactions of ₹400 to ₹4,000 at HPCL pumps (page); the monthly or cycle cap is not on the page. MITC says surcharge waiver on select cards applies on spends up to ₹50,000 per statement cycle at HPCL; whether Expressions is a select card is not named in the MITC.",
+            "Forex 3.5%: MITC default; not stated on the card page.",
+            "Government spends are treated as utility category for fee purposes since 5 Feb 2024 (MITC); their reward treatment on this card is not stated beyond the MITC cap table."
+          ],
+          "notes": [
+            "Late payment slab and interest from the MITC. Card is customisable (175+ templates, page).",
+            "Annual fee conflict check: page and MITC both say ₹499."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

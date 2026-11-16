@@ -1,0 +1,329 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "sib-one-co-branded-credit-card",
+    "name": "SIB One Co-Branded Credit Card",
+    "issuer_slug": "south-indian-bank",
+    "network": "visa",
+    "network_tier": "visa_signature",
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": null,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": null,
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_page",
+    "source_url": "https://www.southindianbank.bank.in/personal/cards/credit-card/sib-one-co-branded-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": null,
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 50,
+    "rounding_mode": null,
+    "base_points_per_block": 1,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "sib-one-excl",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on money transfers, rent payments, fuel purchases, cash withdrawals, digital wallet loads, and (effective 15 Sep 2026) bills and utilities (SIB One general T&Cs, clause 20)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sib-one-5x-top2",
+      "category_id": "all_retail",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "top_categories_per_month": 2,
+        "min_categories_in_month": 3,
+        "min_spend_per_category_inr": 750,
+        "per_inr_block": 50
+      },
+      "action": {
+        "multiplier": 5,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "5X reward points on the top 2 spend categories of a month if purchases span at least 3 categories with at least INR 750 in each (T&Cs clause 20, from 6 Jan 2025); credited on the 10th of the next month."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "sib-one-base",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 50,
+        "fractional_points": true
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "1 reward point on every INR 50 of regular purchases; fractional points for amounts below INR 50 (T&Cs clause 20)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 45
+    },
+    "forex_markup": {
+      "markup_percent": 1,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": 400
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": null,
+      "atm_transaction_fee_min_inr": null,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 2,
+        "gst_applicable": true,
+        "trigger_condition": "2% of the transaction amount on rent through third-party merchants, w.e.f. 1 Feb 2026",
+        "threshold_spend_inr": null,
+        "effective_from": "2026-02-01",
+        "effective_to": null
+      },
+      {
+        "category_id": "wallet",
+        "mcc_list": [
+          6540
+        ],
+        "fee_percent": 2,
+        "gst_applicable": true,
+        "trigger_condition": "2% on wallet upload/transfer on cumulative spends of INR 10,000 or more a month, w.e.f. 1 Feb 2026",
+        "threshold_spend_inr": 10000,
+        "effective_from": "2026-02-01",
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": null,
+        "min_fee_inr": null,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 48,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 250,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 251,
+        "max_balance_inr": 1000,
+        "fee_inr": 250
+      },
+      {
+        "min_balance_inr": 1001,
+        "max_balance_inr": 5000,
+        "fee_inr": 500
+      },
+      {
+        "min_balance_inr": 5001,
+        "max_balance_inr": 25000,
+        "fee_inr": 1000
+      },
+      {
+        "min_balance_inr": 25001,
+        "max_balance_inr": null,
+        "fee_inr": 1250
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "Joining and annual fee are nil (KFS w.e.f. 15 Sep 2026). Metal card add-on issuance fee INR 3,000; card cancellation fee within 6 months INR 3,000 metal or INR 500 plastic.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": null,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-15",
+          "sources": [
+            {
+              "url": "https://www.southindianbank.bank.in/personal/cards/credit-card/sib-one-co-branded-credit-card",
+              "kind": "SIB product page (read in the built-in browser; plain fetch returned 403): features, Visa Signature, 1% forex",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://www.southindianbank.bank.in/userfiles/upload/sib_onecard_kfs.pdf",
+              "kind": "SIB One Key Fact Statement w.e.f. 15 Sep 2026 (PDF created 14 Aug 2026): fees, interest, late fee, fuel waiver",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.southindianbank.bank.in/userfiles/upload/sib_onecard_credit_card_most_imp_terms_conditions.pdf",
+              "kind": "SIB One MITC (PDF created 14 Aug 2026): \"VISA powered credit card\", fuel waiver, rent and wallet fees",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.southindianbank.bank.in/userfiles/upload/sib_onecard_credit_card_general_terms_and_conditions.pdf",
+              "kind": "SIB One general T&Cs (PDF created 14 Aug 2026), clause 20: reward earn, 5X, exclusions, validity",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.southindianbank.bank.in/userfiles/upload/faq_sib_onecard_credit_card.pdf",
+              "kind": "SIB One FAQ (PDF created 19 Oct 2026): Visa powered, points never expire",
+              "read": "pdftotext"
+            }
+          ],
+          "open_questions": [
+            "Rupee value of one reward point is not stated in the issuer documents read (the T&Cs say the rate may change); left null. The OneCard rewards page (getonecard.app) is a partner site and was not read.",
+            "Fuel waiver: capped INR 400 per calendar month per account (MITC); no per-transaction band stated; KFS says 1% of the amount.",
+            "The 25,000-point ceiling on incremental 5X points in education, bills and insurance categories (T&Cs 20.h) is not modelled as a cap rule because the T&Cs give no period. Bills and utilities earn nothing from 15 Sep 2026.",
+            "Which categories exist for the 5X top-2 rule is defined by the app, not by the documents.",
+            "Eligibility: a search snippet claiming the card is issued only to pre-approved customers is not issuer evidence; the issuer page carries no such restriction.",
+            "Reward points are nullified if the card is unused for more than 365 days (T&Cs).",
+            "Card is metal; physical form-factor fees (INR 3,000 metal add-on) are in the KFS; EMI fees are shown only in the OneCard app."
+          ],
+          "notes": [
+            "Secured SIB One Co-Branded Credit Card (FD-backed, limit 100% of deposit, Visa Signature, zero joining and annual fee, 1% forex per the SIB page) links the same KFS, MITC and rewards T&Cs, so it is recorded as a variant of this card, not a separate draft. Its own T&C PDF (updated 10 Jan 2024) covers only the FD lien terms."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

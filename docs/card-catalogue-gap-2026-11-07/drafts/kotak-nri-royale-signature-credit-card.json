@@ -1,0 +1,421 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "kotak-nri-royale-signature-credit-card",
+    "name": "Kotak NRI Royale Signature Credit Card",
+    "issuer_slug": "kotak-mahindra-bank",
+    "network": null,
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 1000,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": null,
+    "is_upi_linkable": false,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 1,
+    "point_value_baseline_basis": "Kotak NRI Royale Signature page, \"2 Rewards on International Spends\": \"1 Reward Point = Re 1/-\". The Reward Redemption tab states no value and links to the Kotak Rewards catalogue.",
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/nri-royale-signature-card.html",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "Eligibility tab: primary cardholder aged 21 to 60, add-on cardholder 18 or above; only NRE or NRO account holders; credit limit up to 80% of the fixed deposit; minimum FD ₹1 lakh; only individual FDs. MITC 34.2: issued against an NRE or NRO term deposit.",
+    "rules": [
+      {
+        "parameter": "fd_amount_inr",
+        "operator": ">=",
+        "threshold_value": 100000,
+        "allowed_values": []
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 200,
+    "rounding_mode": null,
+    "base_points_per_block": 1,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": 0.5,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "kotak-nri-royale-international-2rp",
+      "category_id": "international_spend",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 200,
+        "transaction_type": "international"
+      },
+      "action": {
+        "multiplier": 2,
+        "points_per_block": 2,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Page: \"earn 2 reward points for every Rs. 200/- spent\" on spends outside India."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "kotak-nri-royale-domestic-1rp",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 200,
+        "transaction_type": "domestic"
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Page: \"Earn 1 reward point for every Rs. 200/- spent within India\"."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 45
+    },
+    "forex_markup": {
+      "markup_percent": 3.5,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 3.5,
+      "gst_applicable": true,
+      "trigger_condition": "MITC: 3.5% for all other cards on transactions in Indian currency at international locations or with foreign-registered merchants"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": null,
+      "waiver_percent": null,
+      "min_txn_inr": 500,
+      "max_txn_inr": 5000,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% of the transaction amount + GST on every rent payment (MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "bills",
+        "mcc_list": [],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% on cumulative utility spends above ₹50,000 per statement cycle, levied in the next cycle (MITC note 7)",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "fuel",
+        "mcc_list": [],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% on cumulative fuel spends above ₹35,000 per statement cycle, levied in the next cycle (MITC note 8)",
+        "threshold_spend_inr": 35000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "wallet",
+        "mcc_list": [],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% on cumulative wallet loads above ₹10,000 per statement cycle (MITC)",
+        "threshold_spend_inr": 10000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education",
+        "mcc_list": [],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% on all education payments made through third-party apps (MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "gaming",
+        "mcc_list": [],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% on cumulative online skill-based gaming spends above ₹10,000 per statement cycle (MITC)",
+        "threshold_spend_inr": 10000,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": null,
+        "min_fee_inr": 500,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": 450,
+      "cheque_bounce_charge_inr": 500
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "1% of all purchase transactions and cash advances",
+        "100% of EMI, finance charges, fees, charges and tax",
+        "minimum ₹100, else up to the total amount due, whichever is lower (MITC)"
+      ]
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 100,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 101,
+        "max_balance_inr": 500,
+        "fee_inr": 100
+      },
+      {
+        "min_balance_inr": 501,
+        "max_balance_inr": 1000,
+        "fee_inr": 500
+      },
+      {
+        "min_balance_inr": 1001,
+        "max_balance_inr": 5000,
+        "fee_inr": 600
+      },
+      {
+        "min_balance_inr": 5001,
+        "max_balance_inr": 10000,
+        "fee_inr": 750
+      },
+      {
+        "min_balance_inr": 10001,
+        "max_balance_inr": 25000,
+        "fee_inr": 900
+      },
+      {
+        "min_balance_inr": 25001,
+        "max_balance_inr": 50000,
+        "fee_inr": 1100
+      },
+      {
+        "min_balance_inr": 50001,
+        "max_balance_inr": null,
+        "fee_inr": 1300
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "Fees and Charges tab: joining fee nil, annual fee ₹1,000, no waiver condition (NA).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "kotak-nri-royale-lounge",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "Kotak Mahindra Bank",
+      "label": "2 complimentary visits every quarter to select lounges in India (page)",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 2,
+      "quota_period": "quarter",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "kotak-nri-royale-railway",
+      "category_id": "other",
+      "network_program": null,
+      "sponsor": "Kotak Mahindra Bank",
+      "label": "Railway surcharge waiver on www.irctc.co.in and Indian Railways counters, maximum ₹500 a calendar year (page)",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": 500,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 599,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": 18
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "Kotak Rewards catalogue (mobile recharge, shopping, e-vouchers, BookMyShow, travel)",
+        "redemption_type": "partner_catalogue",
+        "inr_value_per_point": 1,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": null,
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-15",
+          "sources": [
+            {
+              "url": "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/nri-royale-signature-card.html",
+              "kind": "NRI Royale Signature features page (rewards, fuel and railway waivers, add-on fee, lounge); read in the built-in browser",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/nri-royale-signature-card/fees-and-charges.html",
+              "kind": "Fees and Charges tab: joining fee nil, annual fee ₹1,000, no waiver",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/nri-royale-signature-card/eligibility.html",
+              "kind": "Eligibility tab: NRE/NRO holders, age 21-60, 80% of FD, minimum FD ₹1 lakh",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/nri-royale-signature-card/reward-redemption.html",
+              "kind": "Reward Redemption tab (Kotak Rewards, no value stated)",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://www.kotak.bank.in/content/dam/Kotak/files/english-rcas.pdf",
+              "kind": "Kotak Mahindra Bank MITC and Cardholder Agreement (PDF created 30 Oct 2026): interest, forex, late fee, MAD, surcharges, fuel waiver rule",
+              "read": "pdftotext"
+            }
+          ],
+          "open_questions": [
+            "Network: neither the pages nor the MITC state the network of the NRI Royale Signature card (the MITC says fees do not depend on the network variant and speaks of Visa/MasterCard/RuPay generally). Not taken from the resident Royale Signature card or the word \"Signature\". A person should confirm from the card art or the welcome kit.",
+            "Fuel surcharge waiver: the page says waiver on transactions of ₹500 to ₹3,000, maximum ₹3,500 in a calendar year; the MITC (PDF created 30 Oct 2026, later than the page) says ₹500 to ₹5,000, maximum ₹3,500 in an anniversary year, and the waiver percentage is not stated for this card. The MITC range is used and waiver_percent, surcharge_percent and the yearly cap (the field is monthly) are left null.",
+            "Reward exclusions, caps and expiry: neither the page nor the MITC special terms read lists excluded categories, caps or point expiry for this card; the special-terms section for Royale, Zen, Signature and NRI Royale cards covers the welcome gift and Priority Pass only. The \"3x Reward Points on Spends\" icon on the page has no matching text.",
+            "Finance charge 3.75% a month (45% a year): read from the MITC finance-charge table where NRI Royale Signature sits in a merged cell group (the layout puts the 3.75% figure in the first group, 3.50% in the White/Infinite group). A person should eyeball the table row.",
+            "Joining fee nil, annual fee ₹1,000 (page and MITC agree); GST is \"as per the Finance Act\" and no numeric rate is stated on the pages, so gst_rate_percent is null.",
+            "Lounge: the page says 2 visits a quarter to select lounges in India; the MITC special terms describe a Priority Pass membership for the Signature family; the quota and any spend condition per card were not tied to NRI Royale in the MITC. Quota from the page used.",
+            "Overlimit fee ₹500 (waived for some cards), cheque return 2% min ₹500, auto-debit failure 2% min ₹450 are MITC rows for \"all other cards\"."
+          ],
+          "notes": [
+            "FD-backed card: credit limit up to 80% of the deposit; deposits at least 1 year and 1 day with auto-renewal in the secured-card terms (MITC 34.4).",
+            "Payments can only be made through auto-debit from the cardholder's Kotak NRE account (MITC bill-payment section for NRI cardholders)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,623 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "icici-adani-one-signature",
+    "name": "Adani One ICICI Bank Signature Credit Card",
+    "issuer_slug": "icici-bank",
+    "network": null,
+    "network_tier": "N/A",
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 5000,
+    "annual_fee_inr": 5000,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": false,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": "Not stated: the page says points are credited to the Adani OneApp as \"Adani OneApp Rewards\" and gives no rupee value per point.",
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.icici.bank.in/personal-banking/cards/credit-card/adani-icici-credit-card/signature-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "Page: Indian citizen over 21; salaried with monthly income of ₹75,000 or self-employed with annual income of ₹9,00,000.",
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": 1.5,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "adani-sig-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          7014,
+          7407,
+          5271,
+          6513
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on rent payments (MITC, Reward Points Capping: \"No reward points ... Cash and Rent categories\")."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "adani-sig-excl-cash",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6011,
+          6050,
+          6051,
+          6529,
+          6530,
+          6538,
+          6666,
+          7777,
+          9999,
+          6010,
+          3882,
+          6541,
+          6542
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on cash transactions (MITC)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "adani-sig-excl-wallet",
+      "category_id": "wallet",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on e-wallet reloads (MITC)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "adani-sig-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          1361,
+          3851,
+          5172,
+          5541,
+          5542,
+          5983,
+          9752,
+          5555
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on fuel transactions (MITC)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "adani-sig-international-2",
+      "category_id": "international_spend",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "transaction_type": "international",
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 1.3333333333333333,
+        "points_per_block": 2,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "2 points per ₹100 on international spend (issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "adani-sig-base-1-5",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100,
+        "transaction_type": "domestic"
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1.5,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "1.5 points per ₹100 on domestic spend (issuer page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 45
+    },
+    "forex_markup": {
+      "markup_percent": 3.5,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 3.5,
+      "gst_applicable": true,
+      "trigger_condition": "MITC: 3.5% DCC fee w.e.f. 15 Jan 2026 on transactions in Indian currency at international locations or at India-located merchants registered abroad"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": null,
+      "waiver_percent": 1,
+      "min_txn_inr": null,
+      "max_txn_inr": 4000,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on rent payment transactions (MCC 6513) (MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          1361,
+          3851,
+          5172,
+          5541,
+          5542,
+          5983,
+          9752,
+          5555
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on fuel transactions above ₹10,000 (MITC, w.e.f. 15 Nov 2024)",
+        "threshold_spend_inr": 10000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "utility",
+        "mcc_list": [
+          4899,
+          4900,
+          4901,
+          4814,
+          4821
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on utility payments above ₹50,000 (MITC, w.e.f. 15 Nov 2024)",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education",
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299,
+          8493,
+          8494,
+          7911
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on education payments made through third-party apps (MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "wallet",
+        "mcc_list": [
+          6540
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on wallet loads of ₹5,000 or more (MITC, w.e.f. 15 Jan 2026)",
+        "threshold_spend_inr": 5000,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": 299,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": 3,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 550,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 99,
+      "gst_applicable": true,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 99,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 100,
+        "max_balance_inr": 500,
+        "fee_inr": 100
+      },
+      {
+        "min_balance_inr": 501,
+        "max_balance_inr": 1000,
+        "fee_inr": 500
+      },
+      {
+        "min_balance_inr": 1001,
+        "max_balance_inr": 5000,
+        "fee_inr": 600
+      },
+      {
+        "min_balance_inr": 5001,
+        "max_balance_inr": 10000,
+        "fee_inr": 750
+      },
+      {
+        "min_balance_inr": 10001,
+        "max_balance_inr": 25000,
+        "fee_inr": 900
+      },
+      {
+        "min_balance_inr": 25001,
+        "max_balance_inr": 50000,
+        "fee_inr": 1100
+      },
+      {
+        "min_balance_inr": 50001,
+        "max_balance_inr": null,
+        "fee_inr": 1300
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 600000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "Spend over ₹6 lakh and the annual fee is waived for the next year. MITC footnote: anniversary year, EMI, rent, government and education spends and fees do not count. The page FAQ says \"calendar year\".",
+      "excluded_category_ids": [
+        "rent",
+        "government",
+        "education",
+        "emi"
+      ],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 5000
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "spend_within_60_days_of_activation_and_fee_paid",
+      "benefit_points": "N/A",
+      "effective_value_inr": 5000,
+      "condition": "Flight voucher worth ₹5,000 on ₹25,000 of spend within 60 days of card activation; only if the joining or annual fee is paid; fee-free issues are ineligible; fees, interest and bank levies do not count (page FAQ)."
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "adani-sig-lounge-intl",
+      "category_id": "lounge",
+      "network_program": "priority_pass",
+      "sponsor": "ICICI Bank",
+      "label": "International airport lounge access (Priority Pass), primary cardholder only",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 2,
+      "quota_period": "annual",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "adani-sig-lounge-dom",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "ICICI Bank",
+      "label": "Domestic airport lounge access, primary cardholder only, on ₹75,000 spent in the preceding spends quarter (MITC: criteria from 1 Jul 2026)",
+      "evaluation_engine": {
+        "conditions": {
+          "preceding_quarter_spend_inr": 75000
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 4,
+      "quota_period": "quarter",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "adani-sig-lounge-upgrade",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "Adani One",
+      "label": "Premium lounge upgrades",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 16,
+      "quota_period": "annual",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "adani-sig-pranaam",
+      "category_id": "other",
+      "network_program": null,
+      "sponsor": "Adani One",
+      "label": "Pranaam service at Adani-managed airports: one on activation, a second on ₹3 lakh spend",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 2,
+      "quota_period": "annual",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "adani-sig-valet",
+      "category_id": "other",
+      "network_program": null,
+      "sponsor": "Adani One",
+      "label": "Valet parking",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 4,
+      "quota_period": "annual",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "adani-sig-parking",
+      "category_id": "other",
+      "network_program": null,
+      "sponsor": "Adani One",
+      "label": "Premium car parking on card activation",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 4,
+      "quota_period": "annual",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "adani-sig-porter",
+      "category_id": "other",
+      "network_program": null,
+      "sponsor": "Adani One",
+      "label": "Porter services: 2 per ₹1 lakh spent, up to 8 a year",
+      "evaluation_engine": {
+        "conditions": {
+          "per_spend_inr": 100000,
+          "per_block_quantity": 2
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 8,
+      "quota_period": "annual",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": null,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [
+    {
+      "promo_id": "adani-sig-bms",
+      "category_id": "movie",
+      "network_program": "N/A",
+      "sponsor": "BookMyShow",
+      "platform": "BookMyShow",
+      "offer_type": "buy_one_get_one",
+      "discount_percent": "N/A",
+      "max_discount_inr": 500,
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": true,
+      "is_permanent_card_feature": true,
+      "valid_from": "2026-04-01",
+      "valid_to": null
+    }
+  ],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-15",
+          "sources": [
+            {
+              "url": "https://www.icici.bank.in/personal-banking/cards/credit-card/adani-icici-credit-card/signature-credit-card",
+              "kind": "issuer card page: fees, earn rates, benefits, FAQ (page text, no revision date)",
+              "read": "plain HTTP fetch, page text"
+            },
+            {
+              "url": "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf",
+              "kind": "ICICI credit card MITC, last updated 6 Nov 2026: fee table, forex, DCC, late fee, interest, reward exclusions and caps, lounge rules",
+              "read": "pdftotext"
+            }
+          ],
+          "open_questions": [
+            "Network NOT STATED: neither the card page nor the MITC names a network for this card, and no card-art file naming one was found in the page source. Ask ICICI or read an issued card.",
+            "\"7 points per ₹100 on Adani One Ecosystem spend\" is not encoded as a rule: the page does not define which merchants or MCCs make up the Adani One ecosystem (\"Adani One ecosystem*, including Adani-managed airports, Trainman, gas, electricity and more\" is the only wording). A person should obtain the merchant list.",
+            "Value of one Adani OneApp Reward point in rupees: not stated on the page, FAQ or MITC.",
+            "Reward caps: the MITC per-statement-cycle cap tables (utility, insurance, grocery, transport) do not name the Adani One cards, so no cap is stated for them either way.",
+            "Annual fee waiver period: page FAQ says \"calendar year\", the MITC footnote says anniversary year. MITC used (newer, 6 Nov 2026). Fee waiver spend ₹6,00,000 is in both.",
+            "Fuel waiver: page says 1% on all fuel at any outlet \"up to ₹4,000\"; whether that is the maximum transaction size or a cap is not said, and no monthly cap is stated. max_txn_inr 4,000 is the most literal reading.",
+            "Forex 3.5% is the MITC default; the Adani cards are not among its listed exceptions. The page also says 3.5%.",
+            "BookMyShow offer: buy one get one up to ₹500 off, twice a month, needs ₹25,000 spend in the preceding spends quarter (from 1 Apr 2026)."
+          ],
+          "notes": [
+            "Domestic lounge criteria: MITC says the \"valid till Jun 30, 2026\" waiver of the ₹75,000 criteria ended; from 1 Jul 2026 ₹75,000 per calendar quarter unlocks access in the next quarter.",
+            "Late payment fee is the MITC table (page says \"₹100 to ₹1,300\"). Interest 3.75% a month (45% a year)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

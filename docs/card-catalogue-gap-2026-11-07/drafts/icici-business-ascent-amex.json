@@ -1,0 +1,315 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "icici-business-ascent-amex",
+    "name": "ICICI Bank Business Ascent Credit Card (American Express)",
+    "issuer_slug": "icici-bank",
+    "network": "amex",
+    "network_tier": "N/A",
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 2000,
+    "annual_fee_inr": 1500,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": false,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": "Not stated by ICICI for this card.",
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.icici.bank.in/business-banking/cards/business-credit-card/ascent-business-advantage-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "Business credit card for entrepreneurs, owners and self-employed professionals (page FAQ); documents: business registration, address proof, financial documents.",
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 200,
+    "rounding_mode": null,
+    "base_points_per_block": null,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "biz-asc-airline-dining-4",
+      "category_id": "travel",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 200,
+        "categories": [
+          "airlines",
+          "dining"
+        ]
+      },
+      "action": {
+        "multiplier": 1.3333333333333333,
+        "points_per_block": 4,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "4 points per ₹200 on airline and dining spend (page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "biz-asc-base-3",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 200
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 3,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "3 points per ₹200 on other spend (page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 45
+    },
+    "forex_markup": {
+      "markup_percent": 3.5,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 3.5,
+      "gst_applicable": true,
+      "trigger_condition": "Business MITC: 1% until 24 Nov 2026, 3.5% w.e.f. 25 Nov 2026 on Indian-rupee transactions abroad or at foreign-registered merchants; 3.5% used as the standing rate"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": null,
+      "waiver_percent": 1,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": null,
+      "atm_transaction_fee_min_inr": null,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on rent payments (Business MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 550,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 99,
+      "gst_applicable": true,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 99,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 100,
+        "max_balance_inr": 500,
+        "fee_inr": 100
+      },
+      {
+        "min_balance_inr": 501,
+        "max_balance_inr": 1000,
+        "fee_inr": 500
+      },
+      {
+        "min_balance_inr": 1001,
+        "max_balance_inr": 5000,
+        "fee_inr": 600
+      },
+      {
+        "min_balance_inr": 5001,
+        "max_balance_inr": 10000,
+        "fee_inr": 750
+      },
+      {
+        "min_balance_inr": 10001,
+        "max_balance_inr": 25000,
+        "fee_inr": 900
+      },
+      {
+        "min_balance_inr": 25001,
+        "max_balance_inr": 50000,
+        "fee_inr": 1100
+      },
+      {
+        "min_balance_inr": 50001,
+        "max_balance_inr": null,
+        "fee_inr": 1300
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 750000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "Spend ₹7,50,000 or more during an anniversary year and the annual fee is reversed for the subsequent year (Business MITC).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 1500
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "first_month_bill_payment",
+      "benefit_points": 3000,
+      "effective_value_inr": null,
+      "condition": "3,000 reward points on payment of the first month's bill; 2,000 points within 30 days of paying the annual fee (page). Rupee value of a point not stated."
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "biz-asc-lounge",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "ICICI Bank",
+      "label": "Complimentary domestic airport lounge access",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 2,
+      "quota_period": "quarter",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": null,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-15",
+          "sources": [
+            {
+              "url": "https://www.icici.bank.in/business-banking/cards/business-credit-card/ascent-business-advantage-card",
+              "kind": "issuer business card page: fees, earn, benefits, FAQ (no revision date)",
+              "read": "plain HTTP fetch, page text"
+            },
+            {
+              "url": "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc-terms-and-conditions-business.pdf",
+              "kind": "ICICI Business Cards MITC dated 14 Oct 2026: fee table, fuel waiver table, interest, late fee, forex",
+              "read": "pdftotext"
+            }
+          ],
+          "open_questions": [
+            "Network: American Express, from the issuer page (\"exclusive American Express (AMEX) lifestyle offers\", card art alt text \"American Express logo\").",
+            "Value of one reward point: not stated.",
+            "FEES CONFLICT: the consumer MITC (6 Nov 2026) lists \"ICICI Bank Ascent American Express Credit Card\" at joining ₹4,000, annual ₹1,000, waiver at ₹ spend not stated; the Business MITC (14 Oct 2026) and the business page give joining ₹2,000, annual ₹1,500, waiver at ₹7,50,000. These look like two different cards (a personal Ascent and this Business Ascent). The business figures are used because the Business MITC names the \"American Express Business Ascent Card\". A person should confirm the consumer Ascent is a separate product.",
+            "Fuel waiver: page says 1% on all petrol pumps; the Business MITC fuel table does not list the Ascent card, so no max transaction value or monthly cap is stated.",
+            "Reward exclusions not listed."
+          ],
+          "notes": [
+            "Late payment fee table, interest, over-limit fee, redemption fee, forex 3.5% and rent fee come from the Business MITC of 14 Oct 2026. Business card variants have corporate-liability and individual-liability forms (BCCL, BCIL)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

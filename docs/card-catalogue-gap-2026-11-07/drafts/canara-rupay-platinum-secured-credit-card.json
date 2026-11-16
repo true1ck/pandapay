@@ -1,0 +1,296 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "canara-rupay-platinum-secured-credit-card",
+    "name": "Canara RuPay Platinum Secured Credit Card",
+    "issuer_slug": "canara-bank",
+    "network": "rupay",
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": false,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": null,
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_page",
+    "source_url": "https://www.canarabank.bank.in/rupay-platinum-secured-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "FD-backed; eligible limit up to 75% of the FD, minimum card limit ₹25,000 (Eligibility tab); maximum limit per month ₹50,00,000 and minimum ₹50,000 (Features).",
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": 2,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "canara-plat-sec-base",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 2,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "2 points per ₹100 on every POS and e-commerce spend (Features table on the card page). No category exclusions, accelerators or caps are stated on the page."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": null,
+      "annual_interest_rate_percent": null
+    },
+    "forex_markup": {
+      "markup_percent": 3,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 400,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": 100
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 3,
+      "atm_transaction_fee_min_inr": 150,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": 50
+    },
+    "category_surcharges": [
+      {
+        "category_id": "travel",
+        "mcc_list": [
+          4112
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Railway tickets on www.irctc.co.in: 1% of the transaction amount; at railway counters ₹30 + 2.5% of the transaction amount (Fee and Charges tab)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": 100,
+      "foreclosure_charge_percent": 2,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": null,
+        "min_fee_inr": null,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": 50,
+      "cheque_bounce_charge_inr": 50
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 50,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "5% of total outstanding (minimum ₹100)",
+        "all applicable charges, fees and taxes",
+        "EMI amount",
+        "over-limit amount"
+      ]
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": null,
+        "fee_inr": 250
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "Enrolment, joining and annual fees are nil (Fee and Charges tab).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "canara-plat-sec-lounge",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "Canara Bank",
+      "label": "Domestic airport lounge access, 2 per quarter and a maximum of 4 per year; no international access (Benefits list)",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 2,
+      "quota_period": "quarter",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [
+    {
+      "cover_type": "other",
+      "coverage_inr": 800000,
+      "coverage_usd": "N/A",
+      "claim_condition": "Death due to air accident: ₹8,00,000 for the cardholder, ₹4,00,000 for the spouse (Features table).",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "cover_type": "other",
+      "coverage_inr": 400000,
+      "coverage_usd": "N/A",
+      "claim_condition": "Death due to accident other than air: ₹4,00,000 for the cardholder, ₹2,00,000 for the spouse (Features table).",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": null,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "Canara Rewardz: cashback or goods purchase (canararewardz.com)",
+        "redemption_type": "cashback",
+        "inr_value_per_point": null,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": null,
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-15",
+          "sources": [
+            {
+              "url": "https://www.canarabank.bank.in/rupay-platinum-secured-credit-card",
+              "kind": "Canara Bank Canara RuPay Platinum Secured Credit Card page (Benefits, Features, Eligibility, Fee and Charges tabs, plain fetch 2026-11-15)",
+              "read": "page text"
+            },
+            {
+              "url": "https://www.canararewardz.com/",
+              "kind": "Canara Rewardz home page (redemption site named by the card pages): states no point value",
+              "read": "page text"
+            }
+          ],
+          "open_questions": [
+            "Network (rupay): stated by the card name and the Features table heading \"RuPay Platinum Secured Credit Card\" on the Canara page; no tier is stated.",
+            "Point value: the page says points redeem for \"Cashback or Goods Purchase through canararewardz.com\" but states no rupee value for a point, and the Canara Rewardz home page states none. point_value_inr_baseline is null. A person should confirm from the Canara Rewardz catalogue or the Canara reward-points circular.",
+            "Finance charge: the Features table says 2.5% a month (30% a year) \"for Unsecured Credit Cards\" and the fee block says \"for all other credit cards\"; no secured-card rate is stated, so interest is null.",
+            "Fee text on the page is shared across the Canara credit-card tabs: the Features table, eligibility block (credit limit as a share of the FD) and the Fee and Charges block are repeated for the secured and unsecured variants, and the eligible limit is stated as both 75% and 100% of the FD on the same page. Joining, enrolment and annual fees are \"Nil\" in the secured Features table itself, which is what is used; the limit rule is left as an open question.",
+            "Fuel surcharge: the page says 1% (minimum ₹10) is charged and \"maximum of ₹100 for the billing month would be reimbursed\" if the card is used for at least ₹2,500 of purchases that month and each fuel purchase is at least ₹400; modelled as a 1% waiver with a ₹100 monthly cap and ₹400 minimum.",
+            "Forex: the page says \"Upto 3% of transaction amount\" and 3% is used. Cash withdrawal at Canara ATMs 3% with a ₹150 minimum (Fee and Charges tab); Features tab says ₹30 per ₹1,000.",
+            "The Canara MITC PDF linked from the page (file dated 18 Dec 2023 in its name) returned HTTP 404 on 2026-11-15, so no MITC was read.",
+            "Inactivity fee when the annual turnover is below the stated threshold: ₹200 a year if turnover is below ₹50,000 (Fee and Charges tab).",
+            "Lounge: domestic 2 per quarter with a maximum of 4 a year, international nil (Benefits list)."
+          ],
+          "notes": [
+            "FD-backed secured card issued against deposits in the applicant's name (joint deposits with \"Either or Survivor\" accepted; add-on cards to other joint depositors).",
+            "Late payment fee ₹250 + GST, in addition to finance charges on the carried-over balance (Fee and Charges tab).",
+            "Insurance: personal accident cover for self and spouse; baggage cover and purchase protection up to ₹25,000 (Features table)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

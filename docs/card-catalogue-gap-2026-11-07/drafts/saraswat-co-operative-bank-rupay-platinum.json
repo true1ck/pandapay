@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "saraswat-co-operative-bank-rupay-platinum",
+    "name": "Saraswat Bank RuPay Platinum Credit Card",
+    "issuer_slug": "saraswat-co-operative-bank",
+    "network": "rupay",
+    "network_tier": "rupay_platinum",
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 500,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": false,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": null,
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.saraswat.bank.in/content.aspx?id=Credit-Card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "Page: resident individuals; salaried net take-home from INR 25,000 (unsecured regular scheme) or INR 10,000 (other schemes); business or professional gross income at least INR 1.5 lakh a year; limit INR 10,000 to INR 5,00,000 (within the unsecured limit of INR 5,00,000 per individual); nominal membership INR 100 for limits up to INR 1,00,000 and regular shareholding INR 500 above.",
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": null,
+    "rounding_mode": null,
+    "base_points_per_block": null,
+    "base_cashback_percent": null,
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 2.25,
+      "annual_interest_rate_percent": 27
+    },
+    "forex_markup": {
+      "markup_percent": 3,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": null,
+      "waiver_percent": null,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": null,
+      "atm_transaction_fee_min_inr": 100,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": 40
+    },
+    "category_surcharges": [],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": null,
+        "min_fee_inr": null,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": 250,
+      "cheque_bounce_charge_inr": 250
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "5% of outstanding usage",
+        "100% of all pending charges and taxes",
+        "EMI if any",
+        "minimum INR 200, whichever is higher"
+      ]
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": null,
+        "fee_inr": 250
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 10000,
+      "period": null,
+      "evaluation_condition": "Page: annual spends of INR 10,000 or more means AMC nil; below INR 10,000 the AMC is INR 500. Period not stated.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 500
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "card_activation",
+      "benefit_points": 500,
+      "effective_value_inr": null,
+      "condition": "500 welcome bonus points on card activation and 300 reward points on the 1st successful transaction (page)."
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 0,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-15",
+          "sources": [
+            {
+              "url": "https://www.saraswat.bank.in/content.aspx?id=Credit-Card",
+              "kind": "Issuer Credit Card page: eligibility, schedule of charges for all RuPay credit cards w.e.f. January 2026, rewards line",
+              "read": "curl, stripped to text"
+            },
+            {
+              "url": "https://www.saraswat.bank.in/Assets/Saraswat%20-%2027508%20-%20MITC%20Booklet%20-%20English%202026.pdf",
+              "kind": "RuPay Credit Cards MITC booklet, Version 2.3 January 2026 (34 pages, image PDF created 29 Jun 2026)",
+              "read": "tesseract OCR"
+            }
+          ],
+          "open_questions": [
+            "Rewards: the page states only \"500 Welcome Bonus points on card activation and 300 Reward points on 1st successful transaction\" and a \"Rewards & Cashbacks\" tab with no rate. No earn rate per amount spent, no point value and no expiry is published on the page or in the MITC booklet; the points sit behind a rewards-portal login. No earn rule is written; the card is held until Saraswat publishes one.",
+            "Network: stated as RuPay (RuPay Platinum) on the issuer pages, the MITC booklet \"RuPay Credit Cards\" (v2.3 January 2026) and the Secured MITC; the offers link points to the RuPay Platinum page on rupay.co.in. No other network is mentioned.",
+            "Fee schedule is \"applicable for all RuPay Credit Cards w.e.f. January 2026\" (page). The MITC booklet says the annual fee \"may vary for each Cardholder and from offer to offer\", so the figures are the page schedule only.",
+            "Railway ticket fee 1.8% + GST; fuel surcharge \"varies by fuel station and acquirer\" (MITC); no fuel waiver is stated.",
+            "Welcome points: 500 on activation and 300 on the first successful transaction; the rupee value per point is not stated, so effective_value_inr is null.",
+            "Cash payment of the bill: nil up to INR 5,000, INR 125 above (page).",
+            "How to apply: \"visit your nearest branch\" (page); no online application.",
+            "Main MITC (34 pages) is a scanned image booklet read with OCR; wording was read from the OCR and the headline fee table from the page.",
+            "Annual fee: INR 500 applies only when annual spends are below INR 10,000; stored annual_fee_inr is 500 with the waiver recorded. Add-on cards: joining nil, annual lifetime free.",
+            "Finance charges 2.25% a month (27% a year) from the transaction date on purchases and cash; interest free up to 50 days (plus 3 grace days per the MITC) if the previous balance is paid in full. EMI on purchase 1.75% a month; conversion and pre-closure nil. Late payment INR 250; card replacement INR 200; auto debit return INR 250."
+          ],
+          "notes": [],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

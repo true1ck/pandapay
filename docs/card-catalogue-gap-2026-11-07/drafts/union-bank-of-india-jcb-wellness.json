@@ -1,0 +1,389 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "union-bank-of-india-jcb-wellness",
+    "name": "Union Bank of India Union JCB Wellness Credit Card",
+    "issuer_slug": "union-bank-of-india",
+    "network": "rupay",
+    "network_tier": "rupay_select",
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 999,
+    "annual_fee_inr": 999,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 0.25,
+    "point_value_baseline_basis": "Card page features table: \"1 Reward Point = Rs. 0.25\" (Union Bank of India card page read 2026-11-15). Not repeated in the KFS or MITC.",
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.unionbankofindia.bank.in/en/Details/union-jcb-wellness-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": null,
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": 2,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": 0.5,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "union-bank-of-india-jcb-wellness-fuel-excluded",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Page states 2 points on \"all other non-fuel spends\", so fuel is read as earning no points."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "union-bank-of-india-jcb-wellness-accel-4",
+      "category_id": "dining",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "categories": [
+          "dining",
+          "shopping",
+          "groceries",
+          "departmental_stores",
+          "apparel"
+        ],
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 2,
+        "points_per_block": 4,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "4 reward points per Rs 100 on dining, shopping, groceries, departmental stores and apparel (card page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "union-bank-of-india-jcb-wellness-base",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 2,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "2 points per Rs 100 on all other non-fuel spends (card page); 1 point = Rs 0.25."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3,
+      "annual_interest_rate_percent": 36
+    },
+    "forex_markup": {
+      "markup_percent": 3,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": "No separate DCC markup is stated in the issuer documents read"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": null,
+      "waiver_percent": 1,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": 100
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 3,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": 40
+    },
+    "category_surcharges": [],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": 2,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 250,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": 250,
+      "cheque_bounce_charge_inr": 250
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 25000,
+        "fee_inr": 200
+      },
+      {
+        "min_balance_inr": 25001,
+        "max_balance_inr": null,
+        "fee_inr": 500
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 100000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "Annual fee Rs 999 + GST waived if card spend in the last 12 months is Rs 1,00,000 (KFS). Joining fee Rs 999; no add-on card (KFS \"NA\").",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 999
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "N/A",
+      "benefit_points": "N/A",
+      "effective_value_inr": "N/A",
+      "condition": "No welcome benefit is stated in the issuer documents read."
+    },
+    "spend_milestones": [
+      {
+        "id": "union-bank-of-india-jcb-wellness-m1",
+        "label": "1,000 bonus points at Rs 1,50,000 annual spend (page)",
+        "threshold_spend_inr": 150000,
+        "reward_value_inr": 250,
+        "period": "card_anniversary_year",
+        "is_repeatable": false,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "id": "union-bank-of-india-jcb-wellness-m2",
+        "label": "1,500 bonus points at Rs 2,00,000 annual spend (page)",
+        "threshold_spend_inr": 200000,
+        "reward_value_inr": 375,
+        "period": "card_anniversary_year",
+        "is_repeatable": false,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "id": "union-bank-of-india-jcb-wellness-m3",
+        "label": "2,000 bonus points at Rs 2,50,000 annual spend (page)",
+        "threshold_spend_inr": 250000,
+        "reward_value_inr": 500,
+        "period": "card_anniversary_year",
+        "is_repeatable": false,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ]
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "union-bank-of-india-jcb-wellness-lounge",
+      "category_id": "lounge",
+      "network_program": "rupay",
+      "sponsor": "NPCI / RuPay",
+      "label": "Complimentary airport lounge access",
+      "evaluation_engine": {
+        "conditions": {
+          "domestic_per_year": 8,
+          "domestic_per_quarter": 2,
+          "international_per_year": 2
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 10,
+      "quota_period": "annual",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "union-bank-of-india-jcb-wellness-golf",
+      "category_id": "golf",
+      "network_program": null,
+      "sponsor": "Union Bank of India",
+      "label": "Complimentary golf round, once a year",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 1,
+      "quota_period": "annual",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "union-bank-of-india-jcb-wellness-health",
+      "category_id": "health",
+      "network_program": null,
+      "sponsor": "Union Bank of India",
+      "label": "Complimentary health check-up (diagnostic test) once a year; spa massage sessions; gym 15/30-day trial once a year",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 1,
+      "quota_period": "annual",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "union-bank-of-india-jcb-wellness-accident",
+      "category_id": "insurance_related_perk",
+      "network_program": null,
+      "sponsor": "Union Bank of India",
+      "label": "Accidental insurance Rs 10 lakh (premium borne by NPCI) plus an additional Rs 30 lakh (premium borne by cardholder)",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": 0,
+    "fee_per_card_inr": null,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-15",
+          "sources": [
+            {
+              "url": "https://www.unionbankofindia.bank.in/pdf/Key-Fact-Statement.pdf",
+              "kind": "Key Fact Statement, Credit Cards, Version 1.4 (PDF created 22 Apr 2026): joining and annual fees, fee waivers, interest, late fee, forex, fuel waiver, cash limits, reward notes for Unicorn and Nexteria",
+              "date": "PDF created 2026-04-22",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.unionbankofindia.bank.in/pdf/mitc-credit-cards.pdf",
+              "kind": "MITC, Credit Cards (PDF created 22 Apr 2026): same fee tables as the KFS",
+              "date": "PDF created 2026-04-22",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.unionbankofindia.bank.in/en/Details/union-jcb-wellness-credit-card",
+              "kind": "Union JCB Wellness card page: benefits table, features, milestone rewards",
+              "read": "plain page fetch; tab content read from the page source"
+            }
+          ],
+          "open_questions": [
+            "Reward points exclusions: the KFS lists excluded MCCs (jewellery, fuel, cash withdrawal, bitcoin, wallet loading, alcohol and wine shops, insurance) only for Unicorn and Nexteria. For the other cards the page says only \"no reward points on cash withdrawals\" (FAQ); the full list of MCCs that earn nothing is not published (\"eligible MCCs prescribed by Bank time to time\").",
+            "Fuel surcharge waiver wording differs: the card pages say \"per billing cycle\"; the KFS and MITC say \"per month\". The page wording is used. The surcharge the acquirer charges at the pump (the amount being waived) is not stated, and no minimum transaction value is stated except for UNI CARBON (Rs 200 and above).",
+            "KFS and MITC say all fees are exclusive of GST; the 18% rate is taken from the worked examples in the same documents (GST of Rs 36 on a Rs 200 fee).",
+            "Reward-point value: the card page states 1 Reward Point = Rs 0.25. The KFS and MITC do not repeat it.",
+            "Both PDFs are Version 1.4 with no printed effective date; the file creation date (22 Apr 2026) is the only date available.",
+            "Network: the page names RuPay (RuPay credit card can be linked on UPI; RuPay Select booking steps; RuPay Airport Lounge details). \"JCB\" in the card name is not described as a network anywhere on the page or in the KFS. Network recorded as RuPay on that page wording; a person should confirm the issued network.",
+            "The page says the annual benefits are \"worth around Rs 22,000\" but gives no per-benefit rupee value, so none is recorded.",
+            "Milestone period: \"in a year\"; card anniversary year is assumed."
+          ],
+          "notes": [
+            "Whether the 4-point categories include online shopping or are in-store only is not stated; \"shopping\" is as written on the page."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

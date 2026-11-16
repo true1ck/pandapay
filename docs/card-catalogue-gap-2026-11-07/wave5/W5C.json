@@ -1,0 +1,406 @@
+{
+ "agent": "W5C",
+ "cards": [
+  {
+   "name": "Union NEXTERIA Credit Card",
+   "slug": "union-bank-of-india-nexteria",
+   "status": "still_blocked",
+   "network": "rupay",
+   "network_evidence": "Card page: built on the \"Ekaa\" variant of the RuPay network",
+   "reason": "Fees, waivers, 5 pts per Rs125, caps and milestones stated; no rupee value per point.",
+   "sources": [
+    "https://www.unionbankofindia.bank.in/en/Details/nexteria-credit-card",
+    "https://www.unionbankofindia.bank.in/pdf/Key-Fact-Statement.pdf"
+   ],
+   "still_missing": [
+    "what is one NEXTERIA reward point worth in rupees? (not stated)"
+   ]
+  },
+  {
+   "name": "Union Unicorn RuPay Credit Card",
+   "slug": "union-bank-of-india-unicorn",
+   "status": "still_blocked",
+   "network": "rupay",
+   "network_evidence": "Page title and text: Unicorn RuPay credit card",
+   "reason": "Fees, waivers, 4 pts per Rs100, caps, milestones stated; no rupee value per point.",
+   "sources": [
+    "https://www.unionbankofindia.bank.in/en/Details/union-unicorn-credit-card",
+    "https://www.unionbankofindia.bank.in/pdf/Key-Fact-Statement.pdf"
+   ],
+   "still_missing": [
+    "what is one Unicorn reward point worth in rupees? (not stated)"
+   ]
+  },
+  {
+   "name": "Union DIVAA ICON Credit Card",
+   "slug": "union-bank-of-india-divaa-icon",
+   "status": "complete",
+   "network": "rupay",
+   "network_evidence": "KFS name: Divaa Icon (Female Only - RuPay Platinum)",
+   "reason": "Fees, waiver, 2 pts per Rs100, Rs0.25 per point stated on page.",
+   "sources": [
+    "https://www.unionbankofindia.bank.in/en/Details/divaa-icon-credit-card",
+    "https://www.unionbankofindia.bank.in/pdf/Key-Fact-Statement.pdf"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "Union PM SVANidhi Credit Card",
+   "slug": null,
+   "status": "held",
+   "network": "rupay",
+   "network_evidence": "Page: RuPay credit card for PM SVANidhi beneficiaries",
+   "reason": "Fees nil but reward is \"per Bank policy\" with no number; KFS says rewards not applicable to PM SVANidhi cards.",
+   "sources": [
+    "https://www.unionbankofindia.bank.in/en/Details/pm-svanidhi-credit-card",
+    "https://www.unionbankofindia.bank.in/pdf/Key-Fact-Statement.pdf"
+   ],
+   "still_missing": [
+    "numeric reward rate (none published)"
+   ]
+  },
+  {
+   "name": "Union JCB Wellness Credit Card",
+   "slug": "union-bank-of-india-jcb-wellness",
+   "status": "complete",
+   "network": "rupay",
+   "network_evidence": "Page text: RuPay credit card UPI linking, RuPay lounge and Select booking steps; \"JCB\" in name not described as a network",
+   "reason": "4 pts per Rs100 on listed categories, 2 on other non-fuel, Rs0.25 per point, fees and waiver stated.",
+   "sources": [
+    "https://www.unionbankofindia.bank.in/en/Details/union-jcb-wellness-credit-card",
+    "https://www.unionbankofindia.bank.in/pdf/Key-Fact-Statement.pdf"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "Union RuPay Select Credit Card",
+   "slug": "union-bank-of-india-rupay-select",
+   "status": "complete",
+   "network": "rupay",
+   "network_evidence": "Card name and page",
+   "reason": "4 pts per Rs100, Rs0.25 per point, fees and waiver stated.",
+   "sources": [
+    "https://www.unionbankofindia.bank.in/en/Details/rupay-select-credit-card",
+    "https://www.unionbankofindia.bank.in/pdf/Key-Fact-Statement.pdf"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "Union JCB Health Credit Card",
+   "slug": "union-bank-of-india-jcb-health",
+   "status": "complete",
+   "network": "rupay",
+   "network_evidence": "Page text: RuPay credit card UPI linking, RuPay lounge and offers links; \"JCB\" in name not described as a network",
+   "reason": "2 pts per Rs100, Rs0.25 per point, fees and waiver stated.",
+   "sources": [
+    "https://www.unionbankofindia.bank.in/en/Details/union-jcb-health-credit-card",
+    "https://www.unionbankofindia.bank.in/pdf/Key-Fact-Statement.pdf"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "Union UNI-CARBON Credit Card",
+   "slug": "union-bank-of-india-uni-carbon",
+   "status": "complete",
+   "network": "rupay",
+   "network_evidence": "Page: co-branded card with HPCL and RuPay",
+   "reason": "HPCL 16 pts per Rs100 (Rs150 cap per cycle), 2 pts non-fuel, Rs0.25 per point, fees and waiver stated.",
+   "sources": [
+    "https://www.unionbankofindia.bank.in/en/Details/union-uni-carbon-credit-card",
+    "https://www.unionbankofindia.bank.in/pdf/Key-Fact-Statement.pdf"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "Union RuPay Platinum Credit Card",
+   "slug": "union-bank-of-india-rupay-platinum",
+   "status": "complete",
+   "network": "rupay",
+   "network_evidence": "Card name and page",
+   "reason": "2 pts per Rs100, Rs0.25 per point, fees and waiver stated.",
+   "sources": [
+    "https://www.unionbankofindia.bank.in/en/Details/rupay-platinum-credit-card",
+    "https://www.unionbankofindia.bank.in/pdf/Key-Fact-Statement.pdf"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "Union VISA Signature Credit Card",
+   "slug": "union-bank-of-india-visa-signature",
+   "status": "complete",
+   "network": "visa",
+   "network_evidence": "Card name and page; Visa offers link",
+   "reason": "4 pts per Rs100, Rs0.25 per point, fees and waiver stated.",
+   "sources": [
+    "https://www.unionbankofindia.bank.in/en/Details/visa-signature-credit-card",
+    "https://www.unionbankofindia.bank.in/pdf/Key-Fact-Statement.pdf"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "Union VISA Platinum Credit Card",
+   "slug": "union-bank-of-india-visa-platinum",
+   "status": "complete",
+   "network": "visa",
+   "network_evidence": "Card name and page; Visa offers link",
+   "reason": "2 pts per Rs100, Rs0.25 per point, fees and waiver stated.",
+   "sources": [
+    "https://www.unionbankofindia.bank.in/en/Details/visa-platinum-credit-card",
+    "https://www.unionbankofindia.bank.in/pdf/Key-Fact-Statement.pdf"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "Union VISA Gold Credit Card",
+   "slug": "union-bank-of-india-visa-gold",
+   "status": "complete",
+   "network": "visa",
+   "network_evidence": "Card name and page; Visa offers link",
+   "reason": "1 pt per Rs100, Rs0.25 per point, fees and waiver stated.",
+   "sources": [
+    "https://www.unionbankofindia.bank.in/en/Details/visa-gold-credit-card",
+    "https://www.unionbankofindia.bank.in/pdf/Key-Fact-Statement.pdf"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "Union Sparsh Credit Card",
+   "slug": "union-bank-of-india-sparsh",
+   "status": "complete",
+   "network": "rupay",
+   "network_evidence": "Page: accessible credit card on RuPay network",
+   "reason": "Fees, waiver, 4 pts per Rs100, Rs0.25 per point on page; eligibility restricted to visually impaired customers; not in KFS fee table.",
+   "sources": [
+    "https://www.unionbankofindia.bank.in/en/Details/union-sparsh-credit-card",
+    "https://www.unionbankofindia.bank.in/pdf/Key-Fact-Statement.pdf"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "IB-VISA-Platinum Credit Card",
+   "slug": "indian-bank-visa-platinum",
+   "status": "complete",
+   "network": "visa",
+   "network_evidence": "MITC names VISA Platinum; poster shows a Visa Platinum card face",
+   "reason": "AMC Rs250 from year 2 (waived above Rs50,000), Rs1 per Rs100 (poster Jan 2025, features sheet Dec 2023). Reward documents are older than the 2026 MITC.",
+   "sources": [
+    "https://indianbank.bank.in/en/credit-cards",
+    "https://indianbank.bank.in/documents/d/guest/mitc-final-with-effective-apr",
+    "https://indianbank.bank.in/documents/d/guest/Get-Rewards-for-Every-Spent-with-IB-Credit-Card-3",
+    "https://indianbank.bank.in/documents/d/guest/CREDIT-CARD-FEATURES-AND-BENEFITS-6"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "IB-VISA-Business Credit Card",
+   "slug": "indian-bank-visa-business",
+   "status": "still_blocked",
+   "network": "visa",
+   "network_evidence": "MITC names VISA Business",
+   "reason": "Fees and 1 pt per Rs200 from a Dec 2023 sheet only; business entities only.",
+   "sources": [
+    "https://indianbank.bank.in/en/credit-cards",
+    "https://indianbank.bank.in/documents/d/guest/mitc-final-with-effective-apr",
+    "https://indianbank.bank.in/documents/d/guest/Get-Rewards-for-Every-Spent-with-IB-Credit-Card-3",
+    "https://indianbank.bank.in/documents/d/guest/CREDIT-CARD-FEATURES-AND-BENEFITS-6"
+   ],
+   "still_missing": [
+    "reward rate and Business purchase interest not in any 2026 document; confirm current"
+   ]
+  },
+  {
+   "name": "Indian Bank Secured Credit Card (VISA / RuPay)",
+   "slug": null,
+   "status": "held",
+   "network": "dual (visa and rupay)",
+   "network_evidence": "Listing page and MITC: Secure variants on both networks",
+   "reason": "Fees and rate (MITC) stated but no reward rate for the secured card in any document read.",
+   "sources": [
+    "https://indianbank.bank.in/en/credit-cards",
+    "https://indianbank.bank.in/documents/d/guest/mitc-final-with-effective-apr",
+    "https://indianbank.bank.in/documents/d/guest/Get-Rewards-for-Every-Spent-with-IB-Credit-Card-3",
+    "https://indianbank.bank.in/documents/d/guest/CREDIT-CARD-FEATURES-AND-BENEFITS-6"
+   ],
+   "still_missing": [
+    "reward rate for secured card"
+   ]
+  },
+  {
+   "name": "IB-RuPay-Select Credit Card",
+   "slug": "indian-bank-rupay-select",
+   "status": "complete",
+   "network": "rupay",
+   "network_evidence": "MITC names RuPay Select",
+   "reason": "AMC Rs250 from year 2 (waived above Rs50,000), Rs1 per Rs100 (features sheet Dec 2023, poster Jan 2025); lounge quota not stated.",
+   "sources": [
+    "https://indianbank.bank.in/en/credit-cards",
+    "https://indianbank.bank.in/documents/d/guest/mitc-final-with-effective-apr",
+    "https://indianbank.bank.in/documents/d/guest/Get-Rewards-for-Every-Spent-with-IB-Credit-Card-3",
+    "https://indianbank.bank.in/documents/d/guest/CREDIT-CARD-FEATURES-AND-BENEFITS-6"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "IB-RuPay-Platinum Credit Card",
+   "slug": "indian-bank-rupay-platinum",
+   "status": "complete",
+   "network": "rupay",
+   "network_evidence": "Poster card face shows RuPay Platinum; MITC names RuPay Platinum",
+   "reason": "AMC Rs250 from year 2, Rs1 per Rs100 (poster, features sheet); lounge quota not stated.",
+   "sources": [
+    "https://indianbank.bank.in/en/credit-cards",
+    "https://indianbank.bank.in/documents/d/guest/mitc-final-with-effective-apr",
+    "https://indianbank.bank.in/documents/d/guest/Get-Rewards-for-Every-Spent-with-IB-Credit-Card-3",
+    "https://indianbank.bank.in/documents/d/guest/CREDIT-CARD-FEATURES-AND-BENEFITS-6"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "IB-RuPay-Classic Credit Card",
+   "slug": null,
+   "status": "held",
+   "network": "rupay",
+   "network_evidence": "MITC names RuPay Classic",
+   "reason": "Features sheet states no reward points program and no lounge for Classic.",
+   "sources": [
+    "https://indianbank.bank.in/en/credit-cards",
+    "https://indianbank.bank.in/documents/d/guest/mitc-final-with-effective-apr",
+    "https://indianbank.bank.in/documents/d/guest/Get-Rewards-for-Every-Spent-with-IB-Credit-Card-3",
+    "https://indianbank.bank.in/documents/d/guest/CREDIT-CARD-FEATURES-AND-BENEFITS-6"
+   ],
+   "still_missing": [
+    "no reward program"
+   ]
+  },
+  {
+   "name": "IND Youth Credit Card",
+   "slug": null,
+   "status": "held",
+   "network": "visa",
+   "network_evidence": "Youth MITC (30 Oct 2026): Visa Platinum product",
+   "reason": "No reward rate in the Youth MITC or on the listing page; AMC conflict (Rs500 in schedule, Rs250 in text); forex 1%.",
+   "sources": [
+    "https://indianbank.bank.in/en/credit-cards",
+    "https://indianbank.bank.in/documents/d/guest/mitc-youth-credit-card"
+   ],
+   "still_missing": [
+    "reward rate",
+    "AMC: Rs500 or Rs250"
+   ]
+  },
+  {
+   "name": "IDBI Bank Royale Signature Credit Card",
+   "slug": "idbi-bank-royale-signature",
+   "status": "still_blocked",
+   "network": "visa",
+   "network_evidence": "FAQ lists Royale Signature (Visa); page: Visa lounge and offers",
+   "reason": "Fees, 3 DP per Rs100, bonuses, lounge, fuel waiver stated; no rupee value per Delight Point.",
+   "sources": [
+    "https://www.idbi.bank.in/royal-credit-card.aspx",
+    "https://www.idbi.bank.in/pdf/MITC-CC.PDF",
+    "https://www.idbi.bank.in/credit-card-faq.aspx"
+   ],
+   "still_missing": [
+    "what is one IDBI Delight Point worth in rupees for this card?"
+   ]
+  },
+  {
+   "name": "IDBI Bank Euphoria World Credit Card",
+   "slug": "idbi-bank-euphoria-world",
+   "status": "still_blocked",
+   "network": "mastercard",
+   "network_evidence": "FAQ lists Euphoria World (MasterCard); page: Mastercard lounge",
+   "reason": "Fees, 6/3 DP per Rs100, 12 lounge visits stated; no rupee value per Delight Point.",
+   "sources": [
+    "https://www.idbi.bank.in/Euphoria-credit-card.aspx",
+    "https://www.idbi.bank.in/pdf/MITC-CC.PDF",
+    "https://www.idbi.bank.in/credit-card-faq.aspx"
+   ],
+   "still_missing": [
+    "what is one IDBI Delight Point worth in rupees for this card?"
+   ]
+  },
+  {
+   "name": "IDBI Bank Aspire Platinum Credit Card",
+   "slug": "idbi-bank-aspire-platinum",
+   "status": "still_blocked",
+   "network": "visa",
+   "network_evidence": "FAQ lists Aspire Platinum (Visa)",
+   "reason": "2 DP per Rs150, nil fees; no rupee value per Delight Point.",
+   "sources": [
+    "https://www.idbi.bank.in/aspire-credit-card.aspx",
+    "https://www.idbi.bank.in/pdf/MITC-CC.PDF",
+    "https://www.idbi.bank.in/credit-card-faq.aspx"
+   ],
+   "still_missing": [
+    "what is one IDBI Delight Point worth in rupees for this card?"
+   ]
+  },
+  {
+   "name": "IDBI Bank Imperium Platinum Credit Card",
+   "slug": "idbi-bank-imperium-platinum",
+   "status": "still_blocked",
+   "network": "visa",
+   "network_evidence": "FAQ lists Imperium Platinum (Visa); page: secured card on the VISA platform",
+   "reason": "Secured against FD; joining fee conflict (page Rs499, MITC nil); no rupee value per Delight Point.",
+   "sources": [
+    "https://www.idbi.bank.in/Imperium-credit-card.aspx",
+    "https://www.idbi.bank.in/pdf/MITC-CC.PDF",
+    "https://www.idbi.bank.in/credit-card-faq.aspx"
+   ],
+   "still_missing": [
+    "what is one IDBI Delight Point worth in rupees for this card?"
+   ]
+  },
+  {
+   "name": "IDBI Bank Winnings Credit Card (Winnings Select)",
+   "slug": "idbi-bank-winnings-select",
+   "status": "still_blocked",
+   "network": "rupay",
+   "network_evidence": "FAQ lists Winnings Select (RuPay)",
+   "reason": "2 DP per Rs100; MITC cashback rows (10% utilities, 5% dining) not on the page; no rupee value per Delight Point.",
+   "sources": [
+    "https://www.idbi.bank.in/Winnings-credit-card.aspx",
+    "https://www.idbi.bank.in/pdf/MITC-CC.PDF",
+    "https://www.idbi.bank.in/credit-card-faq.aspx"
+   ],
+   "still_missing": [
+    "what is one IDBI Delight Point worth in rupees for this card?"
+   ]
+  },
+  {
+   "name": "IDBI Bank - LIC CSL Lumine Platinum Credit Card",
+   "slug": "idbi-bank-lic-csl-lumine-platinum",
+   "status": "still_blocked",
+   "network": "rupay",
+   "network_evidence": "Card art on idbi.bank.in shows the RuPay mark with PLATINUM (the FAQ omits the LIC cards)",
+   "reason": "3 DP per Rs100, nil fees; redemption fee conflict (page Rs99, MITC Rs20); no rupee value per Delight Point.",
+   "sources": [
+    "https://www.idbi.bank.in/Lumine-credit-card.aspx",
+    "https://www.idbi.bank.in/pdf/MITC-CC.PDF",
+    "https://www.idbi.bank.in/credit-card-faq.aspx",
+    "https://www.idbi.bank.in/images/Lumine-Credit-Card.png"
+   ],
+   "still_missing": [
+    "what is one IDBI Delight Point worth in rupees for this card?"
+   ]
+  },
+  {
+   "name": "IDBI Bank - LIC CSL Eclat Select Credit Card",
+   "slug": "idbi-bank-lic-csl-eclat-select",
+   "status": "still_blocked",
+   "network": "rupay",
+   "network_evidence": "Card art shows the RuPay mark with SELECT; page: lounge provided by RuPay",
+   "reason": "4 DP per Rs100, nil fees; lounge quota not stated; no rupee value per Delight Point.",
+   "sources": [
+    "https://www.idbi.bank.in/Eclat-credit-card.aspx",
+    "https://www.idbi.bank.in/pdf/MITC-CC.PDF",
+    "https://www.idbi.bank.in/credit-card-faq.aspx",
+    "https://www.idbi.bank.in/images/Eclat-Credit-Card.png"
+   ],
+   "still_missing": [
+    "what is one IDBI Delight Point worth in rupees for this card?"
+   ]
+  }
+ ]
+}

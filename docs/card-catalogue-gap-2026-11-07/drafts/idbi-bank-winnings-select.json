@@ -1,0 +1,434 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "idbi-bank-winnings-select",
+    "name": "IDBI Bank Winnings Select Credit Card (RuPay)",
+    "issuer_slug": "idbi-bank",
+    "network": "rupay",
+    "network_tier": "rupay_select",
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 899,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": null,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": "IDBI Bank states no rupee value for one Delight Point on the card page, the MITC or the FAQ read on 2026-11-15 (the IDBI Delight site redirects to idbidelight.idbi.bank.in and was not read). Left null.",
+    "point_expiry_months": 36,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.idbi.bank.in/Winnings-credit-card.aspx",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": null,
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": 2,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "idbi-winnings-excluded-mccs",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6010,
+          6011,
+          6211,
+          6300,
+          6381,
+          9211,
+          9222,
+          9311,
+          9399,
+          9405,
+          4112,
+          5960,
+          5541,
+          5542,
+          5172,
+          5983
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No Delight Points on cash disbursements, securities, insurance, government and court payments, passenger railways, direct-marketing insurance and fuel MCCs (MITC section 12)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "idbi-winnings-utility-cashback",
+      "category_id": "bills",
+      "priority": 8,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4814,
+          4816,
+          4899,
+          4900
+        ],
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 10,
+        "cap_reference": "idbi-winnings-utility-cap",
+        "reason": "10% cashback on utility bill payments (MCC 4814, 4816, 4899, 4900), up to Rs 100 a month (MITC section 13, Winnings row)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "idbi-winnings-dining-cashback",
+      "category_id": "dining",
+      "priority": 9,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5814,
+          5812
+        ],
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 5,
+        "cap_reference": "idbi-winnings-dining-cap",
+        "reason": "5% cashback on dining (MCC 5814, 5812), up to Rs 50 a month (MITC section 13, Winnings row)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "idbi-winnings-base",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 2,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "2 Delight Points for every Rs 100 spent (card page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "idbi-winnings-utility-cap",
+      "category_id": "bills",
+      "metric": "eligible_spend_amount",
+      "mcc_target_list": [],
+      "period": "calendar_month",
+      "limit_value": "N/A",
+      "limit_value_inr": 100,
+      "post_limit_behavior": {
+        "action": "downgrade_to_base_rate",
+        "points_per_block": 2
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "idbi-winnings-dining-cap",
+      "category_id": "dining",
+      "metric": "eligible_spend_amount",
+      "mcc_target_list": [],
+      "period": "calendar_month",
+      "limit_value": "N/A",
+      "limit_value_inr": 50,
+      "post_limit_behavior": {
+        "action": "downgrade_to_base_rate",
+        "points_per_block": 2
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.4,
+      "annual_interest_rate_percent": 40.8
+    },
+    "forex_markup": {
+      "markup_percent": 3.5,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": "No separate DCC markup is stated in the issuer documents read"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 400,
+      "max_txn_inr": 4000,
+      "monthly_waiver_cap_inr": 400
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": 0,
+      "foreclosure_charge_percent": 0,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 500,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": 500,
+      "cheque_bounce_charge_inr": 500
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 20,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 500,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 501,
+        "max_balance_inr": 5000,
+        "fee_inr": 400
+      },
+      {
+        "min_balance_inr": 5001,
+        "max_balance_inr": 10000,
+        "fee_inr": 500
+      },
+      {
+        "min_balance_inr": 10001,
+        "max_balance_inr": 20000,
+        "fee_inr": 750
+      },
+      {
+        "min_balance_inr": 20001,
+        "max_balance_inr": null,
+        "fee_inr": 950
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 90000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "Annual fee Rs 899 from the 2nd year, waived on spends of more than Rs 90,000 in a year (card page); MITC: minimum Rs 90,000 in the preceding year.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 899
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "card_activation",
+      "benefit_points": 500,
+      "effective_value_inr": null,
+      "condition": "500 bonus Delight Points on card activation, and 500 bonus Delight Points on a first transaction of Rs 1,000 or more within 30 days of activation (card page). Rupee value unknown."
+    },
+    "spend_milestones": [
+      {
+        "id": "idbi-winnings-m1",
+        "label": "1,000 bonus Delight Points on net annual spend of Rs 1,00,000 (card page; rupee value unknown)",
+        "threshold_spend_inr": 100000,
+        "reward_value_inr": null,
+        "period": "card_anniversary_year",
+        "is_repeatable": false,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "id": "idbi-winnings-m2",
+        "label": "1,500 bonus Delight Points on net annual spend of Rs 2,00,000 (card page; rupee value unknown)",
+        "threshold_spend_inr": 200000,
+        "reward_value_inr": null,
+        "period": "card_anniversary_year",
+        "is_repeatable": false,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ]
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "idbi-winnings-lounge",
+      "category_id": "lounge",
+      "network_program": "rupay",
+      "sponsor": "NPCI / RuPay",
+      "label": "2 complimentary lounge visits per quarter in India and 2 per half year outside India (RuPay; quarters run from the 15th: Jan 15-Apr 15, Apr 15-Jul 15, Jul 15-Oct 15, Oct 15-Jan 15)",
+      "evaluation_engine": {
+        "conditions": {
+          "domestic_per_quarter": 2,
+          "international_per_half_year": 2
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 2,
+      "quota_period": "quarter",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "idbi-winnings-accident",
+      "category_id": "insurance_related_perk",
+      "network_program": null,
+      "sponsor": "IDBI Bank",
+      "label": "Personal accident cover: accidental death Rs 10 lakh and permanent disability Rs 10 lakh (age 18-70; one successful transaction in the last 90 days)",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": 2,
+    "fee_per_card_inr": 0,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": true,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-15",
+          "sources": [
+            {
+              "url": "https://www.idbi.bank.in/Winnings-credit-card.aspx",
+              "kind": "Winnings card page: features, lounge, fees and charges",
+              "read": "plain page fetch"
+            },
+            {
+              "url": "https://www.idbi.bank.in/pdf/MITC-CC.PDF",
+              "kind": "MITC, IDBI Bank Credit Card (PDF created 23 Oct 2026; the fee schedule inside says \"Effective from April 13, 2023\"): fee schedule by variant, interest, late fee, forex, fuel waiver, Delight Points exclusions and expiry, cashback table",
+              "date": "PDF created 2026-10-23",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.idbi.bank.in/credit-card-faq.aspx",
+              "kind": "Credit card FAQ: lists the Aspire, Royale, Euphoria, Imperium and Winnings variants with their networks",
+              "read": "plain page fetch"
+            }
+          ],
+          "open_questions": [
+            "Value of one Delight Point in rupees: NOT STATED by IDBI in the card page, MITC or FAQ read. Point value, effective return and every rupee value of a bonus or milestone stay null. Question for IDBI: what is one Delight Point worth in rupees for this card, and on what redemption (the MITC mentions only a Rs 20 fee for cash-back redemption between 1,000 and 4,000 points)?",
+            "Delight Points expiry: the MITC says points expire after 3 years (campaign points after 1 year). Taken as 36 months.",
+            "Late fee and interest come from the MITC fee schedule \"effective from April 13, 2023\" inside a file created 23 Oct 2026; the card page values match it.",
+            "Cash advance fee is 2.5% of the amount or Rs 500, whichever is higher; the page wording says \"transaction fee\" and is read as the transaction amount (MITC section 1b says \"transaction amount\").",
+            "The milestone benefits on the page are bonus points on net annual spend; the page does not say whether the year is the card year or a calendar year, so the period is a guess flagged here: card_anniversary_year is used.",
+            "The page says Delight Points accrue on all transactions except the MCC list in MITC section 12; the exemptions on the page are linked (\"refer exempted categories here\"), and the MITC list was used.",
+            "Cashback conflict: the MITC (Oct 2026) section 13 lists 10% utility cashback (Rs 100 a month) and 5% dining cashback (Rs 50 a month) for \"Winnings\"; the Winnings card page (undated) does not mention any cashback. The MITC is followed; a person should confirm the cashback is live for the Winnings Select card.",
+            "Whether the cashback replaces or adds to the 2 Delight Points on those transactions is not stated. The MITC also lists an Apex variant with higher caps; not part of this assignment.",
+            "The MITC says \"Opulence, Apex & SmartPay variants will be launched shortly\"; none is in this assignment."
+          ],
+          "notes": [],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

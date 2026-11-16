@@ -1,0 +1,474 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "city-union-bank-kavach",
+    "name": "CUB Kavach Credit Card (secured, RuPay / Mastercard)",
+    "issuer_slug": "city-union-bank",
+    "network": null,
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": false,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 0.2,
+    "point_value_baseline_basis": "CUB Kavachh Reward Document section 5.1: 1 Reward Point = INR 0.20 (100 RP = INR 20) at https://rewards.cub.bank.in/; minimum redemption criteria may apply.",
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://cityunionbank.bank.in/cub-kavach-terms-and-conditions",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": null,
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": "floor",
+    "base_points_per_block": 1,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": 0.2,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": "statement_cycle",
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "cub-kavach-excluded",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5094,
+          5944,
+          6513,
+          6538,
+          6539,
+          6540,
+          6541,
+          6542,
+          5172,
+          5541,
+          5542,
+          5983,
+          6010,
+          6011,
+          6012,
+          6051,
+          7801,
+          7995,
+          9754,
+          5111,
+          5192,
+          5942,
+          5943,
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299,
+          8351
+        ],
+        "mcc_ranges": [
+          [
+            4800,
+            4999
+          ],
+          [
+            5960,
+            6399
+          ],
+          [
+            9000,
+            9999
+          ]
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on utilities and telecom, gold and jewellery, rent, wallet, insurance, government payments, fuel, cash, gambling, educational services (Kavachh Reward Document section 6). Also excluded: low-interchange categories railways, contracted services, agriculture, transportation and transit, post office, and transactions under INR 2,000 at small offline merchants (sections 2.1 and 3); their MCCs are not listed."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cub-kavach-super-10",
+      "category_id": "all_retail",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "monthly_eligible_spend_above_inr": 50000,
+        "channel": "online (physical or virtual card) or in-store with the physical card",
+        "per_inr_block": 100,
+        "tiered": "only the spend above INR 50,000 in the billing month earns 10 RP per INR 100"
+      },
+      "action": {
+        "multiplier": 10,
+        "points_per_block": 10,
+        "cashback_percent": "N/A",
+        "cap_reference": "cub-kavach-cycle-cap",
+        "reason": "10 RP per INR 100 on eligible spend above INR 50,000 in a billing month (Kavachh Reward Document 2.3 and example 3)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cub-kavach-accel-5",
+      "category_id": "all_retail",
+      "priority": 11,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "monthly_eligible_spend_from_inr": 20000,
+        "monthly_eligible_spend_to_inr": 50000,
+        "channel": "online (physical or virtual card) or in-store with the physical card",
+        "per_inr_block": 100,
+        "tiered": "only the spend between INR 20,000 and INR 50,000 in the billing month earns 5 RP per INR 100"
+      },
+      "action": {
+        "multiplier": 5,
+        "points_per_block": 5,
+        "cashback_percent": "N/A",
+        "cap_reference": "cub-kavach-cycle-cap",
+        "reason": "5 RP per INR 100 on eligible spend from INR 20,000 to INR 50,000 in a billing month (Kavachh Reward Document 2.2 and example 2)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "cub-kavach-base",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100,
+        "note": "first INR 20,000 of eligible spend in the billing month"
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": "cub-kavach-cycle-cap",
+        "reason": "1 RP per INR 100 on the first INR 20,000 of eligible monthly spend (Kavachh Reward Document 2.1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "cub-kavach-cycle-cap",
+      "category_id": "all_retail",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": "N/A",
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 2,
+      "annual_interest_rate_percent": 24
+    },
+    "forex_markup": {
+      "markup_percent": 2,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 400,
+      "max_txn_inr": 3000,
+      "monthly_waiver_cap_inr": 300
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2,
+      "atm_transaction_fee_min_inr": 250,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% of each rent payment under MCC 6513 (issuer fee table)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "wallet",
+        "mcc_list": [
+          6538,
+          6539,
+          6540,
+          6541,
+          6542
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% of each wallet load (KFS V6)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          5983,
+          5541,
+          5542,
+          5172
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% on cumulative fuel spends of INR 50,000 or more in a statement cycle (KFS V6)",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "bills",
+        "mcc_list": [
+          4814,
+          4899,
+          4900
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% on cumulative utility spends of INR 25,000 or more in a statement cycle (KFS V6, Kavach KFS names MCC 4814, 4899, 4900)",
+        "threshold_spend_inr": 25000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "entertainment",
+        "mcc_list": [
+          5816
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% on cumulative online skill-gaming spends of INR 10,000 or more in a statement cycle (KFS V6; MCC 5816 per the Kavach KFS)",
+        "threshold_spend_inr": 10000,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": 200,
+      "foreclosure_charge_percent": 5,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 3,
+        "min_fee_inr": 250,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": 300,
+      "cheque_bounce_charge_inr": 300
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 25000,
+        "fee_inr": 350
+      },
+      {
+        "min_balance_inr": 25001,
+        "max_balance_inr": null,
+        "fee_inr": 450
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "No annual fee to waive (issuer states nil annual fee).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": null,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "verified_network_research",
+        "value": {
+          "product_status": "active",
+          "source_url": "https://cityunionbank.bank.in/filemanager/Jun26/KFS%20Kavach.pdf",
+          "evidence": "CUB Kavach Key Fact Statement (file Kfs_v1_050126, Jun26 folder) lists two separate rows, \"CUB KAVACH RUPAY CREDIT CARD\" and \"CUB KAVACH MASTER CREDIT CARD\", with identical fees; KFS V6 (3 Oct 2026) lists one row \"CUB KAVACH RUPAY / MASTER CREDIT CARD\". The issuer does not say whether the customer chooses.",
+          "candidates": [
+            {
+              "network": "rupay",
+              "network_tier": "N/A",
+              "label": "CUB Kavach RuPay Credit Card",
+              "source_url": "https://cityunionbank.bank.in/filemanager/Jun26/KFS%20Kavach.pdf",
+              "evidence": "KFS: \"CUB KAVACH RUPAY CREDIT CARD\", joining/annual/add-on NIL, 2% a month."
+            },
+            {
+              "network": "mastercard",
+              "network_tier": "N/A",
+              "label": "CUB Kavach Master Credit Card",
+              "source_url": "https://cityunionbank.bank.in/filemanager/Jun26/KFS%20Kavach.pdf",
+              "evidence": "KFS: \"CUB KAVACH MASTER CREDIT CARD\", joining/annual/add-on NIL, 2% a month."
+            }
+          ]
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-15",
+          "sources": [
+            {
+              "url": "https://cityunionbank.bank.in/filemanager/Jun26/KFS%20Kavach.pdf",
+              "kind": "CUB Kavach Key Fact Statement (file Kfs_v1_050126, Jun26 folder), 8 pages: fees, interest, fuel waiver, forex",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://cityunionbank.bank.in/filemanager/Oct26/KFS_V6%20English.pdf",
+              "kind": "KFS V6 (3 Oct 2026): combined row for RuPay / Master; Kavach exceptions (cash 2%, forex 2%, statement fee)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://cityunionbank.bank.in/filemanager/Sep26/Kavachh_Reward_Document.pdf",
+              "kind": "CUB Kavachh Credit Card Reward Document (5 pages, Sep26 folder): earn tiers, INR 0.20 per RP, exclusions",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://cityunionbank.bank.in/filemanager/Jun26/MITC%20Kavach.pdf",
+              "kind": "Kavach MITC (Jun26 folder): secured-card clauses (FD as continuing security, lien); no margin or limit ratio",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://cityunionbank.bank.in/cub-kavach-terms-and-conditions",
+              "kind": "Issuer Kavach T&C page (last updated 05-10-2026 per page): links the MITC, KFS and Reward Document; states no fees, margin or network",
+              "read": "page text via fetch tool"
+            }
+          ],
+          "open_questions": [
+            "Network: two networks (RuPay and Mastercard) are listed; whether the customer chooses, and the Mastercard tier, are not stated. Recorded as dual network with no single network.",
+            "Secured-card terms: the FD amount, minimum deposit, margin (credit limit as a percentage of the FD) and whether the card is only against a CUB fixed deposit are not stated in the KFS, the MITC or the Reward Document read (the MITC says only that the fixed deposit is continuing security). The issuer page lists an application link at cubdigital.cub.bank.in/cub-depend-webapp, not opened (a form flow).",
+            "Reward cap: \"Max RP is 2% of your limit in a billing cycle\" (Reward Document 2.1 to 2.3). The cap depends on the individual credit limit, so no fixed number is stored; the cap rule carries limit_value N/A.",
+            "Reward tiers are on cumulative eligible spend in a billing month; the document's examples treat them as marginal slabs (first INR 20,000 at 1 RP, next up to INR 50,000 at 5 RP, rest at 10 RP) and the reward rules are written that way. Whether \"billing month\" means the statement cycle is not stated; statement_cycle is assumed for the cap period only because the document says billing cycle.",
+            "Accelerated and super-accelerated rewards apply to online purchases with physical or virtual card, or in-store with the physical card only; the base-reward categories are said to be excluded from acceleration (\"NA for base reward categories\") without naming them.",
+            "Welcome benefit, lounge access, fuel waiver details beyond the KFS, and card-art networks: no document states a welcome benefit or lounge for Kavach.",
+            "Cash advance: up to 2% or INR 250, whichever is higher, at Indian ATMs; abroad up to 2% or INR 1,000 (Kavach KFS; the abroad line prints \"Up to 2 of cash withdrawal amount\").",
+            "Point validity: \"Reward Points may expire as per the Bank's policy\", no period stated.",
+            "The KFS says Kavach has no add-on card and no re-issue fee."
+          ],
+          "notes": [
+            "Interest 2% a month (24% a year) on extended credit and cash advances (KFS)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

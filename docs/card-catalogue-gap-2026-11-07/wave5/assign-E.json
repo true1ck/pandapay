@@ -1,0 +1,147 @@
+{
+ "agent": "W5E",
+ "issuers": [
+  "City Union Bank",
+  "Tamilnad Mercantile Bank",
+  "Dhanlaxmi Bank",
+  "Jammu & Kashmir Bank",
+  "Saraswat Co-operative Bank"
+ ],
+ "cards": [
+  {
+   "name": "J&K Bank Eminent Credit Card (earlier World Credit Card)",
+   "product_url": "https://jkb.bank.in/transactions/services/credit-cards",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Issuer 'Types of Cards' tab: 'EMINENT CARD (Earlier World Credit Card)', annual fee INR 1,500, joining zero, forex 1.99%, 2 domestic lounge visits per quarter; golf privileges via a Mastercard India golf programme. Apply online link: https://digital.jkbank.com/JKBCreditCard",
+   "issuer": "Jammu & Kashmir Bank"
+  },
+  {
+   "name": "J&K Bank Platinum Credit Card",
+   "product_url": "https://jkb.bank.in/transactions/services/credit-cards",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Issuer tab: 'PLATINUM CARD (Earlier Platinum Card will continue as Platinum Card)', annual fee INR 500, 'This variant includes cards from MasterCard, VISA and RuPay networks' (one product, three networks, so not listed as separate variants). RuPay credit card UPI-enabled.",
+   "issuer": "Jammu & Kashmir Bank"
+  },
+  {
+   "name": "CUB CSK/SRH RuPay Platinum Credit Card (lifetime free)",
+   "product_url": "https://cityunionbank.bank.in/co-branded-creditcard",
+   "status": "sold",
+   "variant_of": null,
+   "partner": "Chennai Super Kings / Sunrisers Hyderabad",
+   "evidence": "Listed in City Union Bank Key Fact Statement for Credit Cards KFS_V6 updated 03.10.2026 (https://cityunionbank.bank.in/filemanager/Oct26/KFS_V6%20English.pdf): joining NIL, annual NIL. Issuer page has 'Apply CSK Credit Card' (/co-branded-creditcard) and 'Apply SRH Credit Card' (/srh-bankingpartner): two team editions (Chennai Super Kings, Sunrisers Hyderabad) of the same variant. Rewards doc: https://cityunionbank.bank.in/filemanager/Apr26/CSK_SRHRewards_Features.pdf",
+   "issuer": "City Union Bank"
+  },
+  {
+   "name": "CUB CSK/SRH Master Platinum Credit Card (first year free)",
+   "product_url": "https://cityunionbank.bank.in/co-branded-creditcard",
+   "status": "sold",
+   "variant_of": "CUB CSK/SRH RuPay Platinum Credit Card (lifetime free)",
+   "partner": "Chennai Super Kings / Sunrisers Hyderabad",
+   "evidence": "KFS V6 row 'CUB CSK/SRH MASTER PLATINUM CREDIT CARD (FIRST YEAR FREE)': joining NIL, annual Rs 1000 + GST from year 2 (waived on spends). Same CSK / SRH apply pages as above.",
+   "issuer": "City Union Bank"
+  },
+  {
+   "name": "CUB CSK/SRH Master World Credit Card (first year free)",
+   "product_url": "https://cityunionbank.bank.in/co-branded-creditcard",
+   "status": "sold",
+   "variant_of": "CUB CSK/SRH RuPay Platinum Credit Card (lifetime free)",
+   "partner": "Chennai Super Kings / Sunrisers Hyderabad",
+   "evidence": "KFS V6 row 'CUB CSK/SRH MASTER WORLD CREDIT CARD (FIRST YEAR FREE)': joining NIL, annual Rs 4000 + GST from year 2 (waived on spends). Same CSK / SRH apply pages.",
+   "issuer": "City Union Bank"
+  },
+  {
+   "name": "CUB Kavach Credit Card (secured, RuPay / Mastercard)",
+   "product_url": "https://cityunionbank.bank.in/cub-kavach-terms-and-conditions",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Issuer page has 'Apply Secured Credit Card (CUB Kavach)' (https://cubdigital.cub.bank.in/cub-depend-webapp/). KFS V6 row 'CUB KAVACH RUPAY / MASTER CREDIT CARD': joining/annual NIL, interest 2% p.m. Docs: https://cityunionbank.bank.in/filemanager/Jun26/KFS%20Kavach.pdf. One product in two networks.",
+   "issuer": "City Union Bank"
+  },
+  {
+   "name": "TMB VIBE360 Credit Card",
+   "product_url": "https://www.tmb.bank.in/personal/retail-cards/tmb-vibe360-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Issuer retail-cards page 'Apply now'. 'Deposit-linked credit card, zero annual fee... designed exclusively for both NRI and Resident customers who maintain a Term Deposit of Rs.50,000 and above'; limit Rs 30,000 to Rs 10,00,000.",
+   "issuer": "Tamilnad Mercantile Bank"
+  },
+  {
+   "name": "TMB Vertex Credit Card",
+   "product_url": "https://www.tmb.bank.in/personal/retail-cards/tmb-vertex-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Issuer page: Term-Deposit-backed card, free joining, zero annual fee, limit Rs 20,000 to Rs 5,00,000 (the page eligibility text still says 'TMB VIBE360' - a copy slip on the issuer's page).",
+   "issuer": "Tamilnad Mercantile Bank"
+  },
+  {
+   "name": "TMB Titanium Credit Card",
+   "product_url": "https://www.tmb.bank.in/personal/savings/tmb-titanium-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Issuer page: Term-Deposit-backed, free joining, zero annual fee, gross annual income Rs 2,00,000+, described as 'A premium RuPay Credit Card'.",
+   "issuer": "Tamilnad Mercantile Bank"
+  },
+  {
+   "name": "TMB Platinum Credit Card",
+   "product_url": "https://www.tmb.bank.in/personal/savings/tmb-platinum-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Issuer page: Term Deposit of Rs 50,000+ for min 3 years, no joining/annual fee, limit up to 75% of deposit; 'A Premium RuPay Platinum Credit Card'.",
+   "issuer": "Tamilnad Mercantile Bank"
+  },
+  {
+   "name": "Dhan Namaste Credit Card (VISA Platinum)",
+   "product_url": "https://www.dhan.bank.in/credit-card-pl/",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Issuer listing: 'Dhan Namaste Credit Card - VISA Platinum Credit Card' with Know more / Apply (https://www.dhan.bank.in/apply). Page: minimum gross income Rs 6 lakh, 5% cashback at supermarkets/department stores (max Rs 50 a month).",
+   "issuer": "Dhanlaxmi Bank"
+  },
+  {
+   "name": "Dhan Vriddhi Credit Card (RuPay Platinum)",
+   "product_url": "https://www.dhan.bank.in/rupay-cc-Dhan-Vriddhi/",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Issuer listing with Apply. Page: nil joining fee, annual fee Rs 400 (waived on Rs 50,000 spend), 2 points per Rs 100, 1 domestic lounge per half year, credit card on UPI.",
+   "issuer": "Dhanlaxmi Bank"
+  },
+  {
+   "name": "Dhan Samriddhi Credit Card (RuPay Select)",
+   "product_url": "https://www.dhan.bank.in/rupay-CC-Dhan-Samriddhi/",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Issuer listing with Apply. Page: nil joining fee, annual fee Rs 800 (waived above Rs 1 lakh spend), 1 domestic lounge per quarter and 1 abroad per half year.",
+   "issuer": "Dhanlaxmi Bank"
+  },
+  {
+   "name": "Saraswat Bank RuPay Platinum Credit Card",
+   "product_url": "https://www.saraswat.bank.in/content.aspx?id=Credit-Card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Issuer page 'Credit Card' under Cards > Credit Cards: 'To Apply, visit your nearest branch'; schedule of charges for all RuPay credit cards w.e.f. January 2026; 'Main terms and conditions of Rupay Platinum Credit Card'.",
+   "issuer": "Saraswat Co-operative Bank"
+  },
+  {
+   "name": "Saraswat Bank Secured RuPay Platinum Credit Card",
+   "product_url": "https://www.saraswat.bank.in/content.aspx?id=Secured-Credit-Card",
+   "status": "sold",
+   "variant_of": "Saraswat Bank RuPay Platinum Credit Card",
+   "partner": null,
+   "evidence": "Issuer page 'Secured Credit Card': 'To Apply, visit your nearest branch'; additional T&C for Secured Rupay Platinum Credit Card.",
+   "issuer": "Saraswat Co-operative Bank"
+  }
+ ]
+}

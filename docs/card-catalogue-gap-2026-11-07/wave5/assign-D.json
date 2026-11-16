@@ -1,0 +1,220 @@
+{
+ "agent": "W5D",
+ "issuers": [
+  "Axis Bank",
+  "Utkarsh Small Finance Bank",
+  "DCB Bank",
+  "Unity Small Finance Bank",
+  "ESAF Small Finance Bank",
+  "South Indian Bank"
+ ],
+ "cards": [
+  {
+   "name": "Axis Bank Pride Platinum Credit Card",
+   "product_url": "https://www.axis.bank.in/cards/credit-card/pride-platinum-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Listed on the Axis credit card listing page and in Axis Key Fact Sheet PDF (states 'last updated on 8th October 2026'), Retail Cards table. Product page: 'Exclusively tailored to suit the brave personnel serving in Indian Defence Forces and the Government of India employees'. Eligibility-restricted to defence/government personnel.",
+   "issuer": "Axis Bank"
+  },
+  {
+   "name": "Axis Bank Pride Signature Credit Card",
+   "product_url": "https://www.axis.bank.in/cards/credit-card/pride-signature-credit-card",
+   "status": "sold",
+   "variant_of": "Axis Bank Pride Platinum Credit Card (higher tier of the same Pride family, separate fee tier)",
+   "partner": null,
+   "evidence": "Listed on the Axis credit card listing page and in Axis Key Fact Sheet PDF (states 'last updated on 8th October 2026'), Retail Cards table (PRIDE SIGNATURE). Product page refers to Indian Defence personnel; eligibility-restricted like Pride Platinum.",
+   "issuer": "Axis Bank"
+  },
+  {
+   "name": "Flipkart Axis Bank Super Elite Credit Card",
+   "product_url": "https://www.axis.bank.in/cards/credit-card/flipkart-axis-bank-super-elite-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": "Flipkart",
+   "evidence": "Listed on the Axis listing page and in Key Fact Sheet Partnership Cards (FLIPKART SUPER ELITE). Product page has an eligibility section and no restriction text. Separate product and fee tier from the Flipkart Axis Bank Credit Card (live).",
+   "issuer": "Axis Bank"
+  },
+  {
+   "name": "Miles & More Axis Bank World Credit Card",
+   "product_url": "https://www.axis.bank.in/cards/credit-card/miles-more-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": "Miles & More (Lufthansa Group)",
+   "evidence": "Listed on the Axis listing page ('Miles and More Axis Bank Credit Card'). Product page names 'Axis Bank Miles & More World Credit Card' and a 'World Select' tier. Key Fact Sheet Partnership Cards lists MILES and MORE World.",
+   "issuer": "Axis Bank"
+  },
+  {
+   "name": "Miles & More Axis Bank World Select Credit Card",
+   "product_url": "https://www.axis.bank.in/cards/credit-card/miles-more-credit-card",
+   "status": "sold",
+   "variant_of": "Miles & More Axis Bank World Credit Card",
+   "partner": "Miles & More (Lufthansa Group)",
+   "evidence": "Same product page as the World card ('Axis Bank Miles & More World Select Credit Card'); Key Fact Sheet lists MILES and MORE World Select as its own column (separate fee tier).",
+   "issuer": "Axis Bank"
+  },
+  {
+   "name": "Axis Bank Privilege Easy Credit Card",
+   "product_url": "https://www.axis.bank.in/cards/credit-card/privilege-easy-credit-card",
+   "status": "sold",
+   "variant_of": "Axis Bank Privilege Credit Card (FD-backed version, own fee)",
+   "partner": null,
+   "evidence": "Listed on the Axis listing page under FD-linked credit cards and in Key Fact Sheet Secured Cards. Product page: fixed-deposit-backed secured card, 'Minimum Fixed Deposit of Rs 65,000; Maximum of Rs 25,00,000'.",
+   "issuer": "Axis Bank"
+  },
+  {
+   "name": "SIB One Co-Branded Credit Card",
+   "product_url": "https://www.southindianbank.bank.in/personal/cards/credit-card/sib-one-co-branded-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": "OneCard (One Consumer Services)",
+   "evidence": "Issuer page 'SIB One Co-Branded Credit Card': 'premium, 100% digital card with lifetime-free benefits. Powered by SIB and M/s One Consumer Services', metal-based Visa Signature, 1% forex, instant virtual issuance via the OneCard app. KFS: https://www.southindianbank.bank.in/userfiles/upload/sib_onecard_kfs.pdf. The page carries no restriction wording; a third-party search snippet claims it is issued only to pre-approved customers (not issuer evidence).",
+   "issuer": "South Indian Bank"
+  },
+  {
+   "name": "Secured SIB One Co-Branded Credit Card",
+   "product_url": "https://www.southindianbank.bank.in/personal/cards/credit-card/secured-sib-one-co-branded-credit-card",
+   "status": "sold",
+   "variant_of": "SIB One Co-Branded Credit Card",
+   "partner": "OneCard (One Consumer Services)",
+   "evidence": "Issuer page: fixed-deposit-backed lifetime-free card, 'zero joining and annual fees', Visa Signature, 100% of deposit offered as limit, 1% forex. Issued by SIB with OneConsumer Pvt Ltd. T&C: https://www.southindianbank.bank.in/userfiles/upload/tandc_secured_sib_onecard.pdf",
+   "issuer": "South Indian Bank"
+  },
+  {
+   "name": "Utkarsh Eternal Credit Card",
+   "product_url": "https://www.utkarsh.bank.in/personal/cards/credit-card/eternal",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Issuer listing (Read more). Page: no annual fee first year, Rs 1,999 from year 2 (waived on Rs 1.5 lakh spend), 1.25% cashback, 1% fuel surcharge refund. Page FAQ also covers a 'Credit Card against FD'.",
+   "issuer": "Utkarsh Small Finance Bank"
+  },
+  {
+   "name": "Utkarsh Rhodium Credit Card",
+   "product_url": "https://www.utkarsh.bank.in/personal/cards/credit-card/rhodium",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Issuer listing. Page: no fee first year, Rs 4,999 from year 2 (waived on Rs 5 lakh spend), lounge access up to 4 times a calendar quarter, 1.25% cashback.",
+   "issuer": "Utkarsh Small Finance Bank"
+  },
+  {
+   "name": "Utkarsh SmartGen Credit Card",
+   "product_url": "https://www.utkarsh.bank.in/personal/cards/credit-card/smartgen",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Issuer listing. Page: no fee first year, Rs 199 + taxes from year 2 (waived on Rs 50,000), 1% cashback.",
+   "issuer": "Utkarsh Small Finance Bank"
+  },
+  {
+   "name": "Utkarsh superCard",
+   "product_url": "https://www.utkarsh.bank.in/personal/cards/credit-card/supercard",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Issuer listing. Page: no joining/annual fee, 5% and 2% cashback on non-UPI spends on Myntra and Flipkart, 1% on all other UPI and non-UPI spends; application includes creating a deposit. Brand partner not named on the page.",
+   "issuer": "Utkarsh Small Finance Bank"
+  },
+  {
+   "name": "Utkarsh Wish Credit Card",
+   "product_url": "https://www.utkarsh.bank.in/personal/cards/credit-card/wish-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": "PhonePe",
+   "evidence": "Issuer listing. Page: no joining/annual fee, 3% reward points on recharges and bill payments through the PhonePe app, 1% on scan and pay through PhonePe, application includes creating a deposit.",
+   "issuer": "Utkarsh Small Finance Bank"
+  },
+  {
+   "name": "Unity Bank Zero Credit Card",
+   "product_url": "https://cards.unity.bank.in/",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Issuer 'Choose your card': 'Lifetime free credit card ... Start your journey with an FD of just Rs 2,000', zero joining/annual, 0% forex, up to 1.5% cashback. Page title says RuPay.",
+   "issuer": "Unity Small Finance Bank"
+  },
+  {
+   "name": "Unity Bank Vibe Credit Card",
+   "product_url": "https://cards.unity.bank.in/",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Issuer 'Choose your card': start with an FD of Rs 25,000, 0% forex, 10 complimentary airport lounge visits a year, up to 2% cashback.",
+   "issuer": "Unity Small Finance Bank"
+  },
+  {
+   "name": "Roarbank Credit Card (Unity SFB)",
+   "product_url": "https://unity.bank.in/personal-banking/cards/credit-card/usfb-roarbank-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": "Roarbank",
+   "evidence": "Issuer listing with Apply Now: 'India's first 2-in-1 Credit Card that combines a digital savings account', up to 20% cashback on top 2 chosen categories, interest-free up to 62 days.",
+   "issuer": "Unity Small Finance Bank"
+  },
+  {
+   "name": "Unity Bank BharatPe Credit Card",
+   "product_url": "https://unity.bank.in/personal-banking/cards/credit-card/usfb-bharatpe-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": "BharatPe",
+   "evidence": "Issuer listing: lifetime free, 2% uncapped rewards, 8 complimentary domestic lounge visits, UPI on credit card; repayment link on consumer.bharatpe.in.",
+   "issuer": "Unity Small Finance Bank"
+  },
+  {
+   "name": "DCB ZET Credit Card",
+   "product_url": "https://www.dcb.bank.in/personal/cards/secured-card/dcb-zet-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": "ZET",
+   "evidence": "Issuer 'Secured Credit Card' list with Apply Now: 'Fixed Deposit backed RuPay Credit Card', FD from Rs 2,000, lifetime free renewal, 90% of FD as limit, UPI on ZET / PhonePe / Google Pay.",
+   "issuer": "DCB Bank"
+  },
+  {
+   "name": "DCB novio Credit Card (RuPay Platinum / RuPay Select)",
+   "product_url": "https://www.dcb.bank.in/personal/cards/secured-card/dcb-novio-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": "novio",
+   "evidence": "Issuer page: FD-secured RuPay card, FD from Rs 2,000, lifetime free; fee table lists 'DCB novio Credit Card (Rupay Platinum)' and '(Rupay Select)', both Nil/Nil; applied for in the novio app (pick Select or Platinum). KFS: https://www.dcb.bank.in/api/dcb/assets/2026-04/KFS-DCB-Novio-Card.pdf",
+   "issuer": "DCB Bank"
+  },
+  {
+   "name": "DCB Niyo Credit Card",
+   "product_url": "https://www.dcb.bank.in/personal/cards/secured-card/dcb-niyo-credit-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": "Niyo",
+   "evidence": "Issuer page: 'DCB Niyo Secured Credit Card', secured by a lien on a DCB Savings Account, limit 90% of lien amount, instant, no credit-score check. Network not stated in the text read.",
+   "issuer": "DCB Bank"
+  },
+  {
+   "name": "DCB PayLess Platinum Credit Card",
+   "product_url": "https://www.dcb.bank.in/personal/cards/secured-card/dcb-payless-platinum-card",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Issuer page with Apply Now: secured against DCB Fixed Deposit, 'powered by RuPay', 90% of FD as limit, 1 domestic lounge a quarter, Rs 250 cashback on Rs 50,000 quarterly spend.",
+   "issuer": "DCB Bank"
+  },
+  {
+   "name": "DCB PayLess Select Credit Card",
+   "product_url": "https://www.dcb.bank.in/personal/cards/secured-card/dcb-payless-select-card",
+   "status": "sold",
+   "variant_of": "DCB PayLess Platinum Credit Card",
+   "partner": null,
+   "evidence": "Issuer page with Apply Now: premium FD-secured RuPay card, 9 lounge visits a year (1 international + 2 domestic per quarter), Rs 1,000 cashback on Rs 1 lakh quarterly spend.",
+   "issuer": "DCB Bank"
+  },
+  {
+   "name": "ESAF INORI RuPay Platinum Credit Card",
+   "product_url": "https://www.esaf.bank.in/credit-card/",
+   "status": "sold",
+   "variant_of": null,
+   "partner": null,
+   "evidence": "Issuer page 'INORI - RuPay Platinum Credit Card': 1.25% cashback on bill amounts, insurance cover up to Rs 2 lakh, concierge, merchant offers; 'Apply Now' https://www.esaf.bank.in/apply-credit-card/; MITC Aug 2026 (https://www.esaf.bank.in/wp-content/uploads/2026/08/Most-Important-Terms-And-Conditions-MITC-Inori_English.pdf).",
+   "issuer": "ESAF Small Finance Bank"
+  }
+ ]
+}

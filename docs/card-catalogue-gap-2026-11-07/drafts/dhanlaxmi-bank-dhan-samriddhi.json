@@ -1,0 +1,339 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "dhanlaxmi-bank-dhan-samriddhi",
+    "name": "Dhan Samriddhi Credit Card (RuPay Select)",
+    "issuer_slug": "dhanlaxmi-bank",
+    "network": "rupay",
+    "network_tier": "rupay_select",
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 800,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 0.05,
+    "point_value_baseline_basis": "Issuer card page: \"Redemption of reward points @ Rs.0.05/point\" (also Credit Card Policy v6.0: cashback at INR 0.05 per point). Redemption fee nil for cash redemption, INR 75 for gifts (MITC).",
+    "point_expiry_months": 24,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.dhan.bank.in/rupay-CC-Dhan-Samriddhi/",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": null,
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": 2,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": 0.1,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": "statement_cycle",
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "dhan-samriddhi-excluded",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on cash withdrawals, EMI conversions or cashback transactions (Credit Card Policy v6.0, loyalty programme); a retail transaction converted to EMI earns no points (Terms and Conditions 11.9). MCC lists are not stated."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "dhan-samriddhi-grocery-cashback",
+      "category_id": "groceries",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "categories": [
+          "grocery"
+        ]
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": "N/A",
+        "cashback_percent": 5,
+        "cap_reference": "dhan-samriddhi-grocery-cap",
+        "reason": "5% cashback on grocery spends, maximum INR 50 per billing cycle (card page; Policy v6.0). The Namaste page words it \"supermarkets and departmental stores, maximum INR 50 a month\"."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "dhan-samriddhi-base",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 2,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "2 reward points per INR 100 spent (card page; Policy v6.0). Redeemed at INR 0.05 per point."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "dhan-samriddhi-grocery-cap",
+      "category_id": "groceries",
+      "metric": "bonus_reward_points",
+      "mcc_target_list": [],
+      "period": "statement_cycle",
+      "limit_value": "N/A",
+      "limit_value_inr": 50,
+      "post_limit_behavior": {
+        "action": "downgrade_to_base_rate",
+        "points_per_block": 2
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 1.9,
+      "annual_interest_rate_percent": 22.8
+    },
+    "forex_markup": {
+      "markup_percent": 3.5,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": null,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": null,
+      "atm_transaction_fee_min_inr": 400,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": 15
+    },
+    "category_surcharges": [],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": 2,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 300,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": 500,
+      "cheque_bounce_charge_inr": 500
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": []
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 100000,
+      "period": null,
+      "evaluation_condition": "Annual fee INR 800 + GST waived on annual usage of INR 1,00,000 (MITC footnote and card page); the page does not say card anniversary year or calendar year.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 800
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "spend_within_90_days_of_issuance",
+      "benefit_points": 1000,
+      "effective_value_inr": 50,
+      "condition": "1,000 points for spends above INR 10,000 within 90 days of issuance (card page). Rupee value is 1,000 x INR 0.05 = INR 50 at the stated redemption rate."
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "dhan-samriddhi-lounge-dom",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "Dhanlaxmi Bank",
+      "label": "Domestic airport lounge access",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 1,
+      "quota_period": "quarter",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "dhan-samriddhi-lounge-intl",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "Dhanlaxmi Bank",
+      "label": "International (abroad) airport lounge access",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 1,
+      "quota_period": "half_year",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 0,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-15",
+          "sources": [
+            {
+              "url": "https://www.dhan.bank.in/rupay-CC-Dhan-Samriddhi/",
+              "kind": "Issuer card page for Dhan Samriddhi Credit Card (RuPay Select) (benefits, annual fee, lounge, reward line)",
+              "read": "curl, stripped to text"
+            },
+            {
+              "url": "https://www.dhan.bank.in/pdf/Most_Imp_Terms_Conditions.pdf",
+              "kind": "Most Important Terms and Conditions (2 pages; one fee table for Visa/RuPay Platinum and RuPay Select; the EMI illustration is dated Dec 2023 to Jun 2024)",
+              "read": "pdftotext -raw"
+            },
+            {
+              "url": "https://www.dhan.bank.in/pdf/Credit-Card-Policy.pdf",
+              "kind": "Credit Card Policy Version 6.0 (18 pages, PDF created 9 Jan 2026): product lines, reward programme, schedule of charges",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.dhan.bank.in/pdf/cc/Credit_Card_Terms_Conditions.pdf",
+              "kind": "Credit Card Terms & Conditions (12 pages, undated): general terms; EMI transactions earn no reward points (clause 11.9)",
+              "read": "pdftotext"
+            }
+          ],
+          "open_questions": [
+            "Fuel transaction surcharge: the MITC table says \"10 or 2.5%\" and the Credit Card Policy v6.0 (Jan 2026) says \"Rs.10 or 1.0% of transaction amount whichever is high\". The two conflict; the newer Policy value (1.0%) is stored; no fuel surcharge waiver is stated for these cards.",
+            "Late payment fee is 30% of the Minimum Amount Due with a minimum of INR 400 and a maximum of INR 600 (MITC and Policy); it cannot be shown as fixed slabs, so late_payment_slabs is empty and the rule is stored in additional_data.",
+            "Joining fee is nil for new customers but INR 400 for customers who earlier took and closed a Dhanlaxmi credit card within the last three years (MITC footnote); stored joining_fee_inr is 0.",
+            "Annual fee INR 400 + GST (Platinum) / INR 800 + GST (Select); waived on annual usage of INR 50,000 (Platinum) / INR 1,00,000 (Select); add-on usage counts (MITC footnote). Policy says renewal fee nil and the annual fee is applicable for activated cards closed within 12 months.",
+            "Interest: 1.90% a month (22.80% a year) on revolving credit, 36% a year on cash advances, 3.5% a month (42% a year) from the date of default (MITC, Policy). The Policy says the rate is benchmarked to the 1-year MCLR with spread capped at 32%.",
+            "Interest free credit period 20 to 50 days on retail purchases if the previous balance is paid in full.",
+            "Cash advance fee INR 400 per transaction; cash limit 15% of the total credit limit; overlimit 2.5% of the amount over the limit (min INR 300); cheque return / auto-debit dishonour INR 500; EMI processing fee 1% of the converted amount, foreclosure 2% of outstanding EMIs; reward redemption fee INR 75 for gifts and nil for cash (MITC).",
+            "Forex markup 3.5% (MITC, Policy).",
+            "Reward expiry: the Credit Card Policy says \"Point Expiry: Every 2 years (on 20th September)\" in its general loyalty section; it is not tied to a card variant, so 24 months is used only for the variants whose pages list the same programme.",
+            "The page says waived \"if annual spend > Rs. 1,00,000\" while the MITC says \"Rs.100000 or more\"; the MITC reading (at or above INR 1,00,000) is not adopted over the page, the threshold is stored as INR 1,00,000 and the strict-or-not wording is unsettled.",
+            "The INR 50 cap is on the cashback amount (not on spend), stored as limit_value_inr 50 under a bonus-reward metric.",
+            "Reward-points exclusions beyond cash withdrawals, EMI conversions and cashback transactions: no MCC list is published in the documents read.",
+            "Lounge access: the page lists the quota; the \"Lounge Access\" link on the page opens no separate document in the HTML read, so the lounge programme, eligibility spend and per-visit rules are not stated.",
+            "Credit Card on UPI is listed as a feature; the setup is not described.",
+            "The page footnote marks reward points with \"#\" (conditions not shown in the page text) and the benefits with \"T & C Apply\"; the \"Terms and Conditions of platinum Credit Card Offers\" (cc-offer-tc.pdf) is only a generic offer disclaimer with no terms for these benefits.",
+            "Bonus reward: the Credit Card Policy v6.0 lists 4,000 points on annual spends of INR 3,00,000 or more; the card page does not list it, so it is not modelled.",
+            "Network tier: the page title says RuPay select; no other tier information."
+          ],
+          "notes": [],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      },
+      {
+        "key": "late_payment_fee_rule",
+        "value": {
+          "rule": "30% of the Minimum Amount Due, minimum INR 400, maximum INR 600",
+          "source": "MITC and Credit Card Policy v6.0"
+        }
+      }
+    ]
+  }
+}

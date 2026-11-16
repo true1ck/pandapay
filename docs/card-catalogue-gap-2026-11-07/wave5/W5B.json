@@ -1,0 +1,369 @@
+{
+ "agent": "W5B",
+ "cards": [
+  {
+   "name": "Kotak NRI Royale Signature Credit Card",
+   "slug": "kotak-nri-royale-signature-credit-card",
+   "status": "still_blocked",
+   "network": null,
+   "network_evidence": "No Kotak page or MITC states the network.",
+   "reason": "Drafted from the four Kotak pages and the Oct 2026 MITC; blocked on network and on missing reward exclusions/caps.",
+   "sources": [
+    "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/nri-royale-signature-card.html",
+    "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/nri-royale-signature-card/fees-and-charges.html",
+    "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/nri-royale-signature-card/eligibility.html",
+    "https://www.kotak.bank.in/content/dam/Kotak/files/english-rcas.pdf"
+   ],
+   "still_missing": [
+    "Which network does the card run on (card art or welcome kit)?",
+    "Any reward exclusions, caps or expiry for this card; fuel waiver percent (page says 500-3000 per calendar year, MITC says 500-5000 per anniversary year, Rs 3,500)"
+   ]
+  },
+  {
+   "name": "Kotak Corporate Gold Credit Card",
+   "slug": null,
+   "status": "held",
+   "network": null,
+   "network_evidence": "n/a",
+   "reason": "Page says only \"higher reward point earnings\" with no rate; its fee tab shows Corporate Classic and Basic columns, not Gold; the commercial MITC (Mar 2026) does not list a Gold variant.",
+   "sources": [
+    "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/corporate-gold-card.html",
+    "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/corporate-gold-card/fees-and-charges.html",
+    "https://www.kotak.bank.in/content/dam/Kotak/gsfcfiles/credit-cards/Corp-CC-MITC.pdf"
+   ],
+   "still_missing": [
+    "Numeric earn rate and the Gold fee row"
+   ]
+  },
+  {
+   "name": "IndusInd Bank Secured Credit Card (Credit Card Against FD)",
+   "slug": null,
+   "status": "held",
+   "network": null,
+   "network_evidence": "n/a",
+   "reason": "The linked page is an application form (PAN and mobile entry) that publishes no fee, earn rate or network; nothing was typed into it. The IndusInd cards page lists the product only as a menu link.",
+   "sources": [
+    "https://induseasycredit.indusind.bank.in/customer/credit-card/secured-credit-card",
+    "https://www.indusind.bank.in/in/en/personal/cards/credit-card.html"
+   ],
+   "still_missing": [
+    "An IndusInd KFS, MITC or product page for the FD-backed card"
+   ]
+  },
+  {
+   "name": "FIRST WOW! Credit Card for NRIs",
+   "slug": null,
+   "status": "variant",
+   "network": "visa",
+   "network_evidence": "NRI page: \"VISA Infinite Premium benefits\" and \"exclusive VISA offers across the globe\".",
+   "reason": "variant_of_idfc-first-wow: same lifetime-free fee, 4 reward points per Rs 200 and Rs 0.25 point value as the resident FIRST WOW! page; only eligibility differs (NRE account, FD Rs 25,000 to Rs 10 lakh, auto-debit from NRE). No separate record.",
+   "sources": [
+    "https://www.idfcfirst.bank.in/credit-card/wow/nri-credit-card",
+    "https://www.idfcfirst.bank.in/credit-card/wow"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "BOBCARD Etihad Guest Premium",
+   "slug": "bobcard-etihad-guest-premium",
+   "status": "still_blocked",
+   "network": null,
+   "network_evidence": "Card art on the product page shows only the contactless chevron, no network wordmark; not taken as proof. Etihad MITC and KFS do not name the network.",
+   "reason": "Drafted: fee 5,000, waiver 5 lakh, 6 miles/Rs 100 on Etihad, 2 elsewhere, lounges, forex 0.",
+   "sources": [
+    "https://www.bobcard.co.in/credit-card-types/bobcard-etihad-guest-premium",
+    "https://media.bobcard.co.in//media/4wnez0dz/bobcard-consolidated-mitc.pdf",
+    "https://media.bobcard.co.in//media/3mjfujsg/etihad-mitc-kfs-22062026.pdf",
+    "https://media.bobcard.co.in//media/dlobtvcn/revision-in-etihad-features-charges-wef5th-aug26.pdf"
+   ],
+   "still_missing": [
+    "Network",
+    "Welcome miles conflict: page 15,000 (Rs 50,000 in 65 days + Rs 1 lakh) vs MITC/KFS 5,000 on Rs 25,000",
+    "Value of an Etihad Guest mile (none stated)"
+   ]
+  },
+  {
+   "name": "BOBCARD Etihad Guest",
+   "slug": "bobcard-etihad-guest",
+   "status": "still_blocked",
+   "network": null,
+   "network_evidence": "Card art on the product page shows only the contactless chevron, no network wordmark; not taken as proof. Etihad MITC and KFS do not name the network.",
+   "reason": "Drafted: fee 2,500, waiver 3 lakh, 3 miles/Rs 100 on Etihad, 1 elsewhere, lounges, forex 1%.",
+   "sources": [
+    "https://www.bobcard.co.in/credit-card-types/bobcard-etihad-guest",
+    "https://media.bobcard.co.in//media/4wnez0dz/bobcard-consolidated-mitc.pdf",
+    "https://media.bobcard.co.in//media/3mjfujsg/etihad-mitc-kfs-22062026.pdf"
+   ],
+   "still_missing": [
+    "Network",
+    "Welcome miles conflict: page 7,500 vs MITC/KFS 2,500 on Rs 10,000",
+    "Value of an Etihad Guest mile (none stated)"
+   ]
+  },
+  {
+   "name": "BOBCARD TIARA",
+   "slug": "bobcard-tiara",
+   "status": "complete",
+   "network": "rupay",
+   "network_evidence": "Card image on the Tiara product page (tiara-card-cutout-01.png) shows the RuPay Credit wordmark (card art).",
+   "reason": "Fee 2,499 with both waivers, 3 RP/Rs 100 and 15 RP on dining, travel, international (cap 5,000 per statement cycle), 1 RP = Rs 0.25 stated on the page, forex 2%, finance charge 3.75%.",
+   "sources": [
+    "https://www.bobcard.co.in/credit-card-types/tiara",
+    "https://media.bobcard.co.in//media/4wnez0dz/bobcard-consolidated-mitc.pdf",
+    "https://media.bobcard.co.in//media/0h5cim12/features-and-rewards-important-terms-conditions-11112026.pdf",
+    "https://media.bobcard.co.in//media/lfhhmpw2/revision-in-charges-and-benefits-166.pdf"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "BOBCARD Cashback",
+   "slug": "bobcard-cashback",
+   "status": "complete",
+   "network": "mastercard",
+   "network_evidence": "Product page: \"Add your Mastercard BOBCARD Cashback Credit Card to Google Pay\".",
+   "reason": "Rs 499 a year or Rs 49 a month, 1% cashback plus 4% on domestic e-commerce (4 transactions a cycle, cap Rs 1,500 per statement), exclusions listed, forex 3.5%.",
+   "sources": [
+    "https://www.bobcard.co.in/credit-card-types/bobcard-cashback",
+    "https://media.bobcard.co.in//media/4wnez0dz/bobcard-consolidated-mitc.pdf",
+    "https://media.bobcard.co.in//media/0h5cim12/features-and-rewards-important-terms-conditions-11112026.pdf"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "BOBCARD Micro Enterprise",
+   "slug": "bobcard-micro-enterprise",
+   "status": "complete",
+   "network": "rupay",
+   "network_evidence": "Card image on the Micro Enterprise page (bobcard-micro-enterprise.webp) shows the RuPay Credit wordmark (card art).",
+   "reason": "Annual fee 500 (waiver Rs 50,000), 1 RP/Rs 100, 1 RP = Rs 0.25 stated, finance charge 1.5% a month, forex 3.5%; application only through the Jan Samarth portal.",
+   "sources": [
+    "https://www.bobcard.co.in/credit-card-types/micro-enterprise-credit-card",
+    "https://media.bobcard.co.in//media/4wnez0dz/bobcard-consolidated-mitc.pdf",
+    "https://media.bobcard.co.in//media/rfnlbqkz/bobcard-kfs_4x8_17jul2026.pdf"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "BOBCARD EMPOWER (Empower Business)",
+   "slug": "bobcard-empower",
+   "status": "still_blocked",
+   "network": null,
+   "network_evidence": "Card art on the product page shows only the contactless chevron, no network wordmark; not taken as proof.",
+   "reason": "Drafted core 1 RP/Rs 100 only; fee 500 with Rs 50,000 waiver.",
+   "sources": [
+    "https://www.bobcard.co.in/credit-card-types/empower",
+    "https://media.bobcard.co.in//media/4wnez0dz/bobcard-consolidated-mitc.pdf",
+    "https://media.bobcard.co.in//media/0h5cim12/features-and-rewards-important-terms-conditions-11112026.pdf",
+    "https://media.bobcard.co.in//media/nfkmkemd/revision-in-product-features-charges-wef-1st-april-26v1.pdf"
+   ],
+   "still_missing": [
+    "Network",
+    "Is the 5X utility (MCC 4900) offer on the page and 1 Apr 2026 revision still live? MITC and FEAT (later) say no accelerated rewards on Empower"
+   ]
+  },
+  {
+   "name": "BOBCARD Uni GoldX",
+   "slug": "bobcard-uni-goldx",
+   "status": "still_blocked",
+   "network": "visa+rupay",
+   "network_evidence": "UKFS: RuPay variant is virtual and shares its limit with the Visa variant; MITC B(k): \"Primary VISA Affiliated credit card\".",
+   "reason": "Drafted as dual network: free for life, 1 Uni Coin per Rs 1 (1 coin = 1 paisa) with exclusions and monthly spend caps, forex 0, finance charge 3.99%.",
+   "sources": [
+    "https://www.bobcard.co.in/credit-card-types/bobcard-uni-goldx",
+    "https://media.bobcard.co.in//media/4wnez0dz/bobcard-consolidated-mitc.pdf",
+    "https://media.bobcard.co.in//media/1qdnjbu5/bobcard-uni-goldx-key-fact-statement-4.pdf"
+   ],
+   "still_missing": [
+    "Terms, cap and eligible vouchers of the 5% value back at the Uni Store (in no BOBCARD document)"
+   ]
+  },
+  {
+   "name": "BOBCARD UPGB/GGB/BRKGB PRAGATI",
+   "slug": "bobcard-pragati",
+   "status": "still_blocked",
+   "network": null,
+   "network_evidence": "Card art on the product page shows only the contactless chevron, no network wordmark; not taken as proof.",
+   "reason": "Drafted: annual fee 250 (waiver Rs 25,000), 1 RP/Rs 100, 5 RP on dept stores and movies capped 1,000 per cycle, 1 RP = Rs 0.25.",
+   "sources": [
+    "https://www.bobcard.co.in/credit-card-types/upgb-ggb-brkgb-pragati",
+    "https://media.bobcard.co.in//media/4wnez0dz/bobcard-consolidated-mitc.pdf",
+    "https://media.bobcard.co.in//media/0h5cim12/features-and-rewards-important-terms-conditions-11112026.pdf"
+   ],
+   "still_missing": [
+    "Network"
+   ]
+  },
+  {
+   "name": "Nainital Bank RENAISSANCE BOBCARD",
+   "slug": "bobcard-nainital-bank-renaissance",
+   "status": "still_blocked",
+   "network": null,
+   "network_evidence": "Card art on the product page shows only the contactless chevron, no network wordmark; not taken as proof.",
+   "reason": "Same schedule as Pragati: annual fee 250 (waiver Rs 25,000), 1 RP/Rs 100, 5 RP dept stores and movies cap 1,000.",
+   "sources": [
+    "https://www.bobcard.co.in/credit-card-types/nainital-bank-renaissance",
+    "https://media.bobcard.co.in//media/4wnez0dz/bobcard-consolidated-mitc.pdf",
+    "https://media.bobcard.co.in//media/0h5cim12/features-and-rewards-important-terms-conditions-11112026.pdf"
+   ],
+   "still_missing": [
+    "Network"
+   ]
+  },
+  {
+   "name": "Indian Army YODDHA BOBCARD",
+   "slug": "bobcard-indian-army-yoddha",
+   "status": "still_blocked",
+   "network": "rupay",
+   "network_evidence": "Product page: concierge \"Powered by RuPay\", \"provided by NPCI-RuPay\" (no wordmark on card art).",
+   "reason": "Lifetime free, 2 RP/Rs 100, 5X on dept stores, 8 lounge visits a year with Rs 20,000 quarterly spend, 1 RP = Rs 0.25, forex 3%.",
+   "sources": [
+    "https://www.bobcard.co.in/credit-card-types/indian-army-yoddha",
+    "https://media.bobcard.co.in//media/4wnez0dz/bobcard-consolidated-mitc.pdf",
+    "https://media.bobcard.co.in//media/0h5cim12/features-and-rewards-important-terms-conditions-11112026.pdf"
+   ],
+   "still_missing": [
+    "Does movies (MCC 7832) still earn 5X? page says dept stores and movies, FEAT table (11 Nov 2026) lists only dept stores"
+   ]
+  },
+  {
+   "name": "Indian Navy VARUNAH BOBCARD",
+   "slug": "bobcard-indian-navy-varunah-premium",
+   "status": "still_blocked",
+   "network": null,
+   "network_evidence": "Card art on the product page shows only the contactless chevron, no network wordmark; not taken as proof.",
+   "reason": "Drafted Varunah Premium only (page): fee 2,499 with waivers, 3 RP/Rs 100, 15 RP on travel/online/dining/international capped 2,500 per cycle, forex 2%. Varunah Plus and base Varunah are fee tiers in the MITC and are not drafted.",
+   "sources": [
+    "https://www.bobcard.co.in/credit-card-types/indian-navy-varunah",
+    "https://media.bobcard.co.in//media/4wnez0dz/bobcard-consolidated-mitc.pdf",
+    "https://media.bobcard.co.in//media/0h5cim12/features-and-rewards-important-terms-conditions-11112026.pdf"
+   ],
+   "still_missing": [
+    "Network",
+    "Whether Varunah Plus (fee 1,499) and base Varunah should be separate rows"
+   ]
+  },
+  {
+   "name": "Indian Coast Guard RAKSHAMAH BOBCARD",
+   "slug": "bobcard-indian-coast-guard-rakshamah",
+   "status": "still_blocked",
+   "network": "rupay",
+   "network_evidence": "Product page: concierge \"Powered by RuPay\", \"provided by NPCI-RuPay\".",
+   "reason": "Same numbers as Yoddha.",
+   "sources": [
+    "https://www.bobcard.co.in/credit-card-types/indian-coast-guard-rakshamah",
+    "https://media.bobcard.co.in//media/4wnez0dz/bobcard-consolidated-mitc.pdf",
+    "https://media.bobcard.co.in//media/0h5cim12/features-and-rewards-important-terms-conditions-11112026.pdf"
+   ],
+   "still_missing": [
+    "Does movies (MCC 7832) still earn 5X?"
+   ]
+  },
+  {
+   "name": "Assam Rifles The SENTINEL BOBCARD",
+   "slug": "bobcard-assam-rifles-the-sentinel",
+   "status": "still_blocked",
+   "network": "rupay",
+   "network_evidence": "Product page: concierge \"Powered by RuPay\", \"provided by NPCI-RuPay\".",
+   "reason": "Same numbers as Yoddha.",
+   "sources": [
+    "https://www.bobcard.co.in/credit-card-types/assam-rifles-the-sentinel",
+    "https://media.bobcard.co.in//media/4wnez0dz/bobcard-consolidated-mitc.pdf",
+    "https://media.bobcard.co.in//media/0h5cim12/features-and-rewards-important-terms-conditions-11112026.pdf"
+   ],
+   "still_missing": [
+    "Does movies (MCC 7832) still earn 5X?"
+   ]
+  },
+  {
+   "name": "PM SVANidhi BOBCARD",
+   "slug": "bobcard-pm-svanidhi",
+   "status": "still_blocked",
+   "network": null,
+   "network_evidence": "Card art on the product page shows only the contactless chevron, no network wordmark; not taken as proof.",
+   "reason": "Lifetime free, 1 RP/Rs 100, 1 RP = Rs 0.20 (page); no cash or international use.",
+   "sources": [
+    "https://www.bobcard.co.in/credit-card-types/pm-svanidhi",
+    "https://media.bobcard.co.in//media/4wnez0dz/bobcard-consolidated-mitc.pdf",
+    "https://media.bobcard.co.in//media/0h5cim12/features-and-rewards-important-terms-conditions-11112026.pdf"
+   ],
+   "still_missing": [
+    "Network",
+    "No separate interest rate or reward exclusions stated for this card"
+   ]
+  },
+  {
+   "name": "Instant RuPay BOBCARD",
+   "slug": null,
+   "status": "held",
+   "network": "rupay",
+   "network_evidence": "Name only: \"Instant RuPay BOBCARD\" on the Bank of Baroda credit-card page.",
+   "reason": "The Bank of Baroda page gives only \"5X Rewards on Popular Spend Categories\" and lifetime free, with no rate, category or cap, and it is not on bobcard.co.in; unclear if it is its own product or a channel offer.",
+   "sources": [
+    "https://bankofbaroda.bank.in/digital-products/cards/credit-cards"
+   ],
+   "still_missing": [
+    "Rates, categories, caps and which BOBCARD it maps to"
+   ]
+  },
+  {
+   "name": "Canara RuPay Select Secured Credit Card",
+   "slug": "canara-rupay-select-secured-credit-card",
+   "status": "still_blocked",
+   "network": "rupay",
+   "network_evidence": "Card name and the Features table heading on the Canara page name the network (rupay).",
+   "reason": "Zero fees, 2 points per Rs 100, forex up to 3%, late fee Rs 250. Canara MITC PDF linked from the page returns 404.",
+   "sources": [
+    "https://www.canarabank.bank.in/rupay-select-secured-credit-card"
+   ],
+   "still_missing": [
+    "Interest rate for the secured card (page gives 2.5% only for \"unsecured/all other\" cards); FD limit share (75% vs 100%)",
+    "Canara MITC (404)"
+   ]
+  },
+  {
+   "name": "Canara RuPay Platinum Secured Credit Card",
+   "slug": "canara-rupay-platinum-secured-credit-card",
+   "status": "still_blocked",
+   "network": "rupay",
+   "network_evidence": "Card name and the Features table heading on the Canara page name the network (rupay).",
+   "reason": "Zero fees, 2 points per Rs 100, forex up to 3%, late fee Rs 250. Canara MITC PDF linked from the page returns 404.",
+   "sources": [
+    "https://www.canarabank.bank.in/rupay-platinum-secured-credit-card"
+   ],
+   "still_missing": [
+    "Value of one Canara reward point; secured-card interest rate",
+    "Canara MITC (404)"
+   ]
+  },
+  {
+   "name": "Canara Mastercard Gold Secured Credit Card",
+   "slug": "canara-mastercard-gold-secured-credit-card",
+   "status": "still_blocked",
+   "network": "mastercard",
+   "network_evidence": "Card name and the Features table heading on the Canara page name the network (mastercard).",
+   "reason": "Zero fees, 2 points per Rs 100, forex up to 3%, late fee Rs 250. Canara MITC PDF linked from the page returns 404.",
+   "sources": [
+    "https://www.canarabank.bank.in/mastercard-gold-secured-credit-card"
+   ],
+   "still_missing": [
+    "Value of one Canara reward point; secured-card interest rate",
+    "Canara MITC (404)"
+   ]
+  },
+  {
+   "name": "Canara Visa Gold Secured Credit Card",
+   "slug": "canara-visa-gold-secured-credit-card",
+   "status": "still_blocked",
+   "network": "visa",
+   "network_evidence": "Card name and the Features table heading on the Canara page name the network (visa).",
+   "reason": "Zero fees, 2 points per Rs 100, forex up to 3%, late fee Rs 250. Canara MITC PDF linked from the page returns 404.",
+   "sources": [
+    "https://www.canarabank.bank.in/visa-gold-secured-credit-card"
+   ],
+   "still_missing": [
+    "Value of one Canara reward point",
+    "Canara MITC (404)"
+   ]
+  }
+ ]
+}

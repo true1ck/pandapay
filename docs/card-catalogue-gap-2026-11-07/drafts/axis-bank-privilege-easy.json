@@ -1,0 +1,362 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "axis-bank-privilege-easy",
+    "name": "Axis Bank Privilege Easy Credit Card",
+    "issuer_slug": "axis-bank",
+    "network": null,
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 1500,
+    "annual_fee_inr": 1500,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": false,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": null,
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_page",
+    "source_url": "https://www.axis.bank.in/cards/credit-card/privilege-easy-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "Fixed-deposit-backed secured card: minimum FD INR 65,000, maximum INR 25,00,000 (page). Joining fee nil for Priority customers only.",
+    "rules": [
+      {
+        "parameter": "fd_amount_inr",
+        "operator": ">=",
+        "threshold_value": 65000,
+        "allowed_values": []
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 200,
+    "rounding_mode": null,
+    "base_points_per_block": 10,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "axis-priveasy-excl",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on utility and telecom, rent, wallet, government services, insurance, gold and jewellery, fuel, education, bridge, road and toll fees; gift cards moved to a separate excluded category w.e.f. 28 Aug 2026 (page and Axis T&C revision)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "axis-priveasy-base",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 200
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 10,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "10 EDGE REWARDS on every INR 200 spent (page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.4,
+      "annual_interest_rate_percent": 49.36
+    },
+    "forex_markup": {
+      "markup_percent": 3.5,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 400,
+      "max_txn_inr": 4001,
+      "monthly_waiver_cap_inr": 400
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": null,
+      "atm_transaction_fee_min_inr": null,
+      "interest_applicable_from_day_one": null,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee per rent transaction",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": null,
+        "min_fee_inr": null,
+        "gst_applicable": null
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 500,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 501,
+        "max_balance_inr": 5000,
+        "fee_inr": 500
+      },
+      {
+        "min_balance_inr": 5001,
+        "max_balance_inr": 10000,
+        "fee_inr": 750
+      },
+      {
+        "min_balance_inr": 10001,
+        "max_balance_inr": 50000,
+        "fee_inr": 1200
+      },
+      {
+        "min_balance_inr": 50001,
+        "max_balance_inr": null,
+        "fee_inr": 1300
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 500000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "Annual fee INR 1,500 reversed on achieving spends of INR 5 lakh in the previous card anniversary year; spends on utility and telecom, rent, wallet, government, insurance, gold and jewellery, fuel, education and tolls are excluded (page).",
+      "excluded_category_ids": [
+        "bills",
+        "rent",
+        "wallet",
+        "government",
+        "insurance",
+        "fuel",
+        "education"
+      ],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 1500
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "first_transaction_within_30_days_and_joining_fee_levied",
+      "benefit_points": 12500,
+      "effective_value_inr": 2500,
+      "condition": "12,500 EDGE REWARD Points, stated as worth INR 2,500 redeemable against vouchers, on levy of joining fee and first transaction within 30 days; not for free, first-year-free or priority-segment cards (page)."
+    },
+    "spend_milestones": [
+      {
+        "id": "axis-priveasy-milestone-2-5l",
+        "label": "10,000 additional EDGE REWARD Points, stated as worth INR 2,000, on INR 2.5 lakh spend in a card anniversary year (page)",
+        "threshold_spend_inr": 250000,
+        "reward_value_inr": 2000,
+        "period": "card_anniversary_year",
+        "is_repeatable": null,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ]
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "axis-priveasy-lounge",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "Axis Bank",
+      "label": "Complimentary domestic airport lounge access",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 2,
+      "quota_period": "quarter",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "axis-priveasy-ppp",
+      "category_id": "insurance_related_perk",
+      "network_program": null,
+      "sponsor": "Axis Bank",
+      "label": "Purchase Protection Plan up to INR 1 lakh and Credit Shield INR 1 lakh (page)",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": 100000,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": null,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [
+    {
+      "promo_id": "axis-priveasy-district-bogo",
+      "category_id": "movie",
+      "network_program": "N/A",
+      "sponsor": "District",
+      "platform": "District app",
+      "offer_type": "instant_discount",
+      "discount_percent": 100,
+      "max_discount_inr": "N/A",
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": true,
+      "is_permanent_card_feature": true,
+      "valid_from": null,
+      "valid_to": null
+    }
+  ],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-15",
+          "sources": [
+            {
+              "url": "https://www.axis.bank.in/cards/credit-card/privilege-easy-credit-card",
+              "kind": "Axis product page (T&Cs updated w.e.f. 28 Aug 2026): features, fees, FD eligibility",
+              "read": "rendered page text"
+            },
+            {
+              "url": "https://campaign.axis.bank.in/generic/terms-and-conditions-privilegeeasy.pdf",
+              "kind": "Privilege Easy T&C revision effective 28 Aug 2026 and 1 Nov 2026 (DCC 3.5%, late fee, District offer spend rule)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.axis.bank.in/docs/default-source/default-document-library/mitc-credit-cards.pdf",
+              "kind": "Axis Credit Card MITC, 62 pages, PDF created 8 Oct 2026: fee table, interest rates, fuel waiver caps",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.axis.bank.in/images/default-source/credit-card/s2_cuv-tracker_rest-of-the-pages_privilege-easy-credit-card_desktop_1366x400-px.jpg",
+              "kind": "Hero image opened and looked at: Axis Privilege card art with no network mark",
+              "read": "image viewed"
+            }
+          ],
+          "open_questions": [
+            "Network not stated: the card art has no network mark and no Axis document names it for Privilege Easy. The page Value Chart (headed \"Privilege Credit Card\") mentions Mastercard-affiliated lounges, but it is the parent Privilege card chart, so it is not used.",
+            "Value of one EDGE point: activation (12,500 = INR 2,500) and milestone (10,000 = INR 2,000) imply INR 0.20, but the Value Chart shows INR 2,000 for INR 2.5 lakh of spends (12,500 points), implying INR 0.16. Left null; ask Axis which is current.",
+            "Fuel waiver band upper limit reads INR 4,001 on the page and INR 4,000 in the fee table; page value kept.",
+            "FD-backed credit limit percentage is not stated on the page read.",
+            "Reward points are cashable only as vouchers per the page; the redemption matrix is not modelled."
+          ],
+          "notes": [],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

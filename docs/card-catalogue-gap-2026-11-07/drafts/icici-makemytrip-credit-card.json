@@ -1,0 +1,677 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "icici-makemytrip-credit-card",
+    "name": "MakeMyTrip ICICI Bank Credit Card",
+    "issuer_slug": "icici-bank",
+    "network": null,
+    "network_tier": "N/A",
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 999,
+    "annual_fee_inr": 999,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": false,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": "Not stated as a rupee value: rewards are credited as myCash, redeemable on MakeMyTrip, not encashable (page FAQ).",
+    "point_expiry_months": 0,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.icici.bank.in/personal-banking/cards/credit-card/makemytrip/makemytrip-icici-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "Page: Indian citizen over 21; salaried monthly income ₹20,000 or self-employed annual income at least ₹2,40,000.",
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": 1,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "mmt-excl-rent",
+      "category_id": "rent",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          7014,
+          7407,
+          5271,
+          6513
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on rent payments (MITC, Reward Points Capping: \"No reward points ... Cash and Rent categories\")."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "mmt-excl-cash",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6011,
+          6050,
+          6051,
+          6529,
+          6530,
+          6538,
+          6666,
+          7777,
+          9999,
+          6010,
+          3882,
+          6541,
+          6542
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on cash transactions (MITC)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "mmt-excl-wallet",
+      "category_id": "wallet",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6540
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on e-wallet reloads (MITC)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "mmt-excl-international",
+      "category_id": "international_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "transaction_type": "international"
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No myCash on international transactions (page FAQ: \"international transactions ... not eligible for myCash Rewards\")."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "mmt-excl-emi",
+      "category_id": "emi",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {},
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No myCash on EMI transactions, balance transfers and personal loan transactions (page FAQ)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "mmt-hotel-6",
+      "category_id": "travel",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100,
+        "sub_category": "hotel"
+      },
+      "action": {
+        "multiplier": 6,
+        "points_per_block": 6,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "6 points (myCash) per ₹100 on hotel booking spend (page). The page does not say whether this applies only on MakeMyTrip."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "mmt-flight-bus-cab-3",
+      "category_id": "travel",
+      "priority": 11,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100,
+        "sub_category": "flight_bus_cab"
+      },
+      "action": {
+        "multiplier": 3,
+        "points_per_block": 3,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "3 points (myCash) per ₹100 on flight, bus and cab spend (page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "mmt-base-1",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": "mmt-insurance-cap",
+        "reason": "1 point per ₹100 on all other retail spend (page). MITC: fuel earns points on this card."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "mmt-insurance-cap",
+      "category_id": "insurance",
+      "metric": "total_reward_points",
+      "mcc_target_list": [
+        5960,
+        6300,
+        6381,
+        6399
+      ],
+      "period": "card_anniversary_year",
+      "limit_value": 1000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 45
+    },
+    "forex_markup": {
+      "markup_percent": 0,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": 0,
+      "gst_applicable": true,
+      "trigger_condition": "MITC: 3.5% DCC fee w.e.f. 15 Jan 2026 on transactions in Indian currency at international locations or at India-located merchants registered abroad"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": null,
+      "waiver_percent": null,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": null
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on rent payment transactions (MCC 6513) (MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          1361,
+          3851,
+          5172,
+          5541,
+          5542,
+          5983,
+          9752,
+          5555
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on fuel transactions above ₹10,000 (MITC, w.e.f. 15 Nov 2024)",
+        "threshold_spend_inr": 10000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "utility",
+        "mcc_list": [
+          4899,
+          4900,
+          4901,
+          4814,
+          4821
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on utility payments above ₹50,000 (MITC, w.e.f. 15 Nov 2024)",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education",
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299,
+          8493,
+          8494,
+          7911
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on education payments made through third-party apps (MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "wallet",
+        "mcc_list": [
+          6540
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% fee on wallet loads of ₹5,000 or more (MITC, w.e.f. 15 Jan 2026)",
+        "threshold_spend_inr": 5000,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": 299,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": 3,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 550,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 99,
+      "gst_applicable": true,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 99,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 100,
+        "max_balance_inr": 500,
+        "fee_inr": 100
+      },
+      {
+        "min_balance_inr": 501,
+        "max_balance_inr": 1000,
+        "fee_inr": 500
+      },
+      {
+        "min_balance_inr": 1001,
+        "max_balance_inr": 5000,
+        "fee_inr": 600
+      },
+      {
+        "min_balance_inr": 5001,
+        "max_balance_inr": 10000,
+        "fee_inr": 750
+      },
+      {
+        "min_balance_inr": 10001,
+        "max_balance_inr": 25000,
+        "fee_inr": 900
+      },
+      {
+        "min_balance_inr": 25001,
+        "max_balance_inr": 50000,
+        "fee_inr": 1100
+      },
+      {
+        "min_balance_inr": 50001,
+        "max_balance_inr": null,
+        "fee_inr": 1300
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 300000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "Spend over ₹3 lakh in one year and the annual fee is waived for the next year (page; MITC fee table 3,00,000). EMI, rent, government and education spends do not count (MITC).",
+      "excluded_category_ids": [
+        "rent",
+        "government",
+        "education",
+        "emi"
+      ],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 999
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "joining_fee_paid",
+      "benefit_points": "N/A",
+      "effective_value_inr": 1000,
+      "condition": "MakeMyTrip voucher worth ₹1,000, valid 1 year, on paying the joining fee; a ₹1,000 hotel voucher valid 3 months on paying the annual fee (page)."
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "mmt-lounge-intl",
+      "category_id": "lounge",
+      "network_program": "priority_pass",
+      "sponsor": "ICICI Bank",
+      "label": "International airport lounge access (Priority Pass), primary cardholder only",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 1,
+      "quota_period": "annual",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "mmt-lounge-dom",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "ICICI Bank",
+      "label": "Domestic airport lounge access, primary cardholder only, on ₹75,000 spent in the preceding spends quarter (MITC: criteria from 1 Jul 2026)",
+      "evaluation_engine": {
+        "conditions": {
+          "preceding_quarter_spend_inr": 75000
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 2,
+      "quota_period": "quarter",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "mmt-black",
+      "category_id": "other",
+      "network_program": null,
+      "sponsor": "MakeMyTrip",
+      "label": "One-year MMTBLACK Gold membership (excluding its myCash benefit)",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "mmt-no-cost-emi",
+      "category_id": "other",
+      "network_program": null,
+      "sponsor": "MakeMyTrip",
+      "label": "3 months no-cost EMI on MakeMyTrip bookings",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "mmt-concierge",
+      "category_id": "concierge",
+      "network_program": null,
+      "sponsor": "ICICI Bank",
+      "label": "24x7 concierge (RuPay variant)",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": null,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [
+    {
+      "promo_id": "mmt-inox",
+      "category_id": "movie",
+      "network_program": "N/A",
+      "sponsor": "INOX",
+      "platform": "INOX",
+      "offer_type": "instant_discount",
+      "discount_percent": 25,
+      "max_discount_inr": 150,
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": true,
+      "is_permanent_card_feature": true,
+      "valid_from": null,
+      "valid_to": null
+    },
+    {
+      "promo_id": "mmt-bms",
+      "category_id": "movie",
+      "network_program": "N/A",
+      "sponsor": "BookMyShow",
+      "platform": "BookMyShow",
+      "offer_type": "instant_discount",
+      "discount_percent": 25,
+      "max_discount_inr": 150,
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": true,
+      "is_permanent_card_feature": true,
+      "valid_from": "2026-04-01",
+      "valid_to": null
+    }
+  ],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "verified_network_research",
+        "value": {
+          "product_status": "active",
+          "source_url": "https://www.icici.bank.in/personal-banking/cards/credit-card/makemytrip/makemytrip-icici-credit-card",
+          "evidence": "Issuer card page: \"the convenience of two networks - MasterCard and RuPay\"; the page card image alt text reads \"MakeMyTrip ICICI Bank card ... and Mastercard logo\". A cardholder gets one network or the other.",
+          "candidates": [
+            {
+              "network": "mastercard",
+              "network_tier": "N/A",
+              "label": "MakeMyTrip ICICI Bank Credit Card (Mastercard)",
+              "source_url": "https://www.icici.bank.in/personal-banking/cards/credit-card/makemytrip/makemytrip-icici-credit-card",
+              "evidence": "Page: \"MasterCard and RuPay\"; card-art alt text names a Mastercard logo. Tier not stated."
+            },
+            {
+              "network": "rupay",
+              "network_tier": "N/A",
+              "label": "MakeMyTrip ICICI Bank Credit Card (RuPay)",
+              "source_url": "https://www.icici.bank.in/personal-banking/cards/credit-card/makemytrip/makemytrip-icici-credit-card",
+              "evidence": "Page: \"MasterCard and RuPay\"; concierge line says \"(RuPay Variant)\". Tier not stated."
+            }
+          ]
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-15",
+          "sources": [
+            {
+              "url": "https://www.icici.bank.in/personal-banking/cards/credit-card/makemytrip/makemytrip-icici-credit-card",
+              "kind": "issuer card page: fees, earn, exclusions FAQ, lounge, networks (no revision date)",
+              "read": "plain HTTP fetch, page text"
+            },
+            {
+              "url": "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf",
+              "kind": "ICICI credit card MITC, last updated 6 Nov 2026: fee table, forex, DCC, late fee, interest, reward exclusions and caps, lounge rules",
+              "read": "pdftotext"
+            }
+          ],
+          "open_questions": [
+            "Value of one myCash point in rupees: not stated on the page or MITC (page says \"6% myCash\" in the headline but gives the earn as 6 points per ₹100 hotel; 1 point = ₹1 is NOT stated).",
+            "The earn rate is per ₹100 and the page headline says \"up to 6% myCash\"; the equivalence of a point and a myCash rupee is not stated, so no percent return is stored.",
+            "Whether the 6-point hotel rate and 3-point flight/bus/cab rate apply only to MakeMyTrip bookings or to any merchant in those categories is not stated.",
+            "Fuel: the page does not mention fuel; the MITC lists this card as an exception that DOES earn points on fuel, so no fuel exclusion is drafted. No fuel surcharge waiver is stated, so none is recorded.",
+            "MITC cap table for utility, insurance and grocery does not list this card; the only stated cap is 1,000 reward points per anniversary year on insurance (MITC). Insurance cap period is anniversary year per the MITC.",
+            "Forex and DCC: nil w.e.f. 10 Nov 2026 (MITC), not applicable to the older MakeMyTrip Platinum and Signature cards. The page also says no forex mark-up. The new card is five days old at the date of the MITC, so confirm the page is not ahead of an older MITC row.",
+            "The page FAQ says Priority Pass for the \"MakeMyTrip ICICI Bank Signature Credit Card\"; read as a page slip for this card since the lounge text in the same FAQ names this card.",
+            "Exclusion list and international exclusion come from the FAQ (rent, cash advances, late payment costs, fees, EMI, balance transfers, international transactions, personal loan)."
+          ],
+          "notes": [
+            "MITC lists the card in the BookMyShow-eligible set. The page and MITC both give interest 3.75% a month and late fees ₹100 to ₹1,300."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

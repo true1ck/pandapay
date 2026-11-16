@@ -1,0 +1,547 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "bobcard-uni-goldx",
+    "name": "BOBCARD Uni GoldX",
+    "issuer_slug": "bobcard",
+    "network": null,
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 0.01,
+    "point_value_baseline_basis": "MITC section B: \"1 Uni Coin on every purchase of ₹1. Each Uni Coin is valued at one paisa.\" Uni Coins do not expire except after 365 days of card inactivity.",
+    "point_expiry_months": 0,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.bobcard.co.in/credit-card-types/bobcard-uni-goldx",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": null,
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 1,
+    "rounding_mode": null,
+    "base_points_per_block": 1,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": 1,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "goldx-excl-categories",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          4829,
+          6513,
+          5541,
+          5542,
+          5983,
+          6540,
+          4812,
+          4814,
+          4815,
+          4816,
+          4821,
+          4899,
+          4900,
+          9034,
+          9211,
+          9222,
+          9223,
+          9311,
+          9399,
+          9402,
+          9405,
+          9700,
+          9701,
+          9702,
+          9751,
+          9754,
+          9950,
+          8299,
+          8211,
+          8241,
+          8244,
+          8249,
+          8220,
+          4784
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No Uni Coins on money transfers, rent, fuel, wallet loads, utilities, government services, education or tolls (MITC B(b)). Cash withdrawals, EMI and international transactions also earn nothing."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "goldx-excl-international",
+      "category_id": "international_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "transaction_type": "international"
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "International transactions earn no Uni Coins (MITC B(b))."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "goldx-transport-1pct-capped",
+      "category_id": "travel",
+      "priority": 20,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 1,
+        "mcc_list": [
+          4111,
+          4112,
+          4131
+        ]
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": "goldx-transport-cap",
+        "reason": "Uni Coins on transportation, passenger railways and bus lines (MCC 4111, 4112, 4131) apply up to ₹20,000 of monthly spends (MITC B(b))."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "goldx-insurance-1pct-capped",
+      "category_id": "insurance",
+      "priority": 20,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 1,
+        "mcc_list": [
+          6300,
+          5960
+        ]
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": "goldx-insurance-cap",
+        "reason": "Uni Coins on insurance (MCC 6300, 5960) apply up to ₹50,000 of monthly spends (MITC B(b))."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "goldx-base",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 1
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "1 Uni Coin per ₹1 on eligible spends; each Uni Coin is worth one paisa, so 1% (MITC B(b))."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "goldx-transport-cap",
+      "category_id": "travel",
+      "metric": "eligible_spend_amount",
+      "mcc_target_list": [
+        4111,
+        4112,
+        4131
+      ],
+      "period": "calendar_month",
+      "limit_value": "N/A",
+      "limit_value_inr": 20000,
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "goldx-insurance-cap",
+      "category_id": "insurance",
+      "metric": "eligible_spend_amount",
+      "mcc_target_list": [
+        6300,
+        5960
+      ],
+      "period": "calendar_month",
+      "limit_value": "N/A",
+      "limit_value_inr": 50000,
+      "post_limit_behavior": {
+        "action": "zero_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.99,
+      "annual_interest_rate_percent": 47.88
+    },
+    "forex_markup": {
+      "markup_percent": 0,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": null,
+      "max_txn_inr": 7500,
+      "monthly_waiver_cap_inr": 500
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 300,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": 30
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1.25,
+        "gst_applicable": true,
+        "trigger_condition": "1.25% of the rent payment or ₹100, whichever is higher (KFS, MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          5172,
+          5541,
+          5542,
+          5983
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% on fuel transactions of ₹10,000 or above (KFS)",
+        "threshold_spend_inr": 10000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education",
+        "mcc_list": [
+          8299,
+          8211,
+          8241,
+          8244,
+          8249,
+          8220
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% on education payments through third-party apps such as CRED, PhonePe, Amazon Pay (KFS)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "bills",
+        "mcc_list": [
+          4900
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% (maximum ₹3,000) on utility transactions of ₹50,000 or above (KFS)",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 300,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": "N/A",
+      "cheque_bounce_charge_inr": 350
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 0,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 50,
+    "grace_period_void_on_revolving_balance": true,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "100% of fees, finance charges, GST and EMI amount",
+        "2% of retail spends and cash advances",
+        "minimum ₹200 (MITC)"
+      ]
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 99,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 100,
+        "max_balance_inr": 500,
+        "fee_inr": 100
+      },
+      {
+        "min_balance_inr": 501,
+        "max_balance_inr": 1000,
+        "fee_inr": 400
+      },
+      {
+        "min_balance_inr": 1001,
+        "max_balance_inr": 10000,
+        "fee_inr": 750
+      },
+      {
+        "min_balance_inr": 10001,
+        "max_balance_inr": 25000,
+        "fee_inr": 950
+      },
+      {
+        "min_balance_inr": 25001,
+        "max_balance_inr": 50000,
+        "fee_inr": 1100
+      },
+      {
+        "min_balance_inr": 50001,
+        "max_balance_inr": null,
+        "fee_inr": 1300
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "No annual fee is charged (MITC).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": 0,
+    "fee_per_card_inr": "N/A",
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": 18
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "Uni App Rewards Store (MITC B(c))",
+        "redemption_type": "partner_catalogue",
+        "inr_value_per_point": 0.01,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": null,
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": 0,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "verified_network_research",
+        "value": {
+          "product_status": "active",
+          "source_url": "https://media.bobcard.co.in//media/1qdnjbu5/bobcard-uni-goldx-key-fact-statement-4.pdf",
+          "evidence": "Uni GoldX KFS (PDF created 23 Oct 2026): \"The RuPay variant is a virtual-only card that shares its credit limit with the Visa variant\"; MITC section B(k): GoldX RuPay variant is a virtual credit card issued as an additional card sharing the limit of the \"Primary VISA Affiliated credit card\", usable only for UPI and e-commerce.",
+          "candidates": [
+            {
+              "network": "visa",
+              "network_tier": "N/A",
+              "label": "BOBCARD Uni GoldX (Visa, primary card)",
+              "source_url": "https://media.bobcard.co.in//media/1qdnjbu5/bobcard-uni-goldx-key-fact-statement-4.pdf",
+              "evidence": "UKFS and MITC B(k) call the primary card the Visa variant."
+            },
+            {
+              "network": "rupay",
+              "network_tier": "N/A",
+              "label": "BOBCARD Uni GoldX UPI (RuPay, virtual, shares the Visa limit)",
+              "source_url": "https://media.bobcard.co.in//media/1qdnjbu5/bobcard-uni-goldx-key-fact-statement-4.pdf",
+              "evidence": "UKFS Other Info: RuPay variant is virtual only, for e-commerce and UPI."
+            }
+          ]
+        }
+      },
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-15",
+          "sources": [
+            {
+              "url": "https://www.bobcard.co.in/credit-card-types/bobcard-uni-goldx",
+              "kind": "BOBCARD Uni GoldX product page (plain fetch, text read 2026-11-15)",
+              "read": "page text"
+            },
+            {
+              "url": "https://media.bobcard.co.in//media/4wnez0dz/bobcard-consolidated-mitc.pdf",
+              "kind": "BOBCARD Consolidated MITC (PDF created 7 Oct 2026, GENERIC MITC 2.0 JULY2026): joining and annual fees, finance charges, forex, fuel, surcharges, late fee, reward T&C",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://media.bobcard.co.in//media/0h5cim12/features-and-rewards-important-terms-conditions-11112026.pdf",
+              "kind": "Features & Rewards Important T&C (PDF created 11 Nov 2026): core rate, accelerated categories and caps, lounge table, TWID",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://media.bobcard.co.in//media/rfnlbqkz/bobcard-kfs_4x8_17jul2026.pdf",
+              "kind": "BOBCARD Key Fact Statement (PDF created 17 Jul 2026)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://media.bobcard.co.in//media/nfkmkemd/revision-in-product-features-charges-wef-1st-april-26v1.pdf",
+              "kind": "Revision in product features and charges w.e.f. 1 Apr 2026 (core rates table, telecom, new surcharges)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://media.bobcard.co.in//media/lfhhmpw2/revision-in-charges-and-benefits-166.pdf",
+              "kind": "Revision in product features/benefits (PDF created 16 Jun 2026): lounge spend rule, finance charge, insurance withdrawn for new cards",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://media.bobcard.co.in//media/1qdnjbu5/bobcard-uni-goldx-key-fact-statement-4.pdf",
+              "kind": "BOBCARD Uni GoldX Key Fact Statement (PDF created 23 Oct 2026): fees, 1% rewards, networks",
+              "read": "pdftotext"
+            }
+          ],
+          "open_questions": [
+            "Network: two networks on one credit account: Visa primary card and a virtual RuPay UPI variant sharing the limit (UKFS, MITC B(k)). Recorded with dualNetwork.",
+            "Uni Store 5% value back: the page and FAQ say 5% value back in Uni Coins when buying vouchers at the Uni Store; no BOBCARD document states its terms, cap or eligible vouchers, so it is not modelled as a reward rule.",
+            "MITC says 1 Uni Coin per ₹1, i.e. 1% value back, on all eligible spends; the KFS repeats it as \"1% of transaction value ... subject to changes, revision, limits and exclusion\". UPI transactions below ₹100 on the GoldX UPI card earn nothing (KFS, MITC).",
+            "Fee note: Uni GoldX has a separate rent processing fee of 1.25% or ₹100 minimum, a card replacement fee of ₹100 and different overlimit and cash-advance minimums (₹300) in the MITC/KFS; the generic rows below were replaced where the MITC differs, others are not modelled.",
+            "Reward point value: only the cashback value shown on the product page is used; points expire 2 years after accrual except Eterna/Tiara (FEAT 1.4). Minimum 1,000 points to redeem against the statement (FEAT).",
+            "EMI processing fee, foreclosure charge and merchant-EMI fees are in the separate \"T&C for EMI on BOBCARD\" PDF and were not read; those fields are null.",
+            "Interest, cash-advance (2.5% or ₹500, limit 40% of available limit), overlimit (2.5% or ₹600) and cheque-return rows are the MITC \"all other credit cards\" rows; the MITC names this card in the fee tables but not in those rows."
+          ],
+          "notes": [
+            "Co-branded with Uniorbit Platform Services Private Limited; Uni Coins are credited to the cardholder's Uni account and redeemed in the Uni App (MITC B).",
+            "Interest-free period up to 50 days including 3 days of grace; add-on cards are not available (MITC).",
+            "BOBCARD can change fees and benefits at its discretion with 30 days notice on its website (MITC)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

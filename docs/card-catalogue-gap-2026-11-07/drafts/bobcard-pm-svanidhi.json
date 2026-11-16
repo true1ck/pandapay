@@ -1,0 +1,504 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "bobcard-pm-svanidhi",
+    "name": "PM SVANidhi BOBCARD",
+    "issuer_slug": "bobcard",
+    "network": null,
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 0,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": true,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": 0.2,
+    "point_value_baseline_basis": "PM SVANidhi product page: \"cashback @ 1 reward point = ₹0.20\". Page text is undated.",
+    "point_expiry_months": 24,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.bobcard.co.in/credit-card-types/pm-svanidhi",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": null,
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": 1,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": 0.2,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "svanidhi-excl-annexure1",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          763,
+          780,
+          820,
+          821,
+          822,
+          823,
+          824,
+          825,
+          1520,
+          1711,
+          1731,
+          1740,
+          1750,
+          1761,
+          1771,
+          1799,
+          4111,
+          4112,
+          4131,
+          4784,
+          4789,
+          6513,
+          7349,
+          7211,
+          7230,
+          7276,
+          8111,
+          8641,
+          9211,
+          9222,
+          9311,
+          9399,
+          9402,
+          9405,
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299,
+          8011,
+          8062,
+          6539,
+          6540,
+          6541,
+          6542,
+          6543,
+          5261,
+          5331,
+          5411,
+          5499,
+          5960,
+          6300,
+          8398,
+          8661,
+          5814
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Annexure 1 merchant categories (agriculture, contractors, transport, rent, cleaning and personal services, government, education, hospital, wallet, supermarkets and variety stores, insurance, charity, fast food) earn no core or accelerated points (FEAT section 1.1, annexure 1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "svanidhi-excl-fuel",
+      "category_id": "fuel",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          5172,
+          5541,
+          5542,
+          5983
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "Fuel transactions earn no reward points on any BOBCARD except HPCL Energie (FEAT 1.1). Fuel MCCs taken from the MITC fuel processing-fee row."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "svanidhi-core",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100,
+        "minimum_transaction_inr": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "1 reward points per ₹100 on eligible spends; transactions below ₹100 earn nothing (FEAT 1.1 core table, REV1 Table 1). Telecom MCC 4814 earns core points from 1 Apr 2026 (REV1)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3.75,
+      "annual_interest_rate_percent": 45
+    },
+    "forex_markup": {
+      "markup_percent": null,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": 1,
+      "waiver_percent": 1,
+      "min_txn_inr": 400,
+      "max_txn_inr": 5000,
+      "monthly_waiver_cap_inr": 250
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 2.5,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": 40
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% of the transaction amount on every rent payment (MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "wallet",
+        "mcc_list": [
+          6539,
+          6540,
+          6541,
+          6542
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% processing fee on wallet loads (MITC)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "bills",
+        "mcc_list": [
+          4900
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% (maximum ₹3,000 per transaction) on utility payments of ₹50,000 or more (MITC)",
+        "threshold_spend_inr": 50000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "fuel",
+        "mcc_list": [
+          5172,
+          5541,
+          5542,
+          5983
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% processing fee on a fuel transaction of ₹10,000 or more (MITC)",
+        "threshold_spend_inr": 10000,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "category_id": "education",
+        "mcc_list": [
+          8299,
+          8211,
+          8241,
+          8244,
+          8249,
+          8220
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% (maximum ₹5,000 per transaction) on online education fees paid through third-party apps (Cheq, CRED, Ease My Deal, Mobikwik, NoBroker, Paytm, Phonepe, SuperPe), from 1 Apr 2026 (MITC, REV1)",
+        "threshold_spend_inr": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      },
+      {
+        "category_id": "travel",
+        "mcc_list": [
+          4784
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% on toll and bus bookings (MCC 4784) of ₹5,000 or more, from 1 Apr 2026 (MITC, REV1)",
+        "threshold_spend_inr": 5000,
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      },
+      {
+        "category_id": "travel",
+        "mcc_list": [
+          4112
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% (maximum ₹5,000 per transaction) on railway bookings (MCC 4112) of ₹30,000 or more, from 1 Apr 2026 (MITC, REV1)",
+        "threshold_spend_inr": 30000,
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": null,
+      "gst_applicable": null
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 600,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": 500,
+      "cheque_bounce_charge_inr": 500
+    },
+    "reward_redemption_fee": {
+      "fee_inr": 0,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": 50,
+    "grace_period_void_on_revolving_balance": true,
+    "minimum_amount_due_mad": {
+      "calculation_mode": "fixed_percent",
+      "components": [
+        "100% of fees, finance charges, GST and EMI amount",
+        "2% of retail spends and cash advances",
+        "minimum ₹200 (MITC)"
+      ]
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 99,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 100,
+        "max_balance_inr": 500,
+        "fee_inr": 100
+      },
+      {
+        "min_balance_inr": 501,
+        "max_balance_inr": 1000,
+        "fee_inr": 400
+      },
+      {
+        "min_balance_inr": 1001,
+        "max_balance_inr": 10000,
+        "fee_inr": 750
+      },
+      {
+        "min_balance_inr": 10001,
+        "max_balance_inr": 25000,
+        "fee_inr": 950
+      },
+      {
+        "min_balance_inr": 25001,
+        "max_balance_inr": 50000,
+        "fee_inr": 1100
+      },
+      {
+        "min_balance_inr": 50001,
+        "max_balance_inr": null,
+        "fee_inr": 1300
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "N/A",
+      "period": "N/A",
+      "evaluation_condition": "No annual fee is charged (MITC).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": "N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": null,
+      "benefit_points": null,
+      "effective_value_inr": null,
+      "condition": null
+    },
+    "spend_milestones": []
+  },
+  "lifestyle_and_network_benefits": [],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 0,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": 18
+  },
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "Redeem reward points as cashback (product page)",
+        "redemption_type": "cashback",
+        "inr_value_per_point": 0.2,
+        "max_bill_percentage_payable_via_points": "N/A",
+        "min_points_per_txn": 1000,
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": 0,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "channel": "TWID Pay with Rewards (FEAT section 4): up to 25% of the invoice, minimum 500 points",
+        "redemption_type": "other",
+        "inr_value_per_point": 0.15,
+        "max_bill_percentage_payable_via_points": 25,
+        "min_points_per_txn": 500,
+        "cycle_points_burn_cap": "N/A",
+        "redemption_fee_inr": 0,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-15",
+          "sources": [
+            {
+              "url": "https://www.bobcard.co.in/credit-card-types/pm-svanidhi",
+              "kind": "PM SVANidhi BOBCARD product page (plain fetch, text read 2026-11-15)",
+              "read": "page text"
+            },
+            {
+              "url": "https://media.bobcard.co.in//media/4wnez0dz/bobcard-consolidated-mitc.pdf",
+              "kind": "BOBCARD Consolidated MITC (PDF created 7 Oct 2026, GENERIC MITC 2.0 JULY2026): joining and annual fees, finance charges, forex, fuel, surcharges, late fee, reward T&C",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://media.bobcard.co.in//media/0h5cim12/features-and-rewards-important-terms-conditions-11112026.pdf",
+              "kind": "Features & Rewards Important T&C (PDF created 11 Nov 2026): core rate, accelerated categories and caps, lounge table, TWID",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://media.bobcard.co.in//media/rfnlbqkz/bobcard-kfs_4x8_17jul2026.pdf",
+              "kind": "BOBCARD Key Fact Statement (PDF created 17 Jul 2026)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://media.bobcard.co.in//media/nfkmkemd/revision-in-product-features-charges-wef-1st-april-26v1.pdf",
+              "kind": "Revision in product features and charges w.e.f. 1 Apr 2026 (core rates table, telecom, new surcharges)",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://media.bobcard.co.in//media/lfhhmpw2/revision-in-charges-and-benefits-166.pdf",
+              "kind": "Revision in product features/benefits (PDF created 16 Jun 2026): lounge spend rule, finance charge, insurance withdrawn for new cards",
+              "read": "pdftotext"
+            }
+          ],
+          "open_questions": [
+            "Rewards: the page says 1 reward point per ₹100 on eligible spends, not on select MCCs or fuel; the FEAT core table does not list this card. The Annexure 1 and fuel exclusions are applied from the generic FEAT text.",
+            "Forex mark-up: international transactions and cash withdrawals are not allowed on this card (page), so the forex markup is null. Interest, cash-advance and overlimit figures here are the MITC \"all other cards\" rows and are shown for completeness only.",
+            "Network: not stated by any BOBCARD page or document for PM SVANidhi BOBCARD. The card art on the product page shows only the contactless symbol (orange and green chevron) and no network wordmark; the chevron is not taken as proof of RuPay.",
+            "Eligibility: street vendors registered under the PM SVANidhi scheme who repaid their loans; application starts on the PM SVANidhi portal; starting credit limit ₹10,000; up to 51 interest-free days (page).",
+            "Reward point value: only the cashback value shown on the product page is used; points expire 2 years after accrual except Eterna/Tiara (FEAT 1.4). Minimum 1,000 points to redeem against the statement (FEAT).",
+            "EMI processing fee, foreclosure charge and merchant-EMI fees are in the separate \"T&C for EMI on BOBCARD\" PDF and were not read; those fields are null.",
+            "Interest, cash-advance (2.5% or ₹500, limit 40% of available limit), overlimit (2.5% or ₹600) and cheque-return rows are the MITC \"all other credit cards\" rows; the MITC names this card in the fee tables but not in those rows."
+          ],
+          "notes": [
+            "Reward value for this card is ₹0.20 a point (page), different from the ₹0.25 shown on most other BOBCARD pages.",
+            "BOBCARD can change fees and benefits at its discretion with 30 days notice on its website (MITC)."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

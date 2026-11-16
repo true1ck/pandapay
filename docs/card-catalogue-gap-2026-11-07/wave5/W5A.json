@@ -1,0 +1,384 @@
+{
+ "agent": "W5A",
+ "cards": [
+  {
+   "name": "HDFC Bank UPI RuPay Biz Credit Card",
+   "slug": null,
+   "status": "variant",
+   "network": "rupay",
+   "network_evidence": "Card name and UPI-on-RuPay product (issuer page)",
+   "reason": "variant_of_hdfc-upi-rupay-credit-card: business page and personal page state the same fee (Rs 99 joining/renewal, renewal waiver at Rs 25,000), same 3%/2%/1% CashPoints and 1 CashPoint = Rs 0.25; no different fee or reward.",
+   "sources": [
+    "https://www.hdfc.bank.in/business-credit-cards/hdfc-bank-upi-rupay-biz-credit-card",
+    "https://www.hdfc.bank.in/credit-cards/hdfc-bank-upi-rupay-credit-card"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "Paytm HDFC Bank Select Business Credit Card",
+   "slug": "hdfc-paytm-select-business",
+   "status": "still_blocked",
+   "network": null,
+   "network_evidence": "No network named on the product page or the MITC (page, linked MITC is the general HDFC KFS)",
+   "reason": "Drafted; network, CashPoint rupee value, base rate outside Paytm and the 5% vs 2% Paytm overlap unstated; possible duplicate of live paytm-hdfc-bank-select / paytm-business-hdfc.",
+   "sources": [
+    "https://www.hdfc.bank.in/business-credit-cards/paytm-select-business-credit-card"
+   ],
+   "still_missing": [
+    "Which network is issued",
+    "Rupee value of one CashPoint on this card",
+    "What the 5% vs 2% Paytm rates each apply to, and the rate outside Paytm",
+    "Interest, forex and late fee for this card",
+    "Confirm it is distinct from the live Paytm Select cards"
+   ]
+  },
+  {
+   "name": "Corporate Platinum Credit Card",
+   "slug": null,
+   "status": "held",
+   "network": null,
+   "network_evidence": "Not stated",
+   "reason": "Earn stated (3 points per Rs 150, max 6,000 points a cycle; 1 point = Rs 0.30 on SmartBuy Corporate) but no joining or renewal fee is published on the page or in the Corporate MITC v1.57; enquiry-led.",
+   "sources": [
+    "https://www.hdfc.bank.in/commercial-credit-cards/corporate-platinum-credit-card",
+    "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/commercial-credit-cards/corporate-platinum-credit-card/corporate-mitc-changes-v-1-54-10-9-2025.pdf"
+   ],
+   "still_missing": [
+    "Joining and renewal fee",
+    "Network"
+   ]
+  },
+  {
+   "name": "Purchase MoneyBack Credit Card",
+   "slug": null,
+   "status": "held",
+   "network": null,
+   "network_evidence": "Not stated",
+   "reason": "Joining/renewal Nil, interest 1.99% a month, but earn is only \"up to 1% cashback on all retail purchases\" with no conditions or rupee basis; enquiry-led.",
+   "sources": [
+    "https://www.hdfc.bank.in/commercial-credit-cards/purchase-moneyback-credit-card",
+    "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/commercial-credit-cards/purchase-mitc-changes-v-2-7.pdf"
+   ],
+   "still_missing": [
+    "Exact cashback rate and conditions",
+    "Network"
+   ]
+  },
+  {
+   "name": "AP: Accounts Payable Program",
+   "slug": null,
+   "status": "held",
+   "network": null,
+   "network_evidence": "Not applicable",
+   "reason": "Payables programme, not a rewards card; pricing is a per-transaction fee with no numeric rate on the page.",
+   "sources": [
+    "https://www.hdfc.bank.in/commercial-credit-cards/accounts-payable-program"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "Fleet Credit Card (Fleet Program)",
+   "slug": null,
+   "status": "held",
+   "network": null,
+   "network_evidence": "Not stated",
+   "reason": "Fleet programme: Nil fee, flat interest, no reward rate published.",
+   "sources": [
+    "https://www.hdfc.bank.in/commercial-credit-cards/fleet-credit-card"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "Purchase Credit Card",
+   "slug": null,
+   "status": "held",
+   "network": null,
+   "network_evidence": "Not stated",
+   "reason": "Issuer FAQ says no reward points on this card.",
+   "sources": [
+    "https://www.hdfc.bank.in/commercial-credit-cards/purchase-credit-card"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "AR: Accounts Receivables Solution",
+   "slug": null,
+   "status": "held",
+   "network": null,
+   "network_evidence": "Not applicable",
+   "reason": "Receivables solution, no card fees or earn rate published.",
+   "sources": [
+    "https://www.hdfc.bank.in/commercial-credit-cards/accounts-receivables-solution"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "TMC Credit Card",
+   "slug": null,
+   "status": "held",
+   "network": null,
+   "network_evidence": "Not stated",
+   "reason": "Nil fee, no earn rate published; enquiry-led purchase card.",
+   "sources": [
+    "https://www.hdfc.bank.in/commercial-credit-cards/tmc-credit-card"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "Dealer Credit Card",
+   "slug": null,
+   "status": "held",
+   "network": null,
+   "network_evidence": "Not stated",
+   "reason": "Nil fee, closed-loop OMC payment card, no earn rate stated.",
+   "sources": [
+    "https://www.hdfc.bank.in/commercial-credit-cards/dealer-credit-card"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "Purchase Reward Credit Card",
+   "slug": null,
+   "status": "held",
+   "network": null,
+   "network_evidence": "Not stated",
+   "reason": "Fees Nil but the cashback headline on the page is unreadable/unqualified and no numeric earn rule with conditions is published.",
+   "sources": [
+    "https://www.hdfc.bank.in/commercial-credit-cards/purchase-reward-credit-card"
+   ],
+   "still_missing": [
+    "Exact cashback rate and conditions",
+    "Network"
+   ]
+  },
+  {
+   "name": "Business Corporate MoneyBack Credit Card",
+   "slug": null,
+   "status": "held",
+   "network": null,
+   "network_evidence": "Not stated",
+   "reason": "Earn stated (2 points per Rs 150; 1 point = Rs 0.30; 8 lounge visits) but no joining or renewal fee on the page or Corporate MITC.",
+   "sources": [
+    "https://www.hdfc.bank.in/commercial-credit-cards/business-corporate-moneyback-credit-card"
+   ],
+   "still_missing": [
+    "Joining and renewal fee",
+    "Network"
+   ]
+  },
+  {
+   "name": "Adani One Signature Credit Card",
+   "slug": "icici-adani-one-signature",
+   "status": "still_blocked",
+   "network": null,
+   "network_evidence": "No network named on the product page or the MITC; no card art naming it",
+   "reason": "Drafted with fees, 2/1.5 points per Rs 100, lounge, waiver; Adani ecosystem 7x merchants undefined, network and point value unstated.",
+   "sources": [
+    "https://www.icici.bank.in/personal-banking/cards/credit-card/adani-icici-credit-card/signature-credit-card",
+    "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf"
+   ],
+   "still_missing": [
+    "Network",
+    "Adani One ecosystem merchant list (7 points)",
+    "Rupee value of an Adani OneApp Reward point",
+    "Reward caps"
+   ]
+  },
+  {
+   "name": "Adani One Platinum Credit Card",
+   "slug": "icici-adani-one-platinum",
+   "status": "still_blocked",
+   "network": null,
+   "network_evidence": "No network named on the product page or the MITC",
+   "reason": "Drafted; same gaps as Signature plus page conflict on domestic lounge quota (2 a quarter tile vs 8 in FAQ).",
+   "sources": [
+    "https://www.icici.bank.in/personal-banking/cards/credit-card/adani-icici-credit-card/platinum-card",
+    "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf"
+   ],
+   "still_missing": [
+    "Network",
+    "Adani One ecosystem merchant list (3 points)",
+    "Point value",
+    "Lounge quota 2 vs 8"
+   ]
+  },
+  {
+   "name": "MakeMyTrip Credit Card",
+   "slug": "icici-makemytrip-credit-card",
+   "status": "still_blocked",
+   "network": "mastercard+rupay (dual)",
+   "network_evidence": "Issuer page: \"two networks - MasterCard and RuPay\"; card-art alt text names a Mastercard logo",
+   "reason": "Drafted with dual network, fees, 6/3/1 points per Rs 100, nil forex from 10 Nov 2026; value of a myCash point and hotel-rate scope unstated.",
+   "sources": [
+    "https://www.icici.bank.in/personal-banking/cards/credit-card/makemytrip/makemytrip-icici-credit-card",
+    "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf"
+   ],
+   "still_missing": [
+    "Rupee value of a point (myCash)",
+    "Whether 6x hotel and 3x flight apply only on MakeMyTrip"
+   ]
+  },
+  {
+   "name": "Expressions Credit Card",
+   "slug": "icici-expressions",
+   "status": "still_blocked",
+   "network": null,
+   "network_evidence": "No network named on the product page or the MITC",
+   "reason": "Drafted with fees, 3 points per Rs 100 retail, 1 utility/insurance, MITC caps; network and point value unstated.",
+   "sources": [
+    "https://www.icici.bank.in/personal-banking/cards/credit-card/expressions-card",
+    "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf"
+   ],
+   "still_missing": [
+    "Network",
+    "Point value",
+    "Whether the MITC cap amounts are spend or points"
+   ]
+  },
+  {
+   "name": "Alumni Credit Card",
+   "slug": null,
+   "status": "held",
+   "network": null,
+   "network_evidence": "No network named on the product page or the MITC",
+   "reason": "Nil fees but no earn rate published (\"reward points on spends\" only).",
+   "sources": [
+    "https://www.icici.bank.in/personal-banking/cards/credit-card/alumni-credit-card",
+    "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf"
+   ],
+   "still_missing": [
+    "Earn rate",
+    "Network",
+    "Point value"
+   ]
+  },
+  {
+   "name": "Instant Platinum Credit Card (against Fixed Deposit)",
+   "slug": null,
+   "status": "held",
+   "network": null,
+   "network_evidence": "No network named on the product page or the MITC",
+   "reason": "MITC lists Nil fees; FD page states no earn rate, caps or network.",
+   "sources": [
+    "https://www.icici.bank.in/personal-banking/cards/credit-card/credit-card-against-fixed-deposit",
+    "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf"
+   ],
+   "still_missing": [
+    "Earn rate",
+    "Network"
+   ]
+  },
+  {
+   "name": "Coral Credit Card against Fixed Deposit",
+   "slug": null,
+   "status": "variant",
+   "network": null,
+   "network_evidence": "No network named on the product page or the MITC",
+   "reason": "variant_of_icici-coral: MITC row has the same Rs 500 fee as Coral; FD page publishes no different reward or fee.",
+   "sources": [
+    "https://www.icici.bank.in/personal-banking/cards/credit-card/credit-card-against-fixed-deposit",
+    "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf"
+   ],
+   "still_missing": []
+  },
+  {
+   "name": "NRI Secured Coral Credit Card",
+   "slug": null,
+   "status": "variant",
+   "network": null,
+   "network_evidence": "No network named on the product page or the MITC",
+   "reason": "variant_of_icici-coral: NRI page tile gives only movie offer and fuel waiver text; no fee or earn row (MITC has an NRI Coral row at 1,000/500, not stated to be this card).",
+   "sources": [
+    "https://www.icici.bank.in/nri-banking/cards/credit-card",
+    "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf"
+   ],
+   "still_missing": [
+    "Fees and earn for the NRI secured variant"
+   ]
+  },
+  {
+   "name": "Platinum Business Card",
+   "slug": "icici-business-platinum",
+   "status": "still_blocked",
+   "network": null,
+   "network_evidence": "No network named on the product page or the MITC (Business MITC names networks only generically)",
+   "reason": "Drafted: Rs 999/999, 1 point per Rs 200 domestic, 2 international, fuel 1%; network, point value, exclusions unstated.",
+   "sources": [
+    "https://www.icici.bank.in/business-banking/cards/business-credit-card/platinum-business-card",
+    "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc-terms-and-conditions-business.pdf"
+   ],
+   "still_missing": [
+    "Network",
+    "Point value",
+    "Reward exclusions"
+   ]
+  },
+  {
+   "name": "Business Ascent Card (American Express)",
+   "slug": "icici-business-ascent-amex",
+   "status": "still_blocked",
+   "network": "amex",
+   "network_evidence": "Issuer page name and Amex card art alt text",
+   "reason": "Drafted: Rs 2,000/1,500, 4 and 3 points per Rs 200, waiver Rs 7.5 lakh; point value, exclusions, fuel cap unstated; consumer MITC lists a different Ascent at 4,000/1,000.",
+   "sources": [
+    "https://www.icici.bank.in/business-banking/cards/business-credit-card/ascent-business-advantage-card",
+    "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc-terms-and-conditions-business.pdf",
+    "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc_cc.pdf"
+   ],
+   "still_missing": [
+    "Point value",
+    "Reward exclusions",
+    "Fuel waiver cap",
+    "Confirm personal Ascent is a separate card"
+   ]
+  },
+  {
+   "name": "Business Essential Credit Card",
+   "slug": "icici-business-essential-amex",
+   "status": "still_blocked",
+   "network": "amex",
+   "network_evidence": "Issuer page: \"American Express Business Essential Credit Card\"",
+   "reason": "Drafted: Rs 1,000/1,000, 4/2/1 points per Rs 200, waiver Rs 5 lakh; point value and exclusion MCCs unstated.",
+   "sources": [
+    "https://www.icici.bank.in/business-banking/cards/business-credit-card/essential-business-advantage-card",
+    "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc-terms-and-conditions-business.pdf"
+   ],
+   "still_missing": [
+    "Point value",
+    "Exclusion MCC lists"
+   ]
+  },
+  {
+   "name": "Gold Business Credit Card",
+   "slug": "icici-business-gold",
+   "status": "still_blocked",
+   "network": null,
+   "network_evidence": "No network named on the product page or the MITC",
+   "reason": "Drafted: Nil fees, 1/2 points per Rs 200; network and point value unstated.",
+   "sources": [
+    "https://www.icici.bank.in/business-banking/cards/business-credit-card/gold-business-card",
+    "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc-terms-and-conditions-business.pdf"
+   ],
+   "still_missing": [
+    "Network",
+    "Point value"
+   ]
+  },
+  {
+   "name": "Business Micro Credit Card",
+   "slug": "icici-business-micro",
+   "status": "still_blocked",
+   "network": "rupay",
+   "network_evidence": "Issuer page FAQ wording \"Business Micro RuPay Credit Card\" (UPI linking)",
+   "reason": "Drafted: Nil fees plus 0.55% CGTMSE fee, 1/2 points per Rs 200, interest 1.5%; point value and fuel transaction cap unstated.",
+   "sources": [
+    "https://www.icici.bank.in/business-banking/cards/business-credit-card/micro-business-credit-card",
+    "https://www.icici.bank.in/content/dam/icicibank/india/managed-assets/revamp-page-images/docs/pdf/mitc-terms-and-conditions-business.pdf"
+   ],
+   "still_missing": [
+    "Point value",
+    "Fuel waiver transaction cap"
+   ]
+  }
+ ]
+}

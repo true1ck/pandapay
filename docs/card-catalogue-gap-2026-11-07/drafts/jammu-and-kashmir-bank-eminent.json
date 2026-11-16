@@ -1,0 +1,403 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "jammu-and-kashmir-bank-eminent",
+    "name": "J&K Bank Eminent Credit Card (earlier World Credit Card)",
+    "issuer_slug": "jammu-and-kashmir-bank",
+    "network": "mastercard",
+    "network_tier": null,
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 0,
+    "annual_fee_inr": 1500,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": false,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": "No issuer document states the rupee value of one reward point.",
+    "point_expiry_months": 36,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://jkb.bank.in/transactions/services/credit-cards",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "Credit limit INR 4.00 lakh to INR 25.00 lakh (T&C, World Credit Card).",
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 100,
+    "rounding_mode": null,
+    "base_points_per_block": 1,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": null,
+    "capping_period_basis": null,
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "jk-eminent-excluded",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "mcc_list": [
+          6513
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on insurance, educational institutions, rent (MCC 6513), wallet, fuel, cash withdrawals and select transportation and toll transactions (page, MCC exclusions for all variants). Only MCC 6513 is named in an issuer document."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "jk-eminent-3x",
+      "category_id": "travel",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "categories": [
+          "online_flights_hotels",
+          "apparel",
+          "dining",
+          "electronics"
+        ],
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 3,
+        "points_per_block": 3,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "3 reward points per INR 100 on online travel bookings (flights and hotels), apparel, dining and electronics (page, Eminent Reward Points Program). Cap not stated."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "jk-eminent-base",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 100
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 1,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "1 reward point per INR 100 on all eligible transactions not in the accelerated categories (page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3,
+      "annual_interest_rate_percent": 36
+    },
+    "forex_markup": {
+      "markup_percent": 1.99,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": null
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": null,
+      "waiver_percent": 1,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": null
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 3,
+      "atm_transaction_fee_min_inr": 300,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": 20
+    },
+    "category_surcharges": [
+      {
+        "category_id": "rent",
+        "mcc_list": [
+          6513
+        ],
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "1% of each rent payment under MCC 6513 (issuer fee table)",
+        "threshold_spend_inr": null,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": 99,
+      "foreclosure_charge_percent": 3,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 400,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": null,
+      "cheque_bounce_charge_inr": null
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 100,
+        "fee_inr": 0
+      },
+      {
+        "min_balance_inr": 101,
+        "max_balance_inr": null,
+        "fee_inr": 250
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 300000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "Annual fee INR 1,500 waived on annual spends of INR 3,00,000 during the year (page); MITC: World card, purchases above INR 3,00,000 so the fee is not levied. \"During the year\" read as the card year; the page does not name anniversary or calendar year.",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 1500
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "first_transaction",
+      "benefit_points": "N/A",
+      "effective_value_inr": 500,
+      "condition": "Gift voucher worth INR 500 on the first eligible transaction, new customers (page); applies to cards issued from 1 Apr 2026."
+    },
+    "spend_milestones": [
+      {
+        "id": "jk-eminent-q",
+        "label": "Gift voucher worth INR 750",
+        "threshold_spend_inr": 150000,
+        "reward_value_inr": 750,
+        "period": "quarter",
+        "is_repeatable": true,
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      },
+      {
+        "id": "jk-eminent-a",
+        "label": "Dining experience voucher worth INR 1,000",
+        "threshold_spend_inr": 600000,
+        "reward_value_inr": 1000,
+        "period": "annual",
+        "is_repeatable": true,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ]
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "jk-eminent-lounge-dom",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "J&K Bank",
+      "label": "Complimentary domestic airport lounge visits",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 2,
+      "quota_period": "quarter",
+      "value_estimate_inr": "N/A",
+      "effective_from": "2026-03-12",
+      "effective_to": null
+    },
+    {
+      "benefit_id": "jk-eminent-lounge-intl",
+      "category_id": "lounge",
+      "network_program": null,
+      "sponsor": "J&K Bank",
+      "label": "Complimentary international airport lounge visit",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 1,
+      "quota_period": "half_year",
+      "value_estimate_inr": "N/A",
+      "effective_from": "2026-03-12",
+      "effective_to": null
+    },
+    {
+      "benefit_id": "jk-eminent-golf",
+      "category_id": "golf",
+      "network_program": "mastercard_golf",
+      "sponsor": "Mastercard",
+      "label": "Golf privileges through the Mastercard World Card India Golf Program (1800-102-6263)",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": "N/A",
+      "effective_from": "2026-03-12",
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": null,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [
+    {
+      "promo_id": "jk-eminent-food",
+      "category_id": "dining",
+      "network_program": "N/A",
+      "sponsor": "J&K Bank",
+      "platform": "online food delivery apps",
+      "offer_type": "cashback",
+      "discount_percent": "N/A",
+      "max_discount_inr": 150,
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": true,
+      "is_permanent_card_feature": true,
+      "valid_from": "2026-03-12",
+      "valid_to": null
+    },
+    {
+      "promo_id": "jk-eminent-movie",
+      "category_id": "movie",
+      "network_program": "N/A",
+      "sponsor": "J&K Bank",
+      "platform": "movie ticket bookings",
+      "offer_type": "bogo",
+      "discount_percent": "N/A",
+      "max_discount_inr": 500,
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": true,
+      "is_permanent_card_feature": true,
+      "valid_from": "2026-03-12",
+      "valid_to": null
+    }
+  ],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-15",
+          "sources": [
+            {
+              "url": "https://jkb.bank.in/transactions/services/credit-cards",
+              "kind": "Issuer credit-cards page: Types of Cards tab (fees, rewards, milestones, benefits), MITC section and fee schedule, T&C",
+              "read": "curl, stripped to text"
+            },
+            {
+              "url": "https://digital.jkbank.com/JKBCreditCard",
+              "kind": "Issuer online application link (a form, not opened)",
+              "read": "link only"
+            }
+          ],
+          "open_questions": [
+            "Reward point value: no issuer document states what one J&K Bank reward point is worth (the MITC says only that points are valid 3 years from the transaction date and are viewed at https://rewards.jkb.bank.in). point_value_inr_baseline is null.",
+            "Reward exclusions: the page excludes insurance, educational institutions, rent, wallet, fuel, cash withdrawals and \"select transportation and toll transactions\" for all variants; the MITC says points are earned on all spends except fuel and cash. The page is newer (revised reward structure effective 1 Apr 2026) and is used; MCC lists are not published except MCC 6513 for rent (MITC).",
+            "Interest: 3% a month (36% a year, APR 42.57%) on purchases and cash (MITC). Cash advance charge 3% with a minimum of INR 300; cash limit 20% of the credit limit. Overlimit 2.5% (min INR 400). Late payment fee: nil up to INR 100 due, INR 250 above. EMI processing fee INR 99, pre-closure 3%. Rental payment charge 1% (MCC 6513).",
+            "Annual and renewal fee: the page says annual fee only; the MITC fee table also lists a renewal fee of INR 200 + GST for these variants and says the annual or renewal fee applies from 1 May 2026 (page). The renewal fee is not modelled.",
+            "Effective dates (page): revised reward structure from 1 Apr 2026; welcome benefits on cards issued from 1 Apr 2026; quarterly milestones counted from 1 Apr 2026; travel, lifestyle and entertainment benefits from 12 Mar 2026.",
+            "Voucher categories and fulfilment options \"may vary from time to time\" (page), so voucher values are stated face values, not guaranteed benefits.",
+            "Fuel surcharge waiver is described as \"1% fuel surcharge waiver up to INR X on fuel transactions in a month\"; whether X is the fuel spend eligible or the waiver amount is not clear. The fuel spend reading is stored in the note below; monthly_waiver_cap_inr is null.",
+            "Network: the Eminent section of the issuer page names golf privileges through the \"Mastercard World Card India Golf Program\" (a Mastercard programme page) and the card was earlier the \"World\" card, but no issuer line says \"Eminent is issued on Mastercard\" and no card art was seen. The MITC/T&C acceptance clauses name MasterCard and VISA generically. A person should confirm the network (and whether Visa is also issued).",
+            "Annual fee: page INR 1,500; MITC fee table INR 1,500 + GST plus a renewal fee of INR 200 + GST.",
+            "Food delivery benefit: INR 150 a month on a minimum spend of INR 500 on online mobile food delivery apps (stored as a promo with a maximum INR 150); movie BOGO capped at INR 500 a month.",
+            "Fuel waiver: 1% on fuel transactions up to INR 10,000 a month (page)."
+          ],
+          "notes": [
+            "Platinum Privilege (earlier Government card) is a separate card and is not in this assignment."
+          ],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}

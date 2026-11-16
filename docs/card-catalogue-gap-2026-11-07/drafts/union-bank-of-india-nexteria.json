@@ -1,0 +1,460 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+  "card_product": {
+    "slug": "union-bank-of-india-nexteria",
+    "name": "Union Bank of India NEXTERIA Credit Card (RuPay Ekaa, metal)",
+    "issuer_slug": "union-bank-of-india",
+    "network": "rupay",
+    "network_tier": "N/A",
+    "card_tier": null,
+    "card_type": "credit",
+    "bin_ranges": [],
+    "joining_fee_inr": 12499,
+    "annual_fee_inr": 12499,
+    "fee_gst_applicable": true,
+    "gst_rate_percent": 18,
+    "is_upi_linkable": null,
+    "application_mode": "open",
+    "form_factors": [],
+    "tokenization_support": [],
+    "contactless_pin_free_limit_inr": null,
+    "point_value_inr_baseline": null,
+    "point_value_baseline_basis": "No Union Bank page or document read states a rupee value for one NEXTERIA reward point. Left null.",
+    "point_expiry_months": null,
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+    "display_assets": {
+      "art_asset_key": null,
+      "card_image_url": null,
+      "logo_url": null,
+      "primary_color_hex": null,
+      "secondary_color_hex": null
+    },
+    "status": "draft",
+    "data_source_tier": "issuer_mitc_plus_manual_audit",
+    "source_url": "https://www.unionbankofindia.bank.in/en/Details/nexteria-credit-card",
+    "verified_at": null
+  },
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only",
+    "notes": "Minimum gross income Rs 25 lakh a year; also available against a term deposit of at least Rs 10 lakh. Base limit Rs 2 lakh. Age 21-65 (term-deposit card from 18); CIBIL 700 and above, not applicable to a deposit-backed card (card page).",
+    "rules": [],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": null,
+      "min_annual_itr_inr": null,
+      "min_existing_issuer_credit_limit_inr": null,
+      "min_cibil_score": null,
+      "is_contractually_enforceable": null
+    },
+    "required_documents": [],
+    "processing_time_days": null
+  },
+  "accrual_engine": {
+    "base_block_inr": 125,
+    "rounding_mode": null,
+    "base_points_per_block": 5,
+    "base_cashback_percent": "N/A",
+    "effective_base_return_percent": null,
+    "cycle_accrual_ceiling_points": 10000,
+    "capping_period_basis": "calendar_month",
+    "reversal_policy": {
+      "mode": null,
+      "negative_balance_allowed": null,
+      "negative_balance_settlement": null
+    }
+  },
+  "reward_rules": [
+    {
+      "id": "union-bank-of-india-nexteria-excluded",
+      "category_id": "excluded_spend",
+      "priority": 2,
+      "evaluation_type": "exclusion",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "categories": [
+          "jewellery",
+          "fuel",
+          "cash_withdrawal",
+          "bitcoin",
+          "wallet_load",
+          "alcohol",
+          "insurance"
+        ]
+      },
+      "action": {
+        "multiplier": 0,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "No reward points on jewellery, fuel, cash withdrawal, bitcoin, wallet loading, alcohol and wine shops, insurance payments; \"eligible MCCs prescribed by Bank time to time\" (KFS)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "union-bank-of-india-nexteria-birthday",
+      "category_id": "online",
+      "priority": 10,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "wording": "Birthday Month: Earn 10X Reward points on online shopping/electronics spends",
+        "period": "birthday_month",
+        "multiplier_basis": "NOT STATED: 10X of the base rate (5 points per Rs 125) is the natural reading but is not defined",
+        "per_inr_block": 125
+      },
+      "action": {
+        "multiplier": 10,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": "union-bank-of-india-nexteria-birthday-cap",
+        "reason": "10X reward points on online shopping and electronics in the birthday month, up to 10,000 points (KFS and page)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "union-bank-of-india-nexteria-monthly-milestone",
+      "category_id": "other",
+      "priority": 11,
+      "evaluation_type": "accelerator",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "wording": "Monthly Milestone: Earn 5X rewards on spend of Rs 2,00,000 and above",
+        "min_monthly_spend_inr": 200000,
+        "multiplier_basis": "NOT STATED: whether 5X applies to the whole month or only the part above Rs 2,00,000",
+        "per_inr_block": 125
+      },
+      "action": {
+        "multiplier": 5,
+        "points_per_block": "N/A",
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "5X rewards on monthly spend of Rs 2,00,000 and above, up to 10,000 points (KFS)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "union-bank-of-india-nexteria-base",
+      "category_id": "all_retail",
+      "priority": 30,
+      "evaluation_type": "standard_accrual",
+      "rail": "any",
+      "channel_type": "all",
+      "conditions": {
+        "per_inr_block": 125
+      },
+      "action": {
+        "multiplier": 1,
+        "points_per_block": 5,
+        "cashback_percent": "N/A",
+        "cap_reference": null,
+        "reason": "5 reward points on each Rs 125 spent, subject to eligible MCCs (KFS note)."
+      },
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "union-bank-of-india-nexteria-monthly-cap",
+      "category_id": "all_retail",
+      "metric": "total_reward_points",
+      "mcc_target_list": [],
+      "period": "calendar_month",
+      "limit_value": 10000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "no_further_accrual",
+        "points_per_block": "N/A"
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "id": "union-bank-of-india-nexteria-birthday-cap",
+      "category_id": "online",
+      "metric": "bonus_reward_points",
+      "mcc_target_list": [],
+      "period": "calendar_month",
+      "limit_value": 10000,
+      "limit_value_inr": "N/A",
+      "post_limit_behavior": {
+        "action": "downgrade_to_base_rate",
+        "points_per_block": 5
+      },
+      "parent_cap_id": null,
+      "reset_day": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "brand_specific_voucher_caps": [],
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": 3,
+      "annual_interest_rate_percent": 36
+    },
+    "forex_markup": {
+      "markup_percent": 3,
+      "gst_applicable": true
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": null,
+      "gst_applicable": null,
+      "trigger_condition": "No separate DCC markup is stated in the issuer documents read"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": null,
+      "waiver_percent": 1,
+      "min_txn_inr": null,
+      "max_txn_inr": null,
+      "monthly_waiver_cap_inr": 100
+    },
+    "cash_advance": {
+      "atm_transaction_fee_percent": 3,
+      "atm_transaction_fee_min_inr": 500,
+      "interest_applicable_from_day_one": true,
+      "daily_interest_percent": null,
+      "max_limit_percent": 40
+    },
+    "category_surcharges": [],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": null,
+      "post_purchase_emi_processing_fee_inr": null,
+      "foreclosure_charge_percent": 2,
+      "gst_applicable": true
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": 2.5,
+        "min_fee_inr": 250,
+        "gst_applicable": true
+      },
+      "auto_debit_bounce_charge_inr": 250,
+      "cheque_bounce_charge_inr": 250
+    },
+    "reward_redemption_fee": {
+      "fee_inr": null,
+      "gst_applicable": null,
+      "exempted_channels": [],
+      "notes": null
+    }
+  },
+  "statement_and_late_fees": {
+    "grace_period_days": null,
+    "grace_period_void_on_revolving_balance": null,
+    "minimum_amount_due_mad": {
+      "calculation_mode": null,
+      "components": []
+    },
+    "late_payment_slabs": [
+      {
+        "min_balance_inr": 0,
+        "max_balance_inr": 25000,
+        "fee_inr": 200
+      },
+      {
+        "min_balance_inr": 25001,
+        "max_balance_inr": null,
+        "fee_inr": 500
+      }
+    ]
+  },
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": 800000,
+      "period": "card_anniversary_year",
+      "evaluation_condition": "Annual fee Rs 12,499 + GST waived on spend of Rs 8,00,000 in the previous year; joining fee waived if Rs 3,00,000 is spent within 90 days of activation (KFS and page).",
+      "excluded_category_ids": [],
+      "excluded_mcc_list": [],
+      "waives_fee_inr": 12499
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "N/A",
+      "benefit_points": "N/A",
+      "effective_value_inr": "N/A",
+      "condition": "No welcome benefit is stated in the issuer documents read."
+    },
+    "spend_milestones": [
+      {
+        "id": "union-bank-of-india-nexteria-m1",
+        "label": "10,000 additional reward points on annual spend of Rs 10 lakh (KFS)",
+        "threshold_spend_inr": 1000000,
+        "reward_value_inr": null,
+        "period": "card_anniversary_year",
+        "is_repeatable": false,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "id": "union-bank-of-india-nexteria-m2",
+        "label": "15,000 additional reward points on annual spend of Rs 12 lakh and above (KFS; milestone points capped at 15,000 a year)",
+        "threshold_spend_inr": 1200000,
+        "reward_value_inr": null,
+        "period": "card_anniversary_year",
+        "is_repeatable": false,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ]
+  },
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "union-bank-of-india-nexteria-lounge",
+      "category_id": "lounge",
+      "network_program": "rupay",
+      "sponsor": "NPCI / Union Bank of India",
+      "label": "Unlimited domestic and international lounge visits for the cardholder; two family visits per quarter (1+3)",
+      "evaluation_engine": {
+        "conditions": {
+          "cardholder_visits": "unlimited",
+          "family_visits_per_quarter": 2
+        },
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "quarter",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "union-bank-of-india-nexteria-hotel",
+      "category_id": "other",
+      "network_program": null,
+      "sponsor": "ITC / Hotel Luxe",
+      "label": "2+1 complimentary nights at ITC premium hotels, 1+1 set-menu dining, 1+1 spa; Hotel Luxe Elite Plus membership",
+      "evaluation_engine": {
+        "conditions": {},
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "union-bank-of-india-nexteria-golf",
+      "category_id": "golf",
+      "network_program": null,
+      "sponsor": "NPCI",
+      "label": "4 domestic complimentary golf lessons or rounds a year",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": 4,
+      "quota_period": "annual",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "benefit_id": "union-bank-of-india-nexteria-insurance",
+      "category_id": "insurance_related_perk",
+      "network_program": null,
+      "sponsor": "Union Bank of India",
+      "label": "Personal accident Rs 50 lakh, air accident Rs 1 crore, purchase protection Rs 2 lakh, baggage loss Rs 20,000, cyber insurance Rs 2 lakh",
+      "evaluation_engine": {
+        "conditions": "N/A",
+        "benefit_calculation": "N/A",
+        "perks": []
+      },
+      "quota_count": null,
+      "quota_period": "N/A",
+      "value_estimate_inr": "N/A",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "insurance_and_protection": [],
+  "addon_card_rules": {
+    "max_addon_cards": null,
+    "fee_per_card_inr": 12499,
+    "separate_priority_pass": null,
+    "lounge_quota_shared": null,
+    "reward_points_pooled": null,
+    "min_age_years": null
+  },
+  "redemption_matrix": {
+    "direct_options": [],
+    "partner_transfers": []
+  },
+  "dynamic_promotions_registry": [
+    {
+      "promo_id": "union-bank-of-india-nexteria-bms",
+      "category_id": "entertainment",
+      "network_program": "N/A",
+      "sponsor": "Union Bank of India",
+      "platform": "movie tickets",
+      "offer_type": "instant_discount",
+      "discount_percent": "N/A",
+      "max_discount_inr": 500,
+      "fnb_discount_inr": "N/A",
+      "min_tickets": "N/A",
+      "quota_controlled": true,
+      "is_permanent_card_feature": true,
+      "valid_from": null,
+      "valid_to": null
+    }
+  ],
+  "additional_data": {
+    "_notes": null,
+    "items": [
+      {
+        "key": "research_provenance",
+        "value": {
+          "research_method": "issuer pages read in a real browser session or issuer PDFs read with pdftotext; no model summaries used as facts",
+          "fetched_on": "2026-11-15",
+          "sources": [
+            {
+              "url": "https://www.unionbankofindia.bank.in/pdf/Key-Fact-Statement.pdf",
+              "kind": "Key Fact Statement, Credit Cards, Version 1.4 (PDF created 22 Apr 2026): joining and annual fees, fee waivers, interest, late fee, forex, fuel waiver, cash limits, reward notes for Unicorn and Nexteria",
+              "date": "PDF created 2026-04-22",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.unionbankofindia.bank.in/pdf/mitc-credit-cards.pdf",
+              "kind": "MITC, Credit Cards (PDF created 22 Apr 2026): same fee tables as the KFS",
+              "date": "PDF created 2026-04-22",
+              "read": "pdftotext"
+            },
+            {
+              "url": "https://www.unionbankofindia.bank.in/en/Details/nexteria-credit-card",
+              "kind": "NEXTERIA card page: benefits, rewards structure, eligibility",
+              "read": "plain page fetch; tab content read from the page source"
+            }
+          ],
+          "open_questions": [
+            "Reward points exclusions: the KFS lists excluded MCCs (jewellery, fuel, cash withdrawal, bitcoin, wallet loading, alcohol and wine shops, insurance) only for Unicorn and Nexteria. For the other cards the page says only \"no reward points on cash withdrawals\" (FAQ); the full list of MCCs that earn nothing is not published (\"eligible MCCs prescribed by Bank time to time\").",
+            "Fuel surcharge waiver wording differs: the card pages say \"per billing cycle\"; the KFS and MITC say \"per month\". The page wording is used. The surcharge the acquirer charges at the pump (the amount being waived) is not stated, and no minimum transaction value is stated except for UNI CARBON (Rs 200 and above).",
+            "KFS and MITC say all fees are exclusive of GST; the 18% rate is taken from the worked examples in the same documents (GST of Rs 36 on a Rs 200 fee).",
+            "Reward-point value: the card page states 1 Reward Point = Rs 0.25. The KFS and MITC do not repeat it.",
+            "Both PDFs are Version 1.4 with no printed effective date; the file creation date (22 Apr 2026) is the only date available.",
+            "QUESTION: what is one NEXTERIA reward point worth in rupees? Not stated, so point value is null.",
+            "Network: the page says the card is built on the \"Ekaa\" variant of the RuPay network; RuPay recorded, RuPay tier left N/A.",
+            "Birthday-month and monthly-milestone 5X/10X: multiplier basis and the period for the 10,000-point birthday-month cap are not stated (calendar month assumed for the cap period).",
+            "Lounge: \"unlimited visit for individuals\" and \"two family visits per quarter, 1+3\" as printed; quota count is null because the family quantity is not stated as a single number.",
+            "Page items marked \"Proposed RuPay Exclusive Benefits (may change from time to time)\" (movie screening, concerts, dining with District, RuPay lounge) are not modelled.",
+            "Movie ticket: buy 1 get 1 up to Rs 500 once a month (page); platform not named."
+          ],
+          "notes": [],
+          "publication_gate": "pending_human_review_of_official_documents"
+        }
+      }
+    ]
+  }
+}
