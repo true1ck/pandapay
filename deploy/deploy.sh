@@ -304,7 +304,7 @@ fi
 # when its repository secret is set; a value that is not supplied keeps whatever
 # the host's .env already has. The worker itself is built and started only when
 # every setting is present (see ai_worker_configured below).
-for name in GEMINI_API_KEY SMS_AI_WORKER_DB_PASSWORD SMS_AI_WORKER_DATABASE_URL; do
+for name in GEMINI_API_KEY SMS_AI_WORKER_DB_PASSWORD SMS_AI_WORKER_DATABASE_URL SMS_V2_AI_SERVICE_URL SMS_V2_AI_SERVICE_TOKEN SMS_V2_AI_SERVICE_PROMPT_VERSION; do
   if [ -n "${!name:-}" ]; then
     upsert_env_value "$name" "${!name}"
     echo "    $name configuration updated"
@@ -441,11 +441,25 @@ fi
 # Keep the setting list in step with deploy/restart-services.sh.
 AI_WORKER=sms-v2-template-worker
 ai_worker_configured() {
-  local key value
-  for key in GEMINI_API_KEY SMS_AI_WORKER_DB_PASSWORD SMS_AI_WORKER_DATABASE_URL; do
-    value="$(awk -v key="$key" 'index($0, key "=") == 1 { v = substr($0, length(key) + 2) } END { print v }' "$APP_DIR/.env"       | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")"
-    [ -n "$value" ] || return 1
-  done
+  local service_url service_token
+  ai_worker_env SMS_AI_WORKER_DB_PASSWORD && ai_worker_env SMS_AI_WORKER_DATABASE_URL || return 1
+  service_url="$(ai_worker_env_value SMS_V2_AI_SERVICE_URL)"
+  service_token="$(ai_worker_env_value SMS_V2_AI_SERVICE_TOKEN)"
+  if [ -n "$service_url" ] || [ -n "$service_token" ]; then
+    [ -n "$service_url" ] && [ "${#service_token}" -ge 32 ] && [ "${#service_token}" -le 512 ] &&
+      [[ "$service_token" =~ ^[A-Za-z0-9_-]+$ ]]
+  else
+    ai_worker_env GEMINI_API_KEY
+  fi
+}
+
+ai_worker_env_value() {
+  awk -v key="$1" 'index($0, key "=") == 1 { v = substr($0, length(key) + 2) } END { print v }' "$APP_DIR/.env" |
+    sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//"
+}
+
+ai_worker_env() {
+  [ -n "$(ai_worker_env_value "$1")" ]
 }
 echo "==> Building target images before the maintenance window"
 "${TARGET_COMPOSE[@]}" build api auth rewards-worker backup db-migrate
