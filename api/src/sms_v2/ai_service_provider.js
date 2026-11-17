@@ -10,7 +10,8 @@ const MAX_RESPONSE_BYTES = 256 * 1024;
 // The service may fall back across several AIs, so a call can take a while. The worker is a background process and the
 // layout lease is 3 minutes: wait up to 100 s by default, never more than 170 s.
 const DEFAULT_TIMEOUT_MS = 100000;
-const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9_.:\/-]{0,99}$/;
+// Provider model ids: "openai/gpt-oss-20b", "clef:free", Cloudflare's "@cf/meta/llama-3.1-8b-instruct".
+const MODEL_ID = /^[@A-Za-z0-9][@A-Za-z0-9_.:+\/-]{0,127}$/;
 const POSTGRES_INTEGER_MAX = 2147483647;
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const SERVICE_LAYOUT_UNSAFE = /[\x00-\x1f\x7f\p{Nd}@]/u;
