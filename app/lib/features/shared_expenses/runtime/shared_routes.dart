@@ -8,6 +8,7 @@ import '../ui/shared_expenses_screen.dart';
 import '../ui/shared_group_screen.dart';
 import '../ui/shared_presentation.dart';
 import '../../../app/providers.dart' show upiPaymentServiceProvider;
+import 'shared_pair_index.dart' show sharedGroupOfPersonRow;
 import 'shared_providers.dart';
 import 'shared_runtime.dart';
 import 'shared_expense_review.dart';
@@ -78,7 +79,7 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
     // create group) can arrive mid-refresh, so a plain rebuild is always safe.
     if (!runtime.busy && runtime.dataVersion != _seenVersion) {
       _seenVersion = runtime.dataVersion;
-      _reload();
+      _reload(fromPhone: true);
     } else {
       setState(() {}); // flags (e.g. add friend) may have arrived
     }
@@ -91,10 +92,19 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
 
   /// Paints the saved screen at once (when there is one), then loads live data
   /// behind it. Newer calls win; an older failure is ignored.
-  Future<void> _run({bool cacheFirst = false}) async {
+  Future<void> _run({bool cacheFirst = false, bool fromPhone = false}) async {
     final runtime = _runtime;
     if (runtime == null) return;
     final seq = ++_seq;
+    // [fromPhone]: something changed on this phone (an expense was saved, a
+    // friend added). Redraw from this phone's own copy right now, with what is
+    // waiting to be sent counted in, then bring in the server's answer.
+    if (fromPhone && _data != null) {
+      try {
+        final saved = await runtime.runCacheOnly(_load, allowLocal: true);
+        if (mounted && seq == _seq) setState(() => _data = saved);
+      } catch (_) {}
+    }
     if (cacheFirst && _data == null) {
       try {
         final saved = await runtime.runCacheOnly(_load, allowLocal: true);
@@ -124,8 +134,8 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
     }
   }
 
-  void _reload() {
-    if (mounted && _runtime != null) unawaited(_run());
+  void _reload({bool fromPhone = false}) {
+    if (mounted && _runtime != null) unawaited(_run(fromPhone: fromPhone));
   }
 
   Future<void> _create(SharedExpensesRuntime runtime) async {
@@ -187,8 +197,10 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
     if (id != null && mounted) _reload();
   }
 
-  void _open(String id) =>
-      unawaited(_gate.run(() => widget.onOpenContext(id)));
+  /// A person who is only in your groups opens the group they are in.
+  void _open(String id) => unawaited(
+    _gate.run(() => widget.onOpenContext(sharedGroupOfPersonRow(id) ?? id)),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -398,7 +410,7 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
     if (runtime.store.isContextRevoked(widget.contextId)) return;
     if (!runtime.busy && runtime.dataVersion != _seenVersion) {
       _seenVersion = runtime.dataVersion;
-      _reload();
+      _reload(fromPhone: true);
     } else {
       setState(() {});
     }
@@ -424,10 +436,18 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
     expenseAfter: _history[SharedGroupTab.expenses]!.last,
     balanceAfter: _history[SharedGroupTab.balances]!.last,
   );
-  Future<void> _run({bool cacheFirst = false}) async {
+  Future<void> _run({bool cacheFirst = false, bool fromPhone = false}) async {
     final runtime = _runtime;
     if (runtime == null) return;
     final seq = ++_seq;
+    // See the Splits list: redraw from this phone's copy at once when
+    // something changed here, then bring in the server's answer.
+    if (fromPhone && _data != null) {
+      try {
+        final saved = await runtime.runCacheOnly(_load, allowLocal: true);
+        if (mounted && seq == _seq) setState(() => _data = saved);
+      } catch (_) {}
+    }
     if (cacheFirst && _data == null) {
       try {
         final saved = await runtime.runCacheOnly(_load, allowLocal: true);
@@ -455,8 +475,8 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
     }
   }
 
-  void _reload() {
-    if (mounted && _runtime != null) unawaited(_run());
+  void _reload({bool fromPhone = false}) {
+    if (mounted && _runtime != null) unawaited(_run(fromPhone: fromPhone));
   }
 
   @override

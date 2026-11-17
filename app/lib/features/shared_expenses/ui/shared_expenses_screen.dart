@@ -131,6 +131,15 @@ class _SharedExpensesScreenState extends State<SharedExpensesScreen>
         sharedPendingCopy(widget.data.pendingChanges),
         icon: Icons.sync_rounded,
       ),
+    if (widget.data.pendingChanges > 0 && widget.data.pendingNote != null)
+      Padding(
+        padding: const EdgeInsets.only(left: 26, bottom: AppSpace.sm),
+        child: Text(
+          widget.data.pendingNote!,
+          key: const Key('splits-waiting-note'),
+          style: BambooFonts.ui(12, color: BambooInk.ink500),
+        ),
+      ),
     if (tab != SharedHubTab.activity) ...[
       if (widget.data.summary case final summary?)
         SharedSummaryCard(

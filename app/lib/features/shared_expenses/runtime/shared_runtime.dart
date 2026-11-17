@@ -15,11 +15,13 @@ import '../data/shared_transport.dart';
 import '../storage/shared_store.dart';
 import '../sync/shared_sync.dart';
 import '../ui/shared_presentation.dart';
+import '../ui/shared_waiting_note.dart';
 import '../composer/shared_editor.dart';
 import '../data/shared_pending_phones.dart';
 import 'shared_expense_mapping.dart';
 import 'shared_activity_text.dart';
 import 'shared_pair_index.dart';
+import 'shared_pending_balances.dart';
 import 'shared_local_reads.dart';
 
 class SharedRuntimeUnavailable implements Exception {
@@ -334,6 +336,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
         // Each queued kind remains capability checked by the authoritative SQL
         // command; a disabled flag cannot silently change a stored command.
         if (proposalsEnabled || settlementsEnabled) await sync.flush();
+        _logWaiting();
         final wasLagging = syncLag;
         for (var i = 0; i < maxPullPages; i++) {
           final before = store.cursor,
@@ -384,6 +387,25 @@ class SharedExpensesRuntime extends ChangeNotifier {
       busy = false;
       _notify();
     }
+  }
+
+  /// When the send pass leaves something waiting, say so in the device log
+  /// (kind, state and reason only, never names or amounts): a "Syncing" line
+  /// that never clears is otherwise invisible.
+  void _logWaiting() {
+    try {
+      final total = store.waitingCount;
+      if (total == 0) return;
+      final what = [
+        for (final w in store.waitingChanges(
+          now: DateTime.now().millisecondsSinceEpoch,
+          limit: 3,
+        ))
+          '${w.queued.command.kind}/${w.queued.state.name}/${w.reason.name}'
+              '/tries=${w.queued.attempts}',
+      ];
+      debugPrint('shared queue: $total waiting after send: ${what.join(', ')}');
+    } catch (_) {}
   }
 
   Future<void> _background = Future<void>.value();
@@ -1160,6 +1182,9 @@ class SharedExpensesRuntime extends ChangeNotifier {
   Future<void> flushEditor() async {
     _current();
     syncLag = true;
+    // Whatever was just saved is stored on this phone: screens show it now
+    // (see [submit]); sending it is the refresh below.
+    dataVersion++;
     _notify();
     await refresh();
   }
@@ -1518,7 +1543,10 @@ class SharedExpensesRuntime extends ChangeNotifier {
       final expense = mapSharedExpenseRecord(row, own);
       if (expense != null) expenseRows.add(expense);
     }
-    final balanceRows = <SharedContextRow>[];
+    // Who owes whom here, from the server's balances plus what expenses saved
+    // on this phone and not yet confirmed will add, so a new expense moves the
+    // balances the moment it is saved.
+    final amounts = <String, BigInt>{};
     for (final raw in balancePage['items'] as List) {
       final row = Map<String, Object?>.from(raw as Map),
           low = row['lowMemberId'],
@@ -1527,18 +1555,31 @@ class SharedExpensesRuntime extends ChangeNotifier {
       final amount =
           BigInt.parse(row['balanceMinor'] as String) *
           (low == own ? BigInt.one : -BigInt.one);
-      final friend = (low == own ? high : low) as String;
-      balanceRows.add(
-        SharedContextRow(
-          id: friend,
-          title: names[friend] as String? ?? 'Member',
-          balance: _summary(
-            amount > BigInt.zero ? amount.toString() : '0',
-            amount < BigInt.zero ? (-amount).toString() : '0',
-          ),
-        ),
+      amounts[(low == own ? high : low) as String] = amount;
+    }
+    var waitingBalances = SharedPendingBalances.none;
+    try {
+      waitingBalances = SharedPendingBalances.read(store, accountId);
+    } catch (_) {}
+    for (final entry in waitingBalances.inContext(id).entries) {
+      amounts.update(
+        entry.key,
+        (v) => v + BigInt.from(entry.value),
+        ifAbsent: () => BigInt.from(entry.value),
       );
     }
+    final balanceRows = <SharedContextRow>[
+      for (final entry in amounts.entries)
+        if (entry.value != BigInt.zero)
+          SharedContextRow(
+            id: entry.key,
+            title: names[entry.key] as String? ?? 'Member',
+            balance: _summary(
+              entry.value > BigInt.zero ? entry.value.toString() : '0',
+              entry.value < BigInt.zero ? (-entry.value).toString() : '0',
+            ),
+          ),
+    ];
     // Expenses saved on this phone and not yet confirmed lead the first page,
     // marked "Waiting to sync"; the server's copy replaces them by expense id.
     final shown = {for (final row in expenseRows) row.id};
@@ -1566,7 +1607,11 @@ class SharedExpensesRuntime extends ChangeNotifier {
     var breakdown = const <SharedBreakdownLine>[];
     if (direct) {
       try {
-        breakdown = SharedPairIndex.read(store, accountId).linesFor(
+        breakdown = SharedPairIndex.read(
+          store,
+          accountId,
+          pending: waitingBalances,
+        ).linesFor(
           id,
           balanceRows.firstOrNull?.balance.netBalance.paise ?? 0,
         );
@@ -1900,10 +1945,41 @@ class SharedExpensesRuntime extends ChangeNotifier {
       pairs = SharedPairIndex.read(store, accountId);
     } catch (_) {}
     SharedContextRow withGroups(SharedContextRow row) {
-      final lines =
-          pairs?.linesFor(row.id, row.balance.netBalance.paise) ?? const [];
-      if (lines.isEmpty) return row;
-      final total = sharedSummaryOfLines(lines, row.balance);
+      // The server did not say what is owed here (offline, or an older saved
+      // copy): use what this phone holds, so the row is never blank.
+      final unknown = row.state == SharedContextState.incomplete;
+      final held = unknown ? pairs?.storedDirect(row.id) : null;
+      var base = row.balance;
+      if (held != null) {
+        base = SharedBalanceSummary(
+          owedToYou: Money.fromPaise(held > 0 ? held : 0),
+          youOwe: Money.fromPaise(held < 0 ? -held : 0),
+          netBalance: Money.fromPaise(held),
+          confidence: row.balance.confidence,
+          incomplete: syncLag,
+        );
+      }
+      // Expenses saved here and not confirmed yet count at once.
+      final shift = pairs?.pendingDirect(row.id) ?? 0;
+      final direct = base.netBalance.paise + shift;
+      final lines = pairs?.linesFor(row.id, direct) ?? const [];
+      if (lines.isEmpty) {
+        if (shift == 0 && held == null) return row;
+        return SharedContextRow(
+          id: row.id,
+          title: row.title,
+          subtitle: row.subtitle,
+          balance: SharedBalanceSummary(
+            owedToYou: Money.fromPaise(direct > 0 ? direct : 0),
+            youOwe: Money.fromPaise(direct < 0 ? -direct : 0),
+            netBalance: Money.fromPaise(direct),
+            confidence: base.confidence,
+            incomplete: base.incomplete,
+          ),
+          state: direct == 0 ? row.state : SharedContextState.active,
+        );
+      }
+      final total = sharedSummaryOfLines(lines, base);
       return SharedContextRow(
         id: row.id,
         title: row.title,
@@ -1915,6 +1991,17 @@ class SharedExpensesRuntime extends ChangeNotifier {
                 ? row.state
                 : SharedContextState.active,
       );
+    }
+
+    List<SharedContextRow> groupPeopleRows(String search) {
+      final index = pairs;
+      if (index == null) return const [];
+      final wanted = search.trim().toLowerCase();
+      return [
+        for (final person in index.groupPeople)
+          if (wanted.isEmpty || person.name.toLowerCase().contains(wanted))
+            _groupPersonRow(person, index.linesForPerson(person)),
+      ];
     }
 
     SharedPage<SharedContextRow> contextPage(
@@ -1940,6 +2027,12 @@ class SharedExpensesRuntime extends ChangeNotifier {
                 }),
           for (final row in contextRows(data['items'] as List))
             tab == SharedHubTab.friends ? withGroups(row) : row,
+          // People you share a group with but never added as a friend: they
+          // are friends too (Splitwise's way), so the group's money shows
+          // under them. Matched by name to a friend you have, so "Sujay"
+          // typed into a group is your friend Sujay, not a second one.
+          if (tab == SharedHubTab.friends && after[tab] == null)
+            ...groupPeopleRows(searches[tab] ?? ''),
         ],
         hasMore: data['hasMore'] == true,
         incomplete: syncLag,
@@ -1953,7 +2046,10 @@ class SharedExpensesRuntime extends ChangeNotifier {
     final activityLookups = <String, _ActivityLookup>{};
     return SharedHubPresentation(
       summary: summaryKnown
-          ? _summary(results[2]['owedMinor'], results[2]['owingMinor'])
+          ? _withWaiting(
+              _summary(results[2]['owedMinor'], results[2]['owingMinor']),
+              pairs?.overviewShift,
+            )
           : const SharedBalanceSummary(
               owedToYou: Money.zero(),
               youOwe: Money.zero(),
@@ -1988,6 +2084,66 @@ class SharedExpensesRuntime extends ChangeNotifier {
       ),
       offline: offline = _servedStale,
       pendingChanges: store.waitingCount,
+      pendingNote: _waitingNote(),
+    );
+  }
+
+  /// Which saved change is waiting and why, for the line under the banner.
+  String? _waitingNote() {
+    try {
+      final total = store.waitingCount;
+      if (total == 0) return null;
+      return sharedWaitingNote(
+        store.waitingChanges(
+          now: DateTime.now().millisecondsSinceEpoch,
+          limit: 1,
+        ),
+        total,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// A friend row for somebody who is only in your groups: what is owed
+  /// between you in each, and which groups they are in under the name. Opening
+  /// it opens their group.
+  static SharedContextRow _groupPersonRow(
+    SharedGroupPerson person,
+    List<SharedBreakdownLine> lines,
+  ) {
+    const none = SharedBalanceSummary(
+      owedToYou: Money.zero(),
+      youOwe: Money.zero(),
+      netBalance: Money.zero(),
+    );
+    return SharedContextRow(
+      id: '$sharedGroupPersonPrefix${person.groups.first.$1}:${person.key}',
+      title: person.name,
+      subtitle: person.groups.length == 1
+          ? 'In ${person.groups.first.$2}'
+          : 'In ${person.groups.length} groups',
+      balance: sharedSummaryOfLines(lines, none),
+      breakdown: lines.length > 1 ? lines : const [],
+    );
+  }
+
+  /// The totals strip with what expenses saved on this phone (and not yet
+  /// confirmed) add to it.
+  static SharedBalanceSummary _withWaiting(
+    SharedBalanceSummary summary,
+    ({int owed, int owing})? shift,
+  ) {
+    if (shift == null || shift.owed == 0 && shift.owing == 0) return summary;
+    int up(int v) => v < 0 ? 0 : v;
+    final owed = up(summary.owedToYou.paise + shift.owed);
+    final owing = up(summary.youOwe.paise + shift.owing);
+    return SharedBalanceSummary(
+      owedToYou: Money.fromPaise(owed),
+      youOwe: Money.fromPaise(owing),
+      netBalance: Money.fromPaise(owed - owing),
+      confidence: summary.confidence,
+      incomplete: summary.incomplete,
     );
   }
 

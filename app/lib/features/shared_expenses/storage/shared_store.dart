@@ -61,6 +61,44 @@ const sharedMaxAttempts = 10;
 /// created in the same offline session) when that command was refused.
 const sharedDependencyRejected = 'dependency_rejected';
 
+/// Set on a command that was waiting for another command that is no longer on
+/// this phone and was never confirmed, so it can never be sent.
+const sharedDependencyMissing = 'dependency_missing';
+
+/// Why a saved change has not reached the server yet, for the line under
+/// "Syncing your latest changes".
+enum SharedWaitReason {
+  /// Being sent right now.
+  sending,
+
+  /// Due: the next send attempt takes it.
+  due,
+
+  /// The server was busy or unreachable; it goes again at [retryAt].
+  retryLater,
+
+  /// The sign-in has to be renewed first.
+  signIn,
+
+  /// An earlier saved change has to go first.
+  earlierChange,
+
+  /// A payment it is linked to has to be matched first.
+  payment,
+
+  /// The split it belongs to is no longer available on this phone.
+  splitUnavailable,
+}
+
+final class SharedWaitingChange {
+  final SharedQueuedCommand queued;
+  final SharedWaitReason reason;
+
+  /// When the next attempt is due (epoch ms) for [SharedWaitReason.retryLater].
+  final int? retryAt;
+  const SharedWaitingChange(this.queued, this.reason, [this.retryAt]);
+}
+
 class SharedLocalException implements Exception {
   final String code;
   const SharedLocalException(this.code);
@@ -259,13 +297,102 @@ class SharedExpensesStore {
           as int;
 
   /// Commands still on their way to the server. A command the server refused
-  /// for good ('rejected' or 'conflict') will never send, so it is not "syncing".
+  /// for good ('rejected' or 'conflict') will never send, so it is not "syncing";
+  /// nor is one in a split this phone has lost access to, which nothing sends
+  /// (the Activity list and the not-synced list leave those out too).
   int get waitingCount =>
       database.db.select(
-            "SELECT COUNT(*) AS n FROM shared_commands WHERE namespace=? AND state NOT IN ('committed','rejected','conflict')",
+            "SELECT COUNT(*) AS n FROM shared_commands c WHERE c.namespace=? AND c.state NOT IN ('committed','rejected','conflict') AND NOT EXISTS(SELECT 1 FROM shared_sync_state s WHERE s.namespace=c.namespace AND s.key='revoked:'||c.context_id)",
             [namespace],
           ).single['n']
           as int;
+
+  /// The oldest changes still waiting, each with the reason it has not gone
+  /// (oldest first). [now] is the clock in epoch ms.
+  List<SharedWaitingChange> waitingChanges({required int now, int limit = 5}) {
+    if (limit < 1 || limit > 100) {
+      throw const SharedLocalException('invalid_query');
+    }
+    final rows = database.db.select(
+      '''SELECT c.*,
+ EXISTS(SELECT 1 FROM shared_command_dependencies d LEFT JOIN shared_operation_receipts r ON r.namespace=d.namespace AND r.operation_id=d.depends_on WHERE d.namespace=c.namespace AND d.operation_id=c.operation_id AND r.operation_id IS NULL) AS earlier,
+ EXISTS(SELECT 1 FROM shared_source_dependencies s WHERE s.namespace=c.namespace AND s.operation_id=c.operation_id AND s.resolved=0) AS payment
+FROM shared_commands c
+WHERE c.namespace=? AND c.state NOT IN ('committed','rejected','conflict')
+AND NOT EXISTS(SELECT 1 FROM shared_sync_state x WHERE x.namespace=c.namespace AND x.key='revoked:'||c.context_id)
+ORDER BY c.created_at,c.operation_id LIMIT ?''',
+      [namespace, limit],
+    );
+    return [
+      for (final row in rows)
+        () {
+          final state = SharedCommandState.values.byName(
+            row['state'] as String,
+          );
+          final next = row['next_attempt'] as int;
+          final reason = state == SharedCommandState.awaitingAuth
+              ? SharedWaitReason.signIn
+              : row['earlier'] == 1
+              ? SharedWaitReason.earlierChange
+              : row['payment'] == 1
+              ? SharedWaitReason.payment
+              : state == SharedCommandState.sending &&
+                    (row['lease_expires'] as int) > now
+              ? SharedWaitReason.sending
+              : next > now
+              ? SharedWaitReason.retryLater
+              : SharedWaitReason.due;
+          return SharedWaitingChange(
+            SharedQueuedCommand(
+              _command(row),
+              state,
+              row['attempts'] as int,
+              row['error_code'] as String?,
+            ),
+            reason,
+            reason == SharedWaitReason.retryLater ? next : null,
+          );
+        }(),
+    ];
+  }
+
+  /// Settles saved changes that can never be sent because the change they wait
+  /// for is gone: refused, or neither confirmed nor still on this phone. Left
+  /// as they were they would be counted as "syncing" for ever. One that waited
+  /// on a change that was refused is folded into it (not a second problem); one
+  /// whose earlier change simply vanished is handed to the person as
+  /// "not synced". Returns how many were settled.
+  Future<int> reconcileQueue() => _write(() {
+    var settled = 0;
+    const live = "c.state IN ('pending','retry','awaitingAuth')";
+    // Waiting on a change that was refused.
+    final refused = database.db.select(
+      "SELECT DISTINCT d.depends_on AS id FROM shared_command_dependencies d JOIN shared_commands p ON p.namespace=d.namespace AND p.operation_id=d.depends_on JOIN shared_commands c ON c.namespace=d.namespace AND c.operation_id=d.operation_id WHERE d.namespace=? AND p.state IN ('rejected','conflict') AND $live",
+      [namespace],
+    );
+    for (final row in refused) {
+      settled += _rejectDependents(row['id'] as String);
+    }
+    // Waiting on a change that is not here and was never confirmed.
+    final missing = database.db.select(
+      "SELECT DISTINCT c.operation_id AS id FROM shared_commands c JOIN shared_command_dependencies d ON d.namespace=c.namespace AND d.operation_id=c.operation_id WHERE c.namespace=? AND $live AND NOT EXISTS(SELECT 1 FROM shared_operation_receipts r WHERE r.namespace=d.namespace AND r.operation_id=d.depends_on) AND NOT EXISTS(SELECT 1 FROM shared_commands p WHERE p.namespace=d.namespace AND p.operation_id=d.depends_on)",
+      [namespace],
+    );
+    for (final row in missing) {
+      final id = row['id'] as String;
+      final changed = database.db.select(
+        "SELECT 1 FROM shared_commands c WHERE c.namespace=? AND c.operation_id=? AND $live",
+        [namespace, id],
+      );
+      if (changed.isEmpty) continue; // folded in by an earlier one
+      database.db.execute(
+        "UPDATE shared_commands SET state='rejected',lease_id=NULL,lease_expires=0,error_code=? WHERE namespace=? AND operation_id=?",
+        [sharedDependencyMissing, namespace, id],
+      );
+      settled += 1 + _rejectDependents(id);
+    }
+    return settled;
+  });
   Map<String, Object?>? provisional(String operationId) {
     final queued = operation(operationId);
     if (queued != null && isContextRevoked(queued.command.contextId)) {
@@ -698,7 +825,8 @@ ORDER BY c.created_at,c.operation_id LIMIT 1''',
 
   /// Commands still waiting for [operationId] can never be sent once it is
   /// refused: refuse them too (listed under it, not as separate problems).
-  void _rejectDependents(String operationId) {
+  int _rejectDependents(String operationId) {
+    var count = 0;
     final queue = [operationId];
     while (queue.isNotEmpty) {
       final current = queue.removeLast();
@@ -713,8 +841,10 @@ ORDER BY c.created_at,c.operation_id LIMIT 1''',
           [sharedDependencyRejected, namespace, id],
         );
         queue.add(id);
+        count++;
       }
     }
+    return count;
   }
 
   /// A reconnect should not wait out a backoff earned while offline: queued

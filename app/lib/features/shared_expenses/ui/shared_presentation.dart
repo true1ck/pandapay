@@ -226,6 +226,9 @@ class SharedHubPresentation {
   final bool offline;
   final bool hideAmounts;
   final int pendingChanges;
+
+  /// Which saved change is waiting and why, under the "Syncing" line.
+  final String? pendingNote;
   const SharedHubPresentation({
     this.summary,
     required this.friends,
@@ -234,6 +237,7 @@ class SharedHubPresentation {
     this.offline = false,
     this.hideAmounts = false,
     this.pendingChanges = 0,
+    this.pendingNote,
   });
 }
 

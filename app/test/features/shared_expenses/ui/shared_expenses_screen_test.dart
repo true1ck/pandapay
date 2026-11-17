@@ -77,6 +77,34 @@ void main() {
   });
   tearDown(() => BambooFonts.useSystemFontsForTests = false);
 
+  testWidgets('the "Syncing" line says which change is waiting and why', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      SharedExpensesScreen(
+        data: SharedHubPresentation(
+          summary: balances,
+          friends: SharedPage(items: const [rahul]),
+          groups: SharedPage(items: const []),
+          activity: SharedPage(items: const []),
+          pendingChanges: 1,
+          pendingNote:
+              'Add expense “Taxi”: It is waiting for an earlier change to go first.',
+        ),
+      ),
+    );
+    expect(find.textContaining('Syncing your latest changes'), findsOneWidget);
+    expect(find.byKey(const Key('splits-waiting-note')), findsOneWidget);
+    expect(find.textContaining('Add expense “Taxi”'), findsOneWidget);
+  });
+
+  testWidgets('nothing waiting: no "Syncing" line and no note', (tester) async {
+    await pump(tester, SharedExpensesScreen(data: hub()));
+    expect(find.textContaining('Syncing your latest changes'), findsNothing);
+    expect(find.byKey(const Key('splits-waiting-note')), findsNothing);
+  });
+
   testWidgets(
     'shared-only financial amounts are not labeled as the full bill or full payment',
     (tester) async {

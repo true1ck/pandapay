@@ -7,41 +7,10 @@ import '../../../app/design/app_theme.dart';
 import '../../sync/split_sync.dart';
 import '../runtime/shared_runtime.dart';
 import '../storage/shared_store.dart';
+import 'shared_change_title.dart';
 import 'shared_components.dart';
 
-/// Plain-language name of a saved change that did not sync. Never shows ids or
-/// queue vocabulary; the wording uses what the person typed.
-String sharedAttentionTitle(SharedQueuedCommand queued) {
-  final payload = (queued.command.toJson()['payload'] as Map);
-  String quoted(String key) {
-    final value = payload[key];
-    return value is String && value.trim().isNotEmpty ? '“$value”' : '';
-  }
-
-  return switch (queued.command.kind) {
-    'context.create' =>
-      payload['contextKind'] == 'direct'
-          ? 'Add friend ${quoted('name')}'.trim()
-          : 'Create group ${quoted('name')}'.trim(),
-    'member.invite' => 'Add ${quoted('displayName')} to a split'.replaceAll(
-      '  ',
-      ' ',
-    ),
-    'member.rename' => 'Rename someone to ${quoted('displayName')}'.trim(),
-    'membership.respond' => 'Answer a request to join',
-    'expense.propose' => 'Add expense ${quoted('title')}'.trim(),
-    'expense.respond' =>
-      payload['decision'] == 'reject'
-          ? 'Reject an expense'
-          : 'Approve an expense',
-    'settlement.report' => 'Report a payment',
-    'settlement.respond' =>
-      payload['decision'] == 'reject'
-          ? 'Reject a payment report'
-          : 'Confirm a payment report',
-    _ => 'A change to a split',
-  };
-}
+export 'shared_change_title.dart' show sharedAttentionTitle;
 
 /// Why the server did not take it, in words that say what to do next.
 String sharedAttentionReason(SharedQueuedCommand queued) {
@@ -64,6 +33,10 @@ String sharedAttentionReason(SharedQueuedCommand queued) {
   }
   if (code.startsWith('http_403')) {
     return 'You no longer have permission to do this.';
+  }
+  if (code == sharedDependencyMissing) {
+    return 'A change it was waiting for is no longer on this phone, so it '
+        'cannot be sent.';
   }
   if (code.startsWith('http_404')) {
     return 'The split or person it was for no longer exists.';

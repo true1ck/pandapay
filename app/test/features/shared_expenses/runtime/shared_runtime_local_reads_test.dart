@@ -150,7 +150,9 @@ void main() {
     final hub = await runtime.loadHub();
     expect(hub.offline, isTrue);
     expect(hub.groups.items.map((r) => r.title), ['Flatmates']);
-    expect(hub.friends.items.map((r) => r.title), ['Sam']);
+    // Sam is a friend; Priya is only in the group, and people in your groups
+    // are friends too.
+    expect(hub.friends.items.map((r) => r.title), ['Sam', 'Priya']);
     expect(hub.summary!.incomplete, isTrue); // totals are not known offline
   });
 

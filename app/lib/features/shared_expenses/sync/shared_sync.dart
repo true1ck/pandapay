@@ -28,6 +28,12 @@ class SharedExpensesSync {
     _running = true;
     try {
       await store.recoveryGate.run(() async {
+        // Settle anything that can never go (it waits on a change that was
+        // refused or is gone) so it is not left "syncing" for ever. Never
+        // blocks sending the rest.
+        try {
+          await store.reconcileQueue();
+        } catch (_) {}
         for (var index = 0; index < maxCommands && isCurrent(); index++) {
           // The server asked every queue to wait: claim nothing, count nothing.
           if (ServerBackoff.process.isPaused) break;
