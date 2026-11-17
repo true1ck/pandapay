@@ -332,7 +332,11 @@ class _SpendTrendsScreenState extends ConsumerState<SpendTrendsScreen> {
                           'with your account.',
                     );
                   }
-                  if (data.spend.txnCount == 0 && data.income.txnCount == 0) {
+                  // A period with only investments is not an empty one: they
+                  // are shown beside spending, so they must reach the report.
+                  if (data.spend.txnCount == 0 &&
+                      data.income.txnCount == 0 &&
+                      data.investment.txnCount == 0) {
                     return _NoSpendingReportState(
                       report: data,
                       onRefresh: () async =>
@@ -1204,10 +1208,9 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
           ?.tagsForTransaction(entry.id, fallback: entry.tags) ??
       entry.tags;
 
-  void _openTagCategoryTransactions(
-    TransactionTag tag,
-    SpendBreakdownRow category,
-  ) {
+  /// The report's first and last day as the `from` / `to` Activity expects, so a
+  /// list opened from here covers exactly the period on this screen.
+  ({String from, String to}) _periodDateParams() {
     DateTime day(DateTime value) =>
         DateTime(value.year, value.month, value.day);
     String dateParam(DateTime value) =>
@@ -1223,10 +1226,34 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
         : day(
             widget.report.periodEnd.subtract(const Duration(days: 1)).toLocal(),
           );
+    return (from: dateParam(from), to: dateParam(to));
+  }
+
+  /// The investments of this period, in Activity's Investments filter: the one
+  /// place the investments flow lives (Home's Investments line opens the same).
+  void _openInvestments() {
+    final period = _periodDateParams();
+    context.push(
+      Uri(
+        path: AppRoute.activity,
+        queryParameters: {
+          'type': 'investments',
+          'from': period.from,
+          'to': period.to,
+        },
+      ).toString(),
+    );
+  }
+
+  void _openTagCategoryTransactions(
+    TransactionTag tag,
+    SpendBreakdownRow category,
+  ) {
+    final period = _periodDateParams();
     final query = <String, String>{
       'tag': tag.id,
-      'from': dateParam(from),
-      'to': dateParam(to),
+      'from': period.from,
+      'to': period.to,
       'spendOnly': 'true',
       if (category.categoryId != null) 'category': category.categoryId!,
       if (category.categoryId == null) 'categoryLabel': category.label,
@@ -1733,6 +1760,18 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
     final cardRows = _cardRows();
     final instrumentRows = _instrumentRows();
     final total = _visibleTotal();
+    // What the summary and the invested line describe: the whole period, or
+    // only the filtered rows while filters are on.
+    final summaryReport = _filtersActive
+        ? _filteredReport(report, total)
+        : report;
+    // Money put into investments is shown beside spending, never inside it:
+    // not in [total], not a slice of the mix, not a category percentage.
+    final invested = summaryReport.investedOut;
+    final showInvested = !invested.isZero;
+    final investedPeriodLabel = report.period == SpendPeriod.custom
+        ? 'in ${report.displayLabel}'
+        : report.period.label.toLowerCase();
     final series = _seriesFor(report);
     final multiMonth = _spansMultipleCalendarMonths(widget.query);
     final categoryEntries = _transactionsForCategory;
@@ -1796,12 +1835,25 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
                   : null,
               comparisonLabel: report.previousDisplayLabel,
               onViewAll: multiMonth ? _showAllCategories : null,
+              invested: invested,
+              investedPeriodLabel: investedPeriodLabel,
+              onInvestedTap: _openInvestments,
+            ),
+            const SizedBox(height: AppSpace.lg),
+          ] else if (showInvested) ...[
+            // A period with investments but no spending has no mix to hang the
+            // line under, and must still say what was invested.
+            CardSummaryPanel(
+              padding: const EdgeInsets.all(AppSpace.md),
+              child: _InvestedLine(
+                amount: invested,
+                periodLabel: investedPeriodLabel,
+                onTap: _openInvestments,
+              ),
             ),
             const SizedBox(height: AppSpace.lg),
           ],
-          _SpendMetricsCard(
-            report: _filtersActive ? _filteredReport(report, total) : report,
-          ),
+          _SpendMetricsCard(report: summaryReport),
           const SizedBox(height: AppSpace.lg),
           if (multiMonth) ...[
             _MonthlyComparisonCard(series: series),
@@ -1848,8 +1900,9 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
               message: 'No tags on these transactions yet.',
             ),
         ] else if (_tab == _SpendingTab.categories &&
-            categoryRows.isNotEmpty) ...[
-          (context) => const _SectionHeader('Categories'),
+            (categoryRows.isNotEmpty || showInvested)) ...[
+          if (categoryRows.isNotEmpty)
+            (context) => const _SectionHeader('Categories'),
           for (final row in categoryRows)
             (context) => _ExpandableCategoryRow(
               row: row,
@@ -1862,6 +1915,12 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
                       widget.initialCategory!.toLowerCase() ==
                           row.label.toLowerCase()),
             ),
+          // Shown like a category so an investment is not lost from this
+          // screen, but it is not one: no share of spending, not in the total
+          // or the mix, and it opens the investments flow instead of expanding.
+          if (showInvested)
+            (context) =>
+                _InvestmentsRow(amount: invested, onTap: _openInvestments),
           if (instrumentRows.isNotEmpty) ...[
             (context) => const SizedBox(height: AppSpace.md),
             (context) => _BreakdownPanel(
@@ -3835,6 +3894,17 @@ class SpendingMixCard extends StatefulWidget {
   final ValueChanged<SpendBreakdownRow?>? onCategorySelected;
   final String? selectedCategoryKey;
 
+  /// Money put into investments in the same period, shown as one line under
+  /// the mix. It is NOT a slice and not in [total]: the line exists so a month
+  /// of SIPs is not mistaken for money spent. Null or zero hides the line.
+  final Money? invested;
+
+  /// Reads "Invested [investedPeriodLabel]": "this month", "in Aug 1 – Aug 31".
+  final String investedPeriodLabel;
+
+  /// Opens the investments behind the figure. No tap target when null.
+  final VoidCallback? onInvestedTap;
+
   const SpendingMixCard({
     required this.rows,
     required this.total,
@@ -3845,6 +3915,9 @@ class SpendingMixCard extends StatefulWidget {
     this.onViewAll,
     this.onCategorySelected,
     this.selectedCategoryKey,
+    this.invested,
+    this.investedPeriodLabel = 'this month',
+    this.onInvestedTap,
   });
 
   @override
@@ -4070,6 +4143,17 @@ class _SpendingMixCardState extends State<SpendingMixCard> {
               },
             ),
           ),
+          if (widget.invested case final invested? when !invested.isZero) ...[
+            SizedBox(height: compact ? 6 : AppSpace.md),
+            Container(height: 1, color: BambooInk.hairlineOnPaper),
+            SizedBox(height: compact ? 6 : AppSpace.sm),
+            _InvestedLine(
+              amount: invested,
+              periodLabel: widget.investedPeriodLabel,
+              compact: compact,
+              onTap: widget.onInvestedTap,
+            ),
+          ],
         ],
       ),
     );
@@ -4428,6 +4512,204 @@ class _MixLegendRow extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The icon and hue of an investment, the same ones Activity gives it
+/// ([AvatarKind.investment]), so the two screens agree on how it looks.
+const _investmentVisual = SpendingVisual(
+  icon: AppIcons.investment,
+  accent: BambooInk.jade,
+);
+
+/// "Invested this month ₹15,000 · Not counted in your spending". Money put into
+/// investments is not spending, so it is never a slice of the mix or part of a
+/// total; this line sits beside them so a month of SIPs is not read as money
+/// spent. Tapping it opens the investments behind the figure.
+class _InvestedLine extends StatelessWidget {
+  final Money amount;
+
+  /// "this month", "in Aug 1 – Aug 31": completes "Invested …".
+  final String periodLabel;
+  final bool compact;
+  final VoidCallback? onTap;
+
+  const _InvestedLine({
+    required this.amount,
+    required this.periodLabel,
+    this.compact = false,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final title = 'Invested $periodLabel';
+    final row = Row(
+      children: [
+        _SpendingVisualBadge(
+          visual: _investmentVisual,
+          size: compact ? 22 : 27,
+        ),
+        SizedBox(width: compact ? 6 : AppSpace.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: BambooFonts.ui(
+                  compact ? 10.5 : 12.5,
+                  weight: FontWeight.w600,
+                  color: BambooInk.ink900,
+                ),
+              ),
+              Text(
+                'Not counted in your spending',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: BambooFonts.ui(
+                  compact ? 9.5 : 11,
+                  color: BambooInk.ink500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: AppSpace.xs),
+        Flexible(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: MoneyText(
+              amount,
+              confidence: Confidence.confirmed,
+              showConfidenceIcon: false,
+              style: BambooFonts.ui(
+                compact ? 10.5 : 12.5,
+                weight: FontWeight.w700,
+                color: BambooInk.ink900,
+              ),
+            ),
+          ),
+        ),
+        if (onTap != null)
+          const Icon(
+            Icons.chevron_right_rounded,
+            size: 18,
+            color: BambooInk.ink500,
+          ),
+      ],
+    );
+    final tap = onTap;
+    return KeyedSubtree(
+      key: const ValueKey('spending_invested_line'),
+      child: tap == null
+          ? row
+          : Semantics(
+              button: true,
+              label:
+                  '$title ${amount.format(hidePaise: false)}, not counted in '
+                  'your spending. Opens your investments',
+              child: ExcludeSemantics(
+                child: InkWell(
+                  onTap: tap,
+                  borderRadius: BorderRadius.circular(10),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: row,
+                  ),
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+/// Investments as a row of the Categories list, for showing only: the row has
+/// no share of spending and no bar, is not in the total or the mix, and opens
+/// the investments in Activity (the one investments flow) instead of
+/// expanding. It is not a category, so nothing else treats it as one.
+class _InvestmentsRow extends StatelessWidget {
+  final Money amount;
+  final VoidCallback onTap;
+
+  const _InvestmentsRow({required this.amount, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return CardSummaryPanel(
+      key: const ValueKey('spending_investments_row'),
+      padding: EdgeInsets.zero,
+      margin: const EdgeInsets.only(bottom: AppSpace.sm),
+      child: Semantics(
+        button: true,
+        label:
+            'Investments ${amount.format(hidePaise: false)}, not counted in '
+            'your spending. Opens your investments',
+        child: ExcludeSemantics(
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.md,
+                AppSpace.sm,
+                AppSpace.sm,
+                AppSpace.sm,
+              ),
+              child: Row(
+                children: [
+                  _SpendingVisualBadge(visual: _investmentVisual, size: 38),
+                  const SizedBox(width: AppSpace.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SpendingBreakdownHeader(
+                          label: Text(
+                            'Investments',
+                            style: BambooFonts.ui(
+                              13.5,
+                              color: BambooInk.ink900,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          amount: MoneyText(
+                            amount,
+                            confidence: Confidence.confirmed,
+                            showConfidenceIcon: false,
+                            style: BambooFonts.ui(
+                              13.5,
+                              weight: FontWeight.w600,
+                              color: BambooInk.ink900,
+                            ),
+                          ),
+                          trailing: const Icon(
+                            Icons.chevron_right_rounded,
+                            size: 20,
+                            color: BambooInk.ink500,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Not counted in your spending · Tap to see them',
+                          style: BambooFonts.ui(
+                            11.5,
+                            color: BambooInk.ink500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),

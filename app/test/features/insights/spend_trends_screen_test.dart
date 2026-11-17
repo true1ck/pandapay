@@ -11,6 +11,7 @@ import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/cards/card_summary.dart';
 import 'package:pandapay/features/insights/spend_trends_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:pandapay_domain/sms_v2.dart' show Totals;
 
 final _reportRefreshGeneration = StateProvider<int>((ref) => 0);
 
@@ -23,6 +24,8 @@ SpendReport _report({
   double investment = 0,
   double rewards = 0,
   double elapsed = 0.5,
+  int spendCount = 12,
+  Totals? totals,
   List<SpendBreakdownRow> byCategory = const [],
   List<SpendBreakdownRow> byMerchant = const [],
   List<CardSpendRow> byCard = const [],
@@ -33,9 +36,10 @@ SpendReport _report({
   periodStart: DateTime(2026, 8, 1),
   periodEnd: DateTime(2026, 9, 1),
   elapsedFraction: elapsed,
+  totals: totals,
   spend: EntryKindTotals(
     total: Money.fromRupees(spend),
-    txnCount: 12,
+    txnCount: spendCount,
     rewards: Money.fromRupees(rewards),
   ),
   income: EntryKindTotals(
@@ -2242,5 +2246,289 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Aug 2026'), findsOneWidget);
+  });
+
+  group('investments beside spending', () {
+    final mix = [
+      SpendBreakdownRow(
+        label: 'Dining',
+        total: Money.fromRupees(28000),
+        txnCount: 8,
+        categoryId: 'dining',
+      ),
+      SpendBreakdownRow(
+        label: 'Shopping',
+        total: Money.fromRupees(14000),
+        txnCount: 4,
+        categoryId: 'shopping',
+      ),
+    ];
+
+    Future<void> pumpRouted(WidgetTester tester, SpendReport report) async {
+      final router = GoRouter(
+        initialLocation: '/spending',
+        routes: [
+          GoRoute(
+            path: '/spending',
+            builder: (context, state) => const SpendTrendsScreen(),
+          ),
+          GoRoute(
+            path: '/activity',
+            builder: (context, state) =>
+                Text(state.uri.toString(), key: const ValueKey('activity-uri')),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            transactionTagsProvider.overrideWith((ref) => null),
+            selectedSpendQueryProvider.overrideWith(
+              (ref) => const SpendReportQuery.preset(SpendPeriod.month),
+            ),
+            spendReportProvider.overrideWith((ref, query) async => report),
+            spendPeriodTransactionsProvider.overrideWith(
+              (ref, query) async => const [],
+            ),
+            bankAccountSummariesProvider.overrideWith((ref) async => const []),
+          ],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('the mix says how much was invested, under the mix and '
+        'outside every spending figure', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(400, 1200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await _pump(
+        tester,
+        _report(spend: 42000, investment: 15000, byCategory: mix),
+      );
+
+      final line = find.byKey(const ValueKey('spending_invested_line'));
+      expect(line, findsOneWidget);
+      expect(
+        find.descendant(of: line, matching: find.text('Invested this month')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: line, matching: find.text('₹15,000.00')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: line,
+          matching: find.text('Not counted in your spending'),
+        ),
+        findsOneWidget,
+      );
+      // Under the mix, above the summary tiles.
+      expect(
+        tester.getTopLeft(line).dy,
+        greaterThan(tester.getTopLeft(find.text('Spending mix')).dy),
+      );
+      expect(
+        tester.getTopLeft(line).dy,
+        lessThan(
+          tester
+              .getTopLeft(find.byKey(const ValueKey('spending_summary_card')))
+              .dy,
+        ),
+      );
+      // Spending is still only spending: the slices keep their share of the
+      // 42,000 and nothing adds the 15,000 to it.
+      expect(find.text('Dining · 67%'), findsOneWidget);
+      expect(find.text('Shopping · 33%'), findsOneWidget);
+      expect(find.textContaining('57,000'), findsNothing);
+      expect(find.textContaining('42,000'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('nothing invested shows no line and no row', (tester) async {
+      await _pump(tester, _report(spend: 42000, byCategory: mix));
+
+      expect(find.byKey(const ValueKey('spending_invested_line')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('spending_investments_row')),
+        findsNothing,
+      );
+      expect(find.textContaining('Invested'), findsNothing);
+    });
+
+    testWidgets('Categories lists Investments like a category, outside the '
+        'total', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(400, 1200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await _pump(
+        tester,
+        _report(spend: 42000, investment: 15000, byCategory: mix),
+      );
+
+      final row = find.byKey(const ValueKey('spending_investments_row'));
+      await tester.scrollUntilVisible(row, 300);
+      expect(
+        find.descendant(of: row, matching: find.text('Investments')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: row, matching: find.text('₹15,000.00')),
+        findsOneWidget,
+      );
+      // No share of spending: it is shown, not part of the 100%.
+      expect(
+        find.descendant(of: row, matching: find.textContaining('%')),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: row,
+          matching: find.byType(LinearProgressIndicator),
+        ),
+        findsNothing,
+      );
+      // It sits after the real categories.
+      expect(
+        tester.getTopLeft(row).dy,
+        greaterThan(tester.getTopLeft(find.text('Dining').last).dy),
+      );
+    });
+
+    testWidgets('tapping the line or the row opens Activity on this '
+        "period's investments", (tester) async {
+      await tester.binding.setSurfaceSize(const Size(400, 1200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      const expected = '/activity?type=investments&from=2026-08-01&to=2026-08-31';
+
+      await pumpRouted(
+        tester,
+        _report(spend: 42000, investment: 15000, byCategory: mix),
+      );
+      await tester.tap(find.byKey(const ValueKey('spending_invested_line')));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('activity-uri'))).data,
+        expected,
+      );
+
+      await pumpRouted(
+        tester,
+        _report(spend: 42000, investment: 15000, byCategory: mix),
+      );
+      final row = find.byKey(const ValueKey('spending_investments_row'));
+      await tester.scrollUntilVisible(row, 300);
+      await tester.tap(row);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('activity-uri'))).data,
+        expected,
+      );
+    });
+
+    testWidgets('a withdrawal does not shrink what was invested', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(400, 1200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      // 15,000 put in and 10,000 taken back out: the ledger's net investment
+      // is 5,000, but 15,000 is what left the account for investing (and what
+      // Home's Money out counts).
+      await _pump(
+        tester,
+        _report(
+          spend: 42000,
+          investment: 5000,
+          byCategory: mix,
+          totals: const Totals(
+            spendMinor: 4200000,
+            refundMinor: 0,
+            incomeMinor: 0,
+            investmentMinor: 500000,
+            investmentOutMinor: 1500000,
+            investmentReturnMinor: 1000000,
+            transactionCount: 14,
+            byCategory: {},
+          ),
+        ),
+      );
+
+      final line = find.byKey(const ValueKey('spending_invested_line'));
+      expect(
+        find.descendant(of: line, matching: find.text('₹15,000.00')),
+        findsOneWidget,
+      );
+      expect(find.text('₹5,000.00'), findsNothing);
+    });
+
+    testWidgets('a period with only investments is not an empty period', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(400, 1200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await _pump(
+        tester,
+        _report(spend: 0, spendCount: 0, investment: 15000),
+      );
+
+      expect(find.text('No spending recorded'), findsNothing);
+      final line = find.byKey(const ValueKey('spending_invested_line'));
+      expect(line, findsOneWidget);
+      expect(
+        find.descendant(of: line, matching: find.text('₹15,000.00')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spending_investments_row')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a period with nothing at all is still empty', (tester) async {
+      await _pump(tester, _report(spend: 0, spendCount: 0));
+      expect(find.text('No spending recorded'), findsOneWidget);
+    });
+
+    testWidgets('fits a 320 wide phone with a large amount', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await _pump(
+        tester,
+        _report(spend: 42000, investment: 12500000, byCategory: mix),
+      );
+
+      expect(
+        find.byKey(const ValueKey('spending_invested_line')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('SpendReport.investedOut', () {
+    SpendReport report({Totals? totals, double investment = 5000}) => _report(
+      investment: investment,
+      totals: totals,
+    );
+
+    test('is the money put in when there is no ledger total', () {
+      expect(report().investedOut, Money.fromRupees(5000));
+    });
+
+    test('is the gross money put in on the ledger path, not the net', () {
+      final withLedger = report(
+        totals: const Totals(
+          spendMinor: 0,
+          refundMinor: 0,
+          incomeMinor: 0,
+          investmentMinor: 500000,
+          investmentOutMinor: 1500000,
+          investmentReturnMinor: 1000000,
+          transactionCount: 0,
+          byCategory: {},
+        ),
+      );
+      expect(withLedger.investedOut, Money.fromRupees(15000));
+    });
   });
 }

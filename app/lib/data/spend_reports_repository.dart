@@ -318,6 +318,21 @@ class SpendReport {
 
   Money get netFlow => income.total - spend.total - investment.total;
 
+  /// Money put into investments in the period, before anything taken back out.
+  /// The Spending screen shows it BESIDE spending ("also invested ₹X") so it is
+  /// never mistaken for money lost; it is not part of [spend], [byCategory] or
+  /// any other spending total.
+  ///
+  /// On the ledger path this is the gross figure Home's Money out uses
+  /// ([Totals.investmentOutMinor]); [investment] there is the NET (a redemption
+  /// would shrink it). Off the ledger path [investment] only holds money put in.
+  Money get investedOut {
+    final ledger = totals;
+    return ledger == null
+        ? investment.total
+        : Money.fromPaise(ledger.investmentOutMinor);
+  }
+
   factory SpendReport.fromJson(Map<String, dynamic> json) {
     final totals = json['totals'] as Map<String, dynamic>? ?? const {};
     final previousTotals =
