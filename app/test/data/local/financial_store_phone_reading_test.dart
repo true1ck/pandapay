@@ -124,4 +124,31 @@ void main() {
     expect(FinancialStore.keepPhoneReading(serverRow(), other).instrument, TxnInstrument.other);
     expect(FinancialStore.keepPhoneReading(serverRow(), null).instrument, TxnInstrument.other);
   });
+
+  test('a server copy that knows only "credit card" keeps which card the phone read', () {
+    store.saveTransactions(ns, [phoneRow()], fromPhoneProjection: true);
+    store.saveTransactions(ns, [serverRow(instrument: TxnInstrument.creditCard)]);
+    final row = only();
+    expect(row['instrument'], 'credit_card');
+    expect(row['user_card_id'], 'wallet-sbi');
+    expect(row['card_last4'], '2837');
+    expect(row['card_name'], 'PhonePe SBI Select Black');
+    expect(row['note'], 'set on another phone');
+  });
+
+  test('a detail the server does have wins over the phone\'s', () {
+    store.saveTransactions(ns, [phoneRow()], fromPhoneProjection: true);
+    store.saveTransactions(ns, [
+      TransactionEntry.fromJson({
+        ...serverRow(instrument: TxnInstrument.creditCard).toJson(),
+        'user_card_id': 'wallet-other',
+        'card_name': 'Card linked on another phone',
+      }),
+    ]);
+    final row = only();
+    expect(row['user_card_id'], 'wallet-other');
+    expect(row['card_name'], 'Card linked on another phone');
+    // What the server left out still comes from the phone.
+    expect(row['card_last4'], '2837');
+  });
 }

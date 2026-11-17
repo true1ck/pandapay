@@ -755,28 +755,47 @@ class FinancialStore {
     };
   }
 
-  /// [row] from the server with the phone's [reading] kept where the server
-  /// says less: a payment method of "other" or none, and no received time.
-  /// A server row that names a payment method itself is taken as it is.
+  /// [row] from the server, with each detail of how the payment was made that
+  /// the server leaves out filled in from the phone's [reading], field by
+  /// field: the server never takes away a detail the phone read from its own
+  /// SMS, and a detail the server does have is kept. A server copy that knows
+  /// only "credit card" while the phone knows which card (its number, its
+  /// wallet card) keeps the phone's card. When the server names a different
+  /// payment method, the server's row is taken as it is: the phone's card
+  /// details belong to another method and are never mixed in.
   static TransactionEntry _keepPhoneReading(
     TransactionEntry row,
     Map<String, dynamic>? reading,
   ) {
     if (reading == null) return row;
     final json = row.toJson();
+    final merged = Map<String, dynamic>.of(json);
+    var changed = false;
     final serverInstrument = json['instrument'];
-    final serverKnows = serverInstrument is String && serverInstrument != 'other';
-    final keepMethod = !serverKnows && reading.containsKey('instrument');
-    final keepReceived =
-        json['sms_received_at'] == null && reading['sms_received_at'] != null;
-    if (!keepMethod && !keepReceived) return row;
-    return TransactionEntry.fromJson({
-      ...json,
-      if (keepMethod)
-        for (final key in _phoneReadingKeys) key: reading[key],
-      if (keepReceived) 'sms_received_at': reading['sms_received_at'],
-    });
+    final phoneInstrument = reading['instrument'];
+    final serverKnows = !_saysNothing(serverInstrument);
+    if (phoneInstrument != null &&
+        (!serverKnows || serverInstrument == phoneInstrument)) {
+      for (final key in _phoneReadingKeys) {
+        final phone = reading[key];
+        if (_saysNothing(json[key]) && !_saysNothing(phone)) {
+          merged[key] = phone;
+          changed = true;
+        }
+      }
+    }
+    if (json['sms_received_at'] == null && reading['sms_received_at'] != null) {
+      merged['sms_received_at'] = reading['sms_received_at'];
+      changed = true;
+    }
+    return changed ? TransactionEntry.fromJson(merged) : row;
   }
+
+  /// A value that tells nothing about how a payment was made.
+  static bool _saysNothing(Object? value) =>
+      value == null ||
+      (value is String &&
+          (value.isEmpty || value == 'other' || value == 'unknown'));
 
   /// [server], a copy fetched to be shown (not saved), with the phone's own
   /// reading of the same SMS payment kept from [phone] where the server says
