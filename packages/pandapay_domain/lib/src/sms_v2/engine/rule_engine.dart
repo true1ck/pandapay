@@ -308,7 +308,22 @@ class RuleEngine implements SmsInterpreter {
 
       // 2. First matching rule wins.
       final lower = body.toLowerCase();
+      // A private AI (provisional) rule sorts after every active rule (see
+      // CompiledBundle). It is for messages that Needs review holds: unknown
+      // ones, and ones a signed rule read without being sure (a fact below
+      // kConfidentRead). The evidence reader gets its turn before the first
+      // AI rule, and a message that a signed rule or the evidence reader settles
+      // confidently is never read by an AI rule.
+      var evidenceTried = false;
+      EngineOutcome? unsure;
       for (final c in cb.rulesFor(brand)) {
+        final isAi = c.rule.status == RuleStatus.provisional;
+        if (unsure != null && !isAi) continue;
+        if (!evidenceTried && isAi) {
+          evidenceTried = true;
+          final solved = _solve(cb, message, brand, hash, appVersion);
+          if (solved != null) return solved;
+        }
         final th = c.templateHash;
         if (th != null && th != hash) continue;
         if (!c.passes(lower)) continue;
@@ -378,9 +393,7 @@ class RuleEngine implements SmsInterpreter {
         }
         facts = _withPayee(cb, facts, message, id, brand);
         facts = _withSalaryPayer(cb, facts, message);
-        stats.matched++;
-        stats.ruleHits[id] = (stats.ruleHits[id] ?? 0) + 1;
-        return EngineOutcome(
+        final outcome = EngineOutcome(
           InterpretResult(
             outcome: InterpretOutcome.matched,
             facts: facts,
@@ -390,12 +403,30 @@ class RuleEngine implements SmsInterpreter {
           ),
           winnerId: id,
         );
+        // Not sure, so it goes to review: an AI rule for this layout may still
+        // read it. If none does, this reading stands.
+        if (!isAi && facts.any((f) => f.confidence < kConfidentRead)) {
+          unsure = outcome;
+          evidenceTried = true;
+          continue;
+        }
+        stats.matched++;
+        stats.ruleHits[id] = (stats.ruleHits[id] ?? 0) + 1;
+        return outcome;
+      }
+      final stays = unsure;
+      if (stays != null) {
+        stats.matched++;
+        stats.ruleHits[stays.winnerId!] = (stats.ruleHits[stays.winnerId!] ?? 0) + 1;
+        return stays;
       }
       // 3. Tier 2: no rule matched, so read the message by its evidence. Only an
       // accepted reading becomes facts; anything less stays unknown and goes to
       // review / the AI drafter exactly as before.
-      final solved = _solve(cb, message, brand, hash, appVersion);
-      if (solved != null) return solved;
+      if (!evidenceTried) {
+        final solved = _solve(cb, message, brand, hash, appVersion);
+        if (solved != null) return solved;
+      }
       return unknown('no_rule_matched');
     } catch (e) {
       return unknown('engine_error', detail: '$e');

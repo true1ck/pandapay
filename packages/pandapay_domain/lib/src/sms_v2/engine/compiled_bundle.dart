@@ -276,6 +276,12 @@ class CompiledBundle {
     }
 
     int order(CompiledRule a, CompiledRule b) {
+      // A private AI (provisional) rule only ever reads what no signed rule and
+      // no evidence reading could read, so it comes after every active rule
+      // whatever its priority.
+      final pa = a.rule.status == RuleStatus.provisional ? 1 : 0;
+      final pb = b.rule.status == RuleStatus.provisional ? 1 : 0;
+      if (pa != pb) return pa.compareTo(pb);
       final p = b.rule.priority.compareTo(a.rule.priority);
       if (p != 0) return p;
       // At equal priority a brand rule comes before a generic one.

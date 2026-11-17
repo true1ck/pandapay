@@ -129,13 +129,25 @@ Future<DraftCheck> checkDraftOffThread({
   ),
 );
 
-/// At least one fact, every rupee amount printed in the message, and every
-/// reference value (account, ref number) found in its text.
+/// At least one fact, every rupee amount printed in the message, every
+/// reference value (account, ref number) found in its text, and a payee that is
+/// really in the message and is more than a lone letter.
+///
+/// A draft whose payee slot caught only the tail of a name ("P" out of
+/// "Amazon P") read the message's amounts correctly and used to pass.
+// ponytail: a lone letter is the cheap stand-in for "a fragment of a name".
+// A fuller test (does the payee match what a signed rule reads) needs a
+// baseline that an unknown message does not have.
 bool _factsAreInMessage(List<Fact> facts, String body) {
   if (facts.isEmpty) return false;
   final plain = body.replaceAll(',', '');
   final lower = body.toLowerCase();
   for (final fact in facts) {
+    final payee = fact.counterparty?.name?.trim();
+    if (payee != null && payee.isNotEmpty) {
+      if (payee.replaceAll(RegExp(r'[^A-Za-z0-9]'), '').length < 2) return false;
+      if (!lower.contains(payee.toLowerCase())) return false;
+    }
     for (final amount in fact.amounts) {
       if (!amount.isInr) continue;
       final rupees = amount.minor ~/ 100, paise = amount.minor % 100;

@@ -203,10 +203,17 @@ const REFERENCE_KEYS = Object.keys(factSchema.properties.references.properties);
 // "<ruleId>@<version>" of the first active rule for the sender that reads this layout with every way of
 // writing its values (three fills), or null. One fill is not enough: a rule that only reads "Rs. 127.45"
 // would be called a cover and then fail on "INR 1,23,456.78". The AI is not asked about a covered layout.
+// A rule for every sender ("*") covers it too, but only when it is sure of what it reads (confidence at
+// least GENERIC_COVER_CONFIDENCE): a catch-all that reads unsurely leaves the message in review, which is
+// exactly what the AI is for.
+const GENERIC_COVER_CONFIDENCE = 0.7;
 function coveredBy(template, rules) {
   const samples = FILLS.map((values) => fillWith(template.redacted_body, values));
   for (const rule of rules) {
-    if (!rule?.match?.pattern || !rule.senders?.includes(template.sender_brand)) continue;
+    if (!rule?.match?.pattern) continue;
+    const own = rule.senders?.includes(template.sender_brand);
+    const generic = !own && rule.senders?.includes("*") && Number(rule.confidence) >= GENERIC_COVER_CONFIDENCE;
+    if (!own && !generic) continue;
     try {
       if (samples.every((sample) => ruleMatches(rule, sample))) return `${rule.id}@${rule.version}`;
     } catch {
@@ -640,7 +647,7 @@ function createPgWorkerStore({ withAdminClient, adminId, transaction }) {
       return tx(async (client) =>
         (
           await client.query(
-            "SELECT body FROM sms_v2_rules WHERE status='active' AND $1=ANY(senders) ORDER BY rule_id,version DESC LIMIT 200",
+            "SELECT body FROM sms_v2_rules WHERE status='active' AND ($1=ANY(senders) OR '*'=ANY(senders)) ORDER BY ('*'=ANY(senders)),rule_id,version DESC LIMIT 600",
             [template.sender_brand],
           )
         ).rows.map((row) => row.body),

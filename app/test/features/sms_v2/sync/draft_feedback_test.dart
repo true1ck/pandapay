@@ -137,6 +137,13 @@ void main() {
     test('a sound rule passes', () {
       expect(check(_result(_rule()), [_body]), DraftCheck.pass);
     });
+    test('a payee that is only a fragment of the name is invalid_facts', () {
+      final r = _rule(
+        pattern:
+            r'^Rs\.(?<amt>\d+(?:\.\d{1,2})?) paid from card XX(?<mask>\d{4}) to ACME (?<merchant>S)TORE\.$',
+      );
+      expect(check(_result(r), [_body]), DraftCheck.invalidFacts);
+    });
     test('a rule that does not match the message is no_match', () {
       final r = _rule(pattern: r'^Rs\.(?<amt>\d+) refunded to (?<mask>\d{4}) (?<merchant>[A-Z ]+)$');
       expect(check(_result(r), [_body]), DraftCheck.noMatch);

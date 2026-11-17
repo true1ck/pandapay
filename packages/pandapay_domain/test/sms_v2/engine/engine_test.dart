@@ -16,6 +16,7 @@ Map<String, Object?> _rule({
   required String id,
   List<String> senders = const ['HDFCBK'],
   int priority = 500,
+  double confidence = 0.9,
   required String pattern,
   String flags = 'i',
   List<String>? requireAll,
@@ -49,7 +50,7 @@ Map<String, Object?> _rule({
               ],
             },
           ],
-      'confidence': 0.9,
+      'confidence': confidence,
       'examples': examples ??
           [
             {'sender': 'VM-HDFCBK-S', 'body': 'pos', 'expectFactTypes': ['movement']},
@@ -444,6 +445,28 @@ void main() {
       expect(run(b, _msg('VM-HDFCBK-S', body)).ruleId, 'PROV');
       expect(run(b, _msg('VM-HDFCBK-S', 'Rs.5.00 totally different words here now')).outcome,
           InterpretOutcome.unknown);
+    });
+
+    test('never read a message a signed rule already reads, whatever their priority', () {
+      const body = 'Rs.5.00 something';
+      final hash = run(_bundle([_rule(id: 'X', pattern: '^$_amt')]), _msg('VM-HDFCBK-S', body)).templateHash;
+      final b = _bundle([
+        _rule(id: 'SIGNED', pattern: '^$_amt', priority: 10),
+        _rule(id: 'PROV', pattern: '^$_amt', priority: 500, status: 'provisional', createdBy: 'ai:test', templateHash: hash),
+      ]);
+      expect(run(b, _msg('VM-HDFCBK-S', body)).ruleId, 'SIGNED');
+    });
+
+    test('read a message a signed rule is unsure about, which Needs review holds', () {
+      const body = 'Rs.5.00 something';
+      final hash = run(_bundle([_rule(id: 'X', pattern: '^$_amt')]), _msg('VM-HDFCBK-S', body)).templateHash;
+      final b = _bundle([
+        _rule(id: 'UNSURE', pattern: '^$_amt', priority: 600, confidence: 0.6),
+        _rule(id: 'PROV', pattern: '^$_amt', priority: 500, status: 'provisional', createdBy: 'ai:test', templateHash: hash),
+      ]);
+      expect(run(b, _msg('VM-HDFCBK-S', body)).ruleId, 'PROV');
+      // With no AI rule for the layout the unsure reading stands.
+      expect(run(_bundle([_rule(id: 'UNSURE', pattern: '^$_amt', confidence: 0.6)]), _msg('VM-HDFCBK-S', body)).ruleId, 'UNSURE');
     });
   });
 
