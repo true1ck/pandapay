@@ -138,7 +138,7 @@ Future<void> _pumpScan(
 }
 
 Future<void> _tapPay(WidgetTester tester) async {
-  final pay = find.widgetWithText(FilledButton, 'Pay with c1');
+  final pay = find.byKey(const ValueKey('pay:c1'));
   await tester.ensureVisible(pay);
   await tester.pumpAndSettle();
   await tester.tap(pay);
@@ -260,19 +260,15 @@ void main() {
       );
       // Excluded cards never get a "Pay with" action.
       expect(
-        find.widgetWithText(FilledButton, 'Pay with rupay-card'),
+        find.byKey(const ValueKey('pay:rupay-card')),
         findsNothing,
       );
     },
   );
 
   testWidgets(
-    'tapping "Wasn\'t accepted" removes that card from the ranked list',
+    'cards are compact rows: Pay on each, no "always use" or "wasn\'t accepted"',
     (tester) async {
-      // A non-zero `am` so the two cards' differing reward rates actually
-      // produce different expectedValue results — at ₹0 spend the engine's
-      // final card-id tie-break would rank card-a first regardless of rate,
-      // which would make this test pass for the wrong reason.
       final parsed = ParsedUpiQr(
         pa: 'shop@okhdfcbank',
         pn: 'Local Store',
@@ -299,46 +295,20 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // card-a ranks first (higher rate) and shows a "Pay with card-a" button.
+      expect(find.byKey(const ValueKey('pay:card-a')), findsOneWidget);
+      expect(find.byKey(const ValueKey('pay:card-b')), findsOneWidget);
+      // The better card is first and marked.
+      expect(find.text('BEST'), findsOneWidget);
       expect(
-        find.widgetWithText(FilledButton, 'Pay with card-a'),
-        findsOneWidget,
+        tester.getTopLeft(find.text('card-a')).dy,
+        lessThan(tester.getTopLeft(find.text('card-b')).dy),
       );
-
-      final rejectedButton = find
-          .widgetWithText(TextButton, "Wasn't accepted")
-          .first;
-      await tester.drag(find.byType(ListView).first, const Offset(0, -300));
-      await tester.pumpAndSettle();
-      await tester.tap(rejectedButton);
-      await tester.pumpAndSettle();
-
+      expect(find.text("Wasn't accepted"), findsNothing);
+      expect(find.text('Always use this card here'), findsNothing);
+      // Paying from the bank account is the last thing on the page.
       expect(
-        find.widgetWithText(FilledButton, 'Pay with card-a'),
-        findsNothing,
-      );
-      expect(
-        find.widgetWithText(FilledButton, 'Pay with card-b'),
-        findsOneWidget,
-      );
-
-      // Reject the last one too -> not "No cards yet" (they own two), a
-      // reversible dead end.
-      final lastRejectedButton = find
-          .widgetWithText(TextButton, "Wasn't accepted")
-          .first;
-      await tester.drag(find.byType(ListView).first, const Offset(0, -300));
-      await tester.pumpAndSettle();
-      await tester.tap(lastRejectedButton);
-      await tester.pumpAndSettle();
-      expect(find.text('No other cards to try'), findsOneWidget);
-      expect(find.text('No cards yet'), findsNothing);
-
-      await tester.tap(find.widgetWithText(OutlinedButton, 'Show them again'));
-      await tester.pumpAndSettle();
-      expect(
-        find.widgetWithText(FilledButton, 'Pay with card-a'),
-        findsOneWidget,
+        tester.getTopLeft(find.text('Continue without card')).dy,
+        greaterThan(tester.getTopLeft(find.text('card-b')).dy),
       );
     },
   );
@@ -419,6 +389,61 @@ void main() {
       expect(fake.launched.single.package, 'in.slice.android');
     });
 
+    testWidgets(
+      'an app with no known payment link is opened and the UPI ID is copied',
+      (tester) async {
+        const scapia = UpiApp(
+          packageName: 'scapia',
+          name: 'Scapia',
+          prefillsPayment: false,
+        );
+        final fake = _FakeUpiService(apps: const [_gpay, scapia]);
+        await _pumpScan(tester, fake);
+        final copied = <String>[];
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          (call) async {
+            if (call.method == 'Clipboard.setData') {
+              copied.add((call.arguments as Map)['text'] as String);
+            }
+            return null;
+          },
+        );
+
+        await _enterAmountAndPay(tester, '30');
+        await tester.tap(find.text('Scapia'));
+        await tester.pumpAndSettle();
+
+        expect(fake.launched.single.package, 'scapia');
+        expect(copied, ['shop@okhdfcbank']);
+        expect(find.textContaining('UPI ID copied'), findsOneWidget);
+      },
+    );
+
+    testWidgets('an app that takes the link does not touch the clipboard', (
+      tester,
+    ) async {
+      final fake = _FakeUpiService(apps: const [_gpay]);
+      await _pumpScan(tester, fake);
+      final copied = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied.add((call.arguments as Map)['text'] as String);
+          }
+          return null;
+        },
+      );
+
+      await _enterAmountAndPay(tester, '30');
+      await tester.tap(find.text('Google Pay'));
+      await tester.pumpAndSettle();
+
+      expect(copied, isEmpty);
+      expect(find.textContaining('UPI ID copied'), findsNothing);
+    });
+
     testWidgets('a signed merchant QR keeps its signature and references', (
       tester,
     ) async {
@@ -490,7 +515,7 @@ void main() {
 
       expect(find.textContaining("Couldn't open Google Pay"), findsOneWidget);
       expect(find.text('Continue in your UPI app'), findsNothing);
-      expect(find.widgetWithText(FilledButton, 'Pay with c1'), findsOneWidget);
+      expect(find.byKey(const ValueKey('pay:c1')), findsOneWidget);
     });
 
     testWidgets('dismissing the app picker does nothing', (tester) async {
@@ -568,15 +593,15 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('No applicable reward rule.'), findsNothing);
-      expect(find.text('TAP THIS ONE'), findsOneWidget);
+      expect(find.text('BEST'), findsOneWidget);
       // The card that can pay comes before the one that cannot be used.
       expect(
         tester.getTopLeft(find.text('Neu RuPay')).dy,
         lessThan(tester.getTopLeft(find.text('visa')).dy),
       );
-      expect(find.widgetWithText(FilledButton, 'Pay with visa'), findsNothing);
+      expect(find.byKey(const ValueKey('pay:visa')), findsNothing);
       expect(
-        find.widgetWithText(FilledButton, 'Pay with Neu RuPay'),
+        find.byKey(const ValueKey('pay:Neu RuPay')),
         findsOneWidget,
       );
       // The amount goes on that card.
@@ -584,7 +609,7 @@ void main() {
 
       await tester.enterText(find.byType(TextField).last, '180');
       await tester.pump();
-      final pay = find.widgetWithText(FilledButton, 'Pay with Neu RuPay');
+      final pay = find.byKey(const ValueKey('pay:Neu RuPay'));
       await tester.ensureVisible(pay);
       await tester.pumpAndSettle();
       await tester.tap(pay);
@@ -610,7 +635,7 @@ void main() {
       ], const []);
 
       expect(
-        find.widgetWithText(FilledButton, 'Pay with Neu RuPay'),
+        find.byKey(const ValueKey('pay:Neu RuPay')),
         findsNothing,
       );
     });
@@ -642,7 +667,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Pay with c1'));
+    await tester.tap(find.byKey(const ValueKey('pay:c1')));
     await tester.pumpAndSettle();
     expect(find.text('Enter an amount to pay'), findsOneWidget);
     expect(fake.opened, isEmpty);
@@ -650,7 +675,7 @@ void main() {
 
     // Still below the ₹1 floor -> error stays, no hand-off.
     await tester.enterText(find.byType(TextField).last, '0');
-    await tester.tap(find.widgetWithText(FilledButton, 'Pay with c1'));
+    await tester.tap(find.byKey(const ValueKey('pay:c1')));
     await tester.pumpAndSettle();
     expect(find.text('Enter an amount to pay'), findsOneWidget);
     expect(fake.opened, isEmpty);
@@ -659,7 +684,7 @@ void main() {
     await tester.enterText(find.byType(TextField).last, '50');
     await tester.pump();
     expect(find.text('Enter an amount to pay'), findsNothing);
-    await tester.tap(find.widgetWithText(FilledButton, 'Pay with c1'));
+    await tester.tap(find.byKey(const ValueKey('pay:c1')));
     await tester.pumpAndSettle();
     expect(find.text('Open which UPI app?'), findsOneWidget);
   });
@@ -723,10 +748,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.widgetWithText(FilledButton, 'Add this card'),
+        find.byKey(const ValueKey('add:c1')),
         findsOneWidget,
       );
-      expect(find.widgetWithText(FilledButton, 'Pay with c1'), findsNothing);
+      expect(find.byKey(const ValueKey('pay:c1')), findsNothing);
       expect(find.textContaining('Add your own cards'), findsOneWidget);
     },
   );
@@ -779,11 +804,11 @@ void main() {
       );
       expect(find.textContaining('no merchant code'), findsOneWidget);
       expect(
-        find.widgetWithText(FilledButton, 'Pay with rupay-1'),
+        find.byKey(const ValueKey('pay:rupay-1')),
         findsOneWidget,
       );
 
-      final payButton = find.widgetWithText(FilledButton, 'Pay with rupay-1');
+      final payButton = find.byKey(const ValueKey('pay:rupay-1'));
       await tester.drag(find.byType(ListView).first, const Offset(0, -300));
       await tester.pumpAndSettle();
       await tester.tap(payButton);
@@ -794,7 +819,7 @@ void main() {
       expect(find.text('Enter an amount to pay'), findsOneWidget);
       await tester.enterText(find.byType(TextField).last, '500');
       await tester.pump();
-      await tester.tap(find.widgetWithText(FilledButton, 'Pay with rupay-1'));
+      await tester.tap(find.byKey(const ValueKey('pay:rupay-1')));
       await tester.pumpAndSettle();
 
       expect(find.text('Is this a business payment?'), findsOneWidget);
@@ -926,12 +951,8 @@ void main() {
 
         // The same app list as for a card, naming the bank account.
         expect(find.text('Open which UPI app?'), findsOneWidget);
-        expect(
-          find.text(
-            "You'll pay with your bank account there, then enter your UPI PIN.",
-          ),
-          findsOneWidget,
-        );
+        expect(find.text('Paying with'), findsOneWidget);
+        expect(find.text('Your bank account'), findsOneWidget);
         await tester.tap(find.text('Google Pay'));
         await tester.pumpAndSettle();
 

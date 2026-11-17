@@ -20,9 +20,11 @@ import '../../data/scanned_merchant_category.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
 import '../../main.dart' show MoneyText;
 import '../cards/add_card_local_first.dart';
-import '../overrides/override_local_first.dart';
 import '../cards/recommendation_confidence.dart';
 import '../cards/card_picker_screen.dart';
+import '../cards/card_visual.dart' show MiniCardVisual;
+import '../cards/cap_progress.dart';
+import '../cards/widgets/cap_bar.dart';
 import '../comparison/comparison_view_screen.dart';
 import 'payment_sent_screen.dart';
 import 'upi_app_picker_sheet.dart';
@@ -31,8 +33,14 @@ import 'package:url_launcher/url_launcher.dart';
 /// ui-spec B3. Merchant identity/category resolution is best-effort and
 /// exact-VPA based: published directory data may enrich a QR before payment,
 /// while the local MCC/name classifier remains the offline fallback. There is
-/// no silent background contribution write, and "This card wasn't accepted"
-/// remains a local-only (not server-recorded) re-rank.
+/// no silent background contribution write.
+///
+/// Layout (17 Nov 2026 redesign): merchant and amount on top, then one compact
+/// row per card (card art, name, what it earns here, how much of the reward
+/// limit this payment touches is left, a small Pay button) that expands for the
+/// details, and paying from the bank account over UPI always last. There is no
+/// "Always use this card here" or "Wasn't accepted" here any more: an existing
+/// override still ranks first and is marked.
 ///
 /// Ranking here is deliberately independent of Home's
 /// `selectedCategoryProvider`/`enteredAmountProvider` — this screen's
@@ -70,19 +78,6 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
         ? Money.fromRupees(parsed)
         : const Money.zero();
   }
-
-  // "Wasn't accepted" — session-local only re-rank, see scope note above.
-  // This is deliberate, not a missing wire-up: POST /acceptance-reports and
-  // AcceptanceReportsRepository DO exist and ARE used (payment_sent_screen.dart),
-  // but that screen's own doc-comment explains why it's the only honest place
-  // to ask — it fires right after the user confirms a payment actually went
-  // through, a fresh, high-confidence, first-hand signal. This button fires
-  // BEFORE any payment attempt, as a lower-confidence "skip this card, I
-  // don't want to try it here" action; writing it to the same shared
-  // crowdsourced acceptance dataset would mix pre-attempt guesses in with
-  // real post-payment confirmations. So it only excludes the card from the
-  // in-memory ranked list for the rest of this scan session, never persisted.
-  final Set<String> _locallyRejectedCardIds = {};
 
   @override
   void initState() {
@@ -335,7 +330,6 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     );
 
     final snapshots = cards
-        .where((c) => !_locallyRejectedCardIds.contains(c.id))
         .map(
           (c) => buildCardSnapshot(
             c,
@@ -445,7 +439,12 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
           onSelected: (id) => setState(() => _selectedCategoryId = id),
         ),
         const SizedBox(height: AppSpace.md),
-        _amountAndWithoutCard(),
+        _AmountCard(
+          controller: _amountController,
+          focusNode: _amountFocusNode,
+          fieldKey: _amountFieldKey,
+          errorText: _amountError,
+        ),
         const SizedBox(height: AppSpace.lg),
         if (walletEmpty && !noMcc)
           Container(
@@ -514,27 +513,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
               ),
             ),
           ),
-        if (upiRanked.isEmpty && _locallyRejectedCardIds.isNotEmpty)
-          // Every card was marked "wasn't accepted" this scan — not the same
-          // as owning none. Offer to bring them back rather than showing a
-          // dead end.
-          Column(
-            children: [
-              const EmptyState(
-                icon: Icons.block_rounded,
-                title: 'No other cards to try',
-                message:
-                    "You've marked every card as not accepted at this merchant.",
-              ),
-              const SizedBox(height: AppSpace.md),
-              OutlinedButton.icon(
-                onPressed: () => setState(_locallyRejectedCardIds.clear),
-                icon: const Icon(Icons.undo_rounded, size: 18),
-                label: const Text('Show them again'),
-              ),
-            ],
-          )
-        else if (upiRanked.isEmpty)
+        if (upiRanked.isEmpty)
           const EmptyState(
             icon: Icons.credit_card_off_rounded,
             title: 'No cards yet',
@@ -542,37 +521,34 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
                 'Add a card to see personalized reward recommendations here.',
           )
         else
-          // A plain ListView(children:) over a stateless per-row widget —
-          // _ScanResultCard holds no internal state (no "why this card"
-          // expansion, unlike Home's _RecommendationCard), so there is no
-          // per-item Element state that a reorder (amount edit, category
-          // change, "wasn't accepted") could lose or misattribute. The
-          // stable-Key lesson from Home's ranked list therefore doesn't
-          // apply here — see this class's test file for a reorder+rebuild
-          // regression check confirming rows always show data matching
-          // their current rank, not stale carried-over content.
-          // The suggested card first, then the other cards that can pay, and the
-          // cards that cannot be used here last.
+          // The suggested card first, then the other cards that can pay, and
+          // the cards that cannot be used here last. Each row keeps its own
+          // expanded state, keyed by card, so a re-rank (amount or category
+          // change) never opens the wrong card.
           for (final rec in [
             ...upiRanked.where((r) => !r.isExcluded || payable(r)),
             ...upiRanked.where((r) => r.isExcluded && !payable(r)),
           ])
             Padding(
-              padding: const EdgeInsets.only(bottom: AppSpace.md),
+              padding: const EdgeInsets.only(bottom: AppSpace.sm),
               child: _ScanResultCard(
+                key: ValueKey('scan-card-${rec.card.id}'),
                 recommendation: rec,
+                owned: wallet
+                    .where((w) => w.cardProductId == rec.card.id)
+                    .firstOrNull,
+                now: now,
                 isHero: rec.card.id == heroCardId,
-                isOwned: wallet.any((w) => w.cardProductId == rec.card.id),
-                showRupayUpiNote: rec.card.isUpiLinkable,
                 payDespiteExclusion: rec.isExcluded && payable(rec),
                 amountEntered: _amount.rupees >= 1,
-                onNotAccepted: () =>
-                    setState(() => _locallyRejectedCardIds.add(rec.card.id)),
                 onPay: () => _payWith(rec, wallet, activeCategoryId),
-                onAlwaysUseHere: () => _createOverride(rec, wallet),
                 onAddCard: () => _addCard(rec.card),
               ),
             ),
+        // Paying from the bank account over UPI is always there, and always
+        // last: the way out when no card can pay or the shop refuses cards.
+        const SizedBox(height: AppSpace.sm),
+        _WithoutCardBanner(onTap: _continueWithoutCard),
       ],
     );
   }
@@ -716,6 +692,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       context,
       apps: apps,
       cardName: payWith,
+      fromBankAccount: rec == null,
     );
     if (chosen == null || !mounted) return;
 
@@ -744,6 +721,25 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
         ),
       );
       return;
+    }
+
+    // An app with no payment link we know opens on its own screen: copy the UPI
+    // ID so the user can pay to it there (the amount is on this screen).
+    if (!chosen.prefillsPayment) {
+      await Clipboard.setData(
+        ClipboardData(text: widget.parsed.pa),
+      ).catchError((_) {});
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            hasAmount
+                ? 'Opened ${chosen.name}. UPI ID copied: pay ${_amount.format()} to ${widget.parsed.pa} there.'
+                : 'Opened ${chosen.name}. UPI ID copied: pay ${widget.parsed.pa} there.',
+          ),
+          duration: const Duration(seconds: 8),
+        ),
+      );
     }
 
     // The bank SMS is the authoritative settled spend, so nothing is logged
@@ -817,52 +813,6 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
         ),
       ),
     );
-  }
-
-  Future<void> _createOverride(
-    Recommendation rec,
-    List<UserCard> wallet,
-  ) async {
-    final repo = ref.read(cardOverridesRepositoryProvider);
-    final owned = wallet
-        .where((w) => w.cardProductId == rec.card.id)
-        .firstOrNull;
-    if (repo == null || owned == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Sign in and add this card to your wallet to create an override.',
-          ),
-        ),
-      );
-      return;
-    }
-    try {
-      // B8 scope: vpa, from the scanned QR — the most specific override
-      // scope (see override_resolver.dart's priority doc comment), matching
-      // "Always use this card here" meaning "at this exact payee", not this
-      // merchant's name (which can vary) or this whole category.
-      // Local-first (WP-C6): queued when the server is not reachable.
-      await createOverrideLocalFirst(
-        ref,
-        card: owned,
-        scope: OverrideScope.vpa,
-        vpa: widget.parsed.pa,
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${rec.card.name} will always be suggested here.'),
-          ),
-        );
-      }
-    } catch (err) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(err))));
-      }
-    }
   }
 
   /// "Add this card" on a not-owned suggestion (empty wallet). Opens the same
@@ -1183,11 +1133,102 @@ class _P2PNotice extends StatelessWidget {
   }
 }
 
-class _ScanResultCard extends StatelessWidget {
+/// What is left of the reward limit this payment counts against, in one line:
+/// "₹260 cashback left · resets 1 Dec", or "Limit reached · extra spend here
+/// earns nothing". Null when the card has no limit this payment touches, or
+/// the card is not in the wallet (no usage to read).
+///
+/// v2 cards read the caps the engine says this spend consumes
+/// ([RewardEvaluation.capDeltas] and [RewardEvaluation.caps]); v1 cards, which
+/// do not say, show their fullest limit.
+({String text, bool reached, bool warn})? scanCapHeadroom({
+  required Recommendation recommendation,
+  required UserCard? owned,
+  required DateTime now,
+}) {
+  if (owned == null) return null;
+  final card = recommendation.card;
+  if (card.isV2Shaped) {
+    final reward = recommendation.reward;
+    final touched = <String>{
+      ...?reward?.capDeltas.keys,
+      for (final usage in reward?.caps ?? const <RewardCapUsage>[]) usage.cap.id,
+    };
+    final progress = fullestCapProgress(
+      capProgressesFor(product: card, owned: owned, now: now)
+          .where((p) => touched.contains(p.cap.id)),
+    );
+    if (progress == null) return null;
+    if (progress.isUnknown) {
+      return (text: 'Reward limit: updating', reached: false, warn: true);
+    }
+    if (progress.isReached) {
+      return (
+        text: 'Limit reached · ${progress.reachedConsequence}',
+        reached: true,
+        warn: false,
+      );
+    }
+    final left = (progress.amount - (progress.consumed ?? 0)).clamp(
+      0.0,
+      progress.amount,
+    );
+    final leftText = switch (progress.unit) {
+      CapUnit.points => '${formatNative(left)} pts left',
+      CapUnit.cashback => '${Money.fromRupees(left).format(hidePaise: true)} cashback left',
+      CapUnit.spend => '${Money.fromRupees(left).format(hidePaise: true)} at this rate left',
+      CapUnit.uses => '${formatNative(left)} uses left',
+    };
+    return (
+      text: '$leftText · ${progress.resetText}',
+      reached: false,
+      warn: (progress.ratio ?? 0) >= 0.8,
+    );
+  }
+
+  // v1: the fullest limit, in the measure the catalogue states it in.
+  CapRule? fullest;
+  var fullestRatio = -1.0;
+  for (final cap in card.capRules) {
+    if (cap.capValue.isZero) continue;
+    final used = owned.capConsumed[cap.id] ?? const Money.zero();
+    final ratio = (used.paise / cap.capValue.paise).clamp(0.0, 1.0);
+    if (ratio > fullestRatio) {
+      fullest = cap;
+      fullestRatio = ratio;
+    }
+  }
+  if (fullest == null) return null;
+  final used = owned.capConsumed[fullest.id] ?? const Money.zero();
+  final left = Money.fromPaise(
+    (fullest.capValue.paise - used.paise).clamp(0, fullest.capValue.paise),
+  );
+  final period = switch (fullest.period) {
+    CapPeriod.statementCycle => 'this statement',
+    CapPeriod.calendarMonth => 'this month',
+    CapPeriod.quarter => 'this quarter',
+    CapPeriod.halfYear => 'this half-year',
+    CapPeriod.annual => 'this year',
+    CapPeriod.lifetime => 'in all',
+  };
+  if (fullestRatio >= 1) {
+    return (text: 'Limit reached $period', reached: true, warn: false);
+  }
+  final leftText = switch (fullest.measure) {
+    CapMeasure.txnCount => '${left.rupees.toInt()} uses left',
+    CapMeasure.spendAmount => '${left.format(hidePaise: true)} at this rate left',
+    CapMeasure.rewardValue => '${left.format(hidePaise: true)} rewards left',
+  };
+  return (text: '$leftText $period', reached: false, warn: fullestRatio >= 0.8);
+}
+
+/// One card, compact: card art, name, what it earns here, the reward limit
+/// this payment touches, and a small Pay button. Tap to see why it earns that.
+class _ScanResultCard extends StatefulWidget {
   final Recommendation recommendation;
+  final UserCard? owned;
+  final DateTime now;
   final bool isHero;
-  final bool isOwned;
-  final bool showRupayUpiNote;
 
   /// An owned, UPI-linkable card the engine excluded only because it earns
   /// nothing here (no reward rule, category excluded, cap reached). That is
@@ -1198,234 +1239,328 @@ class _ScanResultCard extends StatelessWidget {
   /// Whether a payable amount (≥ ₹1) has been entered yet.
   final bool amountEntered;
 
-  final VoidCallback onNotAccepted;
   final VoidCallback onPay;
-  final VoidCallback onAlwaysUseHere;
   final VoidCallback onAddCard;
 
   const _ScanResultCard({
+    super.key,
     required this.recommendation,
+    required this.owned,
+    required this.now,
     required this.isHero,
-    required this.isOwned,
-    required this.showRupayUpiNote,
     this.payDespiteExclusion = false,
     this.amountEntered = false,
-    required this.onNotAccepted,
     required this.onPay,
-    required this.onAlwaysUseHere,
     required this.onAddCard,
   });
 
   @override
+  State<_ScanResultCard> createState() => _ScanResultCardState();
+}
+
+class _ScanResultCardState extends State<_ScanResultCard> {
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
+    final rec = widget.recommendation;
     // Only a card that truly cannot be used here is shown blocked. A card the
     // engine excluded just because it earns nothing here (no reward rule) is
-    // shown like the others, with its ₹0.00, and can be paid with.
-    final excluded = recommendation.isExcluded && !payDespiteExclusion;
-    final hero = isHero && !excluded;
+    // shown like the others and can be paid with.
+    final excluded = rec.isExcluded && !widget.payDespiteExclusion;
+    final hero = widget.isHero && !excluded;
+    final isOwned = widget.owned != null;
+    final headroom = excluded
+        ? null
+        : scanCapHeadroom(
+            recommendation: rec,
+            owned: widget.owned,
+            now: widget.now,
+          );
+    final rate = rec.effectiveRatePerRupee;
+    final rateText = rate == null || rate <= 0
+        ? null
+        : '${(rate * 100).toStringAsFixed(rate * 100 < 10 ? 1 : 0).replaceAll('.0', '')}% back';
+    final hasDetails =
+        !excluded &&
+        (rec.reasonLines.isNotEmpty || rec.isOverride || headroom != null);
+
     return Container(
-      padding: const EdgeInsets.all(AppSpace.lg),
       decoration: BoxDecoration(
         color: excluded ? BambooInk.paperMuted : BambooInk.glassFillOnPaper,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: hero ? BambooInk.lime : BambooInk.hairlineOnPaper,
           width: hero ? 2 : 1,
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              if (hero) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: BambooInk.slate,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    'TAP THIS ONE',
-                    style: BambooFonts.ui(
-                      10.5,
-                      weight: FontWeight.w700,
-                      color: BambooInk.lime,
-                    ).copyWith(letterSpacing: 0.6),
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-              Expanded(
-                child: Text(
-                  recommendation.card.name,
-                  style: BambooFonts.heading(
-                    16,
-                    color: excluded ? BambooInk.ink500 : BambooInk.ink900,
-                  ),
-                ),
-              ),
-              if (recommendation.isOverride)
-                StatusPill(
-                  label: 'Override',
-                  foreground: BambooInk.ink900,
-                  background: hero
-                      ? Colors.white.withValues(alpha: 0.5)
-                      : BambooInk.paperMuted,
-                ),
-            ],
-          ),
-          const SizedBox(height: AppSpace.xs),
-          if (excluded)
-            // ui-spec B3.4: RuPay/UPI eligibility, explicit — the engine's
-            // own exclusionReason string (e.g. "Not usable via UPI — swipe
-            // this instead.") is shown verbatim, never re-worded
-            // client-side. This is the SAME exclusion gate the engine
-            // applies everywhere else (RecommendationEngine._evaluate's
-            // TxnRail.upiQr / !isUpiLinkable check) — B3 doesn't reinvent
-            // its own RuPay/UPI eligibility logic.
-            Row(
-              children: [
-                const Icon(
-                  Icons.block_rounded,
-                  size: 16,
-                  color: BambooInk.ink500,
-                ),
-                const SizedBox(width: AppSpace.xs),
-                Expanded(
-                  child: Text(
-                    recommendation.exclusionReason!,
-                    style: BambooFonts.ui(13, color: BambooInk.ink500),
-                  ),
-                ),
-              ],
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: hasDetails ? () => setState(() => _expanded = !_expanded) : null,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpace.md,
+              AppSpace.md,
+              AppSpace.sm,
+              AppSpace.md,
             ),
-          if (!excluded) ...[
-            if (showRupayUpiNote)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Icon(
-                      Icons.qr_code_2_rounded,
-                      size: 14,
+                    Opacity(
+                      opacity: excluded ? 0.45 : 1,
+                      child: MiniCardVisual(
+                        product: rec.card,
+                        userCard: widget.owned,
+                        width: 50,
+                        height: 32,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpace.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              if (hero) ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 7,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: BambooInk.slate,
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    'BEST',
+                                    style: BambooFonts.ui(
+                                      9.5,
+                                      weight: FontWeight.w700,
+                                      color: BambooInk.lime,
+                                    ).copyWith(letterSpacing: 0.6),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                              ],
+                              Flexible(
+                                child: Text(
+                                  rec.card.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: BambooFonts.ui(
+                                    14.5,
+                                    weight: FontWeight.w600,
+                                    color: excluded
+                                        ? BambooInk.ink500
+                                        : BambooInk.ink900,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          if (excluded)
+                            Text(
+                              rec.exclusionReason!,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: BambooFonts.ui(12, color: BambooInk.ink500),
+                            )
+                          else if (widget.amountEntered)
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.baseline,
+                              textBaseline: TextBaseline.alphabetic,
+                              children: [
+                                MoneyText(
+                                  rec.expectedValue,
+                                  confidence: confidenceOf(rec),
+                                  style: BambooFonts.money(
+                                    15,
+                                    color: BambooInk.ink900,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  rec.expectedValue.paise > 0
+                                      ? 'back'
+                                      : 'earns nothing here',
+                                  style: BambooFonts.ui(
+                                    12,
+                                    color: BambooInk.ink500,
+                                  ),
+                                ),
+                              ],
+                            )
+                          else
+                            Text(
+                              rateText ?? 'Enter an amount to see the reward',
+                              style: BambooFonts.ui(12, color: BambooInk.ink500),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: AppSpace.sm),
+                    if (!excluded && isOwned)
+                      FilledButton(
+                        key: ValueKey('pay:${rec.card.name}'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: BambooInk.slate,
+                          foregroundColor: BambooInk.lime,
+                          minimumSize: const Size(64, 38),
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: widget.onPay,
+                        child: Text(
+                          'Pay',
+                          semanticsLabel: 'Pay with ${rec.card.name}',
+                        ),
+                      )
+                    else if (!excluded)
+                      // Empty wallet: a catalogue pick, not a card the user
+                      // holds (ui-spec B1's "No cards → add a card").
+                      OutlinedButton(
+                        key: ValueKey('add:${rec.card.name}'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: BambooInk.ink900,
+                          minimumSize: const Size(64, 38),
+                          side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: widget.onAddCard,
+                        child: const Text('Add'),
+                      ),
+                  ],
+                ),
+                if (headroom != null) ...[
+                  const SizedBox(height: AppSpace.sm),
+                  _HeadroomLine(
+                    text: headroom.text,
+                    reached: headroom.reached,
+                    warn: headroom.warn,
+                  ),
+                ],
+                // D32d: say so when an exclusion could not be read. A trust
+                // warning, so it is never folded away.
+                if (!excluded) RecommendationCaution(recommendation: rec),
+                if (hasDetails)
+                  Align(
+                    alignment: Alignment.center,
+                    child: Icon(
+                      _expanded
+                          ? Icons.keyboard_arrow_up_rounded
+                          : Icons.keyboard_arrow_down_rounded,
+                      size: 20,
                       color: BambooInk.ink500,
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      'RuPay credit card — pays through any UPI app',
-                      style: BambooFonts.ui(
-                        11.5,
-                        weight: FontWeight.w600,
-                        color: BambooInk.ink500,
+                  ),
+                if (_expanded && hasDetails) ...[
+                  if (rec.isOverride)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        'Your choice for this payee: always this card.',
+                        style: BambooFonts.ui(
+                          12,
+                          weight: FontWeight.w600,
+                          color: BambooInk.ink700,
+                        ),
                       ),
                     ),
-                  ],
-                ),
-              ),
-            if (!hero || amountEntered) ...[
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  MoneyText(
-                    recommendation.expectedValue,
-                    confidence: confidenceOf(recommendation),
-                    style: BambooFonts.money(
-                      hero ? 34 : 22,
-                      color: BambooInk.ink900,
+                  if (rec.card.isUpiLinkable)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        'RuPay credit card · pays through any UPI app',
+                        style: BambooFonts.ui(12, color: BambooInk.ink500),
+                      ),
                     ),
-                  ),
-                  if (recommendation.expectedValue.paise > 0) ...[
-                    const SizedBox(width: 6),
-                    Text(
-                      'back',
-                      style: BambooFonts.ui(13, color: BambooInk.ink500),
+                  for (final line in rec.reasonLines)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        '•  $line',
+                        style: BambooFonts.ui(12, color: BambooInk.ink500),
+                      ),
                     ),
-                  ],
+                  if (widget.owned != null && rec.card.isV2Shaped)
+                    for (final progress in capProgressesFor(
+                      product: rec.card,
+                      owned: widget.owned,
+                      now: widget.now,
+                    ))
+                      Padding(
+                        padding: const EdgeInsets.only(top: AppSpace.sm),
+                        child: CapBar(
+                          progress: progress,
+                          title: capRuleDisplayLabel(
+                            progress.cap,
+                            categoryName: 'Card-wide',
+                          ),
+                        ),
+                      ),
                 ],
-              ),
-              for (final line in recommendation.reasonLines)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(
-                    '•  $line',
-                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-                  ),
-                ),
-              // D32d: say so when an exclusion could not be read.
-              RecommendationCaution(recommendation: recommendation),
-            ],
-            const SizedBox(height: AppSpace.sm),
-            if (!isOwned)
-              // Empty wallet: this is a catalogue pick, not a card the user
-              // holds — offer to add it rather than a "Pay with" that can't
-              // complete (ui-spec B1's "No cards → add a card").
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "You don't have this card yet.",
-                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-                  ),
-                  const SizedBox(height: AppSpace.xs),
-                  FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: BambooInk.slate,
-                      foregroundColor: BambooInk.lime,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    onPressed: onAddCard,
-                    icon: const Icon(Icons.add_card_rounded, size: 18),
-                    label: const Text('Add this card'),
-                  ),
-                ],
-              )
-            else
-              Wrap(
-                spacing: AppSpace.sm,
-                runSpacing: AppSpace.xs,
-                children: [
-                  FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: BambooInk.slate,
-                      foregroundColor: BambooInk.lime,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    onPressed: onPay,
-                    child: Text('Pay with ${recommendation.card.name}'),
-                  ),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.star_border_rounded, size: 18),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: BambooInk.ink900,
-                      side: const BorderSide(color: BambooInk.hairlineOnPaper),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    onPressed: onAlwaysUseHere,
-                    label: const Text('Always use this card here'),
-                  ),
-                  TextButton(
-                    style: TextButton.styleFrom(
-                      foregroundColor: hero
-                          ? BambooInk.slate
-                          : BambooInk.ink500,
-                    ),
-                    onPressed: onNotAccepted,
-                    child: const Text("Wasn't accepted"),
-                  ),
-                ],
-              ),
-          ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The reward-limit line under a card: green while there is room, amber near
+/// the limit, clay once it is used up (more spend here earns less).
+class _HeadroomLine extends StatelessWidget {
+  final String text;
+  final bool reached;
+  final bool warn;
+
+  const _HeadroomLine({
+    required this.text,
+    required this.reached,
+    required this.warn,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = reached
+        ? BambooInk.clay
+        : warn
+        ? BambooInk.amber
+        : BambooInk.jade;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            reached ? Icons.block_rounded : Icons.speed_rounded,
+            size: 15,
+            color: color,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: BambooFonts.ui(12, weight: FontWeight.w600, color: BambooInk.ink900),
+            ),
+          ),
         ],
       ),
     );
