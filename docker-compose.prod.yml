@@ -103,6 +103,14 @@ services:
       ERROR_REPORTING_DSN: "${API_ERROR_REPORTING_DSN:-}"
       PANDAPAY_GIT_SHA: "${PANDAPAY_GIT_SHA:-}"
       PANDAPAY_ENVIRONMENT: "${PANDAPAY_ENVIRONMENT:-production}"
+      # Firebase App Check for the SMS pipeline (api/src/sms_v2/security.js). Without the project number every
+      # token is rejected, so no phone counts as attested and shared-learning layouts stay "held" (never drafted).
+      # Only the production Android and iOS apps are listed, so Staging and dev builds stay uncounted. The project
+      # number and app ids are public identifiers (they ship in google-services.json / GoogleService-Info.plist);
+      # set the variables in .env to override. SMS_V2_ATTESTATION_MODE is left at its default (monitor): a phone
+      # without a valid token keeps working, it just is not counted.
+      SMS_V2_FIREBASE_PROJECT_NUMBER: "${SMS_V2_FIREBASE_PROJECT_NUMBER:-61906687452}"
+      SMS_V2_FIREBASE_APP_IDS: "${SMS_V2_FIREBASE_APP_IDS:-1:61906687452:android:ba5cf6547e74c772772b19,1:61906687452:ios:7e9119d2a64288ca772b19}"
       TRUST_PROXY_HOPS: "1"
       DATABASE_URL: "${API_DATABASE_URL:?}"
       DB_SSL: "${DB_SSL:-true}"
