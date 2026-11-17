@@ -298,15 +298,10 @@ void main() {
     expect(state.get(ProjectionRefresh.cursorKey), '');
   });
 
-  group('a message moved onto a card that is then paused or removed', () {
+  group('a message is always on the card it printed', () {
     const otherWalletCard = '22222222-2222-4222-8222-222222222222';
     const otherCardId = '33333333-3333-4333-8333-333333333333';
 
-    void walletCard(String id, {required bool archived}) => db.execute(
-      "INSERT OR REPLACE INTO financial_entities(namespace,entity,id,payload,observed_at) "
-      "VALUES(?,'cards',?,?,0)",
-      [namespace, id, jsonEncode({'id': id, 'is_archived': archived})],
-    );
     String? factCard() => db
         .select(
           'SELECT DISTINCT instrument_id FROM v2_facts WHERE namespace=? AND fact_id IN (SELECT event_id FROM v2_events WHERE namespace=?)',
@@ -314,71 +309,68 @@ void main() {
         )
         .single['instrument_id'] as String?;
 
-    /// The message names [card] (linked to a live wallet card); the person moved
-    /// it onto another bank's card, linked to [otherWalletCard].
-    void moveOntoOtherCard() {
+    /// The message names [card] (linked to a wallet card). Something stored a
+    /// link to another card ([issuer], [mask]) for it, as an edit applied to
+    /// similar messages did in Nov 2026.
+    void linkToOtherCard({required String issuer, required String mask}) {
       final store = InstrumentStore(db, namespace: namespace);
       store.upsert(card.copyWith(status: InstrumentStatus.confirmed, userCardId: walletCardId));
       store.upsert(
         Instrument.fromJson({
           ...card.toJson(),
           'instrumentId': otherCardId,
-          'issuerSlug': 'zz_other_bank',
-          'maskDigits': '1260',
-          'displayName': 'Other bank card',
+          'issuerSlug': issuer,
+          'maskDigits': mask,
+          'displayName': 'Other card',
           'status': 'confirmed',
           'userCardId': otherWalletCard,
         }),
       );
-      walletCard(walletCardId, archived: false);
-      walletCard(otherWalletCard, archived: false);
-      // What a "wrong card" edit changes: the transaction's own message.
+      refresh().runAll();
       db.execute(
         'UPDATE v2_facts SET instrument_id=? WHERE namespace=? AND fact_id IN (SELECT event_id FROM v2_events WHERE namespace=?)',
         [otherCardId, namespace, namespace],
       );
-      refresh().runAll();
+      // What an older build saved from that link: the ledger and the row
+      // name the other card.
+      for (final entry in db.select('SELECT entry_id,payload FROM v2_ledger WHERE namespace=?', [namespace])) {
+        final j = jsonDecode(entry['payload'] as String) as Map<String, Object?>;
+        if ((j['from'] as Map?)?['instrumentId'] != null) j['from'] = {'instrumentId': otherCardId};
+        db.execute('UPDATE v2_ledger SET payload=? WHERE namespace=? AND entry_id=?', [jsonEncode(j), namespace, entry['entry_id']]);
+      }
+      editRow((r) => {...r, 'user_card_id': otherWalletCard, 'card_last4': mask, 'card_name': 'Other card'});
+      expect(ledgerFrom(), otherCardId);
+      clearOutbox();
+      // A new build (projection code version) starts the pass.
+      SyncStateStore(db, namespace: namespace).put(ProjectionRefresh.doneKey, 'old');
     }
 
-    test('goes back to the wallet card the message names, and the ledger is uploaded again', () {
-      moveOntoOtherCard();
-      // While the card is in the wallet, the person's choice stands.
-      expect(ledgerFrom(), otherCardId);
-      expect(row()['user_card_id'], otherWalletCard);
-      clearOutbox();
-
-      walletCard(otherWalletCard, archived: true);
-      expect(refresh().pending, isTrue);
+    test('a link to another bank\'s card is pointed back, and the ledger is uploaded again', () {
+      linkToOtherCard(issuer: 'zz_other_bank', mask: '1260');
       expect(refresh().runAll(), 1);
       expect(factCard(), card.instrumentId);
       expect(ledgerFrom(), card.instrumentId);
       expect(row()['user_card_id'], walletCardId);
+      expect(row()['card_last4'], card.maskDigits);
       expect(outboxLedger(), 1);
-      // Nothing left to do.
       clearOutbox();
       expect(refresh().runAll(), 0);
       expect(outboxLedger(), 0);
     });
 
-    test('stays when the card it names has no wallet card, or it is archived too', () {
-      moveOntoOtherCard();
-      walletCard(otherWalletCard, archived: true);
-      walletCard(walletCardId, archived: true);
-      refresh().runAll();
-      expect(factCard(), otherCardId);
-      expect(ledgerFrom(), otherCardId);
-    });
-
-    test('a message read as the archived card itself keeps it', () {
-      // The message names this card, and its wallet card is removed: "Remove
-      // card" keeps the card's own transactions.
-      InstrumentStore(db, namespace: namespace).upsert(
-        card.copyWith(status: InstrumentStatus.confirmed, userCardId: walletCardId),
-      );
-      walletCard(walletCardId, archived: true);
+    test('a link to another number of the same bank is pointed back too', () {
+      linkToOtherCard(issuer: card.issuerSlug, mask: '0000');
       refresh().runAll();
       expect(factCard(), card.instrumentId);
       expect(ledgerFrom(), card.instrumentId);
+    });
+
+    test('a link to the same number printed longer is left alone', () {
+      // Not the same instrument, but nothing the message printed rules it out.
+      linkToOtherCard(issuer: card.issuerSlug, mask: '99${card.maskDigits}');
+      refresh().runAll();
+      expect(factCard(), otherCardId);
+      expect(ledgerFrom(), otherCardId);
     });
   });
 

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:pandapay_domain/sms_v2.dart';
 import 'package:pandapay_domain/sms_v2_category.dart';
+import 'package:pandapay_domain/sms_v2_ledger.dart' show printedCardRulesOut;
 import 'package:sqlite3/sqlite3.dart';
 import 'package:uuid/uuid.dart';
 
@@ -194,7 +195,7 @@ class SimilarChanges {
       if (instrumentId != null &&
           before.instrumentId != null &&
           before.ruleId != null &&
-          !_otherBank(before.eventId, instrumentId))
+          !_printedCardRulesOut(before.eventId, instrumentId))
         ?offer(
           SimilarField.paymentMethod,
           SimilarCriteria.instrument(
@@ -225,16 +226,15 @@ class SimilarChanges {
     ];
   }
 
-  /// True when the edited message names a bank and [instrumentId] is another
-  /// bank's card or account. One message can be moved anywhere (the person is
-  /// looking at it), but a bank's messages are never about another bank's card,
-  /// so the same move is not offered for every message of that card: in Nov
-  /// 2026 one such offer moved 100 SBI card spends onto another bank's card.
-  bool _otherBank(String eventId, String instrumentId) {
+  /// True when what the edited message printed rules out [instrumentId]
+  /// (another bank or another number, [printedCardRulesOut]). Such a change
+  /// is refused for the edited message itself, so it is never offered for the
+  /// others: in Nov 2026 one such offer moved 100 SBI card spends onto
+  /// another bank's card.
+  bool _printedCardRulesOut(String eventId, String instrumentId) {
     final printed = FactStore(_db, namespace: namespace).get(eventId)?.instrument;
     final target = InstrumentStore(_db, namespace: namespace).get(instrumentId);
-    final bank = printed?.issuerSlug;
-    return bank != null && target != null && target.issuerSlug != bank;
+    return target != null && printedCardRulesOut(printed, target);
   }
 
   /// Every other transaction [offer] matches, newest first, for the person to

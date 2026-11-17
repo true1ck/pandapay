@@ -51,6 +51,27 @@ class SmsCorrection {
   final bool reportCase;
 }
 
+/// What the person is told when a card change contradicts the SMS, e.g. "This
+/// SMS is about SBI card ending 2837, so it can only be on that card."
+String printedCardRefusal(InstrumentMention printed) {
+  final bank = printed.issuerSlug == null
+      ? null
+      : defaultIssuerLabel(printed.issuerSlug!);
+  final what = switch (printed.kind) {
+    InstrumentKind.creditCard ||
+    InstrumentKind.debitCard ||
+    InstrumentKind.prepaidCard => 'card',
+    InstrumentKind.bankAccount => 'account',
+    InstrumentKind.wallet => 'wallet',
+    _ => 'card or account',
+  };
+  final ending = printed.maskDigits == null
+      ? ''
+      : ' ending ${printed.maskDigits}';
+  return 'This SMS is about ${bank ?? 'the'} $what$ending, '
+      'so it can only be on that $what.';
+}
+
 /// Applies the local effect and queues its review case in the same savepoint.
 class CorrectionsService {
   CorrectionsService({
@@ -229,6 +250,15 @@ class CorrectionsService {
           }
           final reassigned = {...originalFacts};
           if (current != null) reassigned[current.factId] = current;
+          // What the bank printed decides the card: a message that names
+          // another bank or another number is never put on [target]. The
+          // projection would ignore such a link anyway; saying so here keeps
+          // the person from thinking the change was made.
+          for (final fact in reassigned.values) {
+            if (printedCardRulesOut(fact.instrument, target)) {
+              throw ArgumentError(printedCardRefusal(fact.instrument!));
+            }
+          }
           for (final fact in reassigned.values) {
             _db.execute(
               'UPDATE v2_facts SET instrument_id=? WHERE namespace=? AND fact_id=?',

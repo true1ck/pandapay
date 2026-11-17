@@ -413,12 +413,14 @@ void main() {
   test(
     'instrument reassignment is account scoped and updates the ledger endpoint',
     () {
+      // A card the SMS does not rule out: same bank, no number on record (a
+      // card of another bank or number is refused, see the test below).
       final instrument = Instrument(
         instrumentId: '00000000-0000-4000-8000-000000000001',
-        kind: InstrumentKind.bankAccount,
-        issuerSlug: 'synthetic',
-        maskDigits: '1234',
-        displayName: 'Synthetic account',
+        kind: InstrumentKind.creditCard,
+        issuerSlug: 'hdfc',
+        maskDigits: null,
+        displayName: 'HDFC card',
         status: InstrumentStatus.confirmed,
         firstSeenAt: fact.observedAt,
         lastSeenAt: fact.observedAt,

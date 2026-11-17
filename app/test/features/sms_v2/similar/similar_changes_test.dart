@@ -266,7 +266,7 @@ void main() {
   });
 
   group('a payment method', () {
-    Instrument addCard(String id, {required String issuer, required String mask}) {
+    Instrument addCard(String id, {required String issuer, String? mask}) {
       final store = InstrumentStore(database.db, namespace: namespace);
       final card = Instrument.fromJson({
         ...store.list().first.toJson(),
@@ -279,31 +279,32 @@ void main() {
       return card;
     }
 
-    test('is offered for another card of the bank the message names', () {
+    InstrumentMention printedOf(String eventId) =>
+        FactStore(database.db, namespace: namespace).get(eventId)!.instrument!;
+
+    test('is offered for a card of the same bank with no number on record', () {
       final sources = [for (var day = 1; day <= 3; day++) receive(day)];
       final before = changes.snapshot(row(sources[2]))!;
-      final printed = FactStore(database.db, namespace: namespace)
-          .get(before.eventId)!
-          .instrument!;
       final sameBank = addCard(
         '22222222-2222-4222-8222-222222222222',
-        issuer: printed.issuerSlug!,
-        mask: '0007',
+        issuer: printedOf(before.eventId).issuerSlug!,
       );
       final offer = changes.offers(before, instrumentId: sameBank.instrumentId).single;
       expect(offer.field, SimilarField.paymentMethod);
       expect(offer.summary.count, 2);
     });
 
-    test('is not offered for another bank\'s card: one message moves, the rest stay', () {
+    test('is not offered for a card the SMS rules out: another bank or another number', () {
       final sources = [for (var day = 1; day <= 3; day++) receive(day)];
       final before = changes.snapshot(row(sources[2]))!;
-      final otherBank = addCard(
-        '33333333-3333-4333-8333-333333333333',
-        issuer: 'zz_other_bank',
-        mask: '1260',
+      final otherBank = addCard('33333333-3333-4333-8333-333333333333', issuer: 'zz_other_bank', mask: '1260');
+      final otherNumber = addCard(
+        '44444444-4444-4444-8444-444444444444',
+        issuer: printedOf(before.eventId).issuerSlug!,
+        mask: '0007',
       );
       expect(changes.offers(before, instrumentId: otherBank.instrumentId), isEmpty);
+      expect(changes.offers(before, instrumentId: otherNumber.instrumentId), isEmpty);
       // Other changes made in the same edit are still offered.
       expect(
         changes
@@ -312,6 +313,30 @@ void main() {
             .field,
         SimilarField.type,
       );
+    });
+
+    test('moving the SMS itself onto such a card is refused with the card it names', () {
+      final source = receive(1);
+      final eventId = row(source).eventId!;
+      final printed = printedOf(eventId);
+      final otherBank = addCard('33333333-3333-4333-8333-333333333333', issuer: 'zz_other_bank', mask: '1260');
+      expect(
+        () => edit(source, CorrectionKind.wrongInstrument, {'instrumentId': otherBank.instrumentId}),
+        throwsA(
+          isA<ArgumentError>().having(
+            (e) => e.message,
+            'message',
+            'This SMS is about ${defaultIssuerLabel(printed.issuerSlug!)} card ending ${printed.maskDigits}, '
+                'so it can only be on that card.',
+          ),
+        ),
+      );
+      // Nothing moved.
+      final link = database.db.select(
+        'SELECT instrument_id FROM v2_facts WHERE namespace=? AND fact_id=?',
+        [namespace, eventId],
+      ).single['instrument_id'];
+      expect(link, isNot(otherBank.instrumentId));
     });
   });
 

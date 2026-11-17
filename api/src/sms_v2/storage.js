@@ -580,6 +580,80 @@ const MONEY_LEG_ROLES = new Set(['debit_leg', 'credit_leg', 'reversal', 'charge'
  * digits) as the fact's mention. Only the in-memory entries are changed; the
  * stored ledger keeps what the phone sent. Mutates `ledgerOf` and `instruments`.
  */
+// What a bank printed about its card or account rules out [inst]: another
+// bank, or another number ("2837" is never "1260"). One number printed to
+// different lengths is the same when one ends with the other. Kind is not
+// compared. Mirrors printedCardRulesOut in the app's domain package.
+function printedCardRulesOut(printed, inst) {
+  if (!printed || !inst) return false;
+  const bank = printed.issuerSlug;
+  if (bank && bank !== inst.issuerSlug) return true;
+  const a = printed.maskDigits;
+  const b = inst.maskDigits;
+  if (!a || !b) return false;
+  return !(a.endsWith(b) || b.endsWith(a));
+}
+
+// A ledger side naming an instrument that every message of the event rules
+// out is built on the instrument those messages name, when exactly one does.
+// Phones send the ledger; an older build, an edit or "apply to similar" could
+// name the wrong card (Nov 2026: 101 "SBI card ending 2837" spends sent as a
+// PNB card ending 1260). Rows and card rewards follow what the bank printed;
+// the stored ledger is left as the phone sent it.
+async function followPrintedCards(client, profileId, { events, ledgerOf, instruments }) {
+  const factIds = new Set();
+  for (const [eventId] of ledgerOf) for (const leg of (events.get(eventId)?.legs || [])) factIds.add(leg.factId);
+  if (!factIds.size) return;
+  const facts = new Map((await client.query(
+    `SELECT fact_id AS id, instrument_id, payload->'instrument' AS printed
+       FROM sms_v2_facts WHERE profile_id = $1 AND fact_id = ANY($2::text[])`,
+    [profileId, [...factIds]],
+  )).rows.map((r) => [r.id, r]));
+  const ids = new Set();
+  for (const entries of ledgerOf.values()) {
+    for (const e of entries) {
+      if (e.fromInstrumentId) ids.add(e.fromInstrumentId);
+      if (e.toInstrumentId) ids.add(e.toInstrumentId);
+    }
+  }
+  for (const f of facts.values()) if (f.instrument_id) ids.add(f.instrument_id);
+  if (!ids.size) return;
+  const details = new Map((await client.query(
+    `SELECT instrument_id AS id, kind, issuer_slug, mask_digits, user_card_id, status
+       FROM sms_v2_instruments WHERE profile_id = $1 AND instrument_id = ANY($2::uuid[])`,
+    [profileId, [...ids]],
+  )).rows.map((x) => [x.id, x]));
+  for (const [eventId, entries] of ledgerOf) {
+    const own = (events.get(eventId)?.legs || []).map((l) => facts.get(l.factId)).filter(Boolean);
+    const printed = own.filter((f) => f.printed && (f.printed.issuerSlug || f.printed.maskDigits));
+    if (!printed.length) continue;
+    const named = new Set(own.map((f) => f.instrument_id).filter(Boolean));
+    let changed = false;
+    const next = entries.map((entry) => {
+      let out = entry;
+      for (const side of ['from', 'to']) {
+        const key = `${side}InstrumentId`;
+        const id = out[key];
+        if (!id || named.has(id)) continue;
+        const inst = details.get(id);
+        if (!inst) continue;
+        const shape = { issuerSlug: inst.issuer_slug, maskDigits: inst.mask_digits };
+        if (!printed.every((f) => printedCardRulesOut(f.printed, shape))) continue;
+        const other = out[side === 'from' ? 'toInstrumentId' : 'fromInstrumentId'];
+        const candidates = [...new Set(printed.map((f) => f.instrument_id).filter((c) => c && c !== other))];
+        if (candidates.length !== 1) continue;
+        const to = details.get(candidates[0]);
+        if (!to || to.status === 'rejected') continue;
+        out = { ...out, [key]: candidates[0] };
+        instruments.set(candidates[0], { kind: to.kind, userCardId: to.user_card_id, status: to.status });
+        changed = true;
+      }
+      return out;
+    });
+    if (changed) ledgerOf.set(eventId, next);
+  }
+}
+
 async function resolveUnknownInstruments(client, profileId, { events, ledgerOf, instruments }) {
   const unknown = (id) => Boolean(id) && !instruments.has(id);
   // The side a row is built from: the payer for money out, the payee for
@@ -665,6 +739,7 @@ async function projectTransactions(client, profileId, eventIds, { backfill, cate
     r.rows.forEach((x) => instruments.set(x.id, { kind: x.kind, userCardId: x.user_card_id, status: x.status }));
   }
   await resolveUnknownInstruments(client, profileId, { events, ledgerOf, instruments });
+  await followPrintedCards(client, profileId, { events, ledgerOf, instruments });
   const anchorRows = await client.query(
     `SELECT fact_id AS id, source_key, payload->'attrs'->>'rail' AS rail FROM sms_v2_facts WHERE profile_id = $1 AND fact_id = ANY($2::text[])`,
     [profileId, eventIds],
@@ -1072,7 +1147,36 @@ async function projectStaleInstrumentRows(client, profileId, { exclude, deps }) 
       LIMIT $2`,
     [profileId, STALE_ROWS_PER_BATCH],
   );
-  const ids = [...new Set([...r.rows, ...unlinked.rows].map((x) => x.event_id))]
+  // Card rows whose ledger names a card the event's own message rules out
+  // (another bank or number) while the card the message names is linked to a
+  // wallet card: rebuilt through followPrintedCards. Only events whose
+  // messages name one instrument, and only rows that do not already carry
+  // that wallet card, so nothing is picked twice.
+  const misread = await client.query(
+    `SELECT DISTINCT t.event_id
+       FROM transactions t
+       JOIN sms_v2_events e ON e.profile_id = t.profile_id AND e.event_id = t.event_id
+       JOIN LATERAL (
+         SELECT min(f.instrument_id::text)::uuid AS named, count(DISTINCT f.instrument_id) AS n
+           FROM jsonb_array_elements(e.legs) leg
+           JOIN sms_v2_facts f ON f.profile_id = e.profile_id AND f.fact_id = leg->>'factId'
+          WHERE f.instrument_id IS NOT NULL) ef ON ef.n = 1
+       JOIN sms_v2_instruments fi ON fi.profile_id = t.profile_id AND fi.instrument_id = ef.named
+        AND fi.user_card_id IS NOT NULL AND fi.status <> 'rejected'
+       JOIN sms_v2_ledger_entries l ON l.profile_id = t.profile_id AND l.event_id = t.event_id
+       JOIN sms_v2_instruments li ON li.profile_id = l.profile_id
+        AND li.instrument_id IN (l.from_instrument_id, l.to_instrument_id)
+      WHERE t.profile_id = $1 AND t.pipeline_version = 2 AND t.status = 'active' AND t.event_id IS NOT NULL
+        AND t.user_card_id IS DISTINCT FROM fi.user_card_id
+        AND li.instrument_id <> fi.instrument_id
+        AND (li.issuer_slug <> fi.issuer_slug
+          OR (li.mask_digits IS NOT NULL AND fi.mask_digits IS NOT NULL
+              AND right(li.mask_digits, length(fi.mask_digits)) <> fi.mask_digits
+              AND right(fi.mask_digits, length(li.mask_digits)) <> li.mask_digits))
+      LIMIT $2`,
+    [profileId, STALE_ROWS_PER_BATCH],
+  );
+  const ids = [...new Set([...r.rows, ...unlinked.rows, ...misread.rows].map((x) => x.event_id))]
     .filter((id) => !exclude.has(id))
     .slice(0, STALE_ROWS_PER_BATCH);
   if (!ids.length) return 0;
@@ -1145,6 +1249,6 @@ async function readChanges(client, profileId, cursor, hookCursors = {}) {
 module.exports = {
   ingestBatch, readChanges, encodeCursor, decodeCursor, SYNC_LIMIT,
   mergeInstrument, mergeEvent, ownEntryLegAmounts, projectTransactions, takeProfileLock,
-  resolveUnknownInstruments, projectStaleInstrumentRows,
+  resolveUnknownInstruments, projectStaleInstrumentRows, followPrintedCards, printedCardRulesOut,
   projectRowsOfLinkedInstruments,
 };

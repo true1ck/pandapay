@@ -6,6 +6,7 @@ import '../contract/fact.dart';
 import '../contract/instrument.dart';
 import '../contract/interfaces.dart';
 import '../contract/ledger_entry.dart';
+import '../contract/types.dart' show InstrumentMention;
 import '../instruments/instrument_resolver.dart' show instrumentByNumberOnly, rejectedByNumberOnly;
 import '../category/merchant_key.dart';
 
@@ -62,14 +63,43 @@ String? transactionKindForEvent(Event event) {
   return null;
 }
 
+/// True when what a message printed about its card or account rules out
+/// [instrument]: another bank, or another number. A bank's message is never
+/// about another bank's card, and "card ending 2837" is never the card ending
+/// 1260, whoever linked them. One number printed to different lengths ("837",
+/// "2837", "XX2837") is the same number when one ends with the other. Kind is
+/// not compared: banks word "card" and "account" loosely, and a debit card
+/// stands for its account.
+bool printedCardRulesOut(InstrumentMention? printed, Instrument instrument) {
+  if (printed == null) return false;
+  final bank = printed.issuerSlug;
+  if (bank != null && bank.isNotEmpty && bank != instrument.issuerSlug) {
+    return true;
+  }
+  final a = printed.maskDigits;
+  final b = instrument.maskDigits;
+  if (a == null || b == null || a.isEmpty || b.isEmpty) return false;
+  return !(a.endsWith(b) || b.endsWith(a));
+}
+
 /// A unique resolved instrument, never a guess between matching accounts.
+///
+/// The stored link ([instrumentIdByFactId]) is used unless the message itself
+/// contradicts it ([printedCardRulesOut]): then the instrument is found again
+/// from what the message printed. A link can be wrong (an edit, "apply to
+/// similar", an older build); what the bank printed cannot.
 Instrument? instrumentForFact(
   Fact fact,
   Map<String, Instrument> instruments, {
   Map<String, String> instrumentIdByFactId = const {},
 }) {
   final resolved = instrumentIdByFactId[fact.factId];
-  if (resolved != null) return instruments[resolved];
+  if (resolved != null) {
+    final linked = instruments[resolved];
+    if (linked == null || !printedCardRulesOut(fact.instrument, linked)) {
+      return linked;
+    }
+  }
   final m = fact.instrument;
   if (m == null) return null;
   // A notice that names no bank points at an account by its number alone.

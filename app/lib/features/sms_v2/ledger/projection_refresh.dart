@@ -26,9 +26,11 @@ import 'projection_writer.dart';
 ///    record could be named; rows saved before said "Payment method not matched".
 /// 2: 16 Nov 2026: a server copy no longer overwrites the phone's own reading
 ///    of how an SMS payment was made; rebuild the rows it had overwritten.
-/// 3: 18 Nov 2026: a message a person moved onto a card that is now paused or
-///    removed goes back to the wallet card it names (see [ProjectionRefresh]).
-const int projectionCodeVersion = 3;
+/// 3: 18 Nov 2026 (iPhone build 183 only): a narrower repair, replaced by 4.
+/// 4: 18 Nov 2026: a message is always on the card or account it printed. A
+///    stored link the message contradicts (another bank, another number) is
+///    pointed back at the one it names (see [ProjectionRefresh]).
+const int projectionCodeVersion = 4;
 
 /// One slice of a refresh: how many events were read, how many of them were
 /// rewritten, and whether the pass has more to do.
@@ -56,13 +58,13 @@ typedef ProjectionRefreshStep = ({int events, int changed, bool more});
 /// index; it runs in the capture worker, and the cursor survives the app being
 /// closed.
 ///
-/// One input is fixed on the way: a message the person moved onto another card
-/// (an edit, or "apply to similar") whose card is now paused or removed. Its
-/// money would stay on a card that is gone while the card the message itself
-/// names is in the wallet. Such a message goes back to the card it names, but
-/// only when the message on its own resolves to a different card that has a
-/// wallet card that is not archived. A message read as the archived card keeps
-/// it ("Remove card" keeps the card's own transactions).
+/// One input is fixed on the way: a message whose stored card or account is
+/// one the message itself rules out ([printedCardRulesOut]: another bank or
+/// another number). In Nov 2026 a "wrong card" edit applied to similar
+/// messages put 101 "SBI card ending 2837" spends on a PNB card ending 1260.
+/// The projection already ignores such a link; the stored link is pointed
+/// back at the card the message names (or cleared when that card is not
+/// known), so every other reader of the link agrees.
 class ProjectionRefresh {
   ProjectionRefresh({
     required this.financial,
@@ -126,9 +128,6 @@ class ProjectionRefresh {
               ..sort((a, b) => a.key.compareTo(b.key)))
             .map((e) => [e.key, e.value])
             .toList();
-    // Pausing or removing a wallet card can send messages back to the card
-    // they name, so it starts a pass.
-    final archived = _walletCards().archived.toList()..sort();
     return sha256
         .convert(
           utf8.encode(
@@ -138,73 +137,43 @@ class ProjectionRefresh {
               aliases,
               owner,
               categories,
-              archived,
             ]),
           ),
         )
         .toString();
   }
 
-  /// The saved wallet cards, split into archived (paused or removed) and the
-  /// rest. One small read; a card the phone does not have is in neither.
-  ({Set<String> live, Set<String> archived}) _walletCards() {
-    final live = <String>{};
-    final archived = <String>{};
-    for (final row in _db.select(
-      "SELECT id, json_extract(payload, '\$.is_archived') AS archived "
-      "FROM financial_entities WHERE namespace = ? AND entity = 'cards'",
-      [namespace],
-    )) {
-      final flag = row['archived'];
-      (flag == 1 || flag == true || flag == 'true' ? archived : live).add(
-        row['id'] as String,
-      );
-    }
-    return (live: live, archived: archived);
-  }
-
-  /// Gives each message in [factsById] that a person moved onto a card whose
-  /// wallet card is archived back to the card the message names, when that
-  /// card's wallet card is not archived. Updates [instrumentIdByFactId] and
-  /// the stored link; returns how many moved.
-  int _returnMovedFacts(
+  /// Points each stored link in [factsById] that the message itself rules out
+  /// ([printedCardRulesOut]) at the instrument the message names, found the
+  /// way a new message is (no stored link), or clears it when none fits. Keeps
+  /// [instrumentIdByFactId] in step; returns how many links changed. Only the
+  /// slice's own facts are looked at.
+  int _repairContradictedLinks(
     Map<String, v2.Fact> factsById,
     Map<String, String> instrumentIdByFactId,
     Map<String, v2.Instrument> instruments,
   ) {
-    final wallet = _walletCards();
-    if (wallet.archived.isEmpty) return 0;
-    final away = {
-      for (final i in instruments.values)
-        if (i.userCardId != null && wallet.archived.contains(i.userCardId))
-          i.instrumentId,
-    };
-    if (away.isEmpty) return 0;
-    var moved = 0;
+    var repaired = 0;
     for (final fact in factsById.values) {
       final current = instrumentIdByFactId[fact.factId];
-      if (current == null || !away.contains(current)) continue;
-      // What the message names on its own, by the same rule a new message is
-      // resolved with. The stored link is what the person chose instead.
-      final named = instrumentForFact(fact, instruments);
-      if (named == null ||
-          named.instrumentId == current ||
-          away.contains(named.instrumentId) ||
-          named.status == v2.InstrumentStatus.rejected ||
-          named.status == v2.InstrumentStatus.archived ||
-          named.userCardId == null ||
-          !wallet.live.contains(named.userCardId)) {
+      final linked = current == null ? null : instruments[current];
+      if (linked == null || !printedCardRulesOut(fact.instrument, linked)) {
         continue;
       }
+      final named = instrumentForFact(fact, instruments);
       _db.execute(
         'UPDATE v2_facts SET instrument_id = ? '
         'WHERE namespace = ? AND fact_id = ? AND instrument_id = ?',
-        [named.instrumentId, namespace, fact.factId, current],
+        [named?.instrumentId, namespace, fact.factId, current],
       );
-      instrumentIdByFactId[fact.factId] = named.instrumentId;
-      moved++;
+      if (named == null) {
+        instrumentIdByFactId.remove(fact.factId);
+      } else {
+        instrumentIdByFactId[fact.factId] = named.instrumentId;
+      }
+      repaired++;
     }
-    return moved;
+    return repaired;
   }
 
   /// True when the saved rows may not match their inputs yet: a pass is due
@@ -281,7 +250,7 @@ class ProjectionRefresh {
       for (final i in InstrumentStore(_db, namespace: namespace).list())
         i.instrumentId: i,
     };
-    _returnMovedFacts(factsById, instrumentIdByFactId, instruments);
+    _repairContradictedLinks(factsById, instrumentIdByFactId, instruments);
     // Every stored decision is kept, automatic ones too: moving categories is
     // the re-sort's job, which the person previews and applies.
     final locked = ledger.categoryDecisions(eventIds: ids);
