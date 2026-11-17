@@ -469,7 +469,7 @@ class SharedAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) => group
       ? TintedIconTile(AppIcons.group, BambooChartColors.violet, size: size)
-      : PartyAvatar(AvatarKind.person, size: size);
+      : PartyAvatar(AvatarKind.person, size: size, name: name);
 }
 
 String? sharedStateLabel(SharedContextState state) => switch (state) {

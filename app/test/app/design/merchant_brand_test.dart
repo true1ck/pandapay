@@ -7,6 +7,48 @@ import 'package:pandapay/app/design/merchant_brand.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('Crunchyroll and other well-known brands get their logo', () {
+    const cases = {
+      // The subscription descriptor the bank sends, with the country joined on.
+      'CrunchyrollIndia': MerchantBrand.crunchyroll,
+      'CRUNCHYROLL': MerchantBrand.crunchyroll,
+      'Crunchyroll LLC': MerchantBrand.crunchyroll,
+      'Discord Nitro': MerchantBrand.discord,
+      'MICROSOFT 365 SUBSCRIPTION': MerchantBrand.microsoft,
+      'Microsoft Xbox': MerchantBrand.xbox,
+      'Xbox Game Pass': MerchantBrand.xbox,
+      'PlayStation Network': MerchantBrand.playstation,
+      'LinkedIn Premium': MerchantBrand.linkedin,
+      'Google Cloud': MerchantBrand.googleCloud,
+      'Google One': MerchantBrand.google,
+      'Amazon Music': MerchantBrand.amazonMusic,
+      'Amazon': MerchantBrand.amazon,
+      'NordVPN': MerchantBrand.nordVpn,
+      'Maruti Suzuki India': MerchantBrand.suzuki,
+      'Hyundai Motor India': MerchantBrand.hyundai,
+      'Nike India': MerchantBrand.nike,
+      'ZARA INDIA': MerchantBrand.zara,
+      'Booking.com': MerchantBrand.bookingCom,
+      'Burger King India': MerchantBrand.burgerKing,
+      'IKEA India': MerchantBrand.ikea,
+      'OnePlus Technology India': MerchantBrand.oneplus,
+    };
+    for (final entry in cases.entries) {
+      expect(MerchantBrand.forName(entry.key), entry.value, reason: entry.key);
+    }
+  });
+
+  test('a small shop that shares a famous name does not get the logo', () {
+    for (final name in [
+      'Maruti Traders',
+      'MARUTI KIRANA',
+      'Zara Gents Parlour',
+      'Mahindra Hardware',
+    ]) {
+      expect(MerchantBrand.forName(name), isNull, reason: name);
+    }
+  });
+
   test(
     'catalogue and published business aliases resolve to the correct marks',
     () {

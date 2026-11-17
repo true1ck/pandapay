@@ -4757,6 +4757,7 @@ class _MerchantSpendingBadge extends StatelessWidget {
     fallback: PartyAvatar(
       person ? AvatarKind.person : AvatarKind.business,
       size: size,
+      name: merchant,
     ),
   );
 }

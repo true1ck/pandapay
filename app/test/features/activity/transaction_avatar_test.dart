@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/app/design/app_theme.dart';
 import 'package:pandapay/app/design/merchant_brand.dart';
 import 'package:pandapay/app/design/merchant_brand_tile.dart';
 import 'package:pandapay/app/design/party_avatar.dart';
@@ -125,6 +126,9 @@ void main() {
   });
 
   group('the leading tile widget', () {
+    setUp(() => BambooFonts.useSystemFontsForTests = true);
+    tearDown(() => BambooFonts.useSystemFontsForTests = false);
+
     Future<void> pumpTile(WidgetTester tester, TransactionEntry entry) =>
         tester.pumpWidget(
           MaterialApp(home: Scaffold(body: transactionLeading(entry))),
@@ -140,6 +144,17 @@ void main() {
       await pumpTile(tester, _txn('SHREE GANESH KIRANA STORES'));
       final avatar = tester.widget<PartyAvatar>(find.byType(PartyAvatar));
       expect(avatar.kind, AvatarKind.business);
+    });
+
+    testWidgets('a person and a shop show initials, a brand shows no letters', (
+      tester,
+    ) async {
+      await pumpTile(tester, _txn('Transfer to RAMESH KUMAR'));
+      expect(find.text('RK'), findsOneWidget);
+      await pumpTile(tester, _txn('SHREE GANESH KIRANA STORES'));
+      expect(find.text('SG'), findsOneWidget);
+      await pumpTile(tester, _txn('UNKNOWN'));
+      expect(find.byIcon(AvatarKind.business.icon), findsOneWidget);
     });
 
     testWidgets('a known brand shows its logo tile instead', (tester) async {

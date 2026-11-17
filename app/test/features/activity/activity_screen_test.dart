@@ -300,9 +300,10 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Avighna Enterprise'), findsOneWidget);
-    // A merchant with no logo of its own is a shop; a refund keeps its own mark
-    // rather than the brand's logo.
-    expect(find.byIcon(AppIcons.business), findsOneWidget);
+    // A merchant with no logo of its own is a shop tile showing its initials; a
+    // refund keeps its own mark rather than the brand's logo.
+    expect(find.text('AE'), findsOneWidget);
+    expect(find.byIcon(AppIcons.business), findsNothing);
     expect(find.byIcon(AppIcons.refund), findsOneWidget);
   });
 
@@ -740,9 +741,10 @@ void main() {
     expect(find.text('+₹9,000'), findsOneWidget);
     expect(find.text('−₹1,250'), findsOneWidget);
     // The slim summary strip has no icons of its own; each row's tile has one:
-    // money in for the salary, a shop for the cafe.
+    // money in for the salary, the shop's initial for the cafe.
     expect(find.byIcon(AppIcons.moneyIn), findsOneWidget);
-    expect(find.byIcon(AppIcons.business), findsOneWidget);
+    expect(find.text('C'), findsOneWidget);
+    expect(find.byIcon(AppIcons.business), findsNothing);
   });
 
   testWidgets('compacts large summary totals to keep both metrics visible', (

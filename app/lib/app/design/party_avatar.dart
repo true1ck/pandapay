@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_icons.dart';
 import 'app_theme.dart';
+import 'party_initials.dart';
 import 'tile_tones.dart';
 
 /// What a row's leading tile stands for when there is no brand logo.
@@ -45,21 +46,44 @@ enum AvatarKind {
 
 /// The tile for an [AvatarKind]. Same size, radius and tint as a brand logo
 /// tile, so the two sit together in one list.
+///
+/// A person or a business tile that is given a [name] shows the name's initials
+/// in place of the icon, in the same tint, so a list of shops and people is not
+/// a column of identical symbols. Every other kind (a card, a bank, a bill, a
+/// refund...) keeps its icon, and so does a name that says nothing ("Unknown
+/// merchant", a bare number).
 class PartyAvatar extends StatelessWidget {
   const PartyAvatar(
     this.kind, {
     super.key,
     this.size = 40,
     this.onSlate = false,
+    this.name,
   });
 
   final AvatarKind kind;
   final double size;
   final bool onSlate;
 
+  /// The person's or business's name, for its initials. Ignored for kinds that
+  /// are not a person or a business.
+  final String? name;
+
   @override
-  Widget build(BuildContext context) =>
-      TintedIconTile(kind.icon, kind.tone, size: size, onSlate: onSlate);
+  Widget build(BuildContext context) {
+    final initials = switch (kind) {
+      AvatarKind.person => PartyInitials.of(name, person: true),
+      AvatarKind.business => PartyInitials.of(name),
+      _ => '',
+    };
+    return TintedIconTile(
+      kind.icon,
+      kind.tone,
+      size: size,
+      onSlate: onSlate,
+      initials: initials.isEmpty ? null : initials,
+    );
+  }
 }
 
 /// A line icon in a soft tint of one hue: the single tile every avatar,
@@ -72,6 +96,7 @@ class TintedIconTile extends StatelessWidget {
     super.key,
     this.size = 40,
     this.onSlate = false,
+    this.initials,
   });
 
   final IconData icon;
@@ -79,9 +104,13 @@ class TintedIconTile extends StatelessWidget {
   final double size;
   final bool onSlate;
 
+  /// One or two letters shown in place of [icon], in the same mark colour.
+  final String? initials;
+
   @override
   Widget build(BuildContext context) {
     final tones = TileTones.of(context, tone, onSlate: onSlate);
+    final letters = initials;
     return ExcludeSemantics(
       child: Container(
         width: size,
@@ -92,7 +121,20 @@ class TintedIconTile extends StatelessWidget {
           border: Border.all(color: tones.border),
           borderRadius: BorderRadius.circular(size * 0.3),
         ),
-        child: Icon(icon, size: size * 0.5, color: tones.mark),
+        child: letters == null
+            ? Icon(icon, size: size * 0.5, color: tones.mark)
+            : Text(
+                letters,
+                maxLines: 1,
+                overflow: TextOverflow.clip,
+                textScaler: TextScaler.noScaling,
+                style: BambooFonts.ui(
+                  size * (letters.characters.length > 1 ? 0.36 : 0.42),
+                  weight: FontWeight.w600,
+                  color: tones.mark,
+                  height: 1,
+                ),
+              ),
       ),
     );
   }

@@ -344,7 +344,10 @@ class _MerchantResultTile extends ConsumerWidget {
           onTap: onTap,
           leading: MerchantBrandTile(
             brand: brand,
-            fallback: PartyAvatar(AvatarKind.business),
+            fallback: PartyAvatar(
+              AvatarKind.business,
+              name: candidate.displayName,
+            ),
           ),
           title: Text(
             candidate.displayName ?? 'Unnamed merchant',

@@ -61,12 +61,17 @@ MerchantBrand? transactionBrand(TransactionEntry entry) {
       : null;
 }
 
-/// The leading tile for a transaction: its brand logo, else its avatar.
+/// The leading tile for a transaction: its brand logo, else its avatar. A
+/// person or a shop with no logo shows the initials of its name.
 Widget transactionLeading(TransactionEntry entry, {double size = 34}) =>
     MerchantBrandTile(
       brand: transactionBrand(entry),
       size: size,
-      fallback: PartyAvatar(transactionAvatarKind(entry), size: size),
+      fallback: PartyAvatar(
+        transactionAvatarKind(entry),
+        size: size,
+        name: entry.merchantName,
+      ),
     );
 
 String? _transferPayee(TransactionEntry entry, {required bool incoming}) =>
