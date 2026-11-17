@@ -12,6 +12,7 @@ import 'package:pandapay/features/shared_expenses/runtime/shared_join_route.dart
 import 'package:pandapay/app/router.dart';
 import 'package:pandapay/app/tutorial_keys.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
+import 'package:pandapay/data/notification_preferences_repository.dart';
 import 'package:pandapay/features/account/account_screen.dart';
 import 'package:pandapay/features/home/home_screen.dart';
 import 'package:pandapay/features/insights/payments_due_screen.dart'
@@ -69,6 +70,11 @@ Future<void> _pumpApp(
         utilizationTransactionsProvider.overrideWith((ref) async => const []),
         foreignPaymentsProvider.overrideWith((ref) async => const []),
         homeSummaryProvider.overrideWith((ref) async => null),
+        // The real loader keeps an 8 s fetch timeout pending in fake time,
+        // which Insights starts as soon as a test lets it settle.
+        notificationPreferencesProvider.overrideWith(
+          (ref) async => NotificationPreferences.defaults,
+        ),
         bankAccountSummariesProvider.overrideWith((ref) async => const []),
         cardOverridesProvider.overrideWith((ref) async => const []),
         duplicateCandidatesProvider.overrideWith((ref) async => const []),
@@ -334,5 +340,161 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(find.byKey(keys.scanFab), findsOneWidget);
+  });
+
+  group('swiping between the main tabs', () {
+    String location(WidgetTester tester) => ProviderScope.containerOf(
+      tester.element(find.byType(MaterialApp)),
+    ).read(goRouterProvider).routeInformationProvider.value.uri.path;
+
+    // Drag from the upper part of the page, away from the nav bar and the
+    // voice button, the way a thumb would. [dx] < 0 is a swipe left.
+    Future<void> swipe(WidgetTester tester, double dx) async {
+      await tester.flingFrom(const Offset(400, 160), Offset(dx, 0), 1500);
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> tapNav(WidgetTester tester, String label) async {
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('appShellNavBar')),
+          matching: find.text(label),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('swiping left walks Home, Wallet, Insights, You in the order '
+        'of the bottom bar, and swiping right walks back', (tester) async {
+      await _pumpApp(tester);
+      expect(location(tester), AppRoute.home);
+      expect(find.byType(HomeScreen), findsOneWidget);
+
+      await swipe(tester, -500);
+      expect(location(tester), AppRoute.cards);
+      expect(find.byType(MyCardsScreen), findsOneWidget);
+      expect(find.byType(HomeScreen), findsNothing);
+
+      await swipe(tester, -500);
+      expect(location(tester), AppRoute.insights);
+      expect(find.byType(InsightsHubScreen), findsOneWidget);
+
+      await swipe(tester, -500);
+      expect(location(tester), AppRoute.account);
+      expect(find.byType(AccountScreen), findsOneWidget);
+
+      await swipe(tester, 500);
+      expect(location(tester), AppRoute.insights);
+      await swipe(tester, 500);
+      expect(location(tester), AppRoute.cards);
+      await swipe(tester, 500);
+      expect(location(tester), AppRoute.home);
+      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('there is nothing to swipe to before Home or after You', (
+      tester,
+    ) async {
+      await _pumpApp(tester);
+      await swipe(tester, 500);
+      expect(location(tester), AppRoute.home);
+      expect(find.byType(HomeScreen), findsOneWidget);
+
+      await tapNav(tester, 'You');
+      expect(location(tester), AppRoute.account);
+      await swipe(tester, -500);
+      expect(location(tester), AppRoute.account);
+      expect(find.byType(AccountScreen), findsOneWidget);
+    });
+
+    testWidgets('a short drag that falls back stays on the same tab', (
+      tester,
+    ) async {
+      await _pumpApp(tester);
+      final gesture = await tester.startGesture(const Offset(400, 160));
+      await gesture.moveBy(const Offset(-60, 0));
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(location(tester), AppRoute.home);
+      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(find.byType(MyCardsScreen), findsNothing);
+    });
+
+    testWidgets('the bottom bar still jumps straight to a tab without '
+        'building the ones in between', (tester) async {
+      await _pumpApp(tester);
+
+      await tapNav(tester, 'You');
+      expect(location(tester), AppRoute.account);
+      expect(find.byType(AccountScreen), findsOneWidget);
+      expect(find.byType(HomeScreen), findsNothing);
+      expect(find.byType(MyCardsScreen), findsNothing);
+      expect(find.byType(InsightsHubScreen), findsNothing);
+
+      await tapNav(tester, 'Home');
+      expect(location(tester), AppRoute.home);
+      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(find.byType(AccountScreen), findsNothing);
+    });
+
+    testWidgets('a swipe and the bottom bar agree on where you are', (
+      tester,
+    ) async {
+      await _pumpApp(tester);
+      await swipe(tester, -500);
+      await tapNav(tester, 'Insights');
+      expect(location(tester), AppRoute.insights);
+      expect(find.byType(InsightsHubScreen), findsOneWidget);
+
+      await swipe(tester, 500);
+      expect(location(tester), AppRoute.cards);
+      expect(find.byType(MyCardsScreen), findsOneWidget);
+    });
+
+    testWidgets('tapping a tab while a swipe is still settling is not undone '
+        'by the swipe', (tester) async {
+      await _pumpApp(tester);
+      await tester.flingFrom(const Offset(400, 160), const Offset(-500, 0), 1500);
+      // Mid-settle: do not wait for the swipe to finish before the tap.
+      await tester.pump(const Duration(milliseconds: 30));
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('appShellNavBar')),
+          matching: find.text('You'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(location(tester), AppRoute.account);
+      expect(find.byType(AccountScreen), findsOneWidget);
+    });
+
+    testWidgets('system back after a swipe returns to Home', (tester) async {
+      await _pumpApp(tester);
+      await swipe(tester, -500);
+      await swipe(tester, -500);
+      expect(location(tester), AppRoute.insights);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(location(tester), AppRoute.home);
+      expect(find.byType(HomeScreen), findsOneWidget);
+    });
+
+    testWidgets('a page pushed over a tab is not swiped away', (tester) async {
+      await _pumpApp(tester);
+      final scope = ProviderScope.containerOf(
+        tester.element(find.byType(MaterialApp)),
+      );
+      scope.read(goRouterProvider).go(AppRoute.splits);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('appShellNavBar')), findsNothing);
+
+      await swipe(tester, -500);
+      expect(location(tester), AppRoute.splits);
+    });
   });
 }

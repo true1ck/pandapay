@@ -1114,38 +1114,135 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state, child) =>
             _AppShell(location: state.uri.path, child: child),
         routes: [
-          // NoTransitionPage on every tab: a bottom-nav switch should feel
-          // instant, the same as the setState-based int-index switch this
-          // replaced — not a page-push slide transition, which briefly
-          // leaves the incoming screen's tappable content off its resting
-          // position mid-animation (the router tests caught this directly:
-          // a tap landed at x=949 in an 800px-wide viewport because the
-          // default transition hadn't settled).
-          GoRoute(
-            path: AppRoute.home,
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: HomeScreen()),
-          ),
-          GoRoute(
-            path: AppRoute.cards,
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: MyCardsScreen()),
-          ),
-          GoRoute(
-            path: AppRoute.insights,
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: InsightsHubScreen()),
-          ),
-          GoRoute(
-            path: AppRoute.account,
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: AccountScreen()),
-          ),
+          // All four tabs are ONE page with one key: a swipeable pager that
+          // shows the tab the location names ([_MainTabs]). A bottom-nav tap
+          // still switches instantly (no page-push slide, which briefly leaves
+          // the incoming screen's tappable content off its resting position
+          // mid-animation: a router test caught a tap landing at x=949 in an
+          // 800px-wide viewport), and a swipe slides between tabs. The shared
+          // key makes go_router update this page rather than replace it, so
+          // the pager (and a swipe in progress) survives the route change a
+          // swipe itself causes.
+          for (final tab in _mainTabs)
+            GoRoute(
+              path: tab.$1,
+              pageBuilder: (context, state) => NoTransitionPage(
+                key: _mainTabsPageKey,
+                child: _MainTabs(location: tab.$1),
+              ),
+            ),
         ],
       ),
     ],
   );
 });
+
+/// The main tabs, left to right: the order of the bottom bar AND of the swipe,
+/// so swiping left from Home reaches the same tab the bar shows next to it.
+const _mainTabs = <(String, String, IconData)>[
+  (AppRoute.home, 'Home', Icons.home_rounded),
+  (AppRoute.cards, 'Wallet', Icons.credit_card_rounded),
+  (AppRoute.insights, 'Insights', Icons.insights_rounded),
+  (AppRoute.account, 'You', Icons.person_rounded),
+];
+
+/// One key for the single page every main-tab route returns (see the
+/// ShellRoute): go_router updates that page in place when the tab changes.
+const _mainTabsPageKey = ValueKey<String>('mainTabs');
+
+Widget _mainTabScreen(String path) => switch (path) {
+  AppRoute.cards => const MyCardsScreen(),
+  AppRoute.insights => const InsightsHubScreen(),
+  AppRoute.account => const AccountScreen(),
+  _ => const HomeScreen(),
+};
+
+/// Home, Wallet, Insights and You as a swipeable pager: drag left or right
+/// anywhere that is not itself scrolling sideways (a card carousel, a chart)
+/// and the next tab slides in under the finger. Works the same on iOS and
+/// Android: it is a plain [PageView].
+///
+/// The route stays the source of truth. A swipe that settles on another tab
+/// moves the router there ([GoRouter.go]); a route change from anywhere else
+/// (the bottom bar, a deep link, back to Home, the tutorial) starts a fresh
+/// pager on that tab, in the same frame, exactly as the tabs always switched:
+/// instantly, without building the tabs in between.
+///
+/// Only the tab on screen is built (plus its neighbour while a swipe is in
+/// progress). Tabs are NOT kept alive off screen: each one watches providers
+/// that rebuild on every transaction write, and four live tabs would do that
+/// work four times (docs/PERFORMANCE_RULEBOOK.md R6).
+class _MainTabs extends StatefulWidget {
+  final String location;
+  const _MainTabs({required this.location});
+
+  @override
+  State<_MainTabs> createState() => _MainTabsState();
+}
+
+class _MainTabsState extends State<_MainTabs> {
+  late PageController _pages = PageController(
+    initialPage: _indexOf(widget.location),
+  );
+
+  static int _indexOf(String location) {
+    final index = _mainTabs.indexWhere((tab) => tab.$1 == location);
+    return index < 0 ? 0 : index;
+  }
+
+  @override
+  void didUpdateWidget(_MainTabs oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.location == widget.location) return;
+    final target = _indexOf(widget.location);
+    final page = _pages.hasClients ? _pages.page : null;
+    // A swipe already brought the pager to this tab (that is what moved the
+    // route): leave it be, or the tab just settled on would be rebuilt.
+    if (page != null && (page - target).abs() < 0.001) return;
+    // Anything else starts a fresh pager on the tab, rather than moving this
+    // one: that happens in this very frame (a scroll position moved during
+    // build would mark the viewport dirty mid-build, and a post-frame jump
+    // would show the new tab one frame late), builds nothing in between, and
+    // drops a swipe still settling without it ever reporting that it ended,
+    // so it cannot pull the route back to the tab it was passing.
+    final old = _pages;
+    _pages = PageController(initialPage: target);
+    WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
+  }
+
+  bool _onScrollEnd(ScrollEndNotification notification) {
+    // Depth 0 is this pager's own scroll; deeper ones are lists and carousels
+    // inside a tab.
+    if (notification.depth != 0) return false;
+    final settledOn = _pages.page?.round();
+    if (settledOn != null && settledOn != _indexOf(widget.location)) {
+      GoRouter.of(context).go(_mainTabs[settledOn].$1);
+    }
+    return false;
+  }
+
+  @override
+  void dispose() {
+    _pages.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return NotificationListener<ScrollEndNotification>(
+      onNotification: _onScrollEnd,
+      child: PageView.builder(
+        key: ObjectKey(_pages),
+        controller: _pages,
+        itemCount: _mainTabs.length,
+        itemBuilder: (context, index) => KeyedSubtree(
+          key: ValueKey(_mainTabs[index].$1),
+          child: _mainTabScreen(_mainTabs[index].$1),
+        ),
+      ),
+    );
+  }
+}
 
 class _AppShell extends ConsumerStatefulWidget {
   final String location;
@@ -1206,12 +1303,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
   // Labels match the design doc's own nav copy ("02 Wallet" / "05 You")
   // exactly — routes/AppRoute names stay unchanged since those are wired
   // through go_router paths and tests, not user-visible.
-  static const _destinations = [
-    (AppRoute.home, 'Home', Icons.home_rounded),
-    (AppRoute.cards, 'Wallet', Icons.credit_card_rounded),
-    (AppRoute.insights, 'Insights', Icons.insights_rounded),
-    (AppRoute.account, 'You', Icons.person_rounded),
-  ];
+  static const _destinations = _mainTabs;
 
   /// Design 03 "Tap to Sniff": the lime circle in the middle of the nav bar
   /// is the *merchant* scanner — point it at a UPI QR or a bill and get a
