@@ -17,6 +17,7 @@ import '../storage/schema.dart';
 import '../storage/subscription_store.dart';
 import '../storage/sync_state_store.dart';
 import 'corrections_sync.dart';
+import 'instrument_adoption.dart';
 
 /// Pull changes and the next cursor commit in the same local transaction.
 class SyncPull {
@@ -271,102 +272,8 @@ class SyncPull {
     });
   }
 
-  void _adopt(Instrument local, String serverId) {
-    final wasDirty = _dirty(
-      'v2_instruments',
-      'instrument_id',
-      local.instrumentId,
-    );
-    _db.execute(
-      'DELETE FROM v2_instruments WHERE namespace=? AND instrument_id=?',
-      [namespace, local.instrumentId],
-    );
-    _instruments.upsert(
-      Instrument.fromJson({...local.toJson(), 'instrumentId': serverId}),
-      dirty: wasDirty,
-    );
-    _db.execute(
-      'UPDATE v2_facts SET instrument_id=? WHERE namespace=? AND instrument_id=?',
-      [serverId, namespace, local.instrumentId],
-    );
-    for (final child in _instruments.list().where(
-      (item) => item.parentInstrumentId == local.instrumentId,
-    )) {
-      final dirty = _dirty(
-        'v2_instruments',
-        'instrument_id',
-        child.instrumentId,
-      );
-      _instruments.upsert(
-        child.copyWith(parentInstrumentId: serverId),
-        dirty: dirty,
-      );
-    }
-    final personal = _state.get('personal:rules');
-    if (personal != null) {
-      final rules = jsonDecode(personal) as List;
-      for (final rule in rules.whereType<Map>()) {
-        if (rule['instrumentId'] == local.instrumentId) {
-          rule['instrumentId'] = serverId;
-        }
-      }
-      _state.put('personal:rules', jsonEncode(rules));
-    }
-    void rewrite(Map<String, Object?> json) {
-      for (final side in ['from', 'to']) {
-        final endpoint = json[side];
-        if (endpoint is Map && endpoint['instrumentId'] == local.instrumentId) {
-          json[side] = <String, Object?>{'instrumentId': serverId};
-        }
-      }
-    }
-
-    for (final row in _db.select(
-      'SELECT entry_id,payload FROM v2_ledger WHERE namespace=?',
-      [namespace],
-    )) {
-      final json = (jsonDecode(row['payload'] as String) as Map)
-          .cast<String, Object?>();
-      rewrite(json);
-      final rewritten = jsonEncode(json);
-      // Most rows do not mention the adopted instrument; leave them alone.
-      if (rewritten == row['payload']) continue;
-      _db.execute(
-        'UPDATE v2_ledger SET payload=? WHERE namespace=? AND entry_id=?',
-        [rewritten, namespace, row['entry_id']],
-      );
-    }
-    final pending = _db.select(
-      'SELECT id,kind,payload FROM v2_outbox WHERE namespace=?',
-      [namespace],
-    );
-    final queue = OutboxStore(_db, namespace: namespace);
-    for (final row in pending) {
-      final json = (jsonDecode(row['payload'] as String) as Map)
-          .cast<String, Object?>();
-      if (row['id'] == 'instrument:${local.instrumentId}') {
-        _db.execute('DELETE FROM v2_outbox WHERE namespace=? AND id=?', [
-          namespace,
-          row['id'],
-        ]);
-        json['instrumentId'] = serverId;
-        queue.enqueue('instrument', serverId, json);
-      } else if (row['kind'] == 'instrument' &&
-          json['parentInstrumentId'] == local.instrumentId) {
-        json['parentInstrumentId'] = serverId;
-        _db.execute(
-          'UPDATE v2_outbox SET payload=? WHERE namespace=? AND id=?',
-          [jsonEncode(json), namespace, row['id']],
-        );
-      } else if (row['kind'] == 'ledger') {
-        rewrite(json);
-        _db.execute(
-          'UPDATE v2_outbox SET payload=? WHERE namespace=? AND id=?',
-          [jsonEncode(json), namespace, row['id']],
-        );
-      }
-    }
-  }
+  void _adopt(Instrument local, String serverId) =>
+      adoptServerInstrumentId(_db, namespace, local, serverId);
 
 
   // ---------------------------------------------------------------------------

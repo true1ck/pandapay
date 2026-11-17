@@ -6,8 +6,10 @@ import 'package:http/http.dart' as http;
 
 import 'package:pandapay_domain/sms_v2.dart' show uploadSenderBrand;
 
+import '../storage/instrument_store.dart';
 import '../storage/outbox_store.dart';
 import '../storage/sync_state_store.dart';
+import 'instrument_adoption.dart';
 
 class UploadBatch {
   const UploadBatch(this.records, this.body, this.gzipBytes, this.backfill);
@@ -422,6 +424,21 @@ class FactsUpload {
             '${result['kind']}:${result['id']}':
                 '${((result['errors'] as List?)?.firstOrNull as Map?)?['code'] ?? 'rejected'}',
       };
+      // The server already holds this card or account under another id (a
+      // phone that read its history again made new ids): it names the id to
+      // use. Taking it keeps this phone's cards linked on the server, which its
+      // rows and card rewards need; refusing for good left them unlinked.
+      final adoptAs = <String, String>{
+        for (final result in json['results'] as List)
+          if (result['status'] == 'rejected' && result['kind'] == 'instrument')
+            for (final error in (result['errors'] as List? ?? const []))
+              if (error is Map &&
+                  error['code'] == 'instrument_key_conflict' &&
+                  '${error['path']}'.startsWith('existingInstrumentId:'))
+                'instrument:${result['id']}': '${error['path']}'.substring(
+                  'existingInstrumentId:'.length,
+                ),
+      };
       var acknowledged = 0;
       var progressed = false;
       queue.db.execute('SAVEPOINT sms_v2_upload_ack');
@@ -437,6 +454,25 @@ class FactsUpload {
             if (queue.acknowledge(record)) {
               _markClean(record);
               acknowledged++;
+            }
+            progressed = true;
+          } else if (adoptAs[record.id] case final serverId?) {
+            final local = InstrumentStore(
+              queue.db,
+              namespace: queue.namespace,
+            ).get(record.id.substring('instrument:'.length));
+            if (local != null && local.instrumentId != serverId) {
+              // Replaces this record in the queue with the server's id and
+              // queues the ledger entries that name it again.
+              adoptServerInstrumentId(
+                queue.db,
+                queue.namespace,
+                local,
+                serverId,
+                resendLedger: true,
+              );
+            } else {
+              queue.acknowledge(record);
             }
             progressed = true;
           } else if (ids.any(refused.containsKey) &&

@@ -484,4 +484,68 @@ void main() {
       },
     );
   });
+
+  test(
+    'a card the server holds under another id takes that id and its entries are sent again',
+    () async {
+      const serverId = '0c4f9b9e-1000-4000-8000-000000000001';
+      final localId = database.db
+          .select('SELECT instrument_id FROM v2_instruments WHERE namespace=?', ['a'])
+          .single['instrument_id'] as String;
+      var round = 0;
+      final sentLedger = <String, String?>{};
+      final client = MockClient((request) async {
+        round++;
+        final body = decode(request);
+        for (final entry in body['ledger'] as List) {
+          sentLedger[entry['entryId'] as String] =
+              ((entry['from'] as Map?) ?? const {})['instrumentId'] as String?;
+        }
+        final results = [
+          for (final r in accepted(body))
+            if (r['kind'] == 'instrument' && r['id'] == localId)
+              {
+                'kind': 'instrument',
+                'id': localId,
+                'status': 'rejected',
+                'errors': [
+                  {
+                    'code': 'instrument_key_conflict',
+                    'path': 'existingInstrumentId:$serverId',
+                  },
+                ],
+              }
+            else
+              r,
+        ];
+        return http.Response(jsonEncode({'results': results}), 200);
+      });
+      await uploader(client).drain(backfill: true);
+      // The phone now uses the server's id everywhere.
+      final ids = database.db
+          .select('SELECT instrument_id FROM v2_instruments WHERE namespace=?', ['a'])
+          .map((r) => r['instrument_id'])
+          .toList();
+      expect(ids, [serverId]);
+      expect(
+        database.db
+            .select("SELECT instrument_id FROM v2_facts WHERE namespace=? AND fact_type='movement'", ['a'])
+            .single['instrument_id'],
+        serverId,
+      );
+      final ledger = jsonDecode(
+        database.db.select('SELECT payload FROM v2_ledger WHERE namespace=?', ['a']).single['payload'] as String,
+      ) as Map;
+      expect((ledger['from'] as Map)['instrumentId'], serverId);
+      // The entries were sent again with the server's id, and the card too.
+      expect(round, greaterThanOrEqualTo(2));
+      expect(sentLedger.values.last, serverId);
+      expect(queue.due(now.add(const Duration(days: 1))), isEmpty);
+      // Nothing was counted as refused for good.
+      expect(
+        database.db.select("SELECT value FROM v2_sync_state WHERE namespace=? AND key=?", ['a', FactsUpload.refusedKey]),
+        isEmpty,
+      );
+    },
+  );
 }

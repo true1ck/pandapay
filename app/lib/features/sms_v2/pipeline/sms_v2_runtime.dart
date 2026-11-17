@@ -472,6 +472,30 @@ class SmsV2Runtime {
     }
   }
 
+  /// Bump to send every card and account record once more.
+  static const cardsResendKey = 'instruments:resend';
+  static const cardsResendVersion = '1';
+
+  /// Sends every card and account record once more, once per
+  /// [cardsResendVersion]. Builds before 177 set aside the records the server
+  /// refused as `instrument_key_conflict` (it held the same card under another
+  /// id) instead of taking the server's id, so those cards never reached the
+  /// server linked to their wallet card, and the server priced no rewards for
+  /// them. Sent again, the refusal now makes this phone take the server's id
+  /// and resend the card's ledger entries (FactsUpload). A few dozen small
+  /// records; the queue drops repeats the server already holds.
+  void _resendCardsOnce() {
+    if (_state.get(cardsResendKey) == cardsResendVersion) return;
+    final queue = OutboxStore(financial.database.db, namespace: namespace);
+    for (final instrument in InstrumentStore(
+      financial.database.db,
+      namespace: namespace,
+    ).list()) {
+      queue.enqueue('instrument', instrument.instrumentId, instrument.toJson());
+    }
+    _state.put(cardsResendKey, cardsResendVersion);
+  }
+
   /// Writes the shop and rule keys of facts stored before those columns
   /// existed, a little on each pass so no pass is held up: at most about a
   /// fifth of a second, 500 facts at a time.
@@ -602,6 +626,7 @@ class SmsV2Runtime {
       await _applyCardState();
     }
     _keyFacts();
+    _resendCardsOnce();
     await networked(() => _upload.drain());
     final senders = (await activeBundle()).senders;
     final correctionQueue = OutboxStore(
