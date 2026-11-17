@@ -123,11 +123,28 @@
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>upi</string>
+		<string>gpay</string>
 		<string>tez</string>
 		<string>phonepe</string>
 		<string>paytmmp</string>
 		<string>credpay</string>
 		<string>bhim</string>
+		<string>amazonpay</string>
+		<string>super</string>
+		<string>scapia</string>
+		<string>tnupi</string>
+		<string>kiwi</string>
+		<string>slice-upi</string>
+		<string>jupiter</string>
+		<string>omnicard</string>
+		<string>freecharge</string>
+		<string>mobikwik</string>
+		<string>navi</string>
+		<string>myairtel</string>
+		<string>payzapp</string>
+		<string>imobile</string>
+		<string>sbiyono</string>
+		<string>myjio</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>

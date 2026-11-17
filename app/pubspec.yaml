@@ -270,6 +270,7 @@ flutter:
     - assets/illustrations/
     - assets/avatars/
     - assets/merchant_brands/
+    - assets/upi_apps/
     - assets/data/bundled_catalogue.json
     - assets/data/bundled_categories.json
     - assets/sms_rules/

@@ -648,7 +648,11 @@ final acceptanceReportsRepositoryProvider =
 /// Overridden with a fake in widget tests — the real one talks to a
 /// MethodChannel that isn't registered in the test harness.
 final upiPaymentServiceProvider = Provider<UpiPaymentService>(
-  (ref) => MethodChannelUpiPaymentService(),
+  // iOS has no MethodChannel for this: it asks the system which UPI apps answer
+  // to their own URL schemes, so the chooser is shown there too.
+  (ref) => defaultTargetPlatform == TargetPlatform.iOS
+      ? IosUpiPaymentService()
+      : MethodChannelUpiPaymentService(),
 );
 
 /// Plan Phase 2.2 — product analytics. Deliberately NOT null when signed out:
