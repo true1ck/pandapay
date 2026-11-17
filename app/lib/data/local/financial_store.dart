@@ -1510,6 +1510,35 @@ class FinancialStore {
       "AND json_extract(payload, '\$.event_id') IS NOT NULL "
       "AND json_extract(payload, '\$.user_card_id') IS NOT ?";
 
+  /// The saved SMS (v2) transactions that came from [sourceKeys], through
+  /// `financial_source_identity`, 400 keys per query. Bounded by the keys
+  /// given (one card's or account's messages): it shows the transactions a
+  /// found card stands for, before and after it is added to the wallet.
+  List<TransactionEntry> smsTransactionsForSourceKeys(
+    String ns,
+    Iterable<String> sourceKeys,
+  ) {
+    final keys = sourceKeys.toSet().toList();
+    final out = <TransactionEntry>[];
+    for (var offset = 0; offset < keys.length; offset += 400) {
+      final chunk = keys.skip(offset).take(400).toList();
+      for (final row in database.db.select(
+        'SELECT payload FROM financial_entities INDEXED BY financial_source_identity '
+        "WHERE namespace=? AND source_key IN (${List.filled(chunk.length, '?').join(',')}) "
+        "AND entity='transactions' "
+        "AND json_extract(payload, '\$.event_id') IS NOT NULL",
+        [ns, ...chunk],
+      )) {
+        out.add(
+          TransactionEntry.fromJson(
+            jsonDecode(row['payload'] as String) as Map<String, dynamic>,
+          ),
+        );
+      }
+    }
+    return out;
+  }
+
   /// Puts [userCardId] on the saved SMS (v2) card transactions that came from
   /// [sourceKeys].
   ///

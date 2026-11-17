@@ -15,6 +15,7 @@ import '../../../data/user_cards_repository.dart' show UserCard;
 import '../../cards/add_card_local_first.dart';
 import '../../cards/card_picker_screen.dart';
 import '../instruments/card_linker.dart';
+import '../instruments/issuer_slugs.dart' show v2IssuerSlugFromName;
 import '../instruments/bank_summary_adapter.dart'
     show isShadowedByCard, shadowingCard;
 import '../ledger/providers.dart' show instrumentChoiceRevisionProvider;
@@ -32,6 +33,183 @@ String instrumentKindLabel(InstrumentKind kind) => switch (kind) {
   _ => 'Other accounts',
 };
 
+/// A credit card the messages found that no wallet card stands behind: its
+/// spends earn no rewards and stay out of the card's totals until it is added.
+/// An older build could confirm a card without linking it, so "confirmed"
+/// alone does not mean it is in the wallet.
+bool cardNotInWallet(Instrument i) =>
+    i.kind == InstrumentKind.creditCard &&
+    i.status != InstrumentStatus.rejected &&
+    i.status != InstrumentStatus.archived &&
+    (i.status == InstrumentStatus.detected || i.userCardId == null);
+
+/// True when the person still has something to do for [i]: add a card to the
+/// wallet, or confirm an account.
+bool instrumentNeedsAction(Instrument i) => i.kind == InstrumentKind.creditCard
+    ? cardNotInWallet(i)
+    : i.status == InstrumentStatus.detected;
+
+/// "HDFC ••8127", or what to say when the messages never printed a number.
+String instrumentNumberLabel(Instrument i) => i.maskDigits == null
+    ? '${i.issuerSlug.toUpperCase()} · no number in its messages'
+    : '${i.issuerSlug.toUpperCase()} ••${i.maskDigits}';
+
+/// Runs one choice about a found card or account ('confirm' adds a credit
+/// card to the wallet, 'reject', 'restore', 'rename', 'asCard', 'asAccount')
+/// with the same steps wherever it is offered. Saved on the phone first;
+/// the server gets it from the outbox. Returns true when something changed.
+Future<bool> runInstrumentAction(
+  BuildContext context,
+  WidgetRef ref,
+  Instrument instrument,
+  String action,
+) async {
+  final namespace = ref.read(app.cacheNamespaceProvider);
+  try {
+    // Confirming changes no ledger row, so it needs neither the rule bundle
+    // nor a ledger re-projection. Rejecting and renaming still do.
+    RuleBundle? bundle;
+    if (action != 'confirm') {
+      final runtime = await ref.read(smsV2RuntimeProvider.future);
+      bundle = await runtime?.activeBundle();
+      if (bundle == null) throw StateError('No verified rules');
+    }
+    final cache = await ref.read(app.responseCacheProvider.future);
+    if (!context.mounted || namespace != ref.read(app.cacheNamespaceProvider)) {
+      return false;
+    }
+    final actions = InstrumentActions(
+      financial: cache.financialStore,
+      namespace: namespace,
+      bundle: bundle,
+      catalogue: ref.read(app.catalogueProvider).valueOrNull ?? const [],
+    );
+    if (action == 'rename') {
+      final name = await showDialog<String>(
+        context: context,
+        builder: (_) => _RenameDialog(name: instrument.displayName),
+      );
+      if (!context.mounted ||
+          namespace != ref.read(app.cacheNamespaceProvider)) {
+        return false;
+      }
+      if (name != null) actions.rename(instrument.instrumentId, name);
+    } else if (action == 'reject') {
+      actions.reject(instrument.instrumentId);
+    } else if (action == 'restore') {
+      actions.restore(instrument.instrumentId);
+    } else if (action == 'asCard' || action == 'asAccount') {
+      // [instrument] is the bank-account reading of a number that is also a
+      // credit card. Keep the side the user names; archive the other.
+      final all = ref.read(instrumentsProvider).valueOrNull ?? const [];
+      final card = shadowingCard(instrument, all);
+      if (action == 'asCard') {
+        actions.archive(instrument.instrumentId);
+      } else if (card != null && card.userCardId == null) {
+        actions.archive(card.instrumentId);
+        actions.confirm(instrument.instrumentId);
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'This card is in your wallet. Remove it there first.',
+              ),
+            ),
+          );
+        }
+        return false;
+      }
+    } else {
+      final result = actions.confirm(instrument.instrumentId);
+      if (result case CardNeedsProduct(:final issuerSlug, :final maskDigits)) {
+        final products = await Navigator.of(context).push<List<CardProduct>>(
+          MaterialPageRoute(
+            builder: (_) => CardPickerScreen(
+              initialSearch: issuerSlug,
+              detectedLast4: maskDigits,
+            ),
+          ),
+        );
+        if (!context.mounted ||
+            namespace != ref.read(app.cacheNamespaceProvider)) {
+          return false;
+        }
+        final repository = ref.read(app.userCardsRepositoryProvider);
+        if (repository == null) throw StateError('Session unavailable');
+        final selected = products ?? <CardProduct>[];
+        if (selected.isEmpty) {
+          // Nothing was saved: the card stays as it was until a wallet card
+          // is chosen for it.
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Not added yet. Choose a card to add it to your wallet.',
+              ),
+            ),
+          );
+          return false;
+        }
+        if (selected.length > 1) {
+          throw ArgumentError('Choose one card for this account');
+        }
+        for (final product in selected) {
+          // The messages name the bank; a card of another bank cannot be this
+          // one. Checked before anything is added, so a wrong pick never
+          // leaves an extra card in the wallet (Nov 2026: a "PNB Kiwi" card
+          // was added for a YES Kiwi card this way).
+          final bank = v2IssuerSlugFromName(product.issuerName);
+          if (bank != null && bank != instrument.issuerSlug) {
+            final label = defaultIssuerLabel(instrument.issuerSlug);
+            throw ArgumentError(
+              'Your messages say this card is from $label. '
+              'Choose a $label card.',
+            );
+          }
+          // WP-C6: one bounded attempt, else the card is kept on the phone
+          // and sent later (the instrument then links to the pending card).
+          final outcome = await addCardLocalFirst(
+            ref,
+            cardProductId: product.id,
+            product: product,
+            last4: maskDigits,
+          );
+          if (!context.mounted ||
+              namespace != ref.read(app.cacheNamespaceProvider)) {
+            return false;
+          }
+          final UserCard card;
+          if (outcome.queued) {
+            card = UserCard.fromJson(
+              cache.financialStore
+                  .entities(namespace, 'cards')
+                  .firstWhere((c) => c['id'] == outcome.id),
+            );
+          } else {
+            final cards = await repository.fetchUserCards();
+            if (!context.mounted ||
+                namespace != ref.read(app.cacheNamespaceProvider)) {
+              return false;
+            }
+            cache.financialStore.replaceCards(namespace, cards);
+            card = cards.where((c) => c.id == outcome.id).single;
+          }
+          actions.attachCard(instrument.instrumentId, card);
+          ref.invalidate(app.userCardsProvider);
+        }
+      }
+    }
+    // Local first: the choice is already saved on the phone; show it on this
+    // list and on Home right now. Syncing to the server happens later from
+    // the outbox, never while the user waits.
+    ref.read(instrumentChoiceRevisionProvider.notifier).state++;
+    return true;
+  } catch (error) {
+    if (context.mounted) smsShowError(context, error);
+    return false;
+  }
+}
+
 class FoundInstrumentsScreen extends ConsumerWidget {
   const FoundInstrumentsScreen({super.key});
 
@@ -40,142 +218,7 @@ class FoundInstrumentsScreen extends ConsumerWidget {
     WidgetRef ref,
     Instrument instrument,
     String action,
-  ) async {
-    final namespace = ref.read(app.cacheNamespaceProvider);
-    try {
-      // Confirming changes no ledger row, so it needs neither the rule bundle
-      // nor a ledger re-projection. Rejecting and renaming still do.
-      RuleBundle? bundle;
-      if (action != 'confirm') {
-        final runtime = await ref.read(smsV2RuntimeProvider.future);
-        bundle = await runtime?.activeBundle();
-        if (bundle == null) throw StateError('No verified rules');
-      }
-      final cache = await ref.read(app.responseCacheProvider.future);
-      if (!context.mounted ||
-          namespace != ref.read(app.cacheNamespaceProvider)) {
-        return;
-      }
-      final actions = InstrumentActions(
-        financial: cache.financialStore,
-        namespace: namespace,
-        bundle: bundle,
-        catalogue: ref.read(app.catalogueProvider).valueOrNull ?? const [],
-      );
-      if (action == 'rename') {
-        final name = await showDialog<String>(
-          context: context,
-          builder: (_) => _RenameDialog(name: instrument.displayName),
-        );
-        if (!context.mounted ||
-            namespace != ref.read(app.cacheNamespaceProvider)) {
-          return;
-        }
-        if (name != null) actions.rename(instrument.instrumentId, name);
-      } else if (action == 'reject') {
-        actions.reject(instrument.instrumentId);
-      } else if (action == 'restore') {
-        actions.restore(instrument.instrumentId);
-      } else if (action == 'asCard' || action == 'asAccount') {
-        // [instrument] is the bank-account reading of a number that is also a
-        // credit card. Keep the side the user names; archive the other.
-        final all = ref.read(instrumentsProvider).valueOrNull ?? const [];
-        final card = shadowingCard(instrument, all);
-        if (action == 'asCard') {
-          actions.archive(instrument.instrumentId);
-        } else if (card != null && card.userCardId == null) {
-          actions.archive(card.instrumentId);
-          actions.confirm(instrument.instrumentId);
-        } else {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'This card is in your wallet. Remove it there first.',
-                ),
-              ),
-            );
-          }
-          return;
-        }
-      } else {
-        final result = actions.confirm(instrument.instrumentId);
-        if (result case CardNeedsProduct(
-          :final issuerSlug,
-          :final maskDigits,
-        )) {
-          final products = await Navigator.of(context).push<List<CardProduct>>(
-            MaterialPageRoute(
-              builder: (_) => CardPickerScreen(
-                initialSearch: issuerSlug,
-                detectedLast4: maskDigits,
-              ),
-            ),
-          );
-          if (!context.mounted ||
-              namespace != ref.read(app.cacheNamespaceProvider)) {
-            return;
-          }
-          final repository = ref.read(app.userCardsRepositoryProvider);
-          if (repository == null) throw StateError('Session unavailable');
-          final selected = products ?? <CardProduct>[];
-          if (selected.isEmpty) {
-            // Nothing was saved: the card stays as it was until a wallet card
-            // is chosen for it.
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Not added yet. Choose a card to add it to your wallet.',
-                ),
-              ),
-            );
-            return;
-          }
-          if (selected.length > 1) {
-            throw ArgumentError('Choose one card for this account');
-          }
-          for (final product in selected) {
-            // WP-C6: one bounded attempt, else the card is kept on the phone
-            // and sent later (the instrument then links to the pending card).
-            final outcome = await addCardLocalFirst(
-              ref,
-              cardProductId: product.id,
-              product: product,
-              last4: maskDigits,
-            );
-            if (!context.mounted ||
-                namespace != ref.read(app.cacheNamespaceProvider)) {
-              return;
-            }
-            final UserCard card;
-            if (outcome.queued) {
-              card = UserCard.fromJson(
-                cache.financialStore
-                    .entities(namespace, 'cards')
-                    .firstWhere((c) => c['id'] == outcome.id),
-              );
-            } else {
-              final cards = await repository.fetchUserCards();
-              if (!context.mounted ||
-                  namespace != ref.read(app.cacheNamespaceProvider)) {
-                return;
-              }
-              cache.financialStore.replaceCards(namespace, cards);
-              card = cards.where((c) => c.id == outcome.id).single;
-            }
-            actions.attachCard(instrument.instrumentId, card);
-            ref.invalidate(app.userCardsProvider);
-          }
-        }
-      }
-      // Local first: the choice is already saved on the phone; show it on this
-      // list and on Home right now. Syncing to the server happens later from
-      // the outbox, never while the user waits.
-      ref.read(instrumentChoiceRevisionProvider.notifier).state++;
-    } catch (error) {
-      if (context.mounted) smsShowError(context, error);
-    }
-  }
+  ) => runInstrumentAction(context, ref, instrument, action);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -223,7 +266,7 @@ class FoundInstrumentsScreen extends ConsumerWidget {
   }
 }
 
-class FoundInstrumentsList extends StatelessWidget {
+class FoundInstrumentsList extends StatefulWidget {
   const FoundInstrumentsList({
     super.key,
     required this.instruments,
@@ -244,9 +287,21 @@ class FoundInstrumentsList extends StatelessWidget {
   /// Called with the bank-account reading and true when the user says it is a
   /// credit card, false when it is a bank account.
   final void Function(Instrument account, bool isCard)? onResolveKind;
+
+  /// A list this short shows every section open: folding it saves nothing.
+  static const foldAbove = 6;
+
+  @override
+  State<FoundInstrumentsList> createState() => _FoundInstrumentsListState();
+}
+
+class _FoundInstrumentsListState extends State<FoundInstrumentsList> {
+  /// The person's own open/closed choice per section, once they made one.
+  final _open = <InstrumentKind, bool>{};
+
   @override
   Widget build(BuildContext context) {
-    final visible = instruments
+    final visible = widget.instruments
         .where(
           (i) =>
               i.status != InstrumentStatus.rejected &&
@@ -259,6 +314,25 @@ class FoundInstrumentsList extends StatelessWidget {
         icon: Icons.account_balance_outlined,
       );
     }
+    // Cards the messages found that are not in the wallet, the ones with the
+    // most messages first: their spends earn nothing until they are added.
+    final missing =
+        visible.where((i) => cardNotInWallet(i) && i.evidenceCount > 0).toList()
+          ..sort((a, b) => b.evidenceCount.compareTo(a.evidenceCount));
+    // Within a section, what still needs the person comes first, then the
+    // card or account seen most often.
+    int order(Instrument a, Instrument b) {
+      final needs = (instrumentNeedsAction(b) ? 1 : 0).compareTo(
+        instrumentNeedsAction(a) ? 1 : 0,
+      );
+      return needs != 0 ? needs : b.evidenceCount.compareTo(a.evidenceCount);
+    }
+
+    bool isOpen(InstrumentKind kind, List<Instrument> items) =>
+        _open[kind] ??
+        (visible.length <= FoundInstrumentsList.foldAbove ||
+            items.any(instrumentNeedsAction));
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(
         AppSpace.lg,
@@ -271,42 +345,190 @@ class FoundInstrumentsList extends StatelessWidget {
           'Confirm what belongs to you. Credit cards are added to your wallet. You can change these choices later.',
           style: BambooFonts.ui(13, color: BambooInk.ink700, height: 1.4),
         ),
-        for (final kind in InstrumentKind.values)
-          if (visible.any((i) => i.kind == kind)) ...[
-            BambooSectionLabel(
-              instrumentKindLabel(kind),
-              asTitle: true,
-              padding: const EdgeInsets.fromLTRB(
-                AppSpace.xs,
-                AppSpace.lg,
-                AppSpace.xs,
-                AppSpace.sm,
-              ),
+        if (missing.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpace.md),
+            child: _NotInWalletSummary(
+              cards: missing,
+              onShow: () =>
+                  setState(() => _open[InstrumentKind.creditCard] = true),
             ),
-            for (final instrument in visible.where((i) => i.kind == kind))
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpace.sm),
-                child:
-                    onResolveKind != null &&
-                        isShadowedByCard(instrument, visible)
-                    ? _KindQuestionPanel(
-                        account: instrument,
-                        onChoose: (isCard) =>
-                            onResolveKind!(instrument, isCard),
-                      )
-                    : _InstrumentPanel(
-                        instrument: instrument,
-                        suggestNotMine: notMineHints.contains(
-                          instrument.instrumentId,
-                        ),
-                        onConfirm: onConfirm,
-                        onReject: onReject,
-                        onRename: onRename,
-                        onOpen: onOpen,
-                      ),
-              ),
-          ],
+          ),
+        for (final kind in InstrumentKind.values)
+          if (visible.any((i) => i.kind == kind))
+            ...() {
+              final items = visible.where((i) => i.kind == kind).toList()
+                ..sort(order);
+              final open = isOpen(kind, items);
+              final pending = items.where(instrumentNeedsAction).length;
+              return [
+                _SectionHeader(
+                  label: instrumentKindLabel(kind),
+                  count: items.length,
+                  pendingLabel: pending == 0
+                      ? null
+                      : kind == InstrumentKind.creditCard
+                      ? '$pending to add'
+                      : '$pending to confirm',
+                  open: open,
+                  onToggle: () => setState(() => _open[kind] = !open),
+                ),
+                if (open)
+                  for (final instrument in items)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpace.sm),
+                      child:
+                          widget.onResolveKind != null &&
+                              isShadowedByCard(instrument, visible)
+                          ? _KindQuestionPanel(
+                              account: instrument,
+                              onChoose: (isCard) =>
+                                  widget.onResolveKind!(instrument, isCard),
+                            )
+                          : _InstrumentPanel(
+                              instrument: instrument,
+                              suggestNotMine: widget.notMineHints.contains(
+                                instrument.instrumentId,
+                              ),
+                              onConfirm: widget.onConfirm,
+                              onReject: widget.onReject,
+                              onRename: widget.onRename,
+                              onOpen: widget.onOpen,
+                            ),
+                    ),
+              ];
+            }(),
       ],
+    );
+  }
+}
+
+/// A section's title, how many it holds and how many still need the person;
+/// tapping it folds or opens the section.
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.label,
+    required this.count,
+    required this.open,
+    required this.onToggle,
+    this.pendingLabel,
+  });
+  final String label;
+  final int count;
+  final String? pendingLabel;
+  final bool open;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      expanded: open,
+      label: '$label, $count${pendingLabel == null ? '' : ', $pendingLabel'}',
+      excludeSemantics: true,
+      child: InkWell(
+        key: Key('section-$label'),
+        onTap: onToggle,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpace.xs,
+            AppSpace.lg,
+            AppSpace.xs,
+            AppSpace.sm,
+          ),
+          child: Row(
+            children: [
+              Text(
+                label,
+                style: BambooFonts.heading(17, color: BambooInk.ink900),
+              ),
+              const SizedBox(width: AppSpace.sm),
+              Text(
+                '$count',
+                style: BambooFonts.ui(
+                  13,
+                  weight: FontWeight.w600,
+                  color: BambooInk.ink500,
+                ),
+              ),
+              if (pendingLabel != null) ...[
+                const SizedBox(width: AppSpace.sm),
+                StatusPill(
+                  label: pendingLabel!,
+                  foreground: BambooInk.ink900,
+                  background: BambooInk.paperMuted,
+                ),
+              ],
+              const Spacer(),
+              AnimatedRotation(
+                turns: open ? 0.5 : 0,
+                duration: const Duration(milliseconds: 180),
+                child: const Icon(
+                  Icons.expand_more_rounded,
+                  color: BambooInk.ink500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The cards the messages found that are not in the wallet, said once at the
+/// top: until they are added their spends earn no rewards and stay out of the
+/// card's totals.
+class _NotInWalletSummary extends StatelessWidget {
+  const _NotInWalletSummary({required this.cards, required this.onShow});
+  final List<Instrument> cards;
+  final VoidCallback onShow;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = cards.length;
+    final names = cards.take(3).map(instrumentNumberLabel).join(', ');
+    final more = count > 3 ? ' and ${count - 3} more' : '';
+    return BambooPanel(
+      key: const Key('not-in-wallet-summary'),
+      onTap: onShow,
+      semanticLabel: '$count cards are not in your wallet',
+      padding: const EdgeInsets.all(AppSpace.md),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const BambooIconTile(Icons.credit_card_off_outlined),
+          const SizedBox(width: AppSpace.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  count == 1
+                      ? '1 card is not in your wallet'
+                      : '$count cards are not in your wallet',
+                  style: BambooFonts.ui(
+                    14.5,
+                    weight: FontWeight.w700,
+                    color: BambooInk.ink900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$names$more. Their spends earn no rewards until you add them. '
+                  'Open a card to see the transactions it would get.',
+                  style: BambooFonts.ui(
+                    12.5,
+                    color: BambooInk.ink700,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -568,7 +790,7 @@ class _InstrumentPanel extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            '${instrument.issuerSlug.toUpperCase()} ••${instrument.maskDigits ?? 'unknown'}',
+                            instrumentNumberLabel(instrument),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: BambooFonts.ui(
@@ -610,11 +832,14 @@ class _InstrumentPanel extends StatelessWidget {
                       Expanded(
                         child: _Stat(
                           isCard ? 'Limit' : 'Available',
-                          smsMoney(
-                            isCard
-                                ? instrument.creditLimitMinor
-                                : instrument.availableMinor,
-                          ),
+                          // Many banks never print a limit or balance: a dash,
+                          // not "unknown", for what the messages did not say.
+                          switch (isCard
+                              ? instrument.creditLimitMinor
+                              : instrument.availableMinor) {
+                            null => '—',
+                            final minor => smsMoney(minor),
+                          },
                         ),
                       ),
                       Container(
@@ -628,6 +853,15 @@ class _InstrumentPanel extends StatelessWidget {
                           'Last activity',
                           smsDate(instrument.lastSeenAt),
                         ),
+                      ),
+                      Container(
+                        width: 1,
+                        height: 26,
+                        margin: const EdgeInsets.only(right: AppSpace.md),
+                        color: BambooInk.hairlineOnPaper,
+                      ),
+                      Expanded(
+                        child: _Stat('Messages', '${instrument.evidenceCount}'),
                       ),
                     ],
                   ),

@@ -49,7 +49,8 @@ void main() {
     );
     expect(find.text('Bank accounts'), findsOneWidget);
     expect(find.textContaining('1234'), findsOneWidget);
-    expect(find.textContaining('unknown'), findsOneWidget);
+    // No balance in the messages: a dash, not "unknown".
+    expect(find.text('—'), findsOneWidget);
     await tester.tap(find.text('Confirm'));
     expect(action, 'confirm');
     await tester.tap(find.text('Not mine'));

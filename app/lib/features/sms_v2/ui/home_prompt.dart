@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/sms_v2.dart';
 import '../providers/data_providers.dart';
+import 'found_instruments_screen.dart' show cardNotInWallet;
 
 const _gutter = 20.0;
 
@@ -37,6 +38,14 @@ class SmsV2HomePrompt extends ConsumerWidget {
     final detected = available
         .where((i) => i.status == InstrumentStatus.detected)
         .length;
+    // Cards from the messages that no wallet card stands behind: their spends
+    // earn no rewards until they are added, so Home says so.
+    final missingCards = available
+        .where((i) => cardNotInWallet(i) && i.evidenceCount > 0)
+        .length;
+    final missingLine = missingCards == 1
+        ? '1 card is not in your wallet. Add it so its spends earn rewards.'
+        : '$missingCards cards are not in your wallet. Add them so their spends earn rewards.';
     final report = ref.watch(migrationPromptProvider).valueOrNull;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
@@ -59,7 +68,7 @@ class SmsV2HomePrompt extends ConsumerWidget {
                 onTap: () => context.push('/sms-v2/migration'),
               ),
             ),
-          if (detected > 0)
+          if (detected > 0 || missingCards > 0)
             Padding(
               padding: const EdgeInsets.fromLTRB(
                 _gutter,
@@ -69,9 +78,16 @@ class SmsV2HomePrompt extends ConsumerWidget {
               ),
               child: _PromptRow(
                 icon: Icons.account_balance_outlined,
-                title:
-                    'We found $detected ${detected == 1 ? 'account or card' : 'accounts and cards'}',
-                subtitle: 'Confirm what belongs to you.',
+                title: detected > 0
+                    ? 'We found $detected ${detected == 1 ? 'account or card' : 'accounts and cards'}'
+                    : missingCards == 1
+                    ? '1 card is not in your wallet'
+                    : '$missingCards cards are not in your wallet',
+                subtitle: missingCards > 0 && detected > 0
+                    ? missingLine
+                    : missingCards > 0
+                    ? 'Add them so their spends earn rewards.'
+                    : 'Confirm what belongs to you.',
                 onTap: () => context.push('/sms-v2/instruments'),
               ),
             ),

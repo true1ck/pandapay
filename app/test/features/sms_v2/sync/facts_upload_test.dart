@@ -548,4 +548,51 @@ void main() {
       );
     },
   );
+
+  test(
+    'a card link waits for its wallet card instead of being set aside',
+    () async {
+      final localId = database.db
+          .select('SELECT instrument_id FROM v2_instruments WHERE namespace=?', ['a'])
+          .single['instrument_id'] as String;
+      var cardArrived = false;
+      final client = MockClient((request) async {
+        final body = decode(request);
+        final results = [
+          for (final r in accepted(body))
+            if (!cardArrived && r['kind'] == 'instrument' && r['id'] == localId)
+              {
+                'kind': 'instrument',
+                'id': localId,
+                'status': 'rejected',
+                'errors': [
+                  {'code': 'instrument_user_card_unknown', 'path': '/userCardId'},
+                ],
+              }
+            else
+              r,
+        ];
+        return http.Response(jsonEncode({'results': results}), 200);
+      });
+      final upload = uploader(client);
+      // Refused again and again while the server does not know the card yet.
+      for (var i = 0; i < 6; i++) {
+        await upload.drain();
+        now = now.add(const Duration(hours: 6));
+      }
+      expect(
+        queue.due(now.add(const Duration(days: 3650))).where((r) => r.id == 'instrument:$localId'),
+        hasLength(1),
+      );
+      expect(stateValue(FactsUpload.refusedKey), isNull);
+      // The card reached the server: the link goes through.
+      cardArrived = true;
+      now = now.add(const Duration(days: 2));
+      await upload.drain();
+      expect(
+        queue.due(now.add(const Duration(days: 3650))).where((r) => r.id == 'instrument:$localId'),
+        isEmpty,
+      );
+    },
+  );
 }

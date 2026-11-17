@@ -49,6 +49,14 @@ class FactsUpload {
   /// the same every time, so the phone stops sending it.
   static const _settleAfterAttempts = 2;
 
+  /// A card or account whose wallet card the server has not received yet
+  /// (added offline, or the card's own sync has not landed). The card comes,
+  /// so the link is sent again with the usual back-off instead of being set
+  /// aside; set aside only after this many tries. Dropping it left the card's
+  /// old rows unlinked on the server, with no rewards.
+  static const _walletCardWaitAttempts = 30;
+  static const _walletCardUnknown = 'instrument_user_card_unknown';
+
   /// How many records the server refused for good since this phone was set up.
   static const refusedKey = 'upload:refused-total';
 
@@ -476,6 +484,10 @@ class FactsUpload {
             }
             progressed = true;
           } else if (ids.any(refused.containsKey) &&
+              !(ids
+                      .where(refused.containsKey)
+                      .every((id) => refused[id] == _walletCardUnknown) &&
+                  record.attempts < _walletCardWaitAttempts) &&
               (settleRefused || record.attempts >= _settleAfterAttempts)) {
             // Refused for good (for example the server already holds a
             // different version of this event): keep the phone's own copy,

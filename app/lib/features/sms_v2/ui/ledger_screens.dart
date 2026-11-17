@@ -11,7 +11,10 @@ import '../ledger/providers.dart';
 import '../ledger/reports.dart';
 import '../instruments/issuer_slugs.dart';
 import 'screen_parts.dart';
-import 'found_instruments_screen.dart' show instrumentAvatarKind;
+import 'found_instruments_screen.dart'
+    show instrumentAvatarKind, instrumentNumberLabel;
+import 'instrument_evidence.dart';
+import '../providers/data_providers.dart' show instrumentsProvider;
 
 enum SmsLedgerScreen { investments, ipos, moneyIn }
 
@@ -430,52 +433,67 @@ class _MoneyInSummary extends StatelessWidget {
   }
 }
 
+/// One card or account the messages found: whether it is in the wallet (with
+/// "Add to wallet" when it is not), its balances, and every transaction its
+/// messages stand for, so the person can check it before adding it.
 class InstrumentDetailScreen extends ConsumerWidget {
   const InstrumentDetailScreen({super.key, required this.instrumentId});
   final String instrumentId;
   @override
-  Widget build(BuildContext context, WidgetRef ref) => Scaffold(
-    appBar: AppBar(title: const Text('Account details')),
-    body: AppBackground(
-      child: ref
-          .watch(smsV2LedgerReadModelProvider)
-          .when(
-            skipLoadingOnReload: true,
-            skipLoadingOnRefresh: true,
-            loading: () => const SmsLoading(),
-            error: (_, _) => SmsError(
-              onRetry: () => ref.invalidate(smsV2LedgerReadModelProvider),
-            ),
-            data: (model) {
-              final instrument = model.instruments
-                  .where((i) => i.instrumentId == instrumentId)
-                  .firstOrNull;
-              if (instrument == null) {
-                return const SmsEmpty('This account is no longer available.');
-              }
-              return ListView(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpace.lg,
-                  AppSpace.sm,
-                  AppSpace.lg,
-                  AppSpace.xxl,
+  Widget build(BuildContext context, WidgetRef ref) {
+    // The live instrument table, so adding or confirming shows at once; the
+    // ledger model only feeds the balances.
+    final instruments = ref.watch(instrumentsProvider);
+    final model = ref.watch(smsV2LedgerReadModelProvider).valueOrNull;
+    final instrument = instruments.valueOrNull
+        ?.where((i) => i.instrumentId == instrumentId)
+        .firstOrNull;
+    final isCard =
+        instrument != null &&
+        (instrument.kind == InstrumentKind.creditCard ||
+            instrument.kind == InstrumentKind.debitCard);
+    return Scaffold(
+      appBar: AppBar(title: Text(isCard ? 'Card details' : 'Account details')),
+      body: AppBackground(
+        child: instruments.when(
+          skipLoadingOnReload: true,
+          skipLoadingOnRefresh: true,
+          loading: () => const SmsLoading(),
+          error: (_, _) =>
+              SmsError(onRetry: () => ref.invalidate(instrumentsProvider)),
+          data: (_) {
+            if (instrument == null ||
+                instrument.status == InstrumentStatus.rejected) {
+              return const SmsEmpty('This account is no longer available.');
+            }
+            return ListView(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.lg,
+                AppSpace.sm,
+                AppSpace.lg,
+                AppSpace.xxl,
+              ),
+              children: [
+                BambooTitleBlock(
+                  title: instrument.displayName,
+                  subtitle: instrumentNumberLabel(instrument),
+                  icon: instrumentAvatarKind(instrument.kind).icon,
+                  titleSize: 22,
                 ),
-                children: [
-                  BambooTitleBlock(
-                    title: instrument.displayName,
-                    subtitle:
-                        '${instrument.issuerSlug.toUpperCase()} ••${instrument.maskDigits ?? 'unknown'}',
-                    icon: instrumentAvatarKind(instrument.kind).icon,
-                    titleSize: 22,
-                  ),
-                  const SizedBox(height: AppSpace.xl),
+                const SizedBox(height: AppSpace.lg),
+                InstrumentStatusPanel(instrument: instrument),
+                if (model != null) ...[
+                  const SizedBox(height: AppSpace.lg),
                   InstrumentUsageSection(instrument: instrument, model: model),
                 ],
-              );
-            },
-          ),
-    ),
-  );
+                InstrumentEvidenceSection(instrument: instrument),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
 }
 
 class InstrumentUsageSection extends StatelessWidget {
