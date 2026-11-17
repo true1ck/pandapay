@@ -68,15 +68,18 @@ TransactionRewardLabel? transactionRewardLabel(
   final reward = entry.rewardValue;
   if (reward == null) {
     // A fresh spend is priced within moments of syncing. One that is still
-    // unpriced after a few days is not "being calculated": say what to check
-    // (an archived card is never priced) instead of promising it will appear.
+    // unpriced after a few days is not "being calculated": say what is true
+    // and what to check (an archived card is never priced). Opening Cards does
+    // nothing for this, so it is not offered as the fix: the server prices the
+    // spend when it next syncs with this phone.
     final age = (now ?? DateTime.now()).difference(entry.occurredAt);
     if (age > const Duration(days: 3)) {
       return const TransactionRewardLabel(
         'Not calculated',
         note:
-            'Open Cards to refresh. If it stays, check that this card is still '
-            'in your wallet.',
+            'This card is linked, but no reward has been worked out for this '
+            'spend yet. It is filled in when your phone next syncs. If it '
+            'stays, check that the card is still in your wallet.',
       );
     }
     return const TransactionRewardLabel(

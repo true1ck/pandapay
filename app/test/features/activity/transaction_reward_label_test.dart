@@ -81,6 +81,10 @@ void main() {
       )!;
       expect(label.value, 'Not calculated');
       expect(label.note, contains('wallet'));
+      // Opening Cards cannot fix a spend the server has not priced, so it is
+      // not offered as the fix.
+      expect(label.note, isNot(contains('Open Cards')));
+      expect(label.note, contains('next syncs'));
     });
 
     test('a priced-at-zero spend explains why (excluded, minimum or refunded)', () {
