@@ -218,7 +218,7 @@ async function insertNew(client, sql, params) {
   return new Set(r.rows.map((x) => x.id));
 }
 
-async function upsertInstruments(client, profileId, instruments, results) {
+async function upsertInstruments(client, profileId, instruments, results, linked = new Set()) {
   if (!instruments.length) return;
   const seenIds = new Set();
   const keyOwner = new Map();
@@ -281,7 +281,12 @@ async function upsertInstruments(client, profileId, instruments, results) {
     if (!ex) { toInsert.push(inst); continue; }
     const merged = mergeInstrument(ex, inst);
     if (sameDoc(merged, ex)) results.push(ok(inst.instrumentId, 'instrument', 'duplicate'));
-    else toUpdate.push(merged);
+    else {
+      toUpdate.push(merged);
+      // A wallet card newly linked, or a different one: the rows already built
+      // for this instrument have to follow (see ingestBatch).
+      if (merged.userCardId && merged.userCardId !== ex.userCardId) linked.add(inst.instrumentId);
+    }
   }
 
   if (toInsert.length) {
@@ -300,6 +305,7 @@ async function upsertInstruments(client, profileId, instruments, results) {
     );
     for (const inst of toInsert) {
       results.push(inserted.has(inst.instrumentId) ? ok(inst.instrumentId, 'instrument', 'accepted') : rej(inst.instrumentId, 'instrument', 'instrument_id_conflict', '/instrumentId'));
+      if (inserted.has(inst.instrumentId) && inst.userCardId) linked.add(inst.instrumentId);
     }
   }
   if (toUpdate.length) {
@@ -881,7 +887,8 @@ async function projectTransactions(client, profileId, eventIds, { backfill, cate
 async function ingestBatch(client, profileId, body, { backfill = false, categoryOnly = false, deps, hooks }) {
   await takeProfileLock(client, profileId);
   const results = [];
-  await upsertInstruments(client, profileId, body.instruments, results);
+  const linked = new Set(); // instruments whose wallet card was linked or changed by this upload
+  await upsertInstruments(client, profileId, body.instruments, results, linked);
   await insertFacts(client, profileId, body.items, results);
   // Points the bank credited ("Reward Points Credited: 2500 ...") go to the card's points history.
   const creditedFactIds = [...new Set(results.filter((r) => r.kind === 'fact' && r.status !== 'rejected').map((r) => r.id))];
@@ -907,7 +914,17 @@ async function ingestBatch(client, profileId, body, { backfill = false, category
   }
   const stats = await projectTransactions(client, profileId, [...affected], { backfill, categoryOnly, deps });
   if (!categoryOnly) {
-    const healed = await projectStaleInstrumentRows(client, profileId, { exclude: affected, deps });
+    // A row's wallet card, and so its reward, is fixed when the row is built.
+    // Linking a wallet card to an instrument (the card was added after its
+    // messages were read, or was removed and added again) changes what every
+    // row already built for that instrument should say, so they are rebuilt
+    // now, in this same upload, not whenever another message happens to come.
+    const relinked = linked.size
+      ? await projectRowsOfLinkedInstruments(client, profileId, [...linked], { exclude: affected, deps })
+      : { count: 0, ids: [] };
+    // Rows just rebuilt for a linked instrument are not rebuilt again below.
+    const exclude = new Set([...affected, ...relinked.ids]);
+    const healed = relinked.count + await projectStaleInstrumentRows(client, profileId, { exclude, deps });
     if (healed) stats.healed = healed;
   }
   return { results, stats };
@@ -915,6 +932,59 @@ async function ingestBatch(client, profileId, body, { backfill = false, category
 
 /** Rows rebuilt per upload by [projectStaleInstrumentRows]. */
 const STALE_ROWS_PER_BATCH = 200;
+
+/**
+ * Most rows rebuilt in one upload because a wallet card was linked to their
+ * instrument, in slices of [STALE_ROWS_PER_BATCH]. A wallet card's history is a
+ * few hundred spends (the largest on the owner's account: 642); the bound only
+ * keeps one upload's transaction from growing without limit.
+ */
+const LINK_REBUILD_ROWS = 1000;
+
+/**
+ * The card rows whose instrument just got a wallet card (or a different one)
+ * and which do not carry it: still no wallet card, or the card it was
+ * replaced by. Each is rebuilt, which puts it on the new card (taking it off
+ * the old one) and prices it; history rows are priced by the per-card rebuild.
+ * A row the message itself rules out for this card is left to the projection,
+ * which follows what the bank printed.
+ * @returns {{count: number, ids: string[]}} rows changed, and every event looked at
+ */
+async function projectRowsOfLinkedInstruments(client, profileId, instrumentIds, { exclude, deps }) {
+  const r = await client.query(
+    `SELECT DISTINCT t.event_id
+       FROM transactions t
+      WHERE t.profile_id = $1 AND t.pipeline_version = 2 AND t.status = 'active'
+        AND t.event_id IS NOT NULL AND t.instrument IN ('credit_card', 'debit_card')
+        AND (
+          EXISTS (
+            SELECT 1 FROM sms_v2_ledger_entries l
+              JOIN sms_v2_instruments i ON i.profile_id = l.profile_id
+               AND i.instrument_id IN (l.from_instrument_id, l.to_instrument_id)
+             WHERE l.profile_id = t.profile_id AND l.event_id = t.event_id
+               AND i.instrument_id = ANY($2::uuid[]) AND i.status <> 'rejected'
+               AND i.user_card_id IS DISTINCT FROM t.user_card_id)
+          OR (
+            NOT EXISTS (
+              SELECT 1 FROM sms_v2_ledger_entries l
+               WHERE l.profile_id = t.profile_id AND l.event_id = t.event_id)
+            AND EXISTS (
+              SELECT 1 FROM sms_v2_facts f
+                JOIN sms_v2_instruments i ON i.profile_id = f.profile_id AND i.instrument_id = f.instrument_id
+               WHERE f.profile_id = t.profile_id AND f.fact_id = t.event_id
+                 AND i.instrument_id = ANY($2::uuid[]) AND i.status <> 'rejected'
+                 AND i.user_card_id IS DISTINCT FROM t.user_card_id)))
+      LIMIT $3`,
+    [profileId, instrumentIds, LINK_REBUILD_ROWS + exclude.size],
+  );
+  const ids = r.rows.map((x) => x.event_id).filter((id) => !exclude.has(id)).slice(0, LINK_REBUILD_ROWS);
+  let count = 0;
+  for (let i = 0; i < ids.length; i += STALE_ROWS_PER_BATCH) {
+    const done = await projectTransactions(client, profileId, ids.slice(i, i + STALE_ROWS_PER_BATCH), { backfill: true, deps });
+    count += done.updated || 0;
+  }
+  return { count, ids };
+}
 
 /**
  * Rows written before [resolveUnknownInstruments] existed still say "not
@@ -1055,4 +1125,5 @@ module.exports = {
   ingestBatch, readChanges, encodeCursor, decodeCursor, SYNC_LIMIT,
   mergeInstrument, mergeEvent, ownEntryLegAmounts, projectTransactions, takeProfileLock,
   resolveUnknownInstruments, projectStaleInstrumentRows,
+  projectRowsOfLinkedInstruments,
 };
