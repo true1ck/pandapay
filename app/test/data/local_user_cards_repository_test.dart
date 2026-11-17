@@ -32,6 +32,17 @@ void main() {
     benefits: const [],
   );
 
+  test('no card is ever the default, not even the first one added', () async {
+    // The best card changes with every purchase, so the app never picks one.
+    await local.addCard('p-one');
+    await local.addCard('p-two');
+    final cards = await local.fetchUserCards(
+      catalogue: [product('p-one', 'First'), product('p-two', 'Second')],
+    );
+    expect(cards, hasLength(2));
+    expect(cards.any((c) => c.isDefault), isFalse);
+  });
+
   test('a card whose product is in the catalogue resolves normally', () async {
     await local.addCard('p-live');
     final cards = await local.fetchUserCards(

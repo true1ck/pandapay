@@ -34,37 +34,6 @@ class LocalFirstCards {
 
   List<Map<String, dynamic>> _cards() => store.entities(namespace, 'cards');
 
-  /// Makes [cardId] the default card. Only one card may be default, so this
-  /// clears any other default in the same step; the server has no constraint
-  /// that would do it for us on the generic sync path.
-  void setDefault(String cardId) {
-    final cards = _cards();
-    final target = cards.where((c) => c['id'] == cardId).firstOrNull;
-    if (target == null || target['is_archived'] == true) {
-      throw StateError('That card is no longer in your wallet.');
-    }
-    final at = DateTime.now();
-    for (final card in cards) {
-      final id = card['id'] as String;
-      if (id == cardId || card['is_default'] != true) continue;
-      queue.enqueueUpdate(
-        entity: _entity,
-        entityId: id,
-        fields: {'is_default': false},
-        at: at,
-      );
-    }
-    if (target['is_default'] != true) {
-      queue.enqueueUpdate(
-        entity: _entity,
-        entityId: cardId,
-        fields: {'is_default': true},
-        at: at,
-      );
-    }
-    store.notifyExternalChanges(namespace, const ['cards']);
-  }
-
   /// Saves a new priority order, most important first. Every card in
   /// [orderedIds] gets its position as `sort_order`, matching what
   /// `POST /user-cards/reorder` does, and the local list order changes at once.

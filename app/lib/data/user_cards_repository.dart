@@ -1642,21 +1642,6 @@ class UserCardsRepository {
     }
   }
 
-  /// Design 23 "Card actions" — set as default. Server-side this clears any
-  /// existing default in the same transaction, so callers never have to
-  /// unset the previous one themselves.
-  Future<void> setDefaultCard(String userCardId) async {
-    final response = await _client.post(
-      Uri.parse('$apiBaseUrl/user-cards/$userCardId/default'),
-      headers: _headers,
-    );
-    if (response.statusCode != 200) {
-      throw ApiException(
-        'set default failed: ${response.statusCode} ${response.body}',
-      );
-    }
-  }
-
   /// Task C-1: C1's active/archived filter needs a way back from archive,
   /// not just a one-way trip.
   Future<void> unarchiveCard(String userCardId) async {

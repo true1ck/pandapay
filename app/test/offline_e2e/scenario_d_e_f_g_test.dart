@@ -286,10 +286,10 @@ void main() {
     expect(app.pending, 0);
   });
 
-  test('g. edit card nickname/last4/fee/points, archive and default offline',
+  test('g. edit card nickname/last4/fee/points and archive offline',
       () async {
-    final a = app.server.seedCard(last4: '1111', isDefault: true)['id'] as String;
-    final b = app.server.seedCard(product: 'product-2', last4: '2222')['id'] as String;
+    final a = app.server.seedCard(last4: '1111')['id'] as String;
+    app.server.seedCard(product: 'product-2', last4: '2222');
     await app.start();
     await app.firstSyncOnline();
     await app.goOffline();
@@ -312,9 +312,8 @@ void main() {
       'annualFeeOverrideInr': 0.0,
     });
     await queuePointsBalance(ref, a, 4200);
-    expect(await setCardDefault(ref, b), CardChange.queued);
     expect(await setCardArchived(ref, a, archived: true), CardChange.queued);
-    expect(app.pending, greaterThanOrEqualTo(4));
+    expect(app.pending, greaterThanOrEqualTo(3));
 
     await app.restart(online: false);
     await app.goOnline();
@@ -326,7 +325,6 @@ void main() {
     expect(ca['annual_fee_override_inr'], 0);
     expect(ca['points_balance'], 4200);
     expect(ca['is_archived'], isTrue);
-    expect(app.server.cards[b]!['is_default'], isTrue);
     expect(app.server.duplicates, isEmpty);
     expect(app.server.invalidIdRequests, isEmpty);
     expect(app.pending, 0);

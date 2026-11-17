@@ -45,7 +45,6 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
   bool _initialized = false;
   bool _saving = false;
   bool _archiving = false;
-  bool _settingDefault = false;
   bool _feeOverrideEnabled = false;
   bool _lifetimeFree = false;
   AutopayMode _autopayMode = AutopayMode.off;
@@ -313,34 +312,6 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
       }
     } finally {
       if (mounted) setState(() => _archiving = false);
-    }
-  }
-
-  /// Design 23 "set as default". Branches on guest mode the same way every
-  /// other wallet action does (see LocalUserCardsRepository) — a signed-out
-  /// user's wallet is real and on-device, so this must work there too.
-  Future<void> _setDefault() async {
-    setState(() => _settingDefault = true);
-    try {
-      // Same shared path as Card actions (WP-C6): saved on the phone (the old
-      // default is cleared in the same step) and sent in the background.
-      await setCardDefault(ref, widget.userCardId);
-      await clearUserCardsCache(ref);
-      ref.invalidate(myCardsProvider);
-      ref.invalidate(userCardsProvider);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Set as your default card.')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
-      }
-    } finally {
-      if (mounted) setState(() => _settingDefault = false);
     }
   }
 
@@ -638,7 +609,7 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                         )
                       : const Text('Save'),
                 ),
-                // Design 23 "Card actions": set as default / remove.
+                // Design 23 "Card actions": remove.
                 Text(
                   'CARD ACTIONS',
                   style: BambooFonts.ui(
@@ -648,58 +619,6 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                   ).copyWith(letterSpacing: 1),
                 ),
                 const SizedBox(height: AppSpace.sm),
-                if (userCard.isDefault)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpace.md,
-                      vertical: AppSpace.md,
-                    ),
-                    decoration: BoxDecoration(
-                      color: BambooInk.paperMuted,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: BambooInk.hairlineOnPaper),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.star_rounded,
-                          size: 18,
-                          color: BambooInk.jade,
-                        ),
-                        const SizedBox(width: AppSpace.sm),
-                        Expanded(
-                          child: Text(
-                            'This is your default card',
-                            style: BambooFonts.ui(
-                              13.5,
-                              weight: FontWeight.w600,
-                              color: BambooInk.ink900,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: BambooInk.ink900,
-                      minimumSize: const Size.fromHeight(48),
-                      side: const BorderSide(color: BambooInk.hairlineOnPaper),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    onPressed: _settingDefault ? null : _setDefault,
-                    icon: _settingDefault
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.star_outline_rounded),
-                    label: const Text('Set as default card'),
-                  ),
                 const SizedBox(height: AppSpace.md),
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(

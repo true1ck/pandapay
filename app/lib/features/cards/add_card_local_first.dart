@@ -565,20 +565,9 @@ Map<String, CommandHandler> cardCommandHandlers(CardCommandContext c) => {
     );
     c.store?.patchCard(c.namespace, id, {'is_archived': false});
   },
-  CardCommand.setDefault: (p) async {
-    final id = p['cardId'] as String;
-    await goneIsDone(() => c.userCards.setDefaultCard(id));
-    final store = c.store;
-    if (store != null) {
-      for (final card in store.entities(c.namespace, 'cards')) {
-        final other = card['id'] as String;
-        if (other != id && card['is_default'] == true) {
-          store.patchCard(c.namespace, other, {'is_default': false});
-        }
-      }
-      store.patchCard(c.namespace, id, {'is_default': true});
-    }
-  },
+  // The app no longer has a default card. A set_default queued by an older
+  // build is drained without doing anything, so it never reaches the server.
+  CardCommand.setDefault: (p) async {},
   CardCommand.patchCardFields: (p) async {
     await _patchFields(c.userCards, p);
     // Delivered: keep the stored copy equal to the server's, so the card does
@@ -648,7 +637,7 @@ Future<void> _patchFields(UserCardsRepository repo, Map<String, Object?> p) {
         last4: p['last4'] as String?,
       );
     }
-    if (p['makeDefault'] == true) await repo.setDefaultCard(id);
+    // `makeDefault` from an older build's queued patch is ignored.
     if (feeTouched) {
       await repo.updateAnnualFeeOverride(
         id,

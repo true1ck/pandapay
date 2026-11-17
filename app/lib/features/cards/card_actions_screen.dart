@@ -49,33 +49,6 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
       ? widget.card.nickname!
       : widget.card.cardName;
 
-  Future<bool> _run(Future<void> Function() action, String success) async {
-    if (_busy) return false;
-    setState(() => _busy = true);
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await action();
-      await clearUserCardsCache(ref);
-      ref.invalidate(myCardsProvider);
-      ref.invalidate(userCardsProvider);
-      ref.invalidate(transactionsProvider);
-      ref.invalidate(utilizationTransactionsProvider);
-      ref.invalidate(homeSummaryProvider);
-      ref.invalidate(spendReportProvider);
-      ref.invalidate(budgetsProvider);
-      ref.invalidate(recurringReportProvider);
-      messenger.showSnackBar(SnackBar(content: Text(success)));
-      return true;
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(userFacingErrorMessage(e))),
-      );
-      return false;
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
   /// Both the pause toggle and "Remove card" archive the same card, because
   /// archiving is the only real operation underneath. They differ in intent
   /// and in how loudly they say so, which is why Remove confirms first.
@@ -116,12 +89,6 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
-  Future<void> _setDefault() async {
-    await _run(() async {
-      await setCardDefault(ref, widget.card.id);
-    }, '$_displayName is now your default card.');
   }
 
   Future<void> _confirmRemove() async {
@@ -251,14 +218,6 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
                     subtitle:
                         "Your issuer's hotline — works offline, no sign-in.",
                     onTap: () => context.push(AppRoute.emergencyCardInfo),
-                  ),
-                  const _RowDivider(),
-                  _ActionRow(
-                    title: widget.card.isDefault
-                        ? 'Already your default card'
-                        : 'Set as default card',
-                    subtitle: 'Used when nothing else clearly wins.',
-                    onTap: widget.card.isDefault || _busy ? null : _setDefault,
                   ),
                   const _RowDivider(),
                   _ActionRow(

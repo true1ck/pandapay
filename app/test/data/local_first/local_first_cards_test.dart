@@ -43,30 +43,6 @@ void main() {
     return change.payload;
   }
 
-  test('set default flips both cards locally and queues both for the server', () {
-    cards.setDefault('two');
-
-    final byId = {
-      for (final c in store.entities('a', 'cards')) c['id']: c['is_default'],
-    };
-    expect(byId['two'], isTrue);
-    expect(byId['one'], isFalse);
-    expect(payloadOf('two'), {'is_default': true});
-    expect(payloadOf('one'), {'is_default': false});
-    expect(queue.pending().every((c) => c.entity == 'user_cards'), isTrue);
-  });
-
-  test('setting the card that is already default queues nothing', () {
-    cards.setDefault('one');
-    expect(queue.pending(), isEmpty);
-  });
-
-  test('an archived or unknown card cannot become default', () {
-    expect(() => cards.setDefault('gone'), throwsStateError);
-    expect(() => cards.setDefault('missing'), throwsStateError);
-    expect(queue.pending(), isEmpty);
-  });
-
   test('reorder changes the local order at once and queues sort_order', () {
     cards.reorder(['three', 'one', 'two']);
 

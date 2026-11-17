@@ -99,49 +99,6 @@ Future<CardChange> setCardArchived(
   return CardChange.queued;
 }
 
-/// Makes [cardId] the default card.
-Future<CardChange> setCardDefault(WidgetRef ref, String cardId) async {
-  final repo = ref.read(userCardsRepositoryProvider);
-  if (repo == null) {
-    final local = await ref.read(localUserCardsRepositoryProvider.future);
-    await local.setDefaultCard(cardId);
-    return CardChange.saved;
-  }
-  if (kCardsLocalFirst && await isProvisionalCard(ref, cardId)) {
-    // The server does not know the card yet: ask for it once the card exists.
-    await queueCardFieldPatch(ref, cardId, {'makeDefault': true});
-    final cache = await ref.read(responseCacheProvider.future);
-    final ns = ref.read(cacheNamespaceProvider);
-    for (final c in cache.financialStore.entities(ns, 'cards')) {
-      if (c['is_default'] == true && c['id'] != cardId) {
-        cache.financialStore.patchCard(ns, c['id'] as String, {'is_default': false});
-      }
-    }
-    cache.financialStore.patchCard(ns, cardId, {'is_default': true});
-    return CardChange.queued;
-  }
-  if (!kCardsLocalFirst) {
-    await repo.setDefaultCard(cardId);
-    return CardChange.saved;
-  }
-  // Local first, same as archive: stored now, the outbox calls the route.
-  await queueCommand(
-    ref,
-    kind: CardCommand.setDefault,
-    target: cardId,
-    payload: {'cardId': cardId},
-  );
-  final cache = await ref.read(responseCacheProvider.future);
-  final ns = ref.read(cacheNamespaceProvider);
-  for (final c in cache.financialStore.entities(ns, 'cards')) {
-    if (c['is_default'] == true && c['id'] != cardId) {
-      cache.financialStore.patchCard(ns, c['id'] as String, {'is_default': false});
-    }
-  }
-  cache.financialStore.patchCard(ns, cardId, {'is_default': true});
-  return CardChange.queued;
-}
-
 /// Sets the points balance by queueing a points adjustment (replaces the old
 /// "needs a live connection" refusal). The command carries a client mutation
 /// id, so a lost reply cannot count twice.

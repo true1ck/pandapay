@@ -16,7 +16,6 @@ class _Repo implements UserCardsRepository {
   final Future<({String id, bool existing})> Function(String clientId) answer;
   final calls = <String>[];
   final updates = <String>[];
-  final defaults = <String>[];
 
   @override
   Future<({String id, bool existing})> addCardWithClientId(
@@ -41,10 +40,6 @@ class _Repo implements UserCardsRepository {
     AutopayMode? autopayMode,
     String? last4,
   }) async => updates.add('$userCardId:$creditLimitInr');
-
-  @override
-  Future<void> setDefaultCard(String userCardId) async =>
-      defaults.add(userCardId);
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

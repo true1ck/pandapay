@@ -24,7 +24,6 @@ class _FakeCatalogueRepository implements CatalogueRepository {
 class _RecordingUserCardsRepository implements UserCardsRepository {
   Map<String, dynamic>? lastUpdateArgs;
   bool archived = false;
-  String? defaultedId;
 
   @override
   Future<void> updateCard(
@@ -53,10 +52,6 @@ class _RecordingUserCardsRepository implements UserCardsRepository {
   Future<void> archiveCard(String userCardId) async => archived = true;
 
   @override
-  Future<void> setDefaultCard(String userCardId) async =>
-      defaultedId = userCardId;
-
-  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
@@ -83,11 +78,6 @@ class _OfflineUserCardsRepository implements UserCardsRepository {
 
   @override
   Future<void> archiveCard(String userCardId) async {
-    throw Exception('simulated offline failure');
-  }
-
-  @override
-  Future<void> setDefaultCard(String userCardId) async {
     throw Exception('simulated offline failure');
   }
 
@@ -469,6 +459,9 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
+    // Bring the whole button on screen, not just its top edge.
+    await tester.ensureVisible(find.text('Remove card'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Remove card'));
     await tester.pumpAndSettle();
 
@@ -514,6 +507,9 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
+    // Bring the whole button on screen, not just its top edge.
+    await tester.ensureVisible(find.text('Remove card'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Remove card'));
     await tester.pumpAndSettle();
 
@@ -523,41 +519,8 @@ void main() {
     expect(repo.archived, isFalse);
   });
 
-  testWidgets('Set as default card is saved first and queued for the server', (tester) async {
-    final product = CardProduct(
-      id: 'p1',
-      name: 'Test Card',
-      network: CardNetwork.rupay,
-    );
-    final repo = _RecordingUserCardsRepository();
-    await _pump(
-      tester,
-      catalogue: [product],
-      owned: [
-        const UserCard(
-          id: 'uc1',
-          cardProductId: 'p1',
-          cardName: 'Test Card',
-          isDefault: false,
-        ),
-      ],
-      repo: repo,
-    );
-
-    await tester.scrollUntilVisible(
-      find.text('Set as default card'),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.tap(find.text('Set as default card'));
-    await tester.pumpAndSettle();
-
-    expect(repo.defaultedId, isNull, reason: 'the outbox sends it, not the tap');
-    expect(_lastCommands!.pendingOf({'set_default'}).single.target, 'uc1');
-  });
-
   testWidgets(
-    'a card that is already default shows a state row, not the action',
+    'there is no default card: nothing offers it, even on a card an older build flagged',
     (tester) async {
       final product = CardProduct(
         id: 'p1',
@@ -578,12 +541,18 @@ void main() {
         repo: _RecordingUserCardsRepository(),
       );
 
+      // The card actions are still there (the Remove button is the last one)...
       await tester.scrollUntilVisible(
-        find.text('This is your default card'),
+        find.text('Remove card'),
         200,
         scrollable: find.byType(Scrollable).first,
       );
+      // Bring the whole button on screen, not just its top edge.
+      await tester.ensureVisible(find.text('Remove card'));
+      await tester.pumpAndSettle();
+      // ...but no default is offered or shown.
       expect(find.text('Set as default card'), findsNothing);
+      expect(find.text('This is your default card'), findsNothing);
     },
   );
 
@@ -759,6 +728,9 @@ void main() {
         200,
         scrollable: find.byType(Scrollable).first,
       );
+      // Bring the whole button on screen, not just its top edge.
+      await tester.ensureVisible(find.text('Remove card'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Remove card'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, 'Remove card'));
@@ -774,46 +746,6 @@ void main() {
       // refuse), so it is a command, not a sync-queue row.
       expect(queue.pending(), isEmpty);
       expect(_lastCommands!.pendingOf({'archive_card'}).single.target, 'uc1');
-    },
-  );
-
-  testWidgets(
-    'Set as default while offline is saved on the phone and queued like Card actions (WP-C6)',
-    (tester) async {
-      final product = CardProduct(
-        id: 'p1',
-        name: 'Test Card',
-        network: CardNetwork.rupay,
-      );
-      final owned = [
-        const UserCard(
-          id: 'uc1',
-          cardProductId: 'p1',
-          cardName: 'Test Card',
-          isDefault: false,
-        ),
-      ];
-      final (_, queue) = await _pumpOffline(
-        tester,
-        catalogue: [product],
-        owned: owned,
-      );
-
-      await tester.scrollUntilVisible(
-        find.text('Set as default card'),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.tap(find.text('Set as default card'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Set as your default card.'), findsOneWidget);
-      // LocalFirstCards clears any other default in the same step, so two
-      // cards can never end up flagged default.
-      expect(queue.pending(), isEmpty);
-      expect(_lastCommands!.pendingOf({'set_default'}).single.target, 'uc1');
-      final cards = _lastStore!.entities('legacy', 'cards');
-      expect(cards.single['is_default'], isTrue);
     },
   );
 }

@@ -2026,8 +2026,7 @@ app.post('/user-cards/import', requireAuth, async (req, res) => {
     const results = await withUserClient(req.userId, async (client) => {
       // One read up front rather than a per-card existence query: the set of
       // products this profile already owns can't change inside the
-      // transaction, and this also lets `isDefault` below be decided from
-      // the true "did they have any cards at all before this import" state.
+      // transaction.
       const existing = await client.query(
         `SELECT uc.id, uc.card_product_id, uc.last4, uc.is_archived,
                 cp.issuer_id, cp.card_type
@@ -2038,14 +2037,12 @@ app.post('/user-cards/import', requireAuth, async (req, res) => {
       );
       const existingCards = existing.rows;
       const owned = new Set(existingCards.map((r) => cardIdentityKey(r.card_product_id, r.last4)));
-      const hadNoCards = existingCards.length === 0;
 
       const maxOrder = await client.query(
         `SELECT COALESCE(MAX(sort_order), 0) AS m FROM user_cards WHERE profile_id = $1`,
         [req.userId]
       );
       let nextOrder = Number(maxOrder.rows[0].m);
-      let firstImportedId = null;
       const out = [];
 
       for (const card of cards) {
@@ -2136,30 +2133,12 @@ app.post('/user-cards/import', requireAuth, async (req, res) => {
           issuer_id: product.rows[0].issuer_id,
           card_type: product.rows[0].card_type,
         });
-        if (firstImportedId === null && card.isArchived !== true) {
-          firstImportedId = inserted.rows[0].id;
-        }
         out.push({ localId, cardProductId, last4: importedLast4, status: 'imported', userCard: inserted.rows[0] });
       }
 
-      // Default card: only ever set when the account had none before, and
-      // only from the guest's own choice — never overriding a default an
-      // existing account already has, which would silently change what the
-      // Home screen recommends first for a returning user.
-      if (hadNoCards && firstImportedId !== null) {
-        const guestDefault = cards.find((c) => c && c.isDefault === true && c.cardProductId);
-        let targetId = firstImportedId;
-        if (guestDefault) {
-          const match = out.find(
-            (r) => r.status === 'imported' && r.cardProductId === guestDefault.cardProductId
-          );
-          if (match) targetId = match.userCard.id;
-        }
-        await client.query(
-          `UPDATE user_cards SET is_default = (id = $2) WHERE profile_id = $1`,
-          [req.userId, targetId]
-        );
-      }
+      // No card is made the default here, or anywhere else: the best card
+      // changes with every purchase, so the app never picks one for the user.
+      // An `isDefault` sent by an older guest build is ignored.
 
       return out;
     });

@@ -302,26 +302,16 @@ class CardDetailScreen extends ConsumerWidget {
                         effectiveDueDay:
                             duePayment?.dueOn.day ?? userCard.dueDay,
                       ),
-                      if (userCard.isDefault || userCard.isArchived) ...[
+                      if (userCard.isArchived) ...[
                         const SizedBox(height: AppSpace.sm),
-                        Row(
+                        const Row(
                           children: [
-                            if (userCard.isDefault)
-                              const StatusPill(
-                                label: 'DEFAULT CARD',
-                                foreground: BambooInk.onSlate,
-                                background: BambooInk.slate,
-                                icon: Icons.check_circle_rounded,
-                              ),
-                            if (userCard.isArchived) ...[
-                              const SizedBox(width: AppSpace.xs),
-                              const StatusPill(
-                                label: 'PAUSED',
-                                foreground: BambooInk.onSlate,
-                                background: BambooInk.amber,
-                                icon: Icons.pause_circle_rounded,
-                              ),
-                            ],
+                            StatusPill(
+                              label: 'PAUSED',
+                              foreground: BambooInk.onSlate,
+                              background: BambooInk.amber,
+                              icon: Icons.pause_circle_rounded,
+                            ),
                           ],
                         ),
                       ],

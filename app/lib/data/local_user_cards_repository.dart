@@ -92,19 +92,16 @@ class LocalUserCardsRepository {
       'SELECT MAX(sort_order) AS m FROM local_user_cards',
     );
     final maxOrder = (maxOrderRows.first['m'] as num?)?.toDouble() ?? 0;
-    final countRows = _raw.select(
-      'SELECT COUNT(*) AS c FROM local_user_cards WHERE is_archived = 0',
-    );
-    final isFirstCard = (countRows.first['c'] as int) == 0;
+    // No card is ever the default, not even the first one: the best card
+    // changes with every purchase, so the app never picks one for the user.
     _raw.execute(
       'INSERT INTO local_user_cards (id, card_product_id, nickname, last4, is_default, is_archived, sort_order, created_at) '
-      'VALUES (?, ?, ?, ?, ?, 0, ?, ?)',
+      'VALUES (?, ?, ?, ?, 0, 0, ?, ?)',
       [
         id,
         cardProductId,
         nickname,
         normalizedLast4,
-        isFirstCard ? 1 : 0,
         maxOrder + 1,
         DateTime.now().millisecondsSinceEpoch,
       ],
@@ -128,17 +125,6 @@ class LocalUserCardsRepository {
 
   Future<void> unarchiveCard(String userCardId) async {
     _raw.execute('UPDATE local_user_cards SET is_archived = 0 WHERE id = ?', [
-      userCardId,
-    ]);
-  }
-
-  /// Mirrors [UserCardsRepository.setDefaultCard] — clears any existing
-  /// default first, since only one card may be default at a time.
-  Future<void> setDefaultCard(String userCardId) async {
-    _raw.execute(
-      'UPDATE local_user_cards SET is_default = 0 WHERE is_default = 1',
-    );
-    _raw.execute('UPDATE local_user_cards SET is_default = 1 WHERE id = ?', [
       userCardId,
     ]);
   }
