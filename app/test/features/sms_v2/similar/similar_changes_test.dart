@@ -13,6 +13,7 @@ import 'package:pandapay/features/sms_v2/providers/data_providers.dart';
 import 'package:pandapay/features/sms_v2/similar/similar_changes.dart';
 import 'package:pandapay/features/sms_v2/storage/event_store.dart';
 import 'package:pandapay/features/sms_v2/storage/fact_store.dart';
+import 'package:pandapay/features/sms_v2/storage/instrument_store.dart';
 import 'package:pandapay/features/sms_v2/storage/schema.dart';
 import 'package:pandapay/features/sms_v2/ui/review_controller.dart';
 import 'package:pandapay_domain/sms_v2.dart';
@@ -261,6 +262,56 @@ void main() {
       expect(offer.field, SimilarField.type);
       expect(offer.summary.count, 1, reason: 'only the other SWIGGY payment');
       expect(changes.others(offer).map((e) => e.eventId), [movementId(swiggy1)]);
+    });
+  });
+
+  group('a payment method', () {
+    Instrument addCard(String id, {required String issuer, required String mask}) {
+      final store = InstrumentStore(database.db, namespace: namespace);
+      final card = Instrument.fromJson({
+        ...store.list().first.toJson(),
+        'instrumentId': id,
+        'issuerSlug': issuer,
+        'maskDigits': mask,
+        'displayName': '$issuer card',
+      });
+      store.upsert(card);
+      return card;
+    }
+
+    test('is offered for another card of the bank the message names', () {
+      final sources = [for (var day = 1; day <= 3; day++) receive(day)];
+      final before = changes.snapshot(row(sources[2]))!;
+      final printed = FactStore(database.db, namespace: namespace)
+          .get(before.eventId)!
+          .instrument!;
+      final sameBank = addCard(
+        '22222222-2222-4222-8222-222222222222',
+        issuer: printed.issuerSlug!,
+        mask: '0007',
+      );
+      final offer = changes.offers(before, instrumentId: sameBank.instrumentId).single;
+      expect(offer.field, SimilarField.paymentMethod);
+      expect(offer.summary.count, 2);
+    });
+
+    test('is not offered for another bank\'s card: one message moves, the rest stay', () {
+      final sources = [for (var day = 1; day <= 3; day++) receive(day)];
+      final before = changes.snapshot(row(sources[2]))!;
+      final otherBank = addCard(
+        '33333333-3333-4333-8333-333333333333',
+        issuer: 'zz_other_bank',
+        mask: '1260',
+      );
+      expect(changes.offers(before, instrumentId: otherBank.instrumentId), isEmpty);
+      // Other changes made in the same edit are still offered.
+      expect(
+        changes
+            .offers(before, instrumentId: otherBank.instrumentId, eventType: EventType.income)
+            .single
+            .field,
+        SimilarField.type,
+      );
     });
   });
 

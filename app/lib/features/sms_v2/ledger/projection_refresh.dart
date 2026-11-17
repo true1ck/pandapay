@@ -26,7 +26,9 @@ import 'projection_writer.dart';
 ///    record could be named; rows saved before said "Payment method not matched".
 /// 2: 16 Nov 2026: a server copy no longer overwrites the phone's own reading
 ///    of how an SMS payment was made; rebuild the rows it had overwritten.
-const int projectionCodeVersion = 2;
+/// 3: 18 Nov 2026: a message a person moved onto a card that is now paused or
+///    removed goes back to the wallet card it names (see [ProjectionRefresh]).
+const int projectionCodeVersion = 3;
 
 /// One slice of a refresh: how many events were read, how many of them were
 /// rewritten, and whether the pass has more to do.
@@ -53,6 +55,14 @@ typedef ProjectionRefreshStep = ({int events, int changed, bool more});
 /// range of events, their facts by id and their stored rows by the event-id
 /// index; it runs in the capture worker, and the cursor survives the app being
 /// closed.
+///
+/// One input is fixed on the way: a message the person moved onto another card
+/// (an edit, or "apply to similar") whose card is now paused or removed. Its
+/// money would stay on a card that is gone while the card the message itself
+/// names is in the wallet. Such a message goes back to the card it names, but
+/// only when the message on its own resolves to a different card that has a
+/// wallet card that is not archived. A message read as the archived card keeps
+/// it ("Remove card" keeps the card's own transactions).
 class ProjectionRefresh {
   ProjectionRefresh({
     required this.financial,
@@ -116,6 +126,9 @@ class ProjectionRefresh {
               ..sort((a, b) => a.key.compareTo(b.key)))
             .map((e) => [e.key, e.value])
             .toList();
+    // Pausing or removing a wallet card can send messages back to the card
+    // they name, so it starts a pass.
+    final archived = _walletCards().archived.toList()..sort();
     return sha256
         .convert(
           utf8.encode(
@@ -125,10 +138,73 @@ class ProjectionRefresh {
               aliases,
               owner,
               categories,
+              archived,
             ]),
           ),
         )
         .toString();
+  }
+
+  /// The saved wallet cards, split into archived (paused or removed) and the
+  /// rest. One small read; a card the phone does not have is in neither.
+  ({Set<String> live, Set<String> archived}) _walletCards() {
+    final live = <String>{};
+    final archived = <String>{};
+    for (final row in _db.select(
+      "SELECT id, json_extract(payload, '\$.is_archived') AS archived "
+      "FROM financial_entities WHERE namespace = ? AND entity = 'cards'",
+      [namespace],
+    )) {
+      final flag = row['archived'];
+      (flag == 1 || flag == true || flag == 'true' ? archived : live).add(
+        row['id'] as String,
+      );
+    }
+    return (live: live, archived: archived);
+  }
+
+  /// Gives each message in [factsById] that a person moved onto a card whose
+  /// wallet card is archived back to the card the message names, when that
+  /// card's wallet card is not archived. Updates [instrumentIdByFactId] and
+  /// the stored link; returns how many moved.
+  int _returnMovedFacts(
+    Map<String, v2.Fact> factsById,
+    Map<String, String> instrumentIdByFactId,
+    Map<String, v2.Instrument> instruments,
+  ) {
+    final wallet = _walletCards();
+    if (wallet.archived.isEmpty) return 0;
+    final away = {
+      for (final i in instruments.values)
+        if (i.userCardId != null && wallet.archived.contains(i.userCardId))
+          i.instrumentId,
+    };
+    if (away.isEmpty) return 0;
+    var moved = 0;
+    for (final fact in factsById.values) {
+      final current = instrumentIdByFactId[fact.factId];
+      if (current == null || !away.contains(current)) continue;
+      // What the message names on its own, by the same rule a new message is
+      // resolved with. The stored link is what the person chose instead.
+      final named = instrumentForFact(fact, instruments);
+      if (named == null ||
+          named.instrumentId == current ||
+          away.contains(named.instrumentId) ||
+          named.status == v2.InstrumentStatus.rejected ||
+          named.status == v2.InstrumentStatus.archived ||
+          named.userCardId == null ||
+          !wallet.live.contains(named.userCardId)) {
+        continue;
+      }
+      _db.execute(
+        'UPDATE v2_facts SET instrument_id = ? '
+        'WHERE namespace = ? AND fact_id = ? AND instrument_id = ?',
+        [named.instrumentId, namespace, fact.factId, current],
+      );
+      instrumentIdByFactId[fact.factId] = named.instrumentId;
+      moved++;
+    }
+    return moved;
   }
 
   /// True when the saved rows may not match their inputs yet: a pass is due
@@ -205,6 +281,7 @@ class ProjectionRefresh {
       for (final i in InstrumentStore(_db, namespace: namespace).list())
         i.instrumentId: i,
     };
+    _returnMovedFacts(factsById, instrumentIdByFactId, instruments);
     // Every stored decision is kept, automatic ones too: moving categories is
     // the re-sort's job, which the person previews and applies.
     final locked = ledger.categoryDecisions(eventIds: ids);

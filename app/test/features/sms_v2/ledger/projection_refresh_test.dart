@@ -298,6 +298,90 @@ void main() {
     expect(state.get(ProjectionRefresh.cursorKey), '');
   });
 
+  group('a message moved onto a card that is then paused or removed', () {
+    const otherWalletCard = '22222222-2222-4222-8222-222222222222';
+    const otherCardId = '33333333-3333-4333-8333-333333333333';
+
+    void walletCard(String id, {required bool archived}) => db.execute(
+      "INSERT OR REPLACE INTO financial_entities(namespace,entity,id,payload,observed_at) "
+      "VALUES(?,'cards',?,?,0)",
+      [namespace, id, jsonEncode({'id': id, 'is_archived': archived})],
+    );
+    String? factCard() => db
+        .select(
+          'SELECT DISTINCT instrument_id FROM v2_facts WHERE namespace=? AND fact_id IN (SELECT event_id FROM v2_events WHERE namespace=?)',
+          [namespace, namespace],
+        )
+        .single['instrument_id'] as String?;
+
+    /// The message names [card] (linked to a live wallet card); the person moved
+    /// it onto another bank's card, linked to [otherWalletCard].
+    void moveOntoOtherCard() {
+      final store = InstrumentStore(db, namespace: namespace);
+      store.upsert(card.copyWith(status: InstrumentStatus.confirmed, userCardId: walletCardId));
+      store.upsert(
+        Instrument.fromJson({
+          ...card.toJson(),
+          'instrumentId': otherCardId,
+          'issuerSlug': 'zz_other_bank',
+          'maskDigits': '1260',
+          'displayName': 'Other bank card',
+          'status': 'confirmed',
+          'userCardId': otherWalletCard,
+        }),
+      );
+      walletCard(walletCardId, archived: false);
+      walletCard(otherWalletCard, archived: false);
+      // What a "wrong card" edit changes: the transaction's own message.
+      db.execute(
+        'UPDATE v2_facts SET instrument_id=? WHERE namespace=? AND fact_id IN (SELECT event_id FROM v2_events WHERE namespace=?)',
+        [otherCardId, namespace, namespace],
+      );
+      refresh().runAll();
+    }
+
+    test('goes back to the wallet card the message names, and the ledger is uploaded again', () {
+      moveOntoOtherCard();
+      // While the card is in the wallet, the person's choice stands.
+      expect(ledgerFrom(), otherCardId);
+      expect(row()['user_card_id'], otherWalletCard);
+      clearOutbox();
+
+      walletCard(otherWalletCard, archived: true);
+      expect(refresh().pending, isTrue);
+      expect(refresh().runAll(), 1);
+      expect(factCard(), card.instrumentId);
+      expect(ledgerFrom(), card.instrumentId);
+      expect(row()['user_card_id'], walletCardId);
+      expect(outboxLedger(), 1);
+      // Nothing left to do.
+      clearOutbox();
+      expect(refresh().runAll(), 0);
+      expect(outboxLedger(), 0);
+    });
+
+    test('stays when the card it names has no wallet card, or it is archived too', () {
+      moveOntoOtherCard();
+      walletCard(otherWalletCard, archived: true);
+      walletCard(walletCardId, archived: true);
+      refresh().runAll();
+      expect(factCard(), otherCardId);
+      expect(ledgerFrom(), otherCardId);
+    });
+
+    test('a message read as the archived card itself keeps it', () {
+      // The message names this card, and its wallet card is removed: "Remove
+      // card" keeps the card's own transactions.
+      InstrumentStore(db, namespace: namespace).upsert(
+        card.copyWith(status: InstrumentStatus.confirmed, userCardId: walletCardId),
+      );
+      walletCard(walletCardId, archived: true);
+      refresh().runAll();
+      expect(factCard(), card.instrumentId);
+      expect(ledgerFrom(), card.instrumentId);
+    });
+  });
+
   test('a slice that keeps failing is passed over after three tries', () {
     // An event that cannot be read stands for any slice that keeps throwing.
     db.execute(

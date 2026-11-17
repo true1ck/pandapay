@@ -13,6 +13,7 @@ import '../pipeline/trace.dart';
 import '../providers/data_providers.dart';
 import '../storage/event_store.dart';
 import '../storage/fact_store.dart';
+import '../storage/instrument_store.dart';
 import '../ui/review_controller.dart';
 import 'fact_keys.dart';
 import 'similar_finder.dart';
@@ -192,7 +193,8 @@ class SimilarChanges {
         ?offer(SimilarField.category, shop, {'category': categorySlug}),
       if (instrumentId != null &&
           before.instrumentId != null &&
-          before.ruleId != null)
+          before.ruleId != null &&
+          !_otherBank(before.eventId, instrumentId))
         ?offer(
           SimilarField.paymentMethod,
           SimilarCriteria.instrument(
@@ -221,6 +223,18 @@ class SimilarChanges {
           {'eventType': eventType.wire},
         ),
     ];
+  }
+
+  /// True when the edited message names a bank and [instrumentId] is another
+  /// bank's card or account. One message can be moved anywhere (the person is
+  /// looking at it), but a bank's messages are never about another bank's card,
+  /// so the same move is not offered for every message of that card: in Nov
+  /// 2026 one such offer moved 100 SBI card spends onto another bank's card.
+  bool _otherBank(String eventId, String instrumentId) {
+    final printed = FactStore(_db, namespace: namespace).get(eventId)?.instrument;
+    final target = InstrumentStore(_db, namespace: namespace).get(instrumentId);
+    final bank = printed?.issuerSlug;
+    return bank != null && target != null && target.issuerSlug != bank;
   }
 
   /// Every other transaction [offer] matches, newest first, for the person to
