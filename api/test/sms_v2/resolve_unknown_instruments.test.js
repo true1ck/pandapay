@@ -88,3 +88,37 @@ test('nothing to resolve from leaves the entry as it was', async () => {
   }), 'p', { events, ledgerOf, instruments: new Map() });
   assert.equal(ledgerOf.get('e1')[0].fromInstrumentId, PHONE);
 });
+
+const scapia = { id: '33333333-3333-4333-8333-333333333333', kind: 'credit_card', issuer_slug: 'federal', mask_digits: null, user_card_id: 'wallet-scapia', status: 'confirmed' };
+
+test('an own card the message printed no number for is resolved through the fact\'s mention', async () => {
+  const events = new Map([['e1', { eventId: 'e1', type: 'purchase', legs: [{ factId: 'f1', role: 'original' }] }]]);
+  const ledgerOf = new Map([['e1', [{ entryId: 'l1', unit: 'INR', fromInstrumentId: null, fromExternal: null, fromOwnUnresolved: 'credit_card', toExternal: 'SHOP' }]]]);
+  const instruments = new Map();
+  await resolveUnknownInstruments(fakeClient({
+    instruments: [scapia, bank],
+    facts: [{ fact_id: 'f1', instrument_id: null, mention: { kind: 'credit_card', issuerSlug: 'federal', maskDigits: null } }],
+  }), 'p', { events, ledgerOf, instruments });
+  assert.equal(ledgerOf.get('e1')[0].fromInstrumentId, scapia.id);
+});
+
+test('an unnamed own bank account never lands on a card the message names', async () => {
+  const events = new Map([['e1', { eventId: 'e1', type: 'card_bill_payment', legs: [{ factId: 'f1', role: 'original' }] }]]);
+  const ledgerOf = new Map([['e1', [{ entryId: 'l1', unit: 'INR', fromInstrumentId: null, fromExternal: null, fromOwnUnresolved: 'bank_account', toInstrumentId: KNOWN }]]]);
+  const instruments = new Map([[KNOWN, { kind: 'credit_card', userCardId: 'wallet-1', status: 'detected' }]]);
+  await resolveUnknownInstruments(fakeClient({
+    instruments: [card],
+    facts: [{ fact_id: 'f1', instrument_id: KNOWN, mention: { kind: 'credit_card', issuerSlug: 'sbi', maskDigits: '2837' } }],
+  }), 'p', { events, ledgerOf, instruments });
+  assert.equal(ledgerOf.get('e1')[0].fromInstrumentId, null);
+});
+
+test('an outside party is never replaced', async () => {
+  const events = new Map([['e1', { eventId: 'e1', type: 'purchase', legs: [{ factId: 'f1', role: 'original' }] }]]);
+  const entry = { entryId: 'l1', unit: 'INR', fromInstrumentId: null, fromExternal: 'SOMEONE', toExternal: 'SHOP' };
+  const ledgerOf = new Map([['e1', [entry]]]);
+  const client = fakeClient({ instruments: [card], facts: [] });
+  await resolveUnknownInstruments(client, 'p', { events, ledgerOf, instruments: new Map() });
+  assert.equal(ledgerOf.get('e1')[0], entry);
+  assert.equal(client.calls.length, 0);
+});

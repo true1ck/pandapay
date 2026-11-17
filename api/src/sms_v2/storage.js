@@ -576,7 +576,15 @@ const MONEY_LEG_ROLES = new Set(['debit_leg', 'credit_leg', 'reversal', 'charge'
  */
 async function resolveUnknownInstruments(client, profileId, { events, ledgerOf, instruments }) {
   const unknown = (id) => Boolean(id) && !instruments.has(id);
-  const needing = [...ledgerOf.entries()].filter(([, entries]) => entries.some((e) => unknown(e.fromInstrumentId) || unknown(e.toInstrumentId)));
+  // The side a row is built from: the payer for money out, the payee for
+  // money in. It needs resolving when it names an id the server does not
+  // hold, or names nothing at all while it is not an outside party (an own
+  // card or account the message printed no number for, e.g. a card whose
+  // SMS never carry one).
+  const sideOf = (eventId) => (INFLOW_TYPES.has(events.get(eventId)?.type) ? 'to' : 'from');
+  const open = (e, side) => unknown(e[`${side}InstrumentId`])
+    || (!e[`${side}InstrumentId`] && !e[`${side}External`] && Boolean(e[`${side}OwnUnresolved`]));
+  const needing = [...ledgerOf.entries()].filter(([eventId, entries]) => entries.some((e) => open(e, sideOf(eventId))));
   if (!needing.length) return;
   const all = await client.query(
     'SELECT instrument_id AS id, kind, issuer_slug, mask_digits, user_card_id, status FROM sms_v2_instruments WHERE profile_id = $1',
@@ -603,21 +611,26 @@ async function resolveUnknownInstruments(client, profileId, { events, ledgerOf, 
     // Money legs first: a correction's leg says where the money really went.
     const legs = [...(event.legs || [])].sort((a, b) => Number(MONEY_LEG_ROLES.has(b.role)) - Number(MONEY_LEG_ROLES.has(a.role)));
     let resolved = null;
+    const side = sideOf(eventId);
+    // An own instrument the message left unnamed has a kind ("an own credit
+    // card"): only an instrument of that kind may stand for it, so a card bill
+    // paid from an unnamed bank account never lands on the card.
+    const wantKind = entries.find((e) => open(e, side) && !e[`${side}InstrumentId`])?.[`${side}OwnUnresolved`] || null;
+    const fits = (id) => !wantKind || instruments.get(id)?.kind === wantKind;
     for (const leg of legs) {
       const f = facts.get(leg.factId);
-      if (f && f.instrument_id && instruments.has(f.instrument_id)) { resolved = f.instrument_id; break; }
+      if (f && f.instrument_id && instruments.has(f.instrument_id) && fits(f.instrument_id)) { resolved = f.instrument_id; break; }
     }
     if (!resolved) {
       for (const leg of legs) {
         const m = facts.get(leg.factId)?.mention;
         if (!m || !m.kind || !m.issuerSlug) continue;
         const id = byKey.get(`${m.kind}|${m.issuerSlug}|${m.maskDigits || ''}`);
-        if (id) { resolved = id; break; }
+        if (id && fits(id)) { resolved = id; break; }
       }
     }
     if (!resolved) continue;
-    const side = INFLOW_TYPES.has(event.type) ? 'toInstrumentId' : 'fromInstrumentId';
-    ledgerOf.set(eventId, entries.map((e) => (unknown(e[side]) ? { ...e, [side]: resolved } : e)));
+    ledgerOf.set(eventId, entries.map((e) => (open(e, side) ? { ...e, [`${side}InstrumentId`]: resolved } : e)));
   }
 }
 
@@ -626,14 +639,15 @@ async function projectTransactions(client, profileId, eventIds, { backfill, cate
   const evRows = await client.query(`SELECT event_id AS id, ${EVENT_DOC} AS doc FROM sms_v2_events WHERE profile_id = $1 AND event_id = ANY($2::text[])`, [profileId, eventIds]);
   const events = new Map(evRows.rows.map((x) => [x.id, x.doc]));
   const ledRows = await client.query(
-    `SELECT event_id, entry_id, ${ts('occurred_at')} AS occurred_at, unit, from_instrument_id, from_external, to_instrument_id, to_external, category_slug
+    `SELECT event_id, entry_id, ${ts('occurred_at')} AS occurred_at, unit, from_instrument_id, from_external, from_own_unresolved,
+            to_instrument_id, to_external, to_own_unresolved, category_slug
        FROM sms_v2_ledger_entries WHERE profile_id = $1 AND event_id = ANY($2::text[])`,
     [profileId, eventIds],
   );
   const ledgerOf = new Map();
   const instrumentIds = new Set();
   for (const r of ledRows.rows) {
-    const e = { entryId: r.entry_id, occurredAt: r.occurred_at, unit: r.unit, fromInstrumentId: r.from_instrument_id, fromExternal: r.from_external, toInstrumentId: r.to_instrument_id, toExternal: r.to_external, category: r.category_slug };
+    const e = { entryId: r.entry_id, occurredAt: r.occurred_at, unit: r.unit, fromInstrumentId: r.from_instrument_id, fromExternal: r.from_external, fromOwnUnresolved: r.from_own_unresolved, toInstrumentId: r.to_instrument_id, toExternal: r.to_external, toOwnUnresolved: r.to_own_unresolved, category: r.category_slug };
     if (!ledgerOf.has(r.event_id)) ledgerOf.set(r.event_id, []);
     ledgerOf.get(r.event_id).push(e);
     if (e.fromInstrumentId) instrumentIds.add(e.fromInstrumentId);
@@ -933,7 +947,10 @@ async function projectStaleInstrumentRows(client, profileId, { exclude, deps }) 
         AND ((l.from_instrument_id IS NOT NULL AND NOT EXISTS (
                SELECT 1 FROM sms_v2_instruments i WHERE i.profile_id = $1 AND i.instrument_id = l.from_instrument_id))
           OR (l.to_instrument_id IS NOT NULL AND NOT EXISTS (
-               SELECT 1 FROM sms_v2_instruments i WHERE i.profile_id = $1 AND i.instrument_id = l.to_instrument_id)))
+               SELECT 1 FROM sms_v2_instruments i WHERE i.profile_id = $1 AND i.instrument_id = l.to_instrument_id))
+          -- An own card or account the message printed no number for.
+          OR (l.from_instrument_id IS NULL AND l.from_external IS NULL AND l.from_own_unresolved IS NOT NULL)
+          OR (l.to_instrument_id IS NULL AND l.to_external IS NULL AND l.to_own_unresolved IS NOT NULL))
         -- Only rows a rebuild can change: the event's own fact names an
         -- instrument the server holds, of a kind that is not shown as "other".
         -- A row nothing can resolve is never picked again and again.
@@ -975,7 +992,11 @@ async function projectStaleInstrumentRows(client, profileId, { exclude, deps }) 
                WHERE l.profile_id = $1 AND l.event_id = t.event_id)
             AND EXISTS (
               SELECT 1 FROM sms_v2_facts f
-                JOIN sms_v2_instruments i ON i.profile_id = f.profile_id AND i.instrument_id = f.instrument_id
+                JOIN sms_v2_instruments i ON i.profile_id = f.profile_id
+                 AND (i.instrument_id = f.instrument_id
+                   OR (i.kind = f.payload->'instrument'->>'kind'
+                       AND i.issuer_slug = f.payload->'instrument'->>'issuerSlug'
+                       AND COALESCE(i.mask_digits, '') = COALESCE(f.payload->'instrument'->>'maskDigits', '')))
                WHERE f.profile_id = $1 AND f.fact_id = t.event_id
                  AND i.user_card_id IS NOT NULL AND i.status <> 'rejected')))
       LIMIT $2`,
