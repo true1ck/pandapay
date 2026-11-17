@@ -1284,7 +1284,8 @@ class RuleEngine implements SmsInterpreter {
       final cp = f['counterparty'];
       if (cp is! Map<String, Object?>) continue;
       final attrs = f['attrs'] as Map<String, Object?>;
-      if (attrs['direction'] != 'debit') continue;
+      final direction = attrs['direction'];
+      if (direction != 'debit' && direction != 'credit') continue;
       final vpa = cp['vpa'] as String?;
       final name = cp['name'] as String?;
       for (final p in cb.purposes) {
@@ -1293,6 +1294,11 @@ class RuleEngine implements SmsInterpreter {
         if (!byVpa && !byName) continue;
         if (!_purposeReplaceable.contains(attrs['purpose'])) break;
         final purpose = p.purpose.purpose.wire;
+        // Money in from a listed payee is only ever re-read as an investment
+        // coming back (a broker's or fund's payout, "by UPSTOX SECURITIES"):
+        // a wallet top-up or a card payment has no incoming side, and money
+        // from anyone else keeps the rule's own reading.
+        if (direction == 'credit' && purpose != 'investment') break;
         attrs['purpose'] = purpose;
         if (purpose == 'wallet_topup' || purpose == 'card_payment') cp['kind'] = 'own';
         break;

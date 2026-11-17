@@ -953,7 +953,7 @@
     "senders": [
       "*"
     ],
-    "pattern": "(?:\\bdear\\s+investor,?\\s*(?:we\\s+have\\s+received\\s+your\\s+subscription|your\\s+subscription\\b|your\\s+redemption\\b|your\\s+purchase\\s+of\\s+(?:rs\\.?|inr|₹)\\s*[\\d,.]+\\s+in\\s+folio\\s+\\d+\\s+in\\b|your\\s+purchase\\s+request\\b)|\\bwe\\s+confirm\\s+receipt\\s+of\\s+your\\s+request\\s+for\\s+new\\s+purchase\\b|\\bfolio\\s+x+\\d+\\s*-\\s*your\\s+purchase\\s+request\\b)",
+    "pattern": "(?:\\bdear\\s+investor,?\\s*(?:we\\s+have\\s+received\\s+your\\s+subscription|your\\s+subscription\\b|your\\s+redemption\\b(?!\\s+payout\\b)|your\\s+purchase\\s+of\\s+(?:rs\\.?|inr|₹)\\s*[\\d,.]+\\s+in\\s+folio\\s+\\d+\\s+in\\b|your\\s+purchase\\s+request\\b)|\\bwe\\s+confirm\\s+receipt\\s+of\\s+your\\s+request\\s+for\\s+new\\s+purchase\\b|\\bfolio\\s+x+\\d+\\s*-\\s*your\\s+purchase\\s+request\\b)",
     "flags": "i",
     "reason": "service"
   },
@@ -962,7 +962,7 @@
     "senders": [
       "*"
     ],
-    "pattern": "(?:\\byour\\s+zerodha\\s+account\\s+is\\s+due\\s+for\\s+settlement\\b|\\bas\\s+per\\s+sebi'?s?\\s+mandate\\s+regarding\\s+the\\s+settlement\\s+of\\s+accounts\\b|\\bas\\s+per\\s+sebi\\s+directives\\s+on\\s+periodic\\s+settlement,?\\s+payout\\s+of\\b|\\bas\\s+per\\s+your\\s+request,\\s+payout\\s+of\\s+[^.\\n]{0,30}has\\s+been\\s+made\\s+to\\s+your\\b|\\bwe'?ve\\s+transferred\\s+unused\\s+funds\\s+from\\s+your\\s+trading\\s+account\\b|\\btransferred\\s+unused\\s+funds\\s+of\\s+[^.\\n]{0,30}from\\s+your\\s+\\w+\\s+trading\\s+account\\b|\\bopendated\\s+a/c:\\s*\\d+\\s+received:)",
+    "pattern": "(?:\\byour\\s+zerodha\\s+account\\s+is\\s+due\\s+for\\s+settlement\\b|\\bas\\s+per\\s+sebi'?s?\\s+mandate\\s+regarding\\s+the\\s+(?:(?:quarterly|monthly|periodic)\\s+)?settlement\\s+of\\s+accounts\\b|\\bwe'?ve\\s+transferred\\s+unused\\s+funds\\s+from\\s+your\\s+trading\\s+account\\b|\\bopendated\\s+a/c:\\s*\\d+\\s+received:)",
     "flags": "i",
     "reason": "service"
   },

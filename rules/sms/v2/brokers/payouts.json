@@ -119,7 +119,7 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "lane-i",
     "updatedAt": "2026-11-05T00:00:00Z"
   },
@@ -247,7 +247,7 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "lane-i",
     "updatedAt": "2026-11-05T00:00:00Z"
   },
@@ -314,5 +314,221 @@
     "status": "active",
     "createdBy": "baseline",
     "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BRK-PAYOUT-SENT-AMOUNT-FIRST",
+    "version": 1,
+    "family": "broker_withdraw",
+    "senders": [
+      "*"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "^(?=[\\s\\S]*?\\b(?:trading|demat|securities|broking|sebi|settlement|equity|redemption|folio|mutual\\s+fund|unused\\s+funds?|zerodha|kotak\\s+securities|kotak\\s+neo|lemonn|upstox|groww|angel\\s+one|dhan|5\\s?paisa|icici\\s+securities|icicidirect|hdfc\\s+securities|motilal\\s+oswal|sharekhan|paytm\\s+money|indmoney|fyers|alice\\s+blue|m\\.?stock|samco|nuvama|iifl)\\b)(?![\\s\\S]*?\\b(?:made|debited|withdrawn|deducted)\\s+from\\s+your\\b)(?![\\s\\S]*?\\bwithdrawal\\s+request\\b(?:[^.]|\\.\\d){0,160}?\\b(?:initiated|raised|placed|received|accepted)\\b)(?=(?:[\\s\\S]{0,400}?\\b(?<broker>zerodha|kotak\\s+securities|kotak\\s+neo|lemonn|upstox|groww|angel\\s+one|dhan|5\\s?paisa|icici\\s+securities|icicidirect|hdfc\\s+securities|motilal\\s+oswal|sharekhan|paytm\\s+money|indmoney|fyers|alice\\s+blue|m\\.?stock|samco|nuvama|iifl)\\b)?)[\\s\\S]*?\\b(?:unused\\s+funds?|settlement\\s+payout|redemption\\s+payout|payout|withdrawal(?:\\s+request)?)\\s+(?:of|for)\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\b(?:[^.]|\\.\\d){0,120}?\\b(?:has\\s+been\\s+|have\\s+been\\s+|is\\s+|was\\s+)?(?:processed|made|effected|transferred|credited|paid|initiated|sent)\\b(?:[\\s\\S]{0,160}?\\b(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?[x*•.]+\\s*(?<mask>\\d{2,16})\\b)?",
+      "flags": "i",
+      "rejectAny": [
+        "will be",
+        "would be",
+        "not processed",
+        "could not",
+        "unable to",
+        "failed",
+        "rejected",
+        "declined",
+        "cancelled",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "investment",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask",
+          "issuerFromSender": false
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "broker",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "JD-KOTAKS-S",
+        "body": "Dear customer, as per your request, payout of Rs.2500.40 has been made to your HDFC Bank Account No. XXXX4321. - Kotak Securities",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "JD-KOTAKS-S",
+        "body": "Dear customer, as per SEBI directives on periodic settlement, payout of Rs.1200.10 effected to your HDFC Account XXXX4321. - Kotak Securities",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-KOTAKS-S",
+        "body": "Your running A/c settlement payout for Rs. 3100.55 is processed with reference ID:PY0000001. Date of Transfer: 05-11-2026. You should receive the funds in your default linked bank a/c. - Kotak Neo",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "JM-ZRODHA-S",
+        "body": "Your withdrawal request for Rs.4500.0 for Equity a/c (AB1234) is processed. You should see the funds in your bank account within 24 hours. -ZERODHA",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "JD-ZRODHA-S",
+        "body": "Your quarterly settlement payout for Rs.812.35 for Equity a/c (AB1234) is processed with transaction ID: TXN000111, Date of Transfer:05/11/2026. You should see the funds in your bank account within 24 hours -Zerodha",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VK-MOAMCL-S",
+        "body": "Dear Investor, Your redemption payout of Rs. 5000.20 for trade dated 01/11/2026 under folio - 1234567 in Example Midcap Fund - Dir Gr has been initiated through NEFT/ RTGS to your EXAMPLE BANK A/c No. XXXXXXXX4321 on 03/11/2026. Motilal Oswal MF.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "QP-ZRODHA-S",
+        "body": "Your withdrawal request for Rs.9000.0 for Equity a/c (AB1234) is not processed due to unavailability of funds in your a/c. -ZERODHA",
+        "expectFactTypes": []
+      },
+      {
+        "sender": "UNVEST-S",
+        "body": "Dear client, compulsory funds and shares payout for current qtr. of Rs. 900 would be processed by 05/12/2026 after retaining the reqd margins.",
+        "expectFactTypes": []
+      },
+      {
+        "sender": "VM-UPSTOX-S",
+        "body": "Upstox: Your withdrawal request of Rs 8,000.00 has been initiated. Funds should reach your bank a/c XX1234 by tomorrow.",
+        "expectFactTypes": []
+      },
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "Withdrawal of Rs.3500/- made from your A/C NO.XXXXXX1234 on 14 Aug 2026.",
+        "expectFactTypes": []
+      },
+      {
+        "sender": "VM-UPSTOX-S",
+        "body": "Upstox: Your withdrawal of Rs 2,000.00 has been credited to your bank A/c XX1234.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "TM-FLPKRT-S",
+        "body": "Dear Customer, This is regarding C10034 for your LED TV. Payout of Rs. 2299.2 has been successfully processed. -Flipkart",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "broker-payouts-2026-11-18",
+    "updatedAt": "2026-11-18T00:00:00Z"
+  },
+  {
+    "id": "BRK-PAYOUT-SENT-VERB-FIRST",
+    "version": 1,
+    "family": "broker_withdraw",
+    "senders": [
+      "*"
+    ],
+    "priority": 701,
+    "match": {
+      "pattern": "^(?=[\\s\\S]*?\\b(?:trading|demat|securities|broking|sebi|settlement|equity|redemption|mutual\\s+fund|unused\\s+funds?|zerodha|kotak\\s+securities|kotak\\s+neo|lemonn|upstox|groww|angel\\s+one|dhan|5\\s?paisa|icici\\s+securities|icicidirect|hdfc\\s+securities|motilal\\s+oswal|sharekhan|paytm\\s+money|indmoney|fyers|alice\\s+blue|m\\.?stock|samco|nuvama|iifl)\\b)(?=(?:[\\s\\S]{0,400}?\\b(?<broker>zerodha|kotak\\s+securities|kotak\\s+neo|lemonn|upstox|groww|angel\\s+one|dhan|5\\s?paisa|icici\\s+securities|icicidirect|hdfc\\s+securities|motilal\\s+oswal|sharekhan|paytm\\s+money|indmoney|fyers|alice\\s+blue|m\\.?stock|samco|nuvama|iifl)\\b)?)[\\s\\S]*?\\b(?:we\\s+have|we've|has\\s+been|have\\s+been)\\s+(?:transferred|credited|paid|returned|refunded|sent|settled)\\s+(?:back\\s+)?(?:the\\s+)?(?:unused\\s+funds?|funds?|balance|amount|payout)?\\s*(?:of\\s+)?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\b[\\s\\S]{0,140}?\\b(?:to|into)\\s+your\\s+(?:registered\\s+|linked\\s+|default\\s+|primary\\s+)?(?:[a-z]+\\s+)?(?:bank\\s+)?(?:a/c|acct?\\.?|account)\\b(?:\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?[x*•.]+\\s*(?<mask>\\d{2,16}))?",
+      "flags": "i",
+      "rejectAny": [
+        "will be",
+        "would be",
+        "not processed",
+        "could not",
+        "unable to",
+        "failed",
+        "rejected",
+        "declined",
+        "cancelled",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "investment",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask",
+          "issuerFromSender": false
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "broker",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "LEMNNS-S",
+        "body": "Dear A B CUSTOMER, as per SEBI and exchange guidelines, we have transferred unused funds of Rs 1234.56 from your Lemonn trading account back to your registered bank account by NEFT/RTGS ;Transaction ID: TXN00011122; Date: 05/11/2026. To continue investing, add funds to your Lemonn account",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "LEMNNS-S",
+        "body": "Dear A B CUSTOMER, as per SEBI and exchange guidelines, unused funds in your Lemonn trading account will be transferred back to your registered bank account on the day of settlement.",
+        "expectFactTypes": []
+      },
+      {
+        "sender": "VM-UPSTOX-S",
+        "body": "Dear Client, As per SEBI's mandate regarding the settlement of accounts, we will be settling your account today. This means we'll credit your Upstox balance of Rs.1887.71 back to your registered bank account.",
+        "expectFactTypes": []
+      },
+      {
+        "sender": "VM-ACMEWL-S",
+        "body": "We have transferred Rs 500.00 back to your bank account for your cancelled order 12345.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "broker-payouts-2026-11-18",
+    "updatedAt": "2026-11-18T00:00:00Z"
   }
 ]

@@ -397,7 +397,10 @@ class SolverFacts {
             'movement',
             0,
             attrs: {
-              'direction': 'debit',
+              // Money put in (a SIP, a top-up) goes out; a payout or a
+              // redemption ("credited", "transferred to your bank account")
+              // comes back in. The direction the solver read decides.
+              'direction': d.debitDirection == false ? 'credit' : 'debit',
               'purpose': 'investment',
               'rail': rail(null),
               if (d.evidenceOnly) 'evidenceOnly': true,

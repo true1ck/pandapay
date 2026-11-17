@@ -147,5 +147,19 @@
     "targetInstrument": {
       "kind": "credit_card"
     }
+  },
+  {
+    "id": "CPP-BROKERS",
+    "vpaPattern": "^(?:(?:zerodha|upstox|rksv|groww|nextbillion|kotaksec|kotakneo|angelone|angelbroking|lemonn|5paisa|icicisec|hdfcsec|sharekhan|paytmmoney|indmoney|fyers|aliceblue|mstock|samco|nuvama|iiflsec|indstocks|kuvera)[\\w.-]*|dhan(?:hq)?(?:[.-][\\w.-]*)?)@",
+    "namePattern": "^(?:ZERODHA|UPSTOX|RKSV SEC|GROWW|NEXTBILLION TECH|KOTAK ?SEC|KOTAK NEO|ANGEL (?:ONE|BROKING)|DHAN(?: ?HQ)?$|RAISE SEC|LEMONN|5 ?PAISA|ICICI SEC|HDFC SEC|MOTILAL OSWAL (?:FIN|SEC|BROK)|SHAREKHAN|PAYTM MONEY|IND ?MONEY|FYERS|ALICE ?BLUE|M ?STOCK|MIRAE ASSET CAP|SAMCO SEC|NUVAMA WEALTH|IIFL SEC|INDSTOCKS|STOXKART|KUVERA)",
+    "purpose": "investment",
+    "targetInstrument": null
+  },
+  {
+    "id": "CPP-MUTUAL-FUNDS",
+    "vpaPattern": null,
+    "namePattern": "^[A-Z0-9 .&-]{0,40}?(?:MUTUAL ?FUND|\\bMF(?=$| RED| DIV| PAYOUT| AMC| LTD| DIRECT| SIP)|\\bM\\.? ?F\\.?(?= RED| DIV| PAYOUT| AMC| LTD| DIRECT| SIP)|ASSET MANAGEMENT|\\bREDEMPTION\\b)",
+    "purpose": "investment",
+    "targetInstrument": null
   }
 ]

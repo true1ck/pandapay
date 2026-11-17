@@ -1,6 +1,6 @@
 {
   "schema": "pandapay.sms.solver/1",
-  "version": 6,
+  "version": 7,
   "params": {
     "accept": 0.8,
     "maxCueDistance": 8,
@@ -116,7 +116,12 @@
       "jama kiya",
       "jama ho gaya",
       "credit hua",
-      "credit kiya gaya"
+      "credit kiya gaya",
+      {"p": "back to your bank? a/c|account|acct", "kind": "toOwnBank"},
+      {"p": "back to your registered|linked|default|primary bank? a/c|account|acct", "kind": "toOwnBank"},
+      {"p": "to your registered|linked|default|primary bank? a/c|account|acct", "kind": "toOwnBank"},
+      {"p": "to your bank a/c|account|acct", "kind": "toOwnBank"},
+      {"p": "into your bank a/c|account|acct", "kind": "toOwnBank"}
     ],
     "billerReceived": [
       "we have received",
@@ -761,7 +766,14 @@
       {
         "p": "payout",
         "kind": "investment"
-      }
+      },
+      {"p": "trading account", "kind": "investment"},
+      {"p": "trading a/c", "kind": "investment"},
+      {"p": "unused funds", "kind": "investment"},
+      {"p": "settlement payout", "kind": "investment"},
+      {"p": "running a/c settlement", "kind": "investment"},
+      {"p": "redemption payout", "kind": "investment"},
+      {"p": "redemption proceeds", "kind": "investment"}
     ],
     "mandateRefCue": [
       "mandate id",

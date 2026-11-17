@@ -19,3 +19,5 @@ debit 250000 bill_payment: Premium Rs. 2500 for LIC policy no 123456789 has been
 debit 31000 purchase: Spent Rs.310 From HDFC Bank Card x8406 At QUALITY FUEL STATION On 2026-04-07:21:41:16 Bal Rs.135317.02 Not You? Call 18002586161
 debit 50000 purchase: UPI txn of Rs 500.00 successful from your A/c XX1234 on 22-10-26
 debit 500000 purchase: Sent Rs.5000.00 From Example Bank A/c *1234 To RAVI KUMAR On 05/11/26 Ref 432198765432
+credit 400000 p2p: Acme: Withdrawal of Rs 4,000.00 has been transferred to your bank a/c XX4321. UTR: ACME00112233.
+debit 350000 purchase: Withdrawal of Rs.3500/- made from your A/C NO.XXXXXX1234 on 14 Aug 2026.

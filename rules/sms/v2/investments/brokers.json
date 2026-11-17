@@ -148,7 +148,7 @@
         "expectFactTypes": []
       }
     ],
-    "status": "active",
+    "status": "retired",
     "createdBy": "baseline",
     "updatedAt": "2026-11-05T00:00:00Z"
   },
@@ -209,13 +209,6 @@
     ],
     "confidence": 0.93,
     "examples": [
-      {
-        "sender": "VM-KOTAKN-S",
-        "body": "Kotak Neo: Running A/c settlement payout of INR 15,500.00 initiated for your demat account. You should receive funds in A/c XX1234 by EOD.",
-        "expectFactTypes": [
-          "attempt"
-        ]
-      },
       {
         "sender": "VM-UPSTOX-S",
         "body": "Upstox: Your withdrawal request of Rs 8,000.00 has been initiated. Funds will reach your bank A/c XX1234 in 1 working day.",

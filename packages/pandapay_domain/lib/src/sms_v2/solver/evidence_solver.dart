@@ -946,12 +946,27 @@ class _Run {
           amtIdx - h.end <= 3 &&
           same(h.start, amtIdx),
     );
+    // "Withdrawal of Rs X has been transferred to your bank a/c", "we have
+    // transferred unused funds of Rs X from your trading account back to your
+    // registered bank account": money that reaches the person's own bank
+    // account comes IN, however the verb before the amount reads (a broker's
+    // or an app's payout). The phrase sits after the amount, in its sentence.
+    final toOwnBank = hits('credit').any(
+      (h) =>
+          h.entry.kind == 'toOwnBank' &&
+          h.start > amtIdx &&
+          same(h.start, amtIdx),
+    );
     final realBankDebit =
         cue.debit && cue.bank && _mask(true, amtIdx) != null;
-    final flipped = cue.debit && comesBack && !realBankDebit;
+    final flipped = cue.debit && (comesBack || toOwnBank) && !realBankDebit;
     final debitDir = flipped ? false : cue.debit;
     if (flipped) {
-      reasons.add('refund / reversal wording: a credit, not a debit');
+      reasons.add(
+        comesBack
+            ? 'refund / reversal wording: a credit, not a debit'
+            : 'money sent to your own bank account: a credit, not a debit',
+      );
     }
 
     final ownT = hits('ownTransfer');
