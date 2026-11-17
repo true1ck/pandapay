@@ -404,6 +404,9 @@ test("a layout an active rule already reads, in every way of writing its values,
   const active = { ...rule(), id: "TESTBK-PAID", version: 3, status: "active", match: { pattern: matcher.pattern, flags: "i" } };
   assert.equal(coveredBy(template, [active]), "TESTBK-PAID@3");
   assert.equal(coveredBy(template, [{ ...active, senders: ["OTHERBK"] }]), null, "another sender's rule");
+  assert.equal(coveredBy(template, [{ ...active, senders: ["*"], confidence: 0.9 }]), "TESTBK-PAID@3", "a sure rule for every sender covers");
+  assert.equal(coveredBy(template, [{ ...active, senders: ["*"], confidence: 0.6 }]), null, "a catch-all that is unsure covers nothing");
+  assert.equal(coveredBy(template, [{ ...active, senders: ["*"] }]), null, "a catch-all with no confidence covers nothing");
   assert.equal(coveredBy(template, [{ ...active, match: { ...active.match, pattern: "^Never matches$" } }]), null);
   assert.equal(coveredBy(template, [{ ...active, match: { ...active.match, rejectAny: ["paid"] } }]), null, "rejectAny words");
   assert.equal(coveredBy(template, [{ ...active, match: { ...active.match, requireAll: ["absent"] } }]), null, "requireAll words");
