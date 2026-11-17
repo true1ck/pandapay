@@ -92,7 +92,9 @@ test.after(async () => {
 // A card spend with its instrument, event and ledger entry.
 function cardSpend(o = {}) {
   const inst = o.inst || h.instrument({ userCardId: o.userCardId || null });
-  const f = h.fact({ sourceKey: o.sourceKey, minor: o.minor || 49900, instrument: h.mention() });
+  // The message prints the card or account the money left, as a real SMS does
+  // (the server builds rows on what the message printed).
+  const f = h.fact({ sourceKey: o.sourceKey, minor: o.minor || 49900, instrument: h.mention({ kind: inst.kind, issuerSlug: inst.issuerSlug, maskDigits: inst.maskDigits }) });
   const e = h.event(f, { type: o.type || 'purchase' });
   const l = h.ledger(e, { fromInstrumentId: inst.instrumentId, category: o.category });
   return { inst, f, e, l, body: h.batch({ items: [h.item([f])], instruments: o.skipInstrument ? [] : [inst], events: [e], ledger: [l] }) };
@@ -349,7 +351,12 @@ test('transactions are projected for every event type, per the Contracts table',
   const items = []; const events = []; const ledger = []; const made = new Map();
   let n = 0;
   for (const type of [...Object.keys(expectKind), 'unknown', 'ipo_application']) {
-    const f = h.fact({ sourceKey: `sms:synthetic:type:${type}`, minor: 10000 + (n += 1) });
+    // Money in is printed on the bank account it reached; money out on the card.
+    const f = h.fact({
+      sourceKey: `sms:synthetic:type:${type}`,
+      minor: 10000 + (n += 1),
+      instrument: inflow.has(type) ? h.mention({ kind: 'bank_account', issuerSlug: 'sbi', maskDigits: '4321' }) : undefined,
+    });
     const legs = type === 'ipo_application' ? [{ factId: f.factId, role: 'hold_placed' }] : [{ factId: f.factId, role: 'debit_leg' }];
     const e = h.event(f, { type, legs });
     const l = inflow.has(type)
