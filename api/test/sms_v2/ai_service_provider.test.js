@@ -253,3 +253,11 @@ test("an unpinned prompt version is accepted and recorded; a pinned one must mat
   assert.equal((await runWorkerCycle({ layoutStore: held, provider: pinned, config })).status, "provider_busy");
   assert.equal(held.finished[0].requeue, true);
 });
+
+test("provider model ids with an @ prefix (Cloudflare) are accepted and recorded", async () => {
+  const store = makeStore();
+  const model = "@cf/meta/llama-3.1-8b-instruct";
+  const provider = createAiServiceProvider({ env, fetchImpl: async () => serviceJson({ answer: answer(), ...usage, model, provider: "cloudflare", routeHadInfrastructureFailure: false }) });
+  assert.equal((await runWorkerCycle({ layoutStore: store, provider, config })).status, "ready");
+  assert.equal(store.finished[0].model, model);
+});
