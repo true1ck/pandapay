@@ -949,7 +949,41 @@ async function projectStaleInstrumentRows(client, profileId, { exclude, deps }) 
       LIMIT $2`,
     [profileId, STALE_ROWS_PER_BATCH],
   );
-  const ids = r.rows.map((x) => x.event_id).filter((id) => !exclude.has(id));
+  // Card rows built before their card was linked to a wallet card: the row says
+  // "credit card" but carries no wallet card, so the card's rewards, caps,
+  // milestones and points were never applied. Projection takes the wallet card
+  // from the instrument it resolves (the ledger's own when the server holds
+  // it, else the one the event's fact names), so only rows whose resolved
+  // instrument now has a wallet card are picked; nothing is picked twice.
+  const unlinked = await client.query(
+    `SELECT DISTINCT t.event_id
+       FROM transactions t
+      WHERE t.profile_id = $1 AND t.pipeline_version = 2 AND t.status = 'active'
+        AND t.event_id IS NOT NULL AND t.instrument IN ('credit_card', 'debit_card') AND t.user_card_id IS NULL
+        AND (
+          EXISTS (
+            SELECT 1 FROM sms_v2_ledger_entries l
+              JOIN sms_v2_instruments i ON i.profile_id = l.profile_id
+               AND i.instrument_id IN (l.from_instrument_id, l.to_instrument_id)
+             WHERE l.profile_id = $1 AND l.event_id = t.event_id
+               AND i.user_card_id IS NOT NULL AND i.status <> 'rejected')
+          OR (
+            NOT EXISTS (
+              SELECT 1 FROM sms_v2_ledger_entries l
+                JOIN sms_v2_instruments i ON i.profile_id = l.profile_id
+                 AND i.instrument_id IN (l.from_instrument_id, l.to_instrument_id)
+               WHERE l.profile_id = $1 AND l.event_id = t.event_id)
+            AND EXISTS (
+              SELECT 1 FROM sms_v2_facts f
+                JOIN sms_v2_instruments i ON i.profile_id = f.profile_id AND i.instrument_id = f.instrument_id
+               WHERE f.profile_id = $1 AND f.fact_id = t.event_id
+                 AND i.user_card_id IS NOT NULL AND i.status <> 'rejected')))
+      LIMIT $2`,
+    [profileId, STALE_ROWS_PER_BATCH],
+  );
+  const ids = [...new Set([...r.rows, ...unlinked.rows].map((x) => x.event_id))]
+    .filter((id) => !exclude.has(id))
+    .slice(0, STALE_ROWS_PER_BATCH);
   if (!ids.length) return 0;
   const healed = await projectTransactions(client, profileId, ids, { backfill: true, deps });
   return healed.updated || 0;
