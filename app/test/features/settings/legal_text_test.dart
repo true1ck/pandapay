@@ -110,9 +110,9 @@ void main() {
       expect(section('3.'), contains('never sent to us'));
     });
 
-    test('names Google Gemini, what is shared, and the sharing is off by default', () {
+    test('names the AI service, what is shared, and the sharing is off by default', () {
       final text = section('5.');
-      expect(text, contains('Google Gemini'));
+      expect(text, contains('A third-party AI service may process message layouts'));
       expect(text, contains('off unless you turn it on'));
       expect(text, contains('the categories and shop names you pick for shops'));
       expect(text, contains('It never shares your messages, amounts, account numbers or the people you pay.'));

@@ -161,7 +161,7 @@ const privacyPolicySections = <LegalSection>[
         'The layout of bank messages it can\'t read, with every amount, name, number and date removed.',
         'The shop names it couldn\'t put in a category, and the categories and shop names you pick for shops.',
       ]),
-      LegalBlock.paragraph('It never shares your messages, amounts, account numbers or the people you pay. A shop name is looked at only once several different people have shared it, and only if it has no long numbers or personal details. Google Gemini, a service of Google, may process message layouts and shop names to suggest new rules, and a person at PandaPay approves every rule before it is added for everyone. Nothing is shared unless you turn this on. You can turn it off at any time in Settings, Privacy & Permissions. If you turn it off, what you shared is deleted. Rules already added for everyone stay, and they contain nothing about you.'),
+      LegalBlock.paragraph('It never shares your messages, amounts, account numbers or the people you pay. A shop name is looked at only once several different people have shared it, and only if it has no long numbers or personal details. A third-party AI service may process message layouts and shop names to suggest new rules, and a person at PandaPay approves every rule before it is added for everyone. Nothing is shared unless you turn this on. You can turn it off at any time in Settings, Privacy & Permissions. If you turn it off, what you shared is deleted. Rules already added for everyone stay, and they contain nothing about you.'),
     ],
   ),
   LegalSection(
@@ -184,7 +184,7 @@ const privacyPolicySections = <LegalSection>[
         'Hosting and storage of your account data: Oracle Cloud for our servers (Hyderabad, India) and Supabase on Amazon Web Services for our database (Mumbai, India).',
         'Push notifications: Novu and Google Firebase Cloud Messaging.',
         'Error reports: none are collected today. If we turn them on, they will go to GlitchTip and say only what broke and where in our code, never message text, amounts or IDs.',
-        'Google Gemini: only if you turn on sharing message layouts and shop names (section 5).',
+        'AI service providers: only if you turn on sharing message layouts and shop names (section 5).',
         'Google Places or OpenStreetMap-based providers: for nearby merchant searches (section 4).',
         'Google: only if you use Google sign-in.',
       ]),

@@ -13,7 +13,7 @@ Shipped wording (`TemplateSharingCopy` in `app/lib/features/consent/template_sha
 > - the layout of bank messages it can't read, with every amount, name, number and date removed
 > - the shop names it couldn't put in a category, and the categories and shop names you pick for shops
 >
-> It never shares your messages, amounts, account numbers or the people you pay. Google Gemini may process message layouts and shop names to suggest new rules. Nothing is shared unless you turn this on. If you turn it off, what you shared is deleted. Rules already added for everyone stay, and they contain nothing about you.
+> It never shares your messages, amounts, account numbers or the people you pay. A third-party AI service may process message layouts and shop names to suggest new rules. Nothing is shared unless you turn this on. If you turn it off, what you shared is deleted. Rules already added for everyone stay, and they contain nothing about you.
 
 Where it is offered: Settings > Privacy & Permissions, the sharing line on the fix screen of a message, and a card in Review that can be dismissed ("Not now" hides it for 30 days and it stops after the third dismissal). Where it is described: privacy policy and terms, section 5 ("Optional: sharing message layouts, shop categories and shop names").
 

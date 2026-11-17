@@ -208,7 +208,7 @@ void main() {
         'shop names you pick for shops';
     const footer =
         'It never shares your messages, amounts, account numbers or the '
-        'people you pay. Google Gemini may process message layouts and shop '
+        'people you pay. A third-party AI service may process message layouts and shop '
         'names to suggest new rules. Nothing is shared unless you turn this '
         'on. If you turn it off, what you shared is deleted. Rules already '
         'added for everyone stay, and they contain nothing about you.';
@@ -237,7 +237,7 @@ void main() {
       expect(find.text(bulletLayouts), findsOneWidget);
       expect(find.text(bulletShops), findsOneWidget);
       expect(find.text(footer), findsOneWidget);
-      expect(find.textContaining('Google Gemini'), findsOneWidget);
+      expect(find.textContaining('A third-party AI service'), findsOneWidget);
       expect(find.text('Turn on'), findsOneWidget);
       expect(find.text('Not now'), findsOneWidget);
       expect(server.posted, isEmpty);

@@ -616,7 +616,7 @@ class _PurposeConsents extends ConsumerWidget {
         return;
       }
       if (purpose == smsSharedLearningPurpose && granted) {
-        // Sharing redacted templates (processed by Google Gemini) is off
+        // Sharing redacted templates (processed by a third-party AI service) is off
         // until someone chooses "Turn on" in its own disclosure.
         await TemplateSharingDisclosure.show(
           context,

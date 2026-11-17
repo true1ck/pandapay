@@ -23,7 +23,7 @@ class TemplateSharingCopy {
   ];
   static const footer =
       'It never shares your messages, amounts, account numbers or the people '
-      'you pay. Google Gemini may process message layouts and shop names to '
+      'you pay. A third-party AI service may process message layouts and shop names to '
       'suggest new rules. Nothing is shared unless you turn this on. If you '
       'turn it off, what you shared is deleted. Rules already added for '
       'everyone stay, and they contain nothing about you.';
