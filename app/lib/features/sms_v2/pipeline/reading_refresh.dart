@@ -91,7 +91,13 @@ class ReadingRefresh {
   /// The value the runtime and the worker both compute for the rules in force:
   /// engine version plus the overlay and personal revisions.
   static String passRevisionFor(String pipelineRevision) =>
-      '$smsEngineVersion|$pipelineRevision';
+      '$smsEngineVersion|$readRule|$pipelineRevision';
+
+  /// Changes when a change in how rules are chosen means messages must be read
+  /// again although no rule, engine version or format changed. Part of every
+  /// fingerprint and of the pass revision.
+  /// ai-after-signed-1: an AI rule reads only what no signed rule settles.
+  static const readRule = 'ai-after-signed-1';
 
   late final _db = financial.database.db;
   late final _state = SyncStateStore(_db, namespace: namespace);
@@ -108,6 +114,7 @@ class ReadingRefresh {
   String fingerprint(String brand) {
     _global ??= jsonEncode([
       smsEngineVersion,
+      readRule,
       personalRevision,
       [for (final c in bundle.counterpartyPurposes) c.toJson()],
       bundle.solverPack,
