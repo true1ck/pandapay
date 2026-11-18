@@ -96,8 +96,6 @@ Future<bool> runInstrumentAction(
       if (name != null) actions.rename(instrument.instrumentId, name);
     } else if (action == 'reject') {
       actions.reject(instrument.instrumentId);
-    } else if (action == 'restore') {
-      actions.restore(instrument.instrumentId);
     } else if (action == 'asCard' || action == 'asAccount') {
       // [instrument] is the bank-account reading of a number that is also a
       // credit card. Keep the side the user names; archive the other.
@@ -121,7 +119,12 @@ Future<bool> runInstrumentAction(
         return false;
       }
     } else {
-      final result = actions.confirm(instrument.instrumentId);
+      // 'restore' (Not mine -> mine again) is a confirmation too: the server
+      // ignores anything weaker (see InstrumentActions.restore), and a credit
+      // card needs its wallet card here as well.
+      final result = action == 'restore'
+          ? actions.restore(instrument.instrumentId)
+          : actions.confirm(instrument.instrumentId);
       if (result case CardNeedsProduct(:final issuerSlug, :final maskDigits)) {
         final products = await Navigator.of(context).push<List<CardProduct>>(
           MaterialPageRoute(

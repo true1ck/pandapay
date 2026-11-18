@@ -711,3 +711,52 @@ test('a UPI movement stores its payment method and the transaction route can ret
   assert.equal(rows.filter((r) => r.payment_method === 'upi').length, 1);
   assert.equal(rows.filter((r) => r.payment_method === null).length, 1);
 });
+
+// Marking an account "Not mine" makes the server delete the ledger rows of every
+// event it touches and retire their transaction rows (the sync contract has no
+// tombstones). Bringing the account back must bring both back.
+const RETIRED = '[sms_v2: event no longer counts]';
+const ledgerCount = async (profile) => Number((await pool.query('SELECT count(*) AS n FROM sms_v2_ledger_entries WHERE profile_id = $1', [profile])).rows[0].n);
+const instrumentStatus = async (profile, id) => (await pool.query('SELECT status FROM sms_v2_instruments WHERE profile_id = $1 AND instrument_id = $2', [profile, id])).rows[0].status;
+const noteOf = async (profile) => (await pool.query('SELECT note FROM transactions WHERE profile_id = $1', [profile])).rows[0].note;
+
+async function spendMarkedNotMine() {
+  const profile = await newProfile();
+  const s = cardSpend();
+  await ingest(profile, s.body);
+  assert.equal((await txnsFor(profile))[0].status, 'active');
+  await ingest(profile, h.batch({ instruments: [{ ...s.inst, status: 'rejected' }] }));
+  assert.equal(await ledgerCount(profile), 0, 'the ledger rows of the account are deleted');
+  assert.equal((await txnsFor(profile))[0].status, 'ignored');
+  assert.equal(await noteOf(profile), RETIRED);
+  return { profile, s };
+}
+
+test('an account marked Not mine and then confirmed again brings its ledger and its transaction back', { skip }, async () => {
+  const { profile, s } = await spendMarkedNotMine();
+  await ingest(profile, h.batch({ instruments: [{ ...s.inst, status: 'confirmed' }], events: [s.e], ledger: [s.l] }));
+  assert.equal(await instrumentStatus(profile, s.inst.instrumentId), 'confirmed');
+  assert.equal(await ledgerCount(profile), 1);
+  const [row] = await txnsFor(profile);
+  assert.equal(row.status, 'active');
+  assert.equal(await noteOf(profile), null, 'the retirement note is cleared');
+  assert.equal(row.amount, s.l.amountMinor / 100);
+});
+
+test('a detection alone cannot undo Not mine: the server keeps the user decision and deletes the re-sent ledger again', { skip }, async () => {
+  const { profile, s } = await spendMarkedNotMine();
+  await ingest(profile, h.batch({ instruments: [{ ...s.inst, status: 'detected' }], events: [s.e], ledger: [s.l] }));
+  assert.equal(await instrumentStatus(profile, s.inst.instrumentId), 'rejected');
+  assert.equal(await ledgerCount(profile), 0);
+  assert.equal((await txnsFor(profile))[0].status, 'ignored');
+});
+
+test('a row retired for any other reason is not brought back by a re-sent ledger', { skip }, async () => {
+  const profile = await newProfile();
+  const s = cardSpend();
+  await ingest(profile, s.body);
+  await pool.query("UPDATE transactions SET status = 'ignored', note = '[ignored by the user]' WHERE profile_id = $1", [profile]);
+  await ingest(profile, h.batch({ events: [s.e], ledger: [{ ...s.l, amountMinor: s.l.amountMinor + 100 }] }));
+  assert.equal((await txnsFor(profile))[0].status, 'ignored');
+  assert.equal(await noteOf(profile), '[ignored by the user]');
+});

@@ -201,4 +201,54 @@ void main() {
 
     expect(store.get(_bankId)!.status, InstrumentStatus.confirmed);
   });
+
+  // The server never lets a detection undo a user decision (it ignores a
+  // `detected` upload for a rejected account and deletes the ledger rows again),
+  // so bringing an account back from "Not mine" must be sent as a decision.
+  List<Map<String, Object?>> queuedInstrumentJson() => [
+    for (final item in OutboxStore(
+      database.db,
+      namespace: _namespace,
+    ).due(DateTime.now()))
+      if (item.kind == 'instrument') item.json,
+  ];
+
+  test('restoring a rejected bank account sends a confirmation, never a '
+      'detection', () {
+    store.upsert(
+      _instrument(
+        _bankId,
+        kind: InstrumentKind.bankAccount,
+        status: InstrumentStatus.rejected,
+      ),
+    );
+
+    expect(actions().restore(_bankId), isNull);
+
+    expect(store.get(_bankId)!.status, InstrumentStatus.confirmed);
+    expect(queuedInstrumentJson().single['status'], 'confirmed');
+  });
+
+  test('restoring a rejected credit card asks for its wallet card like '
+      'Confirm and saves nothing until one is chosen', () {
+    store.upsert(_instrument(_creditId, status: InstrumentStatus.rejected));
+
+    expect(actions().restore(_creditId), isA<CardNeedsProduct>());
+
+    expect(store.get(_creditId)!.status, InstrumentStatus.rejected);
+    expect(queuedInstruments(), 0);
+  });
+
+  test('restoring a rejected credit card with one matching wallet card links '
+      'and confirms it', () {
+    store.upsert(_instrument(_creditId, status: InstrumentStatus.rejected));
+    financial.replaceCards(_namespace, [_walletCard()]);
+
+    expect(actions().restore(_creditId), isA<CardLinked>());
+
+    final saved = store.get(_creditId)!;
+    expect(saved.status, InstrumentStatus.confirmed);
+    expect(saved.userCardId, _walletCardId);
+    expect(queuedInstrumentJson().single['status'], 'confirmed');
+  });
 }

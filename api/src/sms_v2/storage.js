@@ -553,7 +553,16 @@ async function upsertLedger(client, profileId, ledger, results, { categoryOnly =
 
 const TXN_COLS = `t.id, t.event_id, t.source_key, t.pipeline_version, t.amount_inr, t.occurred_at, t.merchant_name, t.category_id, t.user_category_id,
   t.user_card_id, t.entry_kind::text AS entry_kind, t.instrument::text AS instrument, t.rail::text AS rail, t.payment_method, t.status::text AS status,
-  t.state_applied, t.is_backfill`;
+  t.state_applied, t.is_backfill, t.note`;
+
+// The note this projection writes when it retires a row because its event no
+// longer maps to one (an account was marked Not mine and its ledger rows were
+// deleted, or the event became unknown). Only this projection writes it. A row
+// carrying it comes back only when its event maps to a row again (the account
+// was confirmed and the ledger re-sent, or the person turned the event back
+// into a payment); an event that stays unknown or without ledger keeps it
+// retired. A row the person ignored or deleted directly has another note.
+const RETIRED_NOTE = '[sms_v2: event no longer counts]';
 
 const sameRow = (row, spec) => Math.round(Number(row.amount_inr) * 100) === spec.amountMinor
   && new Date(row.occurred_at).getTime() === Date.parse(spec.occurredAt)
@@ -810,7 +819,7 @@ async function projectTransactions(client, profileId, eventIds, { backfill, cate
       const card = await cardFor(row.user_card_id);
       if (card) await deps.reverseTransactionState(client, profileId, card, row);
     }
-    await client.query(`UPDATE transactions SET status = 'ignored', state_applied = false, note = '[sms_v2: event no longer counts]' WHERE id = $1`, [row.id]);
+    await client.query(`UPDATE transactions SET status = 'ignored', state_applied = false, note = $2 WHERE id = $1`, [row.id, RETIRED_NOTE]);
     stats.updated += 1;
   }
 
@@ -877,7 +886,11 @@ async function projectTransactions(client, profileId, eventIds, { backfill, cate
   const changed = [];
   for (const [id, row] of rowOf) {
     const spec = specs.get(id);
-    const restoring = row.status === 'ignored' && events.get(id)?.status === 'user_confirmed';
+    // A row the person confirmed back, or one this projection itself retired
+    // (RETIRED_NOTE) whose event maps to a row again, becomes active. A row the
+    // person ignored or deleted carries another note (or status) and stays.
+    const restoring = row.status === 'ignored'
+      && (events.get(id)?.status === 'user_confirmed' || row.note === RETIRED_NOTE);
     if (!spec || (row.status !== 'active' && !restoring)) continue;
     const merged = {
       ...spec,
@@ -899,14 +912,15 @@ async function projectTransactions(client, profileId, eventIds, { backfill, cate
           SET amount_inr = r.amount_minor::numeric / 100, occurred_at = r.occurred_at, merchant_name = r.merchant_name,
               category_id = r.category_id, user_card_id = r.user_card_id, rail = r.rail::txn_rail, payment_method = r.payment_method,
               instrument = r.instrument::txn_instrument, entry_kind = r.entry_kind::txn_entry_kind,
-              pipeline_version = 2, state_applied = false, status = 'active'
+              pipeline_version = 2, state_applied = false, status = 'active',
+              note = CASE WHEN t.note = $3 THEN NULL ELSE t.note END
          FROM jsonb_to_recordset($2::jsonb) AS r(id uuid, amount_minor bigint, occurred_at timestamptz, merchant_name text,
            category_id uuid, user_card_id uuid, rail text, payment_method text, instrument text, entry_kind text)
         WHERE t.id = r.id AND t.profile_id = $1`,
       [profileId, J(changed.map(({ row, spec }) => ({
         id: row.id, amount_minor: spec.amountMinor, occurred_at: spec.occurredAt, merchant_name: spec.merchantName,
         category_id: spec.categoryId, user_card_id: spec.userCardId, rail: spec.rail, payment_method: spec.paymentMethod || null, instrument: spec.instrument, entry_kind: spec.entryKind,
-      })))],
+      }))), RETIRED_NOTE],
     );
     stats.updated += changed.length;
   }

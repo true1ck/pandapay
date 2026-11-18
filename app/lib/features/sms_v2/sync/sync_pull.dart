@@ -6,6 +6,7 @@ import 'package:pandapay_domain/sms_v2.dart';
 import 'package:pandapay_domain/sms_v2_ledger.dart';
 
 import '../../../data/local/financial_store.dart';
+import '../category/category_snapshot.dart';
 import '../ledger/projection_writer.dart';
 import '../storage/draft_verdict_store.dart';
 import '../storage/event_store.dart';
@@ -63,6 +64,8 @@ class SyncPull {
 
   Future<int> _pull() async {
     var pages = 0;
+    final touched = <String>{};
+    _fullRebuildSeen = false;
     while (pages < 100 && accountIsCurrent()) {
       final cursor = _state.get('pull:cursor');
       final response = await client
@@ -89,11 +92,183 @@ class SyncPull {
       if (more && next == cursor) {
         throw const FormatException('Sync cursor did not advance');
       }
-      _apply(body);
+      touched.addAll(_apply(body));
       pages++;
-      if (!more) return pages;
+      if (!more) {
+        // Only now: events and ledger rows page independently, so a ledger row
+        // can still be on the next page while its event is already here.
+        await _healMissingLedger(touched);
+        return pages;
+      }
     }
     return pages;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Events the server holds without ledger rows
+  //
+  // A phone builds its transactions from the ledger rows the server sends. The
+  // server deletes an event's ledger rows when an account the event touches is
+  // marked "Not mine" (the sync contract has no tombstones), and nothing sends
+  // them back when the account is restored. An event with its facts and its
+  // account but no ledger rows then showed nothing for ever on every phone that
+  // was installed again. Here the rows are derived the way capture derives them
+  // (`LedgerSnapshot.project`, which already returns them and is already run for
+  // the categories), written, and queued so the server learns them again.
+  // ---------------------------------------------------------------------------
+
+  /// Set once every event of the account has been looked at under this rule.
+  static const _healKey = 'ledger:heal:v1';
+  static const _healErrorKey = 'ledger:heal:error';
+
+  /// Events derived in one transaction; bounded so a slice stays small (R1).
+  static const _healSlice = 500;
+
+  /// Set by [_rebuildDisplay] when an account or rule change made it rebuild
+  /// every event (an account marked "Not mine" came back, for example).
+  bool _fullRebuildSeen = false;
+
+  /// Looks for money events with no ledger rows after a finished pull: all of
+  /// them the first time on this build and after a full rebuild, otherwise only
+  /// the events this pull named. Best effort: the pull itself already
+  /// succeeded, so a failure is recorded under [_healErrorKey] and tried again
+  /// by the next pull (the marker is written only after a complete look).
+  Future<void> _healMissingLedger(Set<String> touched) async {
+    try {
+      final all = _state.get(_healKey) == null || _fullRebuildSeen;
+      if (!all && touched.isEmpty) return;
+      final ids = _eventsWithoutLedger(only: all ? null : touched);
+      for (var start = 0; start < ids.length; start += _healSlice) {
+        if (!accountIsCurrent()) return;
+        _deriveLedger(ids.skip(start).take(_healSlice).toList());
+        if (start + _healSlice < ids.length) {
+          await Future<void>.delayed(Duration.zero); // perf-ok: one slice (<= 500 events) per turn
+        }
+      }
+      if (all) _state.put(_healKey, '1');
+      if (_state.get(_healErrorKey) != null) {
+        _db.execute('DELETE FROM v2_sync_state WHERE namespace=? AND key=?', [
+          namespace,
+          _healErrorKey,
+        ]);
+      }
+    } catch (error) {
+      _state.put(_healErrorKey, '${error.runtimeType}');
+    }
+  }
+
+  /// Events of the account (or of [only]) that have no ledger row. Ambiguous and
+  /// unknown events never have one. One indexed look-up per event
+  /// (`idx_v2_ledger_event`), chunked for [only].
+  List<String> _eventsWithoutLedger({Set<String>? only}) {
+    const noLedger =
+        'NOT EXISTS (SELECT 1 FROM v2_ledger l WHERE l.namespace=e.namespace AND l.event_id=e.event_id) '
+        "AND e.status<>'ambiguous' AND e.type<>'unknown'";
+    if (only == null) {
+      return [
+        for (final row in _db.select(
+          'SELECT e.event_id FROM v2_events e WHERE e.namespace=? AND $noLedger ORDER BY e.event_id',
+          [namespace],
+        ))
+          row['event_id'] as String,
+      ];
+    }
+    final wanted = only.toList();
+    final out = <String>[];
+    for (var start = 0; start < wanted.length; start += 400) {
+      final chunk = wanted.skip(start).take(400).toList();
+      for (final row in _db.select(
+        'SELECT e.event_id FROM v2_events e WHERE e.namespace=? AND e.event_id IN (${List.filled(chunk.length, '?').join(',')}) AND $noLedger',
+        [namespace, ...chunk],
+      )) {
+        out.add(row['event_id'] as String);
+      }
+    }
+    return out;
+  }
+
+  /// Derives and writes the ledger rows of [ids] (one slice), then queues them
+  /// for upload. An event the projector gives no rows (not a money event, an
+  /// account marked "Not mine", a leg whose fact is not here) is left alone.
+  void _deriveLedger(List<String> ids) {
+    final events = <Event>[];
+    for (final id in ids) {
+      // Bounded by the slice.
+      final event = _events.get(id);
+      if (event != null) events.add(event);
+    }
+    final facts = <String, Fact>{};
+    for (final event in events) {
+      for (final leg in event.legs) {
+        if (facts.containsKey(leg.factId)) continue;
+        // Bounded by the legs of the slice.
+        final fact = _facts.get(leg.factId);
+        if (fact != null) facts[leg.factId] = fact;
+      }
+    }
+    final ready = [
+      for (final event in events)
+        if (transactionKindForEvent(event) != null &&
+            event.legs.every((leg) => facts.containsKey(leg.factId)))
+          event,
+    ];
+    if (ready.isEmpty) return;
+    final instruments = {
+      for (final instrument in _instruments.list())
+        instrument.instrumentId: instrument,
+    };
+    final instrumentIds = _instrumentIdsFor(facts.keys);
+    final categories = CategorySnapshot.load(
+      financial.database,
+      namespace: namespace,
+      aliases: bundle.merchantAliases,
+    );
+    final snapshot = LedgerSnapshot.project(
+      events: ready,
+      factsById: facts,
+      instrumentsById: instruments,
+      bundle: bundle,
+      userRules: categories.userRules,
+      confirmedHistory: categories.confirmedHistory,
+      instrumentIdByFactId: instrumentIds,
+    );
+    final withRows = {for (final entry in snapshot.entries) entry.eventId};
+    if (withRows.isEmpty) return;
+    financial.batch(() {
+      _db.execute('SAVEPOINT sms_v2_ledger_heal');
+      try {
+        ProjectionWriter(financial, _ledger).write(
+          LedgerSnapshot(
+            events: [
+              for (final event in ready)
+                if (withRows.contains(event.eventId)) event,
+            ],
+            entries: snapshot.entries,
+            categoryByEvent: snapshot.categoryByEvent,
+          ),
+          factsById: facts,
+          instrumentsById: instruments,
+          instrumentIdByFactId: instrumentIds,
+          categoryIdBySlug: categoryIdBySlug,
+        );
+        // The rows stay dirty until the server accepts them (`FactsUpload`
+        // cleans a row it delivered), so a later pull cannot replace them with
+        // an older copy meanwhile.
+        final queue = OutboxStore(_db, namespace: namespace);
+        for (final entry in snapshot.entries) {
+          queue.enqueue('ledger', entry.entryId, entry.toJson());
+        }
+        _db.execute('RELEASE SAVEPOINT sms_v2_ledger_heal');
+      } catch (_) {
+        _db.execute('ROLLBACK TO SAVEPOINT sms_v2_ledger_heal');
+        _db.execute('RELEASE SAVEPOINT sms_v2_ledger_heal');
+        rethrow;
+      }
+    });
+    financial.notifyExternalChanges(namespace, const [
+      'transactions',
+      'observations',
+    ]);
   }
 
   bool _dirty(String table, String column, String id) => _db.select(
@@ -101,7 +276,8 @@ class SyncPull {
     [namespace, id],
   ).isNotEmpty;
 
-  void _apply(Map<String, Object?> body) {
+  /// Applies one page. Returns the events the page named.
+  Set<String> _apply(Map<String, Object?> body) {
     final clocks = (body['updatedAt'] as Map?) ?? const {};
     DateTime? remoteClock(String kind, String id) {
       final value = (clocks[kind] as Map?)?[id];
@@ -270,6 +446,7 @@ class SyncPull {
         rethrow;
       }
     });
+    return touchedEvents;
   }
 
   void _adopt(Instrument local, String serverId) =>
@@ -395,6 +572,7 @@ class SyncPull {
     };
     final context = _projectionContext(instruments.values);
     final full = _state.get(_contextKey) != context;
+    if (full) _fullRebuildSeen = true;
     final dirtyEvents = _dirtyEventIds();
     // null means the whole account.
     final Set<String>? scope;

@@ -78,10 +78,20 @@ class InstrumentActions {
   void reject(String id) =>
       _write(_owned(id).copyWith(status: InstrumentStatus.rejected));
 
-  /// Undoes [reject]: the account goes back to the list, waiting to be
-  /// confirmed again, and its movements show in the ledger again.
-  void restore(String id) =>
-      _write(_owned(id).copyWith(status: InstrumentStatus.detected));
+  /// Undoes [reject]: the account is the user's again and its movements show in
+  /// the ledger again.
+  ///
+  /// It is saved and sent as a decision ([confirm]), not as a detection. The
+  /// server never lets a detection undo a decision (`mergeInstrument` keeps a
+  /// rejected account rejected when `detected` arrives), so a restore sent as
+  /// `detected` was ignored there: the account stayed rejected on the server,
+  /// the ledger rows the phone sent again were deleted again, and the next
+  /// phone installed hid the account's transactions for good.
+  ///
+  /// A credit card is restored through the wallet exactly as it is confirmed;
+  /// [CardNeedsProduct] means the caller must open the card picker and finish
+  /// with [attachCard]. Until then nothing is saved.
+  CardLinkResult? restore(String id) => confirm(id);
 
   /// The existing add-card flow returned this server-created wallet identity.
   void attachCard(String id, UserCard card) {
