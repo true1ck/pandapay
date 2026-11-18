@@ -1,3 +1,4 @@
+import '../../data/reward_counting.dart';
 import '../../data/user_cards_repository.dart';
 
 /// What the transaction screen says about the reward a spend earned.
@@ -54,7 +55,7 @@ TransactionRewardLabel? transactionRewardLabel(
         note: 'This payment method does not earn a card reward.',
       );
   }
-  final methodNote = _noRewardPaymentMethodNote[entry.paymentMethod];
+  final methodNote = noRewardPaymentMethodNotes[entry.paymentMethod];
   if (methodNote != null) {
     return TransactionRewardLabel('None', note: methodNote);
   }
@@ -108,30 +109,11 @@ TransactionRewardLabel? transactionRewardLabel(
   );
 }
 
-/// Payment methods a credit-card spend can be marked with that do not earn the
-/// card's reward (the amount was met with a gift card or reward points, or it is
-/// an EMI or a pay-later purchase). The server's reward engine does not read the
-/// payment method yet, so a figure may still be stored for these rows: the app
-/// does not show it. Keys are the stored payment_method values.
-const Map<String, String> _noRewardPaymentMethodNote = {
-  'gift_card': 'Paid with a gift card, so no card reward applies.',
-  'reward_points': 'Paid with reward points, so no card reward applies.',
-  'emi': 'Paid as an EMI, so this spend is not counted for card rewards.',
-  'pay_later': 'Paid with pay later, so no card reward applies.',
-};
-
 /// The short chip on an activity row: "Reward ≈ ₹12" for a credit-card spend the
 /// server has priced above zero, otherwise null (an unpriced, excluded or
 /// non-card spend adds no clutter to the list).
 String? activityRewardChip(TransactionEntry entry) {
-  if (entry.entryKind != TxnEntryKind.spend ||
-      entry.status != 'active' ||
-      entry.instrument != TxnInstrument.creditCard ||
-      entry.userCardId == null ||
-      _noRewardPaymentMethodNote.containsKey(entry.paymentMethod)) {
-    return null;
-  }
-  final reward = entry.rewardValue;
-  if (reward == null || reward.paise <= 0) return null;
+  final reward = countedRewardValue(entry);
+  if (reward == null) return null;
   return 'Reward ≈ ${reward.format(hidePaise: reward.paise % 100 == 0)}';
 }

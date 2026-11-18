@@ -119,4 +119,67 @@ void main() {
     expect(negative.actualValue, const Money.zero());
     expect(negative.missedValue, const Money.zero());
   });
+
+  test('BaseRateTable prices every spend exactly like baseRateValueFor', () {
+    final points = CardProduct(
+      id: 'points',
+      name: 'Points Card',
+      network: CardNetwork.visa,
+      pointValueInr: 0.25,
+      rewardRules: const [
+        RewardRule(id: 'p1', categoryId: 'travel', unit: RewardUnit.pointsPer150, rate: 10),
+        RewardRule(id: 'p2', categoryId: 'fuel', unit: RewardUnit.flatPoints, rate: 500),
+        RewardRule(id: 'p3', unit: RewardUnit.pointsPer100, rate: 2, priority: 200),
+      ],
+    );
+    // A catalogue mistake: more than 100% back, and a negative rate.
+    final broken = CardProduct(
+      id: 'broken',
+      name: 'Broken Card',
+      network: CardNetwork.visa,
+      pointValueInr: 1,
+      rewardRules: const [
+        RewardRule(id: 'b1', categoryId: 'dining', unit: RewardUnit.cashbackPercent, rate: 250),
+        RewardRule(id: 'b2', unit: RewardUnit.cashbackPercent, rate: -3, priority: 200),
+      ],
+    );
+    final empty = CardProduct(id: 'none', name: 'No Rules', network: CardNetwork.visa);
+    final table = BaseRateTable();
+    for (final product in [diningCard, flatCard, points, broken, empty]) {
+      for (final category in [null, 'dining', 'travel', 'fuel', 'other']) {
+        for (final paise in [0, -500, 1, 99, 12345, 100000, 7654321]) {
+          final amount = Money.fromPaise(paise);
+          expect(
+            table.valueFor(product: product, amount: amount, categoryId: category),
+            baseRateValueFor(product: product, amount: amount, categoryId: category),
+            reason: '${product.id} / $category / $paise',
+          );
+        }
+      }
+    }
+  });
+
+  test('compareToOwnedCards gives the same answer with or without a rate table', () {
+    final table = BaseRateTable();
+    for (final used in [diningCard, flatCard]) {
+      for (final category in [null, 'dining', 'travel']) {
+        final plain = compareToOwnedCards(
+          usedCard: used,
+          ownedCards: [diningCard, flatCard],
+          amount: Money.fromRupees(1234.5),
+          categoryId: category,
+        );
+        final cached = compareToOwnedCards(
+          usedCard: used,
+          ownedCards: [diningCard, flatCard],
+          amount: Money.fromRupees(1234.5),
+          categoryId: category,
+          rates: table,
+        );
+        expect(cached.actualValue, plain.actualValue);
+        expect(cached.betterCard?.id, plain.betterCard?.id);
+        expect(cached.missedValue, plain.missedValue);
+      }
+    }
+  });
 }

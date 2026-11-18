@@ -40,7 +40,7 @@ class CapAlert {
 /// NotificationGate to fire it. Deliberately reuses each screen's existing
 /// provider rather than re-deriving the same numbers a second time —
 /// FeeWaiversScreen/BillingFloatScreen/PointsExpiryScreen/BillsAndCommitmentsTab/
-/// MonthlySavingsScreen/NeedsReviewScreen all already compute exactly the
+/// the Rewards page/NeedsReviewScreen all already compute exactly the
 /// state these checks need.
 ///
 /// No push/cron infrastructure exists for this app (see

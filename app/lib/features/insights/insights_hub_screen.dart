@@ -14,6 +14,7 @@ import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
 import '../../main.dart' show MoneyText;
 import 'insights_overview.dart';
+import 'rewards/rewards_filter.dart' show rewardsLocation;
 import 'subscription_view.dart' show subscriptionTileHeadline;
 import '../shared_expenses/runtime/shared_providers.dart';
 import '../cards/card_visual.dart';
@@ -239,7 +240,7 @@ class InsightsHubScreen extends ConsumerWidget {
         icon: Icons.workspace_premium_outlined,
         label: 'Rewards',
         headline: 'What your cards earned',
-        onTap: () => context.push(AppRoute.rewardsGroup),
+        onTap: () => context.push(_rewardsLocationFor(context)),
       ),
       _InsightTile(
         icon: Icons.event_available_outlined,
@@ -1086,7 +1087,7 @@ class _MissedPreview extends StatelessWidget {
   const _MissedPreview({required this.rows, required this.totalMissed});
 
   void _openRewardsMissed(BuildContext context) {
-    GoRouter.of(context).push('${AppRoute.rewardsGroup}?tab=missed');
+    GoRouter.of(context).push(_rewardsLocationFor(context, tab: 'missed'));
   }
 
   @override
@@ -1408,4 +1409,16 @@ class _InsightTile extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The Rewards page on the period the hub is showing, so the hub's Rewards
+/// figure and the page it opens are the same number.
+String _rewardsLocationFor(BuildContext context, {String? tab}) {
+  final container = ProviderScope.containerOf(context, listen: false);
+  return rewardsLocation(
+    tab: tab,
+    period: container.read(insightsPeriodProvider),
+    customRange: container.read(insightsCustomRangeProvider),
+    now: container.read(clockProvider).now(),
+  );
 }

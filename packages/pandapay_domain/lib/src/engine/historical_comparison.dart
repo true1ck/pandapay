@@ -71,21 +71,55 @@ Money baseRateValueFor({
   String? categoryId,
 }) {
   if (amount.isZero || amount.isNegative) return const Money.zero();
+  return amount * baseRatePerRupee(product: product, categoryId: categoryId);
+}
+
+/// The share of a purchase [product]'s base rule returns for [categoryId],
+/// clamped to 0..1: [baseRateValueFor] is `amount * baseRatePerRupee(...)`.
+///
+/// A base-rate reward is a portion of the purchase value, not a debt or a
+/// bonus unrelated to the purchase. Catalogue mistakes (for example a
+/// malformed points value/rate) must not produce an impossible reward that is
+/// below zero or larger than the spend itself, hence the clamp.
+///
+/// Split out so a caller pricing many spends ([BaseRateTable]) can pick each
+/// card's rule once per category instead of once per spend: picking the rule
+/// builds an identity key per catalogue rule, which is the expensive part.
+double baseRatePerRupee({required CardProduct product, String? categoryId}) {
   final matching = uniqueRewardRules(product.rewardRules)
     .where((r) => r.categoryId == null || r.categoryId == categoryId)
     .toList()
     ..sort((a, b) => a.priority.compareTo(b.priority));
-  if (matching.isEmpty) return const Money.zero();
+  if (matching.isEmpty) return 0;
   final rule = matching.first;
-  if (rule.unit == RewardUnit.flatPoints) return const Money.zero();
+  if (rule.unit == RewardUnit.flatPoints) return 0;
   final rate = rule.unit.effectiveRatePerRupee(rule.rate, pointValueInr: product.pointValueInr);
-  final value = amount * rate;
-  // A base-rate reward is a portion of the purchase value, not a debt or a
-  // bonus unrelated to the purchase. Catalogue mistakes (for example a
-  // malformed points value/rate) must not produce an impossible reward that
-  // is larger than the spend itself.
-  if (value.isNegative) return const Money.zero();
-  return value > amount ? amount : value;
+  if (rate < 0) return 0;
+  if (rate > 1) return 1;
+  return rate;
+}
+
+/// Memoised [baseRateValueFor] for pricing many spends against the same
+/// cards (a report over months of history). Gives exactly the same figures:
+/// the rate per rupee depends only on the card and the category, so it is
+/// worked out once per pair and multiplied by each amount the same way
+/// [baseRateValueFor] does. Keyed by the product object, not its id, so two
+/// different products that happen to share an id never share a rate.
+class BaseRateTable {
+  final Map<CardProduct, Map<String?, double>> _rates = Map.identity();
+
+  double rateFor(CardProduct product, String? categoryId) => _rates
+      .putIfAbsent(product, () => <String?, double>{})
+      .putIfAbsent(categoryId, () => baseRatePerRupee(product: product, categoryId: categoryId));
+
+  Money valueFor({
+    required CardProduct product,
+    required Money amount,
+    String? categoryId,
+  }) {
+    if (amount.isZero || amount.isNegative) return const Money.zero();
+    return amount * rateFor(product, categoryId);
+  }
 }
 
 /// [ownedCards] must include [usedCard] itself (its own base rate is one of
@@ -97,8 +131,11 @@ HistoricalCardComparison compareToOwnedCards({
   required List<CardProduct> ownedCards,
   required Money amount,
   String? categoryId,
+  BaseRateTable? rates,
 }) {
-  Money valueFor(CardProduct product) => baseRateValueFor(product: product, amount: amount, categoryId: categoryId);
+  Money valueFor(CardProduct product) => rates == null
+      ? baseRateValueFor(product: product, amount: amount, categoryId: categoryId)
+      : rates.valueFor(product: product, amount: amount, categoryId: categoryId);
 
   final actualValue = valueFor(usedCard);
 

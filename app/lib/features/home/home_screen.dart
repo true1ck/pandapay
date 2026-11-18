@@ -906,7 +906,7 @@ class _BrandHeader extends ConsumerWidget {
               ),
               if (summary != null)
                 GestureDetector(
-                  onTap: () => context.push(AppRoute.monthlySavings),
+                  onTap: () => context.push(AppRoute.rewardsGroup),
                   behavior: HitTestBehavior.opaque,
                   child: FittedBox(
                     fit: BoxFit.scaleDown,

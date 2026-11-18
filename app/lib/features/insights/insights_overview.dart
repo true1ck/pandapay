@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/providers.dart';
+import '../../data/reward_counting.dart';
 import '../../data/user_cards_repository.dart';
 
 /// The period chips across the top of design 04 Insights.
@@ -289,17 +290,22 @@ insightsOverviewProvider = FutureProvider.family<InsightsOverview, InsightsPerio
   final byCategory = <String, Money>{};
   final byCard = <String, Money>{};
   final missedRows = <MissedEarning>[];
+  // Picks each card's rule once per category instead of once per spend; same
+  // figures, about 17x cheaper over a year of history (see BaseRateTable).
+  final rates = BaseRateTable();
 
   for (final txn in active) {
     // Spend the person chose not to count stays out of the spend total, but its
     // rewards below were earned all the same.
     if (ledgerReport == null && txn.countsAsSpend) spend += txn.amount;
 
-    // Null reward means "not known", not "earned nothing" — such a row is
-    // left out of the earned total and its category bar entirely rather
-    // than dragging both down towards zero.
-    final reward = txn.rewardValue;
-    if (reward != null && !reward.isNegative) {
+    // Null means the app counts no reward for this row (not a card spend,
+    // not worked out yet, zero, or a payment method that earns nothing): it is
+    // left out of the earned total and its category bar entirely rather than
+    // dragging both down towards zero. Same rule as Activity and Rewards
+    // (countedRewardValue), so the three never disagree about a period.
+    final reward = countedRewardValue(txn);
+    if (reward != null) {
       earned += reward;
       final categoryLabel = txn.categoryLabel;
       byCategory[categoryLabel] =
@@ -316,6 +322,9 @@ insightsOverviewProvider = FutureProvider.family<InsightsOverview, InsightsPerio
     if (allProducts.length < 2) {
       continue;
     }
+    // Only a credit-card purchase could have gone on another card for a
+    // better reward; the Rewards page's Missed tab uses the same scope.
+    if (!isCardRewardSpend(txn)) continue;
     if (txn.userCardId == null) {
       continue;
     }
@@ -329,6 +338,7 @@ insightsOverviewProvider = FutureProvider.family<InsightsOverview, InsightsPerio
       ownedCards: allProducts,
       amount: txn.amount,
       categoryId: txn.categoryId,
+      rates: rates,
     );
     if (!comparison.hadBetterOption) continue;
     missed += comparison.missedValue;

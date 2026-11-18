@@ -457,12 +457,22 @@ class SpendPeriodSelector extends ConsumerWidget {
   final bool showFilters;
   final ValueChanged<SpendReportQuery>? onChanged;
 
+  /// How many filters are on, shown as "Filters · 2". Null keeps the plain
+  /// "Filters ·" marker Spending uses.
+  final int? filterCount;
+
+  /// The line under the date sheet's Apply button. Defaults to Spending's.
+  final String rangeNote;
+
   const SpendPeriodSelector({
+    super.key,
     required this.selected,
     required this.filtersActive,
     this.onFilters,
     this.showFilters = true,
     this.onChanged,
+    this.filterCount,
+    this.rangeNote = 'For ranges over one month, spending is grouped by month.',
   });
 
   @override
@@ -513,7 +523,13 @@ class SpendPeriodSelector extends ConsumerWidget {
                 OutlinedButton.icon(
                   onPressed: onFilters,
                   icon: const Icon(Icons.tune_rounded, size: 18),
-                  label: Text(filtersActive ? 'Filters ·' : 'Filters'),
+                  label: Text(
+                    !filtersActive
+                        ? 'Filters'
+                        : filterCount == null
+                        ? 'Filters ·'
+                        : 'Filters · $filterCount',
+                  ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: filtersActive
                         ? BambooInk.jade
@@ -586,7 +602,11 @@ class SpendPeriodSelector extends ConsumerWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      builder: (_) => _SpendDateRangeSheet(selected: selected, now: now),
+      builder: (_) => _SpendDateRangeSheet(
+        selected: selected,
+        now: now,
+        note: rangeNote,
+      ),
     );
     if (choice == null || !context.mounted) return;
     if (onChanged != null) {
@@ -620,8 +640,13 @@ class _SpendRangeOption {
 class _SpendDateRangeSheet extends StatefulWidget {
   final SpendReportQuery selected;
   final DateTime now;
+  final String note;
 
-  const _SpendDateRangeSheet({required this.selected, required this.now});
+  const _SpendDateRangeSheet({
+    required this.selected,
+    required this.now,
+    required this.note,
+  });
 
   @override
   State<_SpendDateRangeSheet> createState() => _SpendDateRangeSheetState();
@@ -1031,7 +1056,7 @@ class _SpendDateRangeSheetState extends State<_SpendDateRangeSheet> {
                 const SizedBox(width: AppSpace.xs),
                 Expanded(
                   child: Text(
-                    'For ranges over one month, spending is grouped by month.',
+                    widget.note,
                     style: BambooFonts.ui(11.5, color: BambooInk.ink500),
                   ),
                 ),

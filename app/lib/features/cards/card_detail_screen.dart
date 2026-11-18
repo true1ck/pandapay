@@ -26,6 +26,7 @@ import 'card_summary.dart';
 import '../insights/payments_due_screen.dart'
     show DuePayment, paymentsDueProvider;
 import '../insights/lounge_access_screen.dart' show isInCurrentLoungeWindow;
+import '../../data/reward_counting.dart';
 import '../../data/api_exception.dart';
 import '../../data/spend_reports_repository.dart';
 import '../../data/user_cards_repository.dart';
@@ -1173,9 +1174,7 @@ class _CardPointsSummaryTile extends ConsumerWidget {
     final isCashbackCard =
         product.baseRewardUnit == RewardUnit.cashbackPercent ||
         product.baseRewardUnit == RewardUnit.discountPercent;
-    final valueEstimate = isCashbackCard
-        ? Money.fromRupees(points)
-        : Money.fromRupees(points * product.pointValueInr);
+    final valueEstimate = lifetimeRewardValue(userCard, product);
     final ledger =
         ref.watch(pointsLedgerProvider(userCard.id)).valueOrNull ??
         const <PointsLedgerEntry>[];

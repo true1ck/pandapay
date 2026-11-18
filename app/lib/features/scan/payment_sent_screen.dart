@@ -19,7 +19,7 @@ import '../../main.dart' show MoneyText;
 /// link (see ScanResultScreen._payWith) gives no success callback on
 /// return, only proof that some UPI app WAS opened. Claiming a guaranteed
 /// success here would be exactly the kind of number/state this codebase
-/// elsewhere refuses to fabricate (see MonthlySavingsScreen, Home's
+/// elsewhere refuses to fabricate (see the Rewards page, Home's
 /// doc-comment). So this screen shows the reward *that will be earned if
 /// the payment completes*, and only logs the real transaction (making the
 /// reward and cap/milestone tracking real) once the user confirms they

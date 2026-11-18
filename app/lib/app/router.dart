@@ -63,15 +63,13 @@ import '../features/insights/fee_waivers_screen.dart';
 import '../features/insights/insights_hub_screen.dart';
 import '../features/insights/lounge_access_screen.dart';
 import '../features/insights/milestones_screen.dart';
-import '../features/insights/missed_opportunities_screen.dart';
-import '../features/insights/monthly_savings_screen.dart';
 import '../features/insights/my_contributions_screen.dart';
-import '../features/insights/portfolio_audit_screen.dart';
 import '../features/insights/budgets_screen.dart';
-import '../features/insights/grouped_insight_screen.dart';
 import '../features/insights/limits_and_perks_screen.dart';
 import '../features/insights/spend_trends_screen.dart';
 import '../features/insights/payments_insight_screen.dart';
+import '../features/insights/rewards/rewards_filter.dart';
+import '../features/insights/rewards/rewards_screen.dart';
 import '../features/onboarding/add_first_card_screen.dart';
 import '../features/onboarding/card_details_setup_screen.dart';
 import '../features/onboarding/permissions_screen.dart';
@@ -845,19 +843,15 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           body: const DueDateCalendarScreen(),
         ),
       ),
+      // The savings report and portfolio audit are now the Rewards page's
+      // Summary and Cards tabs; old links (notifications, Home) land there.
       GoRoute(
         path: AppRoute.monthlySavings,
-        builder: (context, state) => Scaffold(
-          appBar: AppBar(title: const Text('Monthly Savings Report')),
-          body: const MonthlySavingsScreen(),
-        ),
+        redirect: (context, state) => _rewardsTabLocation(state, 'summary'),
       ),
       GoRoute(
         path: AppRoute.portfolioAudit,
-        builder: (context, state) => Scaffold(
-          appBar: AppBar(title: const Text('Portfolio Audit')),
-          body: const PortfolioAuditScreen(),
-        ),
+        redirect: (context, state) => _rewardsTabLocation(state, 'cards'),
       ),
       // These two carry their own Scaffold+AppBar (unlike the tile screens
       // above, which are wrapped here) because both need a floating action
@@ -938,19 +932,17 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoute.limitsAndPerks,
         builder: (context, state) => const LimitsAndPerksScreen(),
       ),
+      // Rewards (Bug 16 redesign): one date/card/category scope over Summary,
+      // Transactions, Missed and Cards. `tab=` picks the tab; `period=` or
+      // `from`/`to` set the dates (the Insights hub passes its own period).
       GoRoute(
         path: AppRoute.rewardsGroup,
-        builder: (context, state) => GroupedInsightScreen(
-          title: 'Rewards',
-          initialIndex: state.uri.queryParameters['tab'] == 'missed' ? 1 : 0,
-          tabs: [
-            (label: 'This month', body: MonthlySavingsScreen()),
-            (
-              label: 'Missed',
-              body: MissedOpportunitiesScreen(showChrome: false),
-            ),
-            (label: 'By card', body: PortfolioAuditScreen()),
-          ],
+        builder: (context, state) => RewardsScreen(
+          key: ValueKey(state.uri.toString()),
+          initialTab: RewardsTab.fromParam(state.uri.queryParameters['tab']),
+          initialQuery: RewardsFilter.queryFromParams(
+            state.uri.queryParameters,
+          ),
         ),
       ),
       GoRoute(
@@ -1005,11 +997,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           body: const MyContributionsScreen(),
         ),
       ),
-      // D6 — already builds its own Scaffold+AppBar, same shape as
-      // importHub/toolsHub below.
+      // D6 Missed opportunities is the Rewards page's Missed tab now.
       GoRoute(
         path: AppRoute.missedOpportunities,
-        builder: (context, state) => const MissedOpportunitiesScreen(),
+        redirect: (context, state) => _rewardsTabLocation(state, 'missed'),
       ),
       // C5 Benefits Cheat Sheet already builds its own Scaffold+AppBar, same
       // shape as importHub/toolsHub below.
@@ -1743,3 +1734,10 @@ class _FloatingNavBar extends StatelessWidget {
     );
   }
 }
+
+/// The Rewards page on [tab], keeping any `period` / `from` / `to` the old
+/// link carried.
+String _rewardsTabLocation(GoRouterState state, String tab) => Uri(
+  path: AppRoute.rewardsGroup,
+  queryParameters: {...state.uri.queryParameters, 'tab': tab},
+).toString();
