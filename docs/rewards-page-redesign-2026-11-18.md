@@ -44,19 +44,21 @@ Filters live for the visit (not saved), like Spending's.
 
 ### Tabs
 
-**Summary**
-- Hero (shareable image): period, "Rewards earned ≈ ₹X", "on ₹Y paid by card ·
-  Z% back · N spends". With two or more cards, one more line: "≈ ₹A more than
-  using only your best single card" (both sides at base rate, so it is a like
-  for like comparison). Share icon in the hero corner.
-- One note when some spends are not counted: "N spends have no reward yet"
-  (not worked out yet / card not in your wallet). Tap opens Transactions on
-  "Not counted".
-- Missed line when there is a missed value: "≈ ₹M more was possible on K
-  spends", tap opens Missed.
-- Breakdown panel: By card / By category toggle, donut and rows; a row tap
-  applies that card or category as the filter.
-- Month by month bars when the range covers two or more months.
+**Summary** (fits one phone screen, display only)
+- Hero (shareable image), compact: "Rewards earned" and the period on one line,
+  the amount, then "on ₹Y by card · Z% back · N spends". With two or more
+  cards, one more line: "More than only <best card> +₹A" (both sides at base
+  rate). Share icon in the hero corner.
+- Two half-width tiles when they apply: "Not counted yet · N spends" (opens
+  Transactions on Not counted) and "Missed on K spends · ≈ ₹M" (opens Missed).
+- "Where it came from": a small donut beside the top four categories (share %
+  and amount), "Show all" when there are more.
+- "Month by month" bars when the range covers two or more months, with the best
+  month's amount.
+- Charts do not respond to taps. The first build narrowed the page when a month
+  bar or category was tapped; on the phone that made the chart vanish and the
+  date at the top change, which read as broken (owner, 18 Nov). Filters live
+  only in the bar above the tabs.
 
 **Transactions**: status chips with counts (All, Earned, No reward, Not
 counted), sort (Newest, Highest reward, Largest amount), rows with merchant,
@@ -147,6 +149,9 @@ Decisions made while building:
   the card earned in the selected range, because a running total that lags the
   per-spend figures would otherwise read as less than one month.
 - Status chips with no spends are hidden (except the one selected).
+- After the owner tried build 189: Summary made compact and display only (see
+  section 2); tests check it fits a 390×844 and a 430×932 screen with the
+  month chart.
 
 Not verified: on a phone, `scripts/perf_smoke_android.sh`, dark mode (the app
 draws Insights in light), large text.

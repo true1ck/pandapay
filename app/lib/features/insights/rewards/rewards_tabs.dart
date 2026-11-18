@@ -14,7 +14,6 @@ import '../../../app/design/app_theme.dart';
 import '../../../app/design/widgets.dart';
 import '../../../data/api_exception.dart';
 import '../../../data/reward_counting.dart';
-import '../../../data/spend_reports_repository.dart';
 import '../../../data/user_cards_repository.dart';
 import '../../../main.dart' show MoneyText;
 import '../../cards/card_summary.dart';
@@ -81,6 +80,11 @@ Widget _emptyScope({
 // Summary
 // ---------------------------------------------------------------------------
 
+/// Summary: everything on one phone screen, display only. Nothing here
+/// changes the page's filters: an earlier version narrowed the page when a
+/// month bar or category was tapped, which made the chart disappear and the
+/// date at the top change, and read as broken. Dates, cards and categories
+/// are set with the bar above the tabs only.
 class RewardsSummaryTab extends StatefulWidget {
   final RewardsReport report;
   final RewardsFilter filter;
@@ -141,13 +145,56 @@ class _RewardsSummaryTabState extends State<RewardsSummaryTab> {
       ...widget.filter.categories,
     ].join(' · ');
 
+    final tiles = <Widget>[
+      if (report.notCountedCount > 0)
+        _StatTile(
+          key: const Key('rewards-not-counted'),
+          icon: Icons.hourglass_top_rounded,
+          accent: BambooInk.amber,
+          label: 'Not counted yet',
+          semanticLabel:
+              '${_plural(report.notCountedCount, 'spend')} not counted yet',
+          value: Text(
+            _plural(report.notCountedCount, 'spend'),
+            style: BambooFonts.ui(
+              14.5,
+              weight: FontWeight.w700,
+              color: BambooInk.ink900,
+            ),
+          ),
+          onTap: () => widget.onOpenTab(
+            RewardsTab.transactions,
+            status: RewardRowStatus.notCounted,
+          ),
+        ),
+      if (report.missedCount > 0)
+        _StatTile(
+          key: const Key('rewards-missed-line'),
+          icon: Icons.trending_down_rounded,
+          accent: BambooInk.clay,
+          label: 'Missed on ${_plural(report.missedCount, 'spend')}',
+          semanticLabel:
+              'Missed on ${_plural(report.missedCount, 'spend')}, '
+              '${report.missed.format(hidePaise: true)}',
+          value: MoneyText(
+            report.missed,
+            confidence: Confidence.estimated,
+            showConfidenceIcon: false,
+            hidePaise: true,
+            prefix: '≈ ',
+            style: BambooFonts.money(14.5, color: BambooInk.clay),
+          ),
+          onTap: () => widget.onOpenTab(RewardsTab.missed),
+        ),
+    ];
+
     return ListView(
       key: const PageStorageKey('rewards-summary'),
       padding: const EdgeInsets.fromLTRB(
         AppSpace.lg,
+        AppSpace.md,
         AppSpace.lg,
-        AppSpace.lg,
-        AppSpace.xxl,
+        AppSpace.xl,
       ),
       children: [
         const AsOfLastSyncCaption(),
@@ -163,101 +210,49 @@ class _RewardsSummaryTabState extends State<RewardsSummaryTab> {
             ),
             // Outside the boundary, so the shared image has no button on it.
             Positioned(
-              right: AppSpace.xs,
-              bottom: AppSpace.xs,
+              right: 0,
+              bottom: 0,
               child: IconButton(
                 key: const Key('rewards-share'),
                 tooltip: 'Share',
                 onPressed: _share,
                 icon: const Icon(
                   Icons.ios_share_rounded,
-                  size: 20,
+                  size: 18,
                   color: BambooInk.onSlateMuted,
                 ),
               ),
             ),
           ],
         ),
-        if (report.notCountedCount > 0) ...[
-          const SizedBox(height: AppSpace.md),
-          _ActionRow(
-            key: const Key('rewards-not-counted'),
-            icon: Icons.hourglass_top_rounded,
-            accent: BambooInk.amber,
-            title:
-                '${_plural(report.notCountedCount, 'spend')} not counted yet',
-            subtitle: [
-              if (report.notWorkedOutCount > 0)
-                '${report.notWorkedOutCount} not worked out yet',
-              if (report.notInWalletCount > 0)
-                '${report.notInWalletCount} on a card not in your wallet',
-            ].join(' · '),
-            onTap: () => widget.onOpenTab(
-              RewardsTab.transactions,
-              status: RewardRowStatus.notCounted,
-            ),
-          ),
-        ],
-        if (report.missedCount > 0) ...[
+        if (tiles.isNotEmpty) ...[
           const SizedBox(height: AppSpace.sm),
-          _ActionRow(
-            key: const Key('rewards-missed-line'),
-            icon: Icons.trending_down_rounded,
-            accent: BambooInk.clay,
-            title: 'Missed on ${_plural(report.missedCount, 'spend')}',
-            subtitle: 'Another of your cards would have earned more',
-            value: MoneyText(
-              report.missed,
-              confidence: Confidence.estimated,
-              showConfidenceIcon: false,
-              hidePaise: true,
-              prefix: '≈ ',
-              style: BambooFonts.money(14, color: BambooInk.clay),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < tiles.length; i++) ...[
+                  if (i > 0) const SizedBox(width: AppSpace.sm),
+                  Expanded(child: tiles[i]),
+                ],
+              ],
             ),
-            onTap: () => widget.onOpenTab(RewardsTab.missed),
           ),
         ],
         if (report.byCategory.isNotEmpty) ...[
           const _SectionTitle('Where it came from'),
-          _CategoryBreakdown(
-            slices: report.byCategory,
-            earned: report.earned,
-            selected: widget.filter.categories,
-            onTap: (key) {
-              final only =
-                  widget.filter.categories.length == 1 &&
-                  widget.filter.categories.contains(key);
-              widget.onFilterChanged(
-                widget.filter.copyWith(categories: only ? const {} : {key}),
-              );
-            },
-          ),
+          _CategoryBreakdown(slices: report.byCategory, earned: report.earned),
         ],
         if (report.buckets.isNotEmpty) ...[
           _SectionTitle(
             report.buckets.first.isYear ? 'Year by year' : 'Month by month',
           ),
-          _EarnedBars(
-            buckets: report.buckets,
-            onTap: (bucket) {
-              if (bucket.isYear) return;
-              final start = bucket.start;
-              widget.onFilterChanged(
-                widget.filter.copyWith(
-                  query: SpendReportQuery.custom(
-                    from: start,
-                    to: DateTime(start.year, start.month + 1, 0),
-                  ),
-                ),
-              );
-            },
-          ),
+          _EarnedBars(buckets: report.buckets),
         ],
-        const SizedBox(height: AppSpace.lg),
+        const SizedBox(height: AppSpace.md),
         Text(
-          'Rewards are estimated from each card\'s rules when the spend is '
-          'recorded. What the bank credits can differ.',
-          style: BambooFonts.ui(11.5, color: BambooInk.ink500, height: 1.4),
+          'Estimated from each card\'s rules. What the bank credits can differ.',
+          style: BambooFonts.ui(11, color: BambooInk.ink500, height: 1.35),
         ),
       ],
     );
@@ -265,7 +260,8 @@ class _RewardsSummaryTabState extends State<RewardsSummaryTab> {
 }
 
 /// The shareable answer to "how much did my cards earn?". Only what is inside
-/// this widget lands in the shared image.
+/// this widget lands in the shared image. Kept to about a fifth of the screen
+/// so the rest of Summary fits under it.
 class _Hero extends StatelessWidget {
   final RewardsReport report;
   final String rangeLabel;
@@ -281,63 +277,46 @@ class _Hero extends StatelessWidget {
   Widget build(BuildContext context) {
     final rate = report.ratePct;
     final beat = report.beatBestSingleCard;
+    final caption = BambooFonts.ui(12, color: BambooInk.onSlateMuted);
     return Container(
       key: const Key('rewards-hero'),
-      padding: const EdgeInsets.all(AppSpace.lg),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.lg,
+        AppSpace.md,
+        AppSpace.lg,
+        AppSpace.md,
+      ),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [BambooInk.slateRaised, BambooInk.slate, BambooInk.slateLow],
         ),
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const PandaMark(size: 24),
+              const PandaMark(size: 18),
+              const SizedBox(width: 6),
+              Text('Rewards earned', style: caption),
               const SizedBox(width: AppSpace.sm),
-              Text(
-                'PandaPay',
-                style: BambooFonts.heading(14, color: BambooInk.onSlate),
-              ),
-              const SizedBox(width: AppSpace.md),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      rangeLabel,
-                      textAlign: TextAlign.end,
-                      style: BambooFonts.ui(
-                        12,
-                        weight: FontWeight.w600,
-                        color: BambooInk.onSlateMuted,
-                      ),
-                    ),
-                    if (scopeLine != null)
-                      Text(
-                        scopeLine!,
-                        textAlign: TextAlign.end,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: BambooFonts.ui(
-                          11.5,
-                          color: BambooInk.onSlateSubtle,
-                        ),
-                      ),
-                  ],
+                child: Text(
+                  scopeLine == null ? rangeLabel : '$rangeLabel · $scopeLine',
+                  textAlign: TextAlign.end,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: BambooFonts.ui(
+                    12,
+                    weight: FontWeight.w600,
+                    color: BambooInk.onSlateMuted,
+                  ),
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: AppSpace.xl),
-          Text(
-            'Rewards earned',
-            style: BambooFonts.ui(13, color: BambooInk.onSlateMuted),
           ),
           const SizedBox(height: AppSpace.xs),
           FittedBox(
@@ -348,48 +327,56 @@ class _Hero extends StatelessWidget {
               key: const Key('rewards-earned'),
               confidence: Confidence.estimated,
               hidePaise: true,
-              style: BambooFonts.money(42, color: BambooInk.lime),
+              style: BambooFonts.money(32, color: BambooInk.lime),
             ),
           ),
-          const SizedBox(height: AppSpace.xs),
-          MoneyText(
-            report.spend,
-            confidence: Confidence.estimated,
-            showConfidenceIcon: false,
-            hidePaise: true,
-            prefix: 'on ',
-            suffix: ' paid by card',
-            style: BambooFonts.ui(13, color: BambooInk.onSlate),
-          ),
           const SizedBox(height: 2),
-          Text(
-            [
-              if (rate != null) '${_percent(rate)}% back',
-              _plural(report.rows.length, 'spend'),
-            ].join(' · '),
-            style: BambooFonts.ui(12.5, color: BambooInk.onSlateSubtle),
+          Padding(
+            // Room for the share button on this corner.
+            padding: EdgeInsets.only(right: beat == null ? 36 : 0),
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 4,
+              children: [
+                MoneyText(
+                  report.spend,
+                  confidence: Confidence.estimated,
+                  showConfidenceIcon: false,
+                  hidePaise: true,
+                  prefix: 'on ',
+                  suffix: ' by card',
+                  style: BambooFonts.ui(12.5, color: BambooInk.onSlate),
+                ),
+                Text(
+                  [
+                    if (rate != null) '${_percent(rate)}% back',
+                    _plural(report.rows.length, 'spend'),
+                  ].map((part) => '· $part').join(' '),
+                  style: BambooFonts.ui(12.5, color: BambooInk.onSlateSubtle),
+                ),
+              ],
+            ),
           ),
           if (beat != null) ...[
-            const SizedBox(height: AppSpace.lg),
+            const SizedBox(height: AppSpace.sm),
             const Divider(height: 1, color: BambooInk.slateHairline),
-            const SizedBox(height: AppSpace.md),
+            const SizedBox(height: AppSpace.sm),
             Padding(
-              // Leaves room for the share button that sits on this corner.
-              padding: const EdgeInsets.only(right: 40),
+              padding: const EdgeInsets.only(right: 36),
               child: Row(
                 children: [
                   const Icon(
                     Icons.trending_up_rounded,
-                    size: 18,
+                    size: 16,
                     color: BambooInk.lime,
                   ),
-                  const SizedBox(width: AppSpace.sm),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'More than using only ${report.bestSingleCardName}',
-                      maxLines: 2,
+                      'More than only ${report.bestSingleCardName}',
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: BambooFonts.ui(12.5, color: BambooInk.onSlate),
+                      style: BambooFonts.ui(12, color: BambooInk.onSlate),
                     ),
                   ),
                   const SizedBox(width: AppSpace.sm),
@@ -400,79 +387,77 @@ class _Hero extends StatelessWidget {
                     showConfidenceIcon: false,
                     hidePaise: true,
                     prefix: '+',
-                    style: BambooFonts.money(14, color: BambooInk.lime),
+                    style: BambooFonts.money(13, color: BambooInk.lime),
                   ),
                 ],
               ),
             ),
-          ] else
-            const SizedBox(height: AppSpace.xl),
+          ],
         ],
       ),
     );
   }
 }
 
-class _ActionRow extends StatelessWidget {
+/// A half-width figure that opens the tab with the detail behind it.
+class _StatTile extends StatelessWidget {
   final IconData icon;
   final Color accent;
-  final String title;
-  final String subtitle;
-  final Widget? value;
+  final String label;
+  final String semanticLabel;
+  final Widget value;
   final VoidCallback onTap;
 
-  const _ActionRow({
+  const _StatTile({
     super.key,
     required this.icon,
     required this.accent,
-    required this.title,
-    required this.subtitle,
+    required this.label,
+    required this.semanticLabel,
+    required this.value,
     required this.onTap,
-    this.value,
   });
 
   @override
   Widget build(BuildContext context) {
     return Pressable(
       onTap: onTap,
-      semanticLabel: '$title. $subtitle',
+      semanticLabel: semanticLabel,
       child: CardSummaryPanel(
         elevated: false,
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpace.md,
-          vertical: AppSpace.md,
+        padding: const EdgeInsets.fromLTRB(
+          AppSpace.md,
+          AppSpace.sm,
+          AppSpace.xs,
+          AppSpace.sm,
         ),
         child: Row(
           children: [
-            _IconBadge(icon: icon, accent: accent),
-            const SizedBox(width: AppSpace.md),
+            _IconBadge(icon: icon, accent: accent, size: 30),
+            const SizedBox(width: AppSpace.sm),
             Expanded(
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    title,
-                    style: BambooFonts.ui(
-                      13.5,
-                      weight: FontWeight.w700,
-                      color: BambooInk.ink900,
-                    ),
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: BambooFonts.ui(11.5, color: BambooInk.ink500),
                   ),
-                  if (subtitle.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: BambooFonts.ui(12, color: BambooInk.ink500),
-                    ),
-                  ],
+                  const SizedBox(height: 1),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: value,
+                  ),
                 ],
               ),
             ),
-            if (value != null) ...[const SizedBox(width: AppSpace.sm), value!],
-            const SizedBox(width: AppSpace.xs),
             const Icon(
               Icons.chevron_right_rounded,
-              size: 20,
+              size: 18,
               color: BambooInk.ink300,
             ),
           ],
@@ -482,25 +467,19 @@ class _ActionRow extends StatelessWidget {
   }
 }
 
+/// Donut beside its legend, the top categories only, display only.
 class _CategoryBreakdown extends StatefulWidget {
   final List<RewardSlice> slices;
   final Money earned;
-  final Set<String> selected;
-  final ValueChanged<String> onTap;
 
-  const _CategoryBreakdown({
-    required this.slices,
-    required this.earned,
-    required this.selected,
-    required this.onTap,
-  });
+  const _CategoryBreakdown({required this.slices, required this.earned});
 
   @override
   State<_CategoryBreakdown> createState() => _CategoryBreakdownState();
 }
 
 class _CategoryBreakdownState extends State<_CategoryBreakdown> {
-  static const _shown = 5;
+  static const _shown = 4;
   bool _expanded = false;
 
   @override
@@ -508,82 +487,114 @@ class _CategoryBreakdownState extends State<_CategoryBreakdown> {
     final slices = widget.slices;
     final total = slices.fold<int>(0, (sum, s) => sum + s.earned.paise);
     if (total <= 0) return const SizedBox.shrink();
-    final visible = _expanded ? slices : slices.take(_shown).toList();
     const colors = BambooChartColors.categorical;
+    final visible = _expanded ? slices : slices.take(_shown).toList();
 
     return CardSummaryPanel(
+      key: const Key('rewards-categories'),
+      elevated: false,
       padding: const EdgeInsets.all(AppSpace.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Center(
-            child: SizedBox(
-              width: 132,
-              height: 132,
-              child: CustomPaint(
-                painter: _DonutPainter(
-                  values: [for (final s in slices) s.earned.paise.toDouble()],
-                  colors: colors,
-                ),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _plural(slices.length, 'category', 'categories'),
-                        style: BambooFonts.ui(10.5, color: BambooInk.ink500),
-                      ),
-                      const SizedBox(height: 1),
-                      SizedBox(
-                        width: 80,
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: MoneyText(
-                            widget.earned,
-                            confidence: Confidence.estimated,
-                            showConfidenceIcon: false,
-                            hidePaise: true,
-                            style: BambooFonts.money(
-                              15,
-                              color: BambooInk.ink900,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 84,
+                height: 84,
+                child: CustomPaint(
+                  painter: _DonutPainter(
+                    values: [for (final s in slices) s.earned.paise.toDouble()],
+                    colors: colors,
                   ),
                 ),
               ),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (var i = 0; i < visible.length; i++)
+                      _LegendRow(
+                        slice: visible[i],
+                        share: visible[i].earned.paise / total,
+                        color: colors[i % colors.length],
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (slices.length > _shown)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => setState(() => _expanded = !_expanded),
+                style: TextButton.styleFrom(
+                  foregroundColor: BambooInk.ink700,
+                  minimumSize: const Size(44, 36),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  textStyle: BambooFonts.ui(12, weight: FontWeight.w700),
+                ),
+                child: Text(
+                  _expanded ? 'Show top $_shown' : 'Show all ${slices.length}',
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LegendRow extends StatelessWidget {
+  final RewardSlice slice;
+  final double share;
+  final Color color;
+
+  const _LegendRow({
+    required this.slice,
+    required this.share,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: AppSpace.sm),
+          Expanded(
+            child: Text(
+              slice.key,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: BambooFonts.ui(
+                12.5,
+                weight: FontWeight.w600,
+                color: BambooInk.ink900,
+              ),
             ),
           ),
-          const SizedBox(height: AppSpace.md),
-          for (var i = 0; i < visible.length; i++)
-            _CategoryRow(
-              slice: visible[i],
-              share: visible[i].earned.paise / total,
-              color: colors[i % colors.length],
-              selected: widget.selected.contains(visible[i].key),
-              onTap: () => widget.onTap(visible[i].key),
-            ),
-          if (slices.length > _shown)
-            TextButton(
-              onPressed: () => setState(() => _expanded = !_expanded),
-              style: TextButton.styleFrom(
-                foregroundColor: BambooInk.ink900,
-                minimumSize: const Size(0, 44),
-                textStyle: BambooFonts.ui(13, weight: FontWeight.w700),
-              ),
-              child: Text(
-                _expanded ? 'Show fewer' : 'Show all ${slices.length}',
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.only(top: AppSpace.xs),
-            child: Text(
-              'Tap a category to see only its rewards.',
-              textAlign: TextAlign.center,
-              style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-            ),
+          Text(
+            '${(share * 100).round()}%',
+            style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+          ),
+          const SizedBox(width: AppSpace.sm),
+          MoneyText(
+            slice.earned,
+            confidence: Confidence.estimated,
+            showConfidenceIcon: false,
+            hidePaise: true,
+            style: BambooFonts.money(12.5, color: BambooInk.ink900),
           ),
         ],
       ),
@@ -591,104 +602,12 @@ class _CategoryBreakdownState extends State<_CategoryBreakdown> {
   }
 }
 
-class _CategoryRow extends StatelessWidget {
-  final RewardSlice slice;
-  final double share;
-  final Color color;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _CategoryRow({
-    required this.slice,
-    required this.share,
-    required this.color,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final visual = spendingCategoryVisual(slice.key);
-    final rate = slice.spend.paise <= 0
-        ? null
-        : slice.earned.paise / slice.spend.paise * 100;
-    return Pressable(
-      onTap: onTap,
-      semanticLabel:
-          '${slice.key}, ${slice.earned.format(hidePaise: true)} earned',
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpace.xs,
-          vertical: AppSpace.sm,
-        ),
-        decoration: BoxDecoration(
-          color: selected ? BambooInk.wash : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-        ),
-        child: Row(
-          children: [
-            _IconBadge(icon: visual.icon, accent: visual.accent, size: 32),
-            const SizedBox(width: AppSpace.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          slice.key,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: BambooFonts.ui(
-                            13,
-                            weight: FontWeight.w600,
-                            color: BambooInk.ink900,
-                          ),
-                        ),
-                      ),
-                      MoneyText(
-                        slice.earned,
-                        confidence: Confidence.estimated,
-                        showConfidenceIcon: false,
-                        hidePaise: true,
-                        style: BambooFonts.money(13, color: BambooInk.ink900),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(AppRadius.pill),
-                    child: LinearProgressIndicator(
-                      value: share.clamp(0.0, 1.0),
-                      minHeight: 5,
-                      backgroundColor: BambooInk.paperMuted,
-                      valueColor: AlwaysStoppedAnimation(color),
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    [
-                      _plural(slice.spends, 'spend'),
-                      if (rate != null) '${_percent(rate)}% back',
-                    ].join(' · '),
-                    style: BambooFonts.ui(11, color: BambooInk.ink500),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
+/// Earned per month (or year), display only. The best bar is slate and
+/// carries its amount; the rest are tinted.
 class _EarnedBars extends StatelessWidget {
   final List<RewardBucket> buckets;
-  final ValueChanged<RewardBucket> onTap;
 
-  const _EarnedBars({required this.buckets, required this.onTap});
+  const _EarnedBars({required this.buckets});
 
   @override
   Widget build(BuildContext context) {
@@ -705,96 +624,26 @@ class _EarnedBars extends StatelessWidget {
     String longLabel(RewardBucket b) => b.isYear
         ? '${b.start.year}'
         : '${rewardsMonthShort(b.start)} ${b.start.year}';
-    const chartHeight = 96.0;
 
     return CardSummaryPanel(
+      key: const Key('rewards-month-bars'),
+      elevated: false,
       padding: const EdgeInsets.fromLTRB(
         AppSpace.md,
-        AppSpace.lg,
+        AppSpace.sm,
         AppSpace.md,
-        AppSpace.md,
+        AppSpace.sm,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(
-            height: chartHeight + 24,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final bucket in buckets)
-                  Expanded(
-                    child: Semantics(
-                      button: !bucket.isYear,
-                      label:
-                          '${longLabel(bucket)}, ${bucket.earned.format(hidePaise: true)} earned',
-                      excludeSemantics: true,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(AppRadius.sm),
-                        onTap: bucket.isYear ? null : () => onTap(bucket),
-                        child: Column(
-                          children: [
-                            Expanded(
-                              child: LayoutBuilder(
-                                builder: (context, box) => Align(
-                                  alignment: Alignment.bottomCenter,
-                                  child: Container(
-                                    width: math.min(28, box.maxWidth - 4),
-                                    height: maxPaise <= 0
-                                        ? 2
-                                        : math.max(
-                                            2,
-                                            box.maxHeight *
-                                                bucket.earned.paise /
-                                                maxPaise,
-                                          ),
-                                    decoration: BoxDecoration(
-                                      color:
-                                          identical(bucket, best) &&
-                                              maxPaise > 0
-                                          ? BambooInk.slate
-                                          : BambooChartColors.teal.withValues(
-                                              alpha: 0.55,
-                                            ),
-                                      borderRadius: const BorderRadius.vertical(
-                                        top: Radius.circular(5),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            SizedBox(
-                              height: 18,
-                              child: Text(
-                                label(bucket),
-                                maxLines: 1,
-                                softWrap: false,
-                                overflow: TextOverflow.clip,
-                                textAlign: TextAlign.center,
-                                style: BambooFonts.ui(
-                                  buckets.length > 9 ? 9.5 : 11,
-                                  color: BambooInk.ink500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          if (best != null && maxPaise > 0) ...[
-            const Divider(height: AppSpace.xl),
+          if (best != null && maxPaise > 0)
             Row(
               children: [
                 Expanded(
                   child: Text(
                     'Best: ${longLabel(best)}',
-                    style: BambooFonts.ui(12.5, color: BambooInk.ink700),
+                    style: BambooFonts.ui(11.5, color: BambooInk.ink500),
                   ),
                 ),
                 MoneyText(
@@ -802,19 +651,81 @@ class _EarnedBars extends StatelessWidget {
                   confidence: Confidence.estimated,
                   showConfidenceIcon: false,
                   hidePaise: true,
-                  style: BambooFonts.money(13, color: BambooInk.ink900),
+                  style: BambooFonts.money(12.5, color: BambooInk.ink900),
                 ),
               ],
             ),
-            if (!buckets.first.isYear)
-              Padding(
-                padding: const EdgeInsets.only(top: AppSpace.xs),
-                child: Text(
-                  'Tap a month to see just that month.',
-                  style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-                ),
+          const SizedBox(height: AppSpace.xs),
+          ExcludeSemantics(
+            child: SizedBox(
+              height: 72,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final bucket in buckets)
+                    Expanded(
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: LayoutBuilder(
+                              builder: (context, box) => Align(
+                                alignment: Alignment.bottomCenter,
+                                child: Container(
+                                  width: math.min(24, box.maxWidth - 4),
+                                  height: maxPaise <= 0
+                                      ? 2
+                                      : math.max(
+                                          2,
+                                          box.maxHeight *
+                                              bucket.earned.paise /
+                                              maxPaise,
+                                        ),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        identical(bucket, best) && maxPaise > 0
+                                        ? BambooInk.slate
+                                        : BambooChartColors.teal.withValues(
+                                            alpha: 0.55,
+                                          ),
+                                    borderRadius: const BorderRadius.vertical(
+                                      top: Radius.circular(4),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          SizedBox(
+                            height: 15,
+                            child: Text(
+                              label(bucket),
+                              maxLines: 1,
+                              softWrap: false,
+                              overflow: TextOverflow.clip,
+                              textAlign: TextAlign.center,
+                              style: BambooFonts.ui(
+                                buckets.length > 9 ? 9.5 : 10.5,
+                                color: BambooInk.ink500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
               ),
-          ],
+            ),
+          ),
+          // The chart is drawn for the eye; this one line carries it for a
+          // screen reader.
+          Semantics(
+            label: [
+              for (final b in buckets)
+                '${longLabel(b)} ${b.earned.format(hidePaise: true)}',
+            ].join(', '),
+            child: const SizedBox(height: 0),
+          ),
         ],
       ),
     );
@@ -1717,11 +1628,14 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.fromLTRB(
       AppSpace.xs,
-      AppSpace.xl,
+      AppSpace.md,
       AppSpace.xs,
-      AppSpace.sm,
+      AppSpace.xs,
     ),
-    child: Text(text, style: BambooFonts.heading(16, color: BambooInk.ink900)),
+    child: Text(
+      text,
+      style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+    ),
   );
 }
 

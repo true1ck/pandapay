@@ -159,8 +159,9 @@ Future<void> _pump(
   List<(UserCard, CardProduct)>? wallet,
   List<TransactionEntry>? transactions,
   String location = '/insights/rewards',
+  Size screen = const Size(390, 844),
 }) async {
-  tester.view.physicalSize = const Size(1170, 2532);
+  tester.view.physicalSize = screen * 3;
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
   final rows = transactions ?? _transactions;
@@ -171,6 +172,9 @@ Future<void> _pump(
         path: '/insights/rewards',
         builder: (context, state) => RewardsScreen(
           initialTab: RewardsTab.fromParam(state.uri.queryParameters['tab']),
+          initialQuery: RewardsFilter.queryFromParams(
+            state.uri.queryParameters,
+          ),
         ),
       ),
       GoRoute(
@@ -218,14 +222,16 @@ void main() {
 
     expect(_money('rewards-earned', '₹140'), findsOneWidget);
     expect(find.text('November 2026'), findsOneWidget);
-    expect(find.text('on ₹7,400 paid by card'), findsOneWidget);
-    expect(find.text('1.9% back · 5 spends'), findsOneWidget);
+    expect(find.text('on ₹7,400 by card'), findsOneWidget);
+    expect(find.text('· 1.9% back · 5 spends'), findsOneWidget);
     // Mix vs one card: used 146 at base rate, Flat Card alone 134.
     expect(_money('rewards-beat-single-card', '+₹12'), findsOneWidget);
-    expect(find.text('More than using only Flat Card'), findsOneWidget);
-    expect(find.text('2 spends not counted yet'), findsOneWidget);
+    expect(find.text('More than only Flat Card'), findsOneWidget);
     expect(
-      find.text('1 not worked out yet · 1 on a card not in your wallet'),
+      find.descendant(
+        of: find.byKey(const Key('rewards-not-counted')),
+        matching: find.text('2 spends'),
+      ),
       findsOneWidget,
     );
     expect(find.text('Missed on 1 spend'), findsOneWidget);
@@ -261,32 +267,42 @@ void main() {
     expect(find.byKey(const Key('rewards-active-filters')), findsNothing);
   });
 
-  testWidgets('tapping a category in the breakdown narrows the page to it', (
-    tester,
-  ) async {
-    await _pump(tester);
+  testWidgets('the summary charts are display only', (tester) async {
+    await _pump(tester, location: '/insights/rewards?period=quarter');
+    expect(find.text('Q4 2026'), findsOneWidget);
+    expect(find.byKey(const Key('rewards-month-bars')), findsOneWidget);
 
-    await tester.scrollUntilVisible(
-      find.text('Travel'),
-      200,
-      scrollable: _list('rewards-summary'),
-    );
-    await tester.ensureVisible(find.text('Travel'));
-    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('rewards-month-bars')));
     await tester.tap(find.text('Travel'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byKey(const Key('rewards-hero')));
-    await tester.pumpAndSettle();
 
-    expect(_money('rewards-earned', '₹100'), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('rewards-active-filters')),
-        matching: find.text('Travel'),
-      ),
-      findsOneWidget,
-    );
+    // Nothing narrowed: same dates, no filter chips, chart still there.
+    expect(find.text('Q4 2026'), findsOneWidget);
+    expect(find.byKey(const Key('rewards-active-filters')), findsNothing);
+    expect(find.byKey(const Key('rewards-month-bars')), findsOneWidget);
+    expect(_money('rewards-earned', '₹240'), findsOneWidget);
   });
+
+  for (final (name, size) in [
+    ('a 6.1-inch phone', const Size(390, 844)),
+    ('an iPhone 16 Pro Max', const Size(430, 932)),
+  ]) {
+    testWidgets('Summary fits on one screen of $name, charts included', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        location: '/insights/rewards?period=quarter',
+        screen: size,
+      );
+      final bottom = tester
+          .getBottomLeft(find.byKey(const Key('rewards-month-bars')))
+          .dy;
+      // A real phone also loses its status bar and home indicator (about
+      // 59 + 34 points) that the test window does not have.
+      expect(bottom, lessThanOrEqualTo(size.height - 93));
+    });
+  }
 
   testWidgets('the not-counted note opens those spends in Transactions', (
     tester,
