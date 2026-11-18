@@ -127,6 +127,12 @@ meaningless.
 - [ ] New provider: does it make a cheap value depend on an expensive one? Does a
       resolve-once dependency make its object rebuild at startup?
 - [ ] Replacing a subsystem: parity list for threading and budgets (R9)?
+- [ ] New code that stores a server list or report over local data: is it wrapped in
+      `readFenced` / `readAfterWrites` (`data/connectivity/write_fence.dart`) and stamped with
+      when the request was SENT (`at:` / `requestedAt:`), never when it arrived? A read answered
+      from before a write must not delete or overwrite what that write just created
+      (`docs/STALE_READS_AND_API_COST_REPORT_2026-11-18.md`; guard in
+      `test/data/stale_read_race_test.dart`).
 - [ ] `performance_guards_test.dart` and, for startup-affecting changes,
       `perf_smoke_android.sh` run and attached.
 
