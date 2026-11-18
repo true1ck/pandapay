@@ -45,7 +45,7 @@ extension CatalogueRepositoryLoading on CatalogueRepository {
 }
 
 class HttpCatalogueRepository
-    implements CatalogueRepository, V2CatalogueSource {
+    implements CatalogueRepository, ConditionalV2CatalogueSource {
   final String baseUrl;
   final http.Client _client;
 
@@ -70,8 +70,22 @@ class HttpCatalogueRepository
   /// parameter and answers with the v1 body; that is not a v2 feed, so it
   /// throws [CatalogueSchemaMismatch] and the loader goes on to v1.
   @override
-  Future<CatalogueV2Fetch> fetchV2() async {
-    final response = await _client.get(Uri.parse('$baseUrl/catalogue?schema=2'));
+  Future<CatalogueV2Fetch> fetchV2() async => (await _fetchV2(null))!;
+
+  /// The same request with `If-None-Match`. The server answers 304 (before any
+  /// heavy query) while the catalogue is unchanged, which is null here.
+  @override
+  Future<CatalogueV2Fetch?> fetchV2IfChanged(String etag) => _fetchV2(etag);
+
+  Future<CatalogueV2Fetch?> _fetchV2(String? etag) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/catalogue?schema=2'),
+      headers: {if (etag != null && etag.isNotEmpty) 'If-None-Match': etag},
+    );
+    // A 304 is only an answer to a validator that was sent.
+    if (response.statusCode == 304 && etag != null && etag.isNotEmpty) {
+      return null;
+    }
     if (response.statusCode != 200) {
       throw ApiException('GET /catalogue?schema=2 failed: ${response.statusCode}');
     }
@@ -83,8 +97,21 @@ class HttpCatalogueRepository
     return CatalogueV2Fetch(
       parseCatalogueBody(decoded, schema: 2, origin: CatalogueOrigin.liveV2),
       response.body,
+      etag: _header(response.headers, 'etag'),
     );
   }
+}
+
+/// A response header by name, whatever case the client reports it in (only the
+/// `dart:io` client lowercases names).
+String? _header(Map<String, String> headers, String name) {
+  for (final entry in headers.entries) {
+    if (entry.key.toLowerCase() == name) {
+      final value = entry.value.trim();
+      return value.isEmpty ? null : value;
+    }
+  }
+  return null;
 }
 
 /// spend_categories row shape from GET /categories — see providers.dart for

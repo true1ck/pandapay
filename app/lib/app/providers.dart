@@ -1992,7 +1992,7 @@ final merchantIssueRulesRepositoryProvider =
 /// snapshot instead of issuing a burst of requests for every report.
 void invalidateTransactionViews(Ref ref) {
   ref.invalidate(transactionsProvider);
-  ref.invalidate(utilizationTransactionsProvider);
+  invalidateUtilizationTransactions(ref);
   ref.invalidate(userCardsProvider);
   ref.invalidate(homeSummaryProvider);
   ref.invalidate(categorySpendProvider);
@@ -2620,6 +2620,24 @@ final utilizationTransactionsProvider = FutureProvider<List<TransactionEntry>>((
   );
 });
 
+/// Drops the saved utilization list so its next reader rebuilds from the latest
+/// data. For use from inside another provider (the outbox flush, the sync
+/// engine): the first `Ref.invalidate` of a provider nobody has read yet BUILDS
+/// it at once (every later one only marks it stale), which reads two months of
+/// rows from disk and starts a server read for them (6.9 MB at 40,000
+/// transactions), at the first delivery or sync after the app starts.
+///
+/// On an SMS-v2 account nothing shows that list except the split planner, and
+/// the planner refreshes itself whenever the phone's transaction store changes
+/// (see [loadTransactionsWithOfflineCache]), so there is nothing to drop and
+/// nobody to wake. Unknown (the ledger has not loaded yet) counts as "not v2":
+/// it is invalidated exactly as before. Widget and container invalidations are
+/// lazy and unaffected.
+void invalidateUtilizationTransactions(Ref ref) {
+  if (ref.read(smsV2ReportingEnabledProvider)) return;
+  ref.invalidate(utilizationTransactionsProvider);
+}
+
 /// The compact per-card spend snapshot used by card surfaces. This deliberately
 /// shares the same definition as credit utilization: active credit-card spend
 /// since the current statement cycle (or the current calendar month when the
@@ -2936,6 +2954,13 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
 
   Future<void> refreshHomeSummary() async {
     if (userRepo == null) return;
+    // An SMS-v2 account reads its header figures from the phone's own ledger
+    // (the first branch of homeSummaryProvider), and the legacy readers of the
+    // saved server copy are behind the same branch. Fetching it would cost the
+    // server an aggregate over the whole history on every open and resume, and
+    // be stored for nobody. Unknown (the ledger has not loaded yet) counts as
+    // "not v2", so the figure is fetched exactly as before.
+    if (ref.read(smsV2ReportingEnabledProvider)) return;
     try {
       final answer = await readFenced(
         () => userRepo
@@ -3513,7 +3538,7 @@ final outboxFlushProvider = Provider<void>((ref) {
           (sent > 0 || duplicateSent > 0 || commandsSent > 0)) {
         ref.invalidate(pendingOutboxCountProvider);
         ref.invalidate(transactionsProvider);
-        ref.invalidate(utilizationTransactionsProvider);
+        invalidateUtilizationTransactions(ref);
         ref.invalidate(homeSummaryProvider);
         ref.invalidate(duplicateCandidatesProvider);
         ref.invalidate(userCardsProvider);

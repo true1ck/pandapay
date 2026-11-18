@@ -759,7 +759,7 @@ class SyncEngine {
     // restart unrelated Home requests. Publish only affected projections.
     if (entities.contains('transactions')) {
       _ref.invalidate(transactionsProvider);
-      _ref.invalidate(utilizationTransactionsProvider);
+      invalidateUtilizationTransactions(_ref);
       _ref.invalidate(homeSummaryProvider);
     }
     if (entities.contains('user_cards')) {

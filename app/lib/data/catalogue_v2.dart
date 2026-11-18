@@ -23,6 +23,11 @@ const String catalogueV2CacheKey = 'catalogue.v2';
 /// as a v1 last resort and never as v2.
 const String catalogueV1CacheKey = 'catalogue';
 
+/// The `ETag` the server sent with the cached v2 body. It is only ever sent back
+/// (as `If-None-Match`) while that body is still cached; see
+/// [CatalogueLoader.refreshCache].
+const String catalogueV2ValidatorCacheKey = 'catalogue.v2.etag';
+
 const String bundledCatalogueAsset = 'assets/data/bundled_catalogue.json';
 
 /// Where a [CatalogueFeed] came from. For diagnostics and tests only.
@@ -74,7 +79,10 @@ Object? decodeCatalogueJson(String raw) => jsonDecode(raw);
 class CatalogueV2Fetch {
   final CatalogueFeed feed;
   final String rawBody;
-  const CatalogueV2Fetch(this.feed, this.rawBody);
+
+  /// The response's `ETag`, when the server sent one.
+  final String? etag;
+  const CatalogueV2Fetch(this.feed, this.rawBody, {this.etag});
 }
 
 /// Implemented by repositories that can serve `GET /catalogue?schema=2`.
@@ -85,6 +93,16 @@ abstract class V2CatalogueSource {
   /// Throws on any transport, HTTP or shape failure, including a body that
   /// is not `schema: 2` (an older server that ignores the query parameter).
   Future<CatalogueV2Fetch> fetchV2();
+}
+
+/// A [V2CatalogueSource] that can ask "has it changed?". Separate from
+/// [V2CatalogueSource] so repositories and fakes that only implement
+/// `fetchV2()` keep working: the loader just never sends a validator to them.
+abstract class ConditionalV2CatalogueSource implements V2CatalogueSource {
+  /// Like `fetchV2`, sending `If-None-Match: [etag]`. Returns null when the
+  /// server answers 304: the copy the caller holds is current and nothing was
+  /// downloaded. Any other non-200 answer throws, as `fetchV2` does.
+  Future<CatalogueV2Fetch?> fetchV2IfChanged(String etag);
 }
 
 /// Thrown when `?schema=2` answered with something that is not a v2 body.
@@ -188,12 +206,31 @@ class _Live {
   /// Set for a v2 response: the raw body to cache losslessly.
   final String? rawV2Body;
 
+  /// The v2 response's `ETag`, kept with [rawV2Body] so the next refresh can
+  /// ask whether it changed.
+  final String? etag;
+
+  /// The server answered 304: what is cached is current. Nothing to write.
+  final bool notModified;
+
   /// True only when the server answered `?schema=2` with something that is
   /// not v2 (an older server, [CatalogueSchemaMismatch]): the cached v2 body
   /// is then stale and is dropped. A transient v2 failure (5xx, 429, a
   /// transport error, a body with no readable card) never clears it (D32a).
   final bool olderServer;
-  const _Live(this.feed, this.rawV2Body, {this.olderServer = false});
+  const _Live(
+    this.feed,
+    this.rawV2Body, {
+    this.olderServer = false,
+    this.etag,
+  }) : notModified = false;
+
+  _Live.notModified()
+    : feed = CatalogueFeed.empty,
+      rawV2Body = null,
+      etag = null,
+      olderServer = false,
+      notModified = true;
 }
 
 /// The catalogue load, in this order (plan C2, WP9):
@@ -259,22 +296,56 @@ class CatalogueLoader {
 
   /// The background refresh: fetch live (v2, else v1) and cache it. Returns
   /// whether something was cached.
+  ///
+  /// When a v2 body is cached together with the `ETag` it came with, this asks
+  /// the server whether it changed (`If-None-Match`). An unchanged catalogue
+  /// costs one cheap request: no download, no parse and no write of the large
+  /// body. Anything else (no validator, a validator without a readable v2 body,
+  /// a changed catalogue, an older server) takes the full fetch exactly as
+  /// before, and a validator the server does not recognise simply gets the
+  /// whole body back.
   Future<bool> refreshCache() async {
     if (cache == null) return false;
-    final live = await _fetchLive();
+    final live = await _fetchLive(validator: await _cachedValidator());
     if (live == null) return false;
+    if (live.notModified) return true;
     return _writeCache(live);
   }
 
-  Future<_Live?> _fetchLive() async {
+  /// The stored `ETag`, but only while the v2 body it belongs to is still
+  /// cached and readable as a v2 body. Never throws.
+  Future<String?> _cachedValidator() async {
+    final store = cache;
+    if (store == null || v2Source is! ConditionalV2CatalogueSource) return null;
+    try {
+      final etag = await store.get(catalogueV2ValidatorCacheKey);
+      if (etag == null || etag.isEmpty) return null;
+      final body = await store.get(catalogueV2CacheKey);
+      if (body == null) return null;
+      final head = body.length > 64 ? body.substring(0, 64) : body;
+      if (!RegExp(r'"schema"\s*:\s*2').hasMatch(head)) return null;
+      return etag;
+    } catch (error) {
+      _log('catalogue: validator unreadable (${error.runtimeType})');
+      return null;
+    }
+  }
+
+  Future<_Live?> _fetchLive({String? validator}) async {
     final source = v2Source;
     var skipV1 = false;
     var olderServer = false;
     if (source != null) {
       try {
-        final fetched = await source.fetchV2().timeout(timeout);
+        final CatalogueV2Fetch? fetched;
+        if (validator != null && source is ConditionalV2CatalogueSource) {
+          fetched = await source.fetchV2IfChanged(validator).timeout(timeout);
+          if (fetched == null) return _Live.notModified();
+        } else {
+          fetched = await source.fetchV2().timeout(timeout);
+        }
         if (fetched.feed.cards.isNotEmpty) {
-          return _Live(fetched.feed, fetched.rawBody);
+          return _Live(fetched.feed, fetched.rawBody, etag: fetched.etag);
         }
       } on TimeoutException {
         // A hung network will not answer the v1 request either: go to the
@@ -314,7 +385,11 @@ class CatalogueLoader {
     try {
       final raw = live.rawV2Body;
       if (raw != null) {
+        // The body first, then the validator that describes it: a crash in
+        // between leaves a validator the server will not recognise (it is
+        // answered with the full body), never one for a body that is not here.
         await store.put(catalogueV2CacheKey, raw);
+        await _writeValidator(store, live.etag);
       } else {
         await store.put(
           catalogueV1CacheKey,
@@ -331,6 +406,7 @@ class CatalogueLoader {
         // fails the write above.
         if (live.olderServer) {
           try {
+            await store.clear(catalogueV2ValidatorCacheKey);
             await store.clear(catalogueV2CacheKey);
           } catch (error) {
             _log(
@@ -343,6 +419,24 @@ class CatalogueLoader {
     } catch (error) {
       _log('catalogue: cache write failed (${error.runtimeType})');
       return false;
+    }
+  }
+
+  /// Stores [etag] for the v2 body just written, or removes the old one when
+  /// the response carried none. A failure here only costs the next refresh a
+  /// full download.
+  Future<void> _writeValidator(CatalogueCacheStore store, String? etag) async {
+    try {
+      if (etag == null || etag.isEmpty) {
+        await store.clear(catalogueV2ValidatorCacheKey);
+      } else {
+        await store.put(catalogueV2ValidatorCacheKey, etag);
+      }
+    } catch (error) {
+      _log('catalogue: validator not saved (${error.runtimeType})');
+      try {
+        await store.clear(catalogueV2ValidatorCacheKey);
+      } catch (_) {}
     }
   }
 

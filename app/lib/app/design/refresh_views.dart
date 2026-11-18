@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/sms_v2/ledger/providers.dart'
+    show smsV2ReportingEnabledProvider;
 import '../providers.dart';
 
 /// Lists and totals that show a transaction or card edit. A save spinner waits
@@ -30,6 +32,16 @@ Future<void> refreshViews(
   Duration limit = const Duration(seconds: 2),
 }) async {
   final all = (views ?? editedMoneyViews).toList();
+  // On an SMS-v2 account card spend and utilization come from the phone's own
+  // ledger, so no screen shows the utilization list; only the split planner
+  // reads it, from the phone's saved rows. Reading it here would start a large
+  // server read (the last two months of transactions, 6.9 MB at 40,000 rows)
+  // on EVERY save for nobody. It is still invalidated below, so whoever reads
+  // it next rebuilds from the saved data, and a screen that is showing it
+  // refreshes at once. `views` given explicitly is always honoured.
+  final skipRead = views == null && ref.read(smsV2ReportingEnabledProvider)
+      ? <FutureProvider<Object?>>{utilizationTransactionsProvider}
+      : const <FutureProvider<Object?>>{};
   // A family: every query is dropped and rebuilds when its screen next reads it.
   ref.invalidate(spendReportProvider);
   for (final view in all) {
@@ -38,7 +50,8 @@ Future<void> refreshViews(
   // Read synchronously (before any await) so the ref is still valid.
   final rebuilt = [
     for (final view in all)
-      ref.read(view.future).then<void>((_) {}, onError: (_) {}),
+      if (!skipRead.contains(view))
+        ref.read(view.future).then<void>((_) {}, onError: (_) {}),
   ];
   await Future.wait(rebuilt).timeout(limit, onTimeout: () => const []);
 }
