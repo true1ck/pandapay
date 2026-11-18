@@ -265,6 +265,27 @@ class SyncQueue {
       row['entity'] as String,
   };
 
+  /// Ids of [entity] rows that have applied changes awaiting [purgeApplied].
+  Set<String> appliedEntityIds(String entity) => {
+    for (final row in _appDb.db.select(
+      'SELECT DISTINCT entity_id FROM sync_pending_changes WHERE namespace=? AND entity=? AND in_flight=$_applied',
+      [namespace, entity],
+    ))
+      row['entity_id'] as String,
+  };
+
+  /// Drops the applied changes of just these [ids] of [entity], once their
+  /// server copy is stored. An applied change of any other row stays.
+  void purgeAppliedIds(String entity, Iterable<String> ids) {
+    for (final id in ids) {
+      _appDb.db.execute(
+        'DELETE FROM sync_pending_changes WHERE namespace=? AND entity=? AND entity_id=? AND in_flight=$_applied',
+        [namespace, entity, id],
+      );
+    }
+    onChanged?.call();
+  }
+
   /// Drops applied changes of [entities] once their server copy is stored.
   void purgeApplied(Iterable<String> entities) {
     for (final entity in entities) {

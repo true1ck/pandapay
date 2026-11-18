@@ -1,6 +1,7 @@
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 
+import 'connectivity/write_fence.dart';
 import 'server_clock.dart';
 
 
@@ -44,14 +45,21 @@ class ApiRequestHeadersClient extends http.BaseClient {
     required Uri apiBaseUrl,
     Future<String?> Function()? appVersion,
     ServerClock? serverClock,
+    WriteFence? writeFence,
   }) : _origin = apiBaseUrl.origin,
+       _basePath = apiBaseUrl.path.endsWith('/')
+           ? apiBaseUrl.path.substring(0, apiBaseUrl.path.length - 1)
+           : apiBaseUrl.path,
        _appVersion = appVersion ?? loadApiAppVersion,
-       _serverClock = serverClock ?? ServerClock.instance;
+       _serverClock = serverClock ?? ServerClock.instance,
+       _writeFence = writeFence ?? WriteFence.process;
 
   final http.Client inner;
   final String _origin;
+  final String _basePath;
   final Future<String?> Function() _appVersion;
   final ServerClock _serverClock;
+  final WriteFence _writeFence;
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
@@ -64,7 +72,28 @@ class ApiRequestHeadersClient extends http.BaseClient {
     final sentAt = DateTime.now();
     final response = await inner.send(request);
     _observeServerClock(response, sentAt);
+    _observeWrite(request, response);
     return response;
+  }
+
+  /// The one place every acknowledged write to the API passes, so no endpoint
+  /// can be forgotten: a read that was in flight when this happens may have
+  /// been answered from before it (see [WriteFence]). Only a 2xx counts; a
+  /// refused write changed nothing. Never throws.
+  void _observeWrite(http.BaseRequest request, http.StreamedResponse response) {
+    try {
+      final status = response.statusCode;
+      if (status < 200 || status >= 300) return;
+      var path = request.url.path;
+      if (_basePath.isNotEmpty && path.startsWith(_basePath)) {
+        path = path.substring(_basePath.length);
+      }
+      if (WriteFence.countsAsDataWrite(request.method, path)) {
+        _writeFence.markAcked();
+      }
+    } catch (_) {
+      // Bookkeeping must never fail an API call.
+    }
   }
 
   /// D9: learn the device-vs-server clock skew from the `Date` header of a

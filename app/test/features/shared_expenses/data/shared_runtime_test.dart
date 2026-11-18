@@ -97,10 +97,10 @@ class _PausingCache extends ResponseCache {
   final started = Completer<void>(), release = Completer<void>();
   _PausingCache(super.db);
   @override
-  Future<void> put(String key, String rawJson) async {
+  Future<void> put(String key, String rawJson, {DateTime? requestedAt}) async {
     started.complete();
     await release.future;
-    await super.put(key, rawJson);
+    await super.put(key, rawJson, requestedAt: requestedAt);
   }
 }
 

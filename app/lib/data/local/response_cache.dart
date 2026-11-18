@@ -95,7 +95,22 @@ class ResponseCache {
     }
   }
 
-  Future<void> put(String key, String rawJson) async {
+  /// Asks for [key] to be fetched again the next time a reader looks at it,
+  /// without removing what is saved (it keeps showing meanwhile).
+  void requestRefresh(String key) => _db.db.execute(
+    'INSERT OR IGNORE INTO cache_refresh_requests (key) VALUES (?)',
+    [key],
+  );
+
+  /// Stores a server snapshot under [key].
+  ///
+  /// [requestedAt] is when the request that produced [rawJson] was SENT. A card
+  /// list replaces the stored cards, and what it may delete is decided by
+  /// comparing each stored card's time with this one: a card saved after the
+  /// request left (one the person just added) is newer than the answer and must
+  /// survive it. Defaults to now, which is only right for a snapshot that was
+  /// not requested over the network.
+  Future<void> put(String key, String rawJson, {DateTime? requestedAt}) async {
     // Validate private entity snapshots before publishing them. The entity
     // store is the shared read source; blobs remain for legacy consumers.
     final cardsMatch = RegExp(
@@ -118,6 +133,7 @@ class ResponseCache {
           cardsMatch[1]!,
           cards,
           archived: cardsMatch[2] == 'user_cards_with_archived',
+          at: requestedAt,
         );
       }
     }

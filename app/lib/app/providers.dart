@@ -1,5 +1,6 @@
 import 'async_first_load.dart';
 import '../data/connectivity/server_backoff.dart';
+import '../data/connectivity/write_fence.dart';
 import '../features/sms_v2/providers/data_providers.dart' as sms_v2_data;
 import '../features/sms_v2/instruments/bank_summary_adapter.dart';
 import '../features/sms_v2/providers/runtime_provider.dart';
@@ -2053,7 +2054,17 @@ spendReportProvider = FutureProvider.family<SpendReport?, SpendReportQuery>((
       );
     }
 
+    // While something is still waiting to be delivered, the phone's own rows are
+    // the truth (the server's report cannot contain them yet). The moment the
+    // outbox delivers it, that stops being true, and the saved server report is
+    // from BEFORE the delivery: showing it makes the new spend vanish from the
+    // total until a refresh lands. So a saved report older than the last
+    // acknowledged write is not shown either; the phone's rows are, while a
+    // fresh report is fetched in the background.
+    final writtenSince =
+        cached != null && WriteFence.process.isSnapshotStale(cached.fetchedAt);
     if (cached == null ||
+        writtenSince ||
         cache?.financialStore.hasPendingTransactions(
               ref.read(cacheNamespaceProvider),
             ) ==
@@ -2061,6 +2072,22 @@ spendReportProvider = FutureProvider.family<SpendReport?, SpendReportQuery>((
       final local = await _buildLocalSpendReport(ref, query);
       if (local != null) {
         ref.read(transactionsProvider);
+        if (writtenSince) {
+          _warmDisplay(
+            ref,
+            cache,
+            key,
+            DateTime.fromMillisecondsSinceEpoch(0),
+            () => repo.fetchReportJson(
+              period: query.period,
+              anchor: anchor,
+              from: query.from,
+              to: query.to,
+              timeZone: timeZone,
+            ),
+            (raw) => raw,
+          );
+        }
         return local;
       }
     } else {
@@ -2509,13 +2536,31 @@ Future<List<UserCard>> _loadUserCardsWithOfflineCache(
   }
 
   try {
-    final cards = await repo
-        .fetchUserCards(includeArchived: includeArchived)
-        .timeout(_homeRequestTimeout);
+    final requestedAt = DateTime.now();
+    final answer = await readFenced(
+      () => repo
+          .fetchUserCards(includeArchived: includeArchived)
+          .timeout(_homeRequestTimeout),
+    );
+    final cards = answer.value;
+    if (!answer.current) {
+      // A write (a card just added, say) was acknowledged while this list was
+      // in flight on every attempt, so it may lack it. Nothing is stored over
+      // the phone's own cards; they are what is shown.
+      final own = cache?.financialStore.entities(
+        ref.read(cacheNamespaceProvider),
+        'cards',
+      );
+      if (own != null && own.isNotEmpty) {
+        return visibleCards(own.map(UserCard.fromJson));
+      }
+      return visibleCards(cards);
+    }
     try {
       await cache?.put(
         cacheKey,
         jsonEncode({'userCards': cards.map((c) => c.toJson()).toList()}),
+        requestedAt: requestedAt,
       );
     } catch (_) {
       // A local-database write must never turn a successful wallet fetch into
@@ -2791,13 +2836,16 @@ void _backgroundDisplayRefresh<T>(
   final namespace = ref.read(cacheNamespaceProvider);
   var disposed = false;
   ref.onDispose(() => disposed = true);
-  final work = fetch()
-      .timeout(_homeRequestTimeout)
-      .then((value) async {
+  final requestedAt = DateTime.now();
+  final work = readFenced(() => fetch().timeout(_homeRequestTimeout))
+      .then((answer) async {
         if (disposed || ref.read(cacheNamespaceProvider) != namespace) return;
-        final next = jsonEncode(encode(value));
+        // Dropped when a write was acknowledged while it was in flight (the
+        // answer may predate it); the next read of this surface asks again.
+        if (!answer.current) return;
+        final next = jsonEncode(encode(answer.value));
         final before = await cache.get(key);
-        await cache.put(key, next);
+        await cache.put(key, next, requestedAt: requestedAt);
         if (!disposed && before != next) ref.invalidateSelf();
       })
       .catchError((Object _) {})
@@ -2823,12 +2871,19 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
   Future<void> refreshUserCards() async {
     if (userRepo == null) return;
     try {
-      final cards = await userRepo.fetchUserCards().timeout(
-        _backgroundReadTimeout,
+      // Runs at the same moments the outbox flushes (open, resume). A card the
+      // flush just added is what a list asked for a moment earlier lacks, and
+      // storing that list would delete it: so it is dropped when a write was
+      // acknowledged meanwhile, and stamped with when it was requested.
+      final requestedAt = DateTime.now();
+      final cards = await readAfterWrites(
+        () => userRepo.fetchUserCards().timeout(_backgroundReadTimeout),
       );
+      if (cards == null) return; // keep what is saved; the next refresh asks
       await cache.put(
         _scopedCacheKey(ref, _userCardsCacheKey),
         jsonEncode({'userCards': cards.map((c) => c.toJson()).toList()}),
+        requestedAt: requestedAt,
       );
       anyOk = true;
     } catch (_) {}
@@ -2867,9 +2922,10 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
     final overridesRepo = ref.read(cardOverridesRepositoryProvider);
     if (overridesRepo == null) return;
     try {
-      final overrides = await overridesRepo.fetchOverrides().timeout(
-        _backgroundReadTimeout,
+      final overrides = await readAfterWrites(
+        () => overridesRepo.fetchOverrides().timeout(_backgroundReadTimeout),
       );
+      if (overrides == null) return; // a write landed meanwhile; ask again later
       await cache.put(
         _scopedCacheKey(ref, _cardOverridesCacheKey),
         jsonEncode({'overrides': overrides.map((o) => o.toJson()).toList()}),
@@ -2881,13 +2937,18 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
   Future<void> refreshHomeSummary() async {
     if (userRepo == null) return;
     try {
-      final summary = await userRepo
-          .fetchHomeSummary(
-            anchor: DateTime.now().toUtc(),
-            timeZone: ref.read(deviceTimeZoneProvider),
-          )
-          .timeout(_backgroundReadTimeout);
+      final answer = await readFenced(
+        () => userRepo
+            .fetchHomeSummary(
+              anchor: DateTime.now().toUtc(),
+              timeZone: ref.read(deviceTimeZoneProvider),
+            )
+            .timeout(_backgroundReadTimeout),
+      );
       anyOk = true;
+      // Totals that may predate a saved change are not stored over it.
+      if (!answer.current) return;
+      final summary = answer.value;
       if (summary != null) {
         await cache.put(
           _scopedCacheKey(ref, 'home_summary'),
@@ -3740,15 +3801,20 @@ Future<List<UserCard>?> _readUserCardsCache(
         !_backgroundCardRefreshes.containsKey(key)) {
       final repository = ref.read(userCardsRepositoryProvider);
       if (repository != null) {
-        final work = repository
-            .fetchUserCards(includeArchived: includeArchived)
+        final requestedAt = DateTime.now();
+        final work = readAfterWrites(
+              () => repository.fetchUserCards(includeArchived: includeArchived),
+            )
             .then((cards) async {
-              if (ref.read(cacheNamespaceProvider) == namespace) {
+              // null: a write was acknowledged while this list was in flight, so
+              // it may lack a card the phone just added; keep what is stored.
+              if (cards != null && ref.read(cacheNamespaceProvider) == namespace) {
                 await cache?.put(
                   key,
                   jsonEncode({
                     'userCards': cards.map((c) => c.toJson()).toList(),
                   }),
+                  requestedAt: requestedAt,
                 );
               }
             })
@@ -4204,7 +4270,13 @@ currentMonthlyReportProvider = FutureProvider<MonthlyReport?>((ref) async {
           : MonthlyReport.fromJson(raw as Map<String, dynamic>);
     }
 
+    // Same rule as the spend report: a saved report older than the last
+    // acknowledged write predates it, so the phone's own rows are shown until a
+    // fresh one is stored.
+    final writtenSince =
+        cached != null && WriteFence.process.isSnapshotStale(cached.fetchedAt);
     if (cached == null ||
+        writtenSince ||
         cache?.financialStore.hasPendingTransactions(
               ref.read(cacheNamespaceProvider),
             ) ==
@@ -4212,6 +4284,16 @@ currentMonthlyReportProvider = FutureProvider<MonthlyReport?>((ref) async {
       final local = await _buildLocalMonthlyReport(ref, now);
       if (local != null) {
         ref.read(transactionsProvider);
+        if (writtenSince) {
+          _warmDisplay(
+            ref,
+            cache,
+            key,
+            DateTime.fromMillisecondsSinceEpoch(0),
+            repo.fetchMonthlyReport,
+            (report) => {'monthlyReport': report?.toJson()},
+          );
+        }
         return local;
       }
     }
@@ -5728,8 +5810,13 @@ final _backgroundTransactionRefreshes = <String, Future<void>>{};
 // materialization for that exact account/query instead of letting each
 // provider run a full fetch and synchronous save on the UI isolate.
 final _transactionFetches = <String, Future<List<TransactionEntry>>>{};
+// WriteFence token taken when each of those fetches started; see fetchShared.
+final _transactionFetchTokens = <String, int>{};
 final _backgroundCardRefreshes = <String, Future<void>>{};
 final _backgroundDisplayRefreshes = <String, Future<void>>{};
+// How many times in a row a background read for a key was dropped because a
+// write was acknowledged while it was in flight (see _warmDisplay).
+final _staleWarmDiscards = <String, int>{};
 
 /// Saved display data is published before any HTTP work. Refresh errors only
 /// change sync status, never replace a usable snapshot with an error page.
@@ -5751,10 +5838,33 @@ void _warmDisplay<T>(
   final namespace = ref.read(cacheNamespaceProvider);
   var disposed = false;
   ref.onDispose(() => disposed = true);
-  final work = fetch()
-      .then((value) async {
+  final requestedAt = DateTime.now();
+  final work = readFenced(fetch)
+      .then((answer) async {
         if (disposed || ref.read(cacheNamespaceProvider) != namespace) return;
-        await cache.put(key, jsonEncode(encode(value)));
+        if (!answer.current) {
+          // A write was acknowledged while this was in flight on every attempt,
+          // so the answer may predate it. Storing it would put the old numbers
+          // back over a change the phone already shows. Keep what is saved, ask
+          // for another read soon, and stop asking after a few rounds (an import
+          // uploading for minutes): the next time the screen is read it asks.
+          cache.requestRefresh(key);
+          final rounds = (_staleWarmDiscards[key] ?? 0) + 1;
+          _staleWarmDiscards[key] = rounds;
+          if (rounds <= 3) {
+            final retry = Timer(const Duration(seconds: 3), () {
+              if (!disposed) ref.invalidateSelf();
+            });
+            ref.onDispose(retry.cancel);
+          }
+          return;
+        }
+        _staleWarmDiscards.remove(key);
+        await cache.put(
+          key,
+          jsonEncode(encode(answer.value)),
+          requestedAt: requestedAt,
+        );
         if (!disposed) ref.invalidateSelf();
       })
       .catchError((Object error) {
@@ -6769,17 +6879,32 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
         if (ref.read(cacheNamespaceProvider) != namespace) return const [];
         return store.transactions(namespace, filter)?.rows ?? const [];
       }
-      final rows = await repo.fetchTransactions(
-        from: from,
-        to: to,
-        cardId: cardId,
-        categoryId: categoryId,
-        userCategoryId: userCategoryId,
-        source: source,
-        query: query,
+      // A full list replaces what the phone holds, and a transaction the person
+      // just added is exactly what a list answered a moment earlier lacks. So a
+      // list that was in flight when a write was acknowledged is dropped and
+      // asked for again (see WriteFence); if writes keep landing, the phone's
+      // own rows are shown instead of an older server copy.
+      final fetched = await readAfterWrites(
+        () => repo.fetchTransactions(
+          from: from,
+          to: to,
+          cardId: cardId,
+          categoryId: categoryId,
+          userCategoryId: userCategoryId,
+          source: source,
+          query: query,
+        ),
       );
       // An old request must not write into a new account after logout/login.
-      if (ref.read(cacheNamespaceProvider) != namespace) return rows;
+      if (ref.read(cacheNamespaceProvider) != namespace) {
+        return fetched ?? const [];
+      }
+      if (fetched == null) {
+        final own = store?.transactions(namespace, filter)?.rows;
+        if (own != null) return own;
+        throw const StaleReadException('transaction list');
+      }
+      final rows = fetched;
       store?.saveTransactions(
         namespace,
         rows,
@@ -6804,9 +6929,17 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
     }
   }
 
+  // A fetch that began before a write was acknowledged must not be handed to a
+  // reader who is asking BECAUSE of that write: it would get the older answer
+  // back (the outbox invalidates this provider right after it delivers).
+  bool inFlightIsCurrent() {
+    final token = _transactionFetchTokens[key];
+    return token == null || !WriteFence.process.changedSince(token);
+  }
+
   Future<List<TransactionEntry>> fetchShared() {
     final existing = _transactionFetches[key];
-    if (existing != null) return existing;
+    if (existing != null && inFlightIsCurrent()) return existing;
 
     late Future<List<TransactionEntry>> work;
     work = fetchAndStore().whenComplete(() {
@@ -6814,9 +6947,11 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
       // never remove that newer work when the old future completes.
       if (identical(_transactionFetches[key], work)) {
         _transactionFetches.remove(key);
+        _transactionFetchTokens.remove(key);
       }
     });
     _transactionFetches[key] = work;
+    _transactionFetchTokens[key] = WriteFence.process.begin();
     return work;
   }
 
@@ -6827,14 +6962,18 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
         (!preferCached ||
             DateTime.now().difference(local.fetchedAt) >=
                 const Duration(seconds: 15)) &&
-        !_backgroundTransactionRefreshes.containsKey(key)) {
-      final work = fetchShared()
+        (!_backgroundTransactionRefreshes.containsKey(key) ||
+            !inFlightIsCurrent())) {
+      late Future<void> work;
+      work = fetchShared()
           .then((_) async {
             if (onBackgroundRefresh != null) await onBackgroundRefresh();
           })
           .catchError((_) {})
           .whenComplete(() {
-            _backgroundTransactionRefreshes.remove(key);
+            if (identical(_backgroundTransactionRefreshes[key], work)) {
+              _backgroundTransactionRefreshes.remove(key);
+            }
           });
       _backgroundTransactionRefreshes[key] = work;
       unawaited(work);

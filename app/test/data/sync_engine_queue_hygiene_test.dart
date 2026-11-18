@@ -158,10 +158,12 @@ class _FakeForeignPayments implements ForeignPaymentsRepository {
 class _Repository implements UserCardsRepository {
   bool fail;
   int fullFetches = 0;
+  final rowFetches = <String>[];
   _Repository({this.fail = false});
 
   @override
   Future<TransactionEntry> fetchTransaction(String id) async {
+    rowFetches.add(id);
     if (fail) throw StateError('network unavailable');
     return _server(id);
   }
@@ -445,7 +447,9 @@ void main() {
       final second = await scope.read(syncEngineProvider).sync();
       expect(second.ranToCompletion, isTrue);
       expect(api.pushes.expand((c) => c), hasLength(1));
-      expect(repository.fullFetches, greaterThanOrEqualTo(1));
+      // Only the edited row is read back, never the whole list.
+      expect(repository.rowFetches, ['t1', 't1']);
+      expect(repository.fullFetches, 0);
       expect(allRows(), 0);
       expect(
         cache.financialStore

@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:pandapay/data/api_request_headers_client.dart';
 import 'package:pandapay/data/authenticated_http_client.dart';
+import 'package:pandapay/data/connectivity/write_fence.dart';
 
 final _api = Uri.parse('https://api.example.test:8443');
 
@@ -94,6 +95,86 @@ void main() {
       expect(h['X-Sms-Pipeline'], 'v2');
     }
     expect(seen[1]['authorization'] ?? seen[1]['Authorization'], 'Bearer new');
+  });
+
+  group('marks acknowledged data writes on the write fence', () {
+    // The fence is what stops a read that was in flight from replacing what a
+    // write just changed (the 18 Nov "added transaction disappears" bug), so
+    // it must see every successful write and nothing else.
+    late WriteFence fence;
+    setUp(() => fence = WriteFence());
+
+    ApiRequestHeadersClient fenced(MockClient inner, {Uri? base}) =>
+        ApiRequestHeadersClient(
+          inner: inner,
+          apiBaseUrl: base ?? _api,
+          appVersion: () async => '1.4.0+57',
+          writeFence: fence,
+        );
+
+    Future<int> acksAfter(
+      ApiRequestHeadersClient client,
+      String method,
+      String url,
+    ) async {
+      final token = fence.begin();
+      await client.send(http.Request(method, Uri.parse(url)));
+      return fence.changedSince(token) ? 1 : 0;
+    }
+
+    test('a successful POST/PATCH/PUT/DELETE counts', () async {
+      final client = fenced(MockClient((r) async => http.Response('{}', 201)));
+      for (final method in ['POST', 'PATCH', 'PUT', 'DELETE']) {
+        expect(
+          await acksAfter(client, method, 'https://api.example.test:8443/transactions'),
+          1,
+          reason: method,
+        );
+      }
+    });
+
+    test('reads, refused writes and server errors do not', () async {
+      Future<int> ack(String method, int status) => acksAfter(
+        fenced(MockClient((r) async => http.Response('{}', status))),
+        method,
+        'https://api.example.test:8443/transactions',
+      );
+      expect(await ack('GET', 200), 0);
+      expect(await ack('POST', 400), 0, reason: 'a refused write changed nothing');
+      expect(await ack('POST', 409), 0);
+      expect(await ack('POST', 503), 0, reason: 'unknown outcome: the outbox retries');
+    });
+
+    test('bookkeeping endpoints do not make every read look out of date', () async {
+      final client = fenced(MockClient((r) async => http.Response('{}', 200)));
+      for (final path in ['/analytics/events', '/sync/ack', '/sync/register-device']) {
+        expect(await acksAfter(client, 'POST', 'https://api.example.test:8443$path'), 0, reason: path);
+      }
+    });
+
+    test('an API served below a base path is matched on the path under it', () async {
+      final client = fenced(
+        MockClient((r) async => http.Response('{}', 200)),
+        base: Uri.parse('https://api.example.test:8443/v1/'),
+      );
+      expect(await acksAfter(client, 'POST', 'https://api.example.test:8443/v1/sync/ack'), 0);
+      expect(await acksAfter(client, 'POST', 'https://api.example.test:8443/v1/transactions'), 1);
+    });
+
+    test('another host is not the API and never marks it', () async {
+      final client = fenced(MockClient((r) async => http.Response('{}', 200)));
+      expect(await acksAfter(client, 'POST', 'https://maps.example.test/place'), 0);
+    });
+
+    test('a transport failure marks nothing', () async {
+      final client = fenced(MockClient((r) async => throw http.ClientException('offline')));
+      final token = fence.begin();
+      await expectLater(
+        client.send(http.Request('POST', Uri.parse('https://api.example.test:8443/transactions'))),
+        throwsA(isA<http.ClientException>()),
+      );
+      expect(fence.changedSince(token), isFalse);
+    });
   });
 
   test('close closes the inner client', () {

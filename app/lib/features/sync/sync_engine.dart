@@ -1,4 +1,5 @@
 import '../../data/connectivity/server_backoff.dart';
+import '../../data/connectivity/write_fence.dart';
 import 'invalidation_coalescer.dart';
 import 'dart:async';
 import 'dart:io' show Platform;
@@ -263,10 +264,69 @@ class SyncEngine {
     // changes left over from an earlier sync (or app run) whose fetch failed.
     final entities = queue.appliedEntities();
     if (entities.isNotEmpty) {
-      await _materialize(api, entities, queue);
-      queue.purgeApplied(entities);
+      // Transactions are refreshed one row at a time: only the rows that were
+      // pushed, never the whole history (31 MB and 336 ms at 40,000 rows) and
+      // never by deleting what a list happens not to contain. A list is only
+      // the fallback for a very large batch (null).
+      final rowIds = entities.contains('transactions')
+          ? await _refreshAppliedTransactions(queue)
+          : null;
+      final listed = rowIds == null
+          ? entities
+          : entities.difference({'transactions'});
+      await _materialize(api, listed, queue);
+      if (rowIds != null) queue.purgeAppliedIds('transactions', rowIds);
+      queue.purgeApplied(listed);
     }
     return applied;
+  }
+
+  /// Most transactions refreshed one by one after a push. A bigger batch reads
+  /// the list instead (one big request is cheaper than hundreds of small ones).
+  static const maxRowRefresh = 100;
+
+  /// Fetches the server copy of each transaction whose edit was just applied
+  /// and stores it, without ever removing a stored row. Returns the ids that
+  /// were refreshed (for [SyncQueue.purgeAppliedIds]), or null when there are
+  /// more than [maxRowRefresh] and the caller should read the list.
+  ///
+  /// A row the server no longer has (404) is skipped, not deleted here: only an
+  /// explicit delete in the change feed removes a stored row.
+  ///
+  /// Like every server read it goes through the write fence: if a write was
+  /// acknowledged while the rows were being fetched they are fetched again, and
+  /// if that never settles nothing is stored and the applied edits stay queued
+  /// (they keep showing the edit) for the next sync.
+  Future<Set<String>?> _refreshAppliedTransactions(SyncQueue queue) async {
+    final ids = queue.appliedEntityIds('transactions');
+    if (ids.length > maxRowRefresh) return null;
+    final namespace = queue.namespace;
+    final repository = _ref.read(userCardsRepositoryProvider);
+    if (repository == null) throw StateError('Sign in to sync');
+    final cache = await _ref.read(responseCacheProvider.future);
+    // Stamped with when the request was SENT: a row the person edited on the
+    // phone after that keeps its value instead of being put back.
+    final requestedAt = DateTime.now();
+    final delta = await readAfterWrites(
+      () => fetchSyncTransactionDelta(
+        [
+          for (final id in ids) {'entity_id': id, 'op': 'update'},
+        ],
+        fetch: repository.fetchTransaction,
+        isCurrent: () => _ref.read(cacheNamespaceProvider) == namespace,
+        maxIds: maxRowRefresh,
+      ),
+    );
+    if (_ref.read(cacheNamespaceProvider) != namespace) {
+      throw StateError('Account changed during sync');
+    }
+    if (delta == null) throw const StaleReadException('edited transactions');
+    cache.financialStore.saveTransactions(
+      namespace,
+      delta.rows,
+      at: requestedAt,
+    );
+    return ids;
   }
 
   /// The next run of queued changes, in queue order, that fits one request.
@@ -582,7 +642,10 @@ class SyncEngine {
   }
 
   Future<void> _refreshSelfTransferRules(SyncApi api, SyncQueue queue) async {
-    final remote = await api.fetchSelfTransferRules();
+    // Replaces every local rule with the server's list, so a list that began
+    // before a rule was confirmed would erase it. Skipped when it cannot be
+    // shown to be newer; the next sync reads it again.
+    final remote = await readAfterWrites(api.fetchSelfTransferRules);
     if (remote == null) return;
     final cache = await _ref.read(responseCacheProvider.future);
     SelfTransferRules(
@@ -591,6 +654,9 @@ class SyncEngine {
     ).replaceRemote(remote);
   }
 
+  /// Stores a fresh full copy of each of [entities]. For `transactions` this
+  /// reads the whole list, so it is only reached for a batch of more than
+  /// [maxRowRefresh] edited rows (see [_refreshAppliedTransactions]).
   Future<void> _materialize(
     SyncApi api,
     Set<String> entities,
@@ -605,41 +671,64 @@ class SyncEngine {
     if (repository == null) throw StateError('Sign in to sync');
     // Materialize authoritative records before advancing the cursor. If a
     // fetch or local commit fails, this batch is safely replayed next time.
+    // Every full read below replaces local rows with the server's copy, and a
+    // transaction or card the person just added (and the outbox just delivered)
+    // is exactly what an older copy lacks. So each one (a) is dropped and asked
+    // again when a write was acknowledged while it was in flight, and (b) is
+    // stamped with when it was REQUESTED, not when it arrived, so a row saved
+    // after that moment is never pruned by it. When it cannot be made certain
+    // the sync stops here: the applied edits stay queued (they keep showing the
+    // edit) and the next sync reads again.
     if (entities.contains('transactions')) {
-      final rows = await repository.fetchTransactions();
+      final requestedAt = DateTime.now();
+      final rows = await readAfterWrites(() => repository.fetchTransactions());
       if (_ref.read(cacheNamespaceProvider) != namespace) {
         throw StateError('Account changed during sync');
       }
+      if (rows == null) throw const StaleReadException('transaction list');
       cache.financialStore.saveTransactions(
         namespace,
         rows,
         completeQuery: const TransactionQuery(),
+        at: requestedAt,
       );
     }
     if (entities.contains('user_cards')) {
-      final cards = await repository.fetchUserCards();
-      final archived = await repository.fetchUserCards(includeArchived: true);
+      final requestedAt = DateTime.now();
+      final fetched = await readAfterWrites(
+        () async => (
+          active: await repository.fetchUserCards(),
+          archived: await repository.fetchUserCards(includeArchived: true),
+        ),
+      );
       if (_ref.read(cacheNamespaceProvider) != namespace) {
         throw StateError('Account changed during sync');
       }
+      if (fetched == null) throw const StaleReadException('card list');
       // Publishing these snapshots also materializes their card scopes in
       // ResponseCache.put. A direct replace here repeats the same SQL work.
       await cache.put(
         '$namespace:user_cards',
-        jsonEncode({'userCards': cards.map((c) => c.toJson()).toList()}),
+        jsonEncode({'userCards': fetched.active.map((c) => c.toJson()).toList()}),
+        requestedAt: requestedAt,
       );
       await cache.put(
         '$namespace:user_cards_with_archived',
-        jsonEncode({'userCards': archived.map((c) => c.toJson()).toList()}),
+        jsonEncode({
+          'userCards': fetched.archived.map((c) => c.toJson()).toList(),
+        }),
+        requestedAt: requestedAt,
       );
     }
     if (entities.contains('card_overrides')) {
-      final overrides = await _ref
-          .read(cardOverridesRepositoryProvider)!
-          .fetchOverrides();
+      final overridesRepository = _ref.read(cardOverridesRepositoryProvider)!;
+      final overrides = await readAfterWrites(
+        () => overridesRepository.fetchOverrides(),
+      );
       if (_ref.read(cacheNamespaceProvider) != namespace) {
         throw StateError('Account changed during sync');
       }
+      if (overrides == null) throw const StaleReadException('card overrides');
       await cache.put(
         '$namespace:card_overrides',
         jsonEncode({'overrides': overrides.map((o) => o.toJson()).toList()}),
