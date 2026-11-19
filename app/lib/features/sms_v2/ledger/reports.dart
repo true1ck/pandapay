@@ -4,6 +4,7 @@ import 'package:pandapay_domain/pandapay_domain.dart' show Money;
 import 'package:pandapay_domain/sms_v2.dart' as v2;
 import 'package:pandapay_domain/sms_v2_category.dart';
 import 'package:pandapay_domain/sms_v2_ledger.dart';
+import '../../../data/reward_counting.dart' show firstCardUseOf;
 import '../../../data/spend_reports_repository.dart';
 import '../../../data/spending_selection.dart';
 import '../../../data/spend_by_category_repository.dart';
@@ -29,6 +30,14 @@ class LedgerReadModel {
     for (final row in transactions)
       if (row.eventId != null && row.status == 'active') row.eventId!: row.id,
   });
+
+  /// The earliest time each wallet card shows up on a credit-card row, by
+  /// wallet card id. The best evidence of when the person had the card, which
+  /// the Rewards comparison uses so a card is never "the better choice" for a
+  /// spend from before it was in hand. Built once per model (one pass over the
+  /// rows), not per consumer rebuild.
+  late final Map<String, DateTime> firstCardUseByUserCardId =
+      Map<String, DateTime>.unmodifiable(firstCardUseOf(transactions));
 
   /// Facts by id / by source message, built once per model instead of once
   /// per consumer rebuild (the review list used to rebuild both every time).

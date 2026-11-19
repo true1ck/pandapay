@@ -3,6 +3,12 @@
 **Status (18 Nov 2026):** built on `dev`, uncommitted, not on a phone yet. Unit and
 widget tests pass; rendered in a test harness only. See section 5.
 
+> **Correction, 19 Nov 2026:** the Missed tab, the "More than only <card>" hero line, and the
+> Cards tab's "Missed on this card" were always empty because every card's base rate read as
+> 0% on the live catalogue. Fixed, and the missed logic below is replaced: see
+> `docs/rewards-missed-fix-2026-11-19.md`. The hero line was removed; Missed now prices each
+> spend with the reward engine on the cards the person actually had.
+
 Route: `/insights/rewards` (Insights → Rewards). Before this change it was
 `GroupedInsightScreen` with three old screens as tabs: This month
 (`MonthlySavingsScreen`), Missed (`MissedOpportunitiesScreen`), By card
@@ -100,9 +106,9 @@ last as "No spends in this range". No extra network request per card.
 - **Status** of each row: Earned (counted reward above zero), No reward (priced
   at zero, or a payment method that earns nothing), Not counted (card not in
   the wallet, or not worked out yet).
-- **Missed** and **best single card**: `compareToOwnedCards` /
-  `baseRateValueFor`, base rate only, need two or more wallet cards, marked as
-  estimates.
+- **Missed**: `SpendComparer` (reward engine, per spend), needs two different card
+  products in the wallet, marked as estimates. (Was `compareToOwnedCards`, base rate only,
+  which read 0% on every v2 card.)
 - **Card fee check**: unchanged maths (`totalPointsEarned × pointValueInr`
   against the annual fee or the user's override).
 

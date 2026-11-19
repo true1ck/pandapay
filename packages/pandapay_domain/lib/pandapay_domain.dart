@@ -14,6 +14,7 @@ export 'src/engine/reward_engine_v2.dart';
 export 'src/engine/acquisition_engine.dart';
 export 'src/engine/calculators.dart';
 export 'src/engine/historical_comparison.dart';
+export 'src/engine/spend_comparison.dart';
 export 'src/engine/urgency.dart';
 export 'src/engine/milestone_marginal_rate.dart';
 export 'src/geo/geo.dart';

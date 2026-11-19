@@ -1,6 +1,75 @@
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:test/test.dart';
 
+/// A card shaped like the live v2 catalogue's Swiggy HDFC card: priority-0
+/// exclusion rows with NO category (a "no rewards under ₹100" row and an EMI
+/// row) sit in front of the real earning rules. The first version of
+/// [baseRatePerRupee] took the lowest-priority rule with no category, which on
+/// this shape is an exclusion paying 0, so every real card read as 0%.
+CardProduct v2Card() => CardProduct(
+  id: 'v2',
+  name: 'V2 Card',
+  network: CardNetwork.visa,
+  baseRewardUnit: RewardUnit.cashbackPercent,
+  baseRewardRate: 1,
+  rewardRules: [
+    RewardRule(
+      id: 'x-under-100',
+      unit: RewardUnit.cashbackPercent,
+      rate: 0,
+      priority: 0,
+      role: RuleRole.exclusion,
+      maxTxn: Money.fromRupees(100),
+      minEngineVersion: 2,
+    ),
+    const RewardRule(
+      id: 'x-emi',
+      unit: RewardUnit.cashbackPercent,
+      rate: 0,
+      priority: 0,
+      role: RuleRole.exclusion,
+      rail: TxnRail.emi,
+      minEngineVersion: 2,
+    ),
+    RewardRule(
+      id: 'e-swiggy',
+      unit: RewardUnit.cashbackPercent,
+      rate: 10,
+      priority: 1,
+      role: RuleRole.earn,
+      merchantSlugs: const ['swiggy'],
+      minTxn: Money.fromRupees(249),
+    ),
+    const RewardRule(
+      id: 'i-online',
+      categoryId: 'online',
+      unit: RewardUnit.cashbackPercent,
+      rate: 5,
+      priority: 2,
+      role: RuleRole.info,
+      rail: TxnRail.online,
+      minEngineVersion: 2,
+    ),
+    RewardRule(
+      id: 'b-base',
+      unit: RewardUnit.cashbackPercent,
+      rate: 1,
+      priority: 3,
+      role: RuleRole.earn,
+      minTxn: Money.fromRupees(100),
+    ),
+    const RewardRule(
+      id: 'x-rent',
+      categoryId: 'rent',
+      unit: RewardUnit.cashbackPercent,
+      rate: 0,
+      priority: 11,
+      role: RuleRole.exclusion,
+      minEngineVersion: 2,
+    ),
+  ],
+);
+
 void main() {
   final diningCard = CardProduct(
     id: 'dining',
@@ -8,178 +77,153 @@ void main() {
     network: CardNetwork.rupay,
     pointValueInr: 1,
     rewardRules: const [
-      RewardRule(id: 'r1', categoryId: 'dining', unit: RewardUnit.cashbackPercent, rate: 5),
-      RewardRule(id: 'r2', unit: RewardUnit.cashbackPercent, rate: 1, priority: 200), // base rate
+      RewardRule(
+        id: 'r1',
+        categoryId: 'dining',
+        unit: RewardUnit.cashbackPercent,
+        rate: 5,
+      ),
+      RewardRule(
+        id: 'r2',
+        unit: RewardUnit.cashbackPercent,
+        rate: 1,
+        priority: 200,
+      ), // base rate
     ],
   );
-  final flatCard = CardProduct(
-    id: 'flat',
-    name: 'Flat Card',
-    network: CardNetwork.visa,
-    pointValueInr: 1,
-    rewardRules: const [
-      RewardRule(id: 'r3', unit: RewardUnit.cashbackPercent, rate: 2, priority: 200),
-    ],
-  );
 
-  test('the card actually used, if it was the best of the owned set, reports no better option', () {
-    final result = compareToOwnedCards(
-      usedCard: diningCard,
-      ownedCards: [diningCard, flatCard],
-      amount: Money.fromRupees(1000),
-      categoryId: 'dining',
-    );
+  group('baseRatePerRupee', () {
+    test('a category rule beats the all-other-spends rule, which covers the rest', () {
+      expect(baseRatePerRupee(product: diningCard, categoryId: 'dining'), 0.05);
+      expect(baseRatePerRupee(product: diningCard, categoryId: 'travel'), 0.01);
+      expect(baseRatePerRupee(product: diningCard), 0.01);
+      expect(
+        baseRateValueFor(
+          product: diningCard,
+          amount: Money.fromRupees(1000),
+          categoryId: 'dining',
+        ),
+        Money.fromRupees(50),
+      );
+    });
 
-    expect(result.hadBetterOption, isFalse);
-    expect(result.actualValue, Money.fromRupees(50)); // 5% of 1000
-    expect(result.missedValue, const Money.zero());
-  });
+    test('exclusion rows with no category are not the card\'s base rate (the v2 catalogue shape)', () {
+      final card = v2Card();
+      // 1%, not the 0% of the priority-0 exclusion rows.
+      expect(baseRatePerRupee(product: card, categoryId: 'dining'), 0.01);
+      expect(baseRatePerRupee(product: card), 0.01);
+      expect(
+        baseRateValueFor(product: card, amount: Money.fromRupees(2000)),
+        Money.fromRupees(20),
+      );
+    });
 
-  test('a different owned card with a higher category rate is flagged as the better option', () {
-    // Same dining spend, but this time flatCard was used instead of diningCard.
-    final result = compareToOwnedCards(
-      usedCard: flatCard,
-      ownedCards: [diningCard, flatCard],
-      amount: Money.fromRupees(1000),
-      categoryId: 'dining',
-    );
+    test('a merchant-only rule is not what the card pays in general', () {
+      // The 10% Swiggy row has no category and a lower priority number than the
+      // 1% base rule; it must not become the card's everyday rate.
+      expect(baseRatePerRupee(product: v2Card(), categoryId: 'dining'), 0.01);
+    });
 
-    expect(result.hadBetterOption, isTrue);
-    expect(result.betterCard?.id, 'dining');
-    expect(result.actualValue, Money.fromRupees(20)); // flatCard's base 2%
-    expect(result.betterValue, Money.fromRupees(50)); // diningCard's 5%
-    expect(result.missedValue, Money.fromRupees(30));
-  });
+    test('info rows are never picked, even at the best priority', () {
+      final card = CardProduct(
+        id: 'info-first',
+        name: 'Info First',
+        network: CardNetwork.visa,
+        baseRewardUnit: RewardUnit.cashbackPercent,
+        baseRewardRate: 2,
+        rewardRules: const [
+          RewardRule(
+            id: 'i',
+            unit: RewardUnit.cashbackPercent,
+            rate: 9,
+            priority: 0,
+            role: RuleRole.info,
+            minEngineVersion: 2,
+          ),
+        ],
+      );
+      // Only an info row: the card's own stated base rate answers.
+      expect(baseRatePerRupee(product: card), 0.02);
+    });
 
-  test('a card with no matching reward rule at all contributes zero, never throws', () {
-    final noRulesCard = CardProduct(id: 'norules', name: 'No Rules', network: CardNetwork.mastercard);
-    final result = compareToOwnedCards(
-      usedCard: noRulesCard,
-      ownedCards: [noRulesCard, diningCard],
-      amount: Money.fromRupees(1000),
-      categoryId: 'dining',
-    );
+    test('a category the card leaves out of rewards pays nothing', () {
+      expect(baseRatePerRupee(product: v2Card(), categoryId: 'rent'), 0);
+      final card = CardProduct(
+        id: 'excl',
+        name: 'Excludes Fuel',
+        network: CardNetwork.visa,
+        baseRewardUnit: RewardUnit.cashbackPercent,
+        baseRewardRate: 1,
+        excludedCategoryIds: const ['fuel'],
+      );
+      expect(baseRatePerRupee(product: card, categoryId: 'fuel'), 0);
+      expect(baseRatePerRupee(product: card, categoryId: 'dining'), 0.01);
+    });
 
-    expect(result.actualValue, const Money.zero());
-    expect(result.hadBetterOption, isTrue);
-    expect(result.betterCard?.id, 'dining');
-  });
+    test('a card with no rule and no stated base rate contributes zero, never throws', () {
+      final noRules = CardProduct(
+        id: 'norules',
+        name: 'No Rules',
+        network: CardNetwork.mastercard,
+      );
+      expect(baseRatePerRupee(product: noRules, categoryId: 'dining'), 0);
+      expect(
+        baseRateValueFor(
+          product: noRules,
+          amount: Money.fromRupees(1000),
+          categoryId: 'dining',
+        ),
+        const Money.zero(),
+      );
+    });
 
-  test('flat_points rules never count as comparable value, on either side', () {
-    final flatPointsCard = CardProduct(
-      id: 'flatpoints',
-      name: 'Flat Points',
-      network: CardNetwork.rupay,
-      rewardRules: const [RewardRule(id: 'r4', unit: RewardUnit.flatPoints, rate: 500, priority: 200)],
-    );
-    final result = compareToOwnedCards(
-      usedCard: flatPointsCard,
-      ownedCards: [flatPointsCard],
-      amount: Money.fromRupees(1000),
-      categoryId: 'dining',
-    );
+    test('flat_points rules never count as comparable value', () {
+      final flatPoints = CardProduct(
+        id: 'flatpoints',
+        name: 'Flat Points',
+        network: CardNetwork.rupay,
+        rewardRules: const [
+          RewardRule(
+            id: 'r4',
+            unit: RewardUnit.flatPoints,
+            rate: 500,
+            priority: 200,
+          ),
+        ],
+      );
+      expect(baseRatePerRupee(product: flatPoints, categoryId: 'dining'), 0);
+    });
 
-    expect(result.actualValue, const Money.zero());
-    expect(result.hadBetterOption, isFalse);
-  });
-
-  test('a single-card wallet never reports a better option (nothing else to compare against)', () {
-    final result = compareToOwnedCards(
-      usedCard: diningCard,
-      ownedCards: [diningCard],
-      amount: Money.fromRupees(1000),
-      categoryId: 'dining',
-    );
-    expect(result.hadBetterOption, isFalse);
-  });
-
-  test('comparison values are never negative or larger than the spend', () {
-    final malformed = CardProduct(
-      id: 'malformed',
-      name: 'Malformed rate card',
-      network: CardNetwork.visa,
-      rewardRules: const [
-        RewardRule(id: 'r-malformed', unit: RewardUnit.cashbackPercent, rate: 500),
-      ],
-    );
-
-    final result = compareToOwnedCards(
-      usedCard: malformed,
-      ownedCards: [malformed],
-      amount: Money.fromRupees(100),
-    );
-    expect(result.actualValue, Money.fromRupees(100));
-    expect(result.missedValue, const Money.zero());
-
-    final negative = compareToOwnedCards(
-      usedCard: malformed,
-      ownedCards: [malformed],
-      amount: Money.fromRupees(-100),
-    );
-    expect(negative.actualValue, const Money.zero());
-    expect(negative.missedValue, const Money.zero());
-  });
-
-  test('BaseRateTable prices every spend exactly like baseRateValueFor', () {
-    final points = CardProduct(
-      id: 'points',
-      name: 'Points Card',
-      network: CardNetwork.visa,
-      pointValueInr: 0.25,
-      rewardRules: const [
-        RewardRule(id: 'p1', categoryId: 'travel', unit: RewardUnit.pointsPer150, rate: 10),
-        RewardRule(id: 'p2', categoryId: 'fuel', unit: RewardUnit.flatPoints, rate: 500),
-        RewardRule(id: 'p3', unit: RewardUnit.pointsPer100, rate: 2, priority: 200),
-      ],
-    );
-    // A catalogue mistake: more than 100% back, and a negative rate.
-    final broken = CardProduct(
-      id: 'broken',
-      name: 'Broken Card',
-      network: CardNetwork.visa,
-      pointValueInr: 1,
-      rewardRules: const [
-        RewardRule(id: 'b1', categoryId: 'dining', unit: RewardUnit.cashbackPercent, rate: 250),
-        RewardRule(id: 'b2', unit: RewardUnit.cashbackPercent, rate: -3, priority: 200),
-      ],
-    );
-    final empty = CardProduct(id: 'none', name: 'No Rules', network: CardNetwork.visa);
-    final table = BaseRateTable();
-    for (final product in [diningCard, flatCard, points, broken, empty]) {
-      for (final category in [null, 'dining', 'travel', 'fuel', 'other']) {
-        for (final paise in [0, -500, 1, 99, 12345, 100000, 7654321]) {
-          final amount = Money.fromPaise(paise);
-          expect(
-            table.valueFor(product: product, amount: amount, categoryId: category),
-            baseRateValueFor(product: product, amount: amount, categoryId: category),
-            reason: '${product.id} / $category / $paise',
-          );
-        }
-      }
-    }
-  });
-
-  test('compareToOwnedCards gives the same answer with or without a rate table', () {
-    final table = BaseRateTable();
-    for (final used in [diningCard, flatCard]) {
-      for (final category in [null, 'dining', 'travel']) {
-        final plain = compareToOwnedCards(
-          usedCard: used,
-          ownedCards: [diningCard, flatCard],
-          amount: Money.fromRupees(1234.5),
-          categoryId: category,
-        );
-        final cached = compareToOwnedCards(
-          usedCard: used,
-          ownedCards: [diningCard, flatCard],
-          amount: Money.fromRupees(1234.5),
-          categoryId: category,
-          rates: table,
-        );
-        expect(cached.actualValue, plain.actualValue);
-        expect(cached.betterCard?.id, plain.betterCard?.id);
-        expect(cached.missedValue, plain.missedValue);
-      }
-    }
+    test('values are never negative or larger than the spend', () {
+      final malformed = CardProduct(
+        id: 'malformed',
+        name: 'Malformed rate card',
+        network: CardNetwork.visa,
+        rewardRules: const [
+          RewardRule(
+            id: 'r-malformed',
+            unit: RewardUnit.cashbackPercent,
+            rate: 500,
+          ),
+        ],
+      );
+      expect(
+        baseRateValueFor(product: malformed, amount: Money.fromRupees(100)),
+        Money.fromRupees(100),
+      );
+      expect(
+        baseRateValueFor(product: malformed, amount: Money.fromRupees(-100)),
+        const Money.zero(),
+      );
+      final negative = CardProduct(
+        id: 'neg',
+        name: 'Negative',
+        network: CardNetwork.visa,
+        rewardRules: const [
+          RewardRule(id: 'n', unit: RewardUnit.cashbackPercent, rate: -3),
+        ],
+      );
+      expect(baseRatePerRupee(product: negative), 0);
+    });
   });
 }

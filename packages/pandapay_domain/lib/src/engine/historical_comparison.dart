@@ -1,33 +1,19 @@
 import '../card_rules/card_rules.dart';
 import '../money/money.dart';
 
-/// Task D-13 (implementation-plan-group-c-d.md's flagged largest technical
-/// risk in Group D) — "was this transaction's card the best choice, in
-/// hindsight?" Shared by D1's row-level optimality indicator and D6
-/// Missed Opportunities, so the two never disagree about the same
-/// transaction.
+/// "Was this transaction's card the best choice, in hindsight?" — the result
+/// type shared by the Rewards page's Missed tab and the Insights hub, built by
+/// [SpendComparer] (`spend_comparison.dart`).
 ///
 /// **Deliberately scoped, not a full historical engine replay.** A fully
 /// accurate answer would need each owned card's cap/milestone/fee-waiver
 /// STATE exactly as it stood on the transaction's date — this schema only
 /// ever stores the CURRENT period's state (cap_states/milestone_states are
 /// upserted in place, not append-only history), so that state is
-/// unrecoverable for a past transaction after the fact. Building an
-/// append-only state history table would be a real, much larger project,
-/// not attempted in this pass.
-///
-/// What this DOES compare, honestly: the BASE reward rate (category match,
-/// no cap/milestone/forex/fuel adjustment) each owned card would have
-/// earned on this transaction's category and amount, using the exact same
-/// rule-selection convention (lowest-priority-number reward_rules row
-/// wins; `categoryId == null` is the base "all other spends" rate) already
-/// used by RecommendationEngine, api/'s insertTransactionAndUpdateState,
-/// and MilestonesScreen's "chasing beats base rate" flag — so this stays
-/// consistent with every other place in the app that answers "what would
-/// this card have earned," rather than inventing a fourth slightly-
-/// different version. `flat_points` rules contribute zero comparable value
-/// here, same convention the server-side helper already uses (a fixed
-/// bonus isn't a per-transaction rate).
+/// unrecoverable for a past transaction after the fact. What the comparison
+/// does use is each card's own earning rules for the spend (category,
+/// merchant, minimum spend, exclusions), exactly as the reward engine reads
+/// them; caps and milestones are left out, so a gap is an estimate.
 class HistoricalCardComparison {
   final CardProduct usedCard;
   final Money actualValue;
@@ -53,18 +39,11 @@ class HistoricalCardComparison {
   }
 }
 
-/// The BASE reward rate (category match, no cap/milestone/forex/fuel
-/// adjustment) [product] would earn on a transaction of [amount] in
-/// [categoryId] — same rule-selection convention as everywhere else that
-/// answers "what would this card have earned" (see the class doc-comment
-/// above). Exported on its own, not just inlined into
-/// [compareToOwnedCards], because E9 Monthly Savings Report's
-/// baseline_single_card ("what a single best-overall card would have
-/// earned across the WHOLE month") needs the exact same per-transaction
-/// rate applied card-by-card across many transactions, not just the
-/// pairwise "better than what was used" comparison this file was built
-/// for — reusing this keeps both screens' numbers consistent with each
-/// other instead of growing a second, slightly different rate calculator.
+/// The BASE reward [product] would earn on a purchase of [amount] in
+/// [categoryId], with nothing known about the merchant: `amount *`
+/// [baseRatePerRupee]. For a person's own spends use [SpendComparer], which
+/// prices the real merchant, rail and date through the reward engine; this is
+/// the "unknown shop" answer (the Split planner's whole-purchase baseline).
 Money baseRateValueFor({
   required CardProduct product,
   required Money amount,
@@ -74,87 +53,89 @@ Money baseRateValueFor({
   return amount * baseRatePerRupee(product: product, categoryId: categoryId);
 }
 
-/// The share of a purchase [product]'s base rule returns for [categoryId],
-/// clamped to 0..1: [baseRateValueFor] is `amount * baseRatePerRupee(...)`.
+/// An earning rule that pays on any purchase in its category, with no
+/// condition on the merchant, payment platform, MCC list or rail. Those are the
+/// only rules that say what a card pays "in general".
+///
+/// A rule's minimum spend is deliberately not a condition here: the base rule
+/// of most v2 cards reads "1% on spends of ₹100 or more", and a general rate
+/// is about ordinary purchases, not a ₹40 chai.
+bool _paysInGeneral(RewardRule rule) {
+  if (rule.isV1Only) return false;
+  final role = rule.effectiveRole;
+  if (role != RuleRole.earn && role != RuleRole.base) return false;
+  final pattern = rule.merchantPattern;
+  return rule.merchantSlugs.isEmpty &&
+      (pattern == null || pattern.trim().isEmpty) &&
+      rule.platformSlugs.isEmpty &&
+      rule.mccInclude.isEmpty &&
+      rule.rail == null;
+}
+
+/// The share of a purchase [product] pays in [categoryId] with nothing else
+/// known about it, clamped to 0..1: [baseRateValueFor] is
+/// `amount * baseRatePerRupee(...)`.
+///
+/// The rate comes from the card's general earning rules for the category (a
+/// category rule, else the all-other-spends rule) by priority, then the card's
+/// own stated base rate when the catalogue wrote no general rule. A category
+/// the card leaves out of rewards pays 0.
+///
+/// This used to pick the lowest-priority rule among every rule with no
+/// category. On the v2 catalogue that is an exclusion (a "no rewards under
+/// ₹100" or EMI rule at priority 0), so every card read as 0% and no card was
+/// ever better than another. Exclusion, info and conditional rules are not
+/// general earning rules and are never picked here.
 ///
 /// A base-rate reward is a portion of the purchase value, not a debt or a
 /// bonus unrelated to the purchase. Catalogue mistakes (for example a
 /// malformed points value/rate) must not produce an impossible reward that is
 /// below zero or larger than the spend itself, hence the clamp.
-///
-/// Split out so a caller pricing many spends ([BaseRateTable]) can pick each
-/// card's rule once per category instead of once per spend: picking the rule
-/// builds an identity key per catalogue rule, which is the expensive part.
 double baseRatePerRupee({required CardProduct product, String? categoryId}) {
-  final matching = uniqueRewardRules(product.rewardRules)
-    .where((r) => r.categoryId == null || r.categoryId == categoryId)
-    .toList()
-    ..sort((a, b) => a.priority.compareTo(b.priority));
-  if (matching.isEmpty) return 0;
-  final rule = matching.first;
-  if (rule.unit == RewardUnit.flatPoints) return 0;
-  final rate = rule.unit.effectiveRatePerRupee(rule.rate, pointValueInr: product.pointValueInr);
+  if (product.excludesCategory(categoryId)) return 0;
+  final rules = uniqueRewardRules(product.rewardRules);
+  // A rule that keeps this whole category out of rewards (rent, wallet loads).
+  final categoryExcluded = categoryId != null &&
+      rules.any(
+        (r) =>
+            !r.isV1Only &&
+            r.effectiveRole == RuleRole.exclusion &&
+            r.categoryId == categoryId &&
+            r.merchantSlugs.isEmpty &&
+            r.platformSlugs.isEmpty &&
+            r.mccInclude.isEmpty &&
+            r.rail == null &&
+            r.maxTxn == null,
+      );
+  if (categoryExcluded) return 0;
+  final matching = rules
+      .where(
+        (r) =>
+            _paysInGeneral(r) &&
+            (r.categoryId == null || r.categoryId == categoryId),
+      )
+      .toList()
+    ..sort((a, b) {
+      final byPriority = a.priority.compareTo(b.priority);
+      if (byPriority != 0) return byPriority;
+      // A rule for this very category over the all-other-spends rule.
+      if ((a.categoryId == null) != (b.categoryId == null)) {
+        return a.categoryId == null ? 1 : -1;
+      }
+      return b.rate.compareTo(a.rate);
+    });
+  double rate;
+  if (matching.isEmpty) {
+    rate = product.baseRatePerRupee;
+  } else {
+    final rule = matching.first;
+    if (rule.unit == RewardUnit.flatPoints) return 0;
+    rate = rule.unit.effectiveRatePerRupee(
+      rule.rate,
+      pointValueInr: product.pointValueInr,
+    );
+  }
   if (rate < 0) return 0;
   if (rate > 1) return 1;
   return rate;
-}
-
-/// Memoised [baseRateValueFor] for pricing many spends against the same
-/// cards (a report over months of history). Gives exactly the same figures:
-/// the rate per rupee depends only on the card and the category, so it is
-/// worked out once per pair and multiplied by each amount the same way
-/// [baseRateValueFor] does. Keyed by the product object, not its id, so two
-/// different products that happen to share an id never share a rate.
-class BaseRateTable {
-  final Map<CardProduct, Map<String?, double>> _rates = Map.identity();
-
-  double rateFor(CardProduct product, String? categoryId) => _rates
-      .putIfAbsent(product, () => <String?, double>{})
-      .putIfAbsent(categoryId, () => baseRatePerRupee(product: product, categoryId: categoryId));
-
-  Money valueFor({
-    required CardProduct product,
-    required Money amount,
-    String? categoryId,
-  }) {
-    if (amount.isZero || amount.isNegative) return const Money.zero();
-    return amount * rateFor(product, categoryId);
-  }
-}
-
-/// [ownedCards] must include [usedCard] itself (its own base rate is one of
-/// the candidates compared, so a card that WAS the best choice correctly
-/// produces `hadBetterOption == false` rather than always finding
-/// something "better").
-HistoricalCardComparison compareToOwnedCards({
-  required CardProduct usedCard,
-  required List<CardProduct> ownedCards,
-  required Money amount,
-  String? categoryId,
-  BaseRateTable? rates,
-}) {
-  Money valueFor(CardProduct product) => rates == null
-      ? baseRateValueFor(product: product, amount: amount, categoryId: categoryId)
-      : rates.valueFor(product: product, amount: amount, categoryId: categoryId);
-
-  final actualValue = valueFor(usedCard);
-
-  CardProduct? bestOther;
-  var bestOtherValue = const Money.zero();
-  for (final card in ownedCards) {
-    if (card.id == usedCard.id) continue;
-    final value = valueFor(card);
-    if (bestOther == null || value > bestOtherValue) {
-      bestOther = card;
-      bestOtherValue = value;
-    }
-  }
-
-  final hasBetter = bestOther != null && bestOtherValue > actualValue;
-  return HistoricalCardComparison(
-    usedCard: usedCard,
-    actualValue: actualValue,
-    betterCard: hasBetter ? bestOther : null,
-    betterValue: hasBetter ? bestOtherValue : actualValue,
-  );
 }

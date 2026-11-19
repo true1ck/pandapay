@@ -43,6 +43,27 @@ Money? countedRewardValue(TransactionEntry entry) {
   return reward;
 }
 
+/// The earliest time each wallet card shows up on an active credit-card row,
+/// by wallet card id: the best evidence of when the person had the card. The
+/// Rewards comparison never offers a card as "the better choice" for a spend
+/// from before this.
+Map<String, DateTime> firstCardUseOf(Iterable<TransactionEntry> rows) {
+  final first = <String, DateTime>{};
+  for (final row in rows) {
+    final cardId = row.userCardId;
+    if (cardId == null ||
+        row.status != 'active' ||
+        row.instrument != TxnInstrument.creditCard) {
+      continue;
+    }
+    final seen = first[cardId];
+    if (seen == null || row.occurredAt.isBefore(seen)) {
+      first[cardId] = row.occurredAt;
+    }
+  }
+  return first;
+}
+
 /// What a wallet card has earned in total, in rupees: the server's points
 /// ledger plus any starting balance the person typed in. A cashback card keeps
 /// its balance in rupees (1 unit = ₹1), so it is never multiplied by a point

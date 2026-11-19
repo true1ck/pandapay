@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/data/reward_counting.dart';
 import 'package:pandapay/data/spend_reports_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
+import 'package:pandapay/features/insights/rewards/rewards_comparison.dart';
 import 'package:pandapay/features/insights/rewards/rewards_filter.dart';
 import 'package:pandapay/features/insights/rewards/rewards_providers.dart';
 import 'package:pandapay/features/insights/rewards/rewards_screen.dart';
@@ -57,24 +59,28 @@ final _travel = CardProduct(
   ],
 );
 
-const _diningCard = UserCard(
+// Issue dates before every test spend, so each card counts as in hand.
+final _diningCard = UserCard(
   id: 'uc-dining',
   cardProductId: 'dining',
   cardName: 'Dining Card',
   isDefault: false,
+  openedOn: DateTime(2025, 1, 1),
 );
-const _flatCard = UserCard(
+final _flatCard = UserCard(
   id: 'uc-flat',
   cardProductId: 'flat',
   cardName: 'Flat Card',
   isDefault: false,
   nickname: 'Everyday',
+  openedOn: DateTime(2025, 1, 1),
 );
-const _travelCard = UserCard(
+final _travelCard = UserCard(
   id: 'uc-travel',
   cardProductId: 'travel',
   cardName: 'Travel Card',
   isDefault: false,
+  openedOn: DateTime(2025, 1, 1),
 );
 
 TransactionEntry _spend(
@@ -160,11 +166,17 @@ Future<void> _pump(
   List<TransactionEntry>? transactions,
   String location = '/insights/rewards',
   Size screen = const Size(390, 844),
+  Future<Map<String, SpendCheck>> Function(
+    List<TransactionEntry> inRange,
+    List<(UserCard, CardProduct)> wallet,
+  )?
+  checks,
 }) async {
   tester.view.physicalSize = screen * 3;
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
   final rows = transactions ?? _transactions;
+  final walletCards = wallet ?? [(_diningCard, _dining), (_flatCard, _flat)];
   final router = GoRouter(
     initialLocation: location,
     routes: [
@@ -189,7 +201,7 @@ Future<void> _pump(
       overrides: [
         clockProvider.overrideWithValue(TestClock(DateTime(2026, 11, 18, 10))),
         ownedCardsWithProductProvider.overrideWithValue(
-          AsyncData(wallet ?? [(_diningCard, _dining), (_flatCard, _flat)]),
+          AsyncData(walletCards),
         ),
         rewardsTransactionsProvider.overrideWith(
           (ref, range) async => [
@@ -197,6 +209,22 @@ Future<void> _pump(
               if (range.contains(row.occurredAt)) row,
           ],
         ),
+        // The real provider reads the ledger, the category list and the
+        // catalogue; the answer itself is the same comparison, run inline.
+        rewardsChecksProvider.overrideWith((ref, range) async {
+          final inRange = [
+            for (final row in rows)
+              if (range.contains(row.occurredAt)) row,
+          ];
+          if (checks != null) return checks(inRange, walletCards);
+          return computeSpendChecks(
+            buildRewardsComparisonRequest(
+              transactions: inRange,
+              walletCards: walletCards,
+              firstUseByCardId: firstCardUseOf(rows),
+            ),
+          );
+        }),
       ],
       child: MaterialApp.router(routerConfig: router),
     ),
@@ -224,9 +252,7 @@ void main() {
     expect(find.text('November 2026'), findsOneWidget);
     expect(find.text('on ₹7,400 by card'), findsOneWidget);
     expect(find.text('· 1.9% back · 5 spends'), findsOneWidget);
-    // Mix vs one card: used 146 at base rate, Flat Card alone 134.
-    expect(_money('rewards-beat-single-card', '+₹12'), findsOneWidget);
-    expect(find.text('More than only Flat Card'), findsOneWidget);
+    expect(find.textContaining('More than only'), findsNothing);
     expect(
       find.descendant(
         of: find.byKey(const Key('rewards-not-counted')),
@@ -340,11 +366,93 @@ void main() {
     expect(find.byKey(const Key('rewards-missed-total')), findsOneWidget);
     expect(find.text('Swiggy'), findsOneWidget);
     expect(find.text('+₹30'), findsOneWidget);
+    // Each card's rate for this very spend, so the gap can be checked by eye.
+    expect(find.text('2% back'), findsOneWidget);
+    expect(find.text('5% back'), findsOneWidget);
     expect(
       find.text('MakeMyTrip'),
       findsNothing,
       reason: 'Flat Card was the best card for travel',
     );
+    // The total says how much was checked, so it is never taken for "all".
+    expect(
+      find.textContaining('Checked 4 of 5 spends against your other cards'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Missed says what was checked when nothing clearly came up', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      location: '/insights/rewards?tab=missed',
+      transactions: [
+        // Travel on the flat card: 2% beats the dining card's 1%.
+        _spend(
+          'b',
+          'MakeMyTrip',
+          rupees: 5000,
+          at: DateTime(2026, 11, 5),
+          card: 'uc-flat',
+          category: 'Travel',
+          reward: 100,
+        ),
+      ],
+    );
+    expect(find.text('No clear misses'), findsOneWidget);
+    expect(
+      find.textContaining('Checked 1 spend in November 2026'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('₹5 or more extra'), findsOneWidget);
+    expect(find.byKey(const Key('rewards-missed-total')), findsNothing);
+  });
+
+  testWidgets('Missed does not call it a clean sheet when nothing was compared', (
+    tester,
+  ) async {
+    // A second card with no history and no issue date was not in hand.
+    final unused = UserCard(
+      id: 'uc-unused',
+      cardProductId: 'dining',
+      cardName: 'Dining Card',
+      isDefault: false,
+    );
+    await _pump(
+      tester,
+      wallet: [(_flatCard, _flat), (unused, _dining)],
+      location: '/insights/rewards?tab=missed',
+    );
+    expect(find.text('Nothing to compare yet'), findsOneWidget);
+    expect(find.text('No clear misses'), findsNothing);
+  });
+
+  testWidgets('Missed says so when the comparison could not run', (
+    tester,
+  ) async {
+    var attempts = 0;
+    await _pump(
+      tester,
+      location: '/insights/rewards?tab=missed',
+      checks: (inRange, wallet) async {
+        attempts++;
+        if (attempts == 1) throw StateError('comparison failed');
+        return computeSpendChecks(
+          buildRewardsComparisonRequest(
+            transactions: inRange,
+            walletCards: wallet,
+            firstUseByCardId: firstCardUseOf(inRange),
+          ),
+        );
+      },
+    );
+    expect(find.text('Could not check your cards'), findsOneWidget);
+    expect(find.text('No clear misses'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('rewards-missed-retry')));
+    await tester.pumpAndSettle();
+    expect(find.text('Swiggy'), findsOneWidget, reason: 'the retry worked');
   });
 
   testWidgets('Missed explains itself with only one card', (tester) async {
@@ -354,6 +462,50 @@ void main() {
       location: '/insights/rewards?tab=missed',
     );
     expect(find.text('Add a second card to compare'), findsOneWidget);
+  });
+
+  testWidgets('Missed warns when the better card cannot take UPI', (
+    tester,
+  ) async {
+    // The better card is card-only; the card used takes UPI.
+    final upiFlat = CardProduct(
+      id: 'upi-flat',
+      name: 'UPI Flat Card',
+      network: CardNetwork.rupay,
+      isUpiLinkable: true,
+      rewardRules: const [
+        RewardRule(
+          id: 'u1',
+          unit: RewardUnit.cashbackPercent,
+          rate: 0.5,
+          priority: 200,
+        ),
+      ],
+    );
+    final upiCard = UserCard(
+      id: 'uc-upi',
+      cardProductId: 'upi-flat',
+      cardName: 'UPI Flat Card',
+      isDefault: false,
+      openedOn: DateTime(2025, 1, 1),
+    );
+    await _pump(
+      tester,
+      wallet: [(upiCard, upiFlat), (_flatCard, _flat)],
+      location: '/insights/rewards?tab=missed',
+      transactions: [
+        _spend(
+          'x',
+          'Cafe',
+          rupees: 1000,
+          at: DateTime(2026, 11, 3),
+          card: 'uc-upi',
+          category: 'Food',
+          reward: 5,
+        ),
+      ],
+    );
+    expect(find.byKey(const Key('rewards-missed-card-only')), findsOneWidget);
   });
 
   testWidgets('Cards shows each wallet card, unused ones last', (tester) async {

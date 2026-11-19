@@ -45,8 +45,9 @@ class RewardRow {
   /// The counted reward; zero unless [status] is [RewardRowStatus.earned].
   final Money reward;
 
-  /// Set only when another wallet card would have earned more at base rate.
-  final HistoricalCardComparison? missed;
+  /// Set only when another wallet card would clearly have earned more on this
+  /// spend (see [SpendComparer]).
+  final SpendComparison? missed;
 
   const RewardRow({
     required this.entry,
@@ -140,17 +141,22 @@ class RewardsReport {
   final int notInWalletCount;
   final int notWorkedOutCount;
 
-  /// Two or more wallet cards: the only case where "another card would have
-  /// earned more" has an answer.
+  /// Two or more different card products in the wallet: the only case where
+  /// "another card would have earned more" has an answer.
   final bool canCompare;
   final Money missed;
   final int missedCount;
 
-  /// How much more the cards actually used earned than the best single wallet
-  /// card would have on the same spends, both at base rate. Null when there is
-  /// nothing to compare or the mix did not beat one card.
-  final Money? beatBestSingleCard;
-  final String? bestSingleCardName;
+  /// Spends in scope that had at least one other card to be compared with (it
+  /// was in hand on the day and fits the payment). Fewer than [rows] when some
+  /// spends were from before the other cards, or cannot move (EMI, UPI on a
+  /// card that cannot take UPI). "Nothing missed" only means something about
+  /// these.
+  final int comparedCount;
+
+  /// The comparison could not be run (it failed), so Missed says nothing about
+  /// these spends rather than claiming the best card was used.
+  final bool comparisonFailed;
 
   /// Categories that earned something, highest first.
   final List<RewardSlice> byCategory;
@@ -178,8 +184,8 @@ class RewardsReport {
     required this.canCompare,
     required this.missed,
     required this.missedCount,
-    required this.beatBestSingleCard,
-    required this.bestSingleCardName,
+    required this.comparedCount,
+    required this.comparisonFailed,
     required this.byCategory,
     required this.cards,
     required this.buckets,
@@ -215,17 +221,22 @@ const rewardsMaxMonthlyBuckets = 18;
 
 /// Works out the whole page for one scope.
 ///
-/// Cost: one pass over the range's transactions, plus, with two or more wallet
-/// cards, `cards` base-rate lookups per spend in scope. Rates come from a
-/// [BaseRateTable], so each card's rule is picked once per category rather than
-/// once per spend (picking a rule builds a key per catalogue rule, which is what
-/// made a year of history slow).
+/// Cost: one pass over the range's transactions. Whether another card would
+/// have paid more on a spend is NOT worked out here: pricing every spend on
+/// every wallet card is O(spends x cards) and runs off the UI isolate
+/// (`rewards_comparison.dart`). The answers arrive as [checks], by transaction
+/// id, so changing a card or category filter only re-slices them.
+///
+/// [checks] holds an entry only for spends that had another card to compare
+/// with. [comparisonFailed] says the comparison could not be run at all.
 RewardsReport buildRewardsReport({
   required List<TransactionEntry> transactions,
   required RewardsRange range,
   required List<(UserCard, CardProduct)> walletCards,
   Set<String> cardIds = const {},
   Set<String> categories = const {},
+  Map<String, SpendCheck> checks = const {},
+  bool comparisonFailed = false,
 }) {
   // Same id twice (an offline copy and a fresh row) counts once.
   final byId = <String, TransactionEntry>{};
@@ -240,8 +251,9 @@ RewardsReport buildRewardsReport({
     for (final (card, product) in walletCards) card.id: product,
   };
   final cardsById = {for (final (card, _) in walletCards) card.id: card};
-  final allProducts = [for (final (_, product) in walletCards) product];
-  final canCompare = allProducts.length >= 2;
+  // Two cards of the same product (two Amazon Pay cards) are one choice, not
+  // two: they earn the same, so with only those there is nothing to compare.
+  final canCompare = {for (final (_, product) in walletCards) product.id}.length >= 2;
 
   final labels = _cardLabels(walletCards, inRange);
 
@@ -296,7 +308,6 @@ RewardsReport buildRewardsReport({
     return true;
   }).toList()..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
 
-  final rates = BaseRateTable();
   var earned = const Money.zero();
   var spend = const Money.zero();
   var earnedCount = 0;
@@ -305,11 +316,7 @@ RewardsReport buildRewardsReport({
   var notWorkedOut = 0;
   var missed = const Money.zero();
   var missedCount = 0;
-  var usedBaseRate = const Money.zero();
-  final singleCardTotals = List<Money>.filled(
-    allProducts.length,
-    const Money.zero(),
-  );
+  var comparedCount = 0;
 
   final categoryEarned = <String, Money>{};
   final categorySpend = <String, Money>{};
@@ -340,30 +347,13 @@ RewardsReport buildRewardsReport({
         }
     }
 
-    HistoricalCardComparison? comparison;
     final cardId = entry.userCardId;
-    final usedProduct = cardId == null ? null : productsByCardId[cardId];
-    if (canCompare && usedProduct != null) {
-      final result = compareToOwnedCards(
-        usedCard: usedProduct,
-        ownedCards: allProducts,
-        amount: entry.amount,
-        categoryId: entry.categoryId,
-        rates: rates,
-      );
-      if (result.hadBetterOption && result.missedValue.paise > 0) {
-        comparison = result;
-        missed += result.missedValue;
-        missedCount++;
-      }
-      usedBaseRate += result.actualValue;
-      for (var i = 0; i < allProducts.length; i++) {
-        singleCardTotals[i] += rates.valueFor(
-          product: allProducts[i],
-          amount: entry.amount,
-          categoryId: entry.categoryId,
-        );
-      }
+    final check = canCompare ? checks[entry.id] : null;
+    if (check != null && check.compared) comparedCount++;
+    final comparison = check?.better;
+    if (comparison != null) {
+      missed += comparison.missedValue;
+      missedCount++;
     }
 
     final key = rewardCategoryKey(entry);
@@ -394,20 +384,6 @@ RewardsReport buildRewardsReport({
         missed: comparison,
       ),
     );
-  }
-
-  Money? beatBestSingleCard;
-  String? bestSingleCardName;
-  if (canCompare && usedBaseRate.paise > 0) {
-    var bestIndex = 0;
-    for (var i = 1; i < singleCardTotals.length; i++) {
-      if (singleCardTotals[i] > singleCardTotals[bestIndex]) bestIndex = i;
-    }
-    final gap = usedBaseRate - singleCardTotals[bestIndex];
-    if (gap.paise > 0) {
-      beatBestSingleCard = gap;
-      bestSingleCardName = allProducts[bestIndex].name;
-    }
   }
 
   final byCategory = [
@@ -468,8 +444,8 @@ RewardsReport buildRewardsReport({
     canCompare: canCompare,
     missed: missed,
     missedCount: missedCount,
-    beatBestSingleCard: beatBestSingleCard,
-    bestSingleCardName: bestSingleCardName,
+    comparedCount: comparedCount,
+    comparisonFailed: comparisonFailed,
     byCategory: byCategory,
     cards: cardSummaries,
     buckets: _buckets(range, rows),
@@ -495,6 +471,13 @@ RewardsReport buildRewardsReport({
   return (RewardRowStatus.earned, null);
 }
 
+// Some catalogue names carry a line break ("Swiggy\n HDFC Bank Credit Card").
+final RegExp _runsOfWhitespace = RegExp(r'\s+');
+
+/// A card name on one line.
+String rewardCardName(String name) =>
+    name.replaceAll(_runsOfWhitespace, ' ').trim();
+
 /// "HDFC Millennia", or "HDFC Millennia ••1234" when two cards share a name.
 Map<String, String> _cardLabels(
   List<(UserCard, CardProduct)> walletCards,
@@ -506,7 +489,7 @@ Map<String, String> _cardLabels(
     final nickname = card.nickname?.trim();
     base[card.id] = nickname != null && nickname.isNotEmpty
         ? nickname
-        : product.name;
+        : rewardCardName(product.name);
     last4[card.id] = card.last4;
   }
   for (final entry in inRange) {

@@ -6,6 +6,8 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/providers.dart';
 import '../../data/reward_counting.dart';
 import '../../data/user_cards_repository.dart';
+import 'rewards/rewards_filter.dart' show RewardsRange;
+import 'rewards/rewards_providers.dart';
 
 /// The period chips across the top of design 04 Insights.
 ///
@@ -146,24 +148,18 @@ class MissedEarning {
 
 /// Everything design 04 Insights puts on screen, computed once.
 ///
-/// Two different sources feed this, deliberately:
-///
 /// - **Earned** figures are the stored per-transaction `expected_value_inr`
 ///   (see [TransactionEntry.rewardValue]) — the same rows `GET /home-summary`
 ///   sums for design 01's header, so Insights and Home never disagree about
 ///   what a month earned.
-/// - **Missed** figures are derived by [compareToOwnedCards], which is a
-///   deliberately scoped base-rate comparison and cannot see the cap or
-///   milestone state as it stood on the day (that history isn't retained —
-///   see historical_comparison.dart). So "left on the table" is an estimate
-///   where "earned" is a record. They are shown side by side on the deck's
-///   own layout, and [missedIsEstimate] exists so the screen can mark the
-///   difference rather than implying both are equally certain.
+/// - **Missed** figures are not part of this snapshot: they come from
+///   [insightsMissedProvider], which reads the Rewards page's own report for the
+///   same dates, so the hub and the page always agree and the figures here never
+///   wait on the card comparison.
+
 class InsightsOverview {
   final Money earned;
   final Money spend;
-  final Money missed;
-  final int missedCount;
   final int transactionCount;
   final List<CategoryEarning> byCategory;
 
@@ -171,33 +167,21 @@ class InsightsOverview {
   /// 32's "Best card" tile. Labelled with the card's display name (nickname
   /// if the user set one), so it reads the way they think of the card.
   final List<CategoryEarning> byCard;
-  final List<MissedEarning> topMissed;
-
-  /// True whenever [missed] came out of the base-rate comparator, which is
-  /// always — kept as a named flag rather than a comment so the screen
-  /// can't quietly start presenting it as exact.
-  bool get missedIsEstimate => true;
 
   const InsightsOverview({
     required this.earned,
     required this.spend,
-    required this.missed,
-    required this.missedCount,
     required this.transactionCount,
     required this.byCategory,
     required this.byCard,
-    required this.topMissed,
   });
 
   static const empty = InsightsOverview(
     earned: Money.zero(),
     spend: Money.zero(),
-    missed: Money.zero(),
-    missedCount: 0,
     transactionCount: 0,
     byCategory: [],
     byCard: [],
-    topMissed: [],
   );
 
   /// Design 04's *"₹1,842 on ₹58,000 of spend · 3.2% effective"*.
@@ -237,11 +221,6 @@ insightsOverviewProvider = FutureProvider.family<InsightsOverview, InsightsPerio
   // calendar date, while the period model uses a half-open end. Convert
   // once at the boundary so online and cached reads agree.
   final toInclusive = toExclusive.subtract(const Duration(days: 1));
-
-  final pairs =
-      ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
-  final productsByUserCardId = {for (final (uc, p) in pairs) uc.id: p};
-  final allProducts = [for (final (_, p) in pairs) p];
 
   final ledgerModel = ref.watch(smsV2ReportingEnabledProvider)
       ? await ref.watch(smsV2LedgerReadModelProvider.future)
@@ -285,14 +264,8 @@ insightsOverviewProvider = FutureProvider.family<InsightsOverview, InsightsPerio
 
   var earned = const Money.zero();
   var spend = ledgerReport?.spend.total ?? const Money.zero();
-  var missed = const Money.zero();
-  var missedCount = 0;
   final byCategory = <String, Money>{};
   final byCard = <String, Money>{};
-  final missedRows = <MissedEarning>[];
-  // Picks each card's rule once per category instead of once per spend; same
-  // figures, about 17x cheaper over a year of history (see BaseRateTable).
-  final rates = BaseRateTable();
 
   for (final txn in active) {
     // Spend the person chose not to count stays out of the spend total, but its
@@ -315,41 +288,6 @@ insightsOverviewProvider = FutureProvider.family<InsightsOverview, InsightsPerio
         byCard[cardLabel] = (byCard[cardLabel] ?? const Money.zero()) + reward;
       }
     }
-
-    // Needs at least two owned cards to mean anything — with one card there
-    // was nothing else to have chosen. Same guard D6 Missed Opportunities
-    // applies.
-    if (allProducts.length < 2) {
-      continue;
-    }
-    // Only a credit-card purchase could have gone on another card for a
-    // better reward; the Rewards page's Missed tab uses the same scope.
-    if (!isCardRewardSpend(txn)) continue;
-    if (txn.userCardId == null) {
-      continue;
-    }
-    final usedProduct = productsByUserCardId[txn.userCardId!];
-    if (usedProduct == null) {
-      continue; // card since archived — nothing to compare against
-    }
-
-    final comparison = compareToOwnedCards(
-      usedCard: usedProduct,
-      ownedCards: allProducts,
-      amount: txn.amount,
-      categoryId: txn.categoryId,
-      rates: rates,
-    );
-    if (!comparison.hadBetterOption) continue;
-    missed += comparison.missedValue;
-    missedCount++;
-    missedRows.add(
-      MissedEarning(
-        entry: txn,
-        betterCard: comparison.betterCard!,
-        missed: comparison.missedValue,
-      ),
-    );
   }
 
   List<CategoryEarning> ranked(Map<String, Money> totals) => [
@@ -360,19 +298,133 @@ insightsOverviewProvider = FutureProvider.family<InsightsOverview, InsightsPerio
   final categories = ranked(byCategory);
   final cards = ranked(byCard);
 
-  missedRows.sort((a, b) => b.missed.paise.compareTo(a.missed.paise));
-
   return InsightsOverview(
     earned: earned,
     spend: spend,
-    missed: missed,
-    missedCount: missedCount,
     transactionCount: ledgerReport?.spend.txnCount ?? active.length,
     byCategory: categories,
     byCard: cards,
-    topMissed: missedRows.take(3).toList(),
   );
 });
+
+/// The hub's "left on the table" figures for a period: how much more other
+/// cards in the wallet would clearly have paid, how many spends it covers, and
+/// the three biggest.
+///
+/// It is the Rewards page's own report for the same dates (the page is where
+/// "See all" goes), so the two can never disagree, and it is a separate
+/// provider so the rest of the hub never waits on the card comparison. While
+/// the comparison is running the value is loading: the hub shows no figure
+/// rather than "no missed rewards".
+class InsightsMissed {
+  final Money missed;
+  final int missedCount;
+
+  /// Spends that had another card to be compared with (see [RewardsReport]).
+  final int comparedCount;
+
+  /// Two different card products in the wallet.
+  final bool canCompare;
+
+  /// The comparison could not be run.
+  final bool failed;
+  final List<MissedEarning> top;
+
+  const InsightsMissed({
+    required this.missed,
+    required this.missedCount,
+    required this.comparedCount,
+    required this.canCompare,
+    required this.failed,
+    required this.top,
+  });
+
+  /// Always an estimate: caps and milestones as they stood on the day are not
+  /// kept (see historical_comparison.dart).
+  bool get isEstimate => true;
+}
+
+final insightsMissedProvider = Provider.autoDispose
+    .family<AsyncValue<InsightsMissed>, InsightsPeriod>((ref, period) {
+      // Nothing to say until the overview has spend to talk about; this also
+      // keeps a period with no spend from loading anything twice.
+      final overview = ref.watch(insightsOverviewProvider(period)).valueOrNull;
+      if (overview == null || overview.transactionCount == 0) {
+        return const AsyncLoading();
+      }
+      final now = ref.watch(clockProvider).now();
+      final customRange = ref.watch(insightsCustomRangeProvider);
+      final (from, toExclusive) = period.range(now, customRange: customRange);
+      final range = RewardsRange.days(
+        from,
+        toExclusive.subtract(const Duration(days: 1)),
+      );
+      // The Rewards page's own inputs for the same dates, read directly: a
+      // tile does not need the page's whole report (R6 in the performance
+      // rulebook), and the figures still agree because they are the same
+      // answers summed the same way (guarded by a test).
+      final transactions = ref.watch(rewardsTransactionsProvider(range));
+      final checks = ref.watch(rewardsChecksProvider(range));
+      final wallet = ref.watch(ownedCardsWithProductProvider);
+      if (wallet.isLoading && !wallet.hasValue && !wallet.hasError) {
+        return const AsyncLoading();
+      }
+      if (checks.isLoading && !transactions.hasError) {
+        return const AsyncLoading();
+      }
+      final walletCards =
+          wallet.valueOrNull ?? const <(UserCard, CardProduct)>[];
+      final canCompare =
+          {for (final (_, product) in walletCards) product.id}.length >= 2;
+      return transactions.whenData((list) {
+        if (checks.hasError) {
+          return InsightsMissed(
+            missed: const Money.zero(),
+            missedCount: 0,
+            comparedCount: 0,
+            canCompare: canCompare,
+            failed: true,
+            top: const [],
+          );
+        }
+        final byId = {for (final entry in list) entry.id: entry};
+        var missed = const Money.zero();
+        var compared = 0;
+        final rows = <MissedEarning>[];
+        if (canCompare) {
+          for (final MapEntry(key: id, value: check)
+              in (checks.valueOrNull ?? const {}).entries) {
+            final entry = byId[id];
+            if (entry == null || !check.compared) continue;
+            compared++;
+            final better = check.better;
+            if (better == null) continue;
+            missed += better.missedValue;
+            rows.add(
+              MissedEarning(
+                entry: entry,
+                betterCard: better.betterCard!,
+                missed: better.missedValue,
+              ),
+            );
+          }
+        }
+        rows.sort((a, b) {
+          final byValue = b.missed.paise.compareTo(a.missed.paise);
+          return byValue != 0
+              ? byValue
+              : b.entry.occurredAt.compareTo(a.entry.occurredAt);
+        });
+        return InsightsMissed(
+          missed: missed,
+          missedCount: rows.length,
+          comparedCount: compared,
+          canCompare: canCompare,
+          failed: false,
+          top: rows.take(3).toList(),
+        );
+      });
+    });
 
 /// Which period chip is selected. A plain [StateProvider] like Home's own
 /// category selection — session state, not persisted.

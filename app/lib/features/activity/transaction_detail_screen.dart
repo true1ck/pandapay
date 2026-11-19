@@ -64,7 +64,7 @@ import 'transaction_avatar.dart';
 /// Still NOT built: the "a better card existed" panel, which needs the
 /// shared historical-recompute calculator. Note that D6 Missed
 /// Opportunities and design 04's Insights both answer that question in
-/// aggregate via `compareToOwnedCards`; what's missing is the per-row
+/// aggregate via `SpendComparer`; what's missing is the per-row
 /// version with its cap/milestone state as of the transaction date, which
 /// this schema does not retain (see historical_comparison.dart).
 class TransactionDetailScreen extends ConsumerWidget {

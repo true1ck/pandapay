@@ -31,6 +31,16 @@ typedef RewardsOpenTab =
 String _percent(double value) =>
     value >= 10 ? value.toStringAsFixed(0) : value.toStringAsFixed(1);
 
+/// A share of a spend as a percentage, to one decimal and without a trailing
+/// ".0": 0.1 is "10%", 0.0195 is "1.9%". Rounded first, so a rate that is 9.99%
+/// by a paise of rounding reads "10%" like its neighbours.
+String _rate(double fraction) {
+  final percent = (fraction * 1000).round() / 10;
+  return percent == percent.roundToDouble()
+      ? '${percent.toStringAsFixed(0)}%'
+      : '${percent.toStringAsFixed(1)}%';
+}
+
 String _plural(int count, String one, [String? many]) =>
     '$count ${count == 1 ? one : (many ?? '${one}s')}';
 
@@ -276,7 +286,6 @@ class _Hero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rate = report.ratePct;
-    final beat = report.beatBestSingleCard;
     final caption = BambooFonts.ui(12, color: BambooInk.onSlateMuted);
     return Container(
       key: const Key('rewards-hero'),
@@ -333,7 +342,7 @@ class _Hero extends StatelessWidget {
           const SizedBox(height: 2),
           Padding(
             // Room for the share button on this corner.
-            padding: EdgeInsets.only(right: beat == null ? 36 : 0),
+            padding: const EdgeInsets.only(right: 36),
             child: Wrap(
               crossAxisAlignment: WrapCrossAlignment.center,
               spacing: 4,
@@ -357,42 +366,6 @@ class _Hero extends StatelessWidget {
               ],
             ),
           ),
-          if (beat != null) ...[
-            const SizedBox(height: AppSpace.sm),
-            const Divider(height: 1, color: BambooInk.slateHairline),
-            const SizedBox(height: AppSpace.sm),
-            Padding(
-              padding: const EdgeInsets.only(right: 36),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.trending_up_rounded,
-                    size: 16,
-                    color: BambooInk.lime,
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      'More than only ${report.bestSingleCardName}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: BambooFonts.ui(12, color: BambooInk.onSlate),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpace.sm),
-                  MoneyText(
-                    beat,
-                    key: const Key('rewards-beat-single-card'),
-                    confidence: Confidence.estimated,
-                    showConfidenceIcon: false,
-                    hidePaise: true,
-                    prefix: '+',
-                    style: BambooFonts.money(13, color: BambooInk.lime),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -1037,16 +1010,25 @@ class _TransactionRow extends StatelessWidget {
 // Missed
 // ---------------------------------------------------------------------------
 
+/// Spends where another card in the wallet would clearly have paid more.
+///
+/// An empty list must never read as "you did everything right" unless the
+/// spends were actually checked: the empty states say how many were checked,
+/// and a page that could not check says so (see [SpendComparer]).
 class RewardsMissedTab extends StatelessWidget {
   final RewardsReport report;
   final RewardsFilter filter;
   final ValueChanged<RewardsFilter> onFilterChanged;
+
+  /// Runs the comparison again after it failed.
+  final VoidCallback? onRetry;
 
   const RewardsMissedTab({
     super.key,
     required this.report,
     required this.filter,
     required this.onFilterChanged,
+    this.onRetry,
   });
 
   @override
@@ -1063,20 +1045,58 @@ class RewardsMissedTab extends StatelessWidget {
         icon: Icons.add_card_outlined,
         title: 'Add a second card to compare',
         message:
-            'Missed rewards compare each spend with your other wallet cards. '
-            'With one card there is nothing else it could have gone on.',
+            'Missed rewards compare each spend with your other cards. With one '
+            'card, or two of the same card, there is nothing else it could '
+            'have gone on.',
+      );
+    }
+    if (report.comparisonFailed) {
+      return EmptyState(
+        icon: Icons.sync_problem_outlined,
+        title: 'Could not check your cards',
+        message:
+            'Missed rewards could not be worked out just now, so nothing is '
+            'claimed either way.',
+        action: onRetry == null
+            ? null
+            : OutlinedButton(
+                key: const Key('rewards-missed-retry'),
+                onPressed: onRetry,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: BambooInk.ink900,
+                  side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                  minimumSize: const Size(0, 44),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                  ),
+                ),
+                child: const Text('Try again'),
+              ),
       );
     }
     final missed = report.missedRows;
     if (missed.isEmpty) {
+      if (report.comparedCount == 0) {
+        return EmptyState(
+          icon: Icons.hourglass_empty_rounded,
+          title: 'Nothing to compare yet',
+          message:
+              'None of the spends in ${rewardsRangeLabel(report.range)} had '
+              'another card to compare with. Your other cards were not in use '
+              'yet, or the payment could not move to another card.',
+        );
+      }
       return EmptyState(
         icon: Icons.check_circle_outline_rounded,
-        title: 'No missed rewards',
+        title: 'No clear misses',
         message:
-            'Every spend in ${rewardsRangeLabel(report.range)} went on your '
-            'best card for its category.',
+            'Checked ${_plural(report.comparedCount, 'spend')} in '
+            '${rewardsRangeLabel(report.range)} against your other cards. None '
+            'would have earned '
+            '${kDefaultMinimumMissedGain.format(hidePaise: true)} or more extra.',
       );
     }
+    final patterns = _patterns(report, missed);
     return ListView.builder(
       key: const PageStorageKey('rewards-missed'),
       padding: const EdgeInsets.fromLTRB(
@@ -1085,15 +1105,23 @@ class RewardsMissedTab extends StatelessWidget {
         AppSpace.lg,
         AppSpace.xxl,
       ),
-      itemCount: missed.length + 1,
+      itemCount: missed.length + 2,
       itemBuilder: (context, index) {
         if (index == 0) {
           return Padding(
-            padding: const EdgeInsets.only(bottom: AppSpace.lg),
+            padding: const EdgeInsets.only(bottom: AppSpace.md),
             child: _MissedTotal(report: report),
           );
         }
-        final row = missed[index - 1];
+        if (index == 1) {
+          return patterns.length < 2
+              ? const SizedBox.shrink()
+              : Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpace.lg),
+                  child: _MissedPatterns(patterns: patterns),
+                );
+        }
+        final row = missed[index - 2];
         return Padding(
           padding: const EdgeInsets.only(bottom: AppSpace.sm),
           child: _MissedTile(
@@ -1106,6 +1134,44 @@ class RewardsMissedTab extends StatelessWidget {
       },
     );
   }
+
+  /// The biggest "paid with this card, would have been better on that card"
+  /// habits, so a long list shows what to change first.
+  static List<_MissedPattern> _patterns(
+    RewardsReport report,
+    List<RewardRow> missed,
+  ) {
+    final byKey = <String, _MissedPattern>{};
+    for (final row in missed) {
+      final comparison = row.missed!;
+      final usedId = row.entry.userCardId!;
+      final key = '$usedId>${comparison.betterCard!.id}';
+      final existing = byKey[key];
+      byKey[key] = _MissedPattern(
+        usedLabel: report.cardLabel(usedId) ?? comparison.usedCard.name,
+        betterName: rewardCardName(comparison.betterCard!.name),
+        count: (existing?.count ?? 0) + 1,
+        total: (existing?.total ?? const Money.zero()) + row.missedValue,
+      );
+    }
+    final patterns = byKey.values.toList()
+      ..sort((a, b) => b.total.paise.compareTo(a.total.paise));
+    return patterns.take(3).toList();
+  }
+}
+
+class _MissedPattern {
+  final String usedLabel;
+  final String betterName;
+  final int count;
+  final Money total;
+
+  const _MissedPattern({
+    required this.usedLabel,
+    required this.betterName,
+    required this.count,
+    required this.total,
+  });
 }
 
 class _MissedTotal extends StatelessWidget {
@@ -1161,10 +1227,74 @@ class _MissedTotal extends StatelessWidget {
           ),
           const SizedBox(height: AppSpace.sm),
           Text(
-            'Compared at each card\'s base rate for the category. Caps, '
-            'milestones and offers are not included.',
+            'Checked ${report.comparedCount} of ${_plural(report.rows.length, 'spend')} '
+            'against your other cards, each priced by its own rules for that '
+            'shop and amount. Caps and milestones are not included, and a '
+            'card counts only from the day you first used it, so this is an '
+            'upper estimate.',
             style: BambooFonts.ui(11.5, color: BambooInk.onSlateSubtle),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The top few card-to-card habits behind the total.
+class _MissedPatterns extends StatelessWidget {
+  final List<_MissedPattern> patterns;
+  const _MissedPatterns({required this.patterns});
+
+  @override
+  Widget build(BuildContext context) {
+    return CardSummaryPanel(
+      key: const Key('rewards-missed-patterns'),
+      padding: const EdgeInsets.all(AppSpace.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Where it adds up',
+            style: BambooFonts.ui(
+              12,
+              weight: FontWeight.w700,
+              color: BambooInk.ink500,
+            ),
+          ),
+          const SizedBox(height: AppSpace.xs),
+          for (final pattern in patterns)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpace.xs),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${pattern.usedLabel} → ${pattern.betterName}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: BambooFonts.ui(
+                        13,
+                        weight: FontWeight.w600,
+                        color: BambooInk.ink900,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpace.sm),
+                  Text(
+                    '${_plural(pattern.count, 'spend')} · ',
+                    style: BambooFonts.ui(12, color: BambooInk.ink500),
+                  ),
+                  MoneyText(
+                    pattern.total,
+                    confidence: Confidence.estimated,
+                    showConfidenceIcon: false,
+                    hidePaise: true,
+                    prefix: '≈ ',
+                    style: BambooFonts.money(13, color: BambooInk.clay),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -1187,9 +1317,15 @@ class _MissedTile extends StatelessWidget {
     final title = entry.merchantName?.trim().isNotEmpty == true
         ? entry.merchantName!.trim()
         : entry.categoryLabel;
+    // The better card is a card payment: a shop that only takes UPI cannot be
+    // paid with it. Only worth saying when the card actually used does take UPI.
+    final cardOnly = !better.isUpiLinkable && comparison.usedCard.isUpiLinkable;
+    final note = comparison.betterNote;
     return Pressable(
       onTap: () => _openTransaction(context, entry),
-      semanticLabel: '$title, ${better.name} would have earned more',
+      semanticLabel:
+          '$title, ${rewardCardName(better.name)} would have earned '
+          '${row.missedValue.format(hidePaise: true)} more',
       child: CardSummaryPanel(
         padding: const EdgeInsets.all(AppSpace.md),
         child: Column(
@@ -1233,6 +1369,7 @@ class _MissedTile extends StatelessWidget {
                 _CardMini(
                   product: comparison.usedCard,
                   label: usedLabel,
+                  rate: comparison.usedRate,
                   muted: true,
                 ),
                 const Padding(
@@ -1243,7 +1380,12 @@ class _MissedTile extends StatelessWidget {
                     color: BambooInk.ink500,
                   ),
                 ),
-                _CardMini(product: better, label: better.name, muted: false),
+                _CardMini(
+                  product: better,
+                  label: rewardCardName(better.name),
+                  rate: comparison.betterRate,
+                  muted: false,
+                ),
               ],
             ),
             const SizedBox(height: AppSpace.sm),
@@ -1265,6 +1407,23 @@ class _MissedTile extends StatelessWidget {
                 ),
               ],
             ),
+            if (note != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                note,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: BambooFonts.ui(11.5, color: BambooInk.ink500, height: 1.3),
+              ),
+            ],
+            if (cardOnly) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Card payment only: not for a shop that takes just UPI.',
+                key: const Key('rewards-missed-card-only'),
+                style: BambooFonts.ui(11.5, color: BambooInk.amber, height: 1.3),
+              ),
+            ],
           ],
         ),
       ),
@@ -1275,11 +1434,13 @@ class _MissedTile extends StatelessWidget {
 class _CardMini extends StatelessWidget {
   final CardProduct product;
   final String label;
+  final double rate;
   final bool muted;
 
   const _CardMini({
     required this.product,
     required this.label,
+    required this.rate,
     required this.muted,
   });
 
@@ -1299,15 +1460,28 @@ class _CardMini extends StatelessWidget {
           ),
           const SizedBox(width: AppSpace.xs),
           Expanded(
-            child: Text(
-              label,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: BambooFonts.ui(
-                11,
-                weight: muted ? FontWeight.w500 : FontWeight.w700,
-                color: muted ? BambooInk.ink500 : BambooInk.ink900,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: BambooFonts.ui(
+                    11,
+                    weight: muted ? FontWeight.w500 : FontWeight.w700,
+                    color: muted ? BambooInk.ink500 : BambooInk.ink900,
+                  ),
+                ),
+                Text(
+                  '${_rate(rate)} back',
+                  style: BambooFonts.ui(
+                    11,
+                    weight: FontWeight.w600,
+                    color: muted ? BambooInk.ink500 : BambooInk.ink700,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

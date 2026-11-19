@@ -86,6 +86,8 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen>
         const [];
     final wallet =
         ref.read(ownedCardsWithProductProvider).valueOrNull ?? const [];
+    final checks =
+        ref.read(rewardsChecksProvider(scope.range)).valueOrNull ?? const {};
     final choice = await showRewardsFilterSheet(
       context: context,
       rangeLabel: rewardsRangeLabel(scope.range),
@@ -98,6 +100,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen>
         walletCards: wallet,
         cardIds: cardIds,
         categories: categories,
+        checks: checks,
       ),
     );
     if (choice == null || !mounted) return;
@@ -207,6 +210,8 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen>
                       report: data,
                       filter: _filter,
                       onFilterChanged: _setFilter,
+                      onRetry: () =>
+                          ref.invalidate(rewardsChecksProvider(scope.range)),
                     ),
                     RewardsCardsTab(
                       report: data,

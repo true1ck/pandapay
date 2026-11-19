@@ -14,6 +14,7 @@ import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
 import '../../main.dart' show MoneyText;
 import 'insights_overview.dart';
+import 'rewards/rewards_report.dart' show rewardCardName;
 import 'rewards/rewards_filter.dart' show rewardsLocation;
 import 'subscription_view.dart' show subscriptionTileHeadline;
 import '../shared_expenses/runtime/shared_providers.dart';
@@ -260,6 +261,10 @@ class InsightsHubScreen extends ConsumerWidget {
     ];
     final period = ref.watch(insightsPeriodProvider);
     final overview = ref.watch(insightsOverviewProvider(period));
+    // The "left on the table" figures come from the Rewards report for the same
+    // dates and are loaded apart from the rest, so nothing else here waits on
+    // the card comparison.
+    final missed = ref.watch(insightsMissedProvider(period));
 
     return AppBackground(
       child: ListView(
@@ -301,8 +306,11 @@ class InsightsHubScreen extends ConsumerWidget {
               message: userFacingErrorMessage(err),
               onRetry: () => ref.invalidate(insightsOverviewProvider(period)),
             ),
-            data: (data) =>
-                _OverviewSections(data: data, milestones: milestoneRows),
+            data: (data) => _OverviewSections(
+              data: data,
+              missed: missed.valueOrNull,
+              milestones: milestoneRows,
+            ),
           ),
           const SizedBox(height: AppSpace.xxl),
           if (needsReviewCount > 0 || duplicateCount > 0) ...[
@@ -593,9 +601,16 @@ class _PeriodChips extends ConsumerWidget {
 /// preview, and the milestone in reach.
 class _OverviewSections extends StatelessWidget {
   final InsightsOverview data;
+
+  /// Null while the card comparison is still running.
+  final InsightsMissed? missed;
   final List<(UserCard, CardProduct, MilestoneRule)> milestones;
 
-  const _OverviewSections({required this.data, required this.milestones});
+  const _OverviewSections({
+    required this.data,
+    required this.missed,
+    required this.milestones,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -617,14 +632,13 @@ class _OverviewSections extends StatelessWidget {
           _CategoryPie(
             categories: data.byCategory,
             earnedTotal: data.earned,
-            missed: data.missed,
-            missedCount: data.missedCount,
+            missed: missed,
             bestCategory: data.bestCategory,
           ),
         ],
-        if (data.topMissed.isNotEmpty) ...[
+        if (missed != null && missed!.top.isNotEmpty) ...[
           const SizedBox(height: AppSpace.xl),
-          _MissedPreview(rows: data.topMissed, totalMissed: data.missed),
+          _MissedPreview(rows: missed!.top, totalMissed: missed!.missed),
         ],
         _MilestoneInReach(milestones: milestones),
       ],
@@ -754,15 +768,15 @@ class _EarnedHero extends StatelessWidget {
 class _CategoryPie extends StatefulWidget {
   final List<CategoryEarning> categories;
   final Money earnedTotal;
-  final Money missed;
-  final int missedCount;
+
+  /// Null while the card comparison is still running.
+  final InsightsMissed? missed;
   final CategoryEarning? bestCategory;
 
   const _CategoryPie({
     required this.categories,
     required this.earnedTotal,
     required this.missed,
-    required this.missedCount,
     required this.bestCategory,
   });
 
@@ -888,11 +902,9 @@ class _CategoryPieState extends State<_CategoryPie> {
                     children: [
                       _CompactHighlight(
                         label: 'Left on the table',
-                        value: widget.missed,
+                        value: hubMissedValue(widget.missed),
                         valueColor: BambooInk.clay,
-                        caption: widget.missedCount == 0
-                            ? 'No missed rewards'
-                            : '${widget.missedCount} payment${widget.missedCount == 1 ? '' : 's'}',
+                        caption: hubMissedCaption(widget.missed),
                       ),
                       const SizedBox(height: AppSpace.sm),
                       _CompactHighlight(
@@ -948,6 +960,28 @@ class _CategoryPieState extends State<_CategoryPie> {
       ),
     );
   }
+}
+
+/// The figure for "Left on the table", or null (shown as a dash) whenever the
+/// comparison has nothing to say: still running, failed, or fewer than two
+/// different cards. A dash with a reason is honest; "₹0 / No missed rewards" is
+/// only said when spends were actually checked.
+@visibleForTesting
+Money? hubMissedValue(InsightsMissed? missed) {
+  if (missed == null || missed.failed || !missed.canCompare) return null;
+  if (missed.missedCount == 0 && missed.comparedCount == 0) return null;
+  return missed.missed;
+}
+
+@visibleForTesting
+String hubMissedCaption(InsightsMissed? missed) {
+  if (missed == null) return 'Checking your cards';
+  if (missed.failed) return 'Could not check';
+  if (!missed.canCompare) return 'Needs two cards';
+  if (missed.missedCount > 0) {
+    return '${missed.missedCount} payment${missed.missedCount == 1 ? '' : 's'}';
+  }
+  return missed.comparedCount == 0 ? 'Nothing to compare yet' : 'No clear misses';
 }
 
 class _CompactHighlight extends StatelessWidget {
@@ -1158,7 +1192,7 @@ class _MissedPreview extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${row.betterCard.name} would have paid more',
+                          '${rewardCardName(row.betterCard.name)} would have paid more',
                           style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                         ),
                       ],

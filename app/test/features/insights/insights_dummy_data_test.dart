@@ -6,6 +6,8 @@ import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/insights/insights_hub_screen.dart';
 import 'package:pandapay/features/insights/insights_overview.dart';
+import 'package:pandapay/features/insights/rewards/rewards_filter.dart';
+import 'package:pandapay/features/insights/rewards/rewards_providers.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 /// Feeds the Insights tab dummy spend and checks the numbers it computes and
@@ -116,6 +118,18 @@ Future<ProviderContainer> _container(List<TransactionEntry> txns) async {
   return c;
 }
 
+/// The hub's missed figures once the comparison has run. The provider is held
+/// open with a listener, as the screen does, because it rebuilds when the
+/// providers it reads settle.
+Future<InsightsMissed> _missed(ProviderContainer c, InsightsPeriod period) async {
+  final sub = c.listen(insightsMissedProvider(period), (_, _) {});
+  addTearDown(sub.close);
+  for (var i = 0; i < 400 && sub.read().isLoading; i++) {
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+  }
+  return sub.read().requireValue;
+}
+
 void main() {
   test('empty period -> InsightsOverview.empty, transactionCount 0', () async {
     final c = await _container(const []);
@@ -146,12 +160,32 @@ void main() {
 
   test('flags the dining swipe made on the 1% flat card as money left on the table', () async {
     final c = await _container(_thisMonth);
-    final o = await c.read(insightsOverviewProvider(InsightsPeriod.thisMonth).future);
+    final missed = await _missed(c, InsightsPeriod.thisMonth);
 
-    expect(o.missedCount, greaterThanOrEqualTo(1));
-    expect(o.missed.paise, greaterThan(0));
-    expect(o.missedIsEstimate, isTrue);
-    expect(o.topMissed.first.betterCard.id, 'dining');
+    // 5% on dining vs 1% on flat, on 3,000: 120 missed, nothing else.
+    expect(missed.canCompare, isTrue);
+    expect(missed.failed, isFalse);
+    expect(missed.missedCount, 1);
+    expect(missed.missed, Money.fromRupees(120));
+    expect(missed.isEstimate, isTrue);
+    expect(missed.top.single.betterCard.id, 'dining');
+    // The flat card first appears on 10 Aug, so the two dining spends before
+    // that had no other card in hand to be compared with.
+    expect(missed.comparedCount, 2);
+  });
+
+  test('the hub shows the same missed figure as the Rewards page for the same dates', () async {
+    final c = await _container(_thisMonth);
+    final missed = await _missed(c, InsightsPeriod.thisMonth);
+    final range = RewardsRange.days(DateTime(2026, 8, 1), DateTime(2026, 8, 31));
+    final sub = c.listen(rewardsReportProvider(RewardsScope(range: range)), (_, _) {});
+    addTearDown(sub.close);
+    for (var i = 0; i < 400 && sub.read().isLoading; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+    final report = sub.read().requireValue;
+    expect(report.missed, missed.missed);
+    expect(report.missedCount, missed.missedCount);
   });
 
   test('last-month period excludes this-month rows', () async {
