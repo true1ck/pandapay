@@ -87,6 +87,7 @@ const cardStateGate = require('./card_state_read_gate');
 const userCardsReadGate = cardStateGate.createReadGate();
 const userCardsLanes = require('./request_coalescer').createRequestCoalescer();
 const { registerSplitRoutes } = require('./transaction_splits');
+const { registerPointsLedgersRoute } = require('./points_ledgers_route');
 const transactionTags = require('./transaction_tags');
 const { registerUserMerchantCategoryRuleRoutes } = require('./user_merchant_category_rules');
 const { AMOUNT_TOLERANCE_INR, MAX_CROSS_SOURCE_CANDIDATE_MS, bestDuplicate } = require('./transaction_dedup');
@@ -2587,6 +2588,9 @@ app.patch('/user-cards/:id', requireAuth, async (req, res) => {
  * user_cards join, not just RLS — same belt-and-suspenders pattern as
  * every other :id route in this file.
  */
+// All of a person's card ledgers in one request (the app's batched read); the per-card route below stays for older builds.
+registerPointsLedgersRoute(app, { requireAuth, withUserClient });
+
 app.get('/user-cards/:id/points-ledger', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, async (client) => {
