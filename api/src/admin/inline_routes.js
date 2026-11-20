@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const { safeErrorCode } = require('../safeErrorCode');
 const { validateField } = require('../admin_rule_families');
 const { SUPPORT_TICKET_KINDS } = require('../support_tickets');
+const { streamJsonRows } = require('./stream_json_rows');
 // External delivery requires a separately reviewed, injected adapter. Never
 // load the customer config or its provider credentials from a private handler.
 const unavailableNotifications = Object.freeze({ isConfigured: () => false });
@@ -19,15 +20,18 @@ app.get('/admin/me', requireAuth, async (req, res) => {
 
 app.get('/admin/cards', requireAdmin, async (req, res) => {
   try {
-    const result = await withUserClient(req.userId, async (client) => {
+    await withUserClient(req.userId, async (client) => {
       // The whole catalogue is large (about 14 MB, 376 cards) and takes several seconds to read, more than the 5 s
       // every other admin read gets. Give this one read more time on the database side and on the client side.
       await client.query("SET LOCAL statement_timeout = '30s'");
-      return client.query({ text: 'SELECT * FROM v_admin_card_catalogue_export ORDER BY name', query_timeout: 30_000 });
+      // Read through a cursor 25 cards at a time and send each batch as it comes, instead of holding all 14 MB in
+      // memory; the bytes are exactly what res.json({ cards }) sent (stream_json_rows.js).
+      await streamJsonRows(client, res, { key: 'cards', text: 'SELECT * FROM v_admin_card_catalogue_export ORDER BY name', batch: 25, queryTimeoutMs: 30_000 });
     });
-    res.json({ cards: result.rows });
   } catch (err) {
     console.error('GET /admin/cards error', safeErrorCode(err));
+    // Part of the list already went out: end the connection so the console never sees a short list as complete.
+    if (res.headersSent) { res.destroy(); return; }
     res.status(500).json({ error: 'internal_error' });
   }
 });
