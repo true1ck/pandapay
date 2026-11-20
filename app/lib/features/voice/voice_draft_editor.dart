@@ -60,6 +60,10 @@ class VoiceDraftEditor {
   /// The purchase a refund was linked to, if any.
   RefundCandidate? refundOf;
   String? moneyInType;
+
+  /// How it was paid before the entry became Money in, so switching back
+  /// restores it instead of guessing a credit card.
+  TxnInstrument? instrumentBeforeMoneyIn;
   bool moneyInHowChosen = false;
   final Set<FollowUpSlot> asked = {};
 

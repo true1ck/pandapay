@@ -303,14 +303,31 @@ class VoiceEntryReview extends StatelessWidget {
               onSelected: (_) {
                 if (editor.type == type) return;
                 final wasMoneyIn = editor.type == VoiceActionType.moneyIn;
+                final wasRefund = editor.type == VoiceActionType.refund;
                 editor.type = type;
                 editor.kindAlternative = null;
-                if (type == VoiceActionType.moneyIn &&
-                    editor.instrument == TxnInstrument.creditCard) {
-                  editor.instrument = TxnInstrument.other;
-                } else if (wasMoneyIn &&
-                    editor.instrument == TxnInstrument.other) {
-                  editor.instrument = TxnInstrument.creditCard;
+                // What belonged to the old kind must not ride along: a refund's
+                // linked purchase (and the category taken from it), and the
+                // kind of money in.
+                if (wasRefund && editor.refundOf != null) {
+                  editor.refundOf = null;
+                  editor.selectedCategoryId = null;
+                }
+                if (wasMoneyIn) editor.moneyInType = null;
+                if (type == VoiceActionType.moneyIn) {
+                  editor.selectedCategoryId = null;
+                  editor.instrumentBeforeMoneyIn = editor.instrument;
+                  if (editor.instrument == TxnInstrument.creditCard) {
+                    editor.instrument = TxnInstrument.other;
+                  }
+                } else if (wasMoneyIn) {
+                  final before = editor.instrumentBeforeMoneyIn;
+                  editor.instrumentBeforeMoneyIn = null;
+                  if (before != null && editor.instrument == TxnInstrument.other) {
+                    editor.instrument = before;
+                  } else if (editor.instrument == TxnInstrument.other) {
+                    editor.instrument = TxnInstrument.creditCard;
+                  }
                 }
                 onChanged();
               },
