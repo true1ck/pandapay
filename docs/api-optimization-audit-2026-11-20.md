@@ -105,6 +105,41 @@ where there were enough calls).
 | Small answers take seconds | `/user-cards` 7 s, `/home-summary` 3.8 s, `/consents` 4.1 s for under 3 KB | time is in the database or waiting for a pool slot, not in the bytes: EXPLAIN the slow queries, add indexes, cache |
 | nginx log never rotated and has no timing | one 91 MB `access.log` since 4 Aug; combined format | logrotate, and add `$request_time $upstream_response_time` to the format |
 
+## 4b. Round 3, 21 Nov 01:40 IST: after the deploys, the iPhone still waited (measured on production)
+
+| Finding | Evidence | Done |
+|---|---|---|
+| Sync answered 429 to the iPhone | 120 sync pages an hour, 60 for a phone without App Check (every iPhone on the free Apple team); a first sync of a 2-year backlog is hundreds of 250-row pages | limit 480 an hour (240 halved) in `sms_v2/security.js`, still per phone, still halved without App Check |
+| Two or three identical wallet reads at app open | `/user-cards` pairs 30 ms apart, 4.5–25 s each | `request_coalescer.js`: reads that arrive during a run share **one follow-up run that starts after they arrived** (never the earlier run's answer, so no older data); the follow-up is cheap because the read gate sees nothing changed |
+| Each app open reopened the database pool | pool fell to 1 connection 10 s after each burst; a new TLS connection to the pooler costs 150–225 ms, a query on an open one 20 ms (measured from the API container) | `DB_POOL_MIN=4` for the API only (`config.js`, `db.js`, compose); the rewards worker keeps 0 |
+| **The real cause of 5–20 s stalls: the VM runs out of memory** | 954 MB RAM, 887 MB in swap; the auth service holds 27 MB in RAM and 91 MB on disk, the API 28 MB and 37 MB, and every API call checks the session with auth (cached 5 s), so the first call after a quiet spell waits for both to be read back from disk; kernel pressure counters with the box idle: all tasks stalled on memory 17% and on disk 35% of the last 10 s; ~550 GB swapped in and out since boot; at 19:55–19:56 UTC even `/categories` and `/catalogue` waited 7–20 s and failed with "database unavailable" | **not fixable in code.** Owner's choice, below |
+
+What uses the memory (in RAM + swapped, 21 Nov): dockerd ~140 MB, two admin servers ~205 MB, SMS template worker
+~130 MB, auth ~118 MB, maps scraper with Playwright ~80 MB, an old PM2 `pandapal-auth-service` plus its PM2 daemon
+~70 MB (still served at `auth.pandapath.in`, port 3000, running since August), API ~65 MB, admin rule jobs ~33 MB,
+Oracle agent ~25 MB.
+
+The swap file (4 GB, since 4 Aug) is why the box stays up instead of killing processes; it is not extra RAM. The disk
+is fine (0.5 ms per 4 KB read, 212 MB/s); the problem is how much moves between RAM and disk.
+
+**Done on the host 21 Nov 01:53 IST (owner asked to make the server better), each reversible:**
+
+| Change | Why | Undo |
+|---|---|---|
+| zswap on (lz4, pool up to 20% of RAM), `/etc/systemd/system/zswap.service`, enabled at boot | idle memory is compressed in RAM (~3:1) before anything goes to disk, so far fewer disk round trips | `sudo systemctl disable --now zswap.service` and `echo 0 \| sudo tee /sys/module/zswap/parameters/enabled` |
+| Stopped `pandapay-prod-maps-scraper-1`, restart policy set to `no` | removed from compose in `62f99ea7` (nearby uses Google Places / OSM directly) but the old container kept running with a headless Chrome since 19 Oct; 24 h of logs held only its own `/ready` health checks | `docker update --restart=unless-stopped pandapay-prod-maps-scraper-1 && docker start pandapay-prod-maps-scraper-1` |
+| Stopped the PM2 `auth-service` (`/home/ubuntu/apps/pandapal-auth-service`), `pm2 save` | every request to `auth.pandapath.in` in the nginx log is a WordPress exploit scanner or a favicon; no app, API or website code references the host; old unpatched code facing the internet | `pm2 start auth-service && pm2 save` |
+
+Swap in use fell from 1,036 MB to 893 MB at once.
+
+Still the owner's decision:
+1. **Move to a bigger VM.** The real fix. Oracle's free Ampere A1 shape allows up to 4 cores and 24 GB in a free
+   account (ARM: images are built on the host, Node and Python images support arm64). Any paid shape with 2–4 GB also
+   removes the swapping.
+2. **Run the admin stack only while it is in use** (admin API, admin gateway, rule jobs: ~130 MB in RAM and ~180 MB
+   swapped, the largest remaining software-side saving).
+3. `auth.pandapath.in` now answers 502 from nginx; a `return 404` server block would be tidier.
+
 ## 5. Not done here
 - Deploying: all the server changes above need a production deploy (owner's go-ahead); the nginx changes are a separate, manual config change on the host.
 - One app-open call (`GET /bootstrap`) instead of ~50: needs an app change and a server route; the biggest remaining win for app-open speed.
