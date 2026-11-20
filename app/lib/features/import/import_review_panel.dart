@@ -19,6 +19,7 @@ import '../../data/local/financial_store.dart' show TransactionQuery;
 import '../../data/statement_import_continuation.dart';
 import '../../data/transaction_import_pipeline.dart';
 import '../../data/category_scope.dart';
+import '../../data/payment_route_rules.dart';
 import '../../data/user_cards_repository.dart';
 
 /// All document and screenshot adapters share this review and commit workflow.
@@ -1349,6 +1350,27 @@ class _EditImportRowState extends State<_EditImportRow> {
     return null;
   }
 
+  static const _railChoices = <(String?, String)>[
+    (null, 'Not specified'),
+    ('upi_qr', 'UPI QR'),
+    ('swipe', 'Card swipe'),
+    ('online', 'Online'),
+    ('contactless', 'Contactless'),
+    ('atm', 'ATM'),
+    ('emi', 'EMI'),
+    ('unknown', 'Unknown'),
+  ];
+
+  static String _railWire(TxnRail rail) => switch (rail) {
+    TxnRail.upiQr => 'upi_qr',
+    TxnRail.swipe => 'swipe',
+    TxnRail.online => 'online',
+    TxnRail.contactless => 'contactless',
+    TxnRail.atm => 'atm',
+    TxnRail.emi => 'emi',
+    TxnRail.unknown => 'unknown',
+  };
+
   TxnEntryKind _entryKindOf(String kind) => TxnEntryKind.fromJson(kind);
 
   String? _fitCategory(String? id, String kind) =>
@@ -1730,49 +1752,41 @@ class _EditImportRowState extends State<_EditImportRow> {
                               child: Text(instrument.label),
                             ),
                         ],
-                        onChanged: (value) =>
-                            setState(() => _instrument = value),
+                        onChanged: (value) => setState(() {
+                          _instrument = value;
+                          // Card swipe on a cash row is not a thing.
+                          final rail = _rail;
+                          if (rail != null &&
+                              rail != 'unknown' &&
+                              !railsForInstrument(value).any(
+                                (r) => _railWire(r) == rail,
+                              )) {
+                            _rail = null;
+                          }
+                        }),
                       ),
                       fieldGap,
                       DropdownButtonFormField<String?>(
+                        key: ValueKey('import-edit-rail-$_instrument'),
                         isExpanded: true,
                         initialValue: _rail,
                         decoration: const InputDecoration(
                           labelText: 'Payment rail',
                         ),
-                        items: const [
-                          DropdownMenuItem<String?>(
-                            value: null,
-                            child: Text('Not specified'),
-                          ),
-                          DropdownMenuItem<String?>(
-                            value: 'upi_qr',
-                            child: Text('UPI QR'),
-                          ),
-                          DropdownMenuItem<String?>(
-                            value: 'swipe',
-                            child: Text('Card swipe'),
-                          ),
-                          DropdownMenuItem<String?>(
-                            value: 'online',
-                            child: Text('Online'),
-                          ),
-                          DropdownMenuItem<String?>(
-                            value: 'contactless',
-                            child: Text('Contactless'),
-                          ),
-                          DropdownMenuItem<String?>(
-                            value: 'atm',
-                            child: Text('ATM'),
-                          ),
-                          DropdownMenuItem<String?>(
-                            value: 'emi',
-                            child: Text('EMI'),
-                          ),
-                          DropdownMenuItem<String?>(
-                            value: 'unknown',
-                            child: Text('Unknown'),
-                          ),
+                        items: [
+                          // Only routes that suit how it was paid; a rail the
+                          // row already carries stays listed.
+                          for (final (value, label) in _railChoices)
+                            if (value == null ||
+                                value == 'unknown' ||
+                                value == _rail ||
+                                railsForInstrument(_instrument).any(
+                                  (r) => _railWire(r) == value,
+                                ))
+                              DropdownMenuItem<String?>(
+                                value: value,
+                                child: Text(label),
+                              ),
                         ],
                         onChanged: (value) => setState(() => _rail = value),
                       ),
