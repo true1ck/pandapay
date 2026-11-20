@@ -302,6 +302,106 @@
     "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
+    "id": "SUB-SI-CHARGED-FX-01",
+    "version": 1,
+    "family": "standing_instruction_charged",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "successfully\\s+processed\\s+(?:the\\s+)?payment\\s+of\\s+(?<cur>\\b(?:usd|eur|gbp|aed|sgd|aud|cad|jpy|chf|cny|hkd|nzd|sar|thb|myr|idr|krw|zar|sek|nok|dkk|qar|kwd|omr|bhd)(?![a-z]))\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:to|for)\\s+(?:merchant\\s+)?(?<m>[a-z0-9&.' _*-]+?)\\s*,?\\s+as\\s+per\\s+(?:the\\s+)?standing\\s+instructions?\\s+(?<ref_umrn>[a-z0-9]+)\\s*,?\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})\\s+for\\s+(?:your\\s+)?(?:[a-z]{1,15}\\s+)?(?:[a-z]{1,15}\\s+)?(?:[a-z]{1,15}\\s+)?credit\\s+card\\s+(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,6})\\b",
+      "flags": "i",
+      "rejectAny": [
+        "could not",
+        "failed",
+        "unsuccessful"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unitFrom": "cur"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        },
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        },
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd/MM/yyyy",
+            "dd-MM-yyyy",
+            "dd/MM/yy"
+          ]
+        }
+      },
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          },
+          "mandatePurpose": "subscription",
+          "oneTime": false
+        },
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        },
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd/MM/yyyy",
+            "dd-MM-yyyy",
+            "dd/MM/yy"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Customer, we have successfully processed the payment of USD 20.00 for ExampleAI, as per the Standing Instruction AbCd12, on 05/12/2026 for your Example Bank Credit Card 1234. To manage your Standing Instructions, visit the Example Bank site.",
+        "expectFactTypes": [
+          "movement",
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Customer, we could not process the payment of USD 20.00 for ExampleAI, as per the Standing Instruction AbCd12, on 05/12/2026 for your Example Bank Credit Card 1234.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "sms-fix-2026-11-20",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
     "id": "SUB-SI-DELETED-01",
     "version": 1,
     "family": "standing_instruction_revoked",
