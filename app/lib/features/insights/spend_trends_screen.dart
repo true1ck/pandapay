@@ -1326,22 +1326,38 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   /// The report's first and last day as the `from` / `to` Activity expects, so a
   /// list opened from here covers exactly the period on this screen.
   ({String from, String to}) _periodDateParams() {
-    DateTime day(DateTime value) =>
-        DateTime(value.year, value.month, value.day);
     String dateParam(DateTime value) =>
         '${value.year.toString().padLeft(4, '0')}-'
         '${value.month.toString().padLeft(2, '0')}-'
         '${value.day.toString().padLeft(2, '0')}';
 
-    final from = widget.query.isCustom
+    final days = _describedDays();
+    return (from: dateParam(days.from), to: dateParam(days.to));
+  }
+
+  /// First and last day (date only, inclusive) this screen is describing: the
+  /// report's period, or only the month picked on the chart, clipped to that
+  /// period (a custom range can start or end mid-month).
+  ({DateTime from, DateTime to}) _describedDays() {
+    DateTime day(DateTime value) =>
+        DateTime(value.year, value.month, value.day);
+
+    var from = widget.query.isCustom
         ? day(widget.query.from!)
         : day(widget.report.periodStart.toLocal());
-    final to = widget.query.isCustom
+    var to = widget.query.isCustom
         ? day(widget.query.to!)
         : day(
             widget.report.periodEnd.subtract(const Duration(days: 1)).toLocal(),
           );
-    return (from: dateParam(from), to: dateParam(to));
+    final month = _monthFilter;
+    if (month != null) {
+      final first = DateTime(month.year, month.month);
+      final last = DateTime(month.year, month.month + 1, 0);
+      if (first.isAfter(from)) from = first;
+      if (last.isBefore(to)) to = last;
+    }
+    return (from: from, to: to);
   }
 
   /// The investments of this period, in Activity's Investments filter: the one
@@ -1487,12 +1503,10 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
     // that month so it agrees with the chart bar. Narrowing to saved rows
     // would drop ledger spend that has no saved transaction row yet.
     if (month != null && !_sheetFiltersActive) {
+      final days = _describedDays();
       return remember(
         model.spendReport(
-          SpendReportQuery.custom(
-            from: DateTime(month.year, month.month),
-            to: DateTime(month.year, month.month + 1, 0),
-          ),
+          SpendReportQuery.custom(from: days.from, to: days.to),
           ref.read(clockProvider).now(),
           bankAccounts: _bankAccounts,
           monthlySeries: true,
@@ -1978,7 +1992,11 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
     // not in [total], not a slice of the mix, not a category percentage.
     final invested = summaryReport.investedOut;
     final showInvested = !invested.isZero;
-    final investedPeriodLabel = report.period == SpendPeriod.custom
+    // A month picked on the chart is what the figures describe, so say so.
+    final pickedMonth = _monthFilter;
+    final investedPeriodLabel = pickedMonth != null
+        ? 'in ${_monthlyPointLabel(pickedMonth)}'
+        : report.period == SpendPeriod.custom
         ? 'in ${report.displayLabel}'
         : report.period.label.toLowerCase();
     final series = _seriesFor(report);
@@ -2038,7 +2056,11 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
               rows: categoryRows,
               total: total,
               compact: multiMonth,
-              rangeLabel: multiMonth ? _reportRangeLabel(report) : null,
+              rangeLabel: multiMonth
+                  ? (pickedMonth != null
+                        ? _monthlyPointLabel(pickedMonth)
+                        : _reportRangeLabel(report))
+                  : null,
               change: !_filtersActive && !multiMonth
                   ? report.changeVsPrevious
                   : null,
@@ -3639,7 +3661,7 @@ class _MonthlyComparisonCard extends StatelessWidget {
               '$direction than ${_monthLabel(previous.periodStart)} '
               '(${(comparison.abs() * 100).toStringAsFixed(0)}%).';
 
-    return CardSummaryPanel(
+    final panel = CardSummaryPanel(
       padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3653,7 +3675,8 @@ class _MonthlyComparisonCard extends StatelessWidget {
                 ),
               ),
               Tooltip(
-                message: 'Tap a bar to show only that month below',
+                message:
+                    'Tap a bar to show only that month below; tap elsewhere on the card to show all',
                 child: Icon(
                   Icons.info_outline_rounded,
                   color: BambooInk.ink500,
@@ -3665,7 +3688,10 @@ class _MonthlyComparisonCard extends StatelessWidget {
           const SizedBox(height: 7),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            // Fixed minimum height so the chart below does not jump when the
+            // larger ✕ appears.
+            constraints: const BoxConstraints(minHeight: 44),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: BambooInk.paper,
               borderRadius: BorderRadius.circular(10),
@@ -3701,15 +3727,16 @@ class _MonthlyComparisonCard extends StatelessWidget {
                   const SizedBox(width: 6),
                   InkWell(
                     key: const ValueKey('monthly-comparison-clear'),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(18),
                     onTap: () => onMonthSelected(null),
                     child: Tooltip(
                       message: 'Show all months',
+                      // 36px target; the icon stays small.
                       child: const Padding(
-                        padding: EdgeInsets.all(4),
+                        padding: EdgeInsets.all(9),
                         child: Icon(
                           Icons.close_rounded,
-                          size: 16,
+                          size: 18,
                           color: BambooInk.ink700,
                         ),
                       ),
@@ -3760,7 +3787,7 @@ class _MonthlyComparisonCard extends StatelessWidget {
                 const SizedBox(width: 7),
                 Expanded(
                   child: Text(
-                    '$comparisonText\nTap a bar to show only that month below; tap it again to clear. Swipe sideways when months overflow.',
+                    '$comparisonText\nTap a bar to show only that month below. Tap anywhere else on this card to show all months. Swipe sideways when months overflow.',
                     style: BambooFonts.ui(10.5, color: BambooInk.ink900),
                   ),
                 ),
@@ -3769,6 +3796,18 @@ class _MonthlyComparisonCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+
+    // A tap anywhere on the card that is not a month column clears the month.
+    // The chart's own tap and the ✕ sit deeper, so they win on their own area.
+    // Hidden from screen readers: the ✕ is their button, a whole-card tap
+    // action would only add noise.
+    return GestureDetector(
+      key: const ValueKey('monthly-comparison-card'),
+      behavior: HitTestBehavior.opaque,
+      excludeFromSemantics: true,
+      onTap: selected == null ? null : () => onMonthSelected(null),
+      child: panel,
     );
   }
 }

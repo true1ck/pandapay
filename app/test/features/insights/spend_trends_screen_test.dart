@@ -106,7 +106,9 @@ TransactionEntry _detailEntry({
   String? cardDisplayName = 'HDFC Millennia',
   String? userCardId = 'uc-1',
   List<TransactionTag> tags = const [],
+  TxnEntryKind entryKind = TxnEntryKind.spend,
 }) => TransactionEntry(
+  entryKind: entryKind,
   id: id,
   amount: Money.fromRupees(amount),
   occurredAt: occurredAt,
@@ -2253,6 +2255,204 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  group('a month picked on the chart', () {
+    // Aug, Sep and Oct on the chart; the picked month's figures, labels and
+    // the lists they open in Activity must all describe that month.
+    Future<void> pumpRouted(
+      WidgetTester tester, {
+      required DateTime from,
+      required DateTime to,
+      required List<TransactionEntry> rows,
+      required SpendReport report,
+    }) async {
+      await tester.binding.setSurfaceSize(const Size(400, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final router = GoRouter(
+        initialLocation: '/spending',
+        routes: [
+          GoRoute(
+            path: '/spending',
+            builder: (context, state) => const SpendTrendsScreen(),
+          ),
+          GoRoute(
+            path: '/activity',
+            builder: (context, state) =>
+                Text(state.uri.toString(), key: const ValueKey('activity-uri')),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            transactionTagsProvider.overrideWith((ref) => null),
+            selectedSpendQueryProvider.overrideWith(
+              (ref) => SpendReportQuery.custom(from: from, to: to),
+            ),
+            spendReportProvider.overrideWith((ref, query) async => report),
+            spendPeriodTransactionsProvider.overrideWith(
+              (ref, query) async => rows,
+            ),
+            bankAccountSummariesProvider.overrideWith((ref) async => const []),
+          ],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    // Taps the chart column of month [i] of three.
+    Future<void> tapMonth(WidgetTester tester, int i) async {
+      final chart = find.byKey(const ValueKey('monthly-comparison-chart'));
+      await tester.ensureVisible(chart);
+      await tester.pumpAndSettle();
+      final rect = tester.getRect(chart);
+      await tester.tapAt(
+        Offset(
+          rect.left + 48 + (rect.width - 48) * (2 * i + 1) / 6,
+          rect.center.dy,
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    String activityUri(WidgetTester tester) =>
+        tester.widget<Text>(find.byKey(const ValueKey('activity-uri'))).data!;
+
+    testWidgets('says which month was invested and opens only that month', (
+      tester,
+    ) async {
+      await pumpRouted(
+        tester,
+        from: DateTime(2026, 8, 1),
+        to: DateTime(2026, 10, 31),
+        report: _report(
+          spend: 1500,
+          investment: 10000,
+          byCategory: [
+            SpendBreakdownRow(
+              label: 'Dining',
+              categoryId: 'dining',
+              total: Money.fromRupees(500),
+              txnCount: 1,
+            ),
+            SpendBreakdownRow(
+              label: 'Travel',
+              categoryId: 'travel',
+              total: Money.fromRupees(1000),
+              txnCount: 1,
+            ),
+          ],
+        ),
+        rows: [
+          _detailEntry(
+            id: 'aug-spend',
+            merchant: 'Aug Cafe',
+            amount: 500,
+            categoryId: 'dining',
+            categoryName: 'Dining',
+            occurredAt: DateTime(2026, 8, 10),
+          ),
+          _detailEntry(
+            id: 'oct-spend',
+            merchant: 'Oct Cab',
+            amount: 1000,
+            categoryId: 'travel',
+            categoryName: 'Travel',
+            occurredAt: DateTime(2026, 10, 12),
+          ),
+          _detailEntry(
+            id: 'aug-invest',
+            merchant: 'Fund',
+            amount: 3000,
+            categoryId: 'investments',
+            categoryName: 'Investments',
+            occurredAt: DateTime(2026, 8, 20),
+            entryKind: TxnEntryKind.investment,
+          ),
+          _detailEntry(
+            id: 'oct-invest',
+            merchant: 'Fund',
+            amount: 7000,
+            categoryId: 'investments',
+            categoryName: 'Investments',
+            occurredAt: DateTime(2026, 10, 20),
+            entryKind: TxnEntryKind.investment,
+          ),
+        ],
+      );
+      final line = find.byKey(const ValueKey('spending_invested_line'));
+      // Whole range before anything is picked.
+      expect(
+        find.descendant(of: line, matching: find.text('₹10,000.00')),
+        findsOneWidget,
+      );
+
+      await tapMonth(tester, 2);
+      expect(
+        find.descendant(of: line, matching: find.text('Invested in Oct 2026')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: line, matching: find.text('₹7,000.00')),
+        findsOneWidget,
+      );
+      // The mix names the month, not the whole range.
+      expect(find.text('Spending mix · Oct 2026'), findsOneWidget);
+
+      await tester.ensureVisible(line);
+      await tester.tap(line);
+      await tester.pumpAndSettle();
+      expect(
+        activityUri(tester),
+        '/activity?type=investments&from=2026-10-01&to=2026-10-31',
+      );
+    });
+
+    testWidgets('Money in opens the picked month, clipped to a custom range', (
+      tester,
+    ) async {
+      // Range starts on 15 Aug and ends on 20 Oct: the first and last months
+      // are partial, so their lists must not reach outside the range.
+      Future<void> pumpRange() => pumpRouted(
+        tester,
+        from: DateTime(2026, 8, 15),
+        to: DateTime(2026, 10, 20),
+        report: _report(spend: 1500, income: 90000),
+        rows: const [],
+      );
+
+      await pumpRange();
+      await tapMonth(tester, 0);
+      await tester.ensureVisible(find.text('Money in'));
+      await tester.tap(find.text('Money in'));
+      await tester.pumpAndSettle();
+      expect(
+        activityUri(tester),
+        '/activity?type=moneyIn&from=2026-08-15&to=2026-08-31',
+      );
+
+      await pumpRange();
+      await tapMonth(tester, 2);
+      await tester.ensureVisible(find.text('Money in'));
+      await tester.tap(find.text('Money in'));
+      await tester.pumpAndSettle();
+      expect(
+        activityUri(tester),
+        '/activity?type=moneyIn&from=2026-10-01&to=2026-10-20',
+      );
+
+      // With no month picked it is still the whole range.
+      await pumpRange();
+      await tester.ensureVisible(find.text('Money in'));
+      await tester.tap(find.text('Money in'));
+      await tester.pumpAndSettle();
+      expect(
+        activityUri(tester),
+        '/activity?type=moneyIn&from=2026-08-15&to=2026-10-20',
+      );
+    });
+  });
+
   testWidgets(
     'a filter with no spending in a new range is cleared and said so',
     (tester) async {
@@ -2376,6 +2576,22 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('All months'), findsOneWidget);
       expect(find.text('₹1,500.00'), findsWidgets);
+
+      // A tap on the card outside the plot (here its title) clears the month
+      // too, while a tap on a month's column still picks that month.
+      await tester.tapAt(Offset(slotX(2), rect.center.dy));
+      await tester.pumpAndSettle();
+      expect(find.text('Oct 2026'), findsOneWidget);
+      await tester.ensureVisible(find.text('Monthly comparison'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Monthly comparison'));
+      await tester.pumpAndSettle();
+      expect(find.text('All months'), findsOneWidget);
+
+      // With nothing picked, the same tap does nothing.
+      await tester.tap(find.text('Monthly comparison'));
+      await tester.pumpAndSettle();
+      expect(find.text('All months'), findsOneWidget);
     },
   );
 
