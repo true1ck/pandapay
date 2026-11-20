@@ -39,11 +39,15 @@ function isReviewerOtpIdentifier(identifier, env = process.env, now = Date.now()
   return Boolean(config) && config.identifiers.has(String(identifier || '').trim().toLowerCase());
 }
 
-// Returns the fixed code for a listed identifier, otherwise null.
-function reviewerOtpCode(identifier, env = process.env, now = Date.now()) {
+// Returns the fixed code for a listed identifier, otherwise null. The current
+// app speaks the legacy protocol, which only accepts a 4-digit code, so the
+// legacy form is the first four digits of the configured six. The v2 protocol
+// uses all six.
+function reviewerOtpCode(identifier, env = process.env, now = Date.now(), { legacy = false } = {}) {
   const config = readConfig(env, now);
   if (!config) return null;
-  return config.identifiers.has(String(identifier || '').trim().toLowerCase()) ? config.code : null;
+  if (!config.identifiers.has(String(identifier || '').trim().toLowerCase())) return null;
+  return legacy ? config.code.slice(0, 4) : config.code;
 }
 
 module.exports = { isReviewerOtpIdentifier, reviewerOtpCode, MAX_IDENTIFIERS };
