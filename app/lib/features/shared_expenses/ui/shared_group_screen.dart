@@ -492,7 +492,12 @@ class _SharedGroupScreenState extends State<SharedGroupScreen> {
     return [
       Row(
         children: [
-          SharedAvatar(name: data.title, group: !data.direct, size: 52),
+          SharedAvatar(
+            name: data.title,
+            group: !data.direct,
+            size: 52,
+            profileId: data.friendProfileId,
+          ),
           const SizedBox(width: AppSpace.md),
           Expanded(
             child: Column(

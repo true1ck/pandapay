@@ -1193,6 +1193,25 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   late Set<String> _tagFilters = {...widget.initialSelection.tagIds};
   late bool _untagged = widget.initialSelection.untagged;
 
+  /// Month picked on the Monthly comparison chart (first of that month).
+  /// Narrows everything below but never the chart's own bars, and is not
+  /// saved across screens — it belongs to the period currently on show.
+  DateTime? _monthFilter;
+
+  void _setMonth(DateTime? month) {
+    setState(() => _monthFilter = month);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ReportBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_monthFilter != null &&
+        (oldWidget.report.periodStart != widget.report.periodStart ||
+            oldWidget.report.periodEnd != widget.report.periodEnd)) {
+      _monthFilter = null;
+    }
+  }
+
   List<BankAccountSummary> get _bankAccounts =>
       ref.read(bankAccountSummariesProvider).valueOrNull ?? const [];
 
@@ -1207,7 +1226,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
         untagged: _untagged,
       ),
     );
-    widget.onFiltersActiveChanged(_filtersActive);
+    widget.onFiltersActiveChanged(_sheetFiltersActive);
   }
 
   @override
@@ -1288,13 +1307,17 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
     );
   }
 
-  bool get _filtersActive =>
+  /// Filters from the Filters sheet (and tag chips) — what the badge shows.
+  bool get _sheetFiltersActive =>
       _paymentFilter != null ||
       _categoryFilters.isNotEmpty ||
       _merchantFilter != null ||
       _cardFilter != null ||
       _tagFilters.isNotEmpty ||
       _untagged;
+
+  /// Anything narrowing the rows below, including the chart's month.
+  bool get _filtersActive => _sheetFiltersActive || _monthFilter != null;
 
   List<TransactionEntry> get _spendEntries =>
       {for (final entry in widget.transactions) entry.id: entry}.values
@@ -1312,6 +1335,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
     Set<String>? categories,
     String? merchant,
     String? card,
+    bool withMonth = true,
   }) {
     final selection = SpendingSelection(
       payment: payment ?? _paymentFilter,
@@ -1320,6 +1344,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
       card: card ?? _cardFilter,
       tagIds: _tagFilters,
       untagged: _untagged,
+      month: withMonth ? _monthFilter : null,
     );
     return _spendEntries
         .where(
@@ -1348,19 +1373,57 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   }
 
   SpendReport? _ledgerReportCache;
-  SpendReport? get _ledgerReport {
+  SpendReport? _ledgerSeriesCache;
+
+  /// Ledger report for everything below the chart (month applied).
+  SpendReport? get _ledgerReport => _ledgerReportFor(withMonth: true);
+
+  /// [withMonth] false keeps every month's bar while the sheet filters still
+  /// apply, so the chart stays comparable after a month is picked.
+  SpendReport? _ledgerReportFor({required bool withMonth}) {
     if (!ref.read(smsV2ReportingEnabledProvider)) return null;
-    if (_ledgerReportCache != null) return _ledgerReportCache;
+    final cached = withMonth ? _ledgerReportCache : _ledgerSeriesCache;
+    if (cached != null) return cached;
     final model = ref.read(smsV2LedgerReadModelProvider).valueOrNull;
     if (model == null) return null;
+    final month = withMonth ? _monthFilter : null;
+    SpendReport remember(SpendReport report) {
+      if (withMonth) {
+        _ledgerReportCache = report;
+      } else {
+        _ledgerSeriesCache = report;
+      }
+      return report;
+    }
+
+    // A month alone is a date window, not a row filter: ask the ledger for
+    // that month so it agrees with the chart bar. Narrowing to saved rows
+    // would drop ledger spend that has no saved transaction row yet.
+    if (month != null && !_sheetFiltersActive) {
+      return remember(
+        model.spendReport(
+          SpendReportQuery.custom(
+            from: DateTime(month.year, month.month),
+            to: DateTime(month.year, month.month + 1, 0),
+          ),
+          ref.read(clockProvider).now(),
+          bankAccounts: _bankAccounts,
+          monthlySeries: true,
+        ),
+      );
+    }
+
     // Unfiltered totals and breakdowns must use the whole ledger snapshot.
     // A partial or empty companion result cannot narrow the aggregate report.
-    if (!_filtersActive || widget.transactionDetailsLoading) {
-      return _ledgerReportCache = model.spendReport(
-        widget.query,
-        ref.read(clockProvider).now(),
-        bankAccounts: _bankAccounts,
-        monthlySeries: true,
+    if ((!_sheetFiltersActive && month == null) ||
+        widget.transactionDetailsLoading) {
+      return remember(
+        model.spendReport(
+          widget.query,
+          ref.read(clockProvider).now(),
+          bankAccounts: _bankAccounts,
+          monthlySeries: true,
+        ),
       );
     }
     final selection = SpendingSelection(
@@ -1370,6 +1433,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
       card: _cardFilter,
       tagIds: _tagFilters,
       untagged: _untagged,
+      month: month,
     );
     final rows = widget.transactions
         .where(
@@ -1380,16 +1444,17 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
           ),
         )
         .toList();
-    return _ledgerReportCache =
-        LedgerReadModel(
-          ledger: model.snapshot(selected: rows),
-          transactions: rows,
-        ).spendReport(
-          widget.query,
-          ref.read(clockProvider).now(),
-          bankAccounts: _bankAccounts,
-          monthlySeries: true,
-        );
+    return remember(
+      LedgerReadModel(
+        ledger: model.snapshot(selected: rows),
+        transactions: rows,
+      ).spendReport(
+        widget.query,
+        ref.read(clockProvider).now(),
+        bankAccounts: _bankAccounts,
+        monthlySeries: true,
+      ),
+    );
   }
 
   String _categoryName(TransactionEntry entry) => entry.categoryLabel;
@@ -1548,11 +1613,24 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
       ..sort((a, b) => b.total.paise.compareTo(a.total.paise));
   }
 
-  Money _visibleTotal() =>
-      _filtersActive ? _sum(_visibleEntries) : widget.report.spend.total;
+  /// Month-only on the ledger path: the ledger's own figure for that month, so
+  /// the donut total and row percentages match the rows built from it.
+  SpendReport? get _monthOnlyLedgerReport =>
+      _monthFilter != null && !_sheetFiltersActive ? _ledgerReport : null;
 
-  int _visibleCount() =>
-      _filtersActive ? _visibleEntries.length : widget.report.spend.txnCount;
+  Money _visibleTotal() {
+    if (!_filtersActive) return widget.report.spend.total;
+    if (_monthOnlyLedgerReport case final report?) return report.spend.total;
+    return _sum(_visibleEntries);
+  }
+
+  int _visibleCount() {
+    if (!_filtersActive) return widget.report.spend.txnCount;
+    if (_monthOnlyLedgerReport case final report?) {
+      return report.spend.txnCount;
+    }
+    return _visibleEntries.length;
+  }
 
   List<DateTime> _monthsInReport(SpendReport report) {
     // Custom ranges are date-only selections. Use those dates directly
@@ -1575,10 +1653,16 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   }
 
   List<SpendSeriesPoint> _seriesFor(SpendReport report) {
-    if (_ledgerReport case final report?) return report.series;
+    if (_ledgerReportFor(withMonth: false) case final report?) {
+      return report.series;
+    }
+    // The bars must not collapse to the picked month, so skip it here.
+    final seriesEntries = _sheetFiltersActive
+        ? _entriesFor(withMonth: false)
+        : _spendEntries;
     final totals = <DateTime, Money>{};
     final counts = <DateTime, int>{};
-    for (final entry in _visibleEntries) {
+    for (final entry in seriesEntries) {
       final local = entry.occurredAt.toLocal();
       final month = DateTime(local.year, local.month);
       totals[month] = (totals[month] ?? const Money.zero()) + entry.amount;
@@ -1612,7 +1696,9 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
           ),
         )
         .toList();
-    if (_filtersActive || report.period == SpendPeriod.custom) return derived;
+    if (_sheetFiltersActive || report.period == SpendPeriod.custom) {
+      return derived;
+    }
 
     // Preset quarter/year reports may have a server series at a larger
     // cadence. Keep only points that belong to the selected range; monthly
@@ -1774,6 +1860,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   @override
   Widget build(BuildContext context) {
     _ledgerReportCache = null;
+    _ledgerSeriesCache = null;
     if (ref.watch(smsV2ReportingEnabledProvider))
       ref.watch(smsV2LedgerReadModelProvider);
 
@@ -1881,7 +1968,11 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
           _SpendMetricsCard(report: summaryReport),
           const SizedBox(height: AppSpace.lg),
           if (multiMonth) ...[
-            _MonthlyComparisonCard(series: series),
+            _MonthlyComparisonCard(
+              series: series,
+              selectedMonth: _monthFilter,
+              onMonthSelected: _setMonth,
+            ),
             const SizedBox(height: AppSpace.lg),
           ],
         ],
@@ -2080,6 +2171,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
       card: _cardFilter,
       tagIds: _tagFilters,
       untagged: _untagged,
+      month: _monthFilter,
     );
     final rows = {for (final row in widget.transactions) row.id: row}.values
         .where(
@@ -3274,17 +3366,27 @@ class _SpendChangePill extends StatelessWidget {
   }
 }
 
-class _MonthlyComparisonCard extends StatefulWidget {
+/// The bars double as a month filter: the picked month is owned by the report
+/// (it narrows the lists below), this card only draws and reports taps.
+class _MonthlyComparisonCard extends StatelessWidget {
   final List<SpendSeriesPoint> series;
+  final DateTime? selectedMonth;
 
-  const _MonthlyComparisonCard({required this.series});
+  /// Called with the tapped month, or null when the picked month is tapped
+  /// again or cleared.
+  final ValueChanged<DateTime?> onMonthSelected;
 
-  @override
-  State<_MonthlyComparisonCard> createState() => _MonthlyComparisonCardState();
-}
+  const _MonthlyComparisonCard({
+    required this.series,
+    required this.selectedMonth,
+    required this.onMonthSelected,
+  });
 
-class _MonthlyComparisonCardState extends State<_MonthlyComparisonCard> {
-  int? _selectedIndex;
+  static bool _isMonth(DateTime a, DateTime? b) {
+    if (b == null) return false;
+    final local = a.toLocal();
+    return local.year == b.year && local.month == b.month;
+  }
 
   static String _monthLabel(DateTime date) {
     const months = <String>[
@@ -3307,12 +3409,13 @@ class _MonthlyComparisonCardState extends State<_MonthlyComparisonCard> {
 
   @override
   Widget build(BuildContext context) {
-    final series = widget.series;
     if (series.length < 2) return const SizedBox.shrink();
-    final selectedIndex = (_selectedIndex ?? series.length - 1)
-        .clamp(0, series.length - 1)
-        .toInt();
-    final selected = series[selectedIndex];
+    // -1 = no month picked: nothing highlighted, strip shows the whole range.
+    final selectedIndex = series.indexWhere(
+      (point) => _isMonth(point.periodStart, selectedMonth),
+    );
+    final selected = selectedIndex < 0 ? null : series[selectedIndex];
+    final rangeTotal = series.fold<int>(0, (sum, p) => sum + p.spend.paise);
     final latest = series.last;
     final previous = series[series.length - 2];
     final difference = latest.spend.paise - previous.spend.paise;
@@ -3343,7 +3446,7 @@ class _MonthlyComparisonCardState extends State<_MonthlyComparisonCard> {
                 ),
               ),
               Tooltip(
-                message: 'Tap a bar to inspect that month',
+                message: 'Tap a bar to show only that month below',
                 child: Icon(
                   Icons.info_outline_rounded,
                   color: BambooInk.ink500,
@@ -3367,7 +3470,9 @@ class _MonthlyComparisonCardState extends State<_MonthlyComparisonCard> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    _monthLabel(selected.periodStart),
+                    selected == null
+                        ? 'All months'
+                        : _monthLabel(selected.periodStart),
                     style: BambooFonts.ui(
                       11,
                       weight: FontWeight.w700,
@@ -3376,13 +3481,34 @@ class _MonthlyComparisonCardState extends State<_MonthlyComparisonCard> {
                   ),
                 ),
                 Text(
-                  selected.spend.format(hidePaise: false),
+                  (selected?.spend ?? Money.fromPaise(rangeTotal)).format(
+                    hidePaise: false,
+                  ),
                   style: BambooFonts.ui(
                     12,
                     weight: FontWeight.w800,
                     color: BambooInk.ink900,
                   ),
                 ),
+                if (selected != null) ...[
+                  const SizedBox(width: 6),
+                  InkWell(
+                    key: const ValueKey('monthly-comparison-clear'),
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => onMonthSelected(null),
+                    child: Tooltip(
+                      message: 'Show all months',
+                      child: const Padding(
+                        padding: EdgeInsets.all(4),
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 16,
+                          color: BambooInk.ink700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -3390,7 +3516,14 @@ class _MonthlyComparisonCardState extends State<_MonthlyComparisonCard> {
           _InteractiveMonthlyBarChart(
             series: series,
             selectedIndex: selectedIndex,
-            onSelected: (index) => setState(() => _selectedIndex = index),
+            onSelected: (index) {
+              final start = series[index].periodStart.toLocal();
+              onMonthSelected(
+                index == selectedIndex
+                    ? null
+                    : DateTime(start.year, start.month),
+              );
+            },
           ),
           const SizedBox(height: 5),
           Container(
@@ -3420,7 +3553,7 @@ class _MonthlyComparisonCardState extends State<_MonthlyComparisonCard> {
                 const SizedBox(width: 7),
                 Expanded(
                   child: Text(
-                    '$comparisonText\nTap a bar to inspect a month. Swipe sideways when months overflow.',
+                    '$comparisonText\nTap a bar to show only that month below; tap it again to clear. Swipe sideways when months overflow.',
                     style: BambooFonts.ui(10.5, color: BambooInk.ink900),
                   ),
                 ),
@@ -3555,7 +3688,9 @@ class _InteractiveMonthlyBarChartState
   @override
   void didUpdateWidget(covariant _InteractiveMonthlyBarChart oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.selectedIndex != widget.selectedIndex ||
+    // Clearing the month (-1) must not yank the chart back to the latest bar.
+    if ((oldWidget.selectedIndex != widget.selectedIndex &&
+            widget.selectedIndex >= 0) ||
         oldWidget.series.length != widget.series.length) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -3577,8 +3712,11 @@ class _InteractiveMonthlyBarChartState
     final position = _controller.position;
     if (position.maxScrollExtent <= 0) return;
     final barWidth = _monthlyChartBarWidth(_slotWidth);
-    final barLeft =
-        widget.selectedIndex * _slotWidth + (_slotWidth - barWidth) / 2;
+    // Nothing picked: open on the latest month, as the chart always has.
+    final index = widget.selectedIndex < 0
+        ? widget.series.length - 1
+        : widget.selectedIndex;
+    final barLeft = index * _slotWidth + (_slotWidth - barWidth) / 2;
     final barRight = barLeft + barWidth;
     final viewLeft = position.pixels;
     final viewRight = viewLeft + _viewportWidth;
@@ -3666,8 +3804,8 @@ class _InteractiveMonthlyBarChartState
                               _selectAt(details.localPosition),
                           child: Semantics(
                             label: scrollable
-                                ? 'Monthly spending chart. Swipe sideways to scroll months. Tap a bar to select a month.'
-                                : 'Monthly spending chart. Tap a bar to select a month.',
+                                ? 'Monthly spending chart. Swipe sideways to scroll months. Tap a bar to show only that month; tap it again to clear.'
+                                : 'Monthly spending chart. Tap a bar to show only that month; tap it again to clear.',
                             child: CustomPaint(
                               painter: _MonthlyBarsPainter(
                                 series: widget.series,

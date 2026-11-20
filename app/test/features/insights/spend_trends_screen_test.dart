@@ -2010,7 +2010,8 @@ void main() {
     expect(position.maxScrollExtent, greaterThan(0));
     // Opens on the latest month rather than the oldest.
     expect(position.pixels, greaterThan(0));
-    expect(find.text('Dec 2026'), findsOneWidget);
+    // Nothing is picked yet: the strip covers the whole range.
+    expect(find.text('All months'), findsOneWidget);
 
     await tester.ensureVisible(chart);
     await tester.pumpAndSettle();
@@ -2018,7 +2019,106 @@ void main() {
     await tester.tapAt(Offset(rect.left + 56, rect.center.dy));
     await tester.pumpAndSettle();
 
-    expect(find.text('Dec 2026'), findsNothing);
+    // Whichever month sat under the tap is now picked.
+    expect(find.text('All months'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('monthly-comparison-clear')),
+      findsOneWidget,
+    );
+
+    // The ✕ clears the month again.
+    await tester.tap(find.byKey(const ValueKey('monthly-comparison-clear')));
+    await tester.pumpAndSettle();
+    expect(find.text('All months'), findsOneWidget);
+  });
+
+  testWidgets('tapping a month bar filters the lists below and keeps the bars', (
+    tester,
+  ) async {
+    final rows = [
+      _detailEntry(
+        id: 'aug',
+        merchant: 'Aug Cafe',
+        amount: 500,
+        categoryId: 'dining',
+        categoryName: 'Dining',
+        occurredAt: DateTime(2026, 8, 10),
+      ),
+      _detailEntry(
+        id: 'oct',
+        merchant: 'Oct Cab',
+        amount: 1000,
+        categoryId: 'travel',
+        categoryName: 'Travel',
+        occurredAt: DateTime(2026, 10, 12),
+      ),
+    ];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          selectedSpendQueryProvider.overrideWith(
+            (ref) => SpendReportQuery.custom(
+              from: DateTime(2026, 8, 1),
+              to: DateTime(2026, 10, 31),
+            ),
+          ),
+          spendReportProvider.overrideWith(
+            (ref, query) async => _report(
+              spend: 1500,
+              byCategory: [
+                SpendBreakdownRow(
+                  label: 'Dining',
+                  categoryId: 'dining',
+                  total: Money.fromRupees(500),
+                  txnCount: 1,
+                ),
+                SpendBreakdownRow(
+                  label: 'Travel',
+                  categoryId: 'travel',
+                  total: Money.fromRupees(1000),
+                  txnCount: 1,
+                ),
+              ],
+            ),
+          ),
+          spendPeriodTransactionsProvider.overrideWith(
+            (ref, query) async => rows,
+          ),
+          bankAccountSummariesProvider.overrideWith((ref) async => const []),
+        ],
+        child: const MaterialApp(home: SpendTrendsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // Whole range: Aug ₹500 + Oct ₹1,000.
+    expect(find.text('All months'), findsOneWidget);
+    expect(find.text('₹1,500.00'), findsWidgets);
+
+    final chart = find.byKey(const ValueKey('monthly-comparison-chart'));
+    await tester.ensureVisible(chart);
+    await tester.pumpAndSettle();
+    final rect = tester.getRect(chart);
+    // Three equal slots right of the 48px axis gutter: Aug, Sep, Oct.
+    double slotX(int i) => rect.left + 48 + (rect.width - 48) * (2 * i + 1) / 6;
+    await tester.tapAt(Offset(slotX(2), rect.center.dy));
+    await tester.pumpAndSettle();
+
+    // Only October is counted below, and the whole-range figure is gone.
+    expect(find.text('Oct 2026'), findsOneWidget);
+    expect(find.text('₹1,000.00'), findsWidgets);
+    expect(find.text('₹1,500.00'), findsNothing);
+
+    // The bars were not narrowed: August still reports its own ₹500.
+    await tester.tapAt(Offset(slotX(0), rect.center.dy));
+    await tester.pumpAndSettle();
+    expect(find.text('Aug 2026'), findsOneWidget);
+    expect(find.text('₹500.00'), findsWidgets);
+
+    // Tapping the same bar again clears the month.
+    await tester.tapAt(Offset(slotX(0), rect.center.dy));
+    await tester.pumpAndSettle();
+    expect(find.text('All months'), findsOneWidget);
+    expect(find.text('₹1,500.00'), findsWidgets);
   });
 
   testWidgets('an empty period shows an explicit zero-spending state', (

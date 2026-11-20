@@ -108,6 +108,10 @@ class SharedContextRow {
   /// For a friend: what is owed between you in each group and outside groups,
   /// when it is more than one place. [balance] is then the total of these.
   final List<SharedBreakdownLine> breakdown;
+
+  /// The other person's account, when they have joined, so their avatar can be
+  /// shown. Null for a group and for someone invited but not yet joined.
+  final String? profileId;
   const SharedContextRow({
     required this.id,
     required this.title,
@@ -115,7 +119,20 @@ class SharedContextRow {
     this.subtitle,
     this.state = SharedContextState.active,
     this.breakdown = const [],
+    this.profileId,
   });
+
+  SharedContextRow withProfile(String? profileId) => profileId == null
+      ? this
+      : SharedContextRow(
+          id: id,
+          title: title,
+          balance: balance,
+          subtitle: subtitle,
+          state: state,
+          breakdown: breakdown,
+          profileId: profileId,
+        );
 
   /// Never hide known obligations behind stale settled-state metadata.
   bool get canHideAsSettled =>
@@ -255,10 +272,14 @@ class SharedGroupPresentation {
   /// A private one-to-one split with a friend rather than a named group.
   final bool direct;
 
+  /// For a private split: the friend's account, to show their avatar.
+  final String? friendProfileId;
+
   /// On a friend's page: what is owed between you in each group and outside
   /// groups, when it is more than one place (see [SharedBreakdownLine]).
   final List<SharedBreakdownLine> breakdown;
   const SharedGroupPresentation({
+    this.friendProfileId,
     required this.id,
     required this.title,
     this.summary,

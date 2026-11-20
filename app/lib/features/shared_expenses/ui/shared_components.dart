@@ -6,6 +6,7 @@ import '../../../app/design/party_avatar.dart';
 import '../../../app/design/app_icons.dart';
 import '../../../app/design/widgets.dart';
 import '../../../main.dart' show MoneyText;
+import '../../account/member_avatar.dart';
 import 'shared_presentation.dart';
 
 /// One header and tab level, matching the existing GroupedInsightScreen. This
@@ -460,16 +461,23 @@ class SharedAvatar extends StatelessWidget {
   final String name;
   final bool group;
   final double size;
+
+  /// The person's account: their avatar or photo is shown instead of the plain
+  /// person tile. Null (not joined yet) keeps the tile.
+  final String? profileId;
   const SharedAvatar({
     super.key,
     required this.name,
     this.group = false,
     this.size = 40,
+    this.profileId,
   });
   @override
   Widget build(BuildContext context) => group
       ? TintedIconTile(AppIcons.group, BambooChartColors.violet, size: size)
-      : PartyAvatar(AvatarKind.person, size: size, name: name);
+      : profileId == null
+      ? PartyAvatar(AvatarKind.person, size: size, name: name)
+      : MemberAvatar(profileId: profileId, name: name, size: size);
 }
 
 String? sharedStateLabel(SharedContextState state) => switch (state) {
@@ -559,7 +567,11 @@ class SharedContextTile extends StatelessWidget {
             LayoutBuilder(
               builder: (context, constraints) => Row(
                 children: [
-                  SharedAvatar(name: row.title, group: isGroup),
+                  SharedAvatar(
+                    name: row.title,
+                    group: isGroup,
+                    profileId: row.profileId,
+                  ),
                   const SizedBox(width: AppSpace.md),
                   Expanded(
                     child: Column(

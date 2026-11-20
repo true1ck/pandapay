@@ -258,6 +258,17 @@ class SharedPairIndex {
     }
   }
 
+  /// The account behind a person key, or null for a person who has not joined
+  /// (their key is a placeholder), so there is no avatar to look up.
+  static String? profileOfKey(String key) =>
+      key.startsWith('ctx:') || key.startsWith('name:') ? null : key;
+
+  /// The account of the friend of [friendContextId], or null when not joined.
+  String? profileOf(String friendContextId) {
+    final person = _friendOf[friendContextId];
+    return person == null ? null : profileOfKey(person);
+  }
+
   /// The lines for the friend of [friendContextId]: one per group you share
   /// with a balance, and one for expenses outside groups worth [directNet]
   /// (the friend context's own balance, from the same source as the screen,
