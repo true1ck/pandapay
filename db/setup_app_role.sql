@@ -269,6 +269,16 @@ begin
                 where table_schema = 'public' and table_name = 'sms_v2_unknown_templates' and column_name = 'sample') then
       grant update (sample, failure_detail) on public.sms_v2_unknown_templates to sms_ai_worker;
     end if;
+    if to_regprocedure('pandapay.sms_v2_ai_requeue_durable(text)') is not null then
+      grant update (ai_drafting_version, ai_job_attempts, ai_counted_jobs, ai_counted_jobs_by_version, ai_run_after)
+        on public.sms_v2_unknown_templates to sms_ai_worker;
+      grant execute on function pandapay.sms_v2_ai_requeue_durable(text) to sms_ai_worker;
+    end if;
+    -- 20261125010000: providers already rejected for the layout in the current retry cycle.
+    if exists (select 1 from information_schema.columns
+                where table_schema = 'public' and table_name = 'sms_v2_unknown_templates' and column_name = 'ai_excluded_providers') then
+      grant update (ai_excluded_providers) on public.sms_v2_unknown_templates to sms_ai_worker;
+    end if;
   end if;
   if to_regclass('public.sms_v2_template_attempts') is not null then
     grant select, insert on public.sms_v2_template_attempts to sms_ai_worker;

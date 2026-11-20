@@ -858,6 +858,72 @@ class FinancialStore {
     ];
   }
 
+  /// The server accepted a queued command for [target]. Writes what the outbox
+  /// was laying over the stored row (a transaction edit, a card patch) into it
+  /// and stamps it now. Without this the row keeps whatever an older refresh
+  /// stored while the command waited, and once the command leaves the outbox
+  /// the edit looks undone until the next pull brings it back. The stamp also
+  /// makes a refresh requested before this moment unable to overwrite it.
+  /// Call before the command is removed. [kind] `set_default` also touches the
+  /// other cards, whose default flag it clears.
+  void settleDelivered(String ns, String kind, String target) {
+    var changed = false;
+    for (final entity in const ['transactions', 'cards']) {
+      final all = entity == 'cards' && kind == 'set_default';
+      final rows = entities(ns, entity, id: all ? null : target);
+      final now = DateTime.now().millisecondsSinceEpoch;
+      for (final row in rows) {
+        final meta = database.db.select(
+          'SELECT payload, pending, source_key FROM financial_entities WHERE namespace=? AND entity=? AND id=?',
+          [ns, entity, row['id']],
+        );
+        if (meta.isEmpty) continue;
+        _upsert(
+          ns,
+          entity,
+          row['id'] as String,
+          row,
+          now,
+          pending: meta.single['pending'] == 1,
+          sourceKey: meta.single['source_key'] as String?,
+        );
+        changed = true;
+      }
+    }
+    if (changed) _notify(ns);
+  }
+
+  /// Transactions with an unsent edit in the command outbox.
+  Set<String> _queuedEditTargets(String ns) => {
+    for (final row in database.db.select(
+      "SELECT DISTINCT target FROM command_outbox WHERE namespace=? AND parked=0 AND kind IN ($_transactionEditKinds)",
+      [ns],
+    ))
+      row['target'] as String,
+  };
+
+  /// Whether the stored row was edited after the copy: [incoming] is the
+  /// copy's edit time, null when it has none.
+  bool _storedEditIsNewer(String ns, String id, DateTime? incoming) {
+    final stored = database.db.select(
+      "SELECT json_extract(payload, '\$.edited_at') AS edited_at FROM financial_entities WHERE namespace=? AND entity='transactions' AND id=?",
+      [ns, id],
+    );
+    if (stored.isEmpty || stored.single['edited_at'] is! String) return false;
+    final at = DateTime.tryParse(stored.single['edited_at'] as String);
+    return at != null && (incoming == null || incoming.isBefore(at));
+  }
+
+  /// Transactions whose delete / restore still waits in the command outbox. The
+  /// phone's state is newer than any server row, so a refresh leaves them be.
+  Set<String> _queuedStateEdits(String ns) => {
+    for (final row in database.db.select(
+      "SELECT target FROM command_outbox WHERE namespace=? AND parked=0 AND kind IN ('ignore_transaction','restore_transaction')",
+      [ns],
+    ))
+      row['target'] as String,
+  };
+
   ///
   /// [fromPhoneProjection]: the rows are the phone's own projection of its SMS
   /// ledger (`ProjectionWriter`). Every other caller saves rows that came from
@@ -909,6 +975,8 @@ class FinancialStore {
       ];
     }
     rows = _keepPendingSpendExclusions(ns, rows);
+    final queuedState = _queuedStateEdits(ns);
+    final queuedEdits = _queuedEditTargets(ns);
     var changed = false;
     final timestamp = (at ?? DateTime.now()).millisecondsSinceEpoch;
     _transaction(() {
@@ -951,6 +1019,17 @@ class FinancialStore {
         );
       }
       for (final row in rows) {
+        // Counted above as present (never pruned), but not written over the
+        // phone's own delete / restore: that would resurrect or hide the row
+        // until the command is delivered.
+        if (queuedState.contains(row.id)) continue;
+        // A copy that predates the person's latest edit (a slow refresh) never
+        // replaces it. An undated copy loses only while the edit is still
+        // waiting to be sent: once delivered, the server's copy carries it.
+        if ((row.editedAt != null || queuedEdits.contains(row.id)) &&
+            _storedEditIsNewer(ns, row.id, row.editedAt)) {
+          continue;
+        }
         if (row.sourceKey != null) {
           _receipt(ns, row.sourceKey!, row.id);
           database.db.execute(
@@ -982,11 +1061,14 @@ class FinancialStore {
     List<TransactionEntry> rows,
     Set<String> deletedIds, {
     required int serverSeq,
+    DateTime? at,
   }) {
     if (serverSeq < 0) throw ArgumentError.value(serverSeq, 'serverSeq');
     batch(() {
       _transaction(() {
-        saveTransactions(ns, rows);
+        // [at] is when the rows were requested, not when they arrived: a row
+        // the phone changed in between is newer and must keep winning.
+        saveTransactions(ns, rows, at: at);
         for (final id in deletedIds) {
           database.db.execute(
             "DELETE FROM financial_entities WHERE namespace=? AND entity='transactions' AND id=? AND pending=0 "
@@ -1472,7 +1554,12 @@ class FinancialStore {
   /// Overlays [fields] on a stored transaction (WP-C5: a queued payment-method
   /// change). A null value removes the key. Does nothing when the row is not
   /// stored.
-  void patchTransaction(String ns, String id, Map<String, Object?> fields) {
+  void patchTransaction(
+    String ns,
+    String id,
+    Map<String, Object?> fields, {
+    DateTime? editedAt,
+  }) {
     final rows = database.db.select(
       "SELECT payload FROM financial_entities WHERE namespace=? AND entity='transactions' AND id=?",
       [ns, id],
@@ -1488,6 +1575,8 @@ class FinancialStore {
         next[key] = value;
       }
     });
+    // The person's own edit: stamped so an older server copy cannot replace it.
+    if (editedAt != null) next['edited_at'] = editedAt.toUtc().toIso8601String();
     _upsert(
       ns,
       'transactions',

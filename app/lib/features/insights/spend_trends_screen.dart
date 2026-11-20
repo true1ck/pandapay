@@ -1289,6 +1289,22 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
     );
   }
 
+  /// Money in for this period, in Activity, where it splits into salary,
+  /// dividends, refunds, cashback and the rest.
+  void _openMoneyIn() {
+    final period = _periodDateParams();
+    context.push(
+      Uri(
+        path: AppRoute.activity,
+        queryParameters: {
+          'type': 'moneyIn',
+          'from': period.from,
+          'to': period.to,
+        },
+      ).toString(),
+    );
+  }
+
   void _openTagCategoryTransactions(
     TransactionTag tag,
     SpendBreakdownRow category,
@@ -1965,7 +1981,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
             ),
             const SizedBox(height: AppSpace.lg),
           ],
-          _SpendMetricsCard(report: summaryReport),
+          _SpendMetricsCard(report: summaryReport, onMoneyIn: _openMoneyIn),
           const SizedBox(height: AppSpace.lg),
           if (multiMonth) ...[
             _MonthlyComparisonCard(
@@ -3131,8 +3147,9 @@ class _FilterLabel extends StatelessWidget {
 /// Compact supporting figures shown below the interactive spending mix.
 class _SpendMetricsCard extends StatelessWidget {
   final SpendReport report;
+  final VoidCallback onMoneyIn;
 
-  const _SpendMetricsCard({required this.report});
+  const _SpendMetricsCard({required this.report, required this.onMoneyIn});
 
   @override
   Widget build(BuildContext context) {
@@ -3160,12 +3177,17 @@ class _SpendMetricsCard extends StatelessWidget {
           LayoutBuilder(
             builder: (context, constraints) {
               final metrics = [
-                _SpendMetricTile(
-                  label: 'Money in',
-                  amount: report.income.total,
-                  icon: Icons.south_rounded,
-                  accent: BambooInk.jade,
-                  tint: BambooInk.jade.withValues(alpha: .09),
+                InkWell(
+                  onTap: onMoneyIn,
+                  borderRadius: BorderRadius.circular(12),
+                  child: _SpendMetricTile(
+                    label: 'Money in',
+                    amount: report.income.total,
+                    icon: Icons.south_rounded,
+                    accent: BambooInk.jade,
+                    tint: BambooInk.jade.withValues(alpha: .09),
+                    chevron: true,
+                  ),
                 ),
                 _SpendMetricTile(
                   label: 'Spent',
@@ -3254,6 +3276,9 @@ class _SpendMetricTile extends StatelessWidget {
   final Color tint;
   final Color? amountColor;
 
+  /// A trailing arrow, for a tile that opens something.
+  final bool chevron;
+
   const _SpendMetricTile({
     required this.label,
     required this.amount,
@@ -3261,6 +3286,7 @@ class _SpendMetricTile extends StatelessWidget {
     required this.accent,
     required this.tint,
     this.amountColor,
+    this.chevron = false,
   });
 
   @override
@@ -3311,6 +3337,12 @@ class _SpendMetricTile extends StatelessWidget {
             ],
           ),
         ),
+        if (chevron)
+          const Icon(
+            Icons.chevron_right_rounded,
+            size: 18,
+            color: BambooInk.ink500,
+          ),
       ],
     ),
   );

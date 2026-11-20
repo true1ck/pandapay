@@ -1,4 +1,15 @@
+import 'package:flutter/services.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+
+/// A percentage box takes whole numbers only, 0 to 100: digits, nothing else,
+/// and a keystroke that would pass 100 is ignored.
+final percentInputFormatters = <TextInputFormatter>[
+  FilteringTextInputFormatter.digitsOnly,
+  TextInputFormatter.withFunction(
+    (old, next) =>
+        next.text.isEmpty || int.parse(next.text) <= 100 ? next : old,
+  ),
+];
 
 enum SharedInputState { empty, incomplete, valid, invalid }
 

@@ -105,7 +105,7 @@ async function aiRows(client) {
     `SELECT (started_at AT TIME ZONE 'utc')::date AS day,model,count(*)::int AS calls,
         sum(input_tokens)::bigint AS input_tokens,sum(output_tokens)::bigint AS output_tokens,
         sum(total_tokens)::bigint AS total_tokens,sum(cost_usd) AS cost_usd,
-        count(*) FILTER(WHERE cost_usd IS NULL)::int AS calls_without_price
+        count(*) FILTER(WHERE cost_usd IS NULL AND (outcome='valid' OR total_tokens>0))::int AS calls_without_price
        FROM sms_v2_template_attempts WHERE started_at >= now()-interval '30 days' GROUP BY 1,2 ORDER BY 1 DESC,2`,
   );
   return result.rows;

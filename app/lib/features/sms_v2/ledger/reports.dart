@@ -9,6 +9,7 @@ import '../../../data/spend_reports_repository.dart';
 import '../../../data/spending_selection.dart';
 import '../../../data/spend_by_category_repository.dart';
 import '../../../data/user_cards_repository.dart';
+import 'adapters.dart' show moneyIn;
 
 /// Adapts existing manual/email/unreplayed rows into the same ledger math.
 /// This is compatibility data conversion, not another totals implementation.
@@ -90,6 +91,18 @@ class LedgerReadModel {
     }
     return true;
   }
+
+  /// Money-in kind (salary, dividend, refund, cashback, person, other) by event
+  /// id, built once per model. Activity's Money in filter reads it.
+  late final Map<String, String> moneyInKindByEvent = Map.unmodifiable({
+    for (final i in moneyIn(
+      facts,
+      snapshot().events,
+      DateTime.utc(1900),
+      DateTime.utc(2200),
+    ))
+      i.eventId: i.kind,
+  });
 
   // snapshot() with no selection is a pure function of this immutable model,
   // and every report, total, home summary and review list asks for it.

@@ -81,6 +81,7 @@ class SharedEditor extends ChangeNotifier {
       title.trim().length <= 200 &&
       !RegExp(r'[\x00-\x1f\x7f]').hasMatch(title) &&
       evaluation.canPropose;
+
   /// Plain-language reason Submit is unavailable, or null when it is allowed
   /// (or already sent). Lets the screen explain a greyed-out button.
   String? get submitBlockReason {
@@ -88,7 +89,8 @@ class SharedEditor extends ChangeNotifier {
     if (!contextVerified) return 'Choose who to split with.';
     final text = title.trim();
     if (text.isEmpty) return 'Enter a merchant or payee to submit.';
-    if (text.length > 200) return 'Use 200 characters or fewer for the merchant.';
+    if (text.length > 200)
+      return 'Use 200 characters or fewer for the merchant.';
     if (RegExp(r'[\x00-\x1f\x7f]').hasMatch(title)) {
       return 'The merchant has characters that cannot be saved.';
     }

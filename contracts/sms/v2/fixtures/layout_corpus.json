@@ -1,8 +1,11 @@
 {
   "_about": "Synthetic layouts and messages (every value is invented). Two tests read this file: api/test/sms_v2/layout_matcher.test.js (the server's matcher reads every message of its layout) and packages/pandapay_domain/test/sms_v2/layout_corpus_test.dart (the phone's skeleton of each message, where skeleton is true, IS the layout). Together they stop the matcher drifting from the skeleton.",
+  "wildcardLimit": 4,
+  "adjacentLooseLimit": 2,
   "entries": [
     {
       "layout": "<AMT> debited from A/c <MASK> on <DATE> to <PARTY>. UPI Ref <REF>. Avl Bal <AMT>.",
+      "wildcards": 1,
       "skeleton": false,
       "messages": [
         "Rs.450.00 debited from A/c XX1234 on 20-11-26 to RAHUL SHARMA. UPI Ref 123456789012. Avl Bal Rs.10,500.25.",
@@ -12,11 +15,13 @@
     },
     {
       "layout": "Dear Customer, your OTP is <REF>. Do not share it with anyone.",
+      "wildcards": 0,
       "skeleton": true,
       "messages": ["Dear Customer, your OTP is 482910. Do not share it with anyone.", "Dear Customer, your OTP is 7391204. Do not share it with anyone."]
     },
     {
       "layout": "Your account <MASK> was credited with <AMT> on <DATE>. Avl Bal <AMT>.",
+      "wildcards": 0,
       "skeleton": true,
       "messages": [
         "Your account XX4321 was credited with Rs.5,000.00 on 20/11/2026. Avl Bal Rs.12,345.67.",
@@ -25,6 +30,7 @@
     },
     {
       "layout": "<AMT> spent on card <MASK> on <DATE>. Avl limit <AMT>.",
+      "wildcards": 0,
       "skeleton": true,
       "messages": [
         "Rs.450 spent on card ending 1234 on 20-Nov-26. Avl limit Rs.45,000.00.",
@@ -33,26 +39,31 @@
     },
     {
       "layout": "<AMT> spent on card <MASK>.",
+      "wildcards": 0,
       "skeleton": true,
       "messages": ["Rs.450 spent on card 4012XXXXXXXX3456.", "INR 99.00 spent on card 12XXXXXX78.", "Rs 1,299 spent on card XX9876."]
     },
     {
       "layout": "For help call <PHONE>. Reply STOP to opt out.",
+      "wildcards": 0,
       "skeleton": false,
       "messages": ["For help call 9876543210. Reply STOP to opt out.", "For help call 18001234567. Reply STOP to opt out."]
     },
     {
       "layout": "Your account has been updated.",
+      "wildcards": 0,
       "skeleton": true,
       "messages": ["Your account has been updated.", "Your   account has been\nupdated."]
     },
     {
       "layout": "Money sent to <VPA> successfully. UPI Ref <REF>.",
+      "wildcards": 0,
       "skeleton": true,
       "messages": ["Money sent to shop.pay@ybl successfully. UPI Ref 123456789012.", "Money sent to abc@okhdfc successfully. UPI Ref 4567891234."]
     },
     {
       "layout": "Track your order at <URL> now.",
+      "wildcards": 0,
       "skeleton": true,
       "messages": ["Track your order at https://shop.example.in/o/42 now.", "Track your order at www.example.com/track now."]
     }

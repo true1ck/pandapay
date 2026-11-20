@@ -53,6 +53,7 @@ import '../data/card_feedback_repository.dart';
 import '../data/card_overrides_repository.dart';
 import '../data/card_requests_api.dart';
 import '../data/catalogue_repository.dart';
+import '../data/category_scope.dart';
 import '../data/catalogue_v2.dart';
 import '../data/commitments_repository.dart';
 import '../data/consents_api.dart';
@@ -3267,6 +3268,7 @@ Map<String, CommandHandler> commandHandlersFor(
   Map<String, CommandHandler> accountHandlers = const {},
   CardCommandContext? cards,
   Future<bool> Function(String tagId)? tagReady,
+  void Function(String transactionId)? onStaleTransactionEdit,
 }) => {
   // WP-C11: consents, name, opt-in, tickets, card reports, inbox read marks.
   ...accountHandlers,
@@ -3280,7 +3282,7 @@ Map<String, CommandHandler> commandHandlersFor(
     onRefused: onNotificationRefused,
   ),
   // WP-C5: payment-method change queued while offline.
-  ...paymentMethodCommandHandlers(repo),
+  ...paymentMethodCommandHandlers(repo, onStale: onStaleTransactionEdit),
   // A repeat answers 409/404 although the state the person wanted is already
   // in place; that is success, not a refusal (SRV-17).
   OutboxCommand.ignoreTransaction: (p) => ignoreAlreadyDoneIsDone(
@@ -3462,8 +3464,12 @@ final outboxFlushProvider = Provider<void>((ref) {
       final outbox = await ref.read(outboxRepositoryProvider.future);
       if (disposed || outbox.namespace != namespace) return;
       final commands = await ref.read(commandOutboxProvider.future);
+      final store = (await ref.read(responseCacheProvider.future)).financialStore;
+      // Transactions whose edit lost to a newer one on the server this pass.
+      final staleEdits = <String>{};
       final handlers = commandHandlersFor(
         repo,
+        onStaleTransactionEdit: staleEdits.add,
         spend: ref.read(spendReportsRepositoryProvider),
         notificationPrefs: ref.read(notificationPreferencesRepositoryProvider),
         onNotificationInboxSynced: () => ref.invalidate(notificationsProvider),
@@ -3502,6 +3508,21 @@ final outboxFlushProvider = Provider<void>((ref) {
                   // A command naming a card still only on the phone waits for
                   // its add (held, not failed, never parked).
                   holdIds: unsentCardAddTargets(commands),
+                  // What the command laid over the stored row is written into
+                  // it now, so no refresh already in flight can undo it.
+                  onDelivered: (kind, target) {
+                    if (!staleEdits.remove(target)) {
+                      store.settleDelivered(namespace, kind, target);
+                      return;
+                    }
+                    // A newer edit stands on the server: take its copy.
+                    unawaited(
+                      repo
+                          .fetchTransaction(target)
+                          .then((row) => store.saveTransactions(namespace, [row]))
+                          .catchError((_) {}),
+                    );
+                  },
                 ));
       if (commandsSent > 0) {
         // Drop the cached server lists so the next read shows what the server
@@ -7240,6 +7261,14 @@ final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
     // catch-all card rules until the next refresh can load the ids.
     return [...await loadBundledCategories(), ...customCategories];
   }
+});
+
+/// Only the categories a spend can use. [categoriesProvider] also carries the
+/// investment, income and transfer categories, which belong in those entries'
+/// pickers and nowhere else (budgets, caps, rewards, imports, rules).
+final spendCategoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
+  final all = await ref.watch(categoriesProvider.future);
+  return categoriesForKind(all, TxnEntryKind.spend);
 });
 
 /// Adds a category for the current account and refreshes every category

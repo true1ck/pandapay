@@ -26,9 +26,10 @@ class _EmptyCategoryRepository implements CategoryRepository {
   Future<List<SpendCategory>> fetchCategories() async => const [];
 }
 
-Future<void> _pumpApp(WidgetTester tester) async {
+Future<void> _pumpApp(WidgetTester tester, {bool tourSeen = false}) async {
   SharedPreferences.setMockInitialValues({
     'pandapay_app.onboarding_complete_v1': true,
+    if (tourSeen) 'pandapay_app.tutorial_seen_v1': true,
   });
   await tester.pumpWidget(
     ProviderScope(
@@ -44,9 +45,7 @@ Future<void> _pumpApp(WidgetTester tester) async {
         userCardsRepositoryProvider.overrideWithValue(null),
         myCardsProvider.overrideWith((ref) async => const []),
         transactionsProvider.overrideWith((ref) async => const []),
-        utilizationTransactionsProvider.overrideWith(
-          (ref) async => const [],
-        ),
+        utilizationTransactionsProvider.overrideWith((ref) async => const []),
         foreignPaymentsProvider.overrideWith((ref) async => const []),
         homeSummaryProvider.overrideWith((ref) async => null),
         bankAccountSummariesProvider.overrideWith((ref) async => const []),
@@ -91,8 +90,8 @@ Future<void> _reveal(WidgetTester tester, String label) async {
   await tester.pump(const Duration(milliseconds: 100));
 }
 
-Future<void> _openInsights(WidgetTester tester) async {
-  await _pumpApp(tester);
+Future<void> _openInsights(WidgetTester tester, {bool tourSeen = false}) async {
+  await _pumpApp(tester, tourSeen: tourSeen);
   final container = ProviderScope.containerOf(
     tester.element(find.byType(MaterialApp)),
   );
@@ -101,35 +100,36 @@ Future<void> _openInsights(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('the grid keeps grouped insights and places subscriptions under Payments', (
-    tester,
-  ) async {
-    // The grid had grown one tile per shipped screen and most of them
-    // answered slices of the same few questions. Subscriptions now belongs
-    // to Payments; anything that used to be its own tile is a tab behind one
-    // of them (see GroupedInsightScreen).
-    await _openInsights(tester);
+  testWidgets(
+    'the grid keeps grouped insights and places subscriptions under Payments',
+    (tester) async {
+      // The grid had grown one tile per shipped screen and most of them
+      // answered slices of the same few questions. Subscriptions now belongs
+      // to Payments; anything that used to be its own tile is a tab behind one
+      // of them (see GroupedInsightScreen).
+      await _openInsights(tester);
 
-    // Every tile needs a scroll, not just the later ones: design 04's
-    // content (earned hero, category bars, missed/best pair) sits above the
-    // grid, so no tile is in the initial viewport any more.
-    for (final label in const [
-      'Limits & perks',
-      'Spending',
-      'Budgets',
-      'Rewards',
-      'Payments',
-    ]) {
-      await _reveal(tester, label);
-      expect(
-        find.text(label),
-        findsOneWidget,
-        reason: '$label tile should be reachable by scrolling',
-      );
-    }
-    expect(find.text('Subscriptions'), findsNothing);
-    expect(find.text('Bills, due dates & subscriptions'), findsOneWidget);
-  });
+      // Every tile needs a scroll, not just the later ones: design 04's
+      // content (earned hero, category bars, missed/best pair) sits above the
+      // grid, so no tile is in the initial viewport any more.
+      for (final label in const [
+        'Limits & perks',
+        'Spending',
+        'Budgets',
+        'Rewards',
+        'Payments',
+      ]) {
+        await _reveal(tester, label);
+        expect(
+          find.text(label),
+          findsOneWidget,
+          reason: '$label tile should be reachable by scrolling',
+        );
+      }
+      expect(find.text('Subscriptions'), findsNothing);
+      expect(find.text('Bills, due dates & subscriptions'), findsOneWidget);
+    },
+  );
 
   testWidgets('the tiles that were merged away are gone from the grid', (
     tester,
@@ -232,5 +232,47 @@ void main() {
 
     expect(find.byType(LimitsAndPerksScreen), findsOneWidget);
     expect(find.text('Your card benefits, together'), findsOneWidget);
+  });
+
+  testWidgets('Custom dates uses the start and end calendar dialogs', (
+    tester,
+  ) async {
+    // Wide and tall, so the whole chip row is built and on screen.
+    tester.view.physicalSize = const Size(1400, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await _openInsights(tester, tourSeen: true);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MaterialApp)),
+    );
+
+    Future<void> pickDay(String help, String day) async {
+      expect(find.text(help), findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(DatePickerDialog),
+          matching: find.text(day),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+    }
+
+    // The chip row is wider than the page; slide it to the last chip.
+    await tester.drag(find.text('This week'), const Offset(-600, 0));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Custom dates'));
+    await tester.pumpAndSettle();
+    await pickDay('Select start date', '1');
+    await pickDay('Select end date', '1');
+
+    final range = container.read(insightsCustomRangeProvider);
+    expect(range, isNotNull);
+    expect(range!.from.day, 1);
+    expect(range.to.day, 1);
+    expect(container.read(insightsPeriodProvider), InsightsPeriod.custom);
+    // Let the shell's own timers finish so none is left pending at teardown.
+    await tester.pump(const Duration(seconds: 10));
   });
 }

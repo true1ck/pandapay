@@ -388,7 +388,7 @@ class _CategoryFallback extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final categories = ref.watch(categoriesProvider);
+    final categories = ref.watch(spendCategoriesProvider);
     return categories.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => ErrorState(message: userFacingErrorMessage(err)),

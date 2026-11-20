@@ -224,11 +224,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // The category chips: Fuel is picked for the user.
-    final fuel = tester.widget<ChoiceChip>(
-      find.widgetWithText(ChoiceChip, 'Fuel'),
+    // The category dropdown: Fuel is picked for the user.
+    expect(
+      tester
+          .widget<DropdownButtonFormField<String>>(
+            find.byType(DropdownButtonFormField<String>),
+          )
+          .initialValue,
+      'fuel-id',
     );
-    expect(fuel.selected, isTrue);
   });
 
   testWidgets(
@@ -269,6 +273,9 @@ void main() {
   testWidgets(
     'cards are compact rows: Pay on each, no "always use" or "wasn\'t accepted"',
     (tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       final parsed = ParsedUpiQr(
         pa: 'shop@okhdfcbank',
         pn: 'Local Store',
@@ -644,6 +651,9 @@ void main() {
   testWidgets('Pay with a zero amount is blocked inline until one is entered', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     final fake = _FakeUpiService(apps: const [_gpay]);
     const parsed = ParsedUpiQr(
       pa: 'shop@okhdfcbank',
@@ -882,7 +892,7 @@ void main() {
       expect(fake.opened, isEmpty);
 
       await _tapPay(tester);
-      await tester.tap(find.widgetWithText(FilledButton, 'Yes, continue'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Yes'));
       await tester.pumpAndSettle();
       expect(find.text('Open which UPI app?'), findsOneWidget);
     },

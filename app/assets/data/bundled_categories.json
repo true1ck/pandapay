@@ -1,5 +1,5 @@
 {
-  "note": "Built-in spend categories from db/supabase/migrations/0014_seed_reference.sql (+ emi). Last-resort offline fallback only; ids are placeholders (the server assigns UUIDs), so they are prefixed 'bundled:' and never sent to the API.",
+  "note": "Built-in spend categories from db/supabase/migrations/0014_seed_reference.sql (+ emi). Last-resort offline fallback only; ids are placeholders (the server assigns UUIDs), so they are prefixed 'bundled:' and never sent to the API. Non-spend rows (entryKinds) come from 20261124000000_entry_kind_categories.sql.",
   "categories": [
     {
       "id": "bundled:groceries",
@@ -75,6 +75,254 @@
       "id": "bundled:other",
       "slug": "other",
       "name": "Other"
+    },
+    {
+      "id": "bundled:inv_sip",
+      "slug": "inv_sip",
+      "name": "SIP",
+      "entryKinds": [
+        "investment"
+      ]
+    },
+    {
+      "id": "bundled:inv_mutual_funds",
+      "slug": "inv_mutual_funds",
+      "name": "Mutual funds",
+      "entryKinds": [
+        "investment"
+      ]
+    },
+    {
+      "id": "bundled:inv_stocks",
+      "slug": "inv_stocks",
+      "name": "Stocks",
+      "entryKinds": [
+        "investment"
+      ]
+    },
+    {
+      "id": "bundled:inv_etfs",
+      "slug": "inv_etfs",
+      "name": "ETFs",
+      "entryKinds": [
+        "investment"
+      ]
+    },
+    {
+      "id": "bundled:inv_ipo",
+      "slug": "inv_ipo",
+      "name": "IPO",
+      "entryKinds": [
+        "investment"
+      ]
+    },
+    {
+      "id": "bundled:inv_bonds",
+      "slug": "inv_bonds",
+      "name": "Bonds",
+      "entryKinds": [
+        "investment"
+      ]
+    },
+    {
+      "id": "bundled:inv_gold",
+      "slug": "inv_gold",
+      "name": "Gold",
+      "entryKinds": [
+        "investment"
+      ]
+    },
+    {
+      "id": "bundled:inv_fd_rd",
+      "slug": "inv_fd_rd",
+      "name": "Fixed deposit / RD",
+      "entryKinds": [
+        "investment"
+      ]
+    },
+    {
+      "id": "bundled:inv_retirement",
+      "slug": "inv_retirement",
+      "name": "NPS / PPF / EPF",
+      "entryKinds": [
+        "investment"
+      ]
+    },
+    {
+      "id": "bundled:inv_crypto",
+      "slug": "inv_crypto",
+      "name": "Crypto",
+      "entryKinds": [
+        "investment"
+      ]
+    },
+    {
+      "id": "bundled:inv_real_estate",
+      "slug": "inv_real_estate",
+      "name": "Real estate",
+      "entryKinds": [
+        "investment"
+      ]
+    },
+    {
+      "id": "bundled:inv_other",
+      "slug": "inv_other",
+      "name": "Other investment",
+      "entryKinds": [
+        "investment"
+      ]
+    },
+    {
+      "id": "bundled:ret_redemption",
+      "slug": "ret_redemption",
+      "name": "Redemption",
+      "entryKinds": [
+        "investment_return"
+      ]
+    },
+    {
+      "id": "bundled:ret_dividend",
+      "slug": "ret_dividend",
+      "name": "Dividend",
+      "entryKinds": [
+        "investment_return"
+      ]
+    },
+    {
+      "id": "bundled:ret_interest",
+      "slug": "ret_interest",
+      "name": "Interest",
+      "entryKinds": [
+        "investment_return"
+      ]
+    },
+    {
+      "id": "bundled:ret_maturity",
+      "slug": "ret_maturity",
+      "name": "Maturity",
+      "entryKinds": [
+        "investment_return"
+      ]
+    },
+    {
+      "id": "bundled:ret_capital_gains",
+      "slug": "ret_capital_gains",
+      "name": "Capital gains",
+      "entryKinds": [
+        "investment_return"
+      ]
+    },
+    {
+      "id": "bundled:ret_other",
+      "slug": "ret_other",
+      "name": "Other return",
+      "entryKinds": [
+        "investment_return"
+      ]
+    },
+    {
+      "id": "bundled:inc_salary",
+      "slug": "inc_salary",
+      "name": "Salary",
+      "entryKinds": [
+        "income"
+      ]
+    },
+    {
+      "id": "bundled:inc_business",
+      "slug": "inc_business",
+      "name": "Business income",
+      "entryKinds": [
+        "income"
+      ]
+    },
+    {
+      "id": "bundled:inc_freelance",
+      "slug": "inc_freelance",
+      "name": "Freelance",
+      "entryKinds": [
+        "income"
+      ]
+    },
+    {
+      "id": "bundled:inc_interest",
+      "slug": "inc_interest",
+      "name": "Interest",
+      "entryKinds": [
+        "income"
+      ]
+    },
+    {
+      "id": "bundled:inc_rental",
+      "slug": "inc_rental",
+      "name": "Rental income",
+      "entryKinds": [
+        "income"
+      ]
+    },
+    {
+      "id": "bundled:inc_gift",
+      "slug": "inc_gift",
+      "name": "Gift",
+      "entryKinds": [
+        "income"
+      ]
+    },
+    {
+      "id": "bundled:inc_cashback",
+      "slug": "inc_cashback",
+      "name": "Cashback",
+      "entryKinds": [
+        "income"
+      ]
+    },
+    {
+      "id": "bundled:inc_pension",
+      "slug": "inc_pension",
+      "name": "Pension",
+      "entryKinds": [
+        "income"
+      ]
+    },
+    {
+      "id": "bundled:inc_other",
+      "slug": "inc_other",
+      "name": "Other income",
+      "entryKinds": [
+        "income"
+      ]
+    },
+    {
+      "id": "bundled:xfer_self",
+      "slug": "xfer_self",
+      "name": "Self transfer",
+      "entryKinds": [
+        "transfer"
+      ]
+    },
+    {
+      "id": "bundled:xfer_family",
+      "slug": "xfer_family",
+      "name": "Family",
+      "entryKinds": [
+        "transfer"
+      ]
+    },
+    {
+      "id": "bundled:xfer_friend",
+      "slug": "xfer_friend",
+      "name": "Friend",
+      "entryKinds": [
+        "transfer"
+      ]
+    },
+    {
+      "id": "bundled:xfer_person",
+      "slug": "xfer_person",
+      "name": "Another person",
+      "entryKinds": [
+        "transfer"
+      ]
     }
   ]
 }

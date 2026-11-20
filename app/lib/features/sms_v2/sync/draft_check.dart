@@ -65,7 +65,9 @@ DraftCheck checkDraft({
     final local = Rule.fromJson({
       ...rule.toJson(),
       'id': '${rule.id}:local:$localHash',
-      'senders': [sender],
+      // Also the header the message is read under when it differs from the brand the layout is filed under
+      // (SBI-UPI is filed as SBIUPI): same rule as ProvisionalStore, or no draft of such a sender could pass.
+      'senders': {sender, normalizeSenderBrand(message.sender, shared.senders).brand}.toList(),
       'match': {...rule.match.toJson(), 'templateHash': localHash},
     });
     final RuleBundle bundle;

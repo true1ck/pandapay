@@ -23,8 +23,11 @@ import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart'
     show SpendCategory, categoryIdForServer, userCategoryIdForServer;
 import '../../data/merchant_category_rules_repository.dart';
+import '../../data/category_scope.dart';
+import '../../data/payment_route_rules.dart';
 import '../../data/user_cards_repository.dart';
 import '../../data/self_transfer.dart';
+import '../../data/server_clock.dart';
 import '../../data/local/financial_store.dart' show FinancialStore, canonicalBankSender;
 import '../../data/local/self_transfer_rules.dart';
 import '../../data/local/sms_intake_repository.dart';
@@ -212,6 +215,14 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     if (amount == null || !amount.isFinite || amount <= 0) {
       setState(() => _submitted = true);
       setState(() => _error = 'Enter a valid amount greater than zero.');
+      return;
+    }
+    // Switching an entry to a credit card needs the card. An older credit-card
+    // row without one is left as it was; only a new choice has to be complete.
+    if (_instrument == TxnInstrument.creditCard &&
+        _userCardId == null &&
+        _originalEntry?.instrument != TxnInstrument.creditCard) {
+      setState(() => _error = 'Choose which credit card was used.');
       return;
     }
     // A self-transfer decision runs several server checks and rules (it can
@@ -582,6 +593,8 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       }
       final store = (await ref.read(responseCacheProvider.future)).financialStore;
       final namespace = ref.read(cacheNamespaceProvider);
+      // One edit time for the stored row and the queued command(s).
+      final editedAt = ServerClock.instance.now();
       if (typed.isNotEmpty) {
         await queueCommand(
           ref,
@@ -590,9 +603,15 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           payload: {
             'id': widget.transactionId,
             ...typed.map((k, v) => MapEntry(_typedWireKey(k), v)),
+            'editedAt': editedAt.toUtc().toIso8601String(),
           },
         );
-        store.patchTransaction(namespace, widget.transactionId, typed);
+        store.patchTransaction(
+          namespace,
+          widget.transactionId,
+          typed,
+          editedAt: editedAt,
+        );
       }
       if (_methodChanged) {
         final method = _methodToSend;
@@ -600,11 +619,15 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           ref,
           kind: PaymentMethodCommand.set,
           target: widget.transactionId,
-          payload: {'id': widget.transactionId, 'paymentMethod': method},
+          payload: {
+            'id': widget.transactionId,
+            'paymentMethod': method,
+            'editedAt': editedAt.toUtc().toIso8601String(),
+          },
         );
         store.patchTransaction(namespace, widget.transactionId, {
           'payment_method': method,
-        });
+        }, editedAt: editedAt);
       }
       if (fields.isNotEmpty) unawaited(ref.read(syncEngineProvider).sync());
       return;
@@ -1183,6 +1206,11 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                         if (value == null) return;
                         setState(() {
                           _entryKind = value;
+                          // Entertainment on an Investment makes no sense:
+                          // drop a category the new kind cannot use.
+                          if (!categoryFitsKind(categories, _categoryId, value)) {
+                            _categoryId = null;
+                          }
                           if (value != TxnEntryKind.transfer &&
                               _selfTransfer != null) {
                             _clearedSelfTransfer = _selfTransfer;
@@ -1304,6 +1332,11 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                           }
                           _instrument = next.instrument;
                           _paymentMethod = next.method;
+                          // Swipe on a cash payment is not a thing: drop a
+                          // route the new instrument cannot have.
+                          if (!railFitsInstrument(_rail, _instrument)) {
+                            _rail = TxnRail.unknown;
+                          }
                           // Tapping away and back to the saved instrument
                           // must not lose the saved method. Only an
                           // instrument tap restores it: clearing the method
@@ -1321,11 +1354,17 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                     ),
                     const SizedBox(height: AppSpace.lg),
                     DropdownButtonFormField<TxnRail>(
+                      key: ValueKey('rail-$_instrument'),
                       initialValue: _rail,
                       style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                       decoration: inputDecoration('Payment route'),
                       items: [
-                        for (final rail in TxnRail.values)
+                        // A route an older entry already carries stays
+                        // listed so opening it does not change it.
+                        for (final rail in {
+                          ...railsForInstrument(_instrument),
+                          _rail,
+                        })
                           DropdownMenuItem(
                             value: rail,
                             child: Text(_railLabel(rail)),
@@ -1342,9 +1381,13 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                         style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                         decoration: inputDecoration('Card'),
                         items: [
+                          // Only credit cards for a credit-card payment; a
+                          // card already chosen stays so it is not lost.
                           for (final c in cards)
-                            DropdownMenuItem(
-                              value: c.id,
+                            if (cardFitsInstrument(c.cardType, _instrument) ||
+                                c.id == _userCardId)
+                              DropdownMenuItem(
+                                value: c.id,
                               child: Text(
                                 c.nickname?.isNotEmpty == true
                                     ? c.nickname!
@@ -1357,6 +1400,8 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                     ],
                     const SizedBox(height: AppSpace.lg),
                     CategoryPickerField(
+                      key: ValueKey('category-$_entryKind'),
+                      entryKind: _entryKind,
                       categories: categories,
                       selectedId: _categoryId,
                       label: 'Category',

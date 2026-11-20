@@ -12,6 +12,11 @@ import 'package:pandapay/app/design/app_icons.dart';
 import 'package:pandapay/app/design/widgets.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/activity/activity_screen.dart';
+import 'package:pandapay/features/sms_v2/ledger/providers.dart'
+    show smsV2LedgerReadModelProvider;
+import 'package:pandapay/features/sms_v2/ledger/reports.dart'
+    show LedgerReadModel;
+import 'package:pandapay_domain/sms_v2_ledger.dart' show LedgerSnapshot;
 import 'package:pandapay/features/shared_expenses/runtime/shared_providers.dart'
     show splitOverlayProvider;
 import 'package:pandapay/features/shared_expenses/runtime/split_share_entries.dart';
@@ -442,6 +447,65 @@ void main() {
     expect(find.text('Flexi Cap Fund'), findsOneWidget);
     expect(find.text('Corner Shop'), findsNothing);
     expect(find.text('Investments'), findsWidgets);
+  });
+
+  testWidgets('Money in splits by kind and a kind pill narrows the list', (
+    tester,
+  ) async {
+    final rows = [
+      _txn(
+        id: 'pay',
+        amount: Money.fromRupees(900),
+        occurredAt: DateTime(2026, 3, 5),
+        merchantName: 'Some Payer',
+        entryKind: TxnEntryKind.income,
+      ),
+      _txn(
+        id: 'redeem',
+        amount: Money.fromRupees(500),
+        occurredAt: DateTime(2026, 3, 6),
+        merchantName: 'Fund Redemption',
+        entryKind: TxnEntryKind.investmentReturn,
+      ),
+    ];
+    await _pump(
+      tester,
+      repo: _FakeUserCardsRepository(rows),
+      cards: const [],
+      activityScreen: const ActivityScreen(initialType: 'moneyIn'),
+      overrides: [
+        transactionsProvider.overrideWith((ref) async => rows),
+        smsV2LedgerReadModelProvider.overrideWith(
+          (ref) async => LedgerReadModel(
+            ledger: LedgerSnapshot(entries: [], events: []),
+            transactions: rows,
+          ),
+        ),
+      ],
+    );
+    // No kind picked: all of Money in, with the kinds offered underneath.
+    expect(find.text('Some Payer'), findsOneWidget);
+    expect(find.text('Fund Redemption'), findsOneWidget);
+    for (final kind in ['Salary', 'Dividends', 'Refunds', 'Cashback']) {
+      expect(find.text(kind), findsOneWidget);
+    }
+
+    // The pills scroll sideways; bring each one into view before tapping.
+    Future<void> pick(String label) async {
+      await tester.ensureVisible(find.text(label));
+      await tester.tap(find.text(label));
+      await tester.pumpAndSettle();
+    }
+
+    await pick('From investments');
+    expect(find.text('Fund Redemption'), findsOneWidget);
+    expect(find.text('Some Payer'), findsNothing);
+
+    await pick('From investments');
+    await pick('Salary');
+    // Nothing here is salary; a payer the ledger has no kind for is "other".
+    expect(find.text('Some Payer'), findsNothing);
+    expect(find.text('Fund Redemption'), findsNothing);
   });
 
   testWidgets('shows an empty state when there are no transactions', (

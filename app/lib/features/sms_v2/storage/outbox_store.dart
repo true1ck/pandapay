@@ -92,13 +92,15 @@ ON CONFLICT(namespace, id) DO UPDATE SET payload=excluded.payload,
     );
   }
 
-  List<OutboxRecord> due(DateTime now, {int limit = 500}) {
+  /// The records due now, oldest first. With [kind] only that kind is looked at, so a long queue of another kind
+  /// cannot push these past [limit] (filtering the result afterwards left layouts behind 2,500 other rows unseen).
+  List<OutboxRecord> due(DateTime now, {int limit = 500, String? kind}) {
     if (limit <= 0) throw ArgumentError.value(limit, 'limit');
     return [
       for (final row in db.select(
         'SELECT id, kind, payload, attempts FROM v2_outbox '
-        'WHERE namespace=? AND next_attempt_at<=? ORDER BY rowid LIMIT ?',
-        [namespace, now.millisecondsSinceEpoch, limit],
+        'WHERE namespace=? AND next_attempt_at<=? ${kind == null ? '' : 'AND kind=? '}ORDER BY rowid LIMIT ?',
+        [namespace, now.millisecondsSinceEpoch, ?kind, limit],
       ))
         OutboxRecord(
           id: row['id'] as String,

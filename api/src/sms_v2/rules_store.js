@@ -54,6 +54,21 @@ class PgTx {
       [ruleId, version, reason, at],
     );
   }
+  // Pausing the last live version of a promoted AI rule (id AI-<template hash>) must not leave the layout's
+  // provisional draft behind: once the signed rule leaves the bundle every submitter's overlay would apply the
+  // same rule again. The draft is cleared and the layout marked rejected by the admin (so phones neither get it
+  // again nor replace it behind the admin's back); phones hear of it through the new revision.
+  async retractTemplateDraft(ruleId) {
+    const m = /^AI-([0-9a-f]{64})$/.exec(ruleId);
+    if (!m) return 0;
+    await this.c.query("SELECT pg_advisory_xact_lock(hashtext('sms_v2_template_results'))");
+    const r = await this.c.query(
+      `UPDATE sms_v2_unknown_templates SET ai_status='failed',ai_draft=NULL,failure_code='rule_paused',lease_id=NULL,lease_expires_at=NULL,
+         admin_decision='rejected',admin_reason='other',admin_note='The promoted rule was paused',decided_at=clock_timestamp(),
+         result_revision=nextval('sms_v2_template_revision')
+       WHERE template_hash=$1 AND ai_status='ready'`, [m[1]]);
+    return r.rowCount;
+  }
   async getParts() {
     const out = {};
     for (const r of (await this.c.query('SELECT part, body FROM sms_v2_bundle_parts')).rows) out[r.part] = r.body;

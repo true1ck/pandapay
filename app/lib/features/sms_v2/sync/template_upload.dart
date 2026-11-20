@@ -3,9 +3,11 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:http/http.dart' as http;
+import 'package:pandapay_domain/sms_v2.dart' show uploadSenderBrand;
 import 'package:pandapay_domain/sms_v2_template.dart';
 
 import '../../../data/local/sms_intake_repository.dart';
+import '../../sms_import/sms_background_queue.dart' show QueuedSms;
 import '../storage/outbox_store.dart';
 import '../storage/sync_state_store.dart';
 import '../storage/template_origin_store.dart';
@@ -83,7 +85,7 @@ class TemplateUpload {
     queue.db.execute('SAVEPOINT sms_v2_template_revoke');
     try {
       queue.db.execute(
-        "DELETE FROM v2_sync_state WHERE namespace=? AND (key LIKE 'ai:%' OR key LIKE 'template:sent:%' OR key LIKE 'template:origins:%' OR key LIKE 'template:scanned:%' OR key LIKE 'draft:%')",
+        "DELETE FROM v2_sync_state WHERE namespace=? AND (key LIKE 'ai:%' OR key LIKE 'template:sent:%' OR key LIKE 'template:origins:%' OR key LIKE 'template:scanned:%' OR key LIKE 'template:refused:%' OR key='template:resend:at' OR key LIKE 'draft:%')",
         [queue.namespace],
       );
       queue.db.execute(
@@ -106,7 +108,7 @@ class TemplateUpload {
   bool _validUpload(Map<String, Object?> item) {
     final brand = item['senderBrand'], body = item['redactedBody'];
     return brand is String &&
-        RegExp(r'^[A-Z0-9]{1,32}$').hasMatch(brand) &&
+        _brandShape.hasMatch(brand) &&
         body is String &&
         body.isNotEmpty &&
         body.length <= 20000 &&
@@ -115,9 +117,12 @@ class TemplateUpload {
         (item['sample'] == null ||
             (item['sample'] is String &&
                 (item['sample'] as String).length <= 2000 &&
-                !RegExp(r'@|https?://|www\.', caseSensitive: false).hasMatch(item['sample'] as String))) &&
+                !_sampleUnsafe.hasMatch(item['sample'] as String))) &&
         item['templateHash'] == smsTemplateHash(brand, body);
   }
+
+  static final _brandShape = RegExp(r'^[A-Z0-9]{1,32}$');
+  static final _sampleUnsafe = RegExp(r'@|https?://|www\.', caseSensitive: false);
 
   static final _unsafe = RegExp(
     r'\d{6,}|https?://|www\.|[\w.+-]+@[\w.-]+|\b[a-z0-9-]+\.(?:com|in|co|io|ly|me|net|org)(?:\b|/)',
@@ -161,6 +166,32 @@ class TemplateUpload {
     state.put(marker, clock().toUtc().toIso8601String());
   }
 
+  /// Messages redacted by this isolate's uploads so far (tests and measurements read it).
+  static int messagesRedacted = 0;
+
+  /// New messages read per pass. Reading one (redacting it for the layout and the wording) costs about 0.65 ms on a
+  /// desktop and runs on the UI isolate, and the server takes 50 new layouts a day per person, so a backlog of
+  /// thousands has nothing to gain from being read in one go: 3,000 messages took 1.9 s in one pass, now at most
+  /// this many per pass, the rest at the next pass (each sync, and every few minutes while answers are awaited).
+  static const maxScannedPerPass = 250;
+
+  /// Messages read per transaction (and per hand-back of the thread): one commit per message was most of the cost.
+  static const _scanChunk = 25;
+
+  /// What a message that can never be uploaded is marked with, so it is not read again at every pass: a layout the
+  /// server would refuse (too many name slots), one that fails the checks below, one whose origin cannot be kept.
+  /// Bump the version when what may be uploaded changes, and they are looked at once more.
+  static const _skipMark = 'skip:v1';
+
+  static final Random _random = Random.secure();
+
+  /// A layout the server refuses (400) is retried after this, then four times as long, up to a week: it is never
+  /// lost (a refusal can be the server's fault) and never costs more than one request a week once it is known.
+  static Duration _refusedWait(int refusals) {
+    final hours = 6 * pow(4, (refusals - 1).clamp(0, 3)).toInt();
+    return Duration(hours: hours.clamp(6, 7 * 24));
+  }
+
   Future<void> drain() async {
     _consentConfirmed = null; // every pass asks the server afresh
     // One layout the server refuses (400) must not hold up the ones behind it:
@@ -200,92 +231,26 @@ class TemplateUpload {
       }
     }
     final state = SyncStateStore(queue.db, namespace: queue.namespace);
-    final origins = TemplateOriginStore(state);
-    var processed = 0;
-    for (final row in queue.db.select(
-      "SELECT payload FROM v2_review_items WHERE namespace=? AND kind='template' AND status='open'",
-      [queue.namespace],
-    )) {
-      final review = jsonDecode(row['payload'] as String) as Map;
-      final key = review['sourceKey'];
-      if (key is! String) continue;
-      // Waiting for history, or already read by it: no rule can be drafted.
-      if (review['aiHold'] != null) continue;
-      // Already queued or sent on an earlier pass: skip the redaction, which is
-      // the costly part (about a second for 1,500 open items, on the UI thread,
-      // at every pass). The marker holds the layout's hash; if its sent mark and
-      // its queue entry are both gone (a re-send, a cleaned-up entry), the item
-      // is processed afresh.
-      final scanned = state.get('template:scanned:$key');
-      if (scanned != null &&
-          (state.get('template:sent:$scanned') != null ||
-              queue.db.select(
-                'SELECT 1 FROM v2_outbox WHERE namespace=? AND id=?',
-                [queue.namespace, 'template:$scanned'],
-              ).isNotEmpty)) {
-        continue;
-      }
-      final message = intake.capturedById(queue.namespace, key)?.message;
-      if (message == null) continue;
-      final salt = base64UrlEncode(
-        List.generate(32, (_) => Random.secure().nextInt(256)),
-      );
-      final redacted = redactSms(
-        sender: message.sender,
-        body: message.body,
-        observedAt: message.receivedAt,
-        options: SmsRedactionOptions(salt: salt),
-      );
-      final safe = smsSkeleton(redacted.body);
-      // The message as it is with only its numbers made up, for the AI; null (the layout alone goes) when an original
-      // number could survive. The same salt gives the same made-up numbers as the layout was made with.
-      final sample = shareWording
-          ? smsSample(
-              original: message.body,
-              redacted: redactSms(
-                sender: message.sender,
-                body: message.body,
-                observedAt: message.receivedAt,
-                options: SmsRedactionOptions(salt: salt, keepNames: true),
-              ).body,
-            )
-          : null;
-      final brand = smsTemplateBrand(message.sender);
-      final hash = smsTemplateHash(brand, safe);
-      final payload = <String, Object?>{
-        'templateHash': hash,
-        'senderBrand': brand,
-        'redactedBody': safe,
-        'observedAt': message.receivedAt.toUtc().toIso8601String(),
-        'sample': ?sample,
-      };
-      if (!_validUpload(payload) ||
-          !origins.remember(
-            remoteHash: hash,
-            localHash: smsTemplateHash(brand, smsSkeleton(message.body)),
-            senderBrand: brand,
-          )) {
-        continue;
-      }
-      if (state.get('template:sent:$hash') == null &&
-          queue.db.select(
-            'SELECT 1 FROM v2_outbox WHERE namespace=? AND id=?',
-            [queue.namespace, 'template:$hash'],
-          ).isEmpty) {
-        queue.enqueue('template', hash, payload);
-      }
-      state.put('template:scanned:$key', hash);
-      // Hand the thread back every few items so a long backlog never freezes the screen.
-      if (++processed % 20 == 0) await Future<void>.delayed(Duration.zero); // perf-ok: a chunk is 20 items (~15 ms) and the first big scan only; later passes skip them
-    }
+    await _scanOpenItems(state);
+    // Layouts this phone sent that the server refused, and how many times: they are sent alone (see below).
+    final refusals = <String, int>{
+      for (final row in queue.db.select(
+        "SELECT key,value FROM v2_sync_state WHERE namespace=? AND key LIKE 'template:refused:%'",
+        [queue.namespace],
+      ))
+        (row['key'] as String).substring('template:refused:'.length): int.tryParse(row['value'] as String) ?? 1,
+    };
+    String hashOf(OutboxRecord record) => '${record.json['templateHash']}';
     while (accountIsCurrent()) {
       if (!await _canShare()) return;
-      final records = queue
-          .due(clock(), limit: 2500)
-          .where((item) => item.kind == 'template')
-          .take(singly ? 1 : _batchSize)
-          .toList();
-      if (records.isEmpty) return;
+      // Only layouts, chosen in SQL; a few more than a batch, so that the ones already refused (a handful at most)
+      // cannot fill the window and keep the others out of it.
+      final waiting = queue.due(clock(), limit: _batchSize + refusals.length, kind: 'template');
+      if (waiting.isEmpty) return;
+      // A layout the server has refused is never put in a batch with others: its failed request would carry them
+      // too, and charge the person's daily allowance for all of them. It goes alone, after the rest.
+      final clean = waiting.where((record) => !refusals.containsKey(hashOf(record))).toList();
+      final records = clean.isNotEmpty ? clean.take(singly ? 1 : _batchSize).toList() : [waiting.first];
       try {
         final admission = await headers();
         if (!await _canShare()) return;
@@ -333,8 +298,10 @@ class TemplateUpload {
         if (response.statusCode == 400) {
           // The server refused the request as invalid. With several layouts in
           // it, send them one at a time to find the one it dislikes; a single
-          // refused layout is set aside for six hours (not lost, and it blocks
-          // nothing), then the rest carry on in tens again.
+          // refused layout is set aside (not lost, and it blocks nothing): six
+          // hours, then four times as long each time it is refused again, to a
+          // week. The rest carry on in tens again, and the refused one is never
+          // sent in a batch with them.
           // A server that refuses everything is not one bad layout: after six
           // refusals in a pass, stop and leave the rest for the next pass.
           if (++refused >= 6) return;
@@ -342,7 +309,11 @@ class TemplateUpload {
             singly = true;
             continue;
           }
-          queue.retry(records.single, clock(), after: const Duration(hours: 6));
+          final hash = hashOf(records.single);
+          final times = (refusals[hash] ?? 0) + 1;
+          refusals[hash] = times;
+          state.put('template:refused:$hash', '$times');
+          queue.retry(records.single, clock(), after: _refusedWait(times));
           singly = false;
           continue;
         }
@@ -376,6 +347,12 @@ class TemplateUpload {
                   clock().toUtc().toIso8601String(),
                 ],
               );
+              if (refusals.remove(hashOf(record)) != null) {
+                queue.db.execute('DELETE FROM v2_sync_state WHERE namespace=? AND key=?', [
+                  queue.namespace,
+                  'template:refused:${hashOf(record)}',
+                ]);
+              }
             }
           } else {
             queue.retry(record, clock());
@@ -391,5 +368,135 @@ class TemplateUpload {
         return;
       }
     }
+  }
+
+  /// Reads the open Needs-review messages that have not been looked at yet, at most [maxScannedPerPass] of them,
+  /// and queues the layouts that can go up. A message already queued, sent or marked as never uploadable is skipped
+  /// with no redaction at all, whatever the size of the backlog: three small queries up front, then no query per
+  /// message for those. Messages are read in chunks of [_scanChunk] inside one transaction each, with the thread
+  /// handed back between chunks.
+  Future<void> _scanOpenItems(SyncStateStore state) async {
+    final db = queue.db;
+    final origins = TemplateOriginStore(state);
+    final scannedMarks = <String, String>{
+      for (final row in db.select(
+        "SELECT key,value FROM v2_sync_state WHERE namespace=? AND key LIKE 'template:scanned:%'",
+        [queue.namespace],
+      ))
+        (row['key'] as String).substring('template:scanned:'.length): row['value'] as String,
+    };
+    final sentHashes = <String>{
+      for (final row in db.select(
+        "SELECT key FROM v2_sync_state WHERE namespace=? AND key LIKE 'template:sent:%'",
+        [queue.namespace],
+      ))
+        (row['key'] as String).substring('template:sent:'.length),
+    };
+    final queuedIds = <String>{
+      for (final row in db.select(
+        "SELECT id FROM v2_outbox WHERE namespace=? AND kind='template'",
+        [queue.namespace],
+      ))
+        row['id'] as String,
+    };
+    var read = 0;
+    var inChunk = 0;
+    void openChunk() => db.execute('SAVEPOINT sms_v2_template_scan');
+    void closeChunk() => db.execute('RELEASE sms_v2_template_scan');
+    openChunk();
+    try {
+      for (final row in db.select(
+        "SELECT payload FROM v2_review_items WHERE namespace=? AND kind='template' AND status='open'",
+        [queue.namespace],
+      )) {
+        final review = jsonDecode(row['payload'] as String) as Map;
+        final key = review['sourceKey'];
+        if (key is! String) continue;
+        // Waiting for history, or already read by it: no rule can be drafted.
+        if (review['aiHold'] != null) continue;
+        // Already queued or sent on an earlier pass, or never uploadable: skip the redaction, which is the costly
+        // part. The marker holds the layout's hash; if its sent mark and its queue entry are both gone (a re-send, a
+        // cleaned-up entry), the item is processed afresh.
+        final scanned = scannedMarks[key];
+        if (scanned != null &&
+            (scanned == _skipMark ||
+                sentHashes.contains(scanned) ||
+                queuedIds.contains('template:$scanned'))) {
+          continue;
+        }
+        if (read >= maxScannedPerPass) break; // the rest waits for the next pass
+        final message = intake.capturedById(queue.namespace, key)?.message;
+        if (message == null) continue;
+        read++;
+        final upload = _layoutOf(message);
+        if (upload == null ||
+            !origins.remember(
+              remoteHash: upload.hash,
+              localHash: smsTemplateHash(upload.localBrand, smsSkeleton(message.body)),
+              senderBrand: upload.brand,
+              localBrand: upload.localBrand,
+            )) {
+          // Not a layout the server takes, or one whose origin cannot be kept (a different brand under the same
+          // hash, or more wordings than an origin holds): marked, so it is not read again at every sync.
+          state.put('template:scanned:$key', _skipMark);
+          scannedMarks[key] = _skipMark;
+        } else {
+          if (!sentHashes.contains(upload.hash) && !queuedIds.contains('template:${upload.hash}')) {
+            queue.enqueue('template', upload.hash, upload.payload);
+            queuedIds.add('template:${upload.hash}');
+          }
+          state.put('template:scanned:$key', upload.hash);
+          scannedMarks[key] = upload.hash;
+        }
+        // Hand the thread back every few items so a long backlog never freezes the screen.
+        if (++inChunk >= _scanChunk) {
+          inChunk = 0;
+          closeChunk();
+          await Future<void>.delayed(Duration.zero); // perf-ok: a chunk is 25 messages (~16 ms) and a pass reads at most 250
+          openChunk();
+        }
+      }
+      closeChunk();
+    } catch (_) {
+      db.execute('ROLLBACK TO sms_v2_template_scan');
+      db.execute('RELEASE sms_v2_template_scan');
+      rethrow;
+    }
+  }
+
+  /// The layout of [message] as it goes up, or null when it is not one the server takes: more name slots than the
+  /// matcher allows (it refuses such a layout only after the upload has used one of the person's 50 a day), or
+  /// something that fails the checks of [_validUpload].
+  ({String hash, String brand, String localBrand, Map<String, Object?> payload})? _layoutOf(QueuedSms message) {
+    messagesRedacted++;
+    final salt = base64UrlEncode(List.generate(32, (_) => _random.nextInt(256)));
+    // One pass over the message makes the layout (names hidden) and the wording for the AI (the message as it is
+    // with only its numbers made up; null, the layout alone goes, when an original number could survive). The same
+    // salt gives the same made-up numbers in both.
+    final pair = redactSmsPair(
+      sender: message.sender,
+      body: message.body,
+      observedAt: message.receivedAt,
+      options: SmsRedactionOptions(salt: salt),
+    );
+    final safe = smsSkeleton(pair.layout.body);
+    if (smsLayoutWildcards(safe) > smsMaxLayoutWildcards || smsLayoutLooseRun(safe) > smsMaxAdjacentLooseSlots) return null;
+    final sample = shareWording ? smsSample(original: message.body, redacted: pair.sample.body) : null;
+    // The brand the server files the layout under: letters and digits only (SBI-UPI is SBIUPI), as it files facts.
+    // The phone's own hashes and rules still use the header as the engine reads it.
+    final localBrand = smsTemplateBrand(message.sender);
+    final brand = uploadSenderBrand(localBrand);
+    // Not a brand a rule can ever attach to (a phone number, or no letters at all): nothing to learn, nothing to send.
+    if ((brand == 'UNKNOWN' || brand == 'NUMBER') && localBrand != brand) return null;
+    final hash = smsTemplateHash(brand, safe);
+    final payload = <String, Object?>{
+      'templateHash': hash,
+      'senderBrand': brand,
+      'redactedBody': safe,
+      'observedAt': message.receivedAt.toUtc().toIso8601String(),
+      'sample': ?sample,
+    };
+    if (!_validUpload(payload)) return null;
+    return (hash: hash, brand: brand, localBrand: localBrand, payload: payload);
   }
 }

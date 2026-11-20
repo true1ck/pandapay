@@ -448,6 +448,52 @@ void main() {
     },
   );
 
+  testWidgets('tapping Money in opens Activity on Money in for the period', (
+    tester,
+  ) async {
+    final router = GoRouter(
+      initialLocation: '/spending',
+      routes: [
+        GoRoute(
+          path: '/spending',
+          builder: (context, state) => const SpendTrendsScreen(),
+        ),
+        GoRoute(
+          path: '/activity',
+          builder: (context, state) =>
+              Text(state.uri.toString(), key: const ValueKey('activity-uri')),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          transactionTagsProvider.overrideWith((ref) => null),
+          selectedSpendQueryProvider.overrideWith(
+            (ref) => const SpendReportQuery.preset(SpendPeriod.month),
+          ),
+          spendReportProvider.overrideWith(
+            (ref, query) async => _report(spend: 42000, income: 90000),
+          ),
+          spendPeriodTransactionsProvider.overrideWith(
+            (ref, query) async => const <TransactionEntry>[],
+          ),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Money in'));
+    await tester.tap(find.text('Money in'));
+    await tester.pumpAndSettle();
+
+    final uri = tester.widget<Text>(find.byKey(const ValueKey('activity-uri')));
+    expect(uri.data, contains('type=moneyIn'));
+    expect(uri.data, contains('from='));
+    expect(uri.data, contains('to='));
+  });
+
   testWidgets('negative net flow is shown as short by in the compact summary', (
     tester,
   ) async {

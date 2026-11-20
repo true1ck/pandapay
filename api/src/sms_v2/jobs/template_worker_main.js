@@ -39,8 +39,8 @@ const {
 
 // One pass of the worker: a layout first; when none is waiting, a shop left in
 // "Other" (only if the admin switched shop suggestions on).
-async function runWorkerCycle({ layoutStore, suggestionStore, provider, config }) {
-  const layout = await runTemplateWorkerOnce({ store: layoutStore, provider, config });
+async function runWorkerCycle({ layoutStore, suggestionStore, provider, config, shutdown }) {
+  const layout = await runTemplateWorkerOnce({ store: layoutStore, provider, config, shutdown });
   if (layout.status !== "idle" || !suggestionStore || typeof provider.generateLayout === "function") return layout;
   const shop = await runSuggestionOnce({ store: suggestionStore, provider, config });
   return shop.status === "disabled" ? layout : { ...shop, job: "shop" };
@@ -51,10 +51,10 @@ async function runWorkerCycle({ layoutStore, suggestionStore, provider, config }
 //    is the production path; it has no admin identity and no shop suggestions.
 //  - ADMIN_API_DATABASE_URL + SMS_V2_JOB_ADMIN_ID: the private admin API login
 //    (local console and tests).
-async function openStores(env = process.env) {
+async function openStores(env = process.env, draftingVersion) {
   if (env.SMS_AI_WORKER_DATABASE_URL) {
     const { pool, transaction } = await openAiWorkerStore({ env });
-    return { pool, store: createPgWorkerStore({ transaction }), suggestionStore: null };
+    return { pool, store: createPgWorkerStore({ transaction, draftingVersion }), suggestionStore: null };
   }
   const adminId = env.SMS_V2_JOB_ADMIN_ID;
   if (!adminId) throw new Error("SMS_V2_JOB_ADMIN_ID_required");
@@ -62,7 +62,7 @@ async function openStores(env = process.env) {
   const helpers = createAdminDbHelpers(pool);
   return {
     pool,
-    store: createPgWorkerStore({ ...helpers, adminId }),
+    store: createPgWorkerStore({ ...helpers, adminId, draftingVersion }),
     suggestionStore: createPgSuggestionStore({ ...helpers, adminId }),
   };
 }
@@ -119,9 +119,12 @@ async function main() {
     }
     return "stopped";
   }
+  // Durable jobs: layouts are stamped with this version, and an operator bumps it to have failed layouts drafted again.
+  const draftingVersion = process.env.SMS_V2_AI_DRAFTING_VERSION || provider.promptVersion;
+  if (!/^[a-zA-Z0-9_.-]{1,64}$/.test(draftingVersion)) throw new Error("SMS_V2_AI_DRAFTING_VERSION_invalid");
   // A database login that fails or a connection that is down for a while is waited out, not a reason to exit.
   const opened = await openPatiently({
-    open: () => openStores(),
+    open: () => openStores(process.env, draftingVersion),
     sleep,
     log,
     isStopped: stopped,
@@ -145,10 +148,11 @@ async function main() {
       sleep,
       log,
       headroom: () => currentHeadroom(settings),
-      runCycle: () => runWorkerCycle({ layoutStore: store, suggestionStore, provider, config }),
+      runCycle: () => runWorkerCycle({ layoutStore: store, suggestionStore, provider, config, shutdown: stopping.signal }),
       // Housekeeping when nothing is waiting: at most hourly.
       afterCycle: async (result) => {
-        consecutiveBusy = result.status === "provider_busy" ? consecutiveBusy + 1 : 0;
+        // A durable job that was rescheduled has its own due time, so only an unscheduled busy answer is waited out here.
+        consecutiveBusy = result.status === "provider_busy" && !result.rescheduled ? consecutiveBusy + 1 : 0;
         if (result.status === "idle" && Date.now() - lastCleanup > 3600000) {
           lastCleanup = Date.now();
           try {
@@ -172,7 +176,7 @@ async function main() {
       // After a call to Gemini the worker rests for the console's gap (ai_min_gap_seconds), so a queue of layouts
       // reaches the provider one at a time, first in first out, never in a burst.
       nextDelayMs: (result) =>
-        result.status === "provider_busy"
+        result.status === "provider_busy" && !result.rescheduled
           ? busyWaitMs({ retryAfterMs: result.retryAfterMs }, consecutiveBusy)
           : result.status === "idle"
           ? 15000

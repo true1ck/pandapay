@@ -54,7 +54,7 @@ class DraftVerifier {
     final origins = TemplateOriginStore(state);
     final pending = <({String hash, String draftId, Map<String, Object?> result})>[];
     for (final row in queue.db.select(
-      "SELECT key,value FROM v2_sync_state WHERE namespace=? AND key LIKE 'ai:%' AND json_extract(value,'\$.status')='ready'",
+      "SELECT key,value FROM v2_sync_state WHERE namespace=? AND key LIKE 'ai:%' AND CASE WHEN json_valid(value) THEN json_extract(value,'\$.status') END='ready'",
       [queue.namespace],
     )) {
       try {

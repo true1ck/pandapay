@@ -1,0 +1,135 @@
+{
+  "_about": "Synthetic. {senderBrand, redactedBody, templateHash} exactly as the phone uploads them (tool/gen_template_hash_vectors.dart). templateHash = sha256(senderBrand + \"\\n\" + redactedBody). The server recomputes it at intake.",
+  "vectors": [
+    {
+      "senderBrand": "HDFCBK",
+      "redactedBody": "<AMT> debited from A/c <MASK> on <DATE> to <PARTY>. UPI Ref <REF>. Avl Bal <AMT>.",
+      "templateHash": "925aec154c06d28ecdc0a0853ea5ba8f9ae6dadf3152d37df88a7e328b360fa0"
+    },
+    {
+      "senderBrand": "ICICIT",
+      "redactedBody": "<AMT> debited from A/c <MASK> on <DATE> to <PARTY>. UPI Ref <REF>. Avl Bal <AMT>.",
+      "templateHash": "1c6cdb893740d9f02efe5195139280be3e50d374ecb14c5a3b15c475722bbbd6"
+    },
+    {
+      "senderBrand": "IPAYTM",
+      "redactedBody": "<AMT> debited from A/c <MASK> on <DATE> to Amazon Pay. UPI Ref <REF>. Avl Bal <AMT>.",
+      "templateHash": "a2d26fc473cfb211f7e1a7b5df2a5fb843f12e5dfa89defa2e47e683791a9c07"
+    },
+    {
+      "senderBrand": "AMEXIN",
+      "redactedBody": "<AMT> debited from A/c <MASK> on <DATE> ##:## to <PARTY> SHOP. UPI Ref <REF>. Avl Bal <AMT>.",
+      "templateHash": "a518a3367bcd96215a54e6a5323c492cd3607b3451624232d7080e85c409f674"
+    },
+    {
+      "senderBrand": "SBIUPI",
+      "redactedBody": "Dear Customer, your OTP is <REF>. Do not share it with anyone.",
+      "templateHash": "a38a01cef238e6c595c4ef15b22b36930768e28c474510ddbfc808f139b359b8"
+    },
+    {
+      "senderBrand": "AXHDFCBK",
+      "redactedBody": "Dear Customer, your OTP is <REF>. Do not share it with anyone.",
+      "templateHash": "5e81c12a5eed5f91f14d7a96b1ba990ec7bd12be11637b4617c87af6fac3e762"
+    },
+    {
+      "senderBrand": "HDFCBK",
+      "redactedBody": "Your account <MASK> was credited with <AMT> on <DATE>. Avl Bal <AMT>.",
+      "templateHash": "2c40e42b9bd60b3ef0a7639ffe86720892f6688aa3e60ba4af5e9e2fe279a032"
+    },
+    {
+      "senderBrand": "ICICIT",
+      "redactedBody": "Your account <MASK> was credited with <AMT> on <DATE>. Avl Bal <AMT>.",
+      "templateHash": "e7de2f4173c44716552471d5614386ec323792bf21c33bbc960d2c538b34d104"
+    },
+    {
+      "senderBrand": "IPAYTM",
+      "redactedBody": "<AMT> spent on card <MASK> on <DATE>. Avl limit <AMT>.",
+      "templateHash": "52c60a97e77e4b55e02998dab1103a9707f56745ce41cc7c21617f513ba58141"
+    },
+    {
+      "senderBrand": "AMEXIN",
+      "redactedBody": "<AMT> spent on card <MASK> on <DATE>. Avl limit <AMT>.",
+      "templateHash": "6e57fd78841040c4d2b0ab27b162707431b9543848150d4e841cc9547667cfa2"
+    },
+    {
+      "senderBrand": "SBIUPI",
+      "redactedBody": "<AMT> spent on card <MASK> on <DATE>. Avl limit <AMT>.",
+      "templateHash": "e7d6f4cbeaeccdf7cd866b182c1db4464f3ff72c8459042ed6a052ecad093eb4"
+    },
+    {
+      "senderBrand": "SBIUPI",
+      "redactedBody": "<AMT> spent on card <MASK>.",
+      "templateHash": "c6c833d21d3447ec7e46015556702cb43d1decd85a1eb8d6bfb3212dc7448d56"
+    },
+    {
+      "senderBrand": "AXHDFCBK",
+      "redactedBody": "<AMT> spent on card <MASK>.",
+      "templateHash": "a850aed3c934ad051240829cd8c558b17ee293d58fa1c3d69611e5703abb6b93"
+    },
+    {
+      "senderBrand": "HDFCBK",
+      "redactedBody": "<AMT> spent on card <MASK>.",
+      "templateHash": "ed4095a6a0899cfad9efbeeff01af1a2b1c0ffc16f8147e2f1410bc4e9c6760b"
+    },
+    {
+      "senderBrand": "ICICIT",
+      "redactedBody": "For <PARTY> call <PHONE>. Reply STOP to <PARTY> out.",
+      "templateHash": "efcdf51d6cf3a4c9e6c724a5699c234a772192a0ecd01aafebf0effd3b2cc07f"
+    },
+    {
+      "senderBrand": "IPAYTM",
+      "redactedBody": "For <PARTY> call <PHONE>. Reply STOP to <PARTY> out.",
+      "templateHash": "8d18cc9f7ac389fe498b02f1af1900408dd573dc2edb0a962dbcd7bd8e98a6c1"
+    },
+    {
+      "senderBrand": "AMEXIN",
+      "redactedBody": "For <PARTY> call <PHONE>. Reply STOP to <PARTY> out.",
+      "templateHash": "bd175249fd242c95385b4afc064c56f4b0f96853fe99a71090c906abbe861e11"
+    },
+    {
+      "senderBrand": "SBIUPI",
+      "redactedBody": "Your account has been updated.",
+      "templateHash": "c0038613bf0a0be2ee9c03a270793f66e680c9a1b9febb7c2869a302e88ecc25"
+    },
+    {
+      "senderBrand": "AXHDFCBK",
+      "redactedBody": "Your account has been updated.",
+      "templateHash": "c445d46cca2422f71b876211c65069505885d1aed499abe8d36859e07f4d7e04"
+    },
+    {
+      "senderBrand": "HDFCBK",
+      "redactedBody": "Money sent to <VPA> successfully. UPI Ref <REF>.",
+      "templateHash": "b573076093e2bd7d73c00caa865d729c66c137d52911b0fdc51d6abda4dde6c5"
+    },
+    {
+      "senderBrand": "ICICIT",
+      "redactedBody": "Money sent to <VPA> successfully. UPI Ref <REF>.",
+      "templateHash": "8c33b2a861027d365b65f132e48daae067255bd96a1b25deb2746c59d8d7f4f3"
+    },
+    {
+      "senderBrand": "IPAYTM",
+      "redactedBody": "<PARTY> your order at <URL> now.",
+      "templateHash": "3db597db275c73b82c659d8dbf4f6cda66853d9c9f1923b77e6ad3602ef8a513"
+    },
+    {
+      "senderBrand": "AMEXIN",
+      "redactedBody": "<PARTY> your order at <URL> now.",
+      "templateHash": "1ade041bc77903b9a1c4a98b1d9cb07c6c4ff6c592e48cf9c8957c162541686d"
+    },
+    {
+      "senderBrand": "SBIUPI",
+      "redactedBody": "<PARTY> your order at <URL> now.",
+      "templateHash": "bee001d4e8487541ba0ff4443cf44ef77607aceac1fb148143544654b9efd574"
+    },
+    {
+      "senderBrand": "SBIUPI",
+      "redactedBody": "<AMT> debited from A/c <MASK> to राहुल शर्मा on <DATE>. Ref <REF>.",
+      "templateHash": "cf4e8b4a61dcf0ad853f06ab020f5dcb961def9bced9b70f4dc38cbdecb6989d"
+    },
+    {
+      "senderBrand": "AXHDFCBK",
+      "redactedBody": "Dear Customer, <AMT> spent on card <MASK> at <PARTY>É <PARTY> – thank you.",
+      "templateHash": "769dd0c816b27b9782630a9290fed8f4d2cf3f536d4665be6341d1501930fc93"
+    }
+  ]
+}

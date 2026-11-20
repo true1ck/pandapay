@@ -1,5 +1,6 @@
 import 'package:pandapay_domain/sms_v2.dart' show Totals;
 import '../sms_v2/ledger/providers.dart';
+import '../sms_v2/ledger/adapters.dart' show moneyInKindLabels;
 import 'dart:async';
 import 'dart:convert';
 
@@ -21,6 +22,7 @@ import '../../app/router.dart' show AppRoute;
 import '../../app/transaction_tag_picker.dart';
 import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart' show SpendCategory;
+import '../../data/category_scope.dart';
 import '../../data/merchant_identity.dart';
 import '../../data/foreign_payment.dart';
 import '../../data/spending_selection.dart';
@@ -234,6 +236,14 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         cards: cards,
         tags: tags,
         categories: resolvedCategories,
+        // A function, so the one pass over the ledger only happens if Money in
+        // is actually chosen in the sheet.
+        moneyInKindByEvent: () =>
+            ref
+                .read(smsV2LedgerReadModelProvider)
+                .valueOrNull
+                ?.moneyInKindByEvent ??
+            const {},
         totalForEntries: ref.read(smsV2ReportingEnabledProvider)
             ? ref
                   .read(smsV2LedgerReadModelProvider)
@@ -512,11 +522,34 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     categories ??= const [];
     if (!mounted) return;
 
+    // Only categories every selected row can take: Salary is no category for a
+    // spend, Travel none for an investment.
+    final kinds = {
+      for (final e in visible)
+        if (_selectedIds.contains(e.id)) e.entryKind,
+    };
+    final allowed = [
+      for (final c in categories)
+        if (kinds.every((k) => categoriesForKind(categories!, k).contains(c)))
+          c,
+    ];
+    if (allowed.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'These transactions are different types, so no one category fits '
+            'them all. Select one type at a time.',
+          ),
+        ),
+      );
+      return;
+    }
     final chosen = await showCategoryBottomSheet(
       context,
       ref,
-      categories,
+      allowed,
       title: 'Set category for ${ids.length} transactions',
+      allowTopLevel: kinds.every((k) => k == TxnEntryKind.spend),
     );
     if (chosen == null || !mounted) return;
 
@@ -960,7 +993,9 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                     _ActivityTypeFilter.moneyOut =>
                       payment.direction != 'refund',
                     _ActivityTypeFilter.moneyIn =>
-                      payment.direction == 'refund',
+                      payment.direction == 'refund' &&
+                          (filter.moneyInKinds.isEmpty ||
+                              filter.moneyInKinds.contains('refund')),
                     _ => false,
                   },
             )
@@ -1063,6 +1098,10 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                     ),
                     onOpenSort: () => _openSortSheet(context, sort),
                   ),
+                  if (filter.type == _ActivityTypeFilter.moneyIn) ...[
+                    const SizedBox(height: AppSpace.xs),
+                    _MoneyInKindRow(filter: filter),
+                  ],
                   if (filter.hasClearableFilters && _hasChips(filter)) ...[
                     const SizedBox(height: AppSpace.xs),
                     _ActiveChipsRow(filter: filter),
@@ -1558,6 +1597,10 @@ class ActivityFilter {
   /// transactions.
   final String? query;
   final _ActivityTypeFilter type;
+
+  /// Inside Money in: which kinds to show (a key of [moneyInKindLabels], or
+  /// `investment_return`). Empty means all of Money in.
+  final Set<String> moneyInKinds;
   final _ActivityDatePreset datePreset;
 
   ActivityFilter({
@@ -1577,6 +1620,7 @@ class ActivityFilter {
     this.foreignOnly = false,
     this.query,
     this.type = _ActivityTypeFilter.all,
+    this.moneyInKinds = const {},
     this.datePreset = _ActivityDatePreset.allTime,
   }) : cardIds = {?cardId, ...cardIds},
        categoryIds = {?categoryId, ...categoryIds},
@@ -1616,8 +1660,24 @@ class ActivityFilter {
 
   /// Whether [entry] passes the choices that are made on the phone (the rest,
   /// date and search, may also have been applied by the server).
-  bool matchesLocally(TransactionEntry entry) {
-    if (!type.matches(entry)) return false;
+  bool matchesLocally(
+    TransactionEntry entry, {
+    Map<String, String> moneyInKindByEvent = const {},
+  }) {
+    // A refund is not Money in, but it is one of its kinds when asked for.
+    final refundAsked =
+        type == _ActivityTypeFilter.moneyIn &&
+        moneyInKinds.contains('refund') &&
+        entry.entryKind == TxnEntryKind.refund;
+    if (!type.matches(entry) && !refundAsked) return false;
+    if (moneyInKinds.isNotEmpty && type == _ActivityTypeFilter.moneyIn) {
+      final kind = switch (entry.entryKind) {
+        TxnEntryKind.investmentReturn => 'investment_return',
+        TxnEntryKind.refund => 'refund',
+        _ => moneyInKindByEvent[entry.eventId] ?? 'other',
+      };
+      if (!moneyInKinds.contains(kind)) return false;
+    }
     if (cardIds.isNotEmpty && !cardIds.contains(entry.userCardId)) return false;
     if (categoryIds.isNotEmpty || categoryLabels.isNotEmpty) {
       final byId =
@@ -1662,6 +1722,7 @@ class ActivityFilter {
     bool? foreignOnly,
     String? Function()? query,
     _ActivityTypeFilter? type,
+    Set<String>? moneyInKinds,
     _ActivityDatePreset? datePreset,
   }) {
     return ActivityFilter(
@@ -1686,6 +1747,10 @@ class ActivityFilter {
       foreignOnly: foreignOnly ?? this.foreignOnly,
       query: query != null ? query() : this.query,
       type: type ?? this.type,
+      // Kinds only mean something inside Money in.
+      moneyInKinds: (type ?? this.type) == _ActivityTypeFilter.moneyIn
+          ? (moneyInKinds ?? this.moneyInKinds)
+          : const {},
       datePreset: datePreset ?? this.datePreset,
     );
   }
@@ -1754,6 +1819,7 @@ const _activityRecentKey = 'activity_recent_searches_v1';
 /// out again on load, so it never goes stale.
 String _activityViewToJson(ActivityFilter f, ActivitySort sort) => jsonEncode({
   'type': f.type.name,
+  'moneyInKinds': f.moneyInKinds.toList(),
   'datePreset': f.datePreset.name,
   if (f.datePreset == _ActivityDatePreset.custom) ...{
     'from': f.from?.toIso8601String(),
@@ -1792,6 +1858,7 @@ String _activityViewToJson(ActivityFilter f, ActivitySort sort) => jsonEncode({
           (v) => v.name == j['type'],
           orElse: () => _ActivityTypeFilter.all,
         ),
+        moneyInKinds: strings('moneyInKinds'),
         datePreset: preset,
         from: custom ? DateTime.tryParse('${j['from']}') : range?.start,
         to: custom ? DateTime.tryParse('${j['to']}') : range?.end,
@@ -1930,10 +1997,19 @@ final activityTransactionsProvider = FutureProvider<List<TransactionEntry>>((
   final unique = {
     for (final entry in [...applied.payments, ...shares]) entry.id: entry,
   };
+  // Only built when a Money in kind is chosen: the map costs one pass over the
+  // ledger (once per read model), which no other filter needs.
+  final kindByEvent = filter.moneyInKinds.isEmpty
+      ? const <String, String>{}
+      : ref
+                .watch(smsV2LedgerReadModelProvider)
+                .valueOrNull
+                ?.moneyInKindByEvent ??
+            const <String, String>{};
   return unique.values
       .where(
         (entry) =>
-            filter.matchesLocally(entry) &&
+            filter.matchesLocally(entry, moneyInKindByEvent: kindByEvent) &&
             selection.matches(
               entry,
               tags:
@@ -1976,6 +2052,13 @@ enum _ActivityTypeFilter {
   cardBills,
   investments,
 }
+
+/// The kinds of Money in a person can pick in Activity: what the ledger tells
+/// apart, plus money that came back from an investment.
+const _activityMoneyInKinds = [
+  ...moneyInKindLabels,
+  ('investment_return', 'From investments'),
+];
 
 enum _ActivityDatePreset {
   allTime,
@@ -2653,6 +2736,40 @@ class _ControlPill extends StatelessWidget {
   }
 }
 
+/// Under the list controls while Money in is chosen: tap kinds (salary,
+/// dividends, refunds, cashback, from people ...) to narrow it. None picked
+/// shows all of Money in.
+class _MoneyInKindRow extends ConsumerWidget {
+  final ActivityFilter filter;
+  const _MoneyInKindRow({required this.filter});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => SingleChildScrollView(
+    key: const Key('activity-money-in-kinds'),
+    scrollDirection: Axis.horizontal,
+    child: Row(
+      children: [
+        for (final (kind, label) in _activityMoneyInKinds) ...[
+          _typePill(
+            label: label,
+            selected: filter.moneyInKinds.contains(kind),
+            onTap: () => ref
+                .read(_activityFilterProvider.notifier)
+                .update(
+                  (f) => f.copyWith(
+                    moneyInKinds: f.moneyInKinds.contains(kind)
+                        ? ({...f.moneyInKinds}..remove(kind))
+                        : {...f.moneyInKinds, kind},
+                  ),
+                ),
+          ),
+          const SizedBox(width: AppSpace.sm),
+        ],
+      ],
+    ),
+  );
+}
+
 /// One chip per choice made in Filters, each with its own ✕, and one Clear all.
 class _ActiveChipsRow extends ConsumerWidget {
   final ActivityFilter filter;
@@ -3078,6 +3195,8 @@ class _MultiSelectSheetState extends State<_MultiSelectSheet> {
   }
 }
 
+Map<String, String> _noMoneyInKinds() => const {};
+
 /// The one place for every choice. Short lists are chips; a long list is a row
 /// that opens a searchable multi-select. Nothing changes until Show.
 class _ActivityFilterSheet extends StatefulWidget {
@@ -3092,6 +3211,9 @@ class _ActivityFilterSheet extends StatefulWidget {
   final List<SpendCategory> categories;
   final Totals Function(Iterable<TransactionEntry>)? totalForEntries;
 
+  /// Money-in kind by event id, for the kind pills and the count.
+  final Map<String, String> Function() moneyInKindByEvent;
+
   const _ActivityFilterSheet({
     required this.initial,
     required this.entries,
@@ -3100,6 +3222,7 @@ class _ActivityFilterSheet extends StatefulWidget {
     required this.categories,
     this.foreignTransactionIds = const {},
     this.totalForEntries,
+    this.moneyInKindByEvent = _noMoneyInKinds,
   });
 
   @override
@@ -3111,6 +3234,7 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
   static const _chipLimit = 6;
 
   late _ActivityTypeFilter _type = widget.initial.type;
+  late Set<String> _moneyInKinds = {...widget.initial.moneyInKinds};
   late Set<String> _merchants = {...widget.initial.merchants};
   late Set<String> _categoryIds = {...widget.initial.categoryIds};
   late Set<String> _categoryLabels = {...widget.initial.categoryLabels};
@@ -3164,6 +3288,7 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
 
   ActivityFilter get _draft => widget.initial.copyWith(
     type: _type,
+    moneyInKinds: _moneyInKinds,
     merchants: _merchants,
     categoryIds: _categoryIds,
     categoryLabels: _categoryLabels,
@@ -3180,8 +3305,13 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
     final from = draft.from;
     final to = draft.to;
     final query = draft.query?.trim().toLowerCase();
+    final kindByEvent = _type == _ActivityTypeFilter.moneyIn
+        ? widget.moneyInKindByEvent()
+        : const <String, String>{};
     return widget.entries.where((entry) {
-      if (!draft.matchesLocally(entry)) return false;
+      if (!draft.matchesLocally(entry, moneyInKindByEvent: kindByEvent)) {
+        return false;
+      }
       if (_foreign && !widget.foreignTransactionIds.contains(entry.id)) {
         return false;
       }
@@ -3207,6 +3337,7 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
   void _reset() {
     setState(() {
       _type = _ActivityTypeFilter.all;
+      _moneyInKinds = {};
       _merchants = {};
       _categoryIds = {};
       _categoryLabels = {};
@@ -3250,7 +3381,34 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
     if (picked != null && mounted) setState(() => _merchants = picked);
   }
 
+  /// The kinds of entry a type filter covers, or null when it covers all.
+  Set<TxnEntryKind>? _kindsFor(_ActivityTypeFilter type) => switch (type) {
+    _ActivityTypeFilter.spending => {TxnEntryKind.spend},
+    _ActivityTypeFilter.moneyIn => {
+      TxnEntryKind.income,
+      TxnEntryKind.investmentReturn,
+    },
+    _ActivityTypeFilter.transfers => {TxnEntryKind.transfer},
+    _ActivityTypeFilter.investments => {TxnEntryKind.investment},
+    _ => null,
+  };
+
+  /// Categories worth offering under [type]: ones it can actually contain.
+  List<SpendCategory> _categoriesFor(_ActivityTypeFilter type) {
+    final kinds = _kindsFor(type);
+    if (kinds == null) return widget.categories;
+    final fits = {
+      for (final k in kinds)
+        for (final c in categoriesForKind(widget.categories, k)) c.id,
+    };
+    return [
+      for (final c in widget.categories)
+        if (fits.contains(c.id)) c,
+    ];
+  }
+
   Future<void> _pickCategories() async {
+    final offered = _categoriesFor(_type);
     final counts = <String, int>{};
     for (final e in widget.entries) {
       final id = e.parentCategoryId ?? e.categoryId;
@@ -3261,7 +3419,7 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
       title: 'Category',
       searchHint: 'Search categories',
       options: [
-        for (final c in widget.categories.where((c) => !c.isSubcategory))
+        for (final c in offered.where((c) => !c.isSubcategory))
           _PickOption(c.id, c.name, counts[c.id]),
       ],
       selected: _categoryIds,
@@ -3413,10 +3571,42 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
                             label: type.label,
                             icon: _typeIcon(type),
                             selected: _type == type,
-                            onTap: () => setState(() => _type = type),
+                            onTap: () => setState(() {
+                              _type = type;
+                              _moneyInKinds = {};
+                              // A category picked under another type may not
+                              // exist in this one; drop it, with its chip.
+                              final offered = {
+                                for (final c in _categoriesFor(type)) c.id,
+                              };
+                              _categoryIds.removeWhere(
+                                (id) => !offered.contains(id),
+                              );
+                            }),
                           ),
                       ],
                     ),
+                    if (_type == _ActivityTypeFilter.moneyIn) ...[
+                      const SizedBox(height: AppSpace.md),
+                      const _FilterLabel('What kind of money in'),
+                      const SizedBox(height: AppSpace.xs),
+                      Wrap(
+                        spacing: AppSpace.sm,
+                        runSpacing: AppSpace.sm,
+                        children: [
+                          for (final (kind, label) in _activityMoneyInKinds)
+                            _typePill(
+                              label: label,
+                              selected: _moneyInKinds.contains(kind),
+                              onTap: () => setState(
+                                () => _moneyInKinds.contains(kind)
+                                    ? _moneyInKinds.remove(kind)
+                                    : _moneyInKinds.add(kind),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: AppSpace.lg),
 
                     const _FilterLabel('Merchants'),

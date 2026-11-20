@@ -1,7 +1,9 @@
 "use strict";
 const { workerConfig } = require("../../../src/sms_v2/template_worker");
+// The server checks templateHash = sha256(brand, newline, body) at intake, so the fixture carries the real one.
+const sha = (brand, body) => require("node:crypto").createHash("sha256").update(brand + "\n" + body, "utf8").digest("hex");
 const template = {
-  template_hash: "a".repeat(64),
+  template_hash: sha("TESTBK", "<AMT> paid to <PARTY>."),
   sender_brand: "TESTBK",
   redacted_body: "<AMT> paid to <PARTY>.",
 };
@@ -74,4 +76,10 @@ function answer() {
     ],
   };
 }
-module.exports = { template, config, rule, answer };
+// A distinct, valid layout upload (its hash is the real one) for tests that need several layouts.
+function layoutItem(n, brand = "TESTBK") {
+  const body = `<AMT> paid to <PARTY> by layout ${n}.`;
+  return { templateHash: sha(brand, body), senderBrand: brand, redactedBody: body, observedAt: new Date().toISOString() };
+}
+
+module.exports = { template, config, rule, answer, layoutItem, layoutHash: sha };

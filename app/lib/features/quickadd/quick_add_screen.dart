@@ -24,6 +24,7 @@ import '../../app/providers.dart';
 import '../../app/transaction_tag_picker.dart';
 import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart' show SpendCategory;
+import '../../data/category_scope.dart';
 import '../../data/receipt_parser.dart' show parseReceiptFields;
 import '../../data/receipt_ocr.dart' show ReceiptOcr;
 import '../../data/import_models.dart' show ParsedStatementLine;
@@ -331,7 +332,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
 
   Future<void> _resolveInitialCategory(String name) async {
     try {
-      final categories = await ref.read(categoriesProvider.future);
+      final categories = await ref.read(spendCategoriesProvider.future);
       final query = name.trim().toLowerCase();
       final match = categories.where((category) {
         final label = category.name.trim().toLowerCase();
@@ -1220,6 +1221,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       ref,
       categories,
       selectedId: _selectedCategoryId,
+      allowTopLevel: _entryKind == TxnEntryKind.spend,
     );
     if (selection != null && mounted) {
       _editPrivate(() => _selectedCategoryId = selection);
@@ -1543,7 +1545,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   @override
   Widget build(BuildContext context) {
     final userCards = ref.watch(userCardsProvider);
-    final categories = ref.watch(categoriesProvider);
+    final categories = ref.watch(categoriesProvider).whenData(
+      (all) => categoriesForKind(all, _entryKind),
+    );
     final history = ref.watch(transactionsProvider).valueOrNull ?? const [];
     final merchants = _rankedMerchants(history);
     final amount = double.tryParse(_amountController.text);
@@ -2288,6 +2292,16 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                           selected: _entryKind == kind,
                           onTap: () => setState(() {
                             _entryKind = kind;
+                            // A category from the old kind (Travel on an
+                            // Investment) no longer applies.
+                            if (!categoryFitsKind(
+                              ref.read(categoriesProvider).valueOrNull ??
+                                  const <SpendCategory>[],
+                              _selectedCategoryId,
+                              kind,
+                            )) {
+                              _selectedCategoryId = null;
+                            }
                             if (kind != TxnEntryKind.spend &&
                                 _instrument == TxnInstrument.creditCard) {
                               _paymentMethod = selectPaymentInstrument(
@@ -3040,7 +3054,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
 
   Widget _buildScanBill() {
     final userCards = ref.watch(userCardsProvider);
-    final categories = ref.watch(categoriesProvider);
+    final categories = ref.watch(categoriesProvider).whenData(
+      (all) => categoriesForKind(all, _entryKind),
+    );
     final history = ref.watch(transactionsProvider).valueOrNull ?? const [];
     final merchants = _rankedMerchants(history);
 
