@@ -135,7 +135,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
   List<String> _contextPhrases() {
     final cards = ref.read(userCardsProvider).valueOrNull ?? const <UserCard>[];
     final categories =
-        ref.read(categoriesProvider).valueOrNull ?? const <SpendCategory>[];
+        ref.read(spendCategoriesProvider).valueOrNull ?? const <SpendCategory>[];
     final tags =
         ref.read(transactionTagsProvider)?.tags ?? const <TransactionTag>[];
     final out = <String>{};
@@ -443,7 +443,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
   void _makeDrafts() {
     final cards = ref.read(userCardsProvider).valueOrNull ?? const <UserCard>[];
     final categories =
-        ref.read(categoriesProvider).valueOrNull ?? const <SpendCategory>[];
+        ref.read(spendCategoriesProvider).valueOrNull ?? const <SpendCategory>[];
     final tags =
         ref.read(transactionTagsProvider)?.tags ?? const <TransactionTag>[];
     final now = ref.read(clockProvider).now();
@@ -483,7 +483,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
     });
     final cards = ref.read(userCardsProvider).valueOrNull ?? const <UserCard>[];
     final categories =
-        ref.read(categoriesProvider).valueOrNull ?? const <SpendCategory>[];
+        ref.read(spendCategoriesProvider).valueOrNull ?? const <SpendCategory>[];
     final now = ref.read(clockProvider).now();
     final question = QuestionReader(_pack).read(
       draft.transcript,
@@ -879,7 +879,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
     final cards =
         ref.watch(userCardsProvider).valueOrNull ?? const <UserCard>[];
     final categories =
-        ref.watch(categoriesProvider).valueOrNull ?? const <SpendCategory>[];
+        ref.watch(spendCategoriesProvider).valueOrNull ?? const <SpendCategory>[];
     return Material(
       color: BambooInk.paper,
       borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),

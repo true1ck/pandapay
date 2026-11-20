@@ -210,7 +210,7 @@ class _TryItNowPreview extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final owned =
         ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
-    final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
+    final categories = ref.watch(spendCategoriesProvider).valueOrNull ?? const [];
     if (owned.isEmpty) return const SizedBox.shrink();
 
     final groceriesId = categories

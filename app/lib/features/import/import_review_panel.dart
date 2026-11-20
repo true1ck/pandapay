@@ -145,7 +145,7 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
     if (repository == null || session.submitting || _preparingContinuation) {
       return;
     }
-    final categories = ref.read(categoriesProvider).valueOrNull;
+    final categories = ref.read(spendCategoriesProvider).valueOrNull;
     // Rows parsed from an export written by a different database can carry
     // category ids this account's catalogue does not have. The row keeps its
     // category hint, so dropping the stale id still classifies it instead of
@@ -230,7 +230,7 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
       context: context,
       builder: (_) => _EditImportRow(
         row: row,
-        categories: ref.read(categoriesProvider).valueOrNull ?? const [],
+        categories: ref.read(spendCategoriesProvider).valueOrNull ?? const [],
         raw: rejected?.cells.join(' | '),
         reason: index == null
             ? rejected?.reason
@@ -296,7 +296,7 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
     }
     final cards = ref.watch(userCardsProvider);
     final categories =
-        ref.watch(categoriesProvider).valueOrNull ?? const <SpendCategory>[];
+        ref.watch(spendCategoriesProvider).valueOrNull ?? const <SpendCategory>[];
     final bankAccounts = ref.watch(bankAccountSummariesProvider);
     final bankDataResolved = bankAccounts.hasValue || bankAccounts.hasError;
     if (cards.hasValue && bankDataResolved && !_destinationsSuggested) {

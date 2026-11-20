@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/api_exception.dart';
 import 'package:pandapay/data/auth_api.dart';
+import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/response_cache.dart';
 import 'package:pandapay/data/local/sync_queue.dart';
@@ -553,5 +554,67 @@ void main() {
     expect(queued?['amount_inr'], 95000.0);
     // The kind was not touched, so it is not re-sent.
     expect(queued?.containsKey('entry_kind'), isFalse);
+  });
+
+  testWidgets('category choices follow the kind, and a stale one is cleared', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(900, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    const categories = [
+      SpendCategory(id: 'travel', slug: 'travel', name: 'Travel'),
+      SpendCategory(
+        id: 'sip',
+        slug: 'inv_sip',
+        name: 'SIP',
+        entryKinds: ['investment'],
+      ),
+      SpendCategory(
+        id: 'salary',
+        slug: 'inc_salary',
+        name: 'Salary',
+        entryKinds: ['income'],
+      ),
+    ];
+    final repo = _FakeUserCardsRepository(
+      TransactionEntry(
+        id: 't1',
+        amount: Money.fromRupees(500),
+        occurredAt: DateTime(2026, 3, 1),
+        merchantName: 'Shop',
+        instrument: TxnInstrument.upiBank,
+        entryKind: TxnEntryKind.spend,
+        categoryId: 'travel',
+        source: 'manual',
+        status: 'active',
+      ),
+    );
+    await _pump(
+      tester,
+      repo: repo,
+      overrides: [categoriesProvider.overrideWith((ref) async => categories)],
+    );
+
+    await tester.tap(find.byKey(const ValueKey('category-TxnEntryKind.spend')));
+    await tester.pumpAndSettle();
+    expect(find.text('Travel'), findsWidgets);
+    expect(find.text('SIP'), findsNothing);
+    expect(find.text('Salary'), findsNothing);
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Spending'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Investment').last);
+    await tester.pumpAndSettle();
+
+    // Travel was on the spend; it must not survive on an Investment.
+    expect(find.text('Travel'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('category-TxnEntryKind.investment')));
+    await tester.pumpAndSettle();
+    expect(find.text('SIP'), findsWidgets);
+    expect(find.text('Travel'), findsNothing);
+    expect(find.text('Salary'), findsNothing);
   });
 }

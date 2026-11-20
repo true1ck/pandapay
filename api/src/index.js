@@ -690,7 +690,7 @@ const CARD_STATUS_TRANSITIONS = {
 app.get('/categories', async (req, res) => {
   try {
     const result = await withUserClient(null, (client) =>
-      client.query('SELECT id, slug, name FROM spend_categories ORDER BY sort_order')
+      client.query('SELECT id, slug, name, entry_kinds AS "entryKinds" FROM spend_categories ORDER BY sort_order')
     );
     res.json({ categories: result.rows });
   } catch (err) {

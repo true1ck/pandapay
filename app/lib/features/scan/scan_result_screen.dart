@@ -123,7 +123,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
   @override
   Widget build(BuildContext context) {
     final catalogue = ref.watch(catalogueProvider);
-    final categories = ref.watch(categoriesProvider);
+    final categories = ref.watch(spendCategoriesProvider);
     final userCards = ref.watch(userCardsProvider);
     final overrides = ref.watch(cardOverridesProvider);
     final engine = ref.watch(recommendationEngineProvider);

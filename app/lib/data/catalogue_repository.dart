@@ -125,6 +125,10 @@ class SpendCategory {
   final String? parentCategoryId;
   final String? parentUserCategoryId;
   final List<String> matchTerms;
+
+  /// Entry kinds that may use this category (`spend`, `investment`, ...).
+  /// Built-in rows say so on the server; custom and older rows are spend.
+  final List<String> entryKinds;
   const SpendCategory({
     required this.id,
     required this.slug,
@@ -133,6 +137,7 @@ class SpendCategory {
     this.parentCategoryId,
     this.parentUserCategoryId,
     this.matchTerms = const [],
+    this.entryKinds = const ['spend'],
   });
 
   bool get isSubcategory =>
@@ -159,6 +164,7 @@ class SpendCategory {
                 const [])
             .whereType<String>()
             .toList(),
+        entryKinds: _parseEntryKinds(json['entryKinds'] ?? json['entry_kinds']),
       );
 
   Map<String, dynamic> toJson() => {
@@ -170,7 +176,15 @@ class SpendCategory {
     if (parentUserCategoryId != null)
       'parentUserCategoryId': parentUserCategoryId,
     if (matchTerms.isNotEmpty) 'matchTerms': matchTerms,
+    if (!(entryKinds.length == 1 && entryKinds.first == 'spend'))
+      'entryKinds': entryKinds,
   };
+}
+
+// An older server (or cache) sends no kinds: that row is a spend category.
+List<String> _parseEntryKinds(Object? raw) {
+  final kinds = raw is List ? raw.whereType<String>().toList() : <String>[];
+  return kinds.isEmpty ? const ['spend'] : kinds;
 }
 
 bool isCustomCategoryId(String? id) => id?.startsWith('custom:') == true;

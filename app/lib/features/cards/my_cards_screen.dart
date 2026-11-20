@@ -383,7 +383,7 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
         .where((p) => p.$1.id == card.id)
         .map((p) => p.$2)
         .firstOrNull;
-    final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
+    final categories = ref.watch(spendCategoriesProvider).valueOrNull ?? const [];
     final bestFor = product == null
         ? const <String>[]
         : bestUsedFor(product, categories);
@@ -889,7 +889,7 @@ class _CardActionButton extends StatelessWidget {
 /// does, so a logged spend is attributed to the same category Home is
 /// currently showing recommendations for.
 final _resolvedSelectedCategoryIdProvider = Provider<String?>((ref) {
-  final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
+  final categories = ref.watch(spendCategoriesProvider).valueOrNull ?? const [];
   final selectedSlug = ref.watch(selectedCategoryProvider);
   for (final c in categories) {
     if (c.slug == selectedSlug) return c.id;

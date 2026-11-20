@@ -23,6 +23,7 @@ import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart'
     show SpendCategory, categoryIdForServer, userCategoryIdForServer;
 import '../../data/merchant_category_rules_repository.dart';
+import '../../data/category_scope.dart';
 import '../../data/user_cards_repository.dart';
 import '../../data/self_transfer.dart';
 import '../../data/server_clock.dart';
@@ -1196,6 +1197,11 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                         if (value == null) return;
                         setState(() {
                           _entryKind = value;
+                          // Entertainment on an Investment makes no sense:
+                          // drop a category the new kind cannot use.
+                          if (!categoryFitsKind(categories, _categoryId, value)) {
+                            _categoryId = null;
+                          }
                           if (value != TxnEntryKind.transfer &&
                               _selfTransfer != null) {
                             _clearedSelfTransfer = _selfTransfer;
@@ -1370,6 +1376,8 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                     ],
                     const SizedBox(height: AppSpace.lg),
                     CategoryPickerField(
+                      key: ValueKey('category-$_entryKind'),
+                      entryKind: _entryKind,
                       categories: categories,
                       selectedId: _categoryId,
                       label: 'Category',

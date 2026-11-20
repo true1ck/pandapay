@@ -150,7 +150,7 @@ registerRuleFamilyRoutes(api.legacyApp, adminRouteDeps, {
 
   api.route('GET', '/admin/reference/categories', async (_req, res, ctx) => {
     try {
-      const result = await ctx.withAdminClient(client => client.query('SELECT id, slug, name FROM spend_categories ORDER BY sort_order'));
+      const result = await ctx.withAdminClient(client => client.query("SELECT id, slug, name FROM spend_categories WHERE entry_kinds @> '{spend}' ORDER BY sort_order"));
       return res.json({ categories: result.rows });
     } catch {
       return res.status(500).json({ error: 'internal_error' });

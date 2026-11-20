@@ -53,6 +53,7 @@ import '../data/card_feedback_repository.dart';
 import '../data/card_overrides_repository.dart';
 import '../data/card_requests_api.dart';
 import '../data/catalogue_repository.dart';
+import '../data/category_scope.dart';
 import '../data/catalogue_v2.dart';
 import '../data/commitments_repository.dart';
 import '../data/consents_api.dart';
@@ -7260,6 +7261,14 @@ final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
     // catch-all card rules until the next refresh can load the ids.
     return [...await loadBundledCategories(), ...customCategories];
   }
+});
+
+/// Only the categories a spend can use. [categoriesProvider] also carries the
+/// investment, income and transfer categories, which belong in those entries'
+/// pickers and nowhere else (budgets, caps, rewards, imports, rules).
+final spendCategoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
+  final all = await ref.watch(categoriesProvider.future);
+  return categoriesForKind(all, TxnEntryKind.spend);
 });
 
 /// Adds a category for the current account and refreshes every category
