@@ -53,6 +53,7 @@ const {
   isBankAccountMessage,
 } = require('./sms_parser');
 const importResolvers = require('./import_resolvers');
+const { categoryFitsEntryKind } = require('./category_kind');
 const { createSyncTransactionApplier } = require('./sync_transaction_state');
 const applyTransactionSync = createSyncTransactionApplier({
   loadUserCardForState,
@@ -4576,6 +4577,9 @@ app.post('/transactions', requireAuth, async (req, res) => {
         }
         userCategoryParentId = category.rows[0].parent_category_id;
       }
+      if (!(await categoryFitsEntryKind(client, userCategoryId ? userCategoryParentId : categoryId, entryKind))) {
+        return { status: 400, error: 'category does not fit this kind of transaction' };
+      }
       // QR/manual payments often arrive with a merchant name but without an
       // explicit category selection. Reuse the same conservative resolver as
       // SMS import so a known merchant is categorized before rewards and
@@ -5658,14 +5662,32 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
         }
       }
 
+      // A category has to fit the kind. A category sent in this request that
+      // does not is refused; a stored one that stops fitting because the kind
+      // changed (an older app sends only the kind) is cleared, not kept.
+      const sentCategory = (categoryId !== undefined && categoryId !== null)
+        || (userCategoryId !== undefined && userCategoryId !== null);
+      const nextCategory = userCategoryId !== undefined && userCategoryId !== null
+        ? (categoryId || userCategoryParentId)
+        : categoryId !== undefined ? categoryId : old.category_id;
+      let clearStaleCategory = false;
+      if (sentCategory) {
+        if (!(await categoryFitsEntryKind(client, nextCategory, newEntryKind))) {
+          return { status: 400, error: 'category does not fit this kind of transaction' };
+        }
+      } else if (entryKind !== undefined && entryKind !== old.entry_kind
+        && categoryId === undefined && userCategoryId === undefined
+        && !(await categoryFitsEntryKind(client, old.category_id, newEntryKind))) {
+        clearStaleCategory = true;
+      }
+
       const newValues = {
         userCardId: newUserCardId,
         amount: amountInr !== undefined ? Number(amountInr) : Number(old.amount_inr),
         occurred: occurredAt !== undefined ? new Date(occurredAt) : old.occurred_at,
-        categoryId: userCategoryId !== undefined && userCategoryId !== null
-          ? (categoryId || userCategoryParentId)
-          : categoryId !== undefined ? categoryId : old.category_id,
-        userCategoryId: userCategoryId !== undefined ? userCategoryId : old.user_category_id,
+        categoryId: clearStaleCategory ? null : nextCategory,
+        userCategoryId: clearStaleCategory ? null
+          : userCategoryId !== undefined ? userCategoryId : old.user_category_id,
         rail: rail ?? old.rail,
         merchantName: selfTransferRule && !disablingSelfTransfer
           ? selfTransfers.selfTransferLabel(selfTransferRule.destination)
