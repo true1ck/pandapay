@@ -356,6 +356,117 @@ void main() {
     expect(consentReads, greaterThanOrEqualTo(1), reason: 'a new pass always asks again');
   });
 
+  test('after an update, waits an older build left (a six-hour hold, a 30-minute back-off) no longer keep layouts unsent', () async {
+    final db = AppDatabase.forTesting(sqlite3.openInMemory());
+    addTearDown(db.db.dispose);
+    SmsV2Schema.ensure(db.db);
+    final intake = SmsIntakeRepository(db);
+    var now = DateTime.utc(2026, 11);
+    for (var i = 1; i <= 12; i++) {
+      final raw = 'Alert ${List.filled(i, 'info').join(' ')} Rs.500.00 debited from A/c XX6789';
+      final source = smsSourceKey('a', 'HDFCBK', raw);
+      intake.remember('a', QueuedSms(sender: 'HDFCBK', body: raw, receivedAt: now));
+      db.db.execute('INSERT INTO v2_review_items VALUES(?,?,?,?,?)', [
+        'a', source, 'template',
+        jsonEncode({'sourceKey': source, 'templateHash': 'a' * 64}), 'open',
+      ]);
+    }
+    final queue = OutboxStore(db.db, namespace: 'a');
+    var calls = 0;
+    var status = 202;
+    final uploader = TemplateUpload(
+      intake: intake,
+      queue: queue,
+      baseUri: Uri.parse('https://api.invalid'),
+      headers: () async => {},
+      hasConsent: () async => true,
+      accountIsCurrent: () => true,
+      clock: () => now,
+      client: MockClient((request) async {
+        calls++;
+        final items = (jsonDecode(request.body) as Map)['items'] as List;
+        if (status != 202) return http.Response('{}', status, headers: {'retry-after': '3600'});
+        return http.Response(jsonEncode({'accepted': [for (final item in items) item['templateHash']]}), 202);
+      }),
+    );
+    // Queue the layouts, then leave them as the old build would have: a six-hour hold and a far-off try.
+    status = 500;
+    await uploader.drain();
+    db.db.execute("DELETE FROM v2_sync_state WHERE namespace='a' AND key='template:waits:cleared:v2'");
+    db.db.execute("UPDATE v2_outbox SET next_attempt_at=? WHERE namespace='a' AND kind='template'", [now.add(const Duration(hours: 5)).millisecondsSinceEpoch]);
+    SyncStateStore(db.db, namespace: 'a').put('template:wait', now.add(const Duration(hours: 6)).toIso8601String());
+    status = 202;
+    calls = 0;
+    await uploader.drain();
+    expect(calls, greaterThan(0), reason: 'the update makes them due now');
+    expect(db.db.select("SELECT * FROM v2_outbox WHERE kind='template'"), isEmpty);
+    // The clean-up runs once: a hold the new build sets itself is respected.
+    final again = DateTime.utc(2026, 11, 2);
+    now = again;
+    status = 429;
+    for (var i = 1; i <= 3; i++) {
+      final raw = 'Notice ${List.filled(i, 'memo').join(' ')} Rs.500.00 debited from A/c XX6789';
+      final source = smsSourceKey('a', 'HDFCBK', raw);
+      intake.remember('a', QueuedSms(sender: 'HDFCBK', body: raw, receivedAt: now));
+      db.db.execute('INSERT INTO v2_review_items VALUES(?,?,?,?,?)', ['a', source, 'template', jsonEncode({'sourceKey': source, 'templateHash': 'a' * 64}), 'open']);
+    }
+    await uploader.drain();
+    calls = 0;
+    await uploader.drain();
+    expect(calls, 0, reason: 'the 429 hold set by this build is not cleared again');
+  });
+
+  test('a pass skips items already queued or sent (no re-redaction of a long backlog); a re-send still queues them again', () async {
+    final db = AppDatabase.forTesting(sqlite3.openInMemory());
+    addTearDown(db.db.dispose);
+    SmsV2Schema.ensure(db.db);
+    final intake = SmsIntakeRepository(db);
+    final now = DateTime.utc(2026, 11);
+    for (var i = 1; i <= 300; i++) {
+      final raw = 'Alert ${List.filled(1 + i % 60, 'info').join(' ')} w${i % 7} Rs.500.00 debited from A/c XX6789';
+      final source = smsSourceKey('a', 'HDFCBK', raw + '$i');
+      intake.remember('a', QueuedSms(sender: 'HDFCBK', body: raw, receivedAt: now));
+      db.db.execute('INSERT OR IGNORE INTO v2_review_items VALUES(?,?,?,?,?)', [
+        'a', smsSourceKey('a', 'HDFCBK', raw), 'template',
+        jsonEncode({'sourceKey': smsSourceKey('a', 'HDFCBK', raw), 'templateHash': 'a' * 64}), 'open',
+      ]);
+      source.length;
+    }
+    final queue = OutboxStore(db.db, namespace: 'a');
+    var server = 503;
+    final uploader = TemplateUpload(
+      intake: intake,
+      queue: queue,
+      baseUri: Uri.parse('https://api.invalid'),
+      headers: () async => {},
+      hasConsent: () async => true,
+      accountIsCurrent: () => true,
+      clock: () => now,
+      client: MockClient((request) async {
+        if (server != 202) return http.Response('{}', server);
+        final items = (jsonDecode(request.body) as Map)['items'] as List;
+        return http.Response(jsonEncode({'accepted': [for (final item in items) item['templateHash']]}), 202);
+      }),
+    );
+    await uploader.drain();
+    final queued = db.db.select("SELECT count(*) n FROM v2_outbox WHERE kind='template'").first['n'] as int;
+    expect(queued, greaterThan(0));
+    final sw = Stopwatch()..start();
+    await uploader.drain();
+    final second = sw.elapsedMilliseconds;
+    expect(db.db.select("SELECT count(*) n FROM v2_outbox WHERE kind='template'").first['n'], queued, reason: 'nothing doubled');
+    // Everything is sent; then the person re-sends (held layouts): the items are queued again.
+    server = 202;
+    db.db.execute("UPDATE v2_outbox SET next_attempt_at=0 WHERE kind='template'");
+    await uploader.drain();
+    expect(db.db.select("SELECT count(*) n FROM v2_outbox WHERE kind='template'").first['n'], 0);
+    db.db.execute("DELETE FROM v2_sync_state WHERE namespace='a' AND key LIKE 'template:sent:%'");
+    await uploader.drain();
+    expect(db.db.select("SELECT count(*) n FROM v2_sync_state WHERE namespace='a' AND key LIKE 'template:sent:%'").first['n'], queued,
+        reason: 'after a re-send every layout goes up again');
+    expect(second, lessThan(2000));
+  });
+
   test('layouts go in batches of at most ten, and a 429 is waited out', () async {
     final db = AppDatabase.forTesting(sqlite3.openInMemory());
     addTearDown(db.db.dispose);

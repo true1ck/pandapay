@@ -74,7 +74,7 @@ class TemplateUpload {
     queue.db.execute('SAVEPOINT sms_v2_template_revoke');
     try {
       queue.db.execute(
-        "DELETE FROM v2_sync_state WHERE namespace=? AND (key LIKE 'ai:%' OR key LIKE 'template:sent:%' OR key LIKE 'template:origins:%' OR key LIKE 'draft:%')",
+        "DELETE FROM v2_sync_state WHERE namespace=? AND (key LIKE 'ai:%' OR key LIKE 'template:sent:%' OR key LIKE 'template:origins:%' OR key LIKE 'template:scanned:%' OR key LIKE 'draft:%')",
         [queue.namespace],
       );
       queue.db.execute(
@@ -127,6 +127,26 @@ class TemplateUpload {
     ),
   );
 
+  /// Earlier builds held the whole queue for up to six hours after a 429 and
+  /// pushed a failed layout's next try out to 30 minutes by doubling. A phone
+  /// that updates would keep honouring those waits, so layouts that were
+  /// already waiting would still sit unsent. Once per account, after the
+  /// update, make them due now and forget the old hold.
+  void _clearWaitsLeftByOlderBuilds() {
+    final state = SyncStateStore(queue.db, namespace: queue.namespace);
+    const marker = 'template:waits:cleared:v2';
+    if (state.get(marker) != null) return;
+    queue.db.execute(
+      "UPDATE v2_outbox SET next_attempt_at=0 WHERE namespace=? AND kind='template'",
+      [queue.namespace],
+    );
+    queue.db.execute(
+      "DELETE FROM v2_sync_state WHERE namespace=? AND key='template:wait'",
+      [queue.namespace],
+    );
+    state.put(marker, clock().toUtc().toIso8601String());
+  }
+
   Future<void> drain() async {
     _consentConfirmed = null; // every pass asks the server afresh
     // One layout the server refuses (400) must not hold up the ones behind it:
@@ -134,6 +154,7 @@ class TemplateUpload {
     var singly = false;
     var refused = 0;
     if (!await _canShare()) return;
+    _clearWaitsLeftByOlderBuilds();
     // The server told us to wait (HTTP 429): hold the whole queue until then.
     final holdUntil = DateTime.tryParse(
       SyncStateStore(
@@ -166,6 +187,7 @@ class TemplateUpload {
     }
     final state = SyncStateStore(queue.db, namespace: queue.namespace);
     final origins = TemplateOriginStore(state);
+    var processed = 0;
     for (final row in queue.db.select(
       "SELECT payload FROM v2_review_items WHERE namespace=? AND kind='template' AND status='open'",
       [queue.namespace],
@@ -175,6 +197,20 @@ class TemplateUpload {
       if (key is! String) continue;
       // Waiting for history, or already read by it: no rule can be drafted.
       if (review['aiHold'] != null) continue;
+      // Already queued or sent on an earlier pass: skip the redaction, which is
+      // the costly part (about a second for 1,500 open items, on the UI thread,
+      // at every pass). The marker holds the layout's hash; if its sent mark and
+      // its queue entry are both gone (a re-send, a cleaned-up entry), the item
+      // is processed afresh.
+      final scanned = state.get('template:scanned:$key');
+      if (scanned != null &&
+          (state.get('template:sent:$scanned') != null ||
+              queue.db.select(
+                'SELECT 1 FROM v2_outbox WHERE namespace=? AND id=?',
+                [queue.namespace, 'template:$scanned'],
+              ).isNotEmpty)) {
+        continue;
+      }
       final message = intake.capturedById(queue.namespace, key)?.message;
       if (message == null) continue;
       final salt = base64UrlEncode(
@@ -217,14 +253,16 @@ class TemplateUpload {
           )) {
         continue;
       }
-      if (state.get('template:sent:$hash') != null ||
+      if (state.get('template:sent:$hash') == null &&
           queue.db.select(
             'SELECT 1 FROM v2_outbox WHERE namespace=? AND id=?',
             [queue.namespace, 'template:$hash'],
-          ).isNotEmpty) {
-        continue;
+          ).isEmpty) {
+        queue.enqueue('template', hash, payload);
       }
-      queue.enqueue('template', hash, payload);
+      state.put('template:scanned:$key', hash);
+      // Hand the thread back every few items so a long backlog never freezes the screen.
+      if (++processed % 20 == 0) await Future<void>.delayed(Duration.zero);
     }
     while (accountIsCurrent()) {
       if (!await _canShare()) return;
